@@ -66,3 +66,29 @@ it('does not turn a broken notification sink into a false model failure or repla
   expect(apply).not.toHaveBeenCalled(); expect(report.mock.calls.filter(([e]) => e === 'error')).toHaveLength(0);
   expect(report.mock.calls.filter(([e]) => e === 'attention-delivery-error')).toHaveLength(1); loop.stop();
 });
+
+it('keeps ordinary shadow mode silent and stops ranking an unchanged encounter after opt-in review', async () => {
+  vi.useFakeTimers();
+  const f=frame();
+  f.battlefield.actors[0]!.nativeReference='blaze@123456';
+  const request=vi.fn(async () => ({answers:{tactic:{type:'choice',choice:'option_0',confidence:.5,
+    probabilities:{option_0:.5,option_1:.49,keep:.01}}}}));
+  const attention=vi.fn(), apply=vi.fn(() => true);
+  const options={config:()=>({...COMBAT_DECISION_DEFAULTS,enabled:true,mode:'shadow' as const,
+    connection:'host' as const,minIntervalMs:1000}),sample:()=>f,request,apply,report:vi.fn(),attention};
+  const ordinary=new CombatDecisionLoop(options);
+  for(let i=0;i<5;i++){ordinary.tick();await vi.advanceTimersByTimeAsync(1000);}
+  expect(attention).not.toHaveBeenCalled();
+  ordinary.stop();
+  request.mockClear();
+  const observer=new CombatDecisionLoop({...options,attentionInShadow:true});
+  for(let i=0;i<21;i++){observer.tick();await vi.advanceTimersByTimeAsync(1000);}
+  expect(request).toHaveBeenCalledTimes(3);
+  expect(attention).toHaveBeenCalledTimes(1);
+  expect(combatAttentionEvent(attention.mock.calls[0][0]).text).toContain('blaze@123456');
+  f.battlefield.self.position=[0,64,3];
+  for(let i=0;i<4;i++){observer.tick();await vi.advanceTimersByTimeAsync(1000);}
+  expect(attention).toHaveBeenCalledTimes(2);
+  expect(apply).not.toHaveBeenCalled();
+  observer.stop();
+});

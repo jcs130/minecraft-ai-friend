@@ -8,5 +8,10 @@
   "dataRoot": "/absolute/private/hosting-data",
   "python": "/absolute/venv/python",
   "voiceTokenFile": "/absolute/private/voice-transport-token",
-  "defaultVoice": "configured-voice-id"
+  "defaultVoice": "configured-voice-id",
+  "systemOne": {
+    "endpoint": "http://127.0.0.1:8090/v1/systemone",
+    "model": "StartLux-Decision-4B",
+    "combatAttention": false
+  }
 }

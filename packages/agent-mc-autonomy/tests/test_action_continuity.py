@@ -2,6 +2,7 @@
 
 import asyncio
 import dataclasses
+import hashlib
 from types import SimpleNamespace
 
 import pytest
@@ -74,6 +75,40 @@ def test_completion_handoff_is_consumed_and_duplicate_receipts_cannot_rearm_it(
     controller.receipt({"execution": action(terminal=True)})
     assert controller.continuation_ready is False
     assert controller.planner_retry_at > 0  # A plain reply retains its normal bounded wait.
+
+
+@pytest.mark.parametrize("condition,expected", [
+    ("fresh idle feedback", 0),
+    ("provider retry", 1100),
+    ("native work", 1100),
+    ("expired", 1100),
+    ("tampered", 1100),
+    ("ordinary chat", 1100),
+])
+def test_combat_attention_releases_only_the_idle_reply_wait(
+        framework_module, tmp_path, run_async, monkeypatch, condition, expected):
+    module, bridge, controller = setup(framework_module, tmp_path, None)
+    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: 1000, time=lambda: 100))
+    controller.planner_retry_at = 1100
+    controller.idle_reply_retry_at = 1090 if condition == "provider retry" else 1100
+    if condition == "native work":
+        controller.pending[("task", "body-1")] = action()
+    text = "Fresh combat review."
+    event = {"cursor": 1, "trigger": "debounce", "source": "minecraft",
+             "type": "minecraft.tactic", "senderKey": "minecraft.combat-decision", "text": text,
+             "meta": {"combatAttention": {"schema": "combat-decision-attention/v1",
+                       "reason": "repeated-ambiguous-ranking", "count": 3, "bodyIdle": True,
+                       "dispatched": False, "observedAtMs": 80000 if condition == "expired" else 99900},
+                      "executionFeedback": {"protocol": "execution-feedback-context/v1", "kind": "host-decision",
+                        "originalSha256": hashlib.sha256(text.encode()).hexdigest()}}}
+    if condition == "tampered":
+        event["text"] += " Changed"
+    if condition == "ordinary chat":
+        event["type"] = "minecraft.chat"
+    bridge.event_pages = [[event]]
+    wake, urgent, _ = run_async(controller.events())
+    assert wake and not urgent
+    assert controller.planner_retry_at == expected
 
 
 @pytest.mark.parametrize("active", [True, False])

@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.62
+
+- Support bounded, read-only Numen battlefield snapshots and opt-in task-owner feedback for repeated ambiguous shadow rankings. Preserve native target references and the existing body controller.
+
 ## 0.5.7-rc.160-preview.61
 
 - Bound accepted tactical event views for execution workers; retain source hashes and action/terminal distinction. Integrate native NeoForge login/appearance helpers and explicit per-account retryable service-unavailable disconnect markers.

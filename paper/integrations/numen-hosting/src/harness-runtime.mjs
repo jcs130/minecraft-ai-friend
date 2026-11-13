@@ -47,6 +47,8 @@ export function harnessRuntime({python,autonomySource,plannerModule,plannerSha25
       child.stdin.write(JSON.stringify(config)+'\n');
       let timer;try{await Promise.race([ready,new Promise((_,reject)=>{timer=setTimeout(()=>reject(fail('HARNESS_START_UNKNOWN','调度进程未确认就绪；先停止并核对。')),30000);})]);}
       finally{clearTimeout(timer);}
+      if(!record.exited)client.attention?.start();
+      void record.exit.then(()=>client.attention?.stop());
       return{alive:()=>!record.exited,async stop(){const result=await stop(record);if(result.stopped)workers.delete(id);return result;}};
     },
     async stopUnknown({role}){const id=key(role),record=workers.get(id);if(!record)return{stopped:true};const result=await stop(record);if(result.stopped)workers.delete(id);return result;}

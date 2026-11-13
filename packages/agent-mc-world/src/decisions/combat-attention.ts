@@ -17,7 +17,7 @@ export interface CombatDecisionAttention {
   position: [number, number, number];
   bodyIdle: true;
   dispatched: false;
-  threats: Array<{ entityId: number | null; type: string | null; distance: number | null }>;
+  threats: Array<{ entityId: number | null; type: string | null; distance: number | null; nativeReference?: string }>;
   alternatives: Array<{ id: string; kind: string; targetId?: number }>;
 }
 
@@ -34,11 +34,12 @@ export class CombatAbstention {
       b.actors.filter(e => e.relation !== 'neutral').map(e => [e.entityId, e.uuid, e.relation, e.lineOfSight, e.health.current === 0, e.targetEntityId]).sort(),
       frame.candidates.map(c => { const { intent: _intent, ...identity } = c; return identity; })]);
   }
-  context(frame: CombatDecisionFrame, now: number) {
+  context(frame: CombatDecisionFrame, now: number, observed = false) {
     const e = this.episode;
     if (!e) return null;
     if (e.key !== this.key(frame) || now < e.lastAtMs || now - e.lastAtMs > 10_000
       || Math.hypot(...frame.battlefield.self.position.map((v, i) => v - e.origin[i]!)) > 1.5) { this.clear(); return null; }
+    if (observed && e.notified) e.lastAtMs = now;
     return { reason: 'ambiguous-ranking', count: e.count, elapsedMs: now - e.sinceMs, dispatched: false, bodyIdle: true,
       ownerReviewRequested: e.notified };
   }
@@ -58,7 +59,8 @@ export class CombatAbstention {
       program: frame.policy ? { name: frame.policy.name, sourceHash: frame.policy.sourceHash } : null,
       position: [...b.self.position], bodyIdle: true, dispatched: false,
       threats: b.actors.filter(e => e.relation === 'hostile' && e.lineOfSight === true && (e.health.current === null || e.health.current > 0))
-        .slice(0, 6).map(({ entityId, type, distance }) => ({ entityId, type, distance })),
+        .slice(0, 6).map(({ entityId, type, distance, nativeReference }) =>
+          ({ entityId, type, distance, ...(nativeReference ? { nativeReference } : {}) })),
       alternatives: frame.candidates.slice(0, 8).map(c => ({ id: c.id, kind: c.kind, ...('targetId' in c ? { targetId: c.targetId } : {}) })) };
   }
 }
@@ -66,7 +68,7 @@ export class CombatAbstention {
 /** Compact evidence for host event streams, not a new command or a goal completion. */
 export function combatAttentionText(a: CombatDecisionAttention): string {
   return `[战斗决策未执行] ${a.count} 次快决策因选项排序接近未下发动作；身体空闲，不能解释为自动战斗正在推进。`
-    + `当前可见敌对：${a.threats.map(e => `${e.type ?? '未知种类'}#${e.entityId} 距离${e.distance ?? '未知'}格`).join('、')}。`
+    + `当前可见敌对：${a.threats.map(e => `${e.nativeReference ?? `${e.type ?? '未知种类'}#${e.entityId}`} 距离${e.distance ?? '未知'}格`).join('、')}。`
     + `候选：${a.alternatives.map(c => c.kind).join('/')}；战术版本 ${a.tacticRevision}。`
     + '执行者请核对当前现场与战术，明确选择攻击、观察、避险或修订方法；观察不会造成伤害。不要只重复等待快决策。'
     + `证据 ${a.firstDecisionId} → ${a.decisionId}，采样 ${new Date(a.observedAtMs).toISOString()}；不证明行动或目标完成。`;

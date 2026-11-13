@@ -25,6 +25,8 @@ export interface BattlefieldActor {
   /** Display-only; never an executable type, party relation or instruction. */
   label?: string;
   customName?: string | null;
+  /** Exact reference supplied by this body's native tools, when available. */
+  nativeReference?: string;
   identity?: EntityIdentity;
   relation: Relation;
   relationSource: 'server' | 'hostile-type' | 'unknown';

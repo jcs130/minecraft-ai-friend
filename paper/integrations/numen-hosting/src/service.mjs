@@ -13,7 +13,7 @@ import {HostedConversations} from './conversations.mjs';
 /** Operator supplies scoped MCP transport and configured existing runtimes.
  * Never discovers credentials, creates a game login or resumes actions at boot. */
 export async function startHostingService({database,sessionFor,admitRole,grantKey,serviceKey,port=19084,
-  coreDirectory,dataRoot,runtimes=()=>({}),modelProfiles,voice,onProblem=()=>{}}){
+  coreDirectory,dataRoot,runtimes=()=>({}),modelProfiles,voice,combatAttention,onProblem=()=>{}}){
   if(!Number.isInteger(port)||port<0||port>65535)throw new Error('Invalid loopback port');
   await mkdir(dirname(resolve(database)),{recursive:true});
   const store=new HostingStore(resolve(database)),body=new NumenHostedBody({sessionFor,admitRole});
@@ -25,7 +25,8 @@ export async function startHostingService({database,sessionFor,admitRole,grantKe
   };
   let harness,http;
   try{
-    harness=new HarnessHubDriver({runtimes:runtimes(checkControl),createClient:await coreClientFactory({coreDirectory,dataRoot})});
+    harness=new HarnessHubDriver({runtimes:runtimes(checkControl),createClient:await coreClientFactory({
+      coreDirectory,dataRoot,checkControl,combatAttention:combatAttention?{...combatAttention,onProblem}:null})});
     if(modelProfiles&&(!Buffer.isBuffer(modelProfiles.key)||modelProfiles.key.length!==32))throw new Error('A separate 32-byte hosting vault key is required');
     if(modelProfiles&&(modelProfiles.key.equals(grantKey)||modelProfiles.key.equals(serviceKey)))throw new Error('Vault key must be separate from transport and grant keys');
     const profiles=modelProfiles?new HostedProfiles({store,...modelProfiles,

@@ -1,4 +1,4 @@
-import { fail } from './protocol.mjs';
+import { PROTOCOL, fail } from './protocol.mjs';
 
 // Implements agent-mc-world's public NumenBodyPort. The shared MC client keeps
 // its journal, request/turn IDs and host protocol; Numen keeps its body queue.
@@ -29,6 +29,19 @@ export function numenCorePort(hosting, role, epoch) {
       return {uuid:state.roleUuid,server:state.serverId,sampledAt:state.sampledAt,
         health:state.health,maxHealth:state.maxHealth,food:state.food,dimension:state.dimension,
         position:state.position,workPending:state.workPending};
+    },
+    async battlefield(signal){
+      const before=check();
+      signal?.throwIfAborted();
+      if(before.unresolvedRequest||!hosting.body.battlefield)return null;
+      const sample=await hosting.body.battlefield(role,{boot:hosting.boot,epoch},signal);
+      signal?.throwIfAborted();
+      if(check().unresolvedRequest||!sample)return null;
+      if(sample.protocol!==PROTOCOL||sample.bodyKind!=='numen'||sample.roleUuid!==role.roleUuid
+        ||sample.serverId!==role.serverId||sample.name!==role.name||sample.epoch!==epoch
+        ||sample.mode!=='harness'||sample.ready!==true||sample.fenced!==true)
+        throw fail('BODY_IDENTITY_MISMATCH','战场采样与当前角色或控制权不符。');
+      return sample.battlefield;
     },
     async catalog(signal){check();signal?.throwIfAborted();const result=await hosting.body.catalog(role);check();return result.tools;},
     async call({id,tool,args,signal}){

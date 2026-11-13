@@ -1,3 +1,7 @@
+## 0.2.156
+
+- Surface fresh, typed combat attention to the task owner during a text-only idle wait. Preserve provider retry delays, native work ownership and the existing turn schedule.
+
 ## 0.2.152
 
 - Give ordinary player conversation a concrete, capability-checked native chat path in both planner modes, independent of the optional companion roster. Allow purposeful initiative alongside useful queued work; preserve audience evidence, survival priority and optional silence.

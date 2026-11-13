@@ -25,6 +25,8 @@ export interface CombatDecisionOptions {
   fallback?: () => void;
   report: (event: string, data: Record<string, unknown>) => void;
   attention?: (evidence: CombatDecisionAttention) => void | Promise<void>;
+  /** An observer may request review without becoming a second body controller. */
+  attentionInShadow?: boolean;
   fetchImpl?: typeof fetch;
   /** Supplied by the host adapter; the game core never resolves providers or credentials. */
   request?: (input: { state: unknown; questions: Record<string, { type: 'choice'; instructions: string; criteria: Record<string, string> }> },
@@ -160,6 +162,8 @@ export class CombatDecisionLoop {
     const frame = this.options.sample();
     this.lastEligible = !!frame && !frame.battlefield.action.emergency && (frame.candidates.length > 0 || !!frame.program);
     if (!frame || !this.lastEligible) { this.abstention.clear(); return false; }
+    if (cfg.mode === 'shadow' && this.options.attentionInShadow
+      && this.abstention.context(frame, now, true)?.ownerReviewRequested) return false;
     this.inFlight = true;
     void this.choose(frame, cfg, now).finally(() => { this.inFlight = false; });
     return true;
@@ -307,7 +311,8 @@ export class CombatDecisionLoop {
         candidate: (outcome === 'sent' ? effective : selected) ?? null, candidates:dispatched };
       Object.assign(entry, result);
       this.options.report('result', result);
-      if (cfg.mode === 'act' && outcome === 'uncertain' && ranking.reason === 'ambiguous-ranking' && current) {
+      if ((cfg.mode === 'act' || this.options.attentionInShadow) && outcome === 'uncertain'
+        && ranking.reason === 'ambiguous-ranking' && current) {
         const attention = this.abstention.record(current, scope.decisionId, now());
         if (attention) {
           this.options.report('attention', { ...attention });

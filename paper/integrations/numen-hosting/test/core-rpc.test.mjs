@@ -6,6 +6,7 @@ import {join,resolve} from 'node:path';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {coreClientFactory} from '../src/core-client.mjs';
 import {openCoreRpc} from '../src/core-rpc.mjs';
+import {fail} from '../src/protocol.mjs';
 
 test('real shared MC core carries stable turn/request IDs through private HTTP and rejects a stale controller',async t=>{
   const directory=await mkdtemp(join(tmpdir(),'hosted-core-'));
@@ -20,7 +21,7 @@ test('real shared MC core carries stable turn/request IDs through private HTTP a
     call:async args=>{calls.push(args);return{text:'Original test receipt'};},result:async id=>({text:id})};
   const create=await coreClientFactory({coreDirectory:resolve('../../../packages/agent-mc-world'),dataRoot:directory});
   client=await create(role,port,1);
-  rpc=await openCoreRpc(client,{check:()=>{if(!current)throw new Error('generation changed');}});
+  rpc=await openCoreRpc(client,{check:()=>{if(!current)throw fail('CONTROL_CHANGED','generation changed');}});
   const request=(operation,args=[],token=rpc.token,extra={})=>fetch(rpc.endpoint,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${token}`,...extra},body:JSON.stringify({operation,arguments:args})});
   assert.equal((await request('tools',[],randomBytes(32).toString('base64url'))).status,403);
   assert.equal((await request('tools',[],rpc.token,{origin:'https://untrusted.test'})).status,403);
@@ -32,6 +33,9 @@ test('real shared MC core carries stable turn/request IDs through private HTTP a
   const response=await(await request('tool',['mc_numen',{op:'call',tool:'lua',args:{code:'return 1'}},meta])).json();
   assert.notEqual(response.isError,true);assert.equal(calls.length,1);assert.equal(calls[0].id,'request-stable-one');
   current=false;
-  assert.equal((await request('tool',['mc_numen',{op:'call',tool:'lua',args:{}},meta])).status,409);
+  const stale=await request('tool',['mc_numen',{op:'call',tool:'lua',args:{}},meta]);
+  assert.equal(stale.status,409);
+  assert.deepEqual(await stale.json(),{error:'CONTROL_CHANGED'});
+  assert.equal((await request('tool',['mc_connection',{action:'connect'}])).status,409);
   assert.equal(calls.length,1);
 });

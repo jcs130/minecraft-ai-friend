@@ -1,4 +1,5 @@
 import type { ToolDef, ToolOutcome, World, WorldHost, WorldRequestFacts } from '../contracts/host.ts';
+import { numenCombatFrame, type NumenBattlefieldSample } from './numen-battlefield.ts';
 
 export type NumenBodyFacts = {
   uuid: string; server: string; sampledAt: number;
@@ -14,6 +15,8 @@ export interface NumenBodyPort {
   disconnect(): Promise<void>;
   /** Optional, freshly sampled status. Excludes inbox and chat text. */
   facts?(signal?: AbortSignal): Promise<NumenBodyFacts|null>;
+  /** Fresh visible threats for the current idle Harness lease. Null when unavailable or occupied. */
+  battlefield?(signal?: AbortSignal): Promise<NumenBattlefieldSample | null>;
   /** Non-consuming state; never substitute get_events and steal the inbox. */
   observe(signal?: AbortSignal): Promise<{ text: string; sampledAt: number; uuid: string; server: string }>;
   catalog(signal?: AbortSignal): Promise<Array<{name: string; description: string; parameters: Record<string,unknown>}>>;
@@ -39,6 +42,12 @@ export class NumenClientWorld implements World {
     this.ready=true;
   }
   async stop(){this.ready=false;this.facts=null;this.brief=null;await this.port.disconnect();}
+  async combatFrame(generation: number, signal: AbortSignal) {
+    if (!this.ready || !this.port.battlefield) return null;
+    const sample = await this.port.battlefield(signal);
+    signal.throwIfAborted();
+    return this.ready ? numenCombatFrame(sample, generation) : null;
+  }
   connectionReadiness(){return{ready:this.ready,phase:this.ready?'numen-hosted':'disconnected',disconnectStopsBody:false};}
   async refreshFacts(signal: AbortSignal) {
     if(!this.ready||!this.port.facts)return;
@@ -67,7 +76,7 @@ export class NumenClientWorld implements World {
       ...(this.facts?.text ? [{key:'world',text:this.facts.text}] : []),
     ]};
   }
-  environment(){return 'Minecraft body: Numen server player. Use mc_protocol to mark actual decision turns and read current facts. Use mc_numen op=catalog for native tools and their schemas, then op=observe for current state. Call advertised tools through op=call. Numen executes Lua, not Mineflayer JavaScript. Preserve request IDs. Dispatch is not task completion: read the original result and current state. Do not replay unknown actions, invent commands, summon another body, or drive after CONTROL_CHANGED. The host owns authentication, model choice and manual takeover.';}
+  environment(){return 'Minecraft body: Numen server player. Use mc_protocol to mark actual decision turns and read current facts. Use mc_numen op=catalog for native tools and their schemas, then op=observe for current state. Call advertised tools through op=call. Numen executes Lua, not Mineflayer JavaScript. If you receive a combat attention event, use its native target reference to recheck the visible threat and decide whether to engage, observe or retreat; it records no action. Preserve request IDs. Dispatch is not task completion: read the original result and current state. Do not replay unknown actions, invent commands, summon another body, or drive after CONTROL_CHANGED. The host owns authentication, model choice and manual takeover.';}
   envPromptVars(){return {world:'Minecraft',body:'Numen server body',
     instructions:'Use mc_numen catalog, then observe and call the advertised native tool. Lua is Numen Lua, not Mineflayer JavaScript. A dispatch receipt is not success. Reconcile an unknown request by its original ID; never replay it. This adapter does not own a model loop.'};}
   tools():ToolDef[]{return [{
