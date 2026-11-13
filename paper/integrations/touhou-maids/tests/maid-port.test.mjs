@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {createMaidPort,maidCommand,MAID_CHANNEL} from '../agent/maid-port.mjs';
+import {createMaidPort,maidCommand,MAID_CHANNEL,MAID_REQUEST_CHANNEL} from '../agent/maid-port.mjs';
 const maid='e3228ffc-eb42-441d-a08c-3e5948a307e8', recipient='fce37da4-0183-4f20-a160-3fe49d871878';
 const envelope=(action,id,data)=>({schema:1,protocol:'qiandengji-maids/v1',recipientUuid:recipient,action,requestId:id,ok:true,sampledAt:new Date().toISOString(),data});
 test('nearby discovery has no invented maid identity and accepts its authenticated catalogue',async()=>{
@@ -36,6 +36,44 @@ test('host adapter supports native dialogue and six equipment slots without raw 
   assert.equal(maidCommand({action:'chat',maidId:maid,requestId:'native-1',text:'跟我说说你的状态'}).command,`/qdmaid chat ${maid} native-1 跟我说说你的状态`);
   for(const hand of ['main','off','head','chest','legs','feet'])assert.equal(maidCommand({action:'equip',maidId:maid,requestId:'gear-1',hand,slot:3}).command,`/qdmaid equip ${maid} gear-1 ${hand} 3`);
   assert.throws(()=>maidCommand({action:'chat',maidId:maid,text:'你好'}),/retained requestId/);
+});
+test('workshop queries are read-only and crafting keeps its original operation ID',async()=>{
+  const query=maidCommand({action:'workshop',maidId:maid,requestId:'workshop-read'});
+  assert.equal(query.command,`/qdmaid workshop ${maid} workshop-read`);
+  assert.equal(query.operationId,undefined);
+  const make={action:'make',maidId:maid,requestId:'craft-1',workshopId:'home',recipeId:'minecraft:torch'};
+  assert.equal(maidCommand(make).command,`/qdmaid make ${maid} craft-1 home minecraft:torch once chest`);
+  assert.equal(maidCommand({...make,quantity:4,inventory:'backpack'}).command,`/qdmaid make ${maid} craft-1 home minecraft:torch 4 backpack`);
+  for(const invalid of [{requestId:undefined},{workshopId:'home 1'},{recipeId:'torch'},{quantity:0},{quantity:1.5},{inventory:'public'}]){
+    assert.throws(()=>maidCommand({...make,...invalid}));
+  }
+  const bot=client();const sent=[];bot.chat=command=>sent.push(command);
+  const port=createMaidPort(bot,{timeoutMs:40});
+  try{
+    const read=port.request({action:'workshop',maidId:maid,requestId:'workshop-read'});
+    bot._client.emit('custom_payload',{channel:MAID_CHANNEL,data:Buffer.from(JSON.stringify(envelope('workshop','workshop-read',{maidId:maid,workshops:[{id:'home'}]})))});
+    assert.equal((await read).data.workshops[0].id,'home');
+    const result=await port.request(make);
+    assert.equal(result.status,'unknown');assert.equal(result.operationId,'craft-1');assert.equal(result.retryAllowed,false);
+    assert.deepEqual(sent,[query.command,maidCommand(make).command]);
+  }finally{port.close();}
+});
+for(const advertised of [false,true])test(`workshop chooses its transport before sending (${advertised})`,async()=>{
+  const bot=client(),sent=[];
+  bot.chat=command=>sent.push(['command',command]);
+  bot._client.write=(kind,packet)=>{
+    if(packet.channel===MAID_REQUEST_CHANNEL)sent.push(['payload',JSON.parse(packet.data).command]);
+  };
+  const reply=value=>bot._client.emit('custom_payload',{channel:MAID_CHANNEL,data:Buffer.from(JSON.stringify(value))});
+  const port=createMaidPort(bot);
+  try{
+    reply(envelope('transport','transport',{requestChannel:MAID_REQUEST_CHANNEL,...(advertised?{workshop:true}:{})}));
+    assert.equal(port.transport,'plugin_message');
+    const result=port.request({action:'workshop',maidId:maid,requestId:'transport-check'});
+    assert.deepEqual(sent,[[advertised?'payload':'command',`/qdmaid workshop ${maid} transport-check`]]);
+    reply(envelope('workshop','transport-check',{maidId:maid,workshops:[]}));
+    assert.equal((await result).ok,true);
+  }finally{port.close();}
 });
 test('command fallback resolves only authentic server system messages',async()=>{
   const bot=client(),port=createMaidPort(bot,{timeoutMs:1000});let done=false;
