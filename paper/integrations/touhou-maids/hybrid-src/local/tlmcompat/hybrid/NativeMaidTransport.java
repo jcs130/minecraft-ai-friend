@@ -13,7 +13,7 @@ import org.bukkit.plugin.messaging.PluginMessageListener;
 /** Uses the authenticated player's connection and the existing owner-checked command parser. */
 public final class NativeMaidTransport implements PluginMessageListener, Listener, AutoCloseable {
     public static final String REQUEST="qiandengji:maid_request";
-    private static final Set<String> ACTIONS=Set.of("brain","nearby","chat","talk","list","context","follow","stay","speak","receipt","inbox","ack","tasks","inventory","sit","task","schedule","pickup","transfer","equip","skins","skin","voices","voice","voice-test","mute","resources","resource-pack","rename");
+    private static final Set<String> ACTIONS=Set.of("brain","nearby","chat","talk","list","context","follow","stay","speak","receipt","inbox","ack","tasks","inventory","sit","task","workshop","make","schedule","pickup","transfer","equip","skins","skin","voices","voice","voice-test","mute","resources","resource-pack","rename");
     private final HybridMaidPlugin plugin;
     private final Map<UUID,ArrayDeque<Long>> requests=new HashMap<>();
     public NativeMaidTransport(HybridMaidPlugin plugin){
@@ -26,6 +26,7 @@ public final class NativeMaidTransport implements PluginMessageListener, Listene
         Player actor=event.getPlayer();
         if(!actor.getListeningPluginChannels().contains(REQUEST)||!actor.getListeningPluginChannels().contains(HybridMaidPlugin.CHANNEL))return;
         JsonObject data=new JsonObject();data.addProperty("requestChannel",REQUEST);data.addProperty("maximumBytes",2048);data.addProperty("requestsPerSecond",16);
+        data.addProperty("workshop",true);
         plugin.reply(actor,"transport","transport",data,null);
     }
     @EventHandler public void quit(PlayerQuitEvent event){requests.remove(event.getPlayer().getUniqueId());}

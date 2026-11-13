@@ -8,10 +8,11 @@ import tempfile
 import zipfile
 
 BASELINE_SHA256 = '19d741b775fe17b067525a369733b19bbc76179637e22bdbb3fd6d1d01f27e08'
-VERSION = '0.1.29-residence-route'
+VERSION = '0.1.30-work-and-guard'
 PACKAGE = 'local/tlmcompat/hybrid/'
 CLASSES = ('NativeMaidResidence', 'HybridMaidPlugin', 'NativeMaidOwnerTravel',
-           'NativeMaidWorkshop', 'NativeMaidAgentSupport', 'MaidLifeEpisodes')
+           'NativeMaidWorkshop', 'NativeMaidAgentSupport', 'MaidLifeEpisodes',
+           'NativeMaidTransport', 'NativeMaidCompanionSupport', 'MaidCompanionActions')
 
 def replaced(name):
     return any(name == PACKAGE + cls + '.class' or

@@ -17,6 +17,10 @@
 - `/qdmaid receipt <maidId> <原requestId> [queryId]` 查原结果。正常接单是 `pending`。`completed` 且 `goalCompleted:true` 表示实际库存已核对，`observation` 给出 `itemId`、`count`、材料和成品所在的 `inventory`，以及到达点。完成时聊天中的工单编号可用于查询。
 - 缺材料、库存已改或路线中断会附原因。可明确确认无效果的失败修正后再下新单，`unknown` 用原请求和实物核对。
 
+更新后的 `mc_maids` 可以用 `workshop` 读取同一工位目录和 `currentOrder`，用 `make` 传 `maidId`、`requestId`、`workshopId`、`recipeId`，并按需传 `quantity`（成品件数）和 `inventory`（`chest` 或 `backpack`）。桥 0.1.30 起目录附 `table`、`supplyChest` 方块坐标。旧桥可走已有的普通命令入口，新的插件频道能力在发送前协商。
+
+需要农场时，从 `tasks` 读取已启用的 `touhou_little_maid:farm`。先核对有权使用的耕地、工作时段与种子，再用 `task` 选择原生任务。`applied` 表示已切模式，采收和补种以方块、掉落或真实库存为准。用 `follow` 结束工作并恢复同行。
+
 在桥的插件数据目录 `workshops.json` 登记工位。示例 UUID 和坐标均需替换成实际站点信息：
 
 ```json
@@ -63,6 +67,8 @@
 **0.1.14-companion 已部署**：原肥鱼在附近点名且回复成功后，同一玩家、连接、维度有45秒接话窗口；每个已完成回复最多承接3条后续输入，仍需8格范围并遵守原节流。公屏、私聊、旁人和跨维度不继承此窗口。对话声音优先于日常短句，后者可被中断；`speech.transport=simple_voice_chat_position` 不依赖客户端女仆投影的实体 UUID，仍需连接 Simple Voice Chat，`sent` 不等于耳听验收。
 
 `context.companion` 返回原生自动护卫状态。仅已配置的原肥鱼在闲置跟随、有合适武器、附近可见怪物正在攻击主人或本人时切到原生战斗；脱战5秒、低血量或武器不合格时恢复陪伴。主人手选任务和停留优先，不另启模型行动循环。她在主人原位置16格内、处于跟随时，会跟随成功的远距／跨维度传送，落点必须已加载且安全；不召回远方或未加载女仆，不创建替代实体。`applied` 仍只是设置成功，必须核对维度、位置及 `ownerDistance`。
+
+桥 0.1.30 候选通过原生注册表匹配主手武器，包含近战、弓、弩、三叉戟与弹幕。弓弩按原生弹药条件就绪。`context.companion` 返回 `mainHand`、就绪的 `equippedAttackTask`、`partnerRange` 和下一步。伙伴距离由原跟随停止距离推导，按 16 格最低值计算。可见敌对目标仍须在女仆 8 格内，并通过原生目标检查。驻点、坐下或手选工作继续优先。VortexRPG 的玩家施法入口仍要求在线玩家角色。
 
 旧聊天回执超过4000字符时仅省略静态帮助，标记 `compactHelp:true`；身份、生命事实、动作终态和原请求ID保留。插件频道返回完整内容。仍超长会明确返回 `response_requires_plugin_channel`，客户端应在 `qiandengji:maids` 查询原请求，不能换ID重做动作。基础协议和命令入口不变。
 
