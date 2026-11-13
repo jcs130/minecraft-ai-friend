@@ -23,7 +23,7 @@ public final class DailyGameplayQa extends JavaPlugin implements Listener {
     @Override public void onEnable() {
         try {
             if (!Files.readString(Path.of(".daily-shop-qa")).equals("ISOLATED_DAILY_SHOP_FROST_ONLY")
-                    || !Bukkit.getIp().equals("127.0.0.1") || Bukkit.getPort() != 25928)
+                    || !Bukkit.getIp().equals("127.0.0.1") || !java.util.Set.of(25928,26324,26326).contains(Bukkit.getPort()))
                 throw new IllegalStateException("Isolated stage required");
             vortex = (VortexCorePlugin) Bukkit.getPluginManager().getPlugin("VortexRPG");
             Bukkit.getPluginManager().registerEvents(this, this);
@@ -60,8 +60,8 @@ public final class DailyGameplayQa extends JavaPlugin implements Listener {
                         player.setFireTicks(120);
                         player.addPotionEffect(new org.bukkit.potion.PotionEffect(PotionEffectType.POISON,200,0));
                         player.addPotionEffect(new org.bukkit.potion.PotionEffect(PotionEffectType.SPEED,400,0));
-                        effects.applyEffectToEntity(player,"bleed",200,1,1,true);
-                        effects.applyEffectToEntity(player,"arcane_ward",200,1,1,true);
+                        effects.applyEffectToEntity(player,"bleed",1,400,1,true);
+                        effects.applyEffectToEntity(player,"arcane_ward",1,400,1,true);
                     }
                     var all=(java.util.Map<?,?>)field(effects,"activeEffects");
                     var active=all.get(player.getUniqueId()) instanceof java.util.Map<?,?> current ? current : java.util.Map.of();
@@ -95,7 +95,7 @@ public final class DailyGameplayQa extends JavaPlugin implements Listener {
                     String tag=player.getName().equals("MaidBrainQA")?"afu_dungeon_mob":"afu_site_qa_readiness";
                     var mobs=player.getNearbyEntities(24,7,24).stream()
                         .filter(entity->entity instanceof LivingEntity living&&!living.isDead()&&entity.getScoreboardTags().contains(tag)).toList();
-                    if (args[2].equals("clear")) for(var mob:mobs) ((LivingEntity)mob).setHealth(0);
+                    if (args[2].equals("clear")) for(var mob:mobs) ((LivingEntity)mob).damage(1000,player);
                     else if (!args[2].equals("read")) throw new IllegalArgumentException("read or clear");
                     sender.sendMessage("mobs="+mobs.size());
                 }

@@ -31,7 +31,8 @@ def compile_sources(jdk, classes, classpath, sources):
     subprocess.run([str(jdk / "bin/javac.exe"), "-J-Xmx768m", "@" + str(options)], check=True)
 
 
-def package(base, target, classes, prefix, names, version):
+def package(base, target, classes, prefix, names, version, resources=None):
+    resources = resources or {}
     def owned(name):
         return name.startswith(prefix) and name.endswith(".class") and name[len(prefix):].split("$")[0].removesuffix(".class") in names
     entries = {path.relative_to(classes).as_posix(): path.read_bytes() for path in sorted(classes.rglob("*.class"))}
@@ -46,6 +47,8 @@ def package(base, target, classes, prefix, names, version):
             if name == "plugin.yml":
                 content, count = re.subn(rb"(?m)^version:[^\r\n]*", ("version: " + version).encode(), content)
                 assert count == 1
+            elif name in resources:
+                content = resources[name].read_bytes()
             new.writestr(info, content)
         for name, content in entries.items():
             info = zipfile.ZipInfo(name, (2026, 11, 13, 0, 0, 0))
@@ -53,7 +56,8 @@ def package(base, target, classes, prefix, names, version):
             new.writestr(info, content)
     with zipfile.ZipFile(base) as old, zipfile.ZipFile(target) as new:
         assert len(new.namelist()) == len(set(new.namelist()))
-        retained = [name for name in old.namelist() if name != "plugin.yml" and not owned(name)]
+        assert all(new.read(name) == path.read_bytes() for name,path in resources.items())
+        retained = [name for name in old.namelist() if name != "plugin.yml" and not owned(name) and name not in resources]
         assert all(old.read(name) == new.read(name) for name in retained)
     print(version, digest(target), len(retained), "preserved entries")
 
@@ -78,7 +82,9 @@ def main():
     ):
         classes = args.output / ("classes-" + version)
         compile_sources(args.jdk, classes, classpath, [source / prefix / (name + ".java") for name in names])
-        package(base, args.output / (base.name.split("-0.")[0] + "-" + version + ".jar"), classes, prefix, names, version)
+        resources = {name: root / "plugins/AgentFriend/resources" / name for name in ("agent-guide.yml","onboarding.yml")} if base == args.agentfriend else None
+        package(base, args.output / (base.name.split("-0.")[0] + "-" + version + ".jar"),
+                classes, prefix, names, version, resources)
 
 
 if __name__ == "__main__":

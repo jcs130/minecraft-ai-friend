@@ -8,17 +8,20 @@ import {installRecipePacketBypass} from '../../ops/mineflayer-client-compat.mjs'
 
 const stage = resolve(process.env.DUNGEON_READINESS_STAGE);
 const baseline = process.argv.includes('--baseline');
+const gamePort=Number(process.env.DUNGEON_READINESS_GAME_PORT ?? 25928);
+const rconPort=Number(process.env.DUNGEON_READINESS_RCON_PORT ?? 25929);
+assert([25928,26324,26326].includes(gamePort)&&rconPort===gamePort+1);
 assert.equal(await readFile(resolve(stage, '.readiness-qa'), 'utf8'), 'SYNTHETIC_DUNGEON_READINESS_ONLY');
 const properties = resolve(stage, 'server.properties');
 const settings = (await readFile(properties, 'utf8')).split(/\r?\n/);
-for (const value of ['server-ip=127.0.0.1','server-port=25928','rcon.port=25929']) assert(settings.includes(value));
+for (const value of ['server-ip=127.0.0.1','server-port='+gamePort,'rcon.port='+rconPort]) assert(settings.includes(value));
 const fixture = JSON.parse(await readFile(resolve(stage, 'fixture.json'), 'utf8'));
 assert(fixture.synthetic && fixture.username === 'MaidBrainQA');
 const {createBot} = createRequire(process.env.MINEFLAYER_PACKAGE)('mineflayer');
 const bots = [];
 const report = {baseline, synthetic: true, checks: []};
 const rc = async text => {
-    const result = await command(text, 12000, {port:25929, properties});
+    const result = await command(text, 12000, {port:rconPort, properties});
     assert(!result.includes('fixture_error=') && !result.includes('An internal error occurred'), result);
     return result.trim();
 };
@@ -37,7 +40,7 @@ async function until(read, reason, timeout = 23000) {
     throw Error('Timed out: ' + reason);
 }
 async function connect(username) {
-    const bot = createBot({host:'127.0.0.1',port:25928,username,auth:'offline',version:'1.21.1',hideErrors:true,physicsEnabled:false});
+    const bot = createBot({host:'127.0.0.1',port:gamePort,username,auth:'offline',version:'1.21.1',hideErrors:true,physicsEnabled:false});
     bots.push(bot);
     bot.lines = [];
     bot.on('messagestr', line => bot.lines.push(line));
@@ -59,10 +62,11 @@ async function gear(bot, weapon = 'iron_sword') {
         await mc(`item replace entity ${bot.username} armor.${slot} with minecraft:iron_${item}`);
     await mc(`give ${bot.username} minecraft:${weapon}`);
 }
-async function y(entity) {
+async function location(entity) {
     const result=await mc('data get entity '+entity+' Pos');
-    return Number(result.match(/\[\s*-?[\d.]+d?,\s*(-?[\d.]+)d?,/)?.[1]);
+    return result.match(/\[([^\]]+)\]/)?.[1].split(',').map(parseFloat);
 }
+const y=async entity=>(await location(entity))?.[1];
 function ints(id) {
     const compact=id.replaceAll('-','');
     return [0,8,16,24].map(index=>parseInt(compact.slice(index,index+8),16)|0).join(',');
@@ -72,7 +76,7 @@ function recovered(receipt) {
     return ['health','mana'].every(key=>{
         const [current,maximum]=fields[key].split('/').map(Number);
         return current===maximum&&maximum>0;
-    }) && fields.fire==='0' && fields.poison==='false' && fields.speed==='true' && fields.bleed==='false' && fields.ward==='true';
+    }) && Number(fields.fire)<=0 && fields.poison==='false' && fields.speed==='true' && fields.bleed==='false' && fields.ward==='true';
 }
 const enemies = async (name, operation='read') => Number((await rc(
     `dailyqa readiness-enemies ${name} ${operation}`
@@ -102,6 +106,8 @@ async function playTower(owner) {
     check(baseline?'old tower admits a sword-only player':'melee and loaded ranged kit opens the trial',start.includes('floor=1'));
     await until(async()=>Math.abs(await y(maid)-69)<3,'companion entered floor one');
     check('original companion alive at the entrance floor', Number((await mc(`data get entity ${maid} Health`)).match(/([\d.]+)f\s*$/)?.[1])>0);
+    await mc('tp '+name+' -589.5 69 -304.5');
+    await mc('tp '+maid+' -587.5 69 -304.5');
     await until(async()=>await enemies(name)>0,'tower enemies');
     if (!baseline) {
         await rc(`dailyqa clear-state ${name} arm`);
@@ -121,13 +127,15 @@ async function playTower(owner) {
             recovered(report.towerRecovery.state) && Math.abs(await y(name)-69)<3);
     }
     await until(async()=>Math.abs(await y(name)-57)<3,'official 12-block next-floor transfer');
+    await delay(350);
+    report.towerPositions={owner:await location(name),companion:await location(maid)};
     if (baseline) {
         check('old companion remains on floor one after the 12-block transfer',Math.abs(await y(maid)-69)<3);
     } else {
         check('same companion arrives with the owner on floor two',
             await until(async()=>Math.abs(await y(maid)-57)<3,'companion floor two',3500));
     }
-    report.towerPositions={ownerY:await y(name),companionY:await y(maid)};
+    report.towerPositions={owner:await location(name),companion:await location(maid)};
     await say(owner,'/mycli arena leave',/已返回地面/);
 }
 
