@@ -60,6 +60,7 @@ export function combatRequest(frame: CombatDecisionFrame, config: { compatible?:
     ...(frame.survival ? {survival: frame.survival} : {}),
     ...(frame.loadout ? { loadout: frame.loadout } : {}),
     ...(frame.programDeferred ? { programDeferred: frame.programDeferred } : {}),
+    ...(frame.policy?.selection ? { programSelection: frame.policy.selection } : {}),
     battlefield: { dimension: b.dimension,...(b.world?{world:b.world.key}:{}),
       self: { entityId: b.self.entityId, health: health(b.self.health), food: b.self.food,
         ...(frame.candidates.some(candidate => candidate.kind === 'step'||candidate.kind==='search')

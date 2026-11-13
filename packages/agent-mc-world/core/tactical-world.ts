@@ -13,7 +13,7 @@ import { tacticSupervisorView } from '../src/client/event-context.ts';
 import { COMBAT_EXECUTION_DEFAULTS, type CombatCandidate, type CombatExecutionPolicy, type CombatDecisionFrame } from './combat-decision-types.ts';
 import { combatReactions, openingSpellBattlefield } from './combat-reactions.ts';
 import { combatLoadout } from './combat-loadout.ts';
-import { CombatProgramRunner, CombatProgramBusyError, CombatProgramSceneChangedError, combatProgramCandidates, combatProgramHash, validCombatProgram } from './combat-program.ts';
+import { CombatProgramRunner, CombatProgramBusyError, CombatProgramSceneChangedError, combatProgramCandidates, combatProgramHash, combatProgramSelection, validCombatProgram } from './combat-program.ts';
 import { combatRulesError, type CombatRule } from './combat-rules.ts';
 import { combatMayTakeTask, diverseCombatOptions } from './combat-options.ts';
 import { combatSearchCandidates } from './combat-search.ts';
@@ -33,6 +33,7 @@ protected combatProgramErrorHash: string | null = null;
 protected combatProgramError: string | null = null;
 protected combatProgramRetryAt = 0;
 protected combatProgramTimeoutRetriedHash: string | null = null;
+private lastExcludedEngagementProgram: string | null = null;
 protected lastCombatProgramFeedbackAt = 0;
 protected lastCombatDecision: { atMs: number; generation: number; outcome: unknown; elapsedMs: unknown } | null = null;
 private readonly routineGraphs = new Map<string, ProcedureGraph | Error>();
@@ -323,9 +324,18 @@ protected async prepareCombatProgram(frame: CombatDecisionFrame): Promise<Combat
         to => this.combatDecisionConfig().allowMovement && corridorSafe(bot, new Vec3(...frame.battlefield.self.position), new Vec3(...to)));
       const max = this.combatDecisionConfig().maxCandidates;
       this.combatProgramErrorHash = null; this.combatProgramError = null;
-      return { ...frame, candidates: result.candidates.slice(0, max),
+      const candidates = result.candidates.slice(0, max), selection = combatProgramSelection(frame, candidates);
+      if (selection?.excludedKinds.includes('engage') && !frame.battlefield.action.fighting
+        && this.lastExcludedEngagementProgram !== hash) {
+        this.lastExcludedEngagementProgram = hash;
+        this.emit('minecraft.tactic', `战术程序「${program.name}」版本 ${frame.tacticRevision} 从当前可执行选项中排除了全部 engage 攻击；`
+          + '这是程序筛选，不是模型选择不攻击，也不表示目标不可达。track 只观察，不会自动射箭；'
+          + 'engage 使用当前可用近战或弓。请结合自己的目标核对源码；引擎未擅自恢复攻击选项。',
+        false, { trigger: 'piggyback', meta: { combatProgramSelection: { sourceHash: hash, selection } } });
+      }
+      return { ...frame, candidates,
         omittedCandidates: Math.max(0, result.candidates.length - max),
-        policy: { name: program.name, sourceHash: hash, instructions: result.instructions } };
+        policy: { name: program.name, sourceHash: hash, instructions: result.instructions, selection } };
     } catch (error) {
       // Another reader owns this evaluation. Keep this reader's fresh default
       // candidates; do not borrow its output, queue stale frames or revoke it.

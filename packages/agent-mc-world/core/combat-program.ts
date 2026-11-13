@@ -5,6 +5,18 @@ import type { CombatCandidate, CombatDecisionFrame } from './combat-decision-typ
 
 export interface CombatProgram { name: string; code: string; params?: Record<string, unknown> }
 export interface CombatProgramResult { candidates: CombatCandidate[]; instructions: string }
+
+/** Explain authored filtering without restoring options the author chose to exclude. */
+export function combatProgramSelection(frame: CombatDecisionFrame, offered: CombatCandidate[]): NonNullable<CombatDecisionFrame['policy']>['selection'] {
+  const count = (items: CombatCandidate[]) => {
+    const counts: Partial<Record<CombatCandidate['kind'], number>> = {};
+    for (const c of items) counts[c.kind] = (counts[c.kind] ?? 0) + 1;
+    return counts;
+  };
+  const native = count(frame.actionPool ?? frame.candidates), selected = count(offered);
+  return { native, offered: selected,
+    excludedKinds: (Object.keys(native) as CombatCandidate['kind'][]).filter(kind => !selected[kind]) };
+}
 /** Transient sampling contention, not a fault in the authored program. */
 export class CombatProgramBusyError extends Error {
   constructor() { super('Combat program already evaluating'); this.name = 'CombatProgramBusyError'; }

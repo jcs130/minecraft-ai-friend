@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.63
+
+- Let explicit equipment transactions finish during low-health combat; retain native confirmation, cancellation and environmental rescue priority. Report authored candidate exclusions without adding or forcing attacks.
+
 ## 0.5.7-rc.160-preview.62
 
 - Support bounded, read-only Numen battlefield snapshots and opt-in task-owner feedback for repeated ambiguous shadow rankings. Preserve native target references and the existing body controller.

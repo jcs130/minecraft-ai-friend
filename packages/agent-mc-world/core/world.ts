@@ -4396,6 +4396,7 @@ export class MinecraftWorld implements World {
       envBusy: () => this.bodyInhibitReason !== null || (this.reflexes?.envActive ?? false) || Date.now() < this.escapeHoldUntil,
       taskEscaping: () => this.executor?.escaping ?? false,
       taskEating: () => this.executor?.eating ?? false,
+      taskEquipping: () => this.executor?.equipping ?? false,
       taskFighting: () => this.executor?.attacking ?? false,
       suspendTasks: (by) => {
         this.interruptIdle('combat');

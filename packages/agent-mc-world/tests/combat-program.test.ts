@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Worker } from 'node:worker_threads';
 import { Vec3 } from 'vec3';
 import type { Bot } from 'mineflayer';
-import { CombatProgramRunner, CombatProgramSceneChangedError, combatProgramCandidates, COMBAT_PROGRAM_LIMITS } from '../core/combat-program.ts';
+import { CombatProgramRunner, CombatProgramSceneChangedError, combatProgramCandidates, combatProgramSelection, COMBAT_PROGRAM_LIMITS } from '../core/combat-program.ts';
+import { combatRequest } from '../src/decisions/combat-request.ts';
 import { CombatDecisionLoop, type CombatDecisionFrame } from '../src/decisions/combat-decision.ts';
 import { combatReactions } from '../core/combat-reactions.ts';
 import { COMBAT_DECISION_DEFAULTS } from '../src/decisions/defaults.ts';
@@ -27,6 +28,22 @@ function frame(): CombatDecisionFrame {
 }
 
 describe('agent-authored combat programs', () => {
+  it('exposes native versus authored candidate coverage without overriding an intentional observe-only policy', async () => {
+    const f = frame();
+    f.battlefield.action.fighting = false;
+    f.candidates = [{ id: 'engage_2', kind: 'engage', targetId: 2, uuid: null, intent: 'Use the ready bow' },
+      { id: 'watch_2', kind: 'track', targetId: 2, uuid: null, minDistance: 5, maxDistance: 8, leaseMs: 4000, intent: 'Observe without attacking' },
+      { id: 'withdraw', kind: 'retreat', intent: 'Withdraw' }];
+    f.actionPool = [...f.candidates];
+    const p = { name: 'observe-only', code: 'return { candidates: frame.actionPool.filter(c => c.kind === "track"), instructions: "Only observe" };' };
+    const result = combatProgramCandidates(await runner().run(p, f), f, () => true);
+    const selection = combatProgramSelection(f, result.candidates);
+    expect(selection).toEqual({ native: { engage: 1, track: 1, retreat: 1 }, offered: { track: 1 }, excludedKinds: ['engage', 'retreat'] });
+    const request = combatRequest({ ...f, candidates: result.candidates, policy: { name: p.name, sourceHash: 'source', instructions: result.instructions, selection } });
+    expect(request.state.programSelection).toEqual(selection);
+    expect(Object.values(request.state.options).map((c: any) => c.kind)).toEqual(['track']);
+    expect(f.actionPool).toHaveLength(3);
+  });
   it('distinguishes a changed native step from invented unsafe geometry', () => {
     const f = frame();
     const offered = { id: 'step_direction_2', kind: 'step' as const, intent: 'Native checked step', destination: [0,64,1.2] as [number,number,number] };

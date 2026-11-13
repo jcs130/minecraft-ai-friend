@@ -217,6 +217,8 @@ interface CombatSessionOptions {
   taskEscaping?: () => boolean;
   /** 已开始的进食占用主手；受击不另起战斗打断消费。 */
   taskEating?: () => boolean;
+  /** Explicit equipment transaction; release on its own terminal, not on a hit. */
+  taskEquipping?: () => boolean;
   /** 主动 attack 已持有身体；被动三格巡检不得把同一场再接管一遍。 */
   taskFighting?: () => boolean;
   /**
@@ -468,7 +470,7 @@ export class CombatSession {
   engagementTargets(): number[] {
     const bot = this.opts.getBot(), t = this.opts.tuning();
     if (!this.alive(bot) || (this.active && (this.bodyEnded(bot) || (!this.tracking && !this.fighting))) || !t.enabled || t.fight === 'off'
-      || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()
+      || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.() || this.opts.taskEquipping?.()
       || (bot.health ?? 0) < t.fleeHealth + ENGAGE_MARGIN
       || (t.fight === 'armed' && !this.bestMeleeWeapon(bot) && !this.rangedReady(bot))
       || Date.now() < this.capCooldownUntil
@@ -486,7 +488,7 @@ export class CombatSession {
   trackingTargets(): number[] {
     const bot = this.opts.getBot(), t = this.opts.tuning();
     if (!this.alive(bot) || (this.active && this.bodyEnded(bot)) || !t.enabled || this.state === 'retreating'
-      || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()
+      || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.() || this.opts.taskEquipping?.()
       || (bot.health ?? 0) < t.fleeHealth + ENGAGE_MARGIN
       || (!this.active && (Date.now() < this.capCooldownUntil
         || (!t.arena && this.busyRatioNow() > t.busyRatio / 100)))) return [];
@@ -497,7 +499,7 @@ export class CombatSession {
   canRetreat(): boolean {
     const bot = this.opts.getBot();
     if (!this.alive(bot) || (this.active && this.bodyEnded(bot)) || this.opts.envBusy()
-      || this.opts.taskEscaping?.() || this.opts.taskFighting?.()) return false;
+      || this.opts.taskEscaping?.() || this.opts.taskFighting?.() || this.opts.taskEquipping?.()) return false;
     return this.active || this.scan(bot, this.opts.tuning(), RETREAT_CLEAR_DIST).some(f => f.visible);
   }
 
@@ -506,7 +508,7 @@ export class CombatSession {
     | { kind: 'track'; targetId: number; uuid: string | null; minDistance: number; maxDistance: number; leaseMs: number }
     | { kind: 'step'; destination: [number, number, number] }): boolean {
     const bot = this.opts.getBot();
-    if (!this.alive(bot) || (this.active && this.bodyEnded(bot)) || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()) return false;
+    if (!this.alive(bot) || (this.active && this.bodyEnded(bot)) || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.() || this.opts.taskEquipping?.()) return false;
     if (action.kind === 'retreat') {
       if (!this.canRetreat()) return false;
       if (this.state === 'retreating') return true;
@@ -645,6 +647,12 @@ export class CombatSession {
       this.beginRetreat('flee'); return true;
     }
     if (this.opts.taskFighting?.()) return true;
+    if (this.opts.taskEquipping?.()) {
+      this.provoked.add(attackerId);
+      this.opts.diag?.write({ lane: 'combat', event: 'hurt-during-equip',
+        msg: '换装仍等待装备回执，受击未另起战斗', data: { attackerId, name, health: this.opts.getBot()?.health } });
+      return true;
+    }
     if (this.opts.taskEating?.()) {
       this.provoked.add(attackerId);
       this.opts.diag?.write({ lane: 'combat', event: 'hurt-during-eat',
@@ -722,7 +730,7 @@ export class CombatSession {
     if (this.state !== 'idle') return;
     const t = this.opts.tuning();
     // 逃生与主动攻击各自持有身体，巡检不重复接管。
-    if (!t.enabled || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.()) return;
+    if (!t.enabled || this.opts.envBusy() || this.opts.taskEscaping?.() || this.opts.taskFighting?.() || this.opts.taskEquipping?.()) return;
     if (t.fight === 'off') return;
     if (!t.arena && Date.now() < this.cooldownUntil) return;
     const bot = this.opts.getBot();
@@ -851,7 +859,9 @@ export class CombatSession {
     this.releaseWalkOnly ??= walkOnlyPath(bot);
     this.hook(bot);
     const held = initial === 'fighting' ? this.hybridWeapon === 'ranged'
-      ? ',保留已经拿好的弓，拉开距离还击' : this.armMelee(bot) : '';
+      ? (bot.heldItem?.name === 'bow' || bot.heldItem?.name === 'crossbow'
+        ? ',保留手里的远程武器，拉开距离还击' : ',准备换上背包里的远程武器，拿稳后还击')
+      : this.armMelee(bot) : '';
     this.opts.emit(
       initial === 'tracking' ? `先和${zhEntity(firstName)}保持距离，跟进观察，不主动出手。`
       : hurt
@@ -2247,17 +2257,19 @@ export class CombatSession {
    * —— 250ms 巡检会在下一拍把刚开跑的任务重新挂起,那就等于什么都没改。挨打仍走
    * `onHurtBy`(宽限期内它退回反射的降级行为),环境反射照旧在两者之上。
    *
-   * 首步为 eat/flee/surface 时允许交还低血自保；环境危机仍由环境反射持有。
+   * 首步为 eat/flee/surface/equip 时允许交还低血自保；换装按原回执结束，
+   * 不推定指定物品可战斗，也不替她选择武器。环境危机仍由环境反射持有。
    * 返回刚才在做什么；本来就空闲返回 null。
    */
   standDown(firstStep?: SkillCall): string | null {
     if (this.state === 'idle') return null;
     if (this.bot && this.bodyEnded(this.bot)) { this.end('death'); return null; }
     // queue:"now" 只更新普通任务意图，不清除受击和无进展记录。
-    // 低血、绝境战斗或刚受击的撤退只向进食和撤离交还身体。
+    // 低血战斗也须让显式换装完成，否则「没拿武器→撤退→换装排队」会自锁。
     const now = Date.now();
     const retreatStillSaving = this.state === 'retreating' && now - this.retreatLastHurtAt < RETREAT_IDLE_MS;
-    const survival = firstStep?.skill === 'eat' || firstStep?.skill === 'flee' || firstStep?.skill === 'surface';
+    const survival = firstStep?.skill === 'eat' || firstStep?.skill === 'flee' || firstStep?.skill === 'surface'
+      || firstStep?.skill === 'equip';
     const environment = this.opts.envBusy();
     if (environment || (!survival
       && (retreatStillSaving || this.desperate || (this.bot?.health ?? 0) < this.opts.tuning().fleeHealth))) {

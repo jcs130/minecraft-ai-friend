@@ -5028,6 +5028,11 @@ export class Executor {
     return this.task?.steps[this.task.stepIndex]?.skill === 'eat';
   }
 
+  /** Explicit equipment changes own the slots until confirmation or failure. */
+  get equipping(): boolean {
+    return this.task?.steps[this.task.stepIndex]?.skill === 'equip';
+  }
+
   /**
    * 自保反射接管寻路前终止当前任务及其排队任务;已处于逃逸状态的任务不被抢占。
    * 本方法不清除寻路目标,由紧随其后的反射 setGoal 替换旧目标。
