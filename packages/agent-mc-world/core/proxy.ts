@@ -337,7 +337,7 @@ export class MinecraftWorldProxy implements World {
           // Executable admission predicates stay in the parent tool table.
           // The child imports its own engine module; init carries data only.
           extension: this.opts.extension ? { ...this.opts.extension,
-            tools: this.opts.extension.tools.map(({ readOnlyCall: _predicate, ...tool }) => tool),
+            tools: this.opts.extension.tools.map(({ readOnlyCall: _readPredicate, learningCall: _learningPredicate, ...tool }) => tool),
           } : undefined,
           cfg: JSON.parse(this.lastConfigJson) as MinecraftWorldOptions['cfg'],
         },

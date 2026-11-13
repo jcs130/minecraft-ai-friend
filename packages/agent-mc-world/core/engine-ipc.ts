@@ -17,7 +17,7 @@ export interface EngineInit {
   /** 账本目录 data/;null = 只在内存 */
   dataDir: string | null;
   extension?: Omit<NonNullable<import('./world.ts').MinecraftWorldOptions['extension']>, 'tools'> & {
-    tools: ReadonlyArray<Omit<import('./support/host-contract.ts').ToolDef, 'handler' | 'readOnlyCall'>>;
+    tools: ReadonlyArray<Omit<import('./support/host-contract.ts').ToolDef, 'handler' | 'readOnlyCall' | 'learningCall'>>;
   };
   cfg: MinecraftConfigSection;
 }
