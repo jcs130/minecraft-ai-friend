@@ -63,6 +63,12 @@ export class CombatAbilities {
   getTactic(): CombatTactic | null {
     return structuredClone(this.tactic);
   }
+  tacticRevision(): number { return this.book.revision(); }
+  tacticHistory(version?: number) {
+    const rows = this.book.history();
+    return version !== undefined ? rows.find(v => v.revision === version) ?? null
+      : rows.map(({tactic, ...row}) => ({...row, program: tactic?.program?.name ?? null}));
+  }
 
   /** Hot combat polling reads only this small immutable preference, not program source/history. */
   preferredMeleeWeapons(): readonly string[] { return this.tactic?.meleeWeapons ?? []; }
@@ -92,7 +98,7 @@ export class CombatAbilities {
         || combatRuleBlock(rule, { ...facts, cost: skill.manaCost })) return [];
       return [{ id: rule.id, kind: 'cast' as const, ruleId: rule.id, spell: rule.spell, intent: rule.intent, manaCost: skill.manaCost }];
     });
-    return { battlefield, tacticRevision: this.book.current().revision, mana: this.mana, skills,
+    return { battlefield, tacticRevision: this.book.revision(), mana: this.mana, skills,
       skillsOmitted: Math.max(0, observed.length - skills.length),
       candidates: candidates.slice(0, maxCandidates), omittedCandidates: Math.max(0, candidates.length - maxCandidates) };
   }
@@ -269,12 +275,15 @@ export class CombatAbilities {
       reason: r.reason, healthBefore: r.healthBefore, healthAfter: r.healthAfter,
       kills: null, killAttribution: r.killAttribution ?? 'legacy-unverified',
       targetDeaths: r.targetDeaths ?? null, tacticRevision: r.tacticRevision,
-      spellsSent: r.casts.map((cast) => cast.spell), castsTruncated: r.castsTruncated }));
+      spellsSent: r.casts.map((cast) => cast.spell), castsTruncated: r.castsTruncated, policy: r.policy ?? null }));
     return `[战术状态] 版本 ${state.revision}，修改时间 ${state.updatedAt ?? '未设置'}；已按世界保存。\n`
       + JSON.stringify({ observedAt: new Date(now).toISOString(),
         controlPaths: { automatic: this.tactic?.rules?.length ? 'rules: first ready match each combat tick' : 'spells: first ready priority',
           program: 'host-choice candidates only; does not gate automatic casts',
-          manaControls: ['rules[].when.manaAtLeast', 'rules[].when.reserveMana'] }, mana: this.mana,
+          manaControls: ['rules[].when.manaAtLeast', 'rules[].when.reserveMana'],
+          meleeWeapons: 'ordered preference with default fallback; [] does not disable melee',
+          enemyTypes: 'rule trigger filter, not server spell target selection',
+          healAtOrBelow: 'absolute health points; increasing the threshold requests healing earlier' }, mana: this.mana,
         manaLoading: this.manaLoading, available: [...this.available], tactic: this.tactic, checks, ruleChecks, recent })
       + '\n能力与魔力只代表本连接已收到的读数，命令发送会扣减客户端估算；block为空仍须满足目标条件并等服务端回执。'
       + '\n默认候选与规则可由 Agent 修订，未安装能力提供方时不自动施放法术；详细战斗用 report:回执编号按需读取。';

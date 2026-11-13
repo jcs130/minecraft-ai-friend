@@ -3,6 +3,9 @@ import { Vec3 } from 'vec3';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Reflexes } from '../core/executor.ts';
 import { methodHarness } from './method-harness.ts';
+import { localHazardExit } from '../core/hazard-exit.ts';
+import { findEscapeCell, hazardsWithin, hazardTouch } from '../core/terrain.ts';
+import { crossFire, intentionalFireCrossing } from '../core/fire-route.ts';
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-04T16:52:12Z')); });
 afterEach(() => vi.useRealTimers());
@@ -73,4 +76,58 @@ it.each(['fire', 'lava'])('still rescues real %s contact, then releases even wit
     await vi.advanceTimersByTimeAsync(1000);
     expect(r.pause).toHaveBeenCalledTimes(1);
   } finally { r.close(); }
+});
+
+it('leaves dense fire through the open side instead of running into the wall (native physics)', async () => {
+  const r=rig();
+  try{
+    r.set(0,64,0,'fire');
+    for(let x=-4;x<=4;x++)for(let z=-4;z<=4;z++)if(Math.abs(x)===3||Math.abs(z)===3)r.set(x,64,z,'fire');
+    r.set(-1,64,0,'nether_bricks');r.set(-1,65,0,'nether_bricks');
+    expect(findEscapeCell(r.bot,hazardsWithin(r.bot,7),4)).toBeNull();
+    const exit=localHazardExit(r.bot as unknown as Bot);
+    expect(exit).not.toBeNull();expect(exit?.x).not.toBe(-1);
+    r.bot.lookAt=async(target:Vec3)=>{const p=r.bot.entity.position;r.bot.entity.yaw=Math.atan2(-(target.x-p.x),-(target.z-p.z));};
+    r.bot.physicsEnabled=true;
+    await vi.advanceTimersByTimeAsync(1800);
+    expect(hazardTouch(r.bot).touching).toBeNull();
+    expect(r.reflex.envActive).toBe(false);
+    expect(r.bot.entity.position.distanceTo(new Vec3(.5,64,.5))).toBeGreaterThan(.7);
+  }finally{r.close();}
+});
+
+it('blocked fire recovery releases controls AND its body lease once, and can use a newly opened exit',async()=>{
+  const r=rig();try{
+    r.set(0,64,0,'fire');
+    for(const [x,z] of [[-1,0],[1,0],[0,-1],[0,1]]){r.set(x,64,z,'nether_bricks');r.set(x,65,z,'nether_bricks');}
+    await vi.advanceTimersByTimeAsync(6200);
+    expect(r.reflex.envActive).toBe(false);expect(r.keys.forward).toBe(false);
+    expect(r.bot.pathfinder.goal).toBeNull();expect(r.pause).toHaveBeenCalledTimes(1);
+    expect(r.reports.filter(t=>t.includes('[反射受阻]'))).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(6000);expect(r.pause).toHaveBeenCalledTimes(1);
+    r.set(1,64,0,'air');r.set(1,65,0,'air');
+    await vi.advanceTimersByTimeAsync(200);expect(r.reflex.envActive).toBe(true);expect(r.pause).toHaveBeenCalledTimes(2);
+  }finally{r.close();}
+});
+
+it('does not call a gap, unobserved block or a thin collision shape a fire exit',()=>{
+  const r=rig();try{
+    r.set(0,64,0,'fire');
+    for(let x=-5;x<=5;x++)for(let z=-5;z<=5;z++)if(x||z)r.set(x,63,z,'air');
+    expect(localHazardExit(r.bot as unknown as Bot)).toBeNull();
+    r.set(1,63,0,'stone');r.set(1,64,0,'oak_fence');
+    expect(localHazardExit(r.bot as unknown as Bot)).toBeNull();
+  }finally{r.close();}
+});
+it('does not fight an explicitly budgeted crossing for body control, then restores fire rescue',async()=>{
+  const r=rig();try{
+    r.bot.physicsEnabled=true;r.set(1,64,0,'fire');
+    const p=crossFire(r.bot as unknown as Bot,{at:[2.5,64,.5],mode:'walk',maxDamage:12},
+      {aborted:()=>false,taskId:97,log:r.host.log} as any);
+    await vi.advanceTimersByTimeAsync(50);expect(intentionalFireCrossing(r.bot as unknown as Bot)).toBe(true);
+    await vi.advanceTimersByTimeAsync(2000);expect(JSON.parse(await p).completed).toBe(true);
+    expect(r.pause).not.toHaveBeenCalled();expect(r.reflex.envActive).toBe(false);
+    r.bot.physicsEnabled=false;const at=r.bot.entity.position.floored();r.set(at.x,at.y,at.z,'fire');
+    await vi.advanceTimersByTimeAsync(200);expect(r.reflex.envActive).toBe(true);
+  }finally{r.close();}
 });

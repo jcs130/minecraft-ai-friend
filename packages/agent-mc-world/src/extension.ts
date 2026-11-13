@@ -62,6 +62,8 @@ export { matchItemName, CONTAINER_FIND } from '../core/chests.ts';
 export { resolveAt } from '../core/cell-facts.ts';
 export { installWorldIdentity, readWorldIdentity, worldScopedRealm } from '../core/world-scope.ts';
 export type { WorldIdentityObservation } from './contracts/world-scope.ts';
+export { identityObservations, type IdentityObservation } from '../core/identity-observation.ts';
+export {fireRoutes,type FireRoute,type FireCrossing} from '../core/fire-route.ts';
 export type { SkillCall } from '../core/skills.ts';
 export { listWorkRoutines, readWorkRoutine, prepareWorkRoutine } from '../core/work-routines.ts';
 export { parseTypedChoice } from '../core/support/typed-decision.ts';

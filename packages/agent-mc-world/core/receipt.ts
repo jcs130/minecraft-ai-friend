@@ -67,6 +67,7 @@ export function describeSkill(c: SkillCall, heldItem?: string | null): string {
     ? `(${c.tool === 'fastest' ? '最快工具' : `指定${zhName(c.tool)}`})`
     : '';
   switch (c.skill) {
+    case 'cross_fire': return `${c.dryRun?'试算':'执行'}短距离穿火（${c.mode??'auto'}，预计损失预算${c.maxDamage??12}）`;
     case 'goto': {
       const where = c.groundY ? `水平坐标 (${c.at[0]},${c.at[2]}) 附近` : `${c.exact ? '精确落脚' : '坐标'} ${anchorsText([c.at])}`;
       const dimension = c.dimension ? `[${zhDimension(c.dimension)}] ` : '';

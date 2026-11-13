@@ -38,6 +38,7 @@ it('emits the existing combat event with the native account scope and saved rece
   Object.assign(world, { cfg: { auth: 'offline', username: 'configured-name' }, botName: 'agent', realmKey: () => 'realm',
     bridge: { bot: { player: { uuid: 'actual-uuid' }, username: 'player' } },
     tactics: { recordCombat: (r: CombatResult) => book.record(r, []) },
+    combatProbe: {flush(){}},
     emit: (...args: unknown[]) => events.push(args), diag: { write() {} } });
   world.extensionCombatReport(result());
   expect(events).toHaveLength(1);

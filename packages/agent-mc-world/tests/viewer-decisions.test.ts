@@ -54,6 +54,7 @@ it.each([true, false])('shows actual host combat choice admission %s without cha
   const events: unknown[] = []; bot.on('viewer:decision', value => events.push(value));
   const world: any = Object.create(TacticalMinecraftWorld.prototype);
   Object.assign(world, { bridge: { bot }, connectionGeneration: 9, choiceReceipts: [], syncRealm() {},
+    tactics:{getTactic:()=>({revision:2})},
     sampleCombatDecision: () => ({ battlefield: { connectionGeneration: 9 } }), applyCombatDecision: () => accepted,
     emit() {}, toolLog: (_tool: string, _args: unknown, text: string) => text });
   const outcome = await world.setCombatTactic({ choice: { candidate: { id: 'engage_7', kind: 'engage', targetId: 7 },

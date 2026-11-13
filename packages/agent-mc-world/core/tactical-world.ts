@@ -7,6 +7,8 @@ import { corridorSafe } from './idle-actions.ts';
 import { BattlefieldObserver } from './battlefield.ts';
 import { CombatAbilities, type CombatSpell } from './combat-abilities.ts';
 import { CombatTacticBook } from './combat-tactics.ts';
+import { combatTacticHash } from './combat-tactics.ts';
+import { CombatProgramProbe, validCombatProbe } from './combat-probe.ts';
 import { tacticSupervisorView } from '../src/client/event-context.ts';
 import { COMBAT_EXECUTION_DEFAULTS, type CombatCandidate, type CombatExecutionPolicy, type CombatDecisionFrame } from './combat-decision-types.ts';
 import { combatReactions, openingSpellBattlefield } from './combat-reactions.ts';
@@ -36,7 +38,10 @@ protected lastCombatDecision: { atMs: number; generation: number; outcome: unkno
 private readonly routineGraphs = new Map<string, ProcedureGraph | Error>();
 private routineAdmission: RoutineAdmission | null = null;
 private routineError: string | null = null;
-  constructor(options: MinecraftWorldOptions, protected readonly tactics = new CombatAbilities(new CombatTacticBook(options.dataDir ? join(options.dataDir,'minecraft-combat-tactics.json') : null))) { super(options); }
+private readonly combatProbe: CombatProgramProbe;
+  constructor(options: MinecraftWorldOptions, protected readonly tactics = new CombatAbilities(new CombatTacticBook(options.dataDir ? join(options.dataDir,'minecraft-combat-tactics.json') : null))) {
+    super(options); this.combatProbe = new CombatProgramProbe(options.dataDir ? join(options.dataDir, 'combat-probes') : null);
+  }
   protected combatHealingUrgent(_bot: Bot): boolean { return false; }
   protected override preferredMeleeWeapons(): readonly string[] { return this.tactics.preferredMeleeWeapons(); }
   protected sendAutoCombatSpell(_bot: Bot, _spell: CombatSpell, _ruleId?: string): boolean { return false; }
@@ -47,10 +52,20 @@ private routineError: string | null = null;
     const text = this.tactics.capabilityIndex();
     return {...facts, text:facts.text+'\n'+text, parts:[...(facts.parts ?? []),{key:'combatCapabilities',text}]};
   }
-  protected override extensionTools(): ToolDef[] { return [{...COMBAT_TACTIC_TOOL, handler: (args, ctx) => this.setCombatTactic(args, ctx.role === 'host-decision', ctx.role)}]; }
-protected async setCombatTactic(args: Record<string, unknown>, hostSampling = false, role?: string): Promise<string | ToolOutcome> {
+  protected override extensionTools(): ToolDef[] { return [{...COMBAT_TACTIC_TOOL, handler: (args, ctx) => this.setCombatTactic(args, ctx.role === 'host-decision', ctx.role, ctx.signal)}]; }
+protected async setCombatTactic(args: Record<string, unknown>, hostSampling = false, role?: string, signal?: AbortSignal): Promise<string | ToolOutcome> {
     const tool = 'mc_combat_tactic';
     this.syncRealm();
+    if (args.probe !== undefined || args.samples !== undefined || args.history !== undefined || args.version !== undefined) {
+      if (Object.keys(args).length !== 1) return this.toolLog(tool,args,'未执行：probe / samples / history / version 须单独使用，不能混合现役修改。');
+      if (args.samples === true) return this.toolLog(tool,args,JSON.stringify(this.combatProbe.index()));
+      if (args.history === true) return this.toolLog(tool,args,JSON.stringify(this.tactics.tacticHistory()));
+      if (Number.isSafeInteger(args.version) && Number(args.version) > 0)
+        return this.toolLog(tool,args,JSON.stringify(this.tactics.tacticHistory(Number(args.version))));
+      if (!validCombatProbe(args.probe)) return this.toolLog(tool,args,'未执行：probe 需要 program 和可选的历史 samples 编号。');
+      const result = await this.combatProbe.run(args.probe,this.tactics.tacticRevision(),signal);
+      return {text:this.toolLog(tool,args,JSON.stringify(result)),meta:{protocol:'combat-program-probe/v1',probe:result}};
+    }
     if (args.choice !== undefined) {
       this.routineAdmission = null; this.routineError = null;
       const choice = args.choice as { candidate?: CombatCandidate; tacticRevision?: number; connectionGeneration?: number; decisionId?: string };
@@ -64,6 +79,7 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
       const admission = this.routineAdmission as RoutineAdmission | null;
       const receipt={id: (this.choiceReceipts.at(-1)?.id as number ?? 0)+1,at:new Date().toISOString(),accepted,
         candidate:choice.candidate,tacticRevision:choice.tacticRevision,goalCompleted:false,
+        policyHash:combatTacticHash(this.tactics.getTactic()),
         ...(choice.decisionId ? { decisionId: choice.decisionId } : {}),
         ...(admission ? { method: admission.method, runId: admission.runId } : {}),
         ...(this.routineError ? { error: this.routineError } : {}),
@@ -112,9 +128,12 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
         + '\n' + this.combatDecisionReadout()
         + '\n快脚本菜单：' + JSON.stringify(tactic?.routines ?? [])
         + '\n近战武器偏好：' + JSON.stringify(tactic?.meleeWeapons ?? [])
-        + '\n自主战术程序：' + JSON.stringify({ program: tactic?.program ?? null,
+        + '\n自主战术程序状态（源码见上方 tactic.program）：' + JSON.stringify({ name: tactic?.program?.name ?? null,
           ...this.combatProgram.status(), error: this.combatProgramError ?? this.combatProgram.status().error }));
     }
+    const revision = this.tactics.tacticRevision(), realm = this.realmKey();
+    if (args.expectedRevision !== undefined && (!Number.isSafeInteger(args.expectedRevision) || args.expectedRevision !== revision))
+      return this.toolLog(tool,args,`未设置：战术版本冲突，expectedRevision=${String(args.expectedRevision)}，当前=${revision}；先读取当前版本再合并改法，原战术未变。`);
     if (args.enabled === false) {
       this.tactics.setTactic(null);
       this.combatProgram.close(); this.combatProgramErrorHash = null; this.combatProgramError = null;
@@ -154,9 +173,14 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
     }
     if (rawProgram !== undefined && rawProgram !== null) {
       if (!validCombatProgram(rawProgram)) return this.toolLog(tool, args, '未设置：program须给name、code及可选JSON对象params。');
-      try { await this.combatProgram.configure(rawProgram); }
+      const compiler = new CombatProgramRunner();
+      try { await compiler.configure(rawProgram); }
       catch (error) { return this.toolLog(tool, args, '未设置：程序编译失败。' + String(error)); }
+      finally { compiler.close(); }
     }
+    signal?.throwIfAborted();
+    if (realm !== this.realmKey() || revision !== this.tactics.tacticRevision())
+      return this.toolLog(tool,args,'未设置：编译期间世界或战术版本变化，请读取当前版本后重新合并；原战术未被覆盖。');
     const previous = this.tactics.getTactic();
     const spells = rawSpells as CombatSpell[] | undefined ?? previous?.spells ?? null;
     const healAtOrBelow = rawHeal as number | undefined ?? previous?.healAtOrBelow ?? null;
@@ -167,7 +191,7 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
     this.tactics.setTactic({ spells, healAtOrBelow, ...(rules !== undefined ? { rules } : {}),
       ...(program !== undefined ? { program } : {}), ...(routines !== undefined ? { routines } : {}),
       ...(meleeWeapons !== undefined ? { meleeWeapons } : {}) });
-    if (rawProgram === null) this.combatProgram.close();
+    if (rawProgram !== undefined) this.combatProgram.close();
     if (rawProgram !== undefined) { this.combatProgramErrorHash = null; this.combatProgramError = null;
       this.combatProgramRetryAt = 0; this.combatProgramTimeoutRetriedHash = null; }
     const programHash = program ? combatProgramHash(program) : null;
@@ -179,10 +203,12 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
         : `生命 ≤${healAtOrBelow} 时向已安装的治疗能力提供方提出请求（服务端生命点数）。`)
       + (rules?.length ? `已启用${rules.length}项条件分支；法术列表仅作分支停用后的备用，未命中不自动进攻施法。` : '')
       + (rawRoutines !== undefined ? `快脚本菜单已登记${routines?.length ?? 0}个精确版本，尚未运行。` : '')
+      + (rawWeapons !== undefined ? `近战偏好已保存${JSON.stringify(meleeWeapons)}；空列表恢复默认选择，不是禁用近战，也未强制改成弓。` : '')
       + (program ? `自主程序「${program.name}」SHA256 ${programHash}；`
         + (programError ? `已停止采用：${programError}。当前使用默认候选，需修订 program 后重新核验。`
           : '已编译，实战效果待核验。') : '')
       + '已按当前世界保存；保存不代表程序已采用。自动连招在交战时尝试；允许主动接敌时，带 intent 的已就绪分支也可供快决策选择先手施法，仍核对控制权、目标、生命、魔力与冷却。效果以服务端回执为准。'
+      + `\n版本 ${revision}→${this.tactics.tacticRevision()}；完整策略 SHA256 ${combatTacticHash(this.tactics.getTactic())}。samples/probe 可比较历史输入下的新旧菜单；这不证明实战改善。`
       + '\n' + this.tactics.readout(undefined, Date.now(), this.bridge?.bot ?? undefined));
   }
 private routineGraph(routine: CombatRoutine): ProcedureGraph {
@@ -282,6 +308,7 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
     return frame;
   }
 protected async prepareCombatProgram(frame: CombatDecisionFrame): Promise<CombatDecisionFrame> {
+    this.combatProbe.capture(frame);
     const program = frame.program, bot = this.bridge?.bot;
     if (!program || !bot) return frame;
     const hash = combatProgramHash(program);
@@ -376,6 +403,7 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
           const receipt = this.tactics.recordCombat({ ...result, ...(bot ? {
             scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${bot.player?.uuid || bot.username}`, agent: this.botName },
           } : {}) });
+          this.combatProbe.flush();
           this.emit('minecraft.combat', `[Minecraft] 战斗观察回执#${receipt.id}：${result.reason}；`
             + `生命 ${result.healthBefore ?? '未知'}→${result.healthAfter ?? '未知'}，`
             + `刀 ${result.swings} 次/命中 ${result.meleeLanded} 次；`
@@ -389,7 +417,7 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
         }
       }
   protected override extensionState() { return (this.bodyInhibitReason ? `[身体受限] ${this.bodyInhibitReason}\n` : '') + this.tactics.readout(undefined, Date.now(), this.bridge?.bot ?? undefined); }
-  protected override extensionRealm(key: string) { this.tactics.useRealm(key); }
+  protected override extensionRealm(key: string) { this.tactics.useRealm(key); this.combatProbe.useRealm(key); }
   protected override extensionSpawn(bot: Bot) { this.tactics.reset(); this.battlefield.reset(); this.battlefield.bind(bot, this.battlefieldChannel()); }
-  protected override disposeExtension() { this.combatProgram.close(); this.battlefield.close(); }
+  protected override disposeExtension() { this.combatProbe.flush(); this.combatProgram.close(); this.battlefield.close(); }
 }
