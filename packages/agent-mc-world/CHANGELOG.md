@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.67
+
+- Allow opted-in autonomous idle strolling through the existing interruptible body lease. Balance movement against glance variants, vary local directions, bound consecutive strolls around an idle anchor, and suppress movement around hazards, hostiles and active body scripts.
+
 ## 0.5.7-rc.160-preview.66
 
 - Expose observed offhand defense separately from backpack ownership; confirm and explain explicit shield replacement without forcing equipment choices.

@@ -144,6 +144,8 @@ export function wanderSafe(bot: Bot, from: Point, to: Point): boolean {
 /** Targets contain only loaded observations; unavailable actions are absent from candidates. */
 export function sampleIdleActions(bot: Bot, options: {
   allowMovement: boolean; preferredPlayer?: string; ignorePlayer?: (name: string) => boolean;
+  /** Stable center of an uninterrupted idle period; prevents cumulative drift. */
+  movementAnchor?: Point; random?: () => number;
 }): {
   state: Record<string, unknown>; candidates: IdleBehaviorCandidate[];
 } {
@@ -189,21 +191,24 @@ export function sampleIdleActions(bot: Bot, options: {
     const origin = state.origin;
     const destination = { x: origin.x - Math.sin(bot.entity.yaw) * 1.2,
       y: origin.y, z: origin.z - Math.cos(bot.entity.yaw) * 1.2 };
-    if (corridorSafe(bot, origin, destination)) {
+    const inRange = (to: Point): boolean => distance(to, options.movementAnchor ?? origin) <= 6;
+    if (inRange(destination) && corridorSafe(bot, origin, destination)) {
       state.movement = { origin, destination };
       allowed.add('short_walk');
     }
-    for (const angle of [0, Math.PI / 2, -Math.PI / 2, Math.PI]) {
+    const start = Math.min(7, Math.floor((options.random ?? Math.random)() * 8));
+    for (let i = 0; i < 8; i++) {
+      const angle = ((start + i) % 8) * Math.PI / 4;
       const yaw = bot.entity.yaw + angle;
       const to = { x: origin.x - Math.sin(yaw) * 2.4, y: origin.y, z: origin.z - Math.cos(yaw) * 2.4 };
-      if (wanderSafe(bot, origin, to)) { state.wander = { origin, destination: to }; allowed.add('wander'); break; }
+      if (inRange(to) && wanderSafe(bot, origin, to)) { state.wander = { origin, destination: to }; allowed.add('wander'); break; }
     }
   }
-  return { state, candidates: IDLE_ACTIONS.filter(action => allowed.has(action.id)).map(({ id, label }) => {
+  return { state, candidates: IDLE_ACTIONS.filter(action => allowed.has(action.id)).map(({ id, label, category }) => {
     const target = state.targets[id];
     const subjectKey = target?.entityId !== undefined ? `entity:${target.entityId}` : target?.block
       ? `block:${target.block.name}:${target.block.position.x},${target.block.position.y},${target.block.position.z}` : undefined;
-    return { id, label: target?.playerName ? `${label}（${target.playerName}）` : label,
+    return { id, category, label: target?.playerName ? `${label}（${target.playerName}）` : label,
       ...(subjectKey ? { subjectKey } : {}) };
   }) };
 }
@@ -293,7 +298,7 @@ export async function executeIdleAction(bot: Bot, id: string, sceneState: Record
       if (!movement || distance(bot.entity.position, movement.origin) > 0.2
         || !wanderSafe(bot, movement.origin, movement.destination)) return;
       const yaw = Math.atan2(-(movement.destination.x - movement.origin.x), -(movement.destination.z - movement.origin.z));
-      await turn(yaw, original.pitch);
+      await turn(yaw, 0);
       for (let i = 0; i < 30; i++) {
         check();
         const here = bot.entity.position, remaining = distance(here, movement.destination);
