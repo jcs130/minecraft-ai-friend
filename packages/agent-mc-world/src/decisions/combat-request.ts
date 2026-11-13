@@ -16,7 +16,9 @@ export function combatChoiceBindings(frame:CombatDecisionFrame,compatible=false)
   }
   return bindings;
 }
-export function combatRequest(frame: CombatDecisionFrame, config: { compatible?: boolean } = {}) {
+export function combatRequest(frame: CombatDecisionFrame, config: { compatible?: boolean; priorAbstention?: {
+  reason: string; count: number; elapsedMs: number; dispatched: boolean; bodyIdle: boolean; ownerReviewRequested: boolean;
+} | null } = {}) {
   const b = frame.battlefield;
   // Four significant digits keep tiny positive health positive; execution retains the original precision.
   const approximate = (value: number | null) => value === null ? null : Number(value.toPrecision(4));
@@ -43,7 +45,8 @@ export function combatRequest(frame: CombatDecisionFrame, config: { compatible?:
     options[`option_${index}`] = action;
   });
   const questions: Record<string, { type: 'choice'; instructions: string; criteria: Record<string,string> }> = {
-    tactic: { type:'choice', instructions:'Choose for survival, confirmed allies, or a short safe idle stroll when offered; keep an effective action. Health≈[current,max,source,ageMs]; null=unknown; blocked=cannot execute. Proximity does not establish allies.'
+    tactic: { type:'choice', instructions:'Choose for survival, confirmed allies, or a short safe idle stroll when offered; keep an effective action. Engage uses the equipped combat controller (melee or bow); it does not mean melee-only. Track only observes and never attacks. If the body is idle with a visible hostile, observing is not combat progress. Health≈[current,max,source,ageMs]; null=unknown; blocked=cannot execute. Proximity does not establish allies.'
+      + ' Live action state is authoritative; an authored tactic may contain outdated assumptions about an owned route or melee-only engage.'
       + (frame.policy ? '\nAgent tactic: '+frame.policy.instructions : ''), criteria },
   };
   for(const [key,indices]of Object.entries(combatChoiceBindings(frame,config.compatible))){
@@ -53,6 +56,7 @@ export function combatRequest(frame: CombatDecisionFrame, config: { compatible?:
     options[key]={kind:'combination',actions:refs};
   }
   return { state: {
+    ...(config.priorAbstention ? { priorAbstention: config.priorAbstention } : {}),
     ...(frame.survival ? {survival: frame.survival} : {}),
     ...(frame.loadout ? { loadout: frame.loadout } : {}),
     ...(frame.programDeferred ? { programDeferred: frame.programDeferred } : {}),

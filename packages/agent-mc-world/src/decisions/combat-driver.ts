@@ -1,5 +1,6 @@
 import type { ToolOutcome } from '../contracts/index.ts';
 import type { CombatExecutionPolicy } from '../../core/combat-decision-types.ts';
+import type { CombatDecisionAttention } from './combat-attention.ts';
 /** Adapter-owned model settings, deliberately excluded from the game process configuration. */
 export interface HostCombatConfig {
   combatOptions?: Partial<CombatExecutionPolicy>;
@@ -11,6 +12,8 @@ import { CombatDecisionLoop, usesHostDecision, type CombatDecisionOptions, type 
 export interface HostCombatPort {
   call(args: Record<string, unknown>, signal: AbortSignal): Promise<string | ToolOutcome>;
   report(event: string, data: Record<string, unknown>): void;
+  /** Deliver bounded unresolved-selection evidence to the task owner, not only a diagnostic log. */
+  attention?: (evidence: CombatDecisionAttention) => void | Promise<void>;
   decisions?: { request: NonNullable<CombatDecisionOptions['request']> };
 }
 
@@ -59,6 +62,7 @@ export class HostCombatDriver {
       // The game loop never stops its rule controller while the host model thinks.
       fallback: () => port.report('fallback', { policy: 'continue-game-rules', goalCompleted: false }),
       report: (event, data) => port.report(event, data),
+      attention: evidence => port.attention?.(evidence),
     });
   }
   private async refresh(): Promise<CombatDecisionFrame | null> {

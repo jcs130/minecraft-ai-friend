@@ -7,3 +7,11 @@ The projection preserves health and its provenance/age, distance, relative heigh
 `requestFacts().decision` supplies a separate, inexpensive current-state projection for host context/effort classifiers. It excludes inventory lists and history while retaining vital readings, immediate hazards, nearby threat counts/distances, task progress and body restrictions. It is advisory; complete `text`/`parts` remain available. Hosts should keep World identities and sample ages separate.
 
 Measure backend-reported input tokens for the whole request. A multi-question backend may evaluate the shared state for each question. Put evidence required by only one question in that question's instructions. Around 200–500 tokens is a normal-scene target, not permission to omit additional threats, unknowns or agent-authored constraints in a dense scene. A returned choice, accepted action and successful goal are separate observations.
+
+## Unresolved selection is execution feedback
+
+`engage` starts the equipped combat controller, including bow use; it does not promise a melee-only approach. `track` observes without attacking. Current controller state is authoritative even when an authored tactic assumes a route is still running.
+
+For a confirmed visible hostile and an idle body, three ambiguous rankings spanning at least 1.5 seconds produce one `CombatDecisionAttention` per unchanged encounter. The optional `HostCombatPort.attention` callback must forward it to the owning task, for example with `combatAttentionEvent(evidence, worldId)` and the host's ordinary World event delivery. Merely logging `host.combat.attention` is insufficient. The event carries decision IDs, sample time, connection, tactic revision, threats and non-execution; it is neither an attack command nor task completion. The source-owned `host-decision` feedback marker allows active execution workers to receive it even when their optional subscription list is narrow.
+
+Subsequent fast requests include compact prior abstention evidence. A new scene/tactic, active body controller, movement, long observation gap or successful decision clears the episode. Thresholds, fresh-scene checks, collision/support and body ownership remain unchanged. Hosts must preserve explicit pauses and decide whether to attack, observe, leave or revise the tactic.

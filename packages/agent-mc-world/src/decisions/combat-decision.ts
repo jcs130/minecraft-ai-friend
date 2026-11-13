@@ -2,6 +2,7 @@
 import { parseTypedChoice } from '../../core/support/typed-decision.ts';
 import { randomUUID } from 'node:crypto';
 import { combatChoiceBindings,combatRequest } from './combat-request.ts';
+import { CombatAbstention, type CombatDecisionAttention } from './combat-attention.ts';
 import type { CombatExecutionPolicy, CombatCandidate, CombatDecisionFrame } from '../../core/combat-decision-types.ts';
 import type { TypedChoice } from '../../core/support/typed-decision.ts';
 export type { CombatExecutionPolicy, CombatCandidate, CombatDecisionFrame } from '../../core/combat-decision-types.ts';
@@ -23,6 +24,7 @@ export interface CombatDecisionOptions {
   prepare?: (frame: CombatDecisionFrame) => Promise<CombatDecisionFrame>;
   fallback?: () => void;
   report: (event: string, data: Record<string, unknown>) => void;
+  attention?: (evidence: CombatDecisionAttention) => void | Promise<void>;
   fetchImpl?: typeof fetch;
   /** Supplied by the host adapter; the game core never resolves providers or credentials. */
   request?: (input: { state: unknown; questions: Record<string, { type: 'choice'; instructions: string; criteria: Record<string, string> }> },
@@ -128,11 +130,12 @@ export function assessCombatChoice(answer: TypedChoice<string>, config: Pick<Com
 }
 
 export class CombatDecisionLoop {
+  private readonly abstention = new CombatAbstention();
   private readonly runId = randomUUID();
   private stopped = false;
   private readonly lifetime = new AbortController();
   private readonly observations = new Set<ReturnType<typeof setTimeout>>();
-  stop(): void { this.stopped=true; this.lifetime.abort(); for(const timer of this.observations) clearTimeout(timer); this.observations.clear(); }
+  stop(): void { this.stopped=true; this.abstention.clear(); this.lifetime.abort(); for(const timer of this.observations) clearTimeout(timer); this.observations.clear(); }
   private inFlight = false;
   private lastCheckedAtMs = -Infinity;
   private lastEligible = false;
@@ -150,13 +153,13 @@ export class CombatDecisionLoop {
     if (this.stopped) return false;
     const cfg = { ...this.options.config() };
     const now = this.options.now?.() ?? Date.now();
-    if (!cfg.enabled || (!usesHostDecision(cfg) && !cfg.endpoint)) return false;
+    if (!cfg.enabled || (!usesHostDecision(cfg) && !cfg.endpoint)) { this.abstention.clear(); return false; }
     if (this.inFlight) return true;
     if (now - this.lastCheckedAtMs < cfg.minIntervalMs) return this.lastEligible;
     this.lastCheckedAtMs = now;
     const frame = this.options.sample();
     this.lastEligible = !!frame && !frame.battlefield.action.emergency && (frame.candidates.length > 0 || !!frame.program);
-    if (!frame || !this.lastEligible) return false;
+    if (!frame || !this.lastEligible) { this.abstention.clear(); return false; }
     this.inFlight = true;
     void this.choose(frame, cfg, now).finally(() => { this.inFlight = false; });
     return true;
@@ -173,6 +176,7 @@ export class CombatDecisionLoop {
     try {
       if (frame.program && this.options.prepare) frame = await this.options.prepare(frame);
     } catch (error) {
+      this.abstention.clear();
       entry.outcome = 'program-error'; entry.reason = String(error);
       if (this.stopped) return;
       this.options.report('error', { ...entry });
@@ -180,9 +184,10 @@ export class CombatDecisionLoop {
       return;
     }
     if (this.stopped) return;
-    if (!frame.candidates.length) { entry.outcome = 'program-idle'; return; }
+    if (!frame.candidates.length) { this.abstention.clear(); entry.outcome = 'program-idle'; return; }
     const bindings=combatChoiceBindings(frame,cfg.selectionMode==='compatible');
-    const compact = combatRequest(frame, {compatible:cfg.selectionMode==='compatible'});
+    const compact = combatRequest(frame, {compatible:cfg.selectionMode==='compatible',
+      priorAbstention: this.abstention.context(frame, now())});
     const criteria = compact.questions.tactic.criteria;
     const { program: _program, actionPool: _pool, ...publicFrame } = frame;
     const body = JSON.stringify({ ...(cfg.model ? { model: cfg.model } : {}), ...compact });
@@ -302,6 +307,20 @@ export class CombatDecisionLoop {
         candidate: (outcome === 'sent' ? effective : selected) ?? null, candidates:dispatched };
       Object.assign(entry, result);
       this.options.report('result', result);
+      if (cfg.mode === 'act' && outcome === 'uncertain' && ranking.reason === 'ambiguous-ranking' && current) {
+        const attention = this.abstention.record(current, scope.decisionId, now());
+        if (attention) {
+          this.options.report('attention', { ...attention });
+          try {
+            const delivery = this.options.attention?.(attention);
+            if (delivery) void delivery.catch(error => {
+              if (!this.stopped) this.options.report('attention-delivery-error', { decisionId: attention.decisionId, reason: String(error) });
+            });
+          } catch (error) {
+            this.options.report('attention-delivery-error', { decisionId: attention.decisionId, reason: String(error) });
+          }
+        }
+      } else this.abstention.clear();
       if (outcome === 'sent') {
         const before = current!.battlefield;
         const targetId = effective?.kind === 'engage' || effective?.kind === 'track' ? effective.targetId : before.action.targetEntityId;
@@ -325,6 +344,7 @@ export class CombatDecisionLoop {
         timer.unref?.();
       }
     } catch (error) {
+      this.abstention.clear();
       if(this.stopped)return;
       const live = this.options.config();
       if (cfg.mode === 'act' && live.enabled && live.mode === cfg.mode && live.endpoint === cfg.endpoint
