@@ -6,15 +6,20 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Blaze;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.SmallFireball;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockFadeEvent;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.entity.LivingEntity;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.util.Vector;
 
 /** Fixture commands are available only on the marked, loopback-only QA server. */
 public final class DailyGameplayQa extends JavaPlugin implements Listener {
@@ -137,18 +142,44 @@ public final class DailyGameplayQa extends JavaPlugin implements Listener {
                     }
                     sender.sendMessage("party=" + party.membersOf(player.getUniqueId()).size());
                 }
-                case "trial-team" -> {
+                case "trial-team", "trial-fourth" -> {
                     var agent = Bukkit.getPluginManager().getPlugin("AgentFriend");
                     Object dungeon = field(agent, "dungeon");
-                    set(dungeon, "floor", 13);
+                    set(dungeon, "floor", args[0].equals("trial-team") ? 13 : 4);
                     set(dungeon, "active", args.length > 2);
                     if (args.length > 2) {
                         set(dungeon, "pausedAt", 0L);
                         set(dungeon, "runStartedAt", System.currentTimeMillis());
                         set(dungeon, "floorStartedAt", System.currentTimeMillis());
+                        if (args[0].equals("trial-fourth")) set(dungeon, "spawnAt", Long.MAX_VALUE);
                     }
                     trialGroup(dungeon, args);
                     sender.sendMessage("trial=" + (args.length > 2));
+                }
+                case "trial-shot" -> {
+                    if (args[2].equals("alive")) {
+                        var shot = Bukkit.getEntity(java.util.UUID.fromString(args[1]));
+                        sender.sendMessage("shotAlive=" + (shot != null && shot.isValid()));
+                        break;
+                    }
+                    var agent = Bukkit.getPluginManager().getPlugin("AgentFriend");
+                    boolean trial = !args[2].equals("ordinary");
+                    boolean atPlayer = args[2].equals("player");
+                    var origin = player.getLocation().add(atPlayer ? 4 : 2, atPlayer ? 0 : 2, 0);
+                    var target = atPlayer ? player.getLocation().add(0, 1.0, 0) : origin.clone().subtract(0, 4, 0);
+                    var shooter = player.getWorld().spawn(origin, Blaze.class, blaze -> {
+                        blaze.setAI(false);
+                        blaze.setSilent(true);
+                        blaze.addScoreboardTag("qd_frost_qa_shooter");
+                        if (trial) {
+                            blaze.addScoreboardTag("afu_dungeon_mob");
+                            blaze.getPersistentDataContainer().set(new NamespacedKey(agent, "dungeon_mob"),
+                                    PersistentDataType.BYTE, (byte) 1);
+                        }
+                    });
+                    Vector velocity = target.subtract(shooter.getEyeLocation()).toVector().normalize().multiply(0.6);
+                    var shot = shooter.launchProjectile(SmallFireball.class, velocity);
+                    sender.sendMessage("shot=" + shot.getUniqueId() + " incendiary=" + shot.isIncendiary());
                 }
                 case "assist" -> {
                     var agent = Bukkit.getPluginManager().getPlugin("AgentFriend");
