@@ -61,7 +61,7 @@ function combatObserver({combat,settings,world,runtime,role,epoch,checkControl})
         ||frame.battlefield.dimension!==evidence.world
         ||Math.hypot(...frame.battlefield.self.position.map((n,i)=>n-evidence.position[i]))>1.5
         ||evidence.threats.some(threat=>!frame.battlefield.actors.some(actor=>
-          actor.entityId===threat.entityId&&actor.nativeReference===threat.nativeReference)))return;
+          actor.entityId===threat.entityId&&actor.nativeReference===threat.nativeReference)))return false;
       lifetime.signal.throwIfAborted();
       checkControl?.(role,epoch);
       await runtime.journal.pushEvent(combat.combatAttentionEvent(evidence,'minecraft'),{trigger:'debounce'});

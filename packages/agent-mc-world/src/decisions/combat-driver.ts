@@ -12,8 +12,8 @@ import { CombatDecisionLoop, usesHostDecision, type CombatDecisionOptions, type 
 export interface HostCombatPort {
   call(args: Record<string, unknown>, signal: AbortSignal): Promise<string | ToolOutcome>;
   report(event: string, data: Record<string, unknown>): void;
-  /** Deliver bounded unresolved-selection evidence to the task owner, not only a diagnostic log. */
-  attention?: (evidence: CombatDecisionAttention) => void | Promise<void>;
+  /** Acknowledge delivery to the task owner. Return false or reject if nothing was delivered. */
+  attention?: (evidence: CombatDecisionAttention) => boolean | void | Promise<boolean | void>;
   /** Opt in to one feedback event in shadow mode while keeping the body read-only. */
   attentionInShadow?: boolean;
   decisions?: { request: NonNullable<CombatDecisionOptions['request']> };

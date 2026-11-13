@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.65
+
+- Retry undelivered combat attention on a fresh matching battlefield and suppress further shadow rankings only after the host acknowledges delivery.
+
 ## 0.5.7-rc.160-preview.64
 
 - Preserve combat ownership when fire has no executable escape; revalidate bounded search, unfinished-room intent and current armor/spare facts.
