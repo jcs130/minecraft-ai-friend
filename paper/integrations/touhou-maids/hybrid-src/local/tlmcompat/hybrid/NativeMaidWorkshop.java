@@ -183,6 +183,14 @@ final class NativeMaidWorkshop {
             coordinates.get(1).getAsBigDecimal().intValueExact(), coordinates.get(2).getAsBigDecimal().intValueExact());
     }
 
+    private static JsonArray coordinates(BlockPos pos) {
+        JsonArray result = new JsonArray();
+        result.add(pos.getX());
+        result.add(pos.getY());
+        result.add(pos.getZ());
+        return result;
+    }
+
     JsonObject describe(UUID maidId, UUID owner) {
         JsonObject result = new JsonObject();
         result.addProperty("maidId", maidId.toString());
@@ -193,6 +201,8 @@ final class NativeMaidWorkshop {
             row.addProperty("id", site.id);
             var world = Bukkit.getWorld(site.world);
             if (world != null) row.addProperty("dimension", world.getKey().toString());
+            row.add("table", coordinates(site.table));
+            row.add("supplyChest", coordinates(site.chest));
             JsonArray recipes = new JsonArray();
             JsonObject productsPerCraft = new JsonObject();
             for (ResourceLocation recipe : site.recipes) {

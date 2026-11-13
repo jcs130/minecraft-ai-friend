@@ -7,7 +7,7 @@ public final class SkillTransitionTest {
   for(String id:SkillTransition.COMMON){if(SkillTransition.LEGACY.contains(id))throw new AssertionError("basic survival skill retired: "+id);count++;}
   if(!SkillTransition.targets(java.util.List.of(java.util.Map.of("type","self"))).equals("自己"))throw new AssertionError("self");count++;
   if(!SkillTransition.targets(java.util.List.of(java.util.Map.of("type","nearby_monster","range",20,"limit",1))).contains("20格"))throw new AssertionError("range");count++;
-  if(!SkillTransition.targets(java.util.List.of(java.util.Map.of("type","nearby_player","range",8))).contains("附近其他玩家（8格"))throw new AssertionError("group healing target");count++;
+  if(!SkillTransition.targets(java.util.List.of(java.util.Map.of("type","nearby_player","range",8))).contains("自己及可见队友（8格"))throw new AssertionError("group healing target");count++;
   if(!SkillTransition.targets(java.util.List.of(java.util.Map.of("type","ray","range",24))).contains("准星指向（24格"))throw new AssertionError("ray target");count++;
   if(!SkillTransition.effects(java.util.List.of(java.util.Map.of("type","damage","base",5,"scaling-attribute","intelligence"))).contains("智力"))throw new AssertionError("damage");count++;
   if(!SkillTransition.effects(java.util.List.of(java.util.Map.of("type","apply_effect","effect","arcane_ward"))).contains("奥术护盾"))throw new AssertionError("effect");count++;
