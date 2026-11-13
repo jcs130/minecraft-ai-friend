@@ -2,9 +2,10 @@ package org.afuhome.agentfriend;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
-/** Companion reunions use the same activity boundaries as the player's named travel. */
+/** Read-only game checks used by the native companion bridge. */
 public final class CompanionTravelAccess {
     private CompanionTravelAccess() { }
 
@@ -31,5 +32,19 @@ public final class CompanionTravelAccess {
         return Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin
             && plugin.isEnabled() && plugin.nativeRpgMayAct(partner)
             && plugin.dungeon().companionTrialArrival(partner, stage, landing);
+    }
+
+    public static boolean mayGuardDungeonTarget(Player partner, Entity companion, Entity target) {
+        if (!(Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin)
+                || !plugin.isEnabled() || !plugin.nativeRpgMayAct(partner)) return false;
+        return plugin.dungeon().companionCombatTarget(partner, companion, target)
+            || plugin.siteDungeons() != null && plugin.siteDungeons().companionCombatTarget(partner, companion, target);
+    }
+
+    public static boolean companionCombatPosition(Player partner, Location position) {
+        if (!(Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin)
+                || !plugin.isEnabled() || !plugin.nativeRpgMayAct(partner)) return false;
+        return plugin.dungeon().companionCombatPosition(partner, position)
+            || plugin.siteDungeons() != null && plugin.siteDungeons().companionCombatPosition(partner, position);
     }
 }

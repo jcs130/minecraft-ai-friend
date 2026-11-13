@@ -6,6 +6,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
 import com.google.gson.JsonObject;
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -34,7 +35,9 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
+import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 
 /** One controller for the original companion; the fast scorer only ranks the local choices. */
@@ -52,12 +55,16 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
     private final Consumer<MaidHurtTarget.Pre> beforeMelee;
     private final Consumer<LivingIncomingDamageEvent> beforeDamage;
     private final Consumer<EntityJoinLevelEvent> onProjectile;
+    private final Method dungeonCombat;
+    private final Method dungeonPosition;
     // The existing brain routing admits one configured original maid.
     private Guard guard = new Guard();
 
     NativeMaidCompanionSupport(HybridMaidPlugin plugin) {
         this.plugin = plugin;
         magic = NativeMaidMagicSupport.create();
+        dungeonCombat = dungeonAccess("mayGuardDungeonTarget", Player.class, org.bukkit.entity.Entity.class, org.bukkit.entity.Entity.class);
+        dungeonPosition = dungeonAccess("companionCombatPosition", Player.class, Location.class);
         var config = plugin.getConfig();
         int port = config.getInt("companion.system-one-port", 8090);
         decision = config.getBoolean("companion.system-one", true) && port > 0 && port <= 65535
@@ -98,22 +105,75 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
     }
 
     private boolean canHit(EntityMaid maid, net.minecraft.world.entity.Entity entity) {
-        return plugin.sharedDialogueEnabled(maid) && eligible(maid, owner(maid)) && !lowHealth(maid)
-            && entity instanceof Mob mob && hostile(maid, mob)
+        Player owner = owner(maid);
+        return plugin.sharedDialogueEnabled(maid) && eligible(maid, owner) && !lowHealth(maid)
+            && entity instanceof Mob mob && hostile(maid, owner, mob)
             && ((IAttackTask) maid.getTask()).canAttack(maid, mob);
     }
 
-    private static boolean hostile(EntityMaid maid, Mob mob) {
+    private boolean hostile(EntityMaid maid, Player owner, Mob mob) {
         if (mob == maid || !mob.isAlive() || maid.distanceToSqr(mob) > 64) return false;
         var entity = mob.getBukkitEntity();
-        var tags = entity.getScoreboardTags();
-        if (tags.contains("afu_site_dungeon") || tags.contains("afu_dungeon_mob")
-                || entity.getPersistentDataContainer().has(VORTEX_INSTANCE)) return false;
+        if (entity.getPersistentDataContainer().has(VORTEX_INSTANCE)) return false;
+        boolean siteMob = authoredMob(mob);
+        if (siteMob && !currentDungeonTarget(maid, owner, mob)) return false;
         var target = mob.getTarget();
         boolean attackingPartner = target != null && (target == maid || target.getUUID().equals(maid.getOwnerUUID()));
-        return MaidCompanionPolicy.hostileCandidate(attackingPartner, mob instanceof Enemy, mob instanceof NeutralMob,
+        return MaidCompanionPolicy.hostileCandidate(attackingPartner || siteMob, mob instanceof Enemy, mob instanceof NeutralMob,
             maid.isAlliedTo(mob), !mob.isNoAi() && !mob.isInvulnerable() && !entity.hasMetadata("NPC"),
             maid.hasLineOfSight(mob), true, true);
+    }
+
+    private static boolean authoredMob(Mob mob) {
+        var tags = mob.getBukkitEntity().getScoreboardTags();
+        return tags.contains("afu_site_dungeon") || tags.contains("afu_dungeon_mob");
+    }
+
+    private static Method dungeonAccess(String name, Class<?>... parameters) {
+        var game = Bukkit.getPluginManager().getPlugin("AgentFriend");
+        if (game == null) return null;
+        try {
+            return Class.forName("org.afuhome.agentfriend.CompanionTravelAccess", false, game.getClass().getClassLoader())
+                .getMethod(name, parameters);
+        } catch (ReflectiveOperationException | LinkageError unavailable) {
+            return null;
+        }
+    }
+
+    boolean combatPosition(Player owner, Location position) {
+        if (dungeonPosition == null) return false;
+        try {
+            return Boolean.TRUE.equals(dungeonPosition.invoke(null, owner, position));
+        } catch (ReflectiveOperationException | LinkageError unavailable) {
+            return false;
+        }
+    }
+
+    boolean closingIn(EntityMaid maid) { return guard.maid == maid && guard.closingIn; }
+
+    JsonObject provisionStaff(EntityMaid maid) {
+        if (magic == null) throw new local.tlmcompat.core.CompatibilityException("rpg_unavailable", "Vortex 法杖服务未就绪。");
+        return magic.provisionStaff(maid);
+    }
+
+    private boolean shouldCloseIn(EntityMaid maid, Player owner) {
+        if (maid.getBukkitEntity().getLocation().distanceSquared(owner.getLocation()) <= 16
+                || !guardWeaponReady(maid)) return false;
+        if (combatPosition(owner, owner.getLocation())) return true;
+        if (!(owner instanceof CraftPlayer craft)) return false;
+        var body = craft.getHandle();
+        return !body.level().getEntitiesOfClass(Mob.class, body.getBoundingBox().inflate(6), mob ->
+            mob.isAlive() && mob.getTarget() == body && body.hasLineOfSight(mob)
+                && !authoredMob(mob) && !mob.getBukkitEntity().getPersistentDataContainer().has(VORTEX_INSTANCE)).isEmpty();
+    }
+
+    private boolean currentDungeonTarget(EntityMaid maid, Player owner, Mob mob) {
+        if (owner == null || dungeonCombat == null) return false;
+        try {
+            return Boolean.TRUE.equals(dungeonCombat.invoke(null, owner, maid.getBukkitEntity(), mob.getBukkitEntity()));
+        } catch (ReflectiveOperationException | LinkageError unavailable) {
+            return false;
+        }
     }
 
     private static void clearTarget(EntityMaid maid) {
@@ -135,7 +195,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
     }
 
     private boolean eligible(EntityMaid maid, Player owner) {
-        int range = partnerRange(maid);
+        int range = owner != null && combatPosition(owner, owner.getLocation()) ? Math.max(32, partnerRange(maid)) : partnerRange(maid);
         return owner != null && owner.isOnline() && !owner.isDead() && owner.getGameMode() != GameMode.SPECTATOR
             && owner.getWorld().equals(maid.getBukkitEntity().getWorld())
             && owner.getLocation().distanceSquared(maid.getBukkitEntity().getLocation()) <= range * range
@@ -179,6 +239,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         guard.target = null;
         guard.selectedAt = 0;
         guard.lastThreat = 0;
+        guard.closingIn = false;
         guard.state = "following_ready";
     }
 
@@ -189,6 +250,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
             guard.maid = maid;
         }
         Player owner = owner(maid);
+        guard.closingIn = false;
         boolean manualTask = !automaticTask(maid) && !maid.getTask().getUid().toString().equals(MaidCompanionActions.IDLE);
         if (manualTask || !eligible(maid, owner) || lowHealth(maid)) {
             stopNative(maid);
@@ -199,7 +261,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         }
 
         long now = System.nanoTime();
-        var threats = new ArrayList<>(maid.level().getEntitiesOfClass(Mob.class, maid.getBoundingBox().inflate(8), mob -> hostile(maid, mob)));
+        var threats = new ArrayList<>(maid.level().getEntitiesOfClass(Mob.class, maid.getBoundingBox().inflate(8), mob -> hostile(maid, owner, mob)));
         threats.sort(Comparator.comparing((Mob mob) -> !attacksPartner(maid, mob)).thenComparingDouble(maid::distanceToSqr));
         if (threats.isEmpty()) {
             if (guard.lastThreat == 0 || now - guard.lastThreat >= QUIET) {
@@ -211,7 +273,8 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
             guard.plan = null;
             guard.requested = null;
             guard.target = null;
-            guard.state = "following_ready";
+            guard.closingIn = shouldCloseIn(maid, owner);
+            guard.state = guard.closingIn ? "closing_in_to_guard" : "following_ready";
             return;
         }
 
@@ -239,7 +302,8 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
             stopNative(maid);
             guard.pending = null;
             guard.plan = null;
-            guard.state = blocked;
+            guard.closingIn = shouldCloseIn(maid, owner);
+            guard.state = guard.closingIn ? "closing_in_to_guard" : blocked;
             return;
         }
 
@@ -434,7 +498,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         if (current && guard.equippedAt != null) out.addProperty("lastEquipmentSwapAt", guard.equippedAt.toString());
         if (magic != null && (magic.staff(maid) != null || magic.hasHistory(maid))) out.add("rpg", magic.describe(maid));
         out.addProperty("nextStep", guardWeaponReady(maid)
-            ? "随行时自动护卫。可从自己的背包换武器，对8格内可见普通敌怪选择近战、远程或法术。请核对护卫状态与实际命中。"
+            ? "随行时自动护卫，可从自己的背包换武器，攻击8格内可见敌怪和伙伴当前参战房间的怪物。请核对实际命中。"
             : "请把可用近战武器、带弹药的弓弩或 Vortex 学徒法杖放入女仆已解锁的背包槽。先查 inventory；武器可由护卫自动换上。");
         return out;
     }
@@ -456,6 +520,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         Scene plan, requested;
         long lastThreat, selectedAt, requestedAt;
         Instant decisionAt, equippedAt;
+        boolean closingIn;
         String state = "awaiting_native_tick", systemOne = "idle";
     }
 }

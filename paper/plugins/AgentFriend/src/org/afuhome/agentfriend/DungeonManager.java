@@ -469,6 +469,14 @@ final class DungeonManager implements Listener {
         return isParticipant(player) && pausedAt == 0 && floor == stage && committedCurrentRun()
             && inFloor(player.getLocation(), stage) && inFloor(landing, stage);
     }
+    boolean companionCombatPosition(Player player, Location position) {
+        return active && spawned && !cleared && pausedAt == 0 && committedCurrentRun()
+            && validParticipantTarget(player) && inFloor(position, floor);
+    }
+    boolean companionCombatTarget(Player player, Entity companion, Entity target) {
+        return trialMob(target) && mobs.contains(target.getUniqueId())
+            && companionCombatPosition(player, companion.getLocation()) && inFloor(target.getLocation(), floor);
+    }
     private boolean inBuild(Location at) {
         if (!built || !sameWorld(at)) return false;
         if (at.getY() >= Y[BASE_FLOORS - 1] && at.getY() <= Y[0] + 7

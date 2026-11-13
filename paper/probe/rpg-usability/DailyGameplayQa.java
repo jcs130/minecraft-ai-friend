@@ -23,7 +23,7 @@ public final class DailyGameplayQa extends JavaPlugin implements Listener {
     @Override public void onEnable() {
         try {
             if (!Files.readString(Path.of(".daily-shop-qa")).equals("ISOLATED_DAILY_SHOP_FROST_ONLY")
-                    || !Bukkit.getIp().equals("127.0.0.1") || !java.util.Set.of(25928,26324,26326).contains(Bukkit.getPort()))
+                    || !Bukkit.getIp().equals("127.0.0.1") || !java.util.Set.of(25928,26324,26326,26334,26336).contains(Bukkit.getPort()))
                 throw new IllegalStateException("Isolated stage required");
             vortex = (VortexCorePlugin) Bukkit.getPluginManager().getPlugin("VortexRPG");
             Bukkit.getPluginManager().registerEvents(this, this);
@@ -77,7 +77,7 @@ public final class DailyGameplayQa extends JavaPlugin implements Listener {
                         throw new IllegalArgumentException("Synthetic dungeon actor required");
                     var world=Bukkit.getWorld("world");
                     player.setInvulnerable(true);
-                    boolean tower=player.getName().equals("MaidBrainQA");
+                    boolean tower=player.getName().equals("MaidBrainQA") && args.length == 2;
                     int fromX=tower?-601:2994, toX=tower?-579:3020;
                     int fromZ=tower?-316:2394, toZ=tower?-294:2406;
                     for(int x=fromX>>4;x<=toX>>4;x++)for(int z=fromZ>>4;z<=toZ>>4;z++)
