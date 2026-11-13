@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.66
+
+- Expose observed offhand defense separately from backpack ownership; confirm and explain explicit shield replacement without forcing equipment choices.
+
 ## 0.5.7-rc.160-preview.65
 
 - Separate physical fire contact from planner clearance. Validate explicit ranged spacing against the current local corridor; blocked retreat can still fire a verified shot. Clarify that a local combat clear does not complete a server room.

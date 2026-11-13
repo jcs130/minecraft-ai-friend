@@ -569,6 +569,8 @@ export async function skillEquip(bot: Bot, call: Extract<SkillCall, { skill: 'eq
       + (near.length > 0 ? `;名字带这几个字的有:${near.join('、')}` : ''));
   }
   const dest = call.hand === 'off' ? 'off-hand' : call.hand === 'main' ? 'hand' : equipDestOf(item.name, bot.registry);
+  const previousOffhand = dest === 'off-hand' ? offHandItem(bot) : null;
+  const previousOffhandLabel = previousOffhand ? itemCustomName(previousOffhand) ?? zhName(previousOffhand.name) : null;
   const checkActive = ctx ? () => checkAbort(ctx) : undefined;
   if (dest === 'hand') await equipHandConfirmed(bot, item, checkActive);
   else await equipSlotConfirmed(bot, item, dest, checkActive);
@@ -582,6 +584,9 @@ export async function skillEquip(bot: Bot, call: Extract<SkillCall, { skill: 'eq
       (nowOff ? `快捷栏那格原来的${pickLabel(pickTargetOf(nowOff, bot.registry as never))}换进了副手` : '副手空了');
   }
   if (dest === 'hand') return `手里拿起了${what}`;
-  if (dest === 'off-hand') return `${what}挂上了副手`;
+  if (dest === 'off-hand') return `${what}挂上了副手`
+    + (previousOffhandLabel ? `；原副手${previousOffhandLabel}已不再装备` : '')
+    + (previousOffhand?.name === 'shield' && item.name !== 'shield' ? '；当前未装备盾，不能举盾防御' : '')
+    + (item.name === 'arrow' ? '；普通箭放在背包即可供本核心弓箭使用，不要求副手持箭' : '');
   return `穿上了${what}`;
 }
