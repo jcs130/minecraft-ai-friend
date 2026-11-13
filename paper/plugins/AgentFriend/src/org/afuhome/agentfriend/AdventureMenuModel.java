@@ -74,7 +74,7 @@ final class AdventureMenuModel {
             button(10,Action.BACKPACK,"BARREL","随身大背包","打开本人54格大背包","与远程个人箱分别存放"),
             button(12,Action.STASH,"ENDER_CHEST","远程个人箱","打开页码选择，查看全部10页","任务奖励和购买商品也在这里"),
             button(14,Action.TIDY_BAG,"CHEST","合并背包堆叠","整理前会再次确认","只合并同组件物品，不丢弃、不出售"),
-            button(16,Action.TIDY_STASH,"HOPPER","合并个人箱堆叠","覆盖全部10页，不只第一页","只合并，不销毁装备或杂物"),
+            button(16,Action.TIDY_STASH,"HOPPER","整理个人箱","合并全部10页的堆叠，装备排在前面","保留物品，整理后请重新查看槽位"),
             button(22,Action.RECYCLE_MENU,"GOLD_INGOT","回收多余装备","先查看报价和保留范围","不会因为打开页面就卖掉物品"));
         case TRADE->List.of(
             button(10,Action.SHOP_MENU,"GOLD_INGOT","金币商城","查看价格，购买装备和物资","商品送入个人箱"),

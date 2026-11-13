@@ -19,6 +19,7 @@ final class NativeRpg {
         market=selected?new PlayerMarket(owner,this):null;
     }
     boolean selected(){return selected;}
+    boolean blockPendingTrade(Player p){return market!=null&&market.blockPending(p);}
     List<AgentCliRecovery.Card> adviceCards(){
         if(!selected)return List.of();
         try{
@@ -110,9 +111,13 @@ final class NativeRpg {
         }return out;
     }
     int level(Player p){var s=state(p);return s.has("level")?s.get("level").getAsInt():1;}
-    boolean usableClassItem(Player p){
-        try{return Boolean.TRUE.equals(call("hasUsableDungeonWeapon",new Class<?>[]{Player.class},p));}
+    boolean usableRangedClassItem(Player p,List<org.bukkit.inventory.ItemStack> candidates){
+        try{return Boolean.TRUE.equals(call("hasUsableRangedDungeonWeapon",new Class<?>[]{Player.class,List.class},p,candidates));}
         catch(RuntimeException unavailable){return false;}
+    }
+    boolean refillDungeonMana(Player p) {
+        try { return Boolean.TRUE.equals(call("refillDungeonMana", new Class<?>[]{Player.class}, p)); }
+        catch (RuntimeException unavailable) { return false; }
     }
     String profession(Player p){var s=state(p);return s.has("combat")?s.get("combat").getAsString():"";}
     boolean hasMana(Player p,double amount){
@@ -237,7 +242,12 @@ final class NativeRpg {
                 data.add("invocation",new Gson().toJsonTree(AgentCommunicationContract.invocation(entry.id(),entry.command())));
                 Long cooldown=owner.readBasicCooldown(p,entry.id());data.add("cooldownRemainingMs",cooldown==null?JsonNull.INSTANCE:new JsonPrimitive(cooldown));
                 if(entry.id().equals("blink"))data.addProperty("aimHint","瞄准安全地面优先到该处；平视空气时沿水平朝向选25格内最远安全落点。不会穿墙、穿封闭天花板或落入悬空/危险地面；拒绝不扣魔力或冷却。");
-                if(Arrays.asList(args).contains("--json"))p.sendMessage("MC_RPG "+data);else p.sendMessage("§b[技能] "+entry.name()+"（"+entry.id()+"）；通用技能，无需学习；"+entry.effect()+"；目标："+entry.target()+"；"+entry.costLine()+"；当前冷却 "+(cooldown==null?"未知，请先核对":cooldown==0?"已就绪":((cooldown+999)/1000)+"秒，等结束后再施放")+(entry.id().equals("blink")?"；不会穿墙或进入危险落点；拒绝未耗魔、无冷却":"")+"。用法："+entry.command());return true;
+                if(entry.id().equals("frostnova")) {
+                    data.addProperty("canExtinguish",true);
+                    data.addProperty("extinguishWithoutEnemy",true);
+                    data.addProperty("extinguishRange",FrostControl.RADIUS);
+                }
+                if(Arrays.asList(args).contains("--json"))p.sendMessage("MC_RPG "+data);else p.sendMessage("§b[技能] "+entry.name()+"（"+entry.id()+"）；通用技能，无需学习；"+entry.effect()+"；目标："+entry.target()+"；"+entry.costLine()+"；当前冷却 "+(cooldown==null?"未知，请先核对":cooldown==0?"已就绪":((cooldown+999)/1000)+"秒，等结束后再施放")+(entry.id().equals("blink")?"；不会穿墙或进入危险落点；拒绝未耗魔、无冷却":"")+(entry.id().equals("frostnova")?"；附近只有明火或有人着火时也可以用":"")+"。用法："+entry.command());return true;
             }
             String[] normalized=args.clone();
             normalized[0]=switch(group){case "职业"->"profession";case "spells","技能"->"skills";case "任务路线"->"tasks";default->group;};

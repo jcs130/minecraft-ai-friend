@@ -7,6 +7,9 @@ import io.vortexcore.player.UnifiedPlayer;
 import io.vortexcore.quest.*;
 import io.vortexcore.combat.ManaManager;
 import io.vortexcore.item.CustomItemService;
+import io.vortexcore.rpg.effects.EffectCategory;
+import io.vortexcore.rpg.effects.EffectService;
+import io.vortexcore.rpg.effects.VortexEffectType;
 import org.bukkit.*;
 import org.bukkit.command.*;
 import org.bukkit.configuration.ConfigurationSection;
@@ -24,6 +27,7 @@ public final class VortexBridge extends JavaPlugin {
     private QuestService quests;
     private ManaManager mana;
     private CustomItemService items;
+    private Map<?,?> registeredEffects=Map.of();
     private YamlConfiguration city;
     private final AuctionSafety auctionSafety=new AuctionSafety();
     public void partyCommand(Player player,String[] args){if(!Bukkit.isPrimaryThread())throw new IllegalStateException("party command requires primary thread");new NativeParties(vortex).command(player,args);}
@@ -46,6 +50,7 @@ public final class VortexBridge extends JavaPlugin {
             quests=vortex.qiandengjiQuests();
             mana=vortex.qiandengjiMana();
             items=vortex.qiandengjiItems();
+            registeredEffects=loadRegisteredEffects();
             Objects.requireNonNull(quests);Objects.requireNonNull(mana);
             validateShops();Bukkit.getPluginManager().registerEvents(new TwinCityGates(this),this);
             Bukkit.getPluginManager().registerEvents(new LegacyRpgCommands(),this);
@@ -101,6 +106,63 @@ public final class VortexBridge extends JavaPlugin {
             if(def.isPresent()&&def.get().material()==item.getType()&&def.get().hasAbilityHook()
                     &&selected.equals(def.get().requiredClassId()))return true;
         }return false;
+    }
+    public boolean hasUsableRangedDungeonWeapon(Player p, List<ItemStack> candidates) {
+        if (!Bukkit.isPrimaryThread()) throw new IllegalStateException("main thread required");
+        var state = profile(p);
+        var role = vortex.classSkillService().selectedClassDefinition(state);
+        if (role.isEmpty()) return false;
+        var spellbook = vortex.spellbookService();
+        var usable = new HashSet<>(spellbook.availableSpells(state));
+        var offensive = new HashSet<String>();
+        for (var spell : spellbook.editorSpellSnapshots()) {
+            if (state.level() < spell.minLevel()
+                    || !spell.requiredClasses().isEmpty() && !spell.requiredClasses().contains(role.get().id())) continue;
+            boolean remote = spell.targeters().stream().anyMatch(target ->
+                Set.of("nearby_monster", "ray", "cone").contains(Objects.toString(target.get("type"), ""))
+                    && target.get("range") instanceof Number range && range.doubleValue() > 4);
+            if (remote && spell.mechanics().stream().anyMatch(effect -> "damage".equals(effect.get("type"))))
+                offensive.add(spell.id());
+        }
+        String active = spellbook.activeSpellId(state).orElse("");
+        for (ItemStack item : candidates) {
+            var definition = items.definition(items.resolveId(item));
+            if (definition.isEmpty() || definition.get().material() != item.getType()
+                    || definition.get().requiredClassId()!=null&&!definition.get().requiredClassId().isBlank()
+                        && !role.get().id().equals(definition.get().requiredClassId())) continue;
+            for (var binding : List.of(definition.get().leftClickAbility(), definition.get().rightClickAbility())) {
+                if (binding.useActiveSpell() && offensive.contains(active) && usable.contains(active)) return true;
+                if (binding.useSpellId() != null && offensive.contains(binding.useSpellId())) return true;
+            }
+        }
+        return false;
+    }
+
+    private Map<?,?> loadRegisteredEffects() {
+        try {
+            // The pinned qd29 API exposes effect IDs but not categories. Read its live registry,
+            // so a reload takes effect without disk IO during the server's combat tick.
+            var registry=EffectService.class.getDeclaredField("effects");
+            registry.setAccessible(true);
+            if (registry.get(vortex.effectService()) instanceof Map<?,?> effects) return effects;
+        } catch (ReflectiveOperationException | RuntimeException unavailable) {
+            getLogger().warning("Vortex effect categories unavailable for room clear: " + unavailable.getClass().getSimpleName());
+        }
+        return Map.of();
+    }
+
+    /** Restore the authoritative pool for an online member after the game commits a room clear. */
+    public boolean refillDungeonMana(Player p) {
+        if (!Bukkit.isPrimaryThread() || !p.isOnline() || p.isDead()) return false;
+        var state = profile(p);
+        mana.setMana(p.getUniqueId(), mana.getMaxMana(p));
+        var context = new io.vortexcore.magic.SpellContext(UUID.randomUUID(), state, p.getLocation(), vortex.nexusBus(), p);
+        var target = new io.vortexcore.magic.SpellTarget(io.vortexcore.magic.SpellTarget.TargetKind.ENTITY, p.getUniqueId(), p.getLocation());
+        for (Object value : registeredEffects.values())
+            if (value instanceof VortexEffectType effect && effect.category()==EffectCategory.HARMFUL)
+                vortex.effectService().removeEffect(context, target, effect.id(), Integer.MAX_VALUE)
+                    .exceptionally(error -> {getLogger().warning("Dungeon effect cleanup failed for " + effect.id());return null;});
+        return true;
     }
     private boolean legacyRetired(){
         if(!getConfig().getString("backend","preview").equals("vortex"))return false;

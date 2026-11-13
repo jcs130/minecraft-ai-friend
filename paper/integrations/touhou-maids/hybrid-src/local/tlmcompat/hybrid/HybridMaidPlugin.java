@@ -56,6 +56,8 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private NativeMaidWorkshop workshops;
     private NativeMaidResidence residence;
     NativeMaidWorkshop workshops(){return workshops;}
+    boolean editingMaidInventory(EntityMaid maid){return maid.guiOpening||menus!=null&&menus.editing(maid);}
+    boolean guardWeaponReady(EntityMaid maid){return companion!=null&&companion.guardWeaponReady(maid);}
     JsonObject lastResidenceLocation(UUID owner,UUID maid){return agentSupport.lastResidenceLocation(owner,maid);}
     void rememberResidenceDeparture(EntityMaid maid){agentSupport.rememberResidenceDeparture(maid);}
     void companionTick(EntityMaid maid){if(companion!=null)companion.tick(maid);}
@@ -354,7 +356,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             case "talk"->{String event=actor.getUniqueId()+":"+operation;inbox.add(id,event,actor.getUniqueId(),actor.getName(),value);observation=new JsonObject();observation.addProperty("eventId",event);Player controller=Bukkit.getPlayer(owner(maid));if(controller!=null&&controller.getListeningPluginChannels().contains(CHANNEL)){JsonObject notice=new JsonObject();notice.addProperty("maidId",id.toString());notice.addProperty("eventId",event);notice.addProperty("sessionKey",records().getAsJsonObject(id.toString()).get("sessionKey").getAsString());reply(controller,"dialogue",operation,notice,null);}}
             case "ack"->{inbox.acknowledge(id,value);observation=new JsonObject();observation.addProperty("eventId",value);}
             case "transfer"->observation=menus.transfer(actor,maid,value);
-            case "equip"->observation=menus.equip(actor,maid,value);
+            case "equip"->{observation=menus.equip(actor,maid,value);if(companion!=null)companion.equipmentChanged(maid);}
             case "menu","native-menu"->{if(action.equals("menu"))menus.open(actor,maid);else maid.openMaidGui(((CraftPlayer)actor).getHandle());observation=new JsonObject();observation.addProperty("maidId",id.toString());observation.addProperty("windowId",((CraftPlayer)actor).getHandle().containerMenu.containerId);}
             default->observation=cosmetics.apply(actor,maid,action,value);
         }

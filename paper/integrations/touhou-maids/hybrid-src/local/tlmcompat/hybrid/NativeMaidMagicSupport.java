@@ -21,10 +21,9 @@ import java.util.Map;
 import java.util.UUID;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.NeutralMob;
-import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.item.ItemStack;
 import org.bukkit.Bukkit;
-import org.bukkit.NamespacedKey;
+import org.bukkit.craftbukkit.inventory.CraftItemStack;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 
@@ -34,12 +33,10 @@ final class NativeMaidMagicSupport {
     private static final String MAGE = "mage";
     private static final double GUARD_RANGE = 8;
     private final VortexCorePlugin vortex;
-    private final NamespacedKey vortexEncounter;
     private final Map<UUID, Mana> manaByMaid = new HashMap<>();
 
     private NativeMaidMagicSupport(VortexCorePlugin vortex) {
         this.vortex = vortex;
-        vortexEncounter = new NamespacedKey(vortex, "dungeon_instance_id");
     }
 
     static NativeMaidMagicSupport create() {
@@ -54,26 +51,33 @@ final class NativeMaidMagicSupport {
     }
 
     CustomItemDefinition staff(EntityMaid maid) {
-        if (!vortex.isEnabled() || !(maid.getBukkitEntity() instanceof LivingEntity caster)
-                || caster.getEquipment() == null) return null;
-        var hand = caster.getEquipment().getItemInMainHand();
+        return staff(maid.getMainHandItem());
+    }
+
+    CustomItemDefinition staff(ItemStack stack) {
+        if (!vortex.isEnabled() || stack.isEmpty()) return null;
+        var hand = CraftItemStack.asCraftMirror(stack);
         var items = vortex.qiandengjiItems();
         if (!STAFF.equals(items.resolveId(hand))) return null;
         return items.definition(STAFF).filter(item -> item.material() == hand.getType()
             && MAGE.equals(item.requiredClassId())).orElse(null);
     }
 
-    String defend(EntityMaid maid, Player owner, CustomItemDefinition staff) {
-        if (!PlayerStateGate.allowed(owner) || !owner.canSee(maid.getBukkitEntity())) return "paused_by_owner_or_world";
+    record Opportunity(String state, Attempt attempt) {}
+
+    Opportunity prepare(EntityMaid maid, Player owner, CustomItemDefinition staff, List<Mob> threats) {
+        if (threats.isEmpty()) return new Opportunity("following_ready", null);
+        if (!PlayerStateGate.allowed(owner) || !owner.canSee(maid.getBukkitEntity()))
+            return new Opportunity("paused_by_owner_or_world", null);
         var caster = (LivingEntity) maid.getBukkitEntity();
         var origin = caster.getLocation();
         var protection = vortex.protectionHookService();
-        if (!protection.allows(owner, origin, ProtectionAction.SPELL_CAST)) return "rpg_protected_area";
+        if (!protection.allows(owner, origin, ProtectionAction.SPELL_CAST))
+            return new Opportunity("rpg_protected_area", null);
 
         var mage = vortex.classSkillService().classProfile(MAGE).filter(role -> role.archetype() == VortexClass.MAGE).orElse(null);
-        if (mage == null) return "rpg_spell_unavailable";
+        if (mage == null) return new Opportunity("rpg_spell_unavailable", null);
         var spellbook = vortex.spellbookService();
-        double range = 0;
         // Right-click starter skill takes precedence, then the staff's basic attack.
         var spells = new ArrayList<Cast>(2);
         for (var binding : List.of(staff.rightClickAbility(), staff.leftClickAbility())) {
@@ -85,15 +89,11 @@ final class NativeMaidMagicSupport {
             if (reach <= 0) continue;
             boolean aimed = "ray".equals(spell.definition().targeters().getFirst().get("type"));
             spells.add(new Cast(spell, reach * reach, Math.max(binding.useCooldownMillis(), spell.definition().cooldownMillis()), aimed));
-            range = Math.max(range, reach);
         }
-        if (spells.isEmpty()) return "rpg_spell_unavailable";
-        double rangeSquared = range * range;
-        var targets = maid.level().getEntitiesOfClass(Mob.class, maid.getBoundingBox().inflate(range), mob ->
-            mob != maid && mob.isAlive() && maid.distanceToSqr(mob) <= rangeSquared && hostile(maid, mob, owner)
-                && protection.allows(owner, mob.getBukkitEntity().getLocation(), ProtectionAction.SPELL_TARGET));
-        if (targets.isEmpty()) return "following_ready";
-        targets.sort(java.util.Comparator.comparingDouble(maid::distanceToSqr));
+        if (spells.isEmpty()) return new Opportunity("rpg_spell_unavailable", null);
+        var targets = threats.stream().filter(mob -> maid.canAttack(mob))
+            .filter(mob -> protection.allows(owner, mob.getBukkitEntity().getLocation(), ProtectionAction.SPELL_TARGET)).toList();
+        if (targets.isEmpty()) return new Opportunity("rpg_protected_area", null);
 
         // This stat snapshot is local to the cast. The RPG player repository only sees players.
         var stats = new UnifiedPlayer(maid.getUUID(), maid.getName().getString());
@@ -121,27 +121,31 @@ final class NativeMaidMagicSupport {
                 blocked = "rpg_mana_low";
                 continue;
             }
-            var context = new SpellContext(UUID.randomUUID(), stats, origin, vortex.nexusBus(), caster);
-            var hit = new SpellTarget(SpellTarget.TargetKind.ENTITY, target.getUniqueId(), target.getLocation().add(0, target.getHeight() * .5, 0));
-            double damage = cast.spell.damage(context, hit);
-            if (!Double.isFinite(damage) || damage <= 0) return "rpg_spell_unavailable";
-            double before = target.getHealth() + target.getAbsorptionAmount();
-            target.damage(damage, caster);
-            mana.current -= cost;
-            mana.cooldowns.put(spellId, now + cast.cooldownMillis);
-            if (!target.isDead() && target.getHealth() + target.getAbsorptionAmount() >= before) {
-                mana.current += cost;
-                return "rpg_hit_blocked";
-            }
-            mana.lastSpell = spellId;
-            mana.lastHit = target.getUniqueId();
-            mana.lastCastAt = Instant.now();
-            maid.getLookControl().setLookAt(enemy);
-            maid.swing(InteractionHand.MAIN_HAND);
-            cast.spell.play(context, hit, caster);
-            return "rpg_cast_hit";
+            return new Opportunity("rpg_ready", new Attempt(cast, enemy, stats, mana, cost, now));
         }
-        return blocked;
+        return new Opportunity(blocked, null);
+    }
+
+    String cast(EntityMaid maid, Attempt attempt) {
+        var caster = (LivingEntity) maid.getBukkitEntity();
+        var target = (LivingEntity) attempt.enemy.getBukkitEntity();
+        var cast = attempt.cast;
+        var context = new SpellContext(UUID.randomUUID(), attempt.stats, caster.getLocation(), vortex.nexusBus(), caster);
+        var hit = new SpellTarget(SpellTarget.TargetKind.ENTITY, target.getUniqueId(), target.getLocation().add(0, target.getHeight() * .5, 0));
+        double damage = cast.spell.damage(context, hit);
+        if (!Double.isFinite(damage) || damage <= 0) return "rpg_spell_unavailable";
+        double before = target.getHealth() + target.getAbsorptionAmount();
+        target.damage(damage, caster);
+        attempt.mana.cooldowns.put(cast.spell.definition().id(), attempt.now + cast.cooldownMillis);
+        if (!target.isDead() && target.getHealth() + target.getAbsorptionAmount() >= before) return "rpg_hit_blocked";
+        attempt.mana.current -= attempt.cost;
+        attempt.mana.lastSpell = cast.spell.definition().id();
+        attempt.mana.lastHit = target.getUniqueId();
+        attempt.mana.lastCastAt = Instant.now();
+        maid.getLookControl().setLookAt(attempt.enemy);
+        maid.swing(InteractionHand.MAIN_HAND);
+        cast.spell.play(context, hit, caster);
+        return "rpg_cast_hit";
     }
 
     private static boolean clearRay(LivingEntity caster, LivingEntity target) {
@@ -151,19 +155,6 @@ final class NativeMaidMagicSupport {
         var first = caster.getWorld().rayTraceEntities(eye, direction, direction.length(), .3,
             entity -> entity instanceof LivingEntity living && living.isValid() && !living.isDead() && !entity.equals(caster));
         return first != null && target.equals(first.getHitEntity());
-    }
-
-    private boolean hostile(EntityMaid maid, Mob mob, Player owner) {
-        var target = mob.getTarget();
-        boolean attacking = target != null && (target == maid || target.getUUID().equals(owner.getUniqueId()));
-        var entity = mob.getBukkitEntity();
-        // Encounter-owned mobs require the instance's participant and reward accounting.
-        var tags = entity.getScoreboardTags();
-        if (tags.contains("afu_site_dungeon") || tags.contains("afu_dungeon_mob")
-                || entity.getPersistentDataContainer().has(vortexEncounter)) return false;
-        return MaidCompanionPolicy.hostileCandidate(attacking, mob instanceof Enemy, mob instanceof NeutralMob,
-            maid.isAlliedTo(mob), !mob.isNoAi() && !mob.isInvulnerable() && !entity.hasMetadata("NPC"),
-            maid.hasLineOfSight(mob), true, maid.canAttack(mob));
     }
 
     JsonObject describe(EntityMaid maid) {
@@ -182,7 +173,14 @@ final class NativeMaidMagicSupport {
         return data;
     }
 
+    boolean hasHistory(EntityMaid maid) {
+        var mana = manaByMaid.get(maid.getUUID());
+        return mana != null && mana.lastCastAt != null;
+    }
+
     private record Cast(NpcSpellAccess spell, double rangeSquared, long cooldownMillis, boolean aimed) {}
+
+    record Attempt(Cast cast, Mob enemy, UnifiedPlayer stats, Mana mana, double cost, long now) {}
 
     private static final class Mana {
         final Map<String, Long> cooldowns = new HashMap<>();

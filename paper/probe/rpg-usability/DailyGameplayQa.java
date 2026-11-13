@@ -50,6 +50,28 @@ public final class DailyGameplayQa extends JavaPlugin implements Listener {
                     if (args.length > 2) player.setHealth(Math.min(player.getMaxHealth(), Double.parseDouble(args[2])));
                     sender.sendMessage("health=" + player.getHealth());
                 }
+                case "clear-state" -> {
+                    if (!player.getName().matches("MaidBrainQA|ag_RUReady[AB]"))
+                        throw new IllegalArgumentException("Synthetic dungeon actor required");
+                    var effects=vortex.effectService();
+                    if (args.length==3&&args[2].equals("arm")) {
+                        player.setHealth(5);
+                        vortex.qiandengjiMana().setMana(player.getUniqueId(),0);
+                        player.setFireTicks(120);
+                        player.addPotionEffect(new org.bukkit.potion.PotionEffect(PotionEffectType.POISON,200,0));
+                        player.addPotionEffect(new org.bukkit.potion.PotionEffect(PotionEffectType.SPEED,400,0));
+                        effects.applyEffectToEntity(player,"bleed",200,1,1,true);
+                        effects.applyEffectToEntity(player,"arcane_ward",200,1,1,true);
+                    }
+                    var all=(java.util.Map<?,?>)field(effects,"activeEffects");
+                    var active=all.get(player.getUniqueId()) instanceof java.util.Map<?,?> current ? current : java.util.Map.of();
+                    var mana=vortex.qiandengjiMana();
+                    sender.sendMessage("health="+player.getHealth()+"/"+player.getMaxHealth()
+                        +" mana="+mana.getMana(player.getUniqueId())+"/"+mana.getMaxMana(player)
+                        +" fire="+player.getFireTicks()+" poison="+player.hasPotionEffect(PotionEffectType.POISON)
+                        +" speed="+player.hasPotionEffect(PotionEffectType.SPEED)+" bleed="+active.containsKey("bleed")
+                        +" ward="+active.containsKey("arcane_ward"));
+                }
                 case "entity-health" -> {
                     var entities = Bukkit.selectEntities(sender, args[1]);
                     if (entities.isEmpty()) sender.sendMessage("health=0.0");

@@ -136,7 +136,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             new FocusSpell("prospect gold", 17, Material.RAW_GOLD, "§e探金矿", "范围随挖矿等级成长；6 魔力"),
             new FocusSpell("prospect redstone", 18, Material.REDSTONE, "§c探红石", "范围随挖矿等级成长；6 魔力"),
             new FocusSpell("starbolt", 19, Material.AMETHYST_SHARD, "§d星芒箭", "自动锁敌；4 魔力"),
-            new FocusSpell("frostnova", 20, Material.SNOWBALL, "§b霜环", "近身群攻；7 魔力"),
+            new FocusSpell("frostnova", 20, Material.SNOWBALL, "§b霜环", "近身控场和灭火；7 魔力"),
             new FocusSpell("flamewave", 21, Material.BLAZE_POWDER, "§6焰浪", "前方群攻；8 魔力"),
             new FocusSpell("selfheal", 22, Material.GOLDEN_APPLE, "§a治疗自己", "回复 4 颗心；6 魔力"),
             new FocusSpell("blink", 23, Material.ENDER_PEARL, "§d闪现", "短距离移动；4 魔力"),
@@ -266,6 +266,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if(cliRecovery!=null)cliRecovery.reject(player,args,"UNKNOWN_SKILL","该技能ID不在当前Vortex配置中，请核对相近用法");
     }
     NativeRpg nativeRpg(){return nativeRpg;}
+    InventoryTidy inventoryTidy(){return inventoryFeedback.tidy();}
     /** Only typed, server-owned buttons reach here; existing commands keep their own authority. */
     void executePlayerMenuAction(Player p,AdventureMenuModel.Action action,String payload){
         switch(action){
@@ -1564,7 +1565,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     private void spells(Player p) {
         p.sendMessage(ChatColor.LIGHT_PURPLE + "守护/恢复：圣愈术(selfheal，治疗自己)、范围治疗(heal，8 格内所有受伤玩家)、饱食(food)；位移：归乡(home)、闪现(blink)；创造/观赏：造物术(give)、烟花术(fireworks)、星尘术(starlight)。");
-        p.sendMessage(ChatColor.GOLD + "战斗咏唱：星芒箭(starbolt，自动锁敌、4 魔力)、霜环(frostnova，7 魔力)、焰浪(flamewave，8 魔力)；仅攻击怪物，不破坏方块。");
+        p.sendMessage(ChatColor.GOLD + "战斗咏唱：星芒箭(starbolt，自动锁敌、4 魔力)、霜环(frostnova，控场与灭火、7 魔力)、焰浪(flamewave，8 魔力)。");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "探矿术(prospect)：基础 24 格，挖矿每 5 级 +2 格、最多 40 格；手持探矿刻印工具再 +8 格。可选 iron|coal|copper|gold|gems|diamond|redstone|ancient；6 魔力，30 秒冷却。");
         p.sendMessage(ChatColor.AQUA + "探索咏唱：跃空(leap，4 魔力/8 秒，需站在地上)、飞行(flight，10 魔力/90 秒，持续 15 秒)、守护傀儡(golem，12 魔力/75 秒，持续 45 秒)、探敌(sense，3 魔力/15 秒，搜索 24 格)。");
         p.sendMessage(ChatColor.GRAY + "Agent 用 /mycli cast <英文ID> 施法；/mycli focus list 查看可绑定 ID，/mycli focus bind <ID> 将法杖改为单次使用即施放。无目标的探敌不扣魔力。");
@@ -2451,7 +2452,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     +"\nVortex职业 "+(state.has("combat")&&!state.get("combat").getAsString().isEmpty()?state.get("combat").getAsString():"未选择")
                     +"\n战斗等级 "+nativeRpg.level(p)+"\n\n/mycli status 查看实时状态。",
                 "§6冒险四步§r\n\n/mycli profession list\n主动choose <ID>选职。\n\n/mycli skills list\n查看等级/学习点要求，主动learn <节点ID>。\n\n/mycli cast <技能ID>\n手持职业装备，核对实际效果。\n\n/mycli tasks list\n接讨伐或探索，达标后主动claim。",
-                "§b通用生存技能§r\n\nhome 归乡\nselfheal 圣愈\nfood 饱食\nblink 闪现\nstarbolt 星芒箭\nfrostnova 寒霜\ngive 造物\n\n另有travel传送点、prospect探矿、night夜视、feather羽落。\n\n无需选职或学习，统一使用Vortex魔力。详情：/mycli skills info <ID>",
+                "§b通用生存技能§r\n\nhome 归乡\nselfheal 圣愈\nfood 饱食\nblink 闪现\nstarbolt 星芒箭\nfrostnova 寒霜（控场、灭火）\ngive 造物\n\n另有travel传送点、prospect探矿、night夜视、feather羽落。\n\n无需选职或学习，统一使用Vortex魔力。详情：/mycli skills info <ID>",
                 "§e补给与个人箱§r\n\n/mycli guild shared\n查看公会共享装备与补给，亲自前往领取。\n\n/mycli arena stash\n远程个人奖励箱；成功开页2魔力。照片成片也在这里。\n\n54格大背包独立，不是个人奖励箱。",
                 "§d组队与攻略§r\n\n/mycli guild party\n原生组队入口。\n\n/mycli dungeon list\n正式遗迹和攻略；先看难度、装备和下一步，再报名。\n\n/mycli arena status\n练习试炼塔；不等于正式爬塔通关。\n\n倒地可等待队友救援。",
                 "§a世界与同伴§r\n\n/mycli world npcs\n找引路NPC，走近再交谈。\n\n/mycli photo menu\n拍照直接成片进个人奖励箱。\n\n/mycli archive help\n写公开日记与攻略。\n\n服务器回执才证明完成；不把命令发出当作成功。"

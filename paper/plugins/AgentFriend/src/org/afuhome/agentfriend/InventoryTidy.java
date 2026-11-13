@@ -12,6 +12,9 @@ import org.bukkit.persistence.PersistentDataType;
 /** Explicit own-inventory maintenance. No selling, world drops or body queue. */
 final class InventoryTidy {
     private static final String SETTINGS="inventory-tidy.";
+    static final String STASH_PREVIEW="/mycli inventory tidy stash --dry-run --discard-common --json";
+    private static final NamespacedKey VORTEX_ITEM=new NamespacedKey("vortexrpg","vortex_item_id");
+    private static final NamespacedKey VORTEX_PROFESSION_ITEM=new NamespacedKey("vortexrpg","profession_item_id");
     private static final long AUTO_INTERVAL_MS=60_000;
     private static final Set<Material> COMMON=Set.of(Material.COBBLESTONE,Material.COBBLED_DEEPSLATE,
             Material.STONE,Material.DIRT,Material.ANDESITE,Material.DIORITE,Material.GRANITE,
@@ -19,7 +22,9 @@ final class InventoryTidy {
             Material.WHEAT_SEEDS,Material.BEETROOT_SEEDS,Material.POISONOUS_POTATO);
     private final AgentFriendPlugin plugin;
     private final Set<UUID> queued=new HashSet<>(),blocked=new HashSet<>();
+    private final Set<UUID> blockedStashes=new HashSet<>();
     private final Map<UUID,Long> lastAuto=new HashMap<>();
+    private final Map<UUID,Long> lastStashAuto=new HashMap<>();
     private CommandSender operator;
     InventoryTidy(AgentFriendPlugin plugin){this.plugin=plugin;}
     static boolean common(ItemStack item){return item!=null&&COMMON.contains(item.getType())&&!item.hasItemMeta();}
@@ -33,22 +38,53 @@ final class InventoryTidy {
     }
     private static Plan plan(ItemStack[] before,boolean discard,int first) {
         ItemStack[] after=copy(before);int merged=0;Map<Material,Integer> removed=new LinkedHashMap<>();
-        // Preserve hotbar positions and all custom components. Only ordinary main-bag stacks consolidate.
-        for(int to=first;to<after.length;to++)if(plain(after[to])&&after[to].getAmount()<after[to].getMaxStackSize())for(int from=to+1;from<after.length;from++) {
-            ItemStack target=after[to],source=after[from];
-            if(!plain(source)||!target.isSimilar(source))continue;
-            int amount=Math.min(source.getAmount(),Math.max(0,target.getMaxStackSize()-target.getAmount()));
-            if(amount==0)continue;target.setAmount(target.getAmount()+amount);source.setAmount(source.getAmount()-amount);
-            if(source.getAmount()==0)after[from]=null;merged+=amount;
-            if(target.getAmount()>=target.getMaxStackSize())break;
+        // Preserve all custom components and, for the carried bag, hotbar positions.
+        Map<Material,List<ItemStack>> partials=new EnumMap<>(Material.class);
+        for (int slot=first;slot<after.length;slot++) {
+            ItemStack source=after[slot];
+            if (!plain(source)) continue;
+            var targets=partials.computeIfAbsent(source.getType(),ignored->new ArrayList<>());
+            for (var iterator=targets.iterator();iterator.hasNext()&&source.getAmount()>0;) {
+                ItemStack target=iterator.next();
+                if (!target.isSimilar(source)) continue;
+                int amount=Math.min(source.getAmount(),target.getMaxStackSize()-target.getAmount());
+                target.setAmount(target.getAmount()+amount);
+                source.setAmount(source.getAmount()-amount);
+                merged+=amount;
+                if (target.getAmount()==target.getMaxStackSize()) iterator.remove();
+            }
+            if (source.getAmount()==0) after[slot]=null;
+            else if (source.getAmount()<source.getMaxStackSize()) targets.add(source);
         }
         if(discard)for(int slot=first;slot<after.length;slot++)if(common(after[slot])) {
             removed.merge(after[slot].getType(),after[slot].getAmount(),Integer::sum);after[slot]=null;
         }
+        if (first == 0) {
+            var ordered = Arrays.stream(after).filter(item -> item != null && !item.getType().isAir())
+                .sorted(Comparator.comparingInt(InventoryTidy::stashPriority)).toList();
+            Arrays.fill(after, null);
+            for (int slot = 0; slot < ordered.size(); slot++) after[slot] = ordered.get(slot);
+        }
         return new Plan(after,used(before),used(after),merged,Collections.unmodifiableMap(removed));
+    }
+    private static int stashPriority(ItemStack item) {
+        String material = item.getType().name();
+        if (DungeonLoadoutRules.melee(material) || material.endsWith("_HELMET") || material.endsWith("_CHESTPLATE")
+                || material.endsWith("_LEGGINGS") || material.endsWith("_BOOTS")
+                || item.getType() == Material.BOW || item.getType() == Material.CROSSBOW || item.getType() == Material.SHIELD) return 0;
+        if (item.hasItemMeta()) {
+            var data = item.getItemMeta().getPersistentDataContainer();
+            if (data.has(VORTEX_PROFESSION_ITEM) || data.has(VORTEX_ITEM) && switch (item.getType()) {
+                case BLAZE_ROD, BOOK, BONE, CLOCK -> true;
+                default -> false;
+            }) return 0;
+        }
+        return common(item) ? 2 : 1;
     }
     private boolean enabled(Player p){return plugin.getConfig().getBoolean(SETTINGS+p.getUniqueId()+".enabled",false);}
     private boolean discard(Player p){return plugin.getConfig().getBoolean(SETTINGS+p.getUniqueId()+".discard-common",false);}
+    private String stashAutoPath(Player p){return SETTINGS+p.getUniqueId()+".stash-auto";}
+    private boolean stashAuto(Player p){return plugin.getConfig().getBoolean(stashAutoPath(p),false);}
     private String blocker(Player p) {
         if(!p.isOnline()||p.isDead()||plugin.isDowned(p))return "player_unavailable";
         if(plugin.isObserver(p)||!Set.of(GameMode.SURVIVAL,GameMode.ADVENTURE).contains(p.getGameMode()))return "survival_required";
@@ -67,7 +103,7 @@ final class InventoryTidy {
         Bukkit.getScheduler().runTask(plugin,()->{queued.remove(id);if(enabled(p)&&p.getInventory().firstEmpty()<0)run(p,false,discard(p),true);});
         return true;
     }
-    void forget(UUID id){queued.remove(id);}
+    void forget(UUID id){queued.remove(id);lastStashAuto.remove(id);}
     void operator(Player p,String[] args,CommandSender sender) {
         if(operator!=null)throw new IllegalStateException("Nested inventory operator");
         operator=sender;try{command(p,args);}finally{operator=null;}
@@ -79,7 +115,13 @@ final class InventoryTidy {
             default->{if(args[n].startsWith("--")){failure(p,"invalid_argument","/mycli inventory tidy --help");return;}words.add(args[n]);}
         }
         if(!words.isEmpty()) {
-            if(words.equals(List.of("stash"))){runStash(p,preview,drop);return;}
+            if(words.equals(List.of("stash"))){runStash(p,preview,drop,false);return;}
+            if(words.size()==3&&words.getFirst().equals("stash")&&words.get(1).equals("auto")) {
+                if(preview||drop||!Set.of("on","off","status").contains(words.getLast())) {
+                    failure(p,"invalid_argument","/mycli inventory tidy stash auto status");return;
+                }
+                stashAutoCommand(p,words.getLast());return;
+            }
             if(words.size()!=2||!words.getFirst().equals("auto")||!Set.of("on","off","status").contains(words.getLast())||preview
                     ||drop&&!words.getLast().equals("on")){failure(p,"invalid_argument","/mycli inventory tidy auto status");return;}
             String action=words.getLast();
@@ -94,24 +136,72 @@ final class InventoryTidy {
         }
         run(p,preview,drop,false);
     }
-    private void runStash(Player p,boolean preview,boolean drop) {
+    private void stashAutoCommand(Player p,String action) {
+        if (!action.equals("status")) {
+            String stop=blocker(p);
+            if(stop!=null){failure(p,stop,"/mycli inventory tidy stash auto status");return;}
+            String path=stashAutoPath(p);
+            Object previous=plugin.getConfig().get(path);
+            try {
+                plugin.getConfig().set(path,action.equals("on"));
+                plugin.saveConfig();
+                lastStashAuto.remove(p.getUniqueId());
+            } catch (RuntimeException error) {
+                plugin.getConfig().set(path,previous);
+                failure(p,"settings_save_unverified","/mycli inventory tidy stash auto status");return;
+            }
+        }
+        boolean enabled=stashAuto(p);
+        JsonObject out=base(p,"stash_auto",true,"ok");
+        out.addProperty("enabled",enabled);
+        out.addProperty("discardCommon",false);
+        out.addProperty("minimumIntervalSeconds",AUTO_INTERVAL_MS/1000);
+        p.sendMessage("§b【个人箱自动整理】"+(enabled?"已开启":"已关闭")+"。开箱时合并普通堆叠、装备排在前面，最多每60秒一次。清理杂物预览："+STASH_PREVIEW);
+        reply(p,out);
+    }
+    void onStashOpen(Player p) {
+        if (!stashAuto(p) || blocker(p)!=null) return;
+        UUID id=p.getUniqueId();
+        long now=System.currentTimeMillis();
+        if (now-lastStashAuto.getOrDefault(id,0L)<AUTO_INTERVAL_MS) return;
+        lastStashAuto.put(id,now);
+        runStash(p,false,false,true);
+    }
+    private void runStash(Player p,boolean preview,boolean drop,boolean automatic) {
         String stop=blocker(p);if(stop!=null){failure(p,stop,"/mycli inventory tidy stash --dry-run");return;}
+        if (!preview && stashWritesBlocked(p.getUniqueId())) {failure(p,"save_unverified","/mycli arena stash list");return;}
+        if (!preview && plugin.nativeRpgSelected() && (plugin.nativeRpg().blockPendingTrade(p)
+                || plugin.nativeRpg().recyclingState(p).get("pending").getAsBoolean())) {
+            if (!automatic) failure(p,"stash_trade_pending","/mycli trade recycle status");
+            return;
+        }
         ItemStack[] before=copy(plugin.dungeon().stashSnapshot(p.getUniqueId()).items());Plan plan=plan(before,drop,0);
         boolean changed=!Arrays.equals(before,plan.after());
+        if (automatic&&!changed) return;
         if(!preview&&changed)try{plugin.dungeon().stageStashContents(p.getUniqueId(),plan.after());plugin.saveConfig();}
-        catch(RuntimeException error){plugin.dungeon().stageStashContents(p.getUniqueId(),before);blocked.add(p.getUniqueId());
-            JsonObject out=base(p,"stash_tidy",false,"save_unverified");out.add("changed",JsonNull.INSTANCE);out.addProperty("outcomeUnknown",true);out.addProperty("retrySameAction",false);reply(p,out);return;}
+        catch(RuntimeException error){plugin.dungeon().stageStashContents(p.getUniqueId(),before);blockedStashes.add(p.getUniqueId());
+            String request=UUID.randomUUID().toString();
+            plugin.getLogger().severe("Stash tidy persistence unverified for "+p.getUniqueId()+" request="+request);
+            p.sendMessage("§e[save_unverified] 个人箱整理存盘待核对；请联系服主，提供回执 "+request+"。");
+            JsonObject out=base(p,"stash_tidy",false,"save_unverified");out.addProperty("requestId",request);out.add("changed",JsonNull.INSTANCE);out.addProperty("outcomeUnknown",true);out.addProperty("retrySameAction",false);reply(p,out);return;}
         int duplicates=0;List<ItemStack> unique=new ArrayList<>();List<Integer> copies=new ArrayList<>();
         for(ItemStack item:plan.after())if(ArenaEconomy.eligible(item)) {
             int match=-1;for(int n=0;n<unique.size();n++)if(unique.get(n).isSimilar(item)){match=n;break;}
             if(match<0){unique.add(item);copies.add(item.getAmount());}else copies.set(match,copies.get(match)+item.getAmount());
         }
         for(int count:copies)duplicates+=Math.max(0,count-2);
-        JsonObject out=base(p,"stash_tidy",true,preview?"preview":changed?"completed":"unchanged");out.addProperty("scope","personal_stash_all_10_pages");out.addProperty("dryRun",preview);out.addProperty("changed",!preview&&changed);
+        JsonObject out=base(p,"stash_tidy",true,preview?"preview":changed?"completed":"unchanged");out.addProperty("scope","personal_stash_all_10_pages");out.addProperty("dryRun",preview);out.addProperty("changed",!preview&&changed);out.addProperty("automatic",automatic);
         out.addProperty("beforeOccupied",plan.beforeUsed());out.addProperty("afterOccupied",plan.afterUsed());out.addProperty("freedSlots",plan.beforeUsed()-plan.afterUsed());out.addProperty("mergedItems",plan.merged());out.addProperty("recyclableDuplicatesBeyondTwo",duplicates);
-        JsonArray removed=new JsonArray();plan.discarded().forEach((m,count)->{JsonObject row=new JsonObject();row.addProperty("id",m.getKey().toString());row.addProperty("count",count);removed.add(row);});out.add("discarded",removed);out.addProperty("nextCommand","/mycli trade recycle list --json");
-        p.sendMessage("§b【个人箱整理"+(preview?"预览":"")+"】覆盖10页540格，合并 "+plan.merged()+" 件，"+(preview?"将":"已")+"释放 "+(plan.beforeUsed()-plan.afterUsed())+" 格；普通杂物销毁 "+plan.discarded().values().stream().mapToInt(Integer::intValue).sum()+" 件。装备不销毁、不自动出售；每种同组件装备保留两件后，可回收冗余约 "+duplicates+" 件。下一步 /mycli trade recycle list --json。");reply(p,out);
+        out.addProperty("sortOrder","equipment_first_common_last");out.addProperty("queuedRewards",plugin.dungeon().queuedRewardEntries(p.getUniqueId()));
+        JsonArray removed=new JsonArray();plan.discarded().forEach((m,count)->{JsonObject row=new JsonObject();row.addProperty("id",m.getKey().toString());row.addProperty("count",count);removed.add(row);});out.add("discarded",removed);
+        String next=preview?"/mycli inventory tidy stash"+(drop?" --discard-common":"")+" --json"
+            :plan.afterUsed()<PagedPersonalStash.CAPACITY?"/mycli arena stash page 1":"/mycli trade recycle list --json";
+        out.addProperty("nextCommand",next);
+        p.sendMessage("§b【个人箱整理"+(preview?"预览":"")+"】10页统一按装备在前、杂物在后排列。合并 "+plan.merged()+" 件，"+(preview?"预计释放 ":"已释放 ")
+            +(plan.beforeUsed()-plan.afterUsed())+" 格；"+(preview?"预计销毁 ":"销毁 ")+plan.discarded().values().stream().mapToInt(Integer::intValue).sum()
+            +" 件普通杂物。下一步 "+next+"。");reply(p,out);
     }
+    boolean stashWritesBlocked(UUID id) {return blockedStashes.contains(id);}
     private void run(Player p,boolean preview,boolean drop,boolean automatic) {
         String stop=blocker(p);if(stop!=null){failure(p,stop,stop.equals("close_container_first")?"/mycli inventory tidy":"/mycli inventory");return;}
         ItemStack[] before=copy(p.getInventory().getStorageContents());Plan plan=plan(before,drop);
@@ -147,6 +237,7 @@ final class InventoryTidy {
             case "survival_required"->"请从本人正常生存或冒险角色操作，观战账号不能整理被观战者的物品。";
             case "player_unavailable"->"角色离线、死亡或倒地，恢复正常状态后再操作。";
             case "save_unverified"->"前次存盘结果尚未确认，自动整理暂停；联系服主核对原请求，勿重放。";
+            case "stash_trade_pending"->"有交易正在对账，先核对交易结果，再整理个人箱。";
             case "settings_save_unverified"->"自动整理设置尚未确认保存，当前内存设置已恢复；联系服主核对存档。";
             default->"参数有误，先按帮助中的完整命令操作。";
         };
