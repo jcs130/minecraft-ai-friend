@@ -8,6 +8,7 @@ import {MinecraftAgentClient,MINECRAFT_CLIENT_DEFAULTS,nullLogger} from '../src/
 import {MinecraftClientWorld} from '../src/client/world.ts';
 import {createMinecraftMcpServer} from '../src/mcp/server.ts';
 import {PROTOCOL} from '../src/contracts/protocol.ts';
+import {COMBAT_TACTIC_TOOL} from '../core/combat-tool.ts';
 it('carries turn boundaries, receipt bytes and cancellation through SDK, MCP and a real child IPC connection',async()=>{
   const dir=mkdtempSync(join(tmpdir(),'mc-protocol-ipc-')),oldOptions=process.env.NODE_OPTIONS;
   process.env.NODE_OPTIONS=`--import=${new URL('./fixtures/deny-network.mjs',import.meta.url).href}`;
@@ -15,7 +16,7 @@ it('carries turn boundaries, receipt bytes and cancellation through SDK, MCP and
   const runtime=new MinecraftAgentClient({cfg,dataDir:dir,agentName:'NamedAgent',log:nullLogger()},new MinecraftClientWorld({cfg,dataDir:dir,
     extension:{module:new URL('./fixtures/protocol-engine.mjs',import.meta.url).href,
       tools:[{name:'mc_fixture',description:'Offline fixture',parameters:{type:'object'},tags:['flow'],
-        readOnlyCall:args=>args.inspect===true}]}}));
+        readOnlyCall:args=>args.inspect===true,learningCall:args=>args.probe===true},COMBAT_TACTIC_TOOL]}}));
   const server=createMinecraftMcpServer(runtime,'test'),client=new Client({name:'ipc-test',version:'1'});
   const [a,b]=InMemoryTransport.createLinkedPair();
   const protocol=(action:string,id:string)=>client.callTool({name:'mc_protocol',arguments:{protocol:PROTOCOL,action,id}});
@@ -23,6 +24,9 @@ it('carries turn boundaries, receipt bytes and cancellation through SDK, MCP and
     const tool=runtime.tools().find(t=>t.name==='mc_fixture')!;
     expect(tool.readOnlyCall?.({inspect:true})).toBe(true);
     expect(tool.readOnlyCall?.({hold:true})).toBe(false);
+    expect(tool.learningCall?.({probe:true})).toBe(true);
+    expect(tool.learningCall?.({hold:true})).toBe(false);
+    expect(runtime.tools().find(t=>t.name===COMBAT_TACTIC_TOOL.name)?.learningCall?.({history:true})).toBe(true);
     await server.connect(a);await client.connect(b);await runtime.connect();await protocol('begin_turn','turn-a');
     const initial=await runtime.events();
     const image=initial.events.find(e=>e.type==='fixture.deferred')!.blobs![0];
