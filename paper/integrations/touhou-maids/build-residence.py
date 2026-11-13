@@ -8,7 +8,7 @@ import tempfile
 import zipfile
 
 BASELINE_SHA256 = '19d741b775fe17b067525a369733b19bbc76179637e22bdbb3fd6d1d01f27e08'
-VERSION = '0.1.28-residence'
+VERSION = '0.1.29-residence-route'
 PACKAGE = 'local/tlmcompat/hybrid/'
 CLASSES = ('NativeMaidResidence', 'HybridMaidPlugin', 'NativeMaidOwnerTravel',
            'NativeMaidWorkshop', 'NativeMaidAgentSupport', 'MaidLifeEpisodes')
