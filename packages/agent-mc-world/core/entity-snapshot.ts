@@ -1,11 +1,11 @@
 /** Detached client observations. Online membership never establishes proximity or visibility. */
 import { itemCustomName } from './item-display.ts';
-import { observedEntityIdentity } from './entity-identity.ts';
+import { entityCustomName, observedEntityIdentity, observedEntityLabel } from './entity-identity.ts';
 type Point={x:number;y:number;z:number};
 type EquipmentItem=Parameters<typeof itemCustomName>[0]&{count?:number};
 export interface EntitySnapshotSource {
  entity?:{id:number;uuid?:string;name?:string;username?:string;type?:string;position?:Point;velocity?:Point;
-  yaw?:number;pitch?:number;onGround?:boolean;isValid?:boolean;width?:number;height?:number;equipment?:Array<EquipmentItem|null>};
+  yaw?:number;pitch?:number;onGround?:boolean;isValid?:boolean;width?:number;height?:number;metadata?:unknown[];equipment?:Array<EquipmentItem|null>};
  entities?:Record<string,EntitySnapshotSource['entity']>;
  players?:Record<string,{username?:string;uuid?:string;entity?:{id?:number}|null;ping?:number;gamemode?:number}>;
  game?:{dimension?:string};
@@ -13,6 +13,7 @@ export interface EntitySnapshotSource {
 export function entitySnapshot(bot: EntitySnapshotSource) {
   const point = (p: {x:number;y:number;z:number} | undefined) => p ? {x:p.x,y:p.y,z:p.z} : null;
   const pack = (e: EntitySnapshotSource['entity']) => e ? {id:e.id,uuid:e.uuid ?? null,name:e.name ?? null,
+    label:observedEntityLabel(bot,e),customName:entityCustomName(bot,e),
     ...(observedEntityIdentity(bot,e)?{identity:observedEntityIdentity(bot,e)}:{}),
     username:e.username ?? null,type:e.type ?? null,position:point(e.position),velocity:point(e.velocity),
     yaw:e.yaw ?? null,pitch:e.pitch ?? null,onGround:e.onGround ?? null,isValid:e.isValid ?? null,

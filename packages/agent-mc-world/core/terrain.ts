@@ -34,7 +34,7 @@ import { readWorldIdentity } from './world-scope.ts';
 import type { WorldIdentityObservation } from '../src/contracts/world-scope.ts';
 import { signTextSnapshot, type SignTextSnapshot } from './sign-read.ts';
 import { entityMaxHealth } from './entity-max-health.ts';
-import { observedEntityIdentity, type EntityIdentity } from './entity-identity.ts';
+import { entityDisplayLabel, observedEntityIdentity, type EntityIdentity } from './entity-identity.ts';
 export { WATER_BLOCKS } from './fluid-blocks.ts';
 export { BURNING_BLOCKS, SCORCHING_FLOOR } from './hazard-geometry.ts';
 
@@ -499,7 +499,7 @@ export function narrateWorldSegments(
           .map((e) => {
             const notes = [e.kind === 'hostile' ? '敌对种类，攻击意图未确认' : e.kind === 'player' ? '玩家，关系未确认' : '', e.note].filter(Boolean);
             const tag = notes.length > 0 ? `（${notes.join('，')}）` : '';
-            return `${whereIs(e.direction, e.distance, e.dy)}有${e.identity?.label ?? zhEntity(e.name)}${tag}`;
+            return `${whereIs(e.direction, e.distance, e.dy)}有${entityDisplayLabel(e.name,e.kind === 'player' ? null : e.customName,e.identity)}${tag}`;
           })
           .join('、') +
         '。',

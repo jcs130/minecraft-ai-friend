@@ -1,4 +1,5 @@
 import { zhEntity } from './names.ts';
+import { minecraftTextComponent } from './text-component.ts';
 
 /** Server-attested semantic identity. Protocol entity type remains unchanged. */
 export interface EntityIdentity {
@@ -10,7 +11,7 @@ export interface EntityIdentity {
   observedAt: string;
   ownerUuid?: string;
 }
-export type IdentityEntity = { uuid?: string; name?: string; type?: string; username?: string };
+export type IdentityEntity = { uuid?: string; name?: string; type?: string; username?: string; metadata?: unknown[] };
 export type EntityIdentityResolver = (entity: IdentityEntity) => EntityIdentity | null;
 const resolvers = new WeakMap<object, EntityIdentityResolver>();
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
@@ -35,10 +36,26 @@ export function observedEntityIdentity(bot: object, entity: IdentityEntity): Ent
     ...(value.ownerUuid && uuid.test(value.ownerUuid) ? { ownerUuid: value.ownerUuid } : {}) };
 }
 
-/** Use only where the caller already has an allowed entity observation. */
-export function observedEntityLabel(bot: object, entity: IdentityEntity): string {
-  return observedEntityIdentity(bot, entity)?.label
-    ?? (entity.type === 'player' || entity.name === 'player' ? entity.username ?? '玩家' : zhEntity(entity.name ?? 'unknown'));
+/** Received display text, not a verified species, relation or instruction. */
+export function entityCustomName(bot: object, entity: IdentityEntity): string | null {
+  const keys = (bot as {registry?: {entitiesByName?: Record<string,{metadataKeys?: string[]}>}})
+    .registry?.entitiesByName?.[entity.name ?? '']?.metadataKeys ?? [];
+  const index = keys.indexOf('custom_name');
+  const text = clean(minecraftTextComponent(index >= 0 ? entity.metadata?.[index] : undefined),160);
+  return text || null;
+}
+
+/** Display text leads; protocol identifiers remain separate execution facts.
+ * Never infer a mod identity/ownership/hostility from a custom-name prefix. */
+export function entityDisplayLabel(name: string, customName?: string | null, identity?: EntityIdentity | null): string {
+  return identity?.label ?? (customName ? `「${customName}」（协议类型：${zhEntity(name)}）` : zhEntity(name));
+}
+
+/** Callers must suppress metadata for nearby, non-visible observations. */
+export function observedEntityLabel(bot: object, entity: IdentityEntity, includeCustomName = true): string {
+  if (entity.type === 'player' || entity.name === 'player') return entity.username ?? '玩家';
+  return entityDisplayLabel(entity.name ?? 'unknown',includeCustomName ? entityCustomName(bot,entity) : null,
+    observedEntityIdentity(bot, entity));
 }
 
 /** Keep display names separate from semantic identity and verified ownership.
