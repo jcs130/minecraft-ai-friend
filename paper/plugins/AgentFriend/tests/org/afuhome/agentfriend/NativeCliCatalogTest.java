@@ -19,6 +19,7 @@ public final class NativeCliCatalogTest {
         check(!help("skills info fortify --help").get("resultQuery").getAsString().contains("skills points"),"no old point query fanout");
         check(help("arena stash --help").toString().contains("2魔力"),"personal stash cost discoverable");
         for(String command:List.of("arena wallet","arena shop list","arena shop buy","arena recycle list","arena recycle quote","arena recycle sell"))check(help(command+" --help").get("jsonSupported").getAsBoolean(),"actual economy JSON alias documented: "+command);
+        check(help("arena loot --help").get("jsonSupported").getAsBoolean(),"trial loot JSON is discoverable");
         check(help("arena recycle quote --help").toString().contains("5分钟"),"quote deadline matches runtime");
         check(!help("arena start --help").get("jsonSupported").getAsBoolean(),"trial mutation keeps original receipt format");
         check(help("guild shared --help").toString().contains("共享"),"shared supplies discoverable");

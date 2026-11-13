@@ -16,6 +16,7 @@ import org.bukkit.persistence.PersistentDataType;
 /** Vanilla-only personal loot shared by Java, Geyser Bedrock and Mineflayer. */
 final class DungeonLoot {
     static final NamespacedKey ENCHANT_ROLL=NamespacedKey.fromString("agentfriend:loot_enchant_schema");
+    private static final NamespacedKey LOOT_TIER = NamespacedKey.fromString("agentfriend:trial_loot_tier");
     record Bonus(ItemStack item, boolean rare, String label, String tier) {
         Bonus(ItemStack item, boolean rare, String label) {
             this(item, rare, label, rare ? "rare" : "common");
@@ -23,6 +24,21 @@ final class DungeonLoot {
         Bonus withTier(String value) { return new Bonus(item, rare, label, value); }
     }
     static final int EQUIPMENT_CYCLE = 8;
+    private record PremiumItem(Material material, String name, String affix, int level) {}
+    private static final List<PremiumItem> EXCELLENT = List.of(
+            new PremiumItem(Material.DIAMOND_SWORD, "星钢长剑", "sharpness", 3),
+            new PremiumItem(Material.DIAMOND_AXE, "断阵战斧", "sharpness", 3),
+            new PremiumItem(Material.DIAMOND_HELMET, "巡星头盔", "protection", 3),
+            new PremiumItem(Material.DIAMOND_CHESTPLATE, "白塔胸甲", "protection", 3),
+            new PremiumItem(Material.DIAMOND_LEGGINGS, "远征护腿", "protection", 3),
+            new PremiumItem(Material.DIAMOND_BOOTS, "踏云长靴", "feather_falling", 3),
+            new PremiumItem(Material.BOW, "落星长弓", "power", 3),
+            new PremiumItem(Material.CROSSBOW, "破阵重弩", "quick_charge", 2));
+    private static final List<PremiumItem> LEGENDARY = List.of(
+            new PremiumItem(Material.DIAMOND_SWORD, "曙光裁锋", "sharpness", 5),
+            new PremiumItem(Material.DIAMOND_CHESTPLATE, "誓约壁垒", "protection", 4),
+            new PremiumItem(Material.BOW, "流星之誓", "power", 5),
+            new PremiumItem(Material.TRIDENT, "奔潮龙牙", "loyalty", 3));
 
     /** Guaranteed equipment favors useful iron gear and spell imprints over raw attack power. */
     static Bonus milestone(int floor, int equipmentIndex) {
@@ -120,29 +136,59 @@ final class DungeonLoot {
         };
     }
 
+    static int equipmentIndex(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return -1;
+        ItemMeta meta = item.getItemMeta();
+        if (!meta.hasDisplayName()) return -1;
+        String name = ChatColor.stripColor(meta.getDisplayName());
+        String spell = meta.getPersistentDataContainer().get(
+                NamespacedKey.fromString("agentfriend:imprint_spell"), PersistentDataType.STRING);
+        return switch (name) {
+            case "赤铜柄·闪现匕首" -> item.getType() == Material.IRON_SWORD && "blink".equals(spell) ? 0 : -1;
+            case "寒霜剑" -> item.getType() == Material.IRON_SWORD && "frostnova".equals(spell) ? 1 : -1;
+            case "赤铜纹战盾" -> item.getType() == Material.SHIELD && trialLore(meta) ? 2 : -1;
+            case "踏影铁靴" -> item.getType() == Material.IRON_BOOTS && trialLore(meta) ? 3 : -1;
+            case "炎纹双刃斧" -> item.getType() == Material.IRON_AXE && "flamewave".equals(spell) ? 4 : -1;
+            case "星轨猎弓" -> item.getType() == Material.BOW && "starbolt".equals(spell) ? 5 : -1;
+            case "影步连弩" -> item.getType() == Material.CROSSBOW && "blink".equals(spell) ? 6 : -1;
+            case "潮汐战矛" -> item.getType() == Material.TRIDENT && "frostnova".equals(spell) ? 7 : -1;
+            default -> -1;
+        };
+    }
+
+    private static boolean trialLore(ItemMeta meta) {
+        return meta.hasLore() && "千灯纪试炼战利品".equals(ChatColor.stripColor(meta.getLore().getFirst()));
+    }
+
+    static String equipmentTier(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return null;
+        return item.getItemMeta().getPersistentDataContainer().get(LOOT_TIER, PersistentDataType.STRING);
+    }
+
     static Bonus roll(int floor, int floorsWithoutRare, int difficulty) {
         ThreadLocalRandom random = ThreadLocalRandom.current();
-        boolean pity = floorsWithoutRare >= Math.max(3, 6 - difficulty);
-        boolean rare = pity
-                || random.nextInt(100) < Math.min(42, 7 + floor + difficulty * 5);
-        if (floor <= 3 || difficulty == 0) return rare ? earlyRare(random.nextInt(4)) : common(random.nextInt(10));
-        if (rare) {
-            // A pity roll guarantees rare loot, never the legendary sub-pool.
-            if (!pity && TrialRewardPolicy.legendary(floor,difficulty) && random.nextInt(100) < 10)
-                return randomize(legendary(random.nextInt(6)).withTier("legendary"),floor,difficulty,"legendary");
-            return randomize(rare(floor, random.nextInt(18),difficulty).withTier("rare"),floor,difficulty,"rare");
-        }
-        if (random.nextInt(100) < 30)
-            return randomize(uncommon(random.nextInt(14)).withTier("uncommon"),floor,difficulty,"uncommon");
-        return common(random.nextInt(10));
+        TrialRewardPolicy.Tier tier = TrialRewardPolicy.roll(floor, difficulty, floorsWithoutRare, random);
+        return switch (tier) {
+            case NONE -> null;
+            case COMMON -> common(random.nextInt(10));
+            case UNCOMMON -> randomize(uncommon(random.nextInt(9)).withTier(tier.id), floor, difficulty, tier.id);
+            case RARE -> grade(randomize(rareGear(floor, difficulty, random).withTier(tier.id),
+                    floor, difficulty, tier.id), tier, null);
+            case EXCELLENT -> premium(EXCELLENT.get(random.nextInt(EXCELLENT.size())), floor, difficulty, tier);
+            case LEGENDARY -> premium(LEGENDARY.get(random.nextInt(LEGENDARY.size())), floor, difficulty, tier);
+        };
     }
 
     private static Bonus randomize(Bonus bonus,int floor,int difficulty,String tier) {
+        return randomize(bonus, floor, difficulty, tier, Set.of());
+    }
+
+    private static Bonus randomize(Bonus bonus,int floor,int difficulty,String tier,Set<String> forced) {
         if(bonus==null)return null;
         ItemStack item=bonus.item().clone();
         boolean book=item.getType()==Material.ENCHANTED_BOOK;
         if(!book&&item.getType().getMaxDurability()==0)return bonus;
-        ItemMeta meta=item.getItemMeta();var required=new LinkedHashSet<String>();
+        ItemMeta meta=item.getItemMeta();var required=new LinkedHashSet<>(forced);
         // Retain the promised breathing / falling specialty, but roll its level
         // and all other affixes. Spell imprints and auras are independent PDC.
         if(!book)for(var e:meta.getEnchants().keySet())if(Set.of("respiration","feather_falling").contains(e.getKey().getKey()))required.add(e.getKey().getKey());
@@ -163,6 +209,36 @@ final class DungeonLoot {
         return new Bonus(item,bonus.rare(),bonus.label(),bonus.tier());
     }
 
+    private static Bonus premium(PremiumItem kind, int floor, int difficulty, TrialRewardPolicy.Tier tier) {
+        ItemStack item = named(kind.material(), kind.name(), kind.affix(), kind.level(), "unbreaking", 2);
+        Bonus rolled = randomize(new Bonus(item, true, kind.name(), tier.id), floor, difficulty, tier.id,
+                Set.of(kind.affix(), "unbreaking"));
+        return grade(rolled, tier, kind);
+    }
+
+    private static Bonus grade(Bonus bonus, TrialRewardPolicy.Tier tier, PremiumItem specialty) {
+        ItemStack item = bonus.item();
+        ItemMeta meta = item.getItemMeta();
+        String label = switch (tier) {
+            case RARE -> "稀有";
+            case EXCELLENT -> "卓越";
+            case LEGENDARY -> "传奇";
+            default -> throw new IllegalArgumentException("unmarked_trial_tier");
+        };
+        if (specialty != null) {
+            Enchantment affix = Enchantment.getByKey(NamespacedKey.minecraft(specialty.affix()));
+            if (meta.getEnchantLevel(affix) < specialty.level()) meta.addEnchant(affix, specialty.level(), false);
+            meta.setDisplayName((tier == TrialRewardPolicy.Tier.LEGENDARY ? ChatColor.GOLD : ChatColor.AQUA)
+                    + "【" + label + "】" + specialty.name());
+        }
+        List<String> lore = new java.util.ArrayList<>(meta.hasLore() ? meta.getLore() : List.of());
+        lore.add(ChatColor.GRAY + "品质 " + label);
+        meta.setLore(lore);
+        meta.getPersistentDataContainer().set(LOOT_TIER, PersistentDataType.STRING, tier.id);
+        item.setItemMeta(meta);
+        return new Bonus(item, true, label + " · " + bonus.label(), tier.id);
+    }
+
     private static Bonus earlyRare(int pick) {
         return switch (pick) {
             case 0 -> new Bonus(new ItemStack(Material.COPPER_INGOT, 8), true, "铜锭 ×8");
@@ -181,9 +257,9 @@ final class DungeonLoot {
             case 3 -> new Bonus(new ItemStack(Material.EXPERIENCE_BOTTLE, 4), false, "附魔之瓶 ×4");
             case 4 -> new Bonus(new ItemStack(Material.TORCH, 16), false, "火把 ×16");
             case 5 -> new Bonus(new ItemStack(Material.HONEY_BOTTLE, 2), false, "蜂蜜瓶 ×2");
-            case 6 -> new Bonus(new ItemStack(Material.PAINTING, 2), false, "画 ×2");
-            case 7 -> new Bonus(new ItemStack(Material.ITEM_FRAME, 2), false, "物品展示框 ×2");
-            case 8 -> new Bonus(new ItemStack(Material.MAP), false, "空地图");
+            case 6 -> new Bonus(new ItemStack(Material.ENDER_PEARL), false, "末影珍珠");
+            case 7 -> new Bonus(new ItemStack(Material.COOKED_BEEF, 4), false, "熟牛肉 ×4");
+            case 8 -> new Bonus(new ItemStack(Material.ARROW, 8), false, "箭矢 ×8");
             default -> new Bonus(new ItemStack(Material.COOKED_BEEF, 8), false, "熟牛肉 ×8");
         };
     }
@@ -206,53 +282,33 @@ final class DungeonLoot {
                     "unbreaking", 1), false, "附魔铁斧");
             case 7 -> new Bonus(named(Material.CROSSBOW, "迅发弩", "quick_charge", 1,
                     "unbreaking", 1), false, "附魔弩");
-            case 8 -> new Bonus(named(Material.SHIELD, "远征盾", "unbreaking", 2,
+            default -> new Bonus(named(Material.SHIELD, "远征盾", "unbreaking", 2,
                     "mending", 1), false, "附魔盾牌");
-            case 9 -> new Bonus(new ItemStack(Material.ENDER_PEARL), false, "末影珍珠");
-            case 10 -> new Bonus(new ItemStack(Material.SPYGLASS), false, "望远镜");
-            case 11 -> new Bonus(new ItemStack(Material.GLOW_ITEM_FRAME, 2), false, "荧光展示框 ×2");
-            case 12 -> new Bonus(new ItemStack(Material.CHERRY_SAPLING, 2), false, "樱花树苗 ×2");
-            default -> new Bonus(new ItemStack(Material.GOLDEN_APPLE), false, "金苹果");
         };
     }
 
-    private static Bonus rare(int floor, int pick,int difficulty) {
-        return switch (pick) {
-            case 0 -> equipmentPiece(floor >= 6 && ThreadLocalRandom.current().nextBoolean() ? 4 : 0);
-            case 1 -> equipmentPiece(floor >= 6 && ThreadLocalRandom.current().nextBoolean() ? 5 : 1);
+    private static Bonus rareGear(int floor, int difficulty, ThreadLocalRandom random) {
+        int entries = TrialRewardPolicy.aura(floor, difficulty) ? 16 : floor >= 8 ? 11 : floor >= 6 ? 9 : 6;
+        return switch (random.nextInt(entries)) {
+            case 0 -> equipmentPiece(0);
+            case 1 -> equipmentPiece(1);
             case 2 -> equipmentPiece(2);
-            case 3 -> floor >= 8 ? equipmentPiece(6)
-                    : new Bonus(named(Material.IRON_CHESTPLATE, "铜纹守护甲", "protection", 2,
+            case 3 -> equipmentPiece(3);
+            case 4 -> new Bonus(named(Material.IRON_CHESTPLATE, "铜纹守护甲", "protection", 2,
                     "unbreaking", 2), true, "铜纹守护甲");
-            case 4 -> floor >= 11 ? equipmentPiece(7)
-                    : new Bonus(named(Material.IRON_PICKAXE, "星矿镐", "efficiency", 3,
-                    "unbreaking", 2), true, "星矿镐");
             case 5 -> new Bonus(named(Material.BOW, "夜空之弦", "power", 2,
                     "unbreaking", 2), true, "夜空之弦");
-            case 6 -> new Bonus(new ItemStack(Material.GOLDEN_APPLE), true, "金苹果");
-            case 7 -> new Bonus(new ItemStack(Material.IRON_INGOT, 6), true, "铁锭 ×6");
-            case 8 -> new Bonus(new ItemStack(Material.COPPER_INGOT, 12), true, "铜锭 ×12");
-            case 9 -> floor >= 11
-                    ? new Bonus(named(Material.CROSSBOW, "机关弩", "quick_charge", 2,
-                            "unbreaking", 2), true, "机关弩")
-                    : new Bonus(new ItemStack(Material.LAPIS_LAZULI, 12), true, "青金石 ×12");
-            case 10 -> new Bonus(named(Material.IRON_CHESTPLATE, "铜纹守护甲", "protection", 2,
-                    "unbreaking", 2), true, "铜纹守护甲");
-            case 11 -> TrialRewardPolicy.aura(floor,difficulty) ? aura(EMBER_ARMOR, DungeonGearAura.EMBER) : earlyRare(0);
-            case 12 -> TrialRewardPolicy.aura(floor,difficulty) ? aura(HEALER_ARMOR, DungeonGearAura.RENEWAL) : earlyRare(1);
-            case 13 -> TrialRewardPolicy.aura(floor,difficulty) ? aura(LEECH_ARMOR, DungeonGearAura.LEECH) : earlyRare(3);
-            case 14 -> new Bonus(new ItemStack(Material.LAPIS_LAZULI, 12), true, "青金石 ×12");
-            case 15 -> new Bonus(SkillTome.random(4), true, "技艺研习书 · 熟练度 +4");
-            case 16 -> new Bonus(enchantedBook(), true, "可在铁砧使用的附魔书");
-            default -> new Bonus(new ItemStack(Material.ENDER_PEARL, 2), true, "末影珍珠 ×2");
-        };
-    }
-
-    private static Bonus legendary(int pick) {
-        return switch (pick) {
-            case 0, 1, 2 -> new Bonus(SkillTome.random(8), true, "珍稀技艺研习书 · 熟练度 +8");
-            case 3 -> aura(EMBER_ARMOR, DungeonGearAura.EMBER);
-            case 4 -> aura(HEALER_ARMOR, DungeonGearAura.RENEWAL);
+            case 6 -> equipmentPiece(4);
+            case 7 -> equipmentPiece(5);
+            case 8 -> new Bonus(named(Material.IRON_PICKAXE, "星矿镐", "efficiency", 3,
+                    "unbreaking", 2), true, "星矿镐");
+            case 9 -> equipmentPiece(6);
+            case 10 -> new Bonus(enchantedBook(), true, "可在铁砧使用的附魔书");
+            case 11 -> equipmentPiece(7);
+            case 12 -> new Bonus(named(Material.CROSSBOW, "机关弩", "quick_charge", 2,
+                    "unbreaking", 2), true, "机关弩");
+            case 13 -> aura(EMBER_ARMOR, DungeonGearAura.EMBER);
+            case 14 -> aura(HEALER_ARMOR, DungeonGearAura.RENEWAL);
             default -> aura(LEECH_ARMOR, DungeonGearAura.LEECH);
         };
     }
@@ -270,18 +326,8 @@ final class DungeonLoot {
         return bossCache(clears,0);
     }
     static Bonus bossCache(int clears,int difficulty) {
-        if(clears>0&&difficulty==0)return earlyRare(Math.floorMod(clears,4));
-        Bonus base=clears==0?new Bonus(bossRelic(),true,"首通武器 · 深渊裁决"):switch ((clears - 1) % 9) {
-            case 0 -> equipmentPiece(4);
-            case 1 -> equipmentPiece(5);
-            case 2 -> equipmentPiece(6);
-            case 3 -> equipmentPiece(7);
-            case 4 -> TrialRewardPolicy.aura(10,difficulty)?auraArmor(DungeonGearAura.EMBER):earlyRare(0);
-            case 5 -> TrialRewardPolicy.aura(10,difficulty)?auraArmor(DungeonGearAura.RENEWAL):earlyRare(1);
-            case 6 -> TrialRewardPolicy.aura(10,difficulty)?auraArmor(DungeonGearAura.LEECH):earlyRare(3);
-            case 7 -> equipmentPiece(0);
-            default -> equipmentPiece(1);
-        };
+        Bonus base = clears == 0 ? new Bonus(bossRelic(), true, "首通武器 · 深渊裁决")
+                : earlyRare(Math.floorMod(clears, 4));
         return randomize(base,10,difficulty,"rare");
     }
 
@@ -289,18 +335,11 @@ final class DungeonLoot {
         return finalCache(clears,0);
     }
     static Bonus finalCache(int clears,int difficulty) {
-        if(clears>0&&difficulty==0)return earlyRare(Math.floorMod(clears,4));
-        Bonus base=clears==0?new Bonus(named(difficulty==2?Material.DIAMOND_SWORD:Material.IRON_SWORD,"星灯誓约","sharpness",3,"unbreaking",2),true,(difficulty==2?"首通钻石剑":"首通铁剑")+" · 星灯誓约"):switch ((clears - 1) % 9) {
-            case 0 -> equipmentPiece(5);
-            case 1 -> equipmentPiece(7);
-            case 2 -> equipmentPiece(4);
-            case 3 -> equipmentPiece(6);
-            case 4 -> auraArmor(DungeonGearAura.RENEWAL);
-            case 5 -> auraArmor(DungeonGearAura.EMBER);
-            case 6 -> auraArmor(DungeonGearAura.LEECH);
-            case 7 -> equipmentPiece(0);
-            default -> equipmentPiece(1);
-        };
+        Bonus base = clears == 0
+                ? new Bonus(named(difficulty == 2 ? Material.DIAMOND_SWORD : Material.IRON_SWORD,
+                        "星灯誓约", "sharpness", 3, "unbreaking", 2), true,
+                        (difficulty == 2 ? "首通钻石剑" : "首通铁剑") + " · 星灯誓约")
+                : earlyRare(Math.floorMod(clears, 4));
         return randomize(base,15,difficulty,"rare");
     }
 
@@ -312,12 +351,6 @@ final class DungeonLoot {
     private static final String EMBER_ARMOR = "熔心护甲";
     private static final String HEALER_ARMOR = "春灯愈甲";
     private static final String LEECH_ARMOR = "血誓锁甲";
-
-    static Bonus auraArmor(String id) {
-        return DungeonGearAura.EMBER.equals(id) ? aura(EMBER_ARMOR, id)
-                : DungeonGearAura.RENEWAL.equals(id) ? aura(HEALER_ARMOR, id)
-                : DungeonGearAura.LEECH.equals(id) ? aura(LEECH_ARMOR, id) : null;
-    }
 
     private static Bonus aura(String name, String id) {
         boolean ember = DungeonGearAura.EMBER.equals(id);

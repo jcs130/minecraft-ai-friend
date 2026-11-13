@@ -62,7 +62,9 @@ public final class LootRollFixture extends JavaPlugin implements CommandExecutor
                     for(int floor:new int[]{4,5,8,9,11,12,13,14})for(int n=0;n<8;n++){validate(milestone(floor,0,difficulty));items++;}
                     for(int clear=0;clear<13;clear++)for(int n=0;n<8;n++)for(String cache:List.of("bossCache","finalCache")){validate(cache(cache,clear,difficulty));items++;}
                     for(int floor:new int[]{4,8,12,15})for(int n=0;n<100;n++){
-                        ItemStack actual=item(invoke("roll",new Class<?>[]{int.class,int.class,int.class},floor,6,difficulty));validate(actual);items++;if(actual.getType()==Material.ENCHANTED_BOOK){books++;bookVariants.add(json.toJson(describe(actual).get("enchantments")));}
+                        Object rolled=invoke("roll",new Class<?>[]{int.class,int.class,int.class},floor,12,difficulty);
+                        if(rolled==null)continue;
+                        ItemStack actual=item(rolled);validate(actual);items++;if(actual.getType()==Material.ENCHANTED_BOOK){books++;bookVariants.add(json.toJson(describe(actual).get("enchantments")));}
                     }
                 }
                 require(variants.size()>20,"same sword has no useful variation");require(books>10&&bookVariants.size()>5,"book variety missing");out.put("items",items);out.put("swordVariants",variants.size());out.put("books",books);out.put("bookVariants",bookVariants.size());
@@ -77,7 +79,7 @@ public final class LootRollFixture extends JavaPlugin implements CommandExecutor
                 if(args[0].equals("queue")){
                     require(!Files.exists(expected),"queue already accepted; inspect instead of replay");p.setOp(false);p.setGameMode(GameMode.SURVIVAL);var items=new ArrayList<ItemStack>();
                     for(int n=0;n<12;n++)items.add(milestone(6,0,1));for(int index=0;index<8;index++)items.add(milestone(6,index,1));
-                    for(int n=0;n<4;n++){ItemStack book=null;for(int attempt=0;attempt<1000;attempt++){var candidate=item(invoke("roll",new Class<?>[]{int.class,int.class,int.class},15,6,1));if(candidate.getType()==Material.ENCHANTED_BOOK){book=candidate;break;}}require(book!=null,"book preparation budget");items.add(book);}
+                    for(int n=0;n<4;n++){ItemStack book=null;for(int attempt=0;attempt<1000;attempt++){Object rolled=invoke("roll",new Class<?>[]{int.class,int.class,int.class},15,12,1);if(rolled!=null&&item(rolled).getType()==Material.ENCHANTED_BOOK){book=item(rolled);break;}}require(book!=null,"book preparation budget");items.add(book);}
                     for(int clear:new int[]{5,6,7})items.add(cache("finalCache",clear,1));
                     items.add(item(invoke("equipmentPreview",new Class<?>[]{int.class},0))); // legacy unrolled item must stay unchanged too
                     var yaml=new YamlConfiguration();yaml.set("items",items);yaml.save(expected.toFile());Files.writeString(description,json.toJson(items.stream().map(this::describe).toList()));

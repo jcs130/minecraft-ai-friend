@@ -1103,6 +1103,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 int tomes = 0, enchantedBooks = 0, pearls = 0, paintings = 0;
                 for (int i = 0; i < draws; i++) {
                     DungeonLoot.Bonus bonus = DungeonLoot.roll(floor, 0, difficulty);
+                    if (bonus == null) {
+                        tiers.merge("none", 1, Integer::sum);
+                        continue;
+                    }
                     tiers.merge(bonus.tier(), 1, Integer::sum);
                     if (SkillTome.isTome(bonus.item())) tomes++;
                     if (bonus.item().getType() == Material.ENCHANTED_BOOK) enchantedBooks++;
@@ -1111,8 +1115,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 }
                 sender.sendMessage("MC_LOOT_AUDIT floor=" + floor + " difficulty=" + difficulty
                         + " draws=" + draws + " common=" + tiers.getOrDefault("common", 0)
+                        + " none=" + tiers.getOrDefault("none", 0)
                         + " uncommon=" + tiers.getOrDefault("uncommon", 0)
                         + " rare=" + tiers.getOrDefault("rare", 0)
+                        + " excellent=" + tiers.getOrDefault("excellent", 0)
                         + " legendary=" + tiers.getOrDefault("legendary", 0)
                         + " skillTomes=" + tomes + " enchantedBooks=" + enchantedBooks
                         + " enderPearls=" + pearls + " paintings=" + paintings);

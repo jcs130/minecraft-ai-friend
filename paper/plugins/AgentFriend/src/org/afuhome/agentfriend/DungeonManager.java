@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -104,6 +105,7 @@ final class DungeonManager implements Listener {
     private static final String STASH = "dungeon-personal-stash.";
     private static final int STASH_SIZE = 54;
     private static final String RARE_MISSES = "dungeon-rare-misses.";
+    private static final String RARE_GEAR_MISSES = "dungeon-rare-gear-misses.";
     // Keep the persisted path so players retain their rotation position across this rebalance.
     private static final String EQUIPMENT_INDEX = "dungeon-diamond-set-index.";
     private static final String BOSS_CLEARS = "dungeon-boss-clears.";
@@ -688,7 +690,14 @@ final class DungeonManager implements Listener {
             }
             case "recycle" -> economy.recycle(player, args);
             case "wallet" -> economy.wallet(player);
-            case "loot" -> lootProgress(player);
+            case "loot" -> {
+                boolean json = args.length == 3 && args[2].equals("--json");
+                if (args.length != 2 && !json) {
+                    player.sendMessage("§e[invalid_argument] 只读查询用法：/mycli arena loot [--json]");
+                    return;
+                }
+                lootProgress(player, json);
+            }
             case "layout" -> layout(player);
             case "rewards", "reward", "箱子" -> rewardCommand(player, args);
             case "stash", "储物" -> stashCommand(player, args);
@@ -1495,7 +1504,13 @@ final class DungeonManager implements Listener {
         return false;
     }
 
-    private void lootProgress(Player player) {
+    private int rareGearMisses(UUID id, Difficulty played) {
+        int previous = plugin.getConfig().getInt(RARE_MISSES + id, 0);
+        int current = plugin.getConfig().getInt(RARE_GEAR_MISSES + id + "." + played.id, previous);
+        return Math.clamp(current, 0, TrialRewardPolicy.pityAfter(played.ordinal()));
+    }
+
+    private void lootProgress(Player player, boolean json) {
         UUID id = player.getUniqueId();
         int index = Math.max(0, plugin.getConfig().getInt(EQUIPMENT_INDEX + id, 0));
         int clears = Math.max(0, plugin.getConfig().getInt(BOSS_CLEARS + id, 0));
@@ -1506,19 +1521,71 @@ final class DungeonManager implements Listener {
         for (int n = 1; n <= maxFloor(); n++)
             if (plugin.getConfig().getLong(DAILY_CLAIMS + id + "." + n, Long.MIN_VALUE) == gameDay)
                 claimedFloors.add(Integer.toString(n));
-        player.sendMessage(ChatColor.GOLD + "村庄练习塔：前三层补给；铁甲与功能装备分层首通取得。普通难度重复挑战只给补给与材料，保底装备每层仅首通一次。"
-                + "轮换装备预览：" + nextName + "（不代表本次必得）。"
-                + "已完成首领挑战 " + clears + " 次。奖励在个人箱；重复装备可在入口或七层回收。"
-                + "本游戏日 " + gameDay + " 已领奖 " + claimedFloors.size() + " 层，每层每天最多一次。");
-        player.sendMessage(ChatColor.AQUA + "新装备的附魔种类、数量和等级在结算时随机；预览只说明装备身份，层数/难度/稀有度影响品质。已有物品与已结算奖励保持原组件。");
-        player.sendMessage(ChatColor.AQUA + "普通：附魔最多I–II级、1–2条，无修补/光环/传奇；冒险深层才可能有光环；末日12层后才可能有传奇。正式楼层攻略请查 /mycli dungeon info aincrad_01。"
-                + "研习书是真实物品，手持使用；Agent 用 /mycli skillbook list|use。");
+        int[] available = new int[DungeonLoot.EQUIPMENT_CYCLE];
+        int[] stored = new int[DungeonLoot.EQUIPMENT_CYCLE];
+        int[] pending = new int[DungeonLoot.EQUIPMENT_CYCLE];
+        countTrialEquipment(available, Arrays.asList(player.getInventory().getContents()));
+        countTrialEquipment(stored, Arrays.asList(stashSnapshot(id).items()));
+        countTrialEquipment(pending, bonusItems(id));
+        int owned = 0;
+        var collection = json ? new com.google.gson.JsonObject() : null;
+        for (int piece = 0; piece < DungeonLoot.EQUIPMENT_CYCLE; piece++) {
+            if (available[piece] + stored[piece] + pending[piece] > 0) owned++;
+            if (collection == null) continue;
+            var counts = new com.google.gson.JsonObject();
+            counts.addProperty("carried", available[piece]);
+            counts.addProperty("stash", stored[piece]);
+            counts.addProperty("pending", pending[piece]);
+            collection.add(DungeonLoot.equipmentId(piece), counts);
+        }
+        Difficulty preview = isParticipant(player) ? difficulty : chosenDifficulty(player);
+        player.sendMessage(ChatColor.GOLD + "试炼轮换装备已查到 " + owned + "/" + DungeonLoot.EQUIPMENT_CYCLE
+                + " 种（随身、个人箱十页及待入箱）。下一件轮换预览：" + nextName
+                + "。第 6、10 层的首通会推进轮换，冒险及末日符合领奖条件时可继续收集。");
+        player.sendMessage(ChatColor.AQUA + "普通重复挑战掉补给和材料；冒险及末日从第 4 层起有装备奖池，第 8 层起可能出卓越，"
+                + "末日第 12 层起可能出传奇。第 10、15 层首通宝藏各一份。每游戏日每层最多一次，深层更容易获得高品质装备。");
+        player.sendMessage(ChatColor.AQUA + "当前按" + preview.label + "预览。"
+                + lootChanceSummary(4, preview) + lootChanceSummary(8, preview) + lootChanceSummary(15, preview)
+                + "几率为难度折扣及保底前。逐层查询：/mycli arena loot --json。");
+        player.sendMessage(ChatColor.GRAY + "已领取 " + claimedFloors.size() + " 层；装备位置用 /mycli arena stash list <1–10>，待入箱用 /mycli arena rewards list。");
+        if (json) {
+            var detail = new com.google.gson.JsonObject();
+            detail.addProperty("schemaVersion", 1);
+            detail.addProperty("difficulty", preview.id);
+            detail.addProperty("rewardPercent", RewardScale.forRun(recommendedDifficulty(player), preview).percent());
+            if (preview != Difficulty.NORMAL) {
+                detail.addProperty("rareMisses", rareGearMisses(id, preview));
+                detail.addProperty("rarePityAfterMisses", TrialRewardPolicy.pityAfter(preview.ordinal()));
+            }
+            detail.addProperty("rotationPiecesFound", owned);
+            detail.addProperty("rotationPiecesTotal", DungeonLoot.EQUIPMENT_CYCLE);
+            detail.add("rotation", collection);
+            var rates = new java.util.LinkedHashMap<Integer, TrialRewardPolicy.Rates>();
+            for (int n = 1; n <= maxFloor(); n++)
+                if (n != REST_FLOOR) rates.put(n, TrialRewardPolicy.rates(n, preview.ordinal()));
+            detail.add("baseRatesPercent", JSON.toJsonTree(rates));
+            player.sendMessage("MC_TRIAL_LOOT " + detail);
+        }
         player.sendMessage("MC_DUNGEON_SET schemaVersion=2 equipmentIndex=" + index
                 + " next=minecraft:" + next.item().getType().name().toLowerCase(Locale.ROOT)
                 + " nextName=" + DungeonLoot.equipmentId(index)
                 + " bossClears=" + clears
                 + " pendingItems=" + queuedItems(id) + " gameDay=" + gameDay
-                + " claimedFloors=" + String.join(",", claimedFloors) + " dailyLimitPerFloor=1 enchantments=random_on_reward enchantmentSchemaVersion=1 rewardProfile=village_training_v2 normalRepeatEquipment=false normalLegendary=false");
+                + " claimedFloors=" + String.join(",", claimedFloors) + " dailyLimitPerFloor=1 enchantments=random_on_reward enchantmentSchemaVersion=1 rewardProfile=village_training_v3 normalRepeatEquipment=false normalLegendary=false");
+    }
+
+    private String lootChanceSummary(int floor, Difficulty preview) {
+        if (floor > maxFloor()) return "";
+        var rates = TrialRewardPolicy.rates(floor, preview.ordinal());
+        return "第 " + floor + " 层装备 " + rates.gear() + "%（其中卓越 " + rates.excellent()
+                + "%、传奇 " + rates.legendary() + "%）。";
+    }
+
+    private static void countTrialEquipment(int[] counts, Iterable<ItemStack> items) {
+        for (ItemStack item : items) {
+            int index = DungeonLoot.equipmentIndex(item);
+            if (index >= 0) counts[index] += item.getAmount();
+        }
     }
 
     private void layout(Player player) {
@@ -1577,46 +1644,32 @@ final class DungeonManager implements Listener {
                     + " adventurerRank=" + plugin.adventurerRank(p)
                     + " recommendedDifficulty=" + recommended.id
                     + " runDifficulty=" + difficulty.id + " rewardPercent=" + scale.percent()
-                    + " firstClear=" + firstClear + " repeatedGear=" + (scale.gap() == 0 || firstClear)));
+                    + " firstClear=" + firstClear + " repeatedGear=" + (scale.gap() == 0
+                            && TrialRewardPolicy.milestone(floor, difficulty.ordinal(), false))));
             for (Loot loot : THEMES.get(floor - 1).rewards()) {
                 String path = rewardPath(id, loot.material());
                 plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0)
                         + scale.stack(loot.amount()));
             }
             if (scale.bonusRoll()) {
-                DungeonLoot.Bonus bonus = DungeonLoot.roll(floor,
-                        plugin.getConfig().getInt(RARE_MISSES + id, 0), difficulty.ordinal());
-                List<ItemStack> queue = bonusItems(id);
-                // The queue limit only converts ordinary supplies. Rare and guaranteed gear
-                // must not disappear merely because a player has not emptied a full chest.
-                if (queue.size() < MAX_BONUS_QUEUE || bonus.rare()) {
-                    queue.add(bonus.item());
-                    plugin.getConfig().set(BONUS_ITEMS + id, queue);
-                    plugin.getConfig().set(RARE_MISSES + id,
-                            bonus.rare() ? 0 : plugin.getConfig().getInt(RARE_MISSES + id, 0) + 1);
-                    p.sendMessage((bonus.rare() ? ChatColor.LIGHT_PURPLE : ChatColor.AQUA)
-                            + "本层额外战利品：" + bonus.label() + "，已存入个人箱子。");
-                    receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category="
-                            + (bonus.rare() ? "rare" : "extra") + " tier=" + bonus.tier()
-                            + " item=minecraft:" + bonus.item().getType().name().toLowerCase(Locale.ROOT)
-                            + " count=" + bonus.item().getAmount()
-                            + DungeonLoot.enchantmentFields(bonus.item())
-                            + (SkillTome.spellId(bonus.item()) == null ? ""
-                                    : " skill=" + SkillTome.spellId(bonus.item()))));
-                } else {
-                    String path = rewardPath(id, Material.EMERALD);
-                    plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0) + 1);
-                    p.sendMessage(ChatColor.YELLOW + "个人宝箱普通奖励队列已满，本层普通额外战利品折成绿宝石 ×1 保存。"
-                            + "稀有与保底装备仍会留在待领取队列；请及时清理个人箱。");
-                    receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor
-                            + " category=converted item=minecraft:emerald"));
+                int misses = rareGearMisses(id, difficulty);
+                DungeonLoot.Bonus bonus = DungeonLoot.roll(floor, misses, difficulty.ordinal());
+                if (TrialRewardPolicy.rates(floor, difficulty.ordinal()).rare() > 0) {
+                    String pityPath = RARE_GEAR_MISSES + id + "." + difficulty.id;
+                    plugin.getConfig().set(pityPath,
+                            bonus != null && bonus.rare() ? 0
+                                    : Math.min(TrialRewardPolicy.pityAfter(difficulty.ordinal()), misses + 1));
+                    // The old counter was shared. Carry it over once to the
+                    // first difficulty that actually rolls for rare gear.
+                    if (plugin.getConfig().getInt(RARE_MISSES + id, 0) != 0)
+                        plugin.getConfig().set(RARE_MISSES + id, 0);
                 }
+                if (bonus != null) storeBonus(p, bonus, receipts);
             } else {
                 receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor
                         + " category=bonus_skipped reason=below_recommended_difficulty"));
             }
-            List<DungeonLoot.Bonus> supplies = scale.gap() == 0 || firstClear
-                    ? DungeonLoot.supplies(floor) : List.of();
+            List<DungeonLoot.Bonus> supplies = firstClear ? DungeonLoot.supplies(floor) : List.of();
             if (!supplies.isEmpty()) {
                 List<ItemStack> guaranteed = bonusItems(id);
                 for (DungeonLoot.Bonus supply : supplies) {
@@ -1633,9 +1686,8 @@ final class DungeonManager implements Listener {
                 plugin.getConfig().set(BONUS_ITEMS + id, guaranteed);
             }
             int setIndex = Math.max(0, plugin.getConfig().getInt(EQUIPMENT_INDEX + id, 0));
-            boolean oneTimeDeepWeapon = floor == 11 || floor == 13;
-            DungeonLoot.Bonus milestone = TrialRewardPolicy.milestone(difficulty.ordinal(),firstClear)
-                    && (oneTimeDeepWeapon ? firstClear : scale.gap() == 0 || firstClear)
+            DungeonLoot.Bonus milestone = TrialRewardPolicy.milestone(floor, difficulty.ordinal(), firstClear)
+                    && (scale.gap() == 0 || firstClear)
                     ? DungeonLoot.milestone(floor, setIndex,difficulty.ordinal()) : null;
             if (milestone != null) {
                 List<ItemStack> guaranteed = bonusItems(id);
@@ -1660,27 +1712,13 @@ final class DungeonManager implements Listener {
             if (floor == BOSS_FLOOR && (scale.gap() == 0 || firstClear)) {
                 int clears = plugin.getConfig().getInt(BOSS_CLEARS + id, -1);
                 if (clears < 0) clears = hasBossRelic(id, p) ? 1 : 0;
-                DungeonLoot.Bonus cache = DungeonLoot.bossCache(clears,difficulty.ordinal());
-                List<ItemStack> relics = bonusItems(id);
-                relics.add(0, cache.item());
-                plugin.getConfig().set(BONUS_ITEMS + id, relics);
                 plugin.getConfig().set(BOSS_CLEARS + id, clears + 1);
-                p.sendMessage(ChatColor.LIGHT_PURPLE + "首领宝藏：" + cache.label() + "，已存入个人箱子。");
-                receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=10 category=boss item=minecraft:"
-                        + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1)
-                        + DungeonLoot.enchantmentFields(cache.item())));
+                if (clears == 0) storeBossCache(p, DungeonLoot.bossCache(0, difficulty.ordinal()), "boss", receipts);
             }
             if (floor == FINAL_FLOOR && (scale.gap() == 0 || firstClear)) {
                 int clears = plugin.getConfig().getInt(FINAL_CLEARS + id, 0);
-                DungeonLoot.Bonus cache = DungeonLoot.finalCache(clears,difficulty.ordinal());
-                List<ItemStack> relics = bonusItems(id);
-                relics.add(0, cache.item());
-                plugin.getConfig().set(BONUS_ITEMS + id, relics);
                 plugin.getConfig().set(FINAL_CLEARS + id, clears + 1);
-                p.sendMessage(ChatColor.LIGHT_PURPLE + "星灯首领宝藏：" + cache.label() + "，已存入个人箱子。");
-                receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=15 category=final_boss item=minecraft:"
-                        + cache.item().getType().name().toLowerCase(Locale.ROOT) + " clear=" + (clears + 1)
-                        + DungeonLoot.enchantmentFields(cache.item())));
+                if (clears == 0) storeBossCache(p, DungeonLoot.finalCache(0, difficulty.ordinal()), "final_boss", receipts);
             }
             if (difficulty.walletBonus > 0) {
                 int bonusBalance = difficulty.walletBonus * (floor >= 11 ? 2 : 1);
@@ -1704,6 +1742,38 @@ final class DungeonManager implements Listener {
         plugin.getLogger().info("Dungeon floor reward: floor=" + floor + ", difficulty=" + difficulty.id
                 + ", credited=" + credited);
         return credited;
+    }
+
+    private void storeBonus(Player player, DungeonLoot.Bonus bonus, List<LootReceipt> receipts) {
+        UUID id = player.getUniqueId();
+        List<ItemStack> queue = bonusItems(id);
+        if (queue.size() >= MAX_BONUS_QUEUE && !bonus.rare()) {
+            String path = rewardPath(id, Material.EMERALD);
+            plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0) + 1);
+            player.sendMessage(ChatColor.YELLOW + "普通奖励队列已满，额外战利品折成绿宝石 ×1；稀有装备继续保留在队列。");
+            receipts.add(new LootReceipt(player, "MC_DUNGEON_LOOT floor=" + floor
+                    + " category=converted item=minecraft:emerald"));
+            return;
+        }
+        queue.add(bonus.item());
+        plugin.getConfig().set(BONUS_ITEMS + id, queue);
+        player.sendMessage((bonus.rare() ? ChatColor.LIGHT_PURPLE : ChatColor.AQUA)
+                + "本层额外战利品：" + bonus.label() + "，已存入个人箱子。");
+        receipts.add(new LootReceipt(player, "MC_DUNGEON_LOOT floor=" + floor + " category="
+                + (bonus.rare() ? "rare" : "extra") + " tier=" + bonus.tier()
+                + " item=minecraft:" + bonus.item().getType().name().toLowerCase(Locale.ROOT)
+                + " count=" + bonus.item().getAmount() + DungeonLoot.enchantmentFields(bonus.item())));
+    }
+
+    private void storeBossCache(Player player, DungeonLoot.Bonus cache, String category, List<LootReceipt> receipts) {
+        UUID id = player.getUniqueId();
+        List<ItemStack> queue = bonusItems(id);
+        queue.addFirst(cache.item());
+        plugin.getConfig().set(BONUS_ITEMS + id, queue);
+        player.sendMessage(ChatColor.LIGHT_PURPLE + "首领宝藏：" + cache.label() + "，已存入个人箱子。");
+        receipts.add(new LootReceipt(player, "MC_DUNGEON_LOOT floor=" + floor + " category=" + category
+                + " item=minecraft:" + cache.item().getType().name().toLowerCase(Locale.ROOT)
+                + " clear=1" + DungeonLoot.enchantmentFields(cache.item())));
     }
 
     private void finish(boolean won, String reason, String message) {
@@ -1873,9 +1943,11 @@ final class DungeonManager implements Listener {
                 ? ChatColor.stripColor(item.getItemMeta().getDisplayName()).replace(' ', '_') : "-";
         String enchants = String.join(",", item.getEnchantments().entrySet().stream()
                 .map(entry -> entry.getKey().getKey().getKey() + ":" + entry.getValue()).sorted().toList());
+        String tier = DungeonLoot.equipmentTier(item);
         return " id=minecraft:" + item.getType().name().toLowerCase(Locale.ROOT)
                 + " count=" + item.getAmount() + " name=" + name
-                + " enchants=" + (enchants.isEmpty() ? "-" : enchants);
+                + " enchants=" + (enchants.isEmpty() ? "-" : enchants)
+                + (tier == null ? "" : " tier=" + tier);
     }
     Inventory liveStash(UUID id) { return storage().page(id,0); }
     void saveStash(Inventory inv, UUID id) { storage().write(inv,id);plugin.saveConfig(); }
