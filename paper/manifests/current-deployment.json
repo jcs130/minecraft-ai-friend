@@ -1,12 +1,12 @@
 {
-  "inventoryScope": "component_runtime_verified_20261112_maid_workshop",
-  "currentComponentEvidence": "paper/manifests/maid-workshop-deployed-20261112.json",
-  "acceptanceDocument": "paper/docs/MAID_WORKSHOP_DEPLOYED_20261112.md",
+  "inventoryScope": "component_runtime_verified_20261113_maid_residence",
+  "currentComponentEvidence": "paper/manifests/maid-residence-deployed-20261113.json",
+  "acceptanceDocument": "paper/docs/MAID_RESIDENCE_DEPLOYED_20261113.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-and-component-verified",
-  "latestRelease": "maid-workshop-release-20261112-r1",
-  "verifiedAt": "2026-11-12T13:41:07.6342368+08:00",
-  "releaseDocument": "paper/docs/MAID_WORKSHOP_DEPLOYED_20261112.md",
+  "latestRelease": "maid-residence-20261113-r1",
+  "verifiedAt": "2026-11-13T11:36:06.1708969+08:00",
+  "releaseDocument": "paper/docs/MAID_RESIDENCE_DEPLOYED_20261113.md",
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
     "sourceCommit": "830b560c8b08d9dfb9ccff3903ddcc6fd763b201",
@@ -1561,20 +1561,20 @@
       "evidence": "paper/manifests/temple-partner-deployed-20261110.json"
     },
     "QiandengjiMaidBridge": {
-      "version": "0.1.27-workshop",
-      "sha256": "19d741b775fe17b067525a369733b19bbc76179637e22bdbb3fd6d1d01f27e08",
-      "evidence": "paper/manifests/maid-workshop-deployed-20261112.json"
+      "version": "0.1.28-residence",
+      "sha256": "f63507a78f0a3f241d4cd5a30265797d14c104bb4edd5ac06601bc8175932b67",
+      "evidence": "paper/manifests/maid-residence-deployed-20261113.json"
     }
   },
   "componentEvidenceByName": {
-    "QiandengjiMaidBridge": "paper/manifests/maid-workshop-deployed-20261112.json",
+    "QiandengjiMaidBridge": "paper/manifests/maid-residence-deployed-20261113.json",
     "AgentFriend": "paper/manifests/temple-partner-deployed-20261110.json"
   },
   "latestVerifiedComponents": {
     "QiandengjiMaidBridge": {
-      "version": "0.1.27-workshop",
-      "artifactSha256": "19d741b775fe17b067525a369733b19bbc76179637e22bdbb3fd6d1d01f27e08",
-      "manifest": "paper/manifests/maid-workshop-deployed-20261112.json"
+      "version": "0.1.28-residence",
+      "artifactSha256": "f63507a78f0a3f241d4cd5a30265797d14c104bb4edd5ac06601bc8175932b67",
+      "manifest": "paper/manifests/maid-residence-deployed-20261113.json"
     },
     "AgentFriend": {
       "version": "0.4.47.70-jungle-survey-rpg",
@@ -1610,7 +1610,7 @@
   "currentRuntime": {
     "AgentFriend": "0.4.47.70-jungle-survey-rpg",
     "CortiEyeMirror": "0.1.21-hud-baseline",
-    "QiandengjiMaidBridge": "0.1.27-workshop",
+    "QiandengjiMaidBridge": "0.1.28-residence",
     "embeddedCore": "0.5.7-rc.160-preview.37",
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 57,
@@ -1906,14 +1906,14 @@
     },
     {
       "name": "QiandengjiMaidBridge",
-      "version": "0.1.27-workshop",
+      "version": "0.1.28-residence",
       "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
-      "sha256": "19d741b775fe17b067525a369733b19bbc76179637e22bdbb3fd6d1d01f27e08",
-      "sourceCommit": "c1f04f922bd2983b43f46fe58c5c44b54954df98",
-      "processId": 6732,
-      "processStartedAt": "2026-11-12T05:38:02.488132+00:00",
-      "verifiedAt": "2026-11-12T13:41:07.6342368+08:00",
-      "manifest": "paper/manifests/maid-workshop-deployed-20261112.json",
+      "sha256": "f63507a78f0a3f241d4cd5a30265797d14c104bb4edd5ac06601bc8175932b67",
+      "sourceCommit": "162a370409a9dbcbfbae59949cf70e0704d48a4c",
+      "processId": 12748,
+      "processStartedAt": "2026-11-13T11:32:51+08:00",
+      "verifiedAt": "2026-11-13T11:36:06.1708969+08:00",
+      "manifest": "paper/manifests/maid-residence-deployed-20261113.json",
       "codeChangedThisBatch": true
     },
     {
@@ -1943,7 +1943,7 @@
   ],
   "latestComponentEvidence": {
     "viewerUi": "viewer-ui-deployed-20261109.json",
-    "maidRuntime": "maid-workshop-deployed-20261112.json",
+    "maidRuntime": "maid-residence-deployed-20261113.json",
     "maidVoicePatrolCandidate": "maid-voice-patrol-candidate-20261110.json",
     "note": "Component evidence overrides older historical runtime fields by its own observation time; candidate is not loaded.",
     "maidSceneVoiceCandidate20261110": {
@@ -1970,6 +1970,11 @@
       "state": "deployed",
       "manifest": "paper/manifests/maid-workshop-deployed-20261112.json",
       "sourceMain": "c9b78d30fbac449af25886dd40a055999ff6fca3"
+    },
+    "maidResidence20261113": {
+      "state": "deployed",
+      "manifest": "paper/manifests/maid-residence-deployed-20261113.json",
+      "sourceMain": "d0b727cf74ab98f461957f1a2effce52d64193bf"
     }
   },
   "publicViewerFidelity": {
@@ -1982,7 +1987,7 @@
     "gameRestarted": false,
     "record": "paper/manifests/public-viewer-deployed-20261109.json"
   },
-  "currentComponentEvidenceScope": "QiandengjiMaidBridge uses maid-workshop-deployed-20261112.json. Component records carry their individual verification times.",
+  "currentComponentEvidenceScope": "The maid bridge uses the residence manifest. Other components retain their individual verification times.",
   "previousCanonicalRuntimeBeforeHutao20261110": {
     "currentRuntime": {
       "AgentFriend": "0.4.47.68-player-ui-rpg",
