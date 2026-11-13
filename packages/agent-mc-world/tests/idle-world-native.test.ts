@@ -28,6 +28,8 @@ it('honors body holds, scripts and local anchor without moving as a side effect 
   Object.assign(w.cfg.idle,{enabled:true,allowMovement:true});
   b.getControlState=(key:string)=>!!r.keys[key as keyof typeof r.keys];b.pathfinder.isMoving=()=>false;
   w.idleScene();const anchor=w.idleMovementAnchor.position.clone();
+  b.vehicle={id:3,name:'horse'};
+  expect(w.idleScene().candidates.some((c:any)=>c.category==='move')).toBe(false);delete b.vehicle;
   b.entity.position=anchor.offset(0,0,-5.5);w.idleScene();expect(w.idleMovementAnchor.position).toEqual(anchor);
   w.methods={current:{id:1}};w.nativeMethod={runId:1,session:{ownsBody:true}};
   expect(w.idleUnavailableReason()).toBe('method');
