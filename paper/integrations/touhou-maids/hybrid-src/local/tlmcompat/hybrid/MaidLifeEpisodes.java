@@ -60,6 +60,9 @@ public final class MaidLifeEpisodes {
             ||(time(row,"lastAliveMillis")>0&&deathTime(grave)<=time(row,"lastAliveMillis"));
     }
     public void alive(UUID owner,UUID maid,long now,JsonObject facts,JsonObject grave){
+        alive(owner,maid,now,facts,grave,false);
+    }
+    void alive(UUID owner,UUID maid,long now,JsonObject facts,JsonObject grave,boolean forceLocation){
         JsonObject row=row(owner,maid);history(owner,maid,row,grave);
         JsonObject previous=row.has("currentDeath")?row.getAsJsonObject("currentDeath"):
             row.has("lastDeath")?row.getAsJsonObject("lastDeath"):null;
@@ -75,7 +78,7 @@ public final class MaidLifeEpisodes {
             pendingEvents.add(text(recovery,"eventId"));dirty=true;
         }
         if(row.has("currentDeath")){row.remove("currentDeath");dirty=true;}
-        if(recovered||time(row,"lastAliveMillis")==0||now-time(row,"lastAliveMillis")>=30000){
+        if(forceLocation||recovered||time(row,"lastAliveMillis")==0||now-time(row,"lastAliveMillis")>=30000){
             row.addProperty("lastAliveMillis",Math.max(now,time(row,"lastAliveMillis")));
             JsonObject last=facts.deepCopy();last.addProperty("observedAt",Instant.ofEpochMilli(now).toString());
             row.add("lastSeenAlive",last);dirty=true;
