@@ -9,13 +9,18 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
-import net.minecraft.world.entity.ai.behavior.BlockPosTracker;
+import net.minecraft.world.entity.ai.memory.WalkTarget;
+import net.minecraft.world.entity.schedule.Activity;
 import net.minecraft.world.level.pathfinder.Path;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.tick.EntityTickEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -62,7 +67,11 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
     private long nextGreeting;
     private int waypoint;
     private int visits;
-    private Path patrolPath;
+    private WalkTarget patrolWalk;
+    private Path checkedPath;
+    private Path priorNativePath;
+    private EntityMaid stationedBody;
+    private final Consumer<EntityTickEvent.Pre> beforeMaidTick = this::beforeMaidTick;
     private String state = "awaiting_original";
 
     static NativeMaidResidence open(HybridMaidPlugin plugin, NativeMaidOwnerTravel travel) {
@@ -102,6 +111,7 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
         this.travel = travel;
         this.config = config;
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        NeoForge.EVENT_BUS.addListener(beforeMaidTick);
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 40L, 20L);
     }
 
@@ -203,6 +213,10 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
             releaseHome();
             return;
         }
+        if (stationedBody != maid) {
+            configureResidenceSchedule(maid);
+            stationedBody = maid;
+        }
         state = partner == null ? "resident_patrol" : "awaiting_partner_at_home";
         patrol(maid, world, now);
     }
@@ -238,33 +252,53 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
     }
 
     private void returnHome(EntityMaid maid, World world, long now) {
-        Location landing = location(world, config.home());
-        if (!walkable(world, config.home()) || !travel.transfer(maid, landing)) {
-            state = "home_landing_unavailable";
-            nextAttempt = now + 15 * SECOND;
-            return;
-        }
-        EntityMaid arrived = original();
-        if (arrived == null || !near(arrived.getBukkitEntity(), world, config.home(), 1)) return;
-        releaseSource();
-        arrived.getNavigation().stop();
-        arrived.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
-        arrived.getBrain().eraseMemory(MemoryModuleType.PATH);
+        EntityMaid arrived = transferHome(maid, world, now);
+        if (arrived == null) return;
         var saved = new CompoundTag();
         arrived.getSchedulePos().save(saved);
         arrived.getPersistentData().put(MARKER, saved);
         arrived.setHomeModeEnable(true);
-        arrived.getSchedulePos().setHomeModeEnable(arrived, config.home());
+        configureResidenceSchedule(arrived);
+        stationedBody = arrived;
+    }
+
+    private void configureResidenceSchedule(EntityMaid maid) {
+        var schedule = maid.getSchedulePos();
+        schedule.setWorkPos(config.home());
+        schedule.setIdlePos(config.home());
+        schedule.setSleepPos(config.home());
+        schedule.setDimension(ResourceLocation.parse(config.world().toString()));
+        schedule.restrictTo(maid);
+    }
+
+    private EntityMaid transferHome(EntityMaid maid, World world, long now) {
+        Location landing = location(world, config.home());
+        if (!walkable(world, config.home()) || !travel.transfer(maid, landing)) {
+            state = "home_landing_unavailable";
+            nextAttempt = now + 15 * SECOND;
+            return null;
+        }
+        EntityMaid arrived = original();
+        if (arrived == null || !near(arrived.getBukkitEntity(), world, config.home(), 1)) return null;
+        releaseSource();
+        arrived.getNavigation().stop();
+        arrived.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+        arrived.getBrain().eraseMemory(MemoryModuleType.PATH);
+        patrolWalk = null;
+        checkedPath = null;
+        priorNativePath = null;
         waypoint = 1;
         nextLeg = 0;
         legDeadline = 0;
+        return arrived;
     }
 
-    private static void restoreSchedule(EntityMaid maid) {
+    private void restoreSchedule(EntityMaid maid) {
         var data = maid.getPersistentData();
         if (!data.contains(MARKER, Tag.TAG_COMPOUND)) return;
         maid.getSchedulePos().load(data.getCompound(MARKER), maid);
         data.remove(MARKER);
+        stationedBody = null;
     }
 
     void manual(EntityMaid maid) {
@@ -275,11 +309,46 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
         releaseHome();
     }
 
+    private boolean canPatrol(EntityMaid maid) {
+        return maid.isHomeModeEnable() && !maid.isNoAi() && !maid.guiOpening && maid.canBrainMoving() && !maid.isVehicle()
+            && !maid.getSwimManager().isGoingToBreath() && !maid.isBegging() && !maid.getBrain().isActive(Activity.PANIC)
+            && maid.getScheduleDetail() != Activity.REST && maid.getTarget() == null
+            && MaidCompanionActions.IDLE.equals(maid.getTask().getUid().toString())
+            && !plugin.workshops().busy(config.maid());
+    }
+
+    private void beforeMaidTick(EntityTickEvent.Pre event) {
+        if (!(event.getEntity() instanceof EntityMaid maid) || maid.level().isClientSide() || !maid.isAlive() || maid.isRemoved()
+            || !config.maid().equals(maid.getUUID()) || !config.owner().equals(maid.getOwnerUUID())
+            || !resident(maid) || !canPatrol(maid)) return;
+        var brain = maid.getBrain();
+        var navigation = maid.getNavigation();
+        // Native random strolls can enqueue movement between scheduler runs.
+        // Keep one approved destination while the resident is available to patrol.
+        var walk = brain.getMemory(MemoryModuleType.WALK_TARGET).orElse(null);
+        if (walk != null && walk != patrolWalk) brain.eraseMemory(MemoryModuleType.WALK_TARGET);
+        Path current = navigation.getPath();
+        if (current == null || current == checkedPath) return;
+        if (patrolWalk != null && walk == patrolWalk && current != priorNativePath
+            && current.getTarget().equals(patrolWalk.getTarget().currentBlockPosition()) && inResidence(current)) {
+            checkedPath = current;
+            return;
+        }
+        navigation.stop();
+        brain.eraseMemory(MemoryModuleType.PATH);
+    }
+
     private void patrol(EntityMaid maid, World world, long now) {
-        if (!maid.isHomeModeEnable() || !near(maid.getBukkitEntity(), world, config.home(), 14)
-            || !maid.canBrainMoving() || maid.isSleeping() || maid.isMaidInSittingPose() || maid.isPassenger()
-            || maid.getTarget() != null || !MaidCompanionActions.IDLE.equals(maid.getTask().getUid().toString())) {
+        if (!canPatrol(maid)) {
             releasePatrol(maid);
+            return;
+        }
+        if (maid.isInWater()) {
+            transferHome(maid, world, now);
+            return;
+        }
+        if (!maid.getBukkitEntity().getWorld().equals(world) || !withinResidence(maid.blockPosition())) {
+            transferHome(maid, world, now);
             return;
         }
         if (now >= nextGreeting && greet(maid, now)) return;
@@ -296,30 +365,27 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
         }
         var navigation = maid.getNavigation();
         var brain = maid.getBrain();
-        var existing = brain.getMemory(MemoryModuleType.WALK_TARGET).orElse(null);
-        if (existing != null) {
-            // While idle at the residence, native random walks may leave a stale
-            // block target. Yield to entity targets and to any path still moving.
-            if (!(existing.getTarget() instanceof BlockPosTracker) || !navigation.isDone()) return;
-            brain.eraseMemory(MemoryModuleType.WALK_TARGET);
-            brain.eraseMemory(MemoryModuleType.PATH);
-            brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
-        }
-        if (navigation.getPath() != null && !navigation.isDone()) return;
+        if (patrolWalk != null && brain.getMemory(MemoryModuleType.WALK_TARGET).orElse(null) == patrolWalk) return;
         var path = walkable(world, target) ? navigation.createPath(target, 0) : null;
-        if (path == null || !path.canReach() || !inResidence(path) || !navigation.moveTo(path, 0.65)) {
+        if (path == null || !path.canReach() || !inResidence(path)) {
             advance(maid, now);
             return;
         }
-        patrolPath = navigation.getPath();
+        priorNativePath = navigation.getPath();
+        patrolWalk = new WalkTarget(target, 0.65F, 0);
+        brain.setMemory(MemoryModuleType.WALK_TARGET, patrolWalk);
         if (legDeadline == 0) legDeadline = now + 10 * SECOND;
+    }
+
+    private boolean withinResidence(BlockPos pos) {
+        BlockPos home = config.home();
+        return (pos.getX() >> 4) == (home.getX() >> 4) && (pos.getZ() >> 4) == (home.getZ() >> 4)
+            && pos.closerThan(home, 10);
     }
 
     private boolean inResidence(Path path) {
         for (int i = 0; i < path.getNodeCount(); i++) {
-            BlockPos pos = path.getNode(i).asBlockPos();
-            if ((pos.getX() >> 4) != (config.home().getX() >> 4)
-                || (pos.getZ() >> 4) != (config.home().getZ() >> 4)) return false;
+            if (!withinResidence(path.getNode(i).asBlockPos())) return false;
         }
         return true;
     }
@@ -366,8 +432,15 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
     }
 
     private void releasePatrol(EntityMaid maid) {
-        if (patrolPath != null && maid.getNavigation().getPath() == patrolPath) maid.getNavigation().stop();
-        patrolPath = null;
+        var brain = maid.getBrain();
+        if (patrolWalk != null && brain.getMemory(MemoryModuleType.WALK_TARGET).orElse(null) == patrolWalk) {
+            brain.eraseMemory(MemoryModuleType.WALK_TARGET);
+            brain.eraseMemory(MemoryModuleType.PATH);
+        }
+        if (checkedPath != null && maid.getNavigation().getPath() == checkedPath) maid.getNavigation().stop();
+        patrolWalk = null;
+        checkedPath = null;
+        priorNativePath = null;
     }
 
     void describe(UUID maid, JsonObject data) {
@@ -399,6 +472,7 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
     }
 
     @Override public void close() {
+        NeoForge.EVENT_BUS.unregister(beforeMaidTick);
         EntityMaid maid = original();
         if (maid != null) releasePatrol(maid);
         releaseSource();
