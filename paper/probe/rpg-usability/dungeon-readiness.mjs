@@ -100,10 +100,11 @@ async function playTower(owner) {
             (await say(owner,'/mycli arena start',/无法入场/)).includes('弹药'));
         await mc('give '+name+' minecraft:arrow 16');
     }
-    await mc(`summon touhou_little_maid:maid -593.5 92 -312.5 {UUID:[I;${ints(maid)}],Owner:[I;${ints(fixture.owner)}],CustomName:'"SyntheticTrialMaid"',PersistenceRequired:1b,Invulnerable:1b}`);
-    await mc(`data merge entity ${maid} {NeoForgeData:{qiandengji_follow:{schemaVersion:1,walkDistance:20,stopDistance:16,returnDistance:64}}}`);
-    const followProfile=await mc(`data get entity ${maid} NeoForgeData.qiandengji_follow`);
-    check('synthetic companion uses the wide follow profile',/walkDistance:\s*20\b/.test(followProfile));
+    await mc(`execute at ${name} run summon touhou_little_maid:maid -593.5 92 -312.5 {UUID:[I;${ints(maid)}],Owner:[I;${ints(fixture.owner)}],CustomName:'"SyntheticTrialMaid"',PersistenceRequired:1b,Invulnerable:1b}`);
+    await until(()=>location(maid),'synthetic companion loaded in the owner world');
+    await mc(`data modify entity ${maid} NeoForgeData.qiandengji_follow set value {schemaVersion:1,walkDistance:20,stopDistance:16,returnDistance:64}`);
+    report.followProfile=await mc(`data get entity ${maid} NeoForgeData.qiandengji_follow`);
+    check('synthetic companion uses the wide follow profile',/walkDistance\s*:\s*20\b/.test(report.followProfile));
     const start=await say(owner,'/mycli arena start',/^MC_DUNGEON_START /);
     check(baseline?'old tower admits a sword-only player':'melee and loaded ranged kit opens the trial',start.includes('floor=1'));
     await until(async()=>Math.abs(await y(maid)-69)<3,'companion entered floor one');
