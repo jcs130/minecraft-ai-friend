@@ -65,8 +65,10 @@ public final class StashGuidanceFixture extends JavaPlugin {
             JsonObject out=new JsonObject();out.addProperty("bagHash",hash(p.getInventory().getStorageContents()));out.addProperty("armorHash",hash(p.getInventory().getArmorContents()));out.addProperty("offhandHash",hash(new ItemStack[]{p.getInventory().getItemInOffHand()}));
             out.addProperty("protectedHash",hash(new ItemStack[]{p.getInventory().getItem(0),p.getInventory().getItem(1),p.getInventory().getItem(11),p.getInventory().getItem(12),p.getInventory().getItem(13),p.getInventory().getItem(14),p.getInventory().getItem(15)}));
             JsonArray items=new JsonArray();for(int n=0;n<36;n++){ItemStack i=p.getInventory().getItem(n);if(i==null||i.getType().isAir())continue;JsonObject row=new JsonObject();row.addProperty("slot",n);row.addProperty("id",i.getType().name());row.addProperty("count",i.getAmount());row.addProperty("meta",i.hasItemMeta());items.add(row);}out.add("bag",items);
-            int used=0;List<ItemStack> all=new ArrayList<>(),protectedItems=new ArrayList<>();for(int n=0;n<10;n++)for(ItemStack i:page(p,n).getContents()){all.add(i);if(i!=null&&!i.getType().isAir()){used++;if(i.hasItemMeta()||i.getType()==Material.IRON_HELMET)protectedItems.add(i);}}
-            out.addProperty("stashOccupied",used);out.addProperty("stashHash",hash(all.toArray(ItemStack[]::new)));out.addProperty("stashProtectedHash",hash(protectedItems.toArray(ItemStack[]::new)));sender.sendMessage("STASH_QA "+out);
+            int used=0;List<ItemStack> all=new ArrayList<>();List<String> protectedItems=new ArrayList<>();for(int n=0;n<10;n++)for(ItemStack i:page(p,n).getContents()){all.add(i);if(i!=null&&!i.getType().isAir()){used++;if(i.hasItemMeta()||i.getType()==Material.IRON_HELMET)protectedItems.add(hash(new ItemStack[]{i}));}}
+            Collections.sort(protectedItems);
+            out.addProperty("stashOccupied",used);out.addProperty("stashHash",hash(all.toArray(ItemStack[]::new)));out.addProperty("stashProtectedHash",String.join("",protectedItems));
+            out.addProperty("firstStashItem",all.getFirst()==null?"AIR":all.getFirst().getType().name());sender.sendMessage("STASH_QA "+out);
         }else if(args[0].equals("pvp")){
             @SuppressWarnings("unchecked") Set<UUID> recovering=(Set<UUID>)field(field(af,"pvpArena"),"recovering");if(args[2].equals("on"))recovering.add(p.getUniqueId());else if(args[2].equals("off"))recovering.remove(p.getUniqueId());else throw new IllegalArgumentException("on/off");sender.sendMessage("STASH_QA pvp="+args[2]);
         }else if(args[0].equals("saveblock")){
@@ -79,7 +81,7 @@ public final class StashGuidanceFixture extends JavaPlugin {
             }
             else if(args[2].equals("off")){var channel=saveBlocks.remove(p.getUniqueId());if(channel==null)throw new IllegalStateException("Original fault not held");channel.close();}
             else throw new IllegalArgumentException("on/off");sender.sendMessage("STASH_QA saveblock="+args[2]);
-        }else if(args[0].equals("drop")){p.getWorld().dropItem(p.getLocation(),new ItemStack(Material.COBBLESTONE,4)).setPickupDelay(0);sender.sendMessage("STASH_QA dropped=4");}
+        }else if(args[0].equals("drop")){p.getWorld().dropItem(p.getLocation(),new ItemStack(Material.DIAMOND,4),item->{item.setOwner(p.getUniqueId());item.setPickupDelay(0);});sender.sendMessage("STASH_QA dropped=4");}
         else throw new IllegalArgumentException("Known bounded QA action only");return true;
     }catch(Exception e){throw new IllegalStateException(e);}}
 }

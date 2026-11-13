@@ -15,7 +15,7 @@ public final class DungeonEnchantmentsTest {
         }
         require(variants.size()>40,"same item must have varied real affixes");require(sizes.size()>1,"affix count must vary");require(levels.size()>1,"affix level must vary");
         String[] materials={"IRON_SWORD","IRON_AXE","IRON_PICKAXE","IRON_SHOVEL","IRON_HOE","IRON_HELMET","GOLDEN_CHESTPLATE","CHAINMAIL_CHESTPLATE","IRON_LEGGINGS","IRON_BOOTS","BOW","CROSSBOW","TRIDENT","SHIELD"};
-        for(String material:materials)for(String tier:List.of("uncommon","rare","legendary"))for(int difficulty=0;difficulty<3;difficulty++)for(int floor=1;floor<=15;floor++)for(int i=0;i<8;i++){
+        for(String material:materials)for(String tier:List.of("uncommon","rare","excellent","legendary"))for(int difficulty=0;difficulty<3;difficulty++)for(int floor=1;floor<=15;floor++)for(int i=0;i<8;i++){
             var roll=DungeonEnchantments.roll(material,floor,difficulty,tier,Set.of(),random);require(!roll.isEmpty()&&roll.size()<=4,"bounded nonempty roll");
             var legal=new HashMap<String,Integer>();for(var r:DungeonEnchantments.pool(material))legal.put(r.id(),r.max());
             for(var e:roll.entrySet())require(legal.containsKey(e.getKey())&&e.getValue()>=1&&e.getValue()<=legal.get(e.getKey()),"wrong item or vanilla level");

@@ -16,6 +16,7 @@ export interface CombatLoadout {
   choices?: WeaponCapability[];
   choicesOmitted?: number;
   meleeOrder?: readonly string[];
+  defense?: { offhand: string | null; carriedShields: number; shieldEquipped: boolean };
 }
 export function combatLoadout(bot: Bot, order: readonly string[] = []): CombatLoadout {
   const lifecycle = (bot as Bot & { deathLifecycle?: { inventorySynced?: boolean } }).deathLifecycle;
@@ -27,5 +28,8 @@ export function combatLoadout(bot: Bot, order: readonly string[] = []): CombatLo
   const choices = weaponCapabilities(itemsInReach(bot));
   return { inventoryKnown: true, melee, ranged, arrows, canEngage: !!melee || !!ranged && hasUsableArrows(bot),
     choices: choices.slice(0, 8).map(c => ({...c, melee:c.melee && usable.has(c.item)})),
-    ...(choices.length > 8 ? {choicesOmitted:choices.length - 8} : {}), meleeOrder: [...order] };
+    ...(choices.length > 8 ? {choicesOmitted:choices.length - 8} : {}), meleeOrder: [...order],
+    defense: { offhand: bot.inventory.slots?.[45]?.name ?? null,
+      carriedShields: bot.inventory.items().filter(i => i.name === 'shield' && i.slot !== 45).reduce((n,i) => n+i.count,0),
+      shieldEquipped: bot.inventory.slots?.[45]?.name === 'shield' } };
 }

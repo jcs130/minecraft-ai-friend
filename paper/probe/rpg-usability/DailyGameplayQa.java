@@ -6,15 +6,20 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Blaze;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.SmallFireball;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockFadeEvent;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.entity.LivingEntity;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.util.Vector;
 
 /** Fixture commands are available only on the marked, loopback-only QA server. */
 public final class DailyGameplayQa extends JavaPlugin implements Listener {
@@ -23,7 +28,7 @@ public final class DailyGameplayQa extends JavaPlugin implements Listener {
     @Override public void onEnable() {
         try {
             if (!Files.readString(Path.of(".daily-shop-qa")).equals("ISOLATED_DAILY_SHOP_FROST_ONLY")
-                    || !Bukkit.getIp().equals("127.0.0.1") || Bukkit.getPort() != 25928)
+                    || !Bukkit.getIp().equals("127.0.0.1") || !java.util.Set.of(25928,26324,26326,26334,26336).contains(Bukkit.getPort()))
                 throw new IllegalStateException("Isolated stage required");
             vortex = (VortexCorePlugin) Bukkit.getPluginManager().getPlugin("VortexRPG");
             Bukkit.getPluginManager().registerEvents(this, this);
@@ -49,6 +54,55 @@ public final class DailyGameplayQa extends JavaPlugin implements Listener {
                 case "health" -> {
                     if (args.length > 2) player.setHealth(Math.min(player.getMaxHealth(), Double.parseDouble(args[2])));
                     sender.sendMessage("health=" + player.getHealth());
+                }
+                case "clear-state" -> {
+                    if (!player.getName().matches("MaidBrainQA|ag_RUReady[AB]"))
+                        throw new IllegalArgumentException("Synthetic dungeon actor required");
+                    var effects=vortex.effectService();
+                    if (args.length==3&&args[2].equals("arm")) {
+                        player.setHealth(5);
+                        vortex.qiandengjiMana().setMana(player.getUniqueId(),0);
+                        player.setFireTicks(120);
+                        player.addPotionEffect(new org.bukkit.potion.PotionEffect(PotionEffectType.POISON,200,0));
+                        player.addPotionEffect(new org.bukkit.potion.PotionEffect(PotionEffectType.SPEED,400,0));
+                        effects.applyEffectToEntity(player,"bleed",1,400,1,true);
+                        effects.applyEffectToEntity(player,"arcane_ward",1,400,1,true);
+                    }
+                    var all=(java.util.Map<?,?>)field(effects,"activeEffects");
+                    var active=all.get(player.getUniqueId()) instanceof java.util.Map<?,?> current ? current : java.util.Map.of();
+                    var mana=vortex.qiandengjiMana();
+                    sender.sendMessage("health="+player.getHealth()+"/"+player.getMaxHealth()
+                        +" mana="+mana.getMana(player.getUniqueId())+"/"+mana.getMaxMana(player)
+                        +" fire="+player.getFireTicks()+" poison="+player.hasPotionEffect(PotionEffectType.POISON)
+                        +" speed="+player.hasPotionEffect(PotionEffectType.SPEED)+" bleed="+active.containsKey("bleed")
+                        +" ward="+active.containsKey("arcane_ward"));
+                }
+                case "readiness-ground" -> {
+                    if (!player.getName().matches("MaidBrainQA|ag_RUReady[AB]"))
+                        throw new IllegalArgumentException("Synthetic dungeon actor required");
+                    var world=Bukkit.getWorld("world");
+                    player.setInvulnerable(true);
+                    boolean tower=player.getName().equals("MaidBrainQA") && args.length == 2;
+                    int fromX=tower?-601:2994, toX=tower?-579:3020;
+                    int fromZ=tower?-316:2394, toZ=tower?-294:2406;
+                    for(int x=fromX>>4;x<=toX>>4;x++)for(int z=fromZ>>4;z<=toZ>>4;z++)
+                        world.getChunkAt(x,z).addPluginChunkTicket(this);
+                    for(int floorY:tower?new int[]{56,68}:new int[]{80})
+                        for(int x=fromX;x<=toX;x++)for(int z=fromZ;z<=toZ;z++) {
+                            world.getBlockAt(x,floorY,z).setType(Material.STONE,false);
+                            for(int y=floorY+1;y<=floorY+3;y++)world.getBlockAt(x,y,z).setType(Material.AIR,false);
+                        }
+                    sender.sendMessage("ground=ready");
+                }
+                case "readiness-enemies" -> {
+                    if (!player.getName().matches("MaidBrainQA|ag_RUReady[AB]")||args.length<3)
+                        throw new IllegalArgumentException("Synthetic dungeon actor and mode required");
+                    String tag=player.getName().equals("MaidBrainQA")?"afu_dungeon_mob":"afu_site_qa_readiness";
+                    var mobs=player.getNearbyEntities(24,7,24).stream()
+                        .filter(entity->entity instanceof LivingEntity living&&!living.isDead()&&entity.getScoreboardTags().contains(tag)).toList();
+                    if (args[2].equals("clear")) for(var mob:mobs) ((LivingEntity)mob).damage(1000,player);
+                    else if (!args[2].equals("read")) throw new IllegalArgumentException("read or clear");
+                    sender.sendMessage("mobs="+mobs.size());
                 }
                 case "entity-health" -> {
                     var entities = Bukkit.selectEntities(sender, args[1]);
@@ -88,18 +142,44 @@ public final class DailyGameplayQa extends JavaPlugin implements Listener {
                     }
                     sender.sendMessage("party=" + party.membersOf(player.getUniqueId()).size());
                 }
-                case "trial-team" -> {
+                case "trial-team", "trial-fourth" -> {
                     var agent = Bukkit.getPluginManager().getPlugin("AgentFriend");
                     Object dungeon = field(agent, "dungeon");
-                    set(dungeon, "floor", 13);
+                    set(dungeon, "floor", args[0].equals("trial-team") ? 13 : 4);
                     set(dungeon, "active", args.length > 2);
                     if (args.length > 2) {
                         set(dungeon, "pausedAt", 0L);
                         set(dungeon, "runStartedAt", System.currentTimeMillis());
                         set(dungeon, "floorStartedAt", System.currentTimeMillis());
+                        if (args[0].equals("trial-fourth")) set(dungeon, "spawnAt", Long.MAX_VALUE);
                     }
                     trialGroup(dungeon, args);
                     sender.sendMessage("trial=" + (args.length > 2));
+                }
+                case "trial-shot" -> {
+                    if (args[2].equals("alive")) {
+                        var shot = Bukkit.getEntity(java.util.UUID.fromString(args[1]));
+                        sender.sendMessage("shotAlive=" + (shot != null && shot.isValid()));
+                        break;
+                    }
+                    var agent = Bukkit.getPluginManager().getPlugin("AgentFriend");
+                    boolean trial = !args[2].equals("ordinary");
+                    boolean atPlayer = args[2].equals("player");
+                    var origin = player.getLocation().add(atPlayer ? 4 : 2, atPlayer ? 0 : 2, 0);
+                    var target = atPlayer ? player.getLocation().add(0, 1.0, 0) : origin.clone().subtract(0, 4, 0);
+                    var shooter = player.getWorld().spawn(origin, Blaze.class, blaze -> {
+                        blaze.setAI(false);
+                        blaze.setSilent(true);
+                        blaze.addScoreboardTag("qd_frost_qa_shooter");
+                        if (trial) {
+                            blaze.addScoreboardTag("afu_dungeon_mob");
+                            blaze.getPersistentDataContainer().set(new NamespacedKey(agent, "dungeon_mob"),
+                                    PersistentDataType.BYTE, (byte) 1);
+                        }
+                    });
+                    Vector velocity = target.subtract(shooter.getEyeLocation()).toVector().normalize().multiply(0.6);
+                    var shot = shooter.launchProjectile(SmallFireball.class, velocity);
+                    sender.sendMessage("shot=" + shot.getUniqueId() + " incendiary=" + shot.isIncendiary());
                 }
                 case "assist" -> {
                     var agent = Bukkit.getPluginManager().getPlugin("AgentFriend");

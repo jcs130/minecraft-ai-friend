@@ -8,7 +8,7 @@ import {installRecipePacketBypass} from '../../ops/mineflayer-client-compat.mjs'
 
 const stage = resolve(process.env.SHOP_QA_STAGE);
 const mode = process.argv[2];
-assert(['baseline', 'daily', 'cold', 'frost', 'support'].includes(mode));
+assert(['baseline', 'daily', 'cold', 'frost', 'support', 'trial-fire-baseline', 'trial-fire'].includes(mode));
 assert.equal(await readFile(resolve(stage, '.daily-shop-qa'), 'utf8'), 'ISOLATED_DAILY_SHOP_FROST_ONLY');
 const properties = resolve(stage, 'server.properties');
 const values = (await readFile(properties, 'utf8')).split(/\r?\n/);
@@ -240,6 +240,83 @@ async function frost(first, second) {
     await rc('minecraft:kill @e[tag=QDFrost]');
 }
 
+async function trialFire(first, second) {
+    const baseline = mode === 'trial-fire-baseline';
+    const shotBlock = [-589, 33, -305];
+    const spellFire = [-589, 33, -303];
+    const soulFire = [-588, 33, -303];
+    const campfire = [-593, 33, -305];
+    const inaccessibleFire = [-590, 33, -311];
+    const hiddenFire = [-590, 33, -309];
+    const mc = text => rc('minecraft:' + text);
+    await mc('gamerule doFireTick false');
+    await mc('gamerule mobGriefing true');
+    await mc('gamerule doMobSpawning false');
+    await position(first, -590.5, 33, -304.5);
+    await position(second, -590.5, 33, -304.5);
+    await mc('fill -601 33 -316 -579 38 -294 minecraft:air');
+    await mc('fill -601 32 -316 -579 32 -294 minecraft:nether_bricks');
+    await mc('fill -591 33 -308 -589 35 -308 minecraft:nether_bricks');
+    await block(...spellFire, 'FIRE');
+    await block(soulFire[0], 32, soulFire[2], 'SOUL_SOIL');
+    await block(...soulFire, 'SOUL_FIRE');
+    await block(...campfire, 'CAMPFIRE');
+    await block(...inaccessibleFire, 'FIRE');
+    await block(...hiddenFire, 'FIRE');
+    await rc('dailyqa trial-fourth ' + name(first) + ' ' + name(first));
+    try {
+        await mana(second);
+        check('a visitor outside the trial roster cannot use frost to edit the protected floor',
+            (await chatResult(second, '/mycli cast frostnova', /未耗魔/)).includes('未耗魔')
+            && await block(...spellFire) === 'block=FIRE');
+        await mana(first);
+        const cast = await chatResult(first, '/mycli cast frostnova', /未耗魔|熄灭/);
+        const [normal, soul] = [await block(...spellFire), await block(...soulFire)];
+        if (baseline) {
+            check('installed build reproduces the fourth-floor protection bug',
+                cast.includes('未耗魔') && normal === 'block=FIRE' && soul === 'block=SOUL_FIRE');
+        } else {
+            check('a participant can extinguish both kinds of visible fire with no enemy nearby',
+                cast.includes('2 处明火') && normal === 'block=AIR' && soul === 'block=AIR');
+        }
+        check('campfire, fire behind a wall and out-of-reach fire remain in place',
+            await block(...campfire) === 'block=CAMPFIRE' && await block(...hiddenFire) === 'block=FIRE'
+            && await block(...inaccessibleFire) === 'block=FIRE');
+
+        async function shoot(kind) {
+            const result = await rc('dailyqa trial-shot ' + name(first) + ' ' + kind);
+            const id = result.match(/shot=([0-9a-f-]{36})/)?.[1];
+            assert(id, result);
+            await until(async () => (await rc('dailyqa trial-shot ' + id + ' alive')).includes('shotAlive=false'),
+                kind + ' fireball impact');
+            await delay(250);
+            return result;
+        }
+        const shot = await shoot('ground');
+        const landing = await block(...shotBlock);
+        check(baseline ? 'installed build reproduces fireball ground ignition'
+            : 'trial fireball block impact leaves no persistent fire',
+        baseline ? shot.includes('incendiary=true') && landing === 'block=FIRE'
+            : shot.includes('incendiary=false') && landing === 'block=AIR');
+        if (baseline) return;
+
+        await position(second, -586.5, 33, -301.5);
+        await block(...shotBlock, 'AIR');
+        await shoot('ordinary');
+        check('ground cleanup does not affect an ordinary non-trial shooter',
+            await block(...shotBlock) === 'block=FIRE');
+        await block(...shotBlock, 'AIR');
+        await rc('dailyqa fire ' + name(first) + ' 0');
+        const before = await health(first);
+        await shoot('player');
+        check('trial fireball still damages and ignites a player it hits',
+            await health(first) < before && await fire(first) > 0);
+    } finally {
+        await rc('dailyqa trial-fourth ' + name(first));
+        await mc('kill @e[tag=qd_frost_qa_shooter]');
+    }
+}
+
 async function support(first, second, bystander) {
     for (const rule of ['gamerule naturalRegeneration false', 'gamerule doMobSpawning false',
         'fill 174 89 174 192 89 192 minecraft:stone', 'fill 174 90 174 192 94 192 minecraft:air'])
@@ -331,6 +408,7 @@ try {
     if (mode === 'daily') await daily(first, second);
     if (mode === 'cold') await cold(first, second);
     if (mode === 'frost') await frost(first, second);
+    if (mode === 'trial-fire-baseline' || mode === 'trial-fire') await trialFire(first, second);
     if (mode === 'support') await support(first, second, await connect('Guest'));
     check('all original-protocol sessions stay connected', clients.every(client => client.errors.length === 0));
 } catch (error) {

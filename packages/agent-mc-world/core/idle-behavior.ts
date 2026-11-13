@@ -88,6 +88,8 @@ export interface IdleBehaviorCandidate {
   label: string;
   /** Stable observed subject, so a delayed choice cannot silently look at a different player. */
   subjectKey?: string;
+  /** Optional movement category; many look variants must not crowd out a stroll. */
+  category?: 'look' | 'pose' | 'target' | 'move' | 'interface';
 }
 
 export interface IdleBehaviorScene {
@@ -191,7 +193,7 @@ export class IdleBehaviorController {
     }
     if (this.operation || now < this.nextAtMs
       || now - this.idleSinceMs! < Math.max(0, config.minIdleMs)) return;
-    const candidates = this.available(scene.candidates.filter(c => c.id !== 'wander'));
+    const candidates = this.available(scene.candidates);
     if (!candidates.length) return;
     this.start(scene, config, candidates);
   }
@@ -266,7 +268,14 @@ export class IdleBehaviorController {
   }
 
   private pick(candidates: readonly IdleBehaviorCandidate[]): string {
-    return candidates[Math.min(candidates.length - 1, Math.floor(this.random() * candidates.length))].id;
+    const movement = candidates.filter(c => c.category === 'move');
+    const other = candidates.filter(c => c.category !== 'move');
+    // Select a behavior family first. Adding ten new glance variants should not
+    // make authorized local strolling ten times less likely. Intervals and the
+    // recent-action filter still leave pauses and prevent constant marching.
+    const pool = movement.length && other.length
+      ? (this.random() < 1 / 3 ? movement : other) : candidates;
+    return pool[Math.min(pool.length - 1, Math.floor(this.random() * pool.length))].id;
   }
 
   private record(operation: Operation, event: IdleBehaviorEvent['event'],

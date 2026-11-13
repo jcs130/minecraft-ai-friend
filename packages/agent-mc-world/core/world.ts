@@ -2824,6 +2824,7 @@ export class MinecraftWorld implements World {
   protected static readonly IDLE_ARRIVAL_SETTLE_MS = 150;
   protected idleArrival: { generation: string; expiresAtMs: number; readyAtMs?: number; blockedBy?: string } | null = null;
   protected idleSceneCache: IdleBehaviorScene | null = null;
+  protected idleMovementAnchor: { generation: string; position: Vec3 } | null = null;
   protected bodyDisplay: { key: string; since: number; published: number } | null = null;
   protected visualWarmKey: string | null = null;
   protected visualInFlight: VisualObservationJob | null = null;
@@ -4556,16 +4557,24 @@ export class MinecraftWorld implements World {
           const bot = this.bridge?.bot;
           if (!bot) return;
           const origin = bot.entity.position.clone();
-          await executeIdleAction(bot, id, scene.state, signal, {
+          try { await executeIdleAction(bot, id, scene.state, signal, {
             available: () => this.bridge?.bot === bot && this.canIdle()
-              && (id !== 'wander' || this.canWander())
+              && (!['short_walk', 'wander'].includes(id) || this.canWander())
               && (!['short_walk', 'wander'].includes(id) || (this.cfg.idle ?? MINECRAFT_DEFAULTS.idle).allowMovement)
               && this.idleGeneration() === scene.generation
               && bot.entity.position.distanceTo(origin) < 3,
             inventoryPreview: (open) => {
               (bot as unknown as EventEmitter).emit('viewer_inventory_preview', { open });
             },
-          });
+          }); } finally {
+            if (['short_walk', 'wander'].includes(id)) this.diag.write({ lane: 'body',
+              event: 'idle-movement-ended', msg: id, level: 'debug', data: {
+                actionId: id, generation: scene.generation, cancelled: signal.aborted,
+                from: { x: origin.x, y: origin.y, z: origin.z },
+                to: { x: bot.entity.position.x, y: bot.entity.position.y, z: bot.entity.position.z },
+                displacement: bot.entity.position.distanceTo(origin),
+              } });
+          }
         },
         record: (event) => this.diag.write({ lane: 'body', event: `idle-${event.event}`,
           msg: event.actionId ?? event.reason ?? event.event, level: 'debug', data: { ...event } }),
@@ -8246,7 +8255,8 @@ export class MinecraftWorld implements World {
   /** Check all currently tracked nearby hazards, not a truncated presentation list. */
   protected canWander(): boolean {
     const bot = this.bridge?.bot;
-    return Boolean(bot?.entity) && !Object.values(bot!.entities).some(e => e && e !== bot!.entity
+    return Boolean(bot?.entity) && !(bot as (Bot & { vehicle?: unknown }) | null)?.vehicle
+      && !Object.values(bot!.entities).some(e => e && e !== bot!.entity
       && e.isValid !== false && e.position && e.position.distanceTo(bot!.entity.position) <= 32
       && (classifyEntity(e.type, e.name ?? '') === 'hostile' || (e.name === 'piglin' && piglinIsHostile(bot!, e))));
   }
@@ -8257,6 +8267,7 @@ export class MinecraftWorld implements World {
     if (this.shuttingDown || !this.host || !(this.cfg.idle ?? MINECRAFT_DEFAULTS.idle).enabled) return 'world-unavailable';
     if (!this.bridge?.connected || !this.bridge.invSynced || !bot?.entity || !queue) return 'connection-unavailable';
     if (queue.running || queue.waiting.length || queue.hold) return 'task';
+    if (this.methodOwnsBody()) return 'method';
     if (this.combat?.active) return 'combat';
     if (this.reflexes?.envActive || Date.now() < this.escapeHoldUntil) return 'reflex';
     if (Date.now() < this.idleQuietUntil) return 'quiet-period';
@@ -8284,11 +8295,16 @@ export class MinecraftWorld implements World {
     const generation = this.idleGeneration();
     if (this.idleBehavior?.executing && this.idleSceneCache?.generation === generation) return this.idleSceneCache;
     const bot = this.bridge!.bot!;
+    if (this.idleMovementAnchor?.generation !== generation
+      || bot.entity.position.distanceTo(this.idleMovementAnchor.position) > 8) {
+      this.idleMovementAnchor = { generation, position: bot.entity.position.clone() };
+    }
     const presentation = this.idleContext.snapshot({ now: Date.now(), lastTask: this.lastFinishedTask,
       goals: this.goals().list.map(goal => ({ slot: goal.slot, intention: goal.text,
         nextStep: goalPlanSummary(goal.plan).next?.do ?? '' })) });
     const sample = sampleIdleActions(bot, {
-      allowMovement: (this.cfg.idle ?? MINECRAFT_DEFAULTS.idle).allowMovement,
+      allowMovement: (this.cfg.idle ?? MINECRAFT_DEFAULTS.idle).allowMovement && this.canWander(),
+      movementAnchor: this.idleMovementAnchor.position,
       preferredPlayer: presentation.preferredPlayer,
       ignorePlayer: name => name === this.chatName() || this.isCamera(name),
     });

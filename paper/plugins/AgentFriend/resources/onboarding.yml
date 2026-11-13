@@ -47,8 +47,8 @@ steps:
     message: 用 /mycli guild status 复查真实步骤；每阶段达标后 guild claim，全部完成才发最终奖。不根据聊天自报或到达一次就判探索完成。
   complete:
     title: 攻略路线已开启
-    message: 用 /mycli dungeon list 选遗迹，或 /mycli arena status 查试炼。带护甲和本职业武器，同场自动参战、可中途进出；一人开场即可，不必邀请。离场保留实际贡献，通关后用 /mycli dungeon status 查领奖；职业、技能、任务看 /mycli intro。
+    message: 用 /mycli dungeon list 选遗迹，或 /mycli arena status 查试炼。穿齐四甲并带近战和可用远程武器；一人开场，同场达标者自动参战，不必邀请。清场立即恢复生命与魔力并清除负面状态。通关后用 /mycli dungeon status 查领奖。
 release-revision: 8
 release-notice:
-- '[攻略更新] 试炼塔先 /mycli arena status；goto arena前往（6魔力），穿甲带武器、伙伴到按钮12格，一人arena start免费开场。每次新开从第1层开始，历史通关不自动跳层；清层自动下楼。旧公会单guild status，新RPG任务tasks status。'
+- '[攻略更新] 试炼塔与遗迹要穿齐四甲，带近战和可用远程武器。/mycli arena status 查战备，/mycli goto arena 前往入口（6魔力）。每次从第1层开始，清场立即恢复生命、魔力并清除负面状态。'
 - '[玩法目录] /mycli world list 分页查职业、技能、组队、遗迹、交易、个人箱、NPC、照片、日记、外观和语音；/mycli world events 查随机集结。活动自主参加，不自动开场或领奖。'

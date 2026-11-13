@@ -1,6 +1,18 @@
-## 0.5.7-rc.160-preview.65
+## 0.5.7-rc.160-preview.68
 
 - Retry undelivered combat attention on a fresh matching battlefield and suppress further shadow rankings only after the host acknowledges delivery.
+
+## 0.5.7-rc.160-preview.67
+
+- Allow opted-in autonomous idle strolling through the existing interruptible body lease. Balance movement against glance variants, vary local directions, bound consecutive strolls around an idle anchor, and suppress movement around hazards, hostiles and active body scripts.
+
+## 0.5.7-rc.160-preview.66
+
+- Expose observed offhand defense separately from backpack ownership; confirm and explain explicit shield replacement without forcing equipment choices.
+
+## 0.5.7-rc.160-preview.65
+
+- Separate physical fire contact from planner clearance. Validate explicit ranged spacing against the current local corridor; blocked retreat can still fire a verified shot. Clarify that a local combat clear does not complete a server room.
 
 ## 0.5.7-rc.160-preview.64
 

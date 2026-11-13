@@ -37,6 +37,17 @@ it.each(['trident','mace','iron_axe','iron_hoe'])('recognizes %s as armed withou
   expect(bestWeapon(f.bot as never)?.name).toBe(name);
   expect(combatLoadout(f.bot as never)).toMatchObject({melee:name,canEngage:true,choices:[{item:name,melee:true}]});
 });
+it('distinguishes a shield in the backpack from an equipped shield without changing either hand',()=>{
+  const f=fixture(['bow','arrow','shield']);
+  const slots=f.bot.inventory.slots as any[];
+  slots[45]={...item('arrow'),slot:45};
+  expect(combatLoadout(f.bot as never).defense).toEqual({offhand:'arrow',carriedShields:1,shieldEquipped:false});
+  slots[45]={...item('shield'),slot:45}; f.replace([item('bow'),item('arrow')]);
+  expect(combatLoadout(f.bot as never).defense).toEqual({offhand:'shield',carriedShields:0,shieldEquipped:true});
+  expect(f.bot.equip).not.toHaveBeenCalled();
+  (f.bot as any).deathLifecycle={inventorySynced:false};
+  expect(combatLoadout(f.bot as never).defense).toBeUndefined();
+});
 it('rejects broken weapons and never classifies food as a melee weapon',()=>{
   const f=fixture([]);f.replace([item('trident',250),item('mace',500),item('bread')]);
   expect(bestWeapon(f.bot as never)).toBeNull();

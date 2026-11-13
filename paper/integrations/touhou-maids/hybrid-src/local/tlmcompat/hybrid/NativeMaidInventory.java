@@ -88,14 +88,26 @@ public final class NativeMaidInventory implements Listener {
             if(!before.isEmpty()&&actor.getGameMode()!=org.bukkit.GameMode.CREATIVE&&net.minecraft.world.item.enchantment.EnchantmentHelper.has(before,net.minecraft.world.item.enchantment.EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE))
                 throw new CompatibilityException("binding_curse","当前护甲具有绑定诅咒，原生规则不允许卸下；本次没有转移物品。");
         }
-        if(!before.isEmpty()&&(!maid.getMaidInv().isItemValid(slot,before)||before.getCount()>maid.getMaidInv().getSlotLimit(slot)))
+        if(!acceptsEquipmentSwap(maid,slot,before))
             throw new CompatibilityException("slot_rejected","原装备无法放回该女仆背包槽；先清理一个允许的槽位。");
     }
     public JsonObject equip(Player actor,EntityMaid maid,String arguments){
         validateEquip(actor,maid,arguments);String[] values=arguments.split(" +");int slot=Integer.parseInt(values[1]);EquipmentSlot target=EQUIPMENT.get(values[0]);
-        ItemStack before=maid.getItemBySlot(target).copy(),incoming=maid.getMaidInv().getStackInSlot(slot).copy();
-        maid.getMaidInv().setStackInSlot(slot,before);maid.setItemSlot(target,incoming);
+        swapEquipment(maid, target, slot);
         JsonObject result=new JsonObject();result.addProperty("maidId",maid.getUUID().toString());result.add("equipment",equipment(maid));result.add("mainHand",HybridMaidPlugin.item(maid.getMainHandItem()));result.add("offHand",HybridMaidPlugin.item(maid.getOffhandItem()));return result;
+    }
+    static boolean acceptsEquipmentSwap(EntityMaid maid, int slot, ItemStack old) {
+        return slot >= 0 && slot < capacity(maid) && (old.isEmpty()
+            || (maid.getMaidInv().isItemValid(slot, old) && old.getCount() <= maid.getMaidInv().getSlotLimit(slot)));
+    }
+    static void swapEquipment(EntityMaid maid, EquipmentSlot equipment, int slot) {
+        var inventory = maid.getMaidInv();
+        ItemStack old = maid.getItemBySlot(equipment).copy(), incoming = inventory.getStackInSlot(slot).copy();
+        inventory.setStackInSlot(slot, old);
+        maid.setItemSlot(equipment, incoming);
+    }
+    boolean editing(EntityMaid maid) {
+        return views.values().stream().anyMatch(view -> view.maid.equals(maid.getUUID()));
     }
     public void open(Player actor,EntityMaid maid){
         plugin.ownedLoaded(actor,maid.getUUID());plugin.requireNearby(actor,maid,8);

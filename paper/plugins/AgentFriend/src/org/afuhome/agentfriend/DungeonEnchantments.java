@@ -24,7 +24,7 @@ final class DungeonEnchantments {
             rule("loyalty",3,6,""),rule("impaling",5,6,""),rule("channeling",1,2,""),rule("riptide",3,3,""));
         var indexed=new LinkedHashMap<String,Rule>();for(var r:rules)indexed.put(r.id,r);RULES=Collections.unmodifiableMap(indexed);
     }
-    static int grade(String tier){return switch(tier){case "common","uncommon"->0;case "rare"->1;case "legendary"->2;default->throw new IllegalArgumentException("unknown_loot_tier");};}
+    static int grade(String tier){return switch(tier){case "common","uncommon"->0;case "rare"->1;case "excellent"->2;case "legendary"->3;default->throw new IllegalArgumentException("unknown_loot_tier");};}
     static List<Rule> pool(String material){
         var names=new ArrayList<>(List.of("unbreaking","mending"));
         if(material.endsWith("_SWORD"))names.addAll(List.of("sharpness","smite","bane_of_arthropods","looting","knockback","fire_aspect"));
@@ -55,20 +55,21 @@ final class DungeonEnchantments {
         int grade=grade(tier),depth=Math.min(2,(floor-1)/5),power=depth+difficulty+grade;
         var candidates=new ArrayList<>(pool(material).stream().filter(r->floor>=r.minimumFloor&&grade>=r.minimumGrade&&(!r.id.equals("mending")||difficulty>0)).toList());
         if(candidates.isEmpty())return Map.of();
-        int count=grade==2?2:1;
+        int count=grade>=2?2:1;
         if(random.nextInt(100)<35+grade*15+depth*5+difficulty*5)count++;
         if(grade>0&&random.nextInt(100)<10+grade*10+depth*5+difficulty*5)count++;
-        count=Math.min(TrialRewardPolicy.affixCount(floor,difficulty),Math.max(count,required.size()));
+        count=Math.min(TrialRewardPolicy.affixCount(floor,difficulty,tier),Math.max(count,required.size()));
         if(required.size()>count)throw new IllegalArgumentException("required_enchantments_exceed_training_budget");
         var chosen=new LinkedHashMap<String,Integer>();
+        int trainingCap=TrialRewardPolicy.affixLevel(floor,difficulty,tier);
         for(String id:new TreeSet<>(required)){
             Rule r=candidates.stream().filter(x->x.id.equals(id)).findFirst().orElseThrow(()->new IllegalArgumentException("invalid_required_enchantment:"+id));
-            add(chosen,r,power,grade,depth,difficulty,TrialRewardPolicy.affixLevel(floor,difficulty),random);candidates.removeIf(x->conflicts(id,x.id));
+            add(chosen,r,power,grade,depth,difficulty,trainingCap,random);candidates.removeIf(x->conflicts(id,x.id));
         }
         while(chosen.size()<count&&!candidates.isEmpty()){
             int draw=random.nextInt(candidates.stream().mapToInt(Rule::weight).sum());Rule selected=null;
             for(var r:candidates){draw-=r.weight;if(draw<0){selected=r;break;}}
-            Rule r=Objects.requireNonNull(selected);add(chosen,r,power,grade,depth,difficulty,TrialRewardPolicy.affixLevel(floor,difficulty),random);candidates.removeIf(x->conflicts(r.id,x.id));
+            Rule r=Objects.requireNonNull(selected);add(chosen,r,power,grade,depth,difficulty,trainingCap,random);candidates.removeIf(x->conflicts(r.id,x.id));
         }
         return Collections.unmodifiableMap(chosen);
     }

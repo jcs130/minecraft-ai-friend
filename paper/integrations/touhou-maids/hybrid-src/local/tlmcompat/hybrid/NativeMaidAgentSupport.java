@@ -149,7 +149,7 @@ public final class NativeMaidAgentSupport implements Listener {
             return;
         }
         if(!context.has("death")) {
-            context.addProperty("nextStep",context.has("recovery")?"曾再次确认原UUID存活；当前未加载，靠近lastSeenAlive所列维度位置后再查询。旧墓碑可留有遗物，不代表再次死亡，勿重复复活。":"女仆当前未加载，历史墓碑不足以确认当前死亡；靠近她最后所在的维度后再查询。");return;
+            context.addProperty("nextStep","当前未加载。可用 /qdmaid recall "+id+" 尝试从最后确认的位置召回原伙伴，再查询当前状态。");return;
         }
         JsonObject death=context.getAsJsonObject("death");annotateGrave(death,found);context.addProperty("name",death.get("name").getAsString());
         death.addProperty("nextStep",death.get("tombstoneRegistered").getAsBoolean()?"当前死亡有本次原生证据。先核对所列墓碑与遗物；原生胶片复活需模组祭坛，不要重复创建替代女仆。":"已观察到本次死亡，但原墓碑尚未确认或已取走；查询原状态，不自动补发物品或新建女仆。");
@@ -258,7 +258,7 @@ public final class NativeMaidAgentSupport implements Listener {
             UUID id=UUID.fromString(entry.getKey());registered.add(id);
             EntityMaid loaded=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
             if(loaded!=null){
-                try{if(registeredOwner(loaded)!=null){plugin.companionTick(loaded);following.tick(loaded);}else following.unavailable(id);}catch(Exception error){plugin.getLogger().fine("Native following observation unavailable: "+error.getClass().getSimpleName());}
+                try{if(registeredOwner(loaded)!=null){plugin.companionTick(loaded);following.tick(loaded,plugin.closingInToGuard(loaded));}else following.unavailable(id);}catch(Exception error){plugin.getLogger().fine("Native following observation unavailable: "+error.getClass().getSimpleName());}
                 if(lifecycleDue)observeLoaded(loaded);
             }else following.unavailable(id);
             if(!lifecycleDue)continue;

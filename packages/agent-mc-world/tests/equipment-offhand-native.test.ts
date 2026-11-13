@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { equipHandConfirmed, equipSlotConfirmed } from '../core/equipment.ts';
 import { clickInventoryConfirmed, installInventoryClickSync, inventoryClickState } from '../core/inventory-click-sync.ts';
 import { installInventoryWindowSyncGuard } from '../core/inventory-window-sync.ts';
+import { skillEquip } from '../core/skills-craft.ts';
 
 const require = createRequire(import.meta.url), mf = createRequire(require.resolve('mineflayer'));
 function nativeServer(version: string, denyNumberSwap = false, rejectPostEquip = false, protectedHotbar: number | null = null) {
@@ -54,6 +55,23 @@ function nativeServer(version: string, denyNumberSwap = false, rejectPostEquip =
   return { bot, server, clicks, full, seed, raw, notes };
 }
 afterEach(() => vi.useRealTimers());
+
+it('reports loss of shield defense when an explicit arrow choice replaces the offhand on 1.21.1', async () => {
+  vi.useFakeTimers(); const r = nativeServer('1.21.1');
+  r.seed(22, 'arrow'); r.seed(45, 'shield'); r.full();
+  const operation = skillEquip(r.bot, { skill: 'equip', item: 'arrow', hand: 'off' });
+  await vi.runAllTimersAsync();
+  const receipt = await operation;
+  expect(r.server.slots[45]?.name).toBe('arrow');
+  expect(r.server.slots[22]?.name).toBe('shield');
+  expect(receipt).toContain('当前未装备盾');
+  expect(receipt).toContain('普通箭放在背包即可');
+  expect(r.clicks).toHaveLength(1);
+  const restore = skillEquip(r.bot, { skill: 'equip', item: 'shield', hand: 'off' });
+  await vi.runAllTimersAsync();
+  expect(await restore).not.toContain('不能举盾');
+  expect(r.server.slots[45]?.name).toBe('shield');
+});
 
 it.each(['1.20.6', '1.21.1'])('equips a stored weapon with native %s clicks while retaining a protected selected shortcut', async version => {
   vi.useFakeTimers(); const r = nativeServer(version, false, false, 0);

@@ -87,6 +87,10 @@ Agent交互与RPG修订已正式上线：统一帮助、任务分页、组队、
 - **观察与直播：**独立 Web 可视化支持实时画面、OBS 覆盖和 Agent 状态；具体能力取决于画面源及所用版本。
   [无账号女神之眼](paper/docs/ACCOUNT_FREE_WORLD_VIEW.md)已匹配官网与现代前端，支持视角切换、小地图、单源云端分发，不占额外玩家名额；[公开足迹、背包、作品与动作优化](paper/docs/PUBLIC_WORLD_TRAIL.md)已上线。
 
+## 在自己的 Minecraft 服务器上玩
+
+使用 [免费的 Autonomous Agent for Minecraft Skill](https://www.agensi.io/skills/autonomous-agent-for-minecraft) 和本机 Agent MC World MCP，让自己的 Agent 连接 Java 服务器，并在浏览器里观战。[本机快速入门](docs/AGENSI-MINECRAFT-QUICKSTART.md)覆盖 Skill 安装、MCP 注册和第一次合成木镐。
+
 ## 带自己的 Agent 加入
 
 1. 在 [官网](https://mc.kangqiang.site) 用用户名、密码注册并登录，邮箱可稍后绑定。

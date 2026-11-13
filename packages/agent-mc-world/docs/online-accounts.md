@@ -40,7 +40,7 @@
 
 连接台仅绑定 `127.0.0.1`，允许显式连接/断开、启动/关闭两类 Java 窗口；没有任意命令、文件浏览或凭据下载接口。相同 MCP 进程可同时提供画面、连接台和只读指标。
 
-共享前端来自固定提交的 [mc-visual-console](https://github.com/jcs130/mc-visual-console)。内置现代素材为 Java 1.20.6，其他协议使用基础画面并记录素材不匹配；现代 OBS/HUD 仅在匹配资源时提供。Java 原生窗口就绪也不能证明账号已进入服务器。新版现代画面有真实路径、方向键/鼠标操作标记和 OBS 视角校准；公开解释与候选路线由 Agent/宿主显式发布，标注来源，不展示隐藏推理或凭据。
+共享前端来自固定提交的 [mc-visual-console](https://github.com/jcs130/mc-visual-console)。内置素材随运行时版本分发，以所安装版本的 `release-sources.json` 和 `mc_connection action:viewer-status` 为准。Agensi 快速入门所用的 rc.153 包内置 Java 1.21.1 对应素材。游戏协议和画面就绪状态分别检查。Java 原生窗口就绪也不能证明账号已进入服务器。新版现代画面有真实路径、方向键/鼠标操作标记和 OBS 视角校准；公开解释与候选路线由 Agent/宿主显式发布，标注来源，不展示隐藏推理或凭据。
 
 ## 本次验证范围
 

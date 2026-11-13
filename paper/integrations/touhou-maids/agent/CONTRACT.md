@@ -1,6 +1,12 @@
-## 学徒法杖与女仆护卫候选
+## 跨维度召回与副本护卫 0.1.33
 
-服主已配置的随行伙伴，主手装备真实的 Vortex `mage_apprentice_staff` 后，会在 8 格内对可见的普通敌怪施放法师初始技能和法杖普攻。技能 ID、法术效果和冷却读 Vortex 当前配置。伙伴用自己的魔力，沿用随行护卫的暂停与低血量规则。遗迹、试炼塔和 Vortex 实例的专属怪物仍走各自的参战规则。
+用 `/qdmaid recall <maidId> [requestId]` 将本人女仆传送到身边并恢复随行。只有一位女仆时可输入 `/qdmaid recall`。副本内、不同维度和远距离均可召回。女仆未加载时会从最后确认的位置查找原实体，附近找不到安全落点时会返回下一步。带请求 ID 的结果可以用 `/qdmaid receipt <maidId> <requestId>` 查询。`observation.arrived=true` 表示这次已经到达。
+
+护卫会跟进正在战斗的伙伴，攻击当前试炼层或遗迹房间内的敌人。把近战武器、带弹药的弓弩或真实的 Vortex 学徒法杖放入女仆已解锁的背包槽。用 `context.companion.rpg.lastHitAt` 和 `lastHitTargetId` 核对最近一次法术命中。手动工作和短暂停等按原安排执行。
+
+## 学徒法杖与女仆护卫 0.1.32
+
+服主已配置的随行伙伴，主手装备真实的 Vortex `mage_apprentice_staff` 后，会在 8 格内对可见的敌怪施放法师初始技能和法杖普攻。技能 ID、法术效果和冷却读 Vortex 当前配置。伙伴用自己的魔力，沿用随行护卫的暂停与低血量规则。Vortex 独立实例使用自己的参战规则。
 
 `context.companion.rpg` 会返回 `classId`、`staffId`、最近一次战斗检查时的 `manaAtLastCombatCheck`，以及最近实际命中的 `lastHitSpellId`、`lastHitTargetId` 和 `lastHitAt`。这些是这只女仆的护卫状态。需要确认新命中时对照目标 UUID 和命中时间。没有新的命中记录时，可读取 `companion.state` 查看当前阻碍。
 
@@ -10,7 +16,7 @@
 
 服主可为一个已有绑定的原实体配置驻点。伙伴离线且女仆处于空闲随行状态时，女仆会回驻点并沿固定路线巡逻。访客在附近时可看到她转身招手，也可以点名交谈。访客的交谈没有操作权限。
 
-`/qdmaid context <maidId>` 对绑定伙伴显示 `residence`。`resident_patrol` 表示当前执行驻点巡逻，`patrolVisitsThisRun` 只在实际到达巡逻点后增加。伙伴回到驻点附近会恢复随行。同维度远处也可以在允许传送且有安全落点时自动会合，副本和竞技场内保持原准入规则。`awaiting_safe_reunion` 表示正在等待可会合的位置。`awaiting_partner_at_home` 表示目前需要回到同一维度或等待驻点活动结束。`awaiting_original` 表示尚未定位到原实体，可用 `lifeState` 区分生命状态。手选驻守、工作、坐下或正在战斗时优先保留现场安排。
+`/qdmaid context <maidId>` 对绑定伙伴显示 `residence`。`resident_patrol` 表示当前执行驻点巡逻，`patrolVisitsThisRun` 只在实际到达巡逻点后增加。`awaiting_safe_reunion` 表示正在寻找伙伴身边的落点。`awaiting_original` 表示尚未定位到原实体，可用 `lifeState` 查询生命状态。短暂掉线有重连等待时间，手选驻守、工作或坐下优先按本人安排处理。
 
 常驻按区块模拟运行，使用现有原生女仆和聊天入口。驻点可以使用现有客户端。驻点只启用步行、动作和访客交谈，已有私人合成工单沿用本人在线条件。[正式发布](../../../docs/MAID_RESIDENCE_DEPLOYED_20261113.md)
 
@@ -26,6 +32,10 @@
 - 缺材料、库存已改或路线中断会附原因。可明确确认无效果的失败修正后再下新单，`unknown` 用原请求和实物核对。
 
 更新后的 `mc_maids` 可以用 `workshop` 读取同一工位目录和 `currentOrder`，用 `make` 传 `maidId`、`requestId`、`workshopId`、`recipeId`，并按需传 `quantity`（成品件数）和 `inventory`（`chest` 或 `backpack`）。桥 0.1.30 起目录附 `table`、`supplyChest` 方块坐标。旧桥可走已有的普通命令入口，新的插件频道能力在发送前协商。
+
+客户端适配器以 `workshop:true` 握手或成功读取工位目录确认当前连接的工位能力。空目录也确认协议可用，使用前仍需取得获准的工位。未确认能力时，适配器会在发送前拒绝 `make`。同一连接中的同参制作请求复用第一次提交，改参复用 ID 返回 `request_conflict`。
+
+断线、超时和结果未知时，使用原 `operationId` 和 `operationAction:"make"` 查回执。`operationAction` 仅供适配器校验，查询命令格式不变。适配器核对收件人、查询 ID、女仆 UUID、原工单 ID 和原动作。制作完成须有 `data.status:"completed"`、`goalCompleted:true`，以及 `observation` 中的 `verified:true`、`itemId`、`count` 和 `inventory`。未知结果保留原 ID 对账。
 
 需要农场时，从 `tasks` 读取已启用的 `touhou_little_maid:farm`。先核对有权使用的耕地、工作时段与种子，再用 `task` 选择原生任务。`applied` 表示已切模式，采收和补种以方块、掉落或真实库存为准。用 `follow` 结束工作并恢复同行。
 

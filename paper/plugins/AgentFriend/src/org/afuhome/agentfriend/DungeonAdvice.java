@@ -52,7 +52,7 @@ final class DungeonAdvice {
             case "undead_crypt" -> new Preparation(3,8,"铁制武器、铁甲、盾、熟食16、火把16","可单人；2–3人更稳：坦克或近战＋输出，有治疗更稳");
             case "creeping_crypt" -> new Preparation(3,10,"铁制武器、完整铁甲、盾、熟食16；准备解毒或治疗","可单人；建议坦克＋输出＋牧师，注意毒与远程敌人");
             case "bunker" -> new Preparation(4,12,"附魔铁制或钻石装备、盾、远程武器与弹药、熟食32","可单人；建议3–4人，坦克承伤、牧师恢复、输出清场");
-            case "illager_camp" -> new Preparation(2,6,"铁制武器、铁甲、盾、熟食16；远程武器可选","可单人；建议近战或坦克＋输出，用盾应对弩箭");
+            case "illager_camp" -> new Preparation(2,6,"近战与远程各一、铁甲、盾、熟食16","可单人；建议近战或坦克＋输出，用盾应对弩箭");
             default -> new Preparation(2,Math.max(5,minimumLevel),"铁制武器、铁甲、盾、熟食16；至少准备一项战斗技能","可单人；建议坦克或近战＋输出，牧师提供恢复");
         };
     }
@@ -111,7 +111,7 @@ final class DungeonAdvice {
             action=text(f,"admissionHint");command=text(f,"admissionCommand");
         }else if(f.containsKey("loadoutReady")&&!yes(f,"loadoutReady")){
             state="requirements";reason="EQUIPMENT_REQUIRED";
-            action="缺少："+text(f,"missingLoadout")+"。穿齐四件护甲，携带近战武器、弓弩或本职业法器；不强制带剑。";command="/mycli guild shared";
+            action="缺少："+text(f,"missingLoadout")+"。"+DungeonLoadoutRules.REQUIREMENTS+"。";command=DungeonLoadoutRules.SUPPLIES;
         }else if(yes(f,"occupied")) {
             if(yes(f,"joinable")) {
                 state="joinable";reason="PARTY_MUSTER_OPEN";

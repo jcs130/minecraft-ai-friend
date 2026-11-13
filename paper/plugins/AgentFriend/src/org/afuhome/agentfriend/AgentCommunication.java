@@ -204,6 +204,10 @@ final class AgentCommunication {
         String root=args.length==0?"status":args[0].toLowerCase(Locale.ROOT);
         if(root.equals("arena") && args.length >= 2) {
             String sub=args[1].toLowerCase(Locale.ROOT);
+            if (sub.equals("loot")) {
+                plugin.dungeon().command(p, raw);
+                return;
+            }
             boolean economy=sub.equals("wallet") && args.length==2
                 || sub.equals("shop") && args.length>=3 && Set.of("list","buy","wallet").contains(args[2].toLowerCase(Locale.ROOT))
                 || sub.equals("recycle") && (args.length==2 || Set.of("list","quote","sell","status").contains(args[2].toLowerCase(Locale.ROOT)));

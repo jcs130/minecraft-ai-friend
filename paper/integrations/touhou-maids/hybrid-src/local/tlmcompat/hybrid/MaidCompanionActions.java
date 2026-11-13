@@ -25,6 +25,8 @@ final class MaidCompanionActions {
     static final String TOOL = "set_companion_mode";
     static final String REVISION = "qiandengji_companion_revision";
     static final String WAIT = "qiandengji_companion_wait_until";
+    private static final String MODEL_FISHING = "qiandengji_companion_model_fishing";
+    private static final String GUARD_UNTIL = "qiandengji_companion_guard_until";
     static final String FISHED_AT = "qiandengji_fishing_retrieved_at";
     static final String IDLE = "touhou_little_maid:idle";
     static final Set<String> MODES = Set.of("follow", "guard", "wait", "fish");
@@ -34,10 +36,21 @@ final class MaidCompanionActions {
     static void tools(ChatCompletion request) {
         var mode = StringParameter.create();
         mode.addEnumValues("follow", "guard", "wait", "fish");
-        mode.setDescription("follow：结束驻守和当前工作，跟随伙伴。guard：随行护卫，需要合用的主手武器，弓弩还需弹药。wait：短停60秒后恢复跟随，期间可随伙伴传送。fish：执行原生钓鱼任务，需要主手鱼竿及水边可用的椅子或船。");
+        mode.setDescription("follow：结束驻守和当前工作，跟随伙伴。guard：随行护卫，可从自己的背包选近战、远程或法术装备。wait：短停60秒后恢复跟随，期间可随伙伴传送。fish：执行原生钓鱼任务，需要主手鱼竿及水边可用的椅子或船。");
         request.addTool(FunctionTool.create().setName(TOOL)
             .setDescription("根据伙伴的话和当前现场，实际切换自己的陪伴模式。需要行动就调用工具，不能只口头答应。返回applied仅表示模式设置，未证明走到身边或完成战斗。不能操作其他实体、物品或任意命令。")
             .setParameters(ObjectParameter.create().addProperties("mode", mode)).build());
+    }
+
+    static void autonomousTool(ChatCompletion request, String availableMode) {
+        var mode = StringParameter.create();
+        mode.addEnumValues(availableMode);
+        mode.setDescription(availableMode.equals("guard")
+            ? "guard：中断自己安排的暂歇或钓鱼，立刻随行护卫。原生控制器会选武器并实际攻击符合条件的目标。"
+            : "follow：收起自己的鱼竿，恢复跟随正在离开的伙伴。");
+        request.addTool(FunctionTool.create().setName(TOOL)
+            .setDescription("选择是否实际切换自己的状态。决定行动时调用一次；暂不行动时回复[[结束]]。")
+            .setParameters(ObjectParameter.create().addProperties("mode",mode)).build());
     }
 
     static long revision(EntityMaid maid) { return maid.getPersistentData().getLong(REVISION); }
@@ -46,9 +59,21 @@ final class MaidCompanionActions {
         var data = maid.getPersistentData();
         data.putLong(REVISION, revision(maid) + 1);
         data.remove(WAIT);
+        data.remove(MODEL_FISHING);
+        data.remove(GUARD_UNTIL);
     }
 
     static boolean waiting(EntityMaid maid) { return maid.getPersistentData().getLong(WAIT) > 0; }
+    static boolean selfDirectedFishing(EntityMaid maid) {
+        return maid.getTask() instanceof TaskFishing && maid.getPersistentData().getBoolean(MODEL_FISHING);
+    }
+    static boolean activeGuardOrder(EntityMaid maid) {
+        return System.currentTimeMillis() < maid.getPersistentData().getLong(GUARD_UNTIL);
+    }
+    static void modelModeApplied(EntityMaid maid,String mode){
+        if("fish".equals(mode))maid.getPersistentData().putBoolean(MODEL_FISHING,true);
+        if("guard".equals(mode))maid.getPersistentData().putLong(GUARD_UNTIL,System.currentTimeMillis()+60_000);
+    }
 
     static void expireWait(EntityMaid maid, long now) {
         long until = maid.getPersistentData().getLong(WAIT);
@@ -150,6 +175,7 @@ final class MaidCompanionActions {
         facts.addProperty("visibleCombatTarget", target != null && target.isAlive() && maid.hasLineOfSight(target));
         facts.add("fishing", fishing(maid));
         facts.addProperty("temporaryWait", waiting(maid));
+        facts.addProperty("explicitGuard", activeGuardOrder(maid));
         facts.addProperty("waitUntilEpochMillis", maid.getPersistentData().getLong(WAIT));
         facts.addProperty("observedAt", java.time.Instant.now().toString());
         var limits = NativeMaidFollowSupport.limits(maid);
@@ -171,9 +197,12 @@ final class MaidCompanionActions {
         result.addProperty("mode", mode);
         result.add("status", receipt.get("status"));
         result.add("operationId", receipt.get("operationId"));
-        result.add("current", facts(maid, partner));
-        if (mode.equals("guard") && NativeMaidCompanionSupport.weaponTask(maid) == null) {
-            result.addProperty("nextStep", "已恢复随行。要实际护卫，请用 inventory/equip 或女仆装备菜单给主手装备武器，弓弩还需弹药。");
+        JsonObject current = facts(maid, partner);
+        boolean armed = plugin.guardWeaponReady(maid);
+        current.addProperty("guardWeaponReady", armed);
+        result.add("current", current);
+        if (mode.equals("guard") && !armed) {
+            result.addProperty("nextStep", "已恢复随行。请用 inventory/transfer 或女仆菜单把武器放入可用背包槽；弓弩还需弹药，也可以用 Vortex 学徒法杖。");
         }
         result.addProperty("goalCompleted", false);
         return result;
