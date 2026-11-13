@@ -162,7 +162,7 @@ final class NativeMaidOwnerTravel implements Listener {
         }
     }
 
-    private boolean transfer(EntityMaid maid, Location landing) {
+    boolean transfer(EntityMaid maid, Location landing) {
         var entity = maid.getBukkitEntity();
         if (entity.getWorld().equals(landing.getWorld())) {
             return entity.teleport(landing, PlayerTeleportEvent.TeleportCause.PLUGIN);

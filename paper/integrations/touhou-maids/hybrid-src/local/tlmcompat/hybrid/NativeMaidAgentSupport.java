@@ -91,6 +91,17 @@ public final class NativeMaidAgentSupport implements Listener {
         JsonElement record=plugin.registeredMaids().get(maid.getUUID().toString());
         return owner!=null&&record instanceof JsonObject row&&owner.toString().equals(row.get("ownerId").getAsString())?owner:null;
     }
+    JsonObject lastResidenceLocation(UUID owner,UUID maid) {
+        JsonObject view=lifecycle.view(owner,maid,System.currentTimeMillis(),null,grave(owner,maid));
+        return view.has("death")||!view.has("lastSeenAlive")?null:view.getAsJsonObject("lastSeenAlive");
+    }
+    void rememberResidenceDeparture(EntityMaid maid) {
+        UUID owner=registeredOwner(maid);
+        if(owner==null||!maid.isAlive()||maid.isRemoved())return;
+        long now=System.currentTimeMillis();
+        lifecycle.alive(owner,maid.getUUID(),now,facts(maid),grave(owner,maid.getUUID()),true);
+        persistLifecycle();
+    }
     private JsonObject grave(UUID owner,UUID id){
         MaidInfo found=tombstone(owner,id);if(found==null)return null;
         JsonObject next=new JsonObject();next.addProperty("maidId",id.toString());next.addProperty("ownerId",owner.toString());

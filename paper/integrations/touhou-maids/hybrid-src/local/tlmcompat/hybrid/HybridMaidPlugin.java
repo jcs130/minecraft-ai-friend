@@ -54,7 +54,10 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private NativeMaidNearbyChat nearbyChat;
     private NativeMaidCompanionSupport companion;
     private NativeMaidWorkshop workshops;
+    private NativeMaidResidence residence;
     NativeMaidWorkshop workshops(){return workshops;}
+    JsonObject lastResidenceLocation(UUID owner,UUID maid){return agentSupport.lastResidenceLocation(owner,maid);}
+    void rememberResidenceDeparture(EntityMaid maid){agentSupport.rememberResidenceDeparture(maid);}
     void companionTick(EntityMaid maid){if(companion!=null)companion.tick(maid);}
     void conversationReplied(Player actor,EntityMaid maid,String reply,boolean proactive){
         nearbyChat.replied(actor,maid,reply,proactive);
@@ -139,7 +142,8 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             agentSupport=new NativeMaidAgentSupport(this,receipts);
             brains=NativeMaidBrainSupport.create(this);
             companion=new NativeMaidCompanionSupport(this);
-            new NativeMaidOwnerTravel(this);
+            NativeMaidOwnerTravel travel=new NativeMaidOwnerTravel(this);
+            residence=NativeMaidResidence.open(this,travel);
             social=new NativeMaidSocialSupport(this,receipts);
             nearbyChat=new NativeMaidNearbyChat(this);
             speech=NativeMaidSpeech.create(this);
@@ -157,7 +161,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             getLogger().info("Native TLM integration ready: "+TaskManager.getTaskMap().size()+" original tasks; no model loop");
         }catch(Throwable error){getLogger().severe("Native maid integration disabled: "+error);error.printStackTrace();getServer().getPluginManager().disablePlugin(this);}
     }
-    @Override public void onDisable(){if(workshops!=null)workshops.close();if(companion!=null)companion.close();if(speech!=null)speech.close();if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
+    @Override public void onDisable(){if(residence!=null)residence.close();if(workshops!=null)workshops.close();if(companion!=null)companion.close();if(speech!=null)speech.close();if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
     private void bindOnMain(EntityMaid maid){
         Bukkit.getScheduler().runTask(this,()->{try{if(maid.isAlive()&&owner(maid)!=null){bind(maid);if(agentSupport!=null)agentSupport.observeLoaded(maid);}}catch(Exception error){getLogger().warning("Native NPC binding preserved: "+error.getMessage());}});
     }
@@ -232,6 +236,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         }
         agentSupport.enrich(actor,id,data);
         if(maid!=null&&companion!=null)data.add("companion",companion.describe(maid));
+        if(residence!=null)residence.describe(id,data);
         data.addProperty("sampledAt",java.time.Instant.now().toString());return data;
     }
     private JsonObject catalog(Player actor,UUID id){
@@ -322,6 +327,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         workshops.cancelFor(maid,action);
         JsonObject observation;
         if(Set.of("follow","stay","sit","task").contains(action)){
+            if(residence!=null)residence.manual(maid);
             if(companion!=null)companion.manual(maid);
             MaidCompanionActions.manual(maid);
         }

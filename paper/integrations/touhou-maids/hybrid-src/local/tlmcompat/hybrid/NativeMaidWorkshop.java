@@ -359,6 +359,10 @@ final class NativeMaidWorkshop {
         if (!allowed) throw new CompatibilityException("workshop_access_denied", "该区域的容器或交互权限不允许本次工作。请在本人可用的工位登记箱子与工作台。");
     }
 
+    boolean busy(UUID maid) {
+        return jobs.containsKey(maid);
+    }
+
     void cancelFor(EntityMaid maid, String action) {
         if (!INTERRUPTING.contains(action)) return;
         Job job = jobs.get(maid.getUUID());
