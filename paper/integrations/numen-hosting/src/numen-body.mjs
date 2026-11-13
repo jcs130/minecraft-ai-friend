@@ -5,7 +5,7 @@ import { PROTOCOL, fail } from './protocol.mjs';
 // Production Numen must explicitly advertise this extension before activation.
 export class NumenHostedBody {
   async message(role,value){
-    const caps=this.decode(await (await this.session(role)).callTool({name:'hosted_body',arguments:{op:'capabilities',companion:role.roleUuid}}));
+    const {caps}=await this.session(role);
     if(caps.spectatorMessages!==true)throw fail('NUMEN_CHAT_NOT_INSTALLED','当前 Numen 尚未安装观众对话入口。',503);
     return this.rpc(role,'web_message',value);
   }
@@ -26,7 +26,7 @@ export class NumenHostedBody {
       if(caps.protocol!==PROTOCOL||caps.stableIdentity!==true||caps.serverFence!==true||caps.inputTimeout!==true
           ||caps.persistedReceipts!==true||!['paused','numen','harness','manual'].every(m=>caps.modes?.includes(m)))
         throw fail('NUMEN_HOSTING_INCOMPATIBLE','Numen 托管扩展不满足身份、停止确认或断线松键要求。',503);
-      return session;
+      return { session, caps };
     })();
     this.sessions.set(id,pending);
     try{return await pending;}catch(error){this.sessions.delete(id);await opened?.close?.();throw error;}
@@ -41,16 +41,24 @@ export class NumenHostedBody {
     return value;
   }
   async rpc(role,op,args={}){
-    const session=await this.session(role);
-    try{return this.decode(await session.callTool({name:'hosted_body',arguments:{...args,op,companion:role.roleUuid,
-      expectedName:role.name,expectedOwner:role.numenOwnerUuid,serverId:role.serverId}}));}
+    const connection=await this.session(role);
+    const {session}=connection;
+    let reply;
+    try{
+      reply=await session.callTool({name:'hosted_body',arguments:{...args,op,companion:role.roleUuid,
+        expectedName:role.name,expectedOwner:role.numenOwnerUuid,serverId:role.serverId}});
+      // A tool rejection is a response from the authenticated session. Retain
+      // it so the next explicit query can use the same connection.
+      if(reply?.isError!==true)return this.decode(reply);
+    }
     catch(error){
       // A server restart invalidates scoped MCP tokens. Drop the failed session
       // so the next explicit query can reauthenticate; never replay this call.
       const id=`${role.serverId}/${role.roleUuid}`,pending=this.sessions.get(id);
-      if(pending&&await pending.catch(()=>null)===session){this.sessions.delete(id);await session.close?.().catch(()=>{});}
+      if(pending&&await pending.catch(()=>null)===connection){this.sessions.delete(id);await session.close?.().catch(()=>{});}
       throw error;
     }
+    return this.decode(reply);
   }
   async attach(role,lease){await this.admitRole?.(role);return this.rpc(role,'attach',lease);}
   async prepare(role,mode){
@@ -65,7 +73,11 @@ export class NumenHostedBody {
   call(role,request){return this.rpc(role,'call',request);}
   result(role,id){return this.rpc(role,'result',{id});}
   observe(role){return this.rpc(role,'observe');}
+  async facts(role){
+    const {caps}=await this.session(role);
+    return caps.sampledFacts===true?this.rpc(role,'facts'):null;
+  }
   catalog(role){return this.rpc(role,'catalog');}
   heartbeat(role,lease){return this.rpc(role,'heartbeat',lease);}
-  async close(){await Promise.allSettled([...this.sessions.values()].map(async pending=>(await pending).close?.()));this.sessions.clear();}
+  async close(){await Promise.allSettled([...this.sessions.values()].map(async pending=>(await pending).session.close?.()));this.sessions.clear();}
 }

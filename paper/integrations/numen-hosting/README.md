@@ -24,6 +24,8 @@ API Key 只写入独立 AES-GCM 保管库，不回传浏览器、不写入 Agent
 
 模型目录是运维审核的 `catalogue.json`，浏览器不能填写回源地址或程序路径。当前别名与端点按 [DeepSeek 官方说明](https://api-docs.deepseek.com/) 和 [千问兼容 API](https://help.aliyun.com/zh/model-studio/qwen-api-reference/) 核对；实际可用权限、配额和地区由用户自己的模型账户决定。联测使用模拟供应商，不冒称已替用户验证付费账户。
 
+托管 Harness 可在私有配置启用 `systemOne: {endpoint, model, tokenFile?}`。端点使用本机 `/v1/systemone`。快速层只接收限长目标和选定事实，输出规划建议。低血量、饥饿和正在执行的原生工作走现有规则；聊天、语音或原始收件箱不进入快速层。Numen 原生模型继续用角色自己的配置。
+
 ## 接入拓扑
 
 `HTTPS 官网 → 已有网站会话与权限 → 云机 127.0.0.1:19084 → 专用受限 SSH 回源 → Windows 127.0.0.1:19084`
@@ -34,8 +36,8 @@ Windows 托管服务连接新 Numen 的签名准入 `127.0.0.1:19085`、作用�
 
 ## 自部署材料
 
-1. `native/base.json` 固定可获取的 Numen 上游提交，`native/upstream.patch` 包括身体控制、用户模型、对话及同名/退出生命周期修复。按 LGPL 保留 `native/LICENSE`，先对该提交执行 `git apply`，使用 Java 21 构建 `:numen-api:paper:build :numen:paper:build --no-daemon`。
-2. `native/assemble.py` 配合 ASM 9.9.1 的 `asm`、`asm-commons` 将两个构建隔离命名。构建环境可能影响归档摘要，安装时重新记录并核验产物 SHA256。
+1. `native/base.json` 固定 Minecraft 1.21.1 的 Numen 0.1.5 源码。原版 Numen 使用这份源码直接构建，托管版在独立工作区应用 `native/upstream.patch`。补丁沿用作用域令牌、用户模型和动作回执，在首次接管时初始化对应角色的执行循环。保留 LGPL 的 `native/LICENSE`。
+2. 使用 Java 21 先执行 `:numen-api:neoforge:runData :numen:neoforge:runData` 生成 Paper 也需要的语言文件和方块标签，再单独执行 `:numen-api:paper:jar :numen:paper:jar`。使用 `native/assemble.py` 与 ASM 9.10.1 的 `asm`、`asm-commons` 隔离托管包。安装时记录并核验四个产物的 SHA256。
 3. Youer 的服务端桥见 `native-bridge/`，用同版本 NeoForge 编译类路径运行 `compile.init.gradle` 的 `compileHostedBridge`，再用 `package.py` 打包；它只保留托管玩家的重生类型，不修改原身体和客户端协议。
 4. `hub/base.json` 固定 Hub 镜像，`hub/hosted-byok.patch` 只用于一份新实例。开启 `HR_HOSTED_BYOK_ONLY=1`、独立 `HARNESS_INTERNAL_KEY` 和 `HR_SECRET_KEY`，使用新数据卷；HTTP Gateway 只映射宿主回环。不要覆盖旧 Hub 的镜像或数据卷。
 5. MC 核心须包含公开 `NumenBodyPort`/`NumenClientWorld`；autonomy 须包含 `mc_numen` 工具目录。独立安装各自依赖，不能让运行服务依赖研究目录或其他工程的 `node_modules`。托管服务复用门户的加密工具，因此其相邻 `agent-portal/src` 和门户生产依赖也须提供。

@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.58
+
+- Read current health, food, position and active work for Numen bodies that expose sampled facts. Keep the full inbox and native guide behind their existing explicit reads.
+
 ## 0.5.7-rc.160-preview.57
 
 - Add collision-checked, costed fire crossings; release failed reflex ownership; expose bounded combat program probes/history and current identity observations.

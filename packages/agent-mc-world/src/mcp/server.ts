@@ -191,7 +191,7 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
             if (!['task', 'method', 'observation'].includes(String(args.kind))) throw new Error('kind is required');
             result = runtime.task(args.kind as 'task' | 'method' | 'observation', id()); break;
           }
-          case 'facts': result = runtime.currentFacts(); break;
+          case 'facts': await runtime.refreshFacts(extra.signal); result = runtime.currentFacts(); break;
           case 'inspect_call': result = runtime.inspectCall(String(args.tool), args.arguments); break;
           case 'resolve_work': result = runtime.resolveWork(args.references as import('../contracts/work-state.ts').WorkReference[]); break;
           case 'report_review': result = runtime.inspectReportReview(
