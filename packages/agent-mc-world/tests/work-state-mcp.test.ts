@@ -15,13 +15,20 @@ it('preserves typed work facts and resolves only the exact occurrence/revision a
   let states:WorkState[]=[state], ready=true;
   const world:World & {connectionReadiness():{ready:boolean;phase:string}}={id:'minecraft',tools:()=>[],envPromptVars:()=>null,start:async()=>{},stop:async()=>{},
     connectionReadiness:()=>({ready,phase:ready?'ready':'reconnecting'}),
-    requestFacts:()=>({text:'',snapshotTypes:[],workStates:states,workBindings:[reference]})};
+    requestFacts:()=>({text:'',snapshotTypes:[],workStates:states,workBindings:[reference],
+      partKeys:['gear','equip'],executionPartKeys:['gear'],partDependencies:{gear:['equip']},decisionBoundary:'body-episode-7'})};
   const runtime=new MinecraftAgentClient({cfg:{...structuredClone(MINECRAFT_CLIENT_DEFAULTS),host:'test.invalid',username:'agent'},dataDir:dir,log:nullLogger()},world);
   const server=createMinecraftMcpServer(runtime,'test',{turnOwnership:'host'}),client=new Client({name:'work-consumer',version:'1'});
   const [left,right]=InMemoryTransport.createLinkedPair();
   try{
     await runtime.connect();await server.connect(left);await client.connect(right);
     const facts=runtime.currentFacts();expect(facts.workStates).toEqual([state]);expect(facts.workBindings).toEqual([reference]);
+    expect(facts.partDependencies).toEqual({gear:['equip']});expect(facts.decisionBoundary).toBe('body-episode-7');
+    facts.partDependencies!.gear=['wrong'];expect(runtime.currentFacts().partDependencies).toEqual({gear:['equip']});
+    const factReply=await client.callTool({name:'mc_protocol',arguments:{protocol:'agent-mc/v1',action:'facts'}});
+    const mcpFacts=JSON.parse((factReply.structuredContent as {text:string}).text);
+    expect(mcpFacts.partDependencies).toEqual({gear:['equip']});expect(mcpFacts.executionPartKeys).toContain('gear');
+    expect(mcpFacts.decisionBoundary).toBe('body-episode-7');
     facts.workStates![0].revision=999;expect(runtime.currentFacts().workStates![0].revision).toBe(3);
     const refs=[reference,{...reference,instance:'other'},{...reference,revision:4},
       {...reference,scope:{...reference.scope,realm:'other'}}];

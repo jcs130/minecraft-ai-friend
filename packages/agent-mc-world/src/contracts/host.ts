@@ -103,6 +103,14 @@ export interface WorldRequestFacts {
   /** Stable selectable partition keys. A declared key absent from parts has no
    * current observation; hosts must not restore a previous value or infer success. */
   partKeys?: readonly string[];
+  /** Producer-declared semantic dependencies, not a host's activity policy.
+   * Selecting a partition includes its dependencies even after a profile override.
+   * Missing dependency observations remain explicitly unknown. */
+  partDependencies?: Readonly<Record<string, readonly string[]>>;
+  /** Opaque critical body lifecycle identity. Changes on death, reconnect or
+   * teleport, not ordinary walking, hunger or health ticks. Not permission to
+   * cancel/replay an already accepted action. */
+  decisionBoundary?: string;
   /** Producer-owned current identity, body queue and execution results required by an active body owner. */
   executionPartKeys?: readonly string[];
   /** Optional typed server work lifecycle. Host-owned intentions require explicit matching references. */

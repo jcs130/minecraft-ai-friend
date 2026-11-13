@@ -95,3 +95,31 @@ checks `hasExecutionFeedbackContext` against the original text and routes it
 to the active worker in the same World independently of optional event
 subscriptions. The marker carries neither a command correlation nor proof of
 an effect. Independent read queries return their matched replies directly.
+
+## Scoped decision evidence and semantic fact dependencies
+
+`WorldRequestFacts.partDependencies` declares producer-owned semantic dependencies.
+`executionFactKeys` and `executionFactParts` resolve them transitively, with stable
+ordering and cycle protection, including after a host overrides a profile's focus.
+For example, `gear` (held item and bag) also requires `equip` (worn armor/offhand)
+and `inventoryIds`; spare boots in a bag do not describe what is worn. An absent
+dependency is explicitly unavailable, never restored from an old snapshot.
+SDK `currentFacts()` and MCP `mc_protocol action=facts` expose these declarations.
+
+`projectDecisionEvidence` creates bounded original excerpts of host-selected
+intent, report, current facts, calls and native events. It labels truncation and
+omissions and retains exact read routes. `complete` means presentation coverage
+only, never execution or goal completion. The host retains original archives and
+chooses a world/task/report version; the helper does not request models or modify
+state. Keep this material in a replaceable request suffix until that logical
+decision is reviewed, then remove it. Do not append it to stable personality or
+long-term memory. A compact current-state index cannot claim full snapshot coverage.
+
+`decisionBoundary` is an opaque critical body identity. On the Mineflayer backend
+it changes on a connection generation, death episode, native world/dimension
+change or material forced displacement (at least eight blocks), not normal
+movement, health or hunger ticks. Consumers may reject an unissued stale side
+effect and read fresh facts. They must not replay or erase an accepted action.
+Death observations use `preempt`: hosts can cancel an unexternalized model
+request; this is not permission to cancel running tools or server operations.
+Legacy producers may omit the boundary and dependency fields.

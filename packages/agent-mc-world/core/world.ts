@@ -3634,6 +3634,10 @@ export class MinecraftWorld implements World {
         + (current ? '' : '这是历史旅途线索，当前已过期或离开近场；可考虑回访，但须重新观察，不能据此判定当前位置仍可立即探访。') });
     } else parts.push({ key: 'journey', text: movementPolicy + '\n当前没有活动旅途观察；mc_policy 可查询和调整行走/垫脚/主动战斗策略。' });
     return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, partKeys: REQUEST_FACT_KEYS,
+      partDependencies: { gear: ['equip', 'inventoryIds'], equip: ['gear'], inventoryIds: ['gear'] },
+      decisionBoundary: JSON.stringify([this.connectionGeneration, this.decisionPositionEpoch,
+        (bot as Bot & { deathLifecycle?: { episodeId?: string; phase?: string } })?.deathLifecycle?.episodeId ?? null,
+        readWorldIdentity(bot).key, normalizeDimension(snap.dimension)]),
       executionPartKeys: travelOptions ? [...EXECUTION_FACT_KEYS, 'travelOptions'] : EXECUTION_FACT_KEYS,
       options, world: readWorldIdentity(bot),
       decision: { sampledAtMs: Date.now(), state: {
@@ -7961,6 +7965,7 @@ export class MinecraftWorld implements World {
       this.lastPosForTeleport = { x: p.x, y: p.y, z: p.z };
       if (!prev) return;
       const dist = Math.hypot(p.x - prev.x, p.y - prev.y, p.z - prev.z);
+      if (dist >= 8) this.decisionPositionEpoch++;
       // 服务器纠偏级别的小位移不值得报;重生传送由死亡播报覆盖;自己发起的 escape 不急报
       if (dist < 8 || Date.now() - this.lastDeathAt < 5_000 || Date.now() < this.escapeHoldUntil) return;
       this.emit(
@@ -8151,7 +8156,7 @@ export class MinecraftWorld implements World {
         'minecraft.event',
         `[Minecraft] 你死了(今天第 ${toll.today} 次)。${causeLine}${this.deathNote(bot, dropAt)}${hereLine}`,
         true,
-        { execution: { kind: 'observation', id: deathId, phase: 'completed', terminal: true,
+        { trigger: 'preempt', execution: { kind: 'observation', id: deathId, phase: 'completed', terminal: true,
           goalCompleted: false, evidence: { outcome: 'death', health: 0 } },
           meta: { deathLifecycle: lifecycle, death: { id: deathId,
           observed_at: lifecycle?.observedAt ?? new Date(this.lastDeathAt).toISOString(),
@@ -8532,6 +8537,9 @@ export class MinecraftWorld implements World {
   protected lastPosForTeleport: { x: number; y: number; z: number } | null = null;
   /** Every server position correction expires outstanding route advice, including short teleports. */
   protected routePositionEpoch = 0;
+  /** Only a material displacement invalidates a whole model decision. Ordinary
+   * position correction still invalidates route advice, not conversation. */
+  protected decisionPositionEpoch = 0;
   protected lastDeathAt = 0;
   /** 挂起的官方死因(死亡广播通常先于 death 事件一拍到);随死亡专报投一次,过期作废 */
   protected pendingDeathCause: { text: string; key: string; at: number } | null = null;

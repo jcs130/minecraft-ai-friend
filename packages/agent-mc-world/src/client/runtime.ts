@@ -400,6 +400,10 @@ export class MinecraftAgentClient {
       ...(workCurrent?.workBindings ? { workBindings: structuredClone(workCurrent.workBindings) } : {}),
       ...(workCurrent?.world ? { world: structuredClone(workCurrent.world) } : {}),
       ...(current?.decisionStability ? { decisionStability: structuredClone(current.decisionStability) } : {}),
+      ...(current?.decisionBoundary !== undefined ? {decisionBoundary:current.decisionBoundary} : {}),
+      ...(current?.partKeys ? {partKeys:['connection','executionState',...current.partKeys]} : {}),
+      ...(current?.executionPartKeys ? {executionPartKeys:['connection','executionState',...current.executionPartKeys]} : {}),
+      ...(current?.partDependencies ? {partDependencies:structuredClone(current.partDependencies)} : {}),
       observation: operationObservation(current?.experience?.observation), parts: this.facts.replace({ text: '', snapshotTypes: [],
       parts: [connection,{key:'executionState',text:JSON.stringify(this.executionState())},
         ...(current?.parts ?? (current?.text ? [{key:'world',text:current.text}] : []))] }) };
