@@ -8255,7 +8255,8 @@ export class MinecraftWorld implements World {
   /** Check all currently tracked nearby hazards, not a truncated presentation list. */
   protected canWander(): boolean {
     const bot = this.bridge?.bot;
-    return Boolean(bot?.entity) && !Object.values(bot!.entities).some(e => e && e !== bot!.entity
+    return Boolean(bot?.entity) && !(bot as (Bot & { vehicle?: unknown }) | null)?.vehicle
+      && !Object.values(bot!.entities).some(e => e && e !== bot!.entity
       && e.isValid !== false && e.position && e.position.distanceTo(bot!.entity.position) <= 32
       && (classifyEntity(e.type, e.name ?? '') === 'hostile' || (e.name === 'piglin' && piglinIsHostile(bot!, e))));
   }
