@@ -24,7 +24,7 @@ it.skipIf(!javaAvailable)('keeps authentication scoped and optionally renews aft
   expect(result).toContain('revocation, transport scope and timeout checks passed');
   const reconnect = execFileSync(executable('java'), ['-cp',output,'ReconnectSessionCheck'],
     {encoding:'utf8', windowsHide:true});
-  expect(reconnect).toContain('16 checks passed');
+  expect(reconnect).toContain('bounded retries require stable authorization');
   const perspective = execFileSync(executable('java'), ['-cp',output,'InitialPerspectiveCheck'],
     {encoding:'utf8', windowsHide:true});
   expect(perspective).toContain('7 checks passed');

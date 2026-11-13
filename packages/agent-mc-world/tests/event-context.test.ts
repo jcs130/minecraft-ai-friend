@@ -22,9 +22,11 @@ describe('source-owned event context',()=>{
     expect(readWorkerEventView(original,{...view,worker:42})).toBeNull();
   });
   it('retains native identities, time, method and the non-completion boundary',()=>{
-    const receipt={id:4,at:'2026-11-06T10:00:00Z',accepted:true,candidate:{kind:'method',targetId:3,source:'x'.repeat(2000)},
+    const receipt={id:4,at:'2026-11-06T10:00:00Z',accepted:true,candidate:{kind:'method',targetId:3,uuid:'target-uuid',source:'x'.repeat(2000)},
       tacticRevision:8,decisionId:'d',method:'navigate',runId:7,meaning:'task-started; inspect terminal'};
     expect(JSON.parse(readSupervisorEventView(JSON.stringify(receipt),tacticSupervisorView(receipt))!)).toMatchObject({
-      id:4,at:receipt.at,decisionId:'d',tacticRevision:8,method:'navigate',runId:7,goalCompleted:false,choice:{targetId:3}});
+      id:4,at:receipt.at,decisionId:'d',tacticRevision:8,method:'navigate',runId:7,goalCompleted:false,choice:{targetId:3,uuid:'target-uuid'}});
+    expect(readWorkerEventView(JSON.stringify(receipt),tacticSupervisorView(receipt)))
+      .toBe(readSupervisorEventView(JSON.stringify(receipt),tacticSupervisorView(receipt)));
   });
 });
