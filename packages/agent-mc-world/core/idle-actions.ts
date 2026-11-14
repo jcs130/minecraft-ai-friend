@@ -149,6 +149,8 @@ export function sampleIdleActions(bot: Bot, options: {
   allowMovement: boolean; preferredPlayer?: string; ignorePlayer?: (name: string) => boolean;
   /** Stable center of an uninterrupted idle period; prevents cumulative drift. */
   movementAnchor?: Point; random?: () => number;
+  /** Preserve a synchronous selection's route; executeIdleRoam revalidates it. */
+  reuseStroll?: IdleRoam;
 }): {
   state: Record<string, unknown>; candidates: IdleBehaviorCandidate[];
 } {
@@ -192,7 +194,10 @@ export function sampleIdleActions(bot: Bot, options: {
   if (options.allowMovement && !bot.currentWindow && !bot.getControlState('sneak')
     && !(['forward', 'back', 'left', 'right', 'jump', 'sprint'] as ControlState[]).some(key => bot.getControlState(key))) {
     const origin = state.origin;
-    const stroll=sampleIdleRoam(bot,options.movementAnchor ?? origin,options.random);
+    const prior=options.reuseStroll;
+    const stroll=prior && distance(prior.origin,origin)<.3
+      && distance(prior.anchor,options.movementAnchor ?? origin)<.01
+      ? prior : sampleIdleRoam(bot,options.movementAnchor ?? origin,options.random);
     if(stroll){state.stroll=stroll;allowed.add('stroll');}
     const destination = { x: origin.x - Math.sin(bot.entity.yaw) * 1.2,
       y: origin.y, z: origin.z - Math.cos(bot.entity.yaw) * 1.2 };

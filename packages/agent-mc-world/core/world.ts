@@ -8308,10 +8308,7 @@ export class MinecraftWorld implements World {
       return null;
     }
     const generation = this.idleGeneration();
-    // Selection is synchronous. Keep its observed route through selection and
-    // execution instead of randomly sampling a second destination in sceneNow.
-    // canIdle above and execute.available still recheck current body/safety state.
-    if (this.idleBehavior?.active && this.idleSceneCache?.generation === generation) return this.idleSceneCache;
+    if (this.idleBehavior?.executing && this.idleSceneCache?.generation === generation) return this.idleSceneCache;
     const bot = this.bridge!.bot!;
     if (this.idleMovementAnchor?.generation !== generation
       || bot.entity.position.distanceTo(this.idleMovementAnchor.position) > 14) {
@@ -8323,6 +8320,10 @@ export class MinecraftWorld implements World {
     const sample = sampleIdleActions(bot, {
       allowMovement: (this.cfg.idle ?? MINECRAFT_DEFAULTS.idle).allowMovement && this.canWander(),
       movementAnchor: this.idleMovementAnchor.position,
+      // Keep only the selected route, not social/visibility state. Execution
+      // rechecks terrain; vanished speakers still disappear from the fresh scene.
+      reuseStroll: this.idleBehavior?.active && this.idleSceneCache?.generation === generation
+        ? this.idleSceneCache.state.stroll as import('./idle-roam.ts').IdleRoam | undefined : undefined,
       preferredPlayer: presentation.preferredPlayer,
       ignorePlayer: name => name === this.chatName() || this.isCamera(name),
     });
