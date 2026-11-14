@@ -670,7 +670,8 @@ export async function skillFind(
     return findHistoryNote(ctx, target, kind);
   };
   ctx.search.history.sync(ctx.search.scope());
-  const start = { x: bot.entity.position.x, z: bot.entity.position.z };
+  const continuation = direction === undefined ? undefined : ctx.findContinuation;
+  const start = continuation?.origin ?? { x: bot.entity.position.x, z: bot.entity.position.z };
   const finish = (text: string, hit: ExploreHit | null): string => {
     if (hit) rememberFindHit(ctx, target, hit);
     return text;
@@ -799,6 +800,9 @@ export async function skillFind(
 
   /** 收工(走满/命中)落覆盖账本;原地命中(没走)不算探过 */
   const settle = (): void => {
+    // Combat/escape movement is not scanned coverage. Keep hits, but do not
+    // promote an interrupted route into a complete directional sweep.
+    if (continuation?.interrupted) return;
     const d = Math.round(walked());
     if (d > 0) ctx.explored?.(dimensionOf(bot), direction, d, biomeAt(bot, bot.entity.position));
   };
@@ -813,8 +817,9 @@ export async function skillFind(
     const away = Math.round(Math.hypot(hitHere.x - p.x, hitHere.z - p.z));
     const where = dir ? `在我${DIRECTION_ZH[dir]}边 ${away} 格` : '就在脚边';
     return finish(
-      `还没往${DIRECTION_ZH[direction]}走就看见了;请求的${DIRECTION_ZH[direction]}向行军尚未发生;` +
-        `这次命中来自出发点的初始全向观察,` +
+      (continuation?.interrupted
+        ? `恢复搜索时看见了;这次命中来自恢复点的当前全向观察,`
+        : `还没往${DIRECTION_ZH[direction]}走就看见了;请求的${DIRECTION_ZH[direction]}向行军尚未发生;这次命中来自出发点的初始全向观察,`) +
         `不是${DIRECTION_ZH[direction]}向搜索结果:${hitHere.what}${where},${findHitText(bot, hitHere)}${deniedNote()}`,
       hitHere,
     );
@@ -832,19 +837,23 @@ export async function skillFind(
   const stopNote = stop ? untilUnknownNote(stop.unknown) : '';
   const stopHit = (): UntilHit | null =>
     (stop ? untilHit(bot, stop.ids, UNTIL_TRAVEL_RADIUS) : null);
-  for (let travelled = 0; travelled < distance; travelled += EXPLORE_LEG) {
+  for (let travelled = continuation?.completedDistance ?? 0; travelled < distance; travelled += EXPLORE_LEG) {
     checkAbort(ctx);
     await keep.light(undefined, 'travel');
     const leg = Math.min(EXPLORE_LEG, distance - travelled);
-    const p = bot.entity.position;
-    const x = Math.round(p.x + (dx / norm) * leg);
-    const z = Math.round(p.z + (dz / norm) * leg);
+    // Anchor every leg to the original request, including an unfinished leg.
+    // Re-entering after combat must not append another full distance budget.
+    const x = Math.round(start.x + (dx / norm) * (travelled + leg));
+    const z = Math.round(start.z + (dz / norm) * (travelled + leg));
     const legGoal = levelTravelGoal(x, z);
     const releaseWalkOnly = entityName ? walkOnlyPath(bot) : () => undefined;
     try {
       await gotoGoal(bot, legGoal, ctx);
     } catch (err) {
-      if (err instanceof Aborted) throw err;
+      if (err instanceof Aborted) {
+        if (continuation) continuation.interrupted = true;
+        throw err;
+      }
       const hit = scan();
       if (hit) {
         settle();
@@ -863,6 +872,7 @@ export async function skillFind(
     } finally {
       releaseWalkOnly();
     }
+    if (continuation) continuation.completedDistance = travelled + leg;
     const hit = scan();
     if (hit) {
       const p2 = bot.entity.position;
@@ -897,7 +907,9 @@ export async function skillFind(
   const w = Math.round(walked());
   const how = w === 0
     ? `朝${DIRECTION_ZH[direction]}这一趟没走出去(要走 ${distance} 格,人还在出发点),请求方向尚未实际搜索`
-    : `朝${DIRECTION_ZH[direction]}走满了 ${w} 格,沿走过路线的当前可见面一路${noFindText()}`;
+    : continuation?.interrupted
+      ? `朝${DIRECTION_ZH[direction]}的 ${distance} 格搜索已按原路点续做到终点，距原起点 ${w} 格；途中被打断，不能把战斗或避险位移算作已搜索覆盖，当前${noFindText()}`
+      : `朝${DIRECTION_ZH[direction]}走满了 ${w} 格,沿走过路线的当前可见面一路${noFindText()}`;
   return finish(
     `${how}${stop ? `,也没碰到 until 名单里的东西${stopNote}` : ''};` +
       `${sawImmature ? '路上看见未成熟作物,没有把它当成可收获目标;' : ''}` +

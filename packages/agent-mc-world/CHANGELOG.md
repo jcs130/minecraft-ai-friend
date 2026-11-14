@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.76
+
+- Preserve directional-search origin and completed legs across combat suspension; never count interrupting motion as a complete searched corridor.
+- Avoid immediate reverse search steps to recently checked origins for the same clue; scope and expire observed local search history.
+
 ## 0.5.7-rc.160-preview.75
 
 - Release combat retreat ownership after observed surface breathing and sustained threat clearance; retain submerged/unknown breathing and recent-hit protection. Report surface escape separately from landing.

@@ -186,6 +186,12 @@ export type ResourcePlacementGate = (item: string, intent?: BlueprintPlacementIn
 export type ResourcePlacementPreview = (item: string) => { ok: boolean; reason?: string };
 
 export interface SkillContext {
+  /** Same directional-find step across body suspension; never shared with another step. */
+  findContinuation?: {
+    origin: { x: number; z: number };
+    completedDistance: number;
+    interrupted: boolean;
+  };
   /** Existing task revocation wakes presentation waits without canceling native receipts. */
   signal?: AbortSignal;
   aborted: () => boolean;
