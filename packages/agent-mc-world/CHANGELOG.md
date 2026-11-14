@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.79
+
+- Detour boats around small banks on loaded water, checking the swept hull and rider clearance before every tick. Keep bounded search, cancellation, server correction and explicit blocked receipts; no automatic dismount.
+
 ## 0.5.7-rc.160-preview.78
 
 - Preserve the selected view for boat item use without coordinates; do not retarget a solid block behind water. Separate calculated aim from unknown server hit and verify inventory plus new entity identity.

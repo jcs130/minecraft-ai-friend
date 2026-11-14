@@ -6,6 +6,7 @@
  */
 import { Vec3 } from 'vec3';
 import { recoverBoat } from './boat-recovery.ts';
+import { boatDetour, type BoatPoint } from './boat-detour.ts';
 import type { Bot } from 'mineflayer';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { isDeepStrictEqual } from 'node:util';
@@ -1912,6 +1913,28 @@ export function rideObstacleText(hits: readonly RideObstacle[], zhV: string): st
   return `直走和贴墙滑都过不去:${parts.join(';')}`;
 }
 
+/** Swept, same-height water edges only. A detour cannot invent a climb, cross
+ * dry ground/lava/unloaded cells or squeeze a boat through a player-size gap. */
+export function boatWaterEdge(bot: Bot, from: BoatPoint, to: BoatPoint,
+  hull: { width: number; height: number }): boolean {
+  if (Math.abs(from.y - to.y) > 1e-6) return false;
+  const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.z - from.z) / .1));
+  for (let i = 0; i <= steps; i++) {
+    const x = from.x + (to.x - from.x) * i / steps, z = from.z + (to.z - from.z) * i / steps;
+    if (rideObstacle(bot, x, from.y, z, hull)) return false;
+    const hw = hull.width / 2 - VEHICLE_HULL_EPS;
+    for (let cx = Math.floor(x - hw); cx <= Math.floor(x + hw); cx++) {
+      for (let cz = Math.floor(z - hw); cz <= Math.floor(z + hw); cz++) {
+        if (blockAtCell(bot, { x: cx, y: Math.floor(from.y - .01), z: cz })?.name !== 'water') return false;
+      }
+    }
+    // Do not detour a rider under a water ceiling or through an unknown head cell.
+    const head = blockAtCell(bot, { x: Math.floor(x), y: Math.floor(from.y + RIDER_OVER_VEHICLE + PLAYER_EYE), z: Math.floor(z) });
+    if (!head || LIQUIDS.has(head.name)) return false;
+  }
+  return true;
+}
+
 /**
  * 玩家控制的载具由骑手客户端发送 vehicle_move 绝对坐标，服务端做碰撞和纠偏。
  * Mineflayer 无载具物理，此处每 tick 小步移动并转向；仅转头不能驱动载具。
@@ -1946,8 +1969,10 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
   const pos = vehicle.position.clone();
   const start = { x: pos.x, z: pos.z };
   let corrections = 0;
+  let detour: BoatPoint[] = [], detours = 0;
   const onCorrect = (p: { x: number; y: number; z: number }): void => {
     corrections += 1;
+    detour = []; // A server correction invalidates the old local route origin.
     pos.set(p.x, p.y, p.z);
     if(vehicleOf(bot)===vehicle) {
       vehicle.position.set(p.x,p.y,p.z);
@@ -1965,10 +1990,12 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
     for (;;) {
       checkAbort(ctx);
       if (vehicleOf(bot)!==vehicle) { stalledWhy = '坐骑已脱离或身份变化，停止旧坐骑控制'; break; }
-      const dx = to.x + 0.5 - pos.x;
-      const dz = to.z + 0.5 - pos.z;
+      if (Math.hypot(to.x + .5 - pos.x, to.z + .5 - pos.z) <= RIDE_ARRIVE_R) break;
+      while (detour.length && Math.hypot(detour[0].x - pos.x, detour[0].z - pos.z) < 1e-6) detour.shift();
+      const waypoint = detour[0];
+      const dx = (waypoint?.x ?? to.x + .5) - pos.x;
+      const dz = (waypoint?.z ?? to.z + .5) - pos.z;
       const dist = Math.hypot(dx, dz);
-      if (dist <= RIDE_ARRIVE_R) break;
       if (Date.now() - startedAt > capMs) {
         stalledWhy = `跑满了时限(${Math.round(capMs / 1000)}s)还没到`;
         break;
@@ -1984,8 +2011,8 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
       const along = Math.min(step, dist);
       const tries = [
         { mx: (dx / dist) * along, mz: (dz / dist) * along },
-        { mx: Math.sign(dx) * Math.min(step, Math.abs(dx)), mz: 0 },
-        { mx: 0, mz: Math.sign(dz) * Math.min(step, Math.abs(dz)) },
+        ...(!waypoint ? [{ mx: Math.sign(dx) * Math.min(step, Math.abs(dx)), mz: 0 },
+          { mx: 0, mz: Math.sign(dz) * Math.min(step, Math.abs(dz)) }] : []),
       ];
       let move: { nx: number; ny: number; nz: number; ux: number; uz: number } | null = null;
       const blocked: RideObstacle[] = [];
@@ -1994,8 +2021,9 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
         if (len < RIDE_MIN_SLIDE) continue;
         const nx = pos.x + t.mx;
         const nz = pos.z + t.mz;
-        const ny = rideGroundY(bot, nx, pos.y, nz);
+        const ny = waypoint ? waypoint.y : rideGroundY(bot, nx, pos.y, nz);
         if (ny === null) continue;
+        if (waypoint && !boatWaterEdge(bot, pos, { x: nx, y: ny, z: nz }, hull)) continue;
         const hit = rideObstacle(bot, nx, ny, nz, hull);
         // 原版只在「原处不重叠」时才拒重叠的落点;已经嵌着的身子往哪挪服务端都收
         const wedged = hit?.kind === 'hull' && rideObstacle(bot, pos.x, pos.y, pos.z, hull)?.kind === 'hull';
@@ -2004,6 +2032,13 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
         break;
       }
       if (!move) {
+        detour = [];
+        if ((vname === 'boat' || isBoat(vname)) && detours < 4) {
+          const route = boatDetour(pos, { x: to.x + .5, y: pos.y, z: to.z + .5 }, (from, next) => {
+            checkAbort(ctx); return boatWaterEdge(bot, from, next, hull);
+          });
+          if (route?.length) { detour = route; detours++; continue; }
+        }
         stalledWhy = blocked.length > 0
           ? rideObstacleText(blocked, zhV)
           : '前面那一格落不了脚(悬崖/墙/区块没加载)';
@@ -2027,7 +2062,8 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
   const secs = Math.round((Date.now() - startedAt) / 1000);
   const where = cellText(cellOfVec(pos));
   const left = Math.round(Math.hypot(to.x + 0.5 - pos.x, to.z + 0.5 - pos.z));
-  const fixNote = corrections > 0 ? `;路上服务端纠了 ${corrections} 次位置` : '';
+  const fixNote = (corrections > 0 ? `;路上服务端纠了 ${corrections} 次位置` : '')
+    + (detours ? `;局部水面绕行 ${detours} 次（只代表本段，不证明整条水路畅通）` : '');
   if (stalledWhy) {
     // Blocking a route does not make dismounting safe, especially over water.
     // Keep the current attachment and let the caller choose a different route
