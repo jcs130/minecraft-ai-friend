@@ -1816,6 +1816,42 @@ describe('战斗:水里与逃不掉', () => {
     return { ...r, b, overrides };
   }
 
+  it.each(['surface', 'submerged', 'unknown', 'recent-hit', 'near-threat'] as const)(
+    'ocean retreat returns body only after observed breathing and threat clearance: %s', async scenario => {
+      const enemy = foe(7, 'drowned', -2);
+      const { bot, controls } = combatRigBot([enemy]), b = bot as any;
+      b.health = 9; b.entity.onGround = false;
+      let afterEntry = false;
+      b.blockAt = (p: Vec3) => {
+        const y = Math.floor(p.y);
+        if (afterEntry && y >= 65 && scenario === 'unknown') return null;
+        return block(y < (afterEntry && scenario === 'submerged' ? 68 : 65) ? 'water' : 'air');
+      };
+      const r = rig(bot);
+      r.session.onHurtBy(7, 'drowned');
+      expect(r.session.active).toBe(true);
+      afterEntry = true;
+      enemy.position.x = scenario === 'near-threat' ? -10 : -40;
+      try {
+        // Continue moving: a stale no-progress timeout must not be the release mechanism.
+        for (let i = 0; i < 7; i++) {
+          b.entity.position.z += 1;
+          if (scenario === 'recent-hit') r.session.onHurtBy(7, 'drowned');
+          await drive(bot, 300);
+        }
+        if (scenario === 'surface') {
+          expect(r.session.active).toBe(false);
+          expect(r.calls.resumed).toBe(1);
+          expect(r.combatReports.at(-1)?.reason).toBe('flee');
+          expect(r.events.some(e => e.text.includes('仍在水面') && e.text.includes('不是已上岸'))).toBe(true);
+          expect(Object.values(controls).some(Boolean)).toBe(false);
+        } else {
+          expect(r.session.active).toBe(true);
+          expect(r.calls.resumed).toBe(0);
+        }
+      } finally { r.session.stop(); }
+    });
+
   it('water-to-bank keeps native controls through the fractional shoreline then requires terrestrial support', async () => {
     const { bot, b, controls } = deepRig();
     const { session, calls } = rig(bot);

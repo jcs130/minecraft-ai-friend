@@ -46,6 +46,7 @@ import type { FightMode } from './policy.ts';
 import { zhEntity, zhName } from './names.ts';
 import { zhErrorText } from './receipt.ts';
 import { BURNING_BLOCKS, SCORCHING_FLOOR, bodyInWater, canSeeEntity, findBankCell, headInWater } from './terrain.ts';
+import { headWaterObservation } from './water-observation.ts';
 import { piglinIsHostile } from './piglin.ts';
 import { corridorSafe } from './idle-actions.ts';
 import { consumeHeldFood } from './skills-craft.ts';
@@ -2151,7 +2152,12 @@ export class CombatSession {
       });
     }
 
-    const distanceSafe = nearest > RETREAT_CLEAR_DIST && !inWater;
+    // A surface swimmer can be clear of combat without reaching land. Requiring
+    // dry feet holds the body for an entire ocean and keeps swimming away from
+    // the old attacker instead of resuming the selected journey/boat preparation.
+    // Unknown breathing geometry is not evidence of surfacing.
+    const breathingClear = headWaterObservation(bot).wet === false;
+    const distanceSafe = nearest > RETREAT_CLEAR_DIST && (!inWater || breathingClear);
     if (distanceSafe) {
       if (this.retreatSafeSince === 0) this.retreatSafeSince = now;
     } else {
@@ -2164,7 +2170,9 @@ export class CombatSession {
     ) {
       const doneWhy = this.retreatWhy;
       this.opts.emit(
-        doneWhy === 'flee'
+        inWater
+          ? `已拉开威胁并能换气，仍在水面，不是已上岸；交还原任务继续选择交通方式。生命 ${this.hp()}/20。`
+          : doneWhy === 'flee'
           ? `跑开了,喘口气。生命 ${this.hp()}/20。`
           : `撤出来了。生命 ${this.hp()}/20。`,
         false, false,
