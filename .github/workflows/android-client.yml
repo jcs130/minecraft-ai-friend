@@ -34,10 +34,10 @@ jobs:
           node-version: '22'
       - name: Build from reviewed original inputs
         run: python paper/integrations/android-client/build.py --cache "$RUNNER_TEMP/android-inputs" --output "$RUNNER_TEMP/android-release"
-      - name: Verify actual pack, audio SPI and website checksum
+      - name: Verify actual pack, SDL3 configuration, audio SPI and website checksum
         run: >-
           python paper/integrations/android-client/verify.py
-          --pack "$RUNNER_TEMP/android-release/qiandengji-android-1.21.1-neoforge-1.0.0-preview.1.mrpack"
+          --pack "$RUNNER_TEMP/android-release/qiandengji-android-1.21.1-neoforge-1.0.0-preview.3.mrpack"
           --cache "$RUNNER_TEMP/android-inputs"
           --catalog paper/integrations/agent-portal/src/android-client-downloads.json
       - name: Install Chinese fonts for browser review

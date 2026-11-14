@@ -46,5 +46,5 @@ test('download page distinguishes desktop, FCL and existing launcher controller 
   assert.equal(document.querySelector('#game-client-downloads').textContent.includes('原生女仆'), false);
   const guide = await (await fetch(site.origin + '/android.html')).text();
   assert.match(guide, /连接手柄/);
-  assert.match(guide, /选择手柄输入模式/);
+  assert.match(guide, /手柄输入模式.*SDL 直通/);
 });

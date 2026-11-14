@@ -1,14 +1,20 @@
 # 千灯纪安卓客户端导入包
 
-2026-11-09：1.0.0-preview.1已在官网启用，52,587字节/SHA256与审查目录一致；OSS匿名完整下载、GET/HEAD及六种页面尺寸通过。手机麦克风与耳听仍待实机验收。
+本目录构建 **1.0.0-preview.3** 原生手柄预览。既有 **1.0.0-preview.1** 仍可通过 `/downloads/android-client` 获取。
 
-FCL 导入一个 `.mrpack`，自动准备 Minecraft 1.21.1 / NeoForge 21.1.248、原生女仆 1.5.3、YSM 2.6.5、SVC 2.6.27，预置服务器地址、中文界面、手机画质及安卓音频配置。
+FCL 导入一个 `.mrpack`，自动准备 Minecraft 1.21.1 / NeoForge 21.1.252、Control Flex 0.8.9-beta.3、原生女仆 1.5.3、YSM 2.6.5、SVC 2.6.27，预置服务器地址、中文界面、手机画质及安卓音频配置。
 
-当前 **1.0.0-preview.1** 为安卓附近语音兼容预览。构建与 Java SPI 检查不等于 Android 真机麦克风、耳听或公网语音验收；发布页面和包内说明均保留此状态。真人角色、背包、密码与服务端配置不随导入改变。
+安卓手柄识别、摇杆手感、热插拔和语音均需在手机实测。真人角色、背包、密码与服务端配置不随导入改变。
 
 ## 玩家安装
 
-见随包 [PLAYER_GUIDE.md](PLAYER_GUIDE.md) 或官网 `/android.html`。流程为：安装 FCL → 导入包/选择 Java21 → 原角色进服 → 授权麦克风并完成 V 菜单向导。无需安装 Agent 宿主或配置模型 Key。
+见随包 [PLAYER_GUIDE.md](PLAYER_GUIDE.md) 或官网 `/android.html`。用 FCL 1.3.4.6 导入独立实例，选择 Java 21，游戏侧栏打开「手柄控制」，输入模式选「SDL 直通」。需要语音时在游戏内按 V 完成麦克风向导。
+
+## 原生手柄输入
+
+[Control Flex 0.8.9-beta.3](https://github.com/ControlFlexMC/control-flex/releases/tag/v0.8.9-beta.3) 提供对应 Minecraft 1.21.1 / NeoForge 的原版构建和 Android ARM64 JNI。清单固定发布者的 SHA256、Modrinth 格式的 SHA1/SHA512 及下载地址。其 Android 后端复用 FCL 的 SDL3，由游戏模组读取实际摇杆轴与按钮。游戏启动后在 FCL 侧栏设置 `SDL_DIRECT`。手柄键位由 Control Flex 的游戏内设置管理。
+
+Control Flex 的客户端 `config/controlflex/analog/server-whitelist.json` 只为预置的主世界域名和端口开启连续模拟移动。其他远程地址继续使用模组默认策略。
 
 ## SVC 安卓调查与实现
 
@@ -21,35 +27,37 @@ FCL 导入一个 `.mrpack`，自动准备 Minecraft 1.21.1 / NeoForge 21.1.248�
 
 ## 可复现构建
 
-需要 Python3.12+、Java21 和联网。Eclipse 编译器、原音频桥及三个官方模组均在 `sources.lock.json` 锁定来源、大小、SHA1和SHA512；没有读取开发机运行目录或账号。
+需要 Python 3.12+、Java 21 和联网。Eclipse 编译器、原音频桥及四个模组均在 `sources.lock.json` 锁定来源、大小、SHA1 和 SHA512。
 
 ```sh
 python paper/integrations/android-client/build.py --cache /tmp/qd-android-inputs --output /tmp/qd-android-release
 python paper/integrations/android-client/verify.py \
-  --pack /tmp/qd-android-release/qiandengji-android-1.21.1-neoforge-1.0.0-preview.1.mrpack \
+  --pack /tmp/qd-android-release/qiandengji-android-1.21.1-neoforge-1.0.0-preview.3.mrpack \
   --cache /tmp/qd-android-inputs \
   --catalog paper/integrations/agent-portal/src/android-client-downloads.json
 ```
 
-归档时间、排序和编译器固定。现有输入或同名输出摘要不符即拒绝，不覆盖未知文件。整合包中只内嵌 MIT 音频桥；女仆、YSM、SVC 由启动器按清单从作者官方 Modrinth CDN 下载。无 Minecraft 本体、私人模型、账号、Key、存档、服务器 JAR 或测试控制器。产物不提交 Git。
+归档时间、排序、文本换行和编译器固定。整合包内嵌 MIT 音频桥；女仆、YSM、SVC 从作者的 Modrinth 下载，Control Flex 从作者的 GitHub 下载。产物不提交 Git。
 
 工作流 `Android client import pack` 重建并核对官网下载摘要，保存可下载的 CI 成品。若修改包内字节，重新生成目录记录；已经发布的同版本不可覆盖，需增加版本。
 
 ## 官网启用
 
-下载中心新增安卓区，固定别名 `/downloads/android-client`，安装说明 `/android.html`。沿用原下载镜像、显式包启用、307/HEAD、SHA256 响应头、匿名访问及限频，不新增账号或任意文件下载口。
+下载中心安卓区提供 `/downloads/android-native-client`，安装说明见 `/android.html`。沿用下载镜像、显式包启用、307/HEAD、SHA256 响应头、匿名访问及限频。
 
-1. 构建并验证最终 `.mrpack`，将输出 `android-client-downloads.json` 与受审源码核对。
+1. 构建并验证最终 `.mrpack`，将生成的原生手柄条目追加到现有 `android-client-downloads.json`，保留既有文件与下载地址。
 2. 把**这个确切文件**上传原公共下载桶的 `<sha256>/<filename>`，匿名完整下载后核对大小与 SHA256。该对象只含公开客户端资源；不使用角色素材/场景的私有桶。
-3. 官网保留现有 `downloads.baseUrl` 与全部已启用包，只追加 `android-client-pack` 到 `downloads.enabledPackages`。
+3. 官网保留现有 `downloads.baseUrl` 与全部已启用包，追加 `android-native-client-pack` 到 `downloads.enabledPackages`。
 4. 窄更新以下官网文件：`src/android-client-downloads.json`、`src/download-catalog.mjs`、`public/android.html`、`public/downloads.html`、`public/downloads.js`、`public/downloads.css`。现役官网有主干之外的补丁时，逐项合并，不能整目录覆盖。保留当前数据库、账号、会话、配置与其他下载；沿既有网站发布流程备份并切换网站。游戏服无须重启。
-5. 公网匿名核验 `/api/v1/downloads` 中这个包 `available=true`；固定别名 GET/HEAD 返回307和正确摘要；浏览器实际导入文件，检查390px页面不横向溢出。
+5. 公网匿名核验 `/api/v1/downloads` 中这个包 `available=true`，固定别名 GET/HEAD 返回 307 和正确摘要，移动下载页和说明页能正常显示。
 
 此 checkout 不包含网站/OSS 运维凭据；代码合入或 CI 成品不代表正式网站已启用。对象验证和官网启用结果应另写实际发布记录，不能修改 `current-deployment.json` 冒充完成。
 
 回退只关闭新增包 ID 与恢复上述网站代码，保留新账号/会话/作品；已公开的固定摘要对象可保留。玩家退出本实例再用原客户端，不回灌角色或世界。
 
 ## 实机验收
+
+手柄以同一 Android 手机试按「SDL 直通」、轻推和全推左摇杆、右摇杆转动视角、打开技能罗盘和背包，再试断开重连。
 
 用同一部手机按玩家四步完成：FCL 导入/Java21 → 原角色认证 → 女仆原模型和原界面 → YSM形象同步 → SVC显示已连接 → 麦克风自测 → 附近玩家与 Agent 双向听说 → 远离/换维度后不再串音。再检查断线重连、前后台切换和耳机。
 

@@ -1,13 +1,21 @@
-# 千灯纪 · 安卓手机安装
+# 千灯纪 · FCL 原生手柄预览
 
-适用：安卓 8 及以上、arm64 手机，使用当前版 FCL。主世界是 Minecraft 1.21.1。
+适用于安卓 8 及以上的 arm64 手机。推荐 FCL 1.3.4.6，游戏为 Minecraft 1.21.1，运行时选 Java 21。
 
-1. 从 https://github.com/FCL-Team/FoldCraftLauncher/releases 安装 FCL。
-2. 在 FCL 导入本 .mrpack，建立独立实例，运行时选择 Java 21。启动器会下载 Minecraft、NeoForge、女仆、YSM 和 Simple Voice Chat，首次需联网。
+1. 从 https://github.com/FCL-Team/FoldCraftLauncher/releases/tag/1.3.4.6 安装 FCL。
+2. 在 FCL 导入本 .mrpack，建立独立实例，运行时选择 Java 21。首次需联网下载游戏、NeoForge 和模组。Control Flex 从作者的 GitHub 下载，其余游戏模组从作者的 Modrinth 下载。
 3. 启动游戏 → 多人游戏 → 千灯纪 · 主世界。沿用本人原角色名和游戏密码；不新建替代角色，也不用为真人客户端提供模型 Key。
 4. 首次允许 FCL 使用麦克风，在触屏键盘按 V，完成语音向导及麦克风/扬声器自测。麦克风应为 Android AudioRecord。默认按键说话且静音；按本人意愿选择语音激活，或给触屏增加“按键说话”绑定。
 
 进服地址已预置：micro.kangqiang.site:25702。服务器资源包已允许。女仆与玩家模型从原生模组/服务器同步，不需要下载其他人的私人模型或账号文件。
+
+## 手柄
+
+先在安卓系统通过蓝牙或 USB 连接手柄。启动整合包，在 FCL 游戏侧栏的「手柄」里启用「手柄控制」，将「手柄输入模式」设为「SDL 直通」。
+
+Control Flex 在游戏内读取摇杆和按钮。预置的千灯纪服务器地址启用连续模拟移动，轻推和全推摇杆的速度不同。先试左摇杆移动、右摇杆转头、左扳机打开手上的技能罗盘。按键可在游戏内的 Control Flex 设置调整，背包和聊天也可用触屏。
+
+这版含 Control Flex 0.8.9-beta.3。手机上的手柄识别、摇杆手感和重连还需实测。
 
 ## 第一次游玩
 

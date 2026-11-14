@@ -19,6 +19,8 @@ LOCK = ROOT / 'sources.lock.json'
 STAMP = (2026, 11, 9, 0, 0, 0)
 BRIDGE_NAME = 'qiandengji-android-audio-1.0.1-qiandengji.1.jar'
 NATIVE_CLASS = 'de/maxhenkel/shim/NativeAudio.class'
+FCL_RELEASE = '1.3.4.6'
+NATIVE_PACK_ID = 'android-native-client-pack'
 
 
 def encoded(value):
@@ -27,6 +29,10 @@ def encoded(value):
 
 def digest(data, algorithm='sha256'):
     return hashlib.new(algorithm, data).hexdigest()
+
+
+def text_input(name):
+    return (ROOT / name).read_text(encoding='utf-8').encode('utf-8')
 
 
 def archive(files):
@@ -49,6 +55,8 @@ def verify(data, row):
     for algorithm in ('sha1', 'sha512'):
         if digest(data, algorithm) != row[algorithm]:
             raise ValueError('Reviewed input checksum mismatch: ' + row['filename'])
+    if 'sha256' in row and digest(data) != row['sha256']:
+        raise ValueError('Publisher SHA256 mismatch: ' + row['filename'])
     return data
 
 
@@ -57,8 +65,16 @@ def load_input(row, cache):
     if PurePosixPath(name).name != name or '\\' in name:
         raise ValueError('Unsafe input filename')
     url = urllib.parse.urlsplit(row['url'])
-    if url.scheme != 'https' or url.netloc not in ('cdn.modrinth.com', 'repo.maven.apache.org') or url.query or url.fragment:
-        raise ValueError('Only locked public Modrinth/Maven inputs are accepted')
+    allowed_hosts = (url.netloc,)
+    if url.netloc == 'github.com' and row.get('id') == 'control-flex':
+        release_path = f"/ControlFlexMC/control-flex/releases/download/v{row['version']}/{name}"
+        if url.path != release_path or 'sha256' not in row:
+            raise ValueError('Expected a checksum-pinned Control Flex release asset')
+        allowed_hosts += ('release-assets.githubusercontent.com',)
+    elif url.netloc not in ('cdn.modrinth.com', 'repo.maven.apache.org'):
+        raise ValueError('Unexpected input host')
+    if url.scheme != 'https' or url.query or url.fragment:
+        raise ValueError('Expected a clean public HTTPS input URL')
     target = cache / name
     if target.exists():
         if target.is_symlink():
@@ -67,7 +83,8 @@ def load_input(row, cache):
     request = urllib.request.Request(row['url'], headers={
         'User-Agent': 'Qiandengji-Android-Client/1.0 (github.com/jcs130/minecraft-ai-friend)'})
     with urllib.request.urlopen(request, timeout=60) as response:
-        if urllib.parse.urlsplit(response.geturl()).netloc != url.netloc:
+        final_url = urllib.parse.urlsplit(response.geturl())
+        if final_url.scheme != 'https' or final_url.netloc not in allowed_hosts:
             raise ValueError('Unexpected download redirect')
         chunks, length = [], 0
         while chunk := response.read(1024 * 1024):
@@ -100,18 +117,18 @@ def build_bridge(upstream, shim, compiler, java='java'):
         raise ValueError('Expected the reviewed arm64 native library')
     if NATIVE_CLASS not in files:
         raise ValueError('Expected upstream NativeAudio class')
-    source = (ROOT / 'NativeAudio.java').read_text().replace('@NATIVE_SHA256@', digest(native))
+    source = (ROOT / 'NativeAudio.java').read_text(encoding='utf-8').replace('@NATIVE_SHA256@', digest(native))
     with tempfile.TemporaryDirectory(prefix='qiandengji-audio-') as directory:
         directory = Path(directory)
-        (directory / 'NativeAudio.java').write_text(source)
+        (directory / 'NativeAudio.java').write_text(source, encoding='utf-8', newline='\n')
         subprocess.run([java, '-jar', str(compiler), '-proc:none', '-source', '8', '-target', '8', '-encoding', 'UTF-8', '-g:none',
                         '-d', str(directory), str(directory / 'NativeAudio.java')], check=True)
         files[NATIVE_CLASS] = (directory / NATIVE_CLASS).read_bytes()
     for name in ('fabric.mod.json', 'mcmod.info', 'META-INF/MANIFEST.MF'):
         files.pop(name, None)
     files['META-INF/MANIFEST.MF'] = b'Manifest-Version: 1.0\r\nAutomatic-Module-Name: qiandeng.android.audio\r\n\r\n'
-    files['META-INF/neoforge.mods.toml'] = (ROOT / 'neoforge.mods.toml').read_bytes()
-    files['META-INF/LICENSE-Android-Audio-Shim.txt'] = (ROOT / 'LICENSE.upstream.txt').read_bytes()
+    files['META-INF/neoforge.mods.toml'] = text_input('neoforge.mods.toml')
+    files['META-INF/LICENSE-Android-Audio-Shim.txt'] = text_input('LICENSE.upstream.txt')
     files['META-INF/qiandengji-audio-source.json'] = encoded({
         'source': shim['source'], 'upstreamSha512': shim['sha512'], 'license': 'MIT',
         'nativeSha256': digest(native), 'nativeBytesUnchanged': True,
@@ -136,8 +153,8 @@ def make_pack(lock, bridge):
     filename = f'qiandengji-android-1.21.1-neoforge-{version}.mrpack'
     index = {
         'formatVersion': 1, 'game': 'minecraft', 'versionId': version,
-        'name': '千灯纪 · 安卓手机',
-        'summary': '主世界、女仆、YSM 与 SVC 已配置；安卓附近语音兼容预览。',
+        'name': '千灯纪 · FCL 原生手柄预览',
+        'summary': 'Control Flex 通过 FCL 的 SDL 直通读取手柄。包含主世界、女仆、YSM 和附近语音。',
         'dependencies': {'minecraft': lock['minecraft'], 'neoforge': lock['neoforge']},
         'files': [{'path': 'mods/' + row['filename'],
                    'hashes': {key: row[key] for key in ('sha1', 'sha512')},
@@ -157,42 +174,48 @@ audio_type=NORMAL
 voice_chat_volume=1.0
 '''.encode()
     options = b'lang:zh_cn\nrenderDistance:6\nsimulationDistance:5\nmaxFps:60\nguiScale:3\n'
+    host, port = lock['serverAddress'].rsplit(':', 1)
+    analog_servers = encoded({'version': 1, 'entries': [{'kind': 'address', 'host': host, 'port': int(port)}]})
     provenance = {
         'schema': 1, 'version': version, 'java': 21,
         'serverAddress': lock['serverAddress'], 'source': 'https://github.com/jcs130/minecraft-ai-friend',
-        'channel': 'android-voice-preview', 'androidDeviceVerified': False,
+        'channel': 'android-native-gamepad-preview', 'androidDeviceVerified': False,
+        'gamepad': {'mode': 'SDL_DIRECT', 'mod': 'controlflex', 'recommendedFcl': FCL_RELEASE,
+                    'physicalAndroidDeviceVerified': False},
         'voiceEndToEndVerified': False, 'officialGameModsModified': False,
         'audioBridgeModified': True, 'audioBridgeSha256': digest(bridge),
         'contents': [row['id'] + ' ' + row['version'] for row in lock['files']],
-        'limitations': ['Android arm64, Android 8+; use current FCL or compatible launcher.',
+        'limitations': ['Android arm64, Android 8+; use FCL ' + FCL_RELEASE + ' with SDL Direct.',
+                        'Native sticks, buttons and reconnection must be checked on device.',
                         'Microphone permission, input/output and public UDP must be checked on device.',
                         'Native denoising, automatic gain and SVC recording are disabled in Java fallback.']}
     files = {'modrinth.index.json': encoded(index),
              'overrides/mods/' + BRIDGE_NAME: bridge,
              'overrides/config/voicechat/voicechat-client.properties': voice,
+             'overrides/config/controlflex/analog/server-whitelist.json': analog_servers,
              'overrides/options.txt': options,
              'overrides/servers.dat': server_list(lock['serverAddress']),
-             'overrides/README-Qiandengji-Android.md': (ROOT / 'PLAYER_GUIDE.md').read_bytes(),
+             'overrides/README-Qiandengji-Android.md': text_input('PLAYER_GUIDE.md'),
              'overrides/qiandengji-android-manifest.json': encoded(provenance),
-             'overrides/LICENSES/Android-Audio-Shim-MIT.txt': (ROOT / 'LICENSE.upstream.txt').read_bytes(),
+             'overrides/LICENSES/Android-Audio-Shim-MIT.txt': text_input('LICENSE.upstream.txt'),
              'overrides/LICENSES/UPSTREAM-SOURCES.json': encoded(lock)}
     data = archive(files)
     row = {
-        'id': 'android-client-pack', 'framework': 'minecraft', 'category': 'android-client',
-        'name': '千灯纪手机版 · FCL 导入包', 'version': version, 'filename': filename,
+        'id': NATIVE_PACK_ID, 'framework': 'minecraft', 'category': 'android-client',
+        'name': '千灯纪手机版 · 原生手柄预览', 'version': version, 'filename': filename,
         'bytes': len(data), 'sha256': digest(data), 'channel': 'website-bundle',
-        'platform': '安卓 8+ / arm64 / FCL / Minecraft 1.21.1 / Java 21',
-        'license': '音频适配 MIT；女仆、YSM、SVC 保留原作者许可并从官方 CDN 下载',
+        'platform': f'安卓 8+ / arm64 / FCL {FCL_RELEASE} / Minecraft 1.21.1 / Java 21',
+        'license': '音频适配 MIT；其余模组由启动器从原作者下载',
         'sourceUrl': 'https://github.com/jcs130/minecraft-ai-friend/tree/main/paper/integrations/android-client',
-        'install': 'FCL 导入此 .mrpack，选择 Java 21；首次允许麦克风并完成语音设置向导。',
-        'includes': '主世界地址、女仆1.5.3、YSM2.6.5、SVC2.6.27、安卓音频适配和低负载画面设置。',
-        'compatibilityNote': '附近语音兼容预览；完整手机听说仍待实机验证。',
+        'install': 'FCL 导入为独立实例，运行时选 Java 21。连接手柄后在游戏侧栏启用「手柄控制」，输入模式选「SDL 直通」。',
+        'includes': 'Control Flex 0.8.9-beta.3、女仆 1.5.3、YSM 2.6.5、附近语音与主世界地址。',
+        'compatibilityNote': '兼容预览。手机上的摇杆、按键和语音仍待实机验证。',
         'androidDeviceVerified': False}
     return filename, data, row
 
 
 def build(cache, output, java='java'):
-    lock = json.loads(LOCK.read_text())
+    lock = json.loads(LOCK.read_text(encoding='utf-8'))
     cache.mkdir(parents=True, exist_ok=True)
     rows = [*lock['files'], lock['audioShim'], lock['compiler']]
     with ThreadPoolExecutor(max_workers=4) as pool:
