@@ -1,11 +1,11 @@
 {
-  "inventoryScope": "component_runtime_verified_20261114_maid_scene_travel",
-  "currentComponentEvidence": "paper/manifests/maid-scene-travel-deployed-20261114.json",
-  "acceptanceDocument": "paper/docs/SERVER_UPDATES.md",
+  "inventoryScope": "component_runtime_verified_20261114_player_navigation",
+  "currentComponentEvidence": "paper/manifests/player-navigation-deployed-20261114.json",
+  "acceptanceDocument": "paper/docs/PLAYER_NAVIGATION_20261114.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-and-component-verified",
-  "latestRelease": "maid-scene-travel-20261114-r3",
-  "verifiedAt": "2026-11-14T19:07:58.311839+08:00",
+  "latestRelease": "player-navigation-20261114-r1",
+  "verifiedAt": "2026-11-14T15:01:37.174Z",
   "releaseDocument": "paper/docs/SERVER_UPDATES.md",
   "numenHostingCurrent": {
     "state": "deployed-and-component-verified",
@@ -2442,5 +2442,27 @@
     "manifest": "paper/manifests/trial-return-voice-deployed-20261114.json",
     "realProductionTowerVictoryVerified": false,
     "humanHearingVerified": false
+  },
+  "playerNavigationCurrent": {
+    "AgentFriend": {
+      "version": "0.4.47.78-player-navigation",
+      "sha256": "247aaedca90905ded41aff8afc36f47022736e6626b4e5276c5732c39cf25eef"
+    },
+    "FastAsyncWorldEdit": {
+      "version": "2.16.1-qd-hybrid1",
+      "sha256": "dc3ed55005e71bc298a82ecb2ac23a03a36a288e78b7be48d7b5d61f030884b2"
+    },
+    "QiandengjiMaidBridge": {
+      "version": "0.1.36-scene-speech",
+      "changed": false
+    }
+  },
+  "svcRoutingCurrent": {
+    "pullRequest": 243,
+    "version": "0.1.14-svc-routing",
+    "deployedAt": "2026-11-14T22:01:50.2051219+08:00",
+    "sha256": "520fb50af707f50adfda551250db1d1524f5865e669d9ab4b85174c083e75ebe",
+    "preservedByThisRestart": true,
+    "padAudioAcceptance": false
   }
 }
