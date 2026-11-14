@@ -7,9 +7,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class AdventureMenuModel {
     static final int SIZE=36;
     static final int[] CONTENT={10,11,12,13,14,15,16,19,20,21,22,23,24,25};
-    enum Page { HOME,GROWTH,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,COMMON_DETAIL,CHARACTER,TIDY_BAG,TIDY_STASH,PARTY,PARTY_CONFIRM,HELP,ERROR }
+    enum Page { HOME,TRAVEL,GROWTH,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,COMMON_DETAIL,CHARACTER,TIDY_BAG,TIDY_STASH,PARTY,PARTY_CONFIRM,HELP,ERROR }
     enum Action {
-        NONE,CLOSE,BACK,HOME,GROWTH,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,CHARACTER,HELP,
+        NONE,CLOSE,BACK,HOME,TRAVEL,GROWTH,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,CHARACTER,HELP,
         CLASS_MENU,SKILL_MENU,TALENT_MENU,QUEST_MENU,COMMON_DETAIL,COMMON_USE,
         TRAINING_MENU,CONQUEST_MENU,DUNGEON_MENU,GUILD_MENU,CONTRACT_MENU,PLACES_MENU,
         BACKPACK,STASH,TIDY_BAG,TIDY_STASH,TIDY_BAG_CONFIRM,TIDY_STASH_CONFIRM,
@@ -33,7 +33,7 @@ final class AdventureMenuModel {
     }
     static Button button(int slot,Action action,String icon,String title,String... lore){return new Button(slot,action,"",icon,title,List.of(lore));}
     static Page destination(Action action){return switch(action){
-        case HOME->Page.HOME;case GROWTH->Page.GROWTH;case ADVENTURE->Page.ADVENTURE;case STORAGE->Page.STORAGE;
+        case HOME->Page.HOME;case TRAVEL->Page.TRAVEL;case GROWTH->Page.GROWTH;case ADVENTURE->Page.ADVENTURE;case STORAGE->Page.STORAGE;
         case TRADE->Page.TRADE;case SOCIAL->Page.SOCIAL;case MEMORIES->Page.MEMORIES;case COMMON->Page.COMMON;
         case CHARACTER->Page.CHARACTER;case TIDY_BAG->Page.TIDY_BAG;case TIDY_STASH->Page.TIDY_STASH;case PARTY->Page.PARTY;case HELP->Page.HELP;
         default->null;
@@ -56,6 +56,11 @@ final class AdventureMenuModel {
             button(19,Action.TRADE,"GOLD_INGOT","商城与交易","买补给、回收装备、玩家交易行"),
             button(22,Action.SOCIAL,"PLAYER_HEAD","队伍与伙伴","组队、找队友、支援与传送点"),
             button(25,Action.MEMORIES,"PAINTING","留影与生活","拍照、阅读日记与更换外观"));
+        case TRAVEL->List.of(
+            button(10,Action.PLACES_MENU,"COMPASS","公共地点传送","村庄、试炼塔入口与已开放的地标","成功传送才消耗魔力"),
+            button(13,Action.WAYPOINTS_MENU,"LODESTONE","我的传送点","保存当前地点，选择已保存地点快速移动","先查看目的地和消耗"),
+            button(16,Action.PLAYERS_MENU,"PLAYER_HEAD","找队友 · 战斗增援","选队友，再点传送；支持跨世界和战斗增援","进入副本会检查装备并自动登记参战"),
+            new Button(22,Action.COMMON_DETAIL,"home","ENDER_PEARL","归乡术",List.of("查看归乡目的地、魔力和冷却，再点击施放")));
         case GROWTH->List.of(
             button(10,Action.CHARACTER,"PLAYER_HEAD","我的角色","查看实际等级、经验、生命与魔力"),
             button(12,Action.CLASS_MENU,"IRON_CHESTPLATE","选择职业","先查看职业，再自行确认选择","浏览不会替你选职"),

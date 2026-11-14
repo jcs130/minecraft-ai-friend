@@ -54,6 +54,10 @@ jobs:
           node --check paper/integrations/touhou-maids/tests/agent-failures.mjs
           node --check paper/integrations/touhou-maids/tests/lifecycle-stage.mjs
           curl --fail --silent --show-error --location --retry 2 https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar --output "$RUNNER_TEMP/maid-life-gson.jar"
+          javac -encoding UTF-8 -cp "$RUNNER_TEMP/maid-life-gson.jar" -d "$RUNNER_TEMP/quest-particles" paper/plugins/AgentFriend/src/org/afuhome/agentfriend/QuestParticleTarget.java paper/plugins/AgentFriend/tests/org/afuhome/agentfriend/QuestParticleTargetTest.java
+          java -cp "$RUNNER_TEMP/quest-particles:$RUNNER_TEMP/maid-life-gson.jar" org.afuhome.agentfriend.QuestParticleTargetTest
+          node --check paper/plugins/AgentFriend/tests/player-navigation-stage.mjs
+          node --check paper/integrations/fawe-hybrid/tests/soul-spell-stage.mjs
           python paper/integrations/touhou-maids/tests/run-lifecycle-ledger.py --gson "$RUNNER_TEMP/maid-life-gson.jar"
           python paper/integrations/touhou-maids/tests/run-close-follow.py
           node --check paper/integrations/touhou-maids/tests/close-follow-stage.mjs

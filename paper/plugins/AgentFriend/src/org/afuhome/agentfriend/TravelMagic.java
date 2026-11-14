@@ -59,6 +59,10 @@ final class TravelMagic implements Listener {
     }
 
     boolean teleport(Player player, Location destination, String id, String name, int mana) {
+        return teleport(player, destination, id, name, mana, () -> true);
+    }
+    /** Admission is checked after the real teleport event and before charging or reporting success. */
+    boolean teleport(Player player, Location destination, String id, String name, int mana, java.util.function.BooleanSupplier admitted) {
         if (!plugin.professions().basicAllowed(player,id.equals("home") ? "home" : id.equals("support") ? "support" : "travel")) return false;
         if (player.getGameMode() == GameMode.SPECTATOR) {
             player.sendMessage(ChatColor.RED + "旁观者不能使用传送术；请使用对应的生存角色，/mycli status 核对状态。"); return false;
@@ -79,6 +83,16 @@ final class TravelMagic implements Listener {
             try { player.teleport(departure); }
             finally { internal.remove(player.getUniqueId()); }
             player.sendMessage("§e[unsafe_destination] 传送目标被其他插件改为不安全位置，已尝试返回出发点；未耗魔。下一步：/mycli waypoint list");
+            return false;
+        }
+        boolean accepted;
+        try { accepted = admitted.getAsBoolean(); }
+        catch (RuntimeException failure) { accepted=false;plugin.getLogger().log(java.util.logging.Level.WARNING,"Travel admission not committed",failure); }
+        if (!accepted) {
+            internal.add(player.getUniqueId());
+            boolean returned;
+            try { returned=player.teleport(departure); } finally { internal.remove(player.getUniqueId()); }
+            player.sendMessage("§e[team_admission_unconfirmed] 参战登记或实际落点未确认，未耗魔；"+(returned?"已返回出发点。":"返回也被取消，请 /mycli status 查询并联系服主。")+"不要重复报名。 ");
             return false;
         }
         if (!plugin.spendMana(player, mana)) {

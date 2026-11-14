@@ -2066,7 +2066,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         };
     }
 
-    private Location safeNear(Player target) {
+    private String teamTravelProblem(Player actor,Player target,Location landing) {
+        if(pvpArena!=null&&(pvpArena.blocksNamedTravel(actor)||pvpArena.blocksNamedTravel(target)||pvpArena.namedTravelArea(landing)))
+            return "[team_pvp_escrow] PvP使用独立背包；先 /mycli pvp leave 完成物品归还，再使用队友传送。";
+        String problem=dungeon==null?"":dungeon.reinforcementProblem(actor,target,landing);
+        if(!problem.isEmpty())return problem;
+        return siteDungeons==null?"":siteDungeons.reinforcementProblem(actor,target,landing);
+    }
+    private Location safeNear(Player actor, Player target) {
         Location at = target.getLocation();
         int[][] offsets = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, 1}, {1, -1}, {-1, -1},
                 {2, 0}, {-2, 0}, {0, 2}, {0, -2}, {0, 0}};
@@ -2077,7 +2084,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             Block feet = at.getWorld().getBlockAt(x, y, z);
             Location landing=new Location(at.getWorld(),x+.5,y,z+.5,at.getYaw(),0);
             if(safeLanding(feet)&&TeamTravelSafety.insideBorder(landing)
-                &&!namedTravelActivityArea(landing))return landing;
+                &&teamTravelProblem(actor,target,landing).isEmpty())return landing;
         }
         return null;
     }
@@ -2090,19 +2097,26 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if(isDowned(viewer)||viewer.isDead()||viewer.isInsideVehicle()||viewer.isGliding()||viewer.isFlying()){
             viewer.sendMessage("§e[team_actor_blocked] 当前倒地、死亡、载具或飞行状态不能传送；未传送、未耗魔。下一步：/mycli status");return;
         }
-        if(namedTravelBlocked(viewer)||namedTravelBlocked(target)||isDowned(target)||target.isDead()){
-            viewer.sendMessage("§e[team_activity_locked] 本人或目标正在试炼、遗迹、PvP或等待救援；不能用队友传送跳过房门和参战登记，未耗魔。先正常结束或离场再集合。下一步：/mycli status");return;
-        }
+        if(target.isDead()){viewer.sendMessage("§e[team_target_respawning] 队友正在重生；等重生完成再支援，未耗魔。");return;}
+        String problem=teamTravelProblem(viewer,target,target.getLocation());
+        if(!problem.isEmpty()){viewer.sendMessage("§e"+problem+" 未传送、未耗魔。");return;}
         long now = System.currentTimeMillis();
         long wait = teamTeleportAt.getOrDefault(viewer.getUniqueId(), 0L) + TEAM_TELEPORT_COOLDOWN_MS - now;
         if (wait > 0) {
             viewer.sendMessage(ChatColor.YELLOW + "传送冷却还剩 " + ((wait + 999) / 1000) + " 秒；等待结束再传一次，/mycli locate list 可先核对队友。"); return;
         }
-        Location landing = safeNear(target);
+        Location landing = safeNear(viewer,target);
         if (landing == null) {
-            viewer.sendMessage(ChatColor.YELLOW + "队友附近没有安全落脚点，请等她走到平地再试。"); return;
+            viewer.sendMessage(ChatColor.YELLOW + "[team_no_safe_ground] 队友附近2格内没有可站立的安全地面（需脚下有支撑、身体和头部不被堵住）；请队友移到平地再试。战斗状态和入口平台本身不会禁止支援，未耗魔。"); return;
         }
-        if (travelMagic.teleport(viewer, landing, "team", "队友传送术", TravelMagic.DISTANT_MANA)) {
+        if (travelMagic.teleport(viewer, landing, "team", "队友传送术", TravelMagic.DISTANT_MANA, () -> {
+            Location arrived=viewer.getLocation();
+            return arrived.getWorld()==landing.getWorld()&&arrived.distanceSquared(landing)<=1
+                    &&safeLanding(arrived.getBlock())&&TeamTravelSafety.insideBorder(arrived)
+                    &&teamTravelProblem(viewer,target,arrived).isEmpty()
+                    &&(dungeon==null||dungeon.enrollReinforcement(viewer,target))
+                    &&(siteDungeons==null||siteDungeons.enrollReinforcement(viewer,target));
+        })) {
             teamTeleportAt.put(viewer.getUniqueId(), now);
             viewer.sendMessage(ChatColor.GREEN + "已安全抵达 " + target.getName() + " 身边。 "
                     + LocationOutput.fields(viewer.getLocation()));

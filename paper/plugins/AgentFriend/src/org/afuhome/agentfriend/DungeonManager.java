@@ -297,6 +297,35 @@ final class DungeonManager implements Listener {
 
     boolean isBuilt() { return built; }
     boolean isParticipant(Player player) { return active && participants.contains(player.getUniqueId()); }
+    String reinforcementProblem(Player actor, Player target, Location landing) {
+        boolean same = isParticipant(target);
+        if (isParticipant(actor) && !same) return "[team_leave_trial] 你仍在另一场试炼；先 /mycli arena leave 正常离场，再支援。";
+        if (inLobby(landing)) return isParticipant(actor) ? "[team_leave_trial] 你仍在试炼中；先 /mycli arena leave 正常离场，再到入口集合。" : "";
+        if (floorAt(landing) == 0) return same ? "[team_trial_target_moved] 队友已离开当前层；重新 /mycli locate list 核对位置。" : "";
+        if (!same || !inFloor(landing, floor)) return "[team_trial_not_current] 只能增援参战队友所在的当前层；入口平台可正常集合，/mycli arena status 查看本场。";
+        if (!committedCurrentRun()) return "[team_trial_unconfirmed] 本场存档暂未确认，先 /mycli arena status 查询；请勿重复报名。";
+        if (plugin.pvpParticipant(actor) || plugin.siteDungeons()!=null && plugin.siteDungeons().isParticipant(actor))
+            return "[team_leave_activity] 先正常离开当前活动，再支援试炼；/mycli status 查看离场方法。";
+        if (actor.getGameMode()!=GameMode.SURVIVAL && actor.getGameMode()!=GameMode.ADVENTURE || plugin.isObserver(actor))
+            return "[team_survival_required] 请使用生存或冒险角色增援。";
+        if (!isParticipant(actor) && !DungeonLoadout.missing(actor).isEmpty())
+            return "[equipment_required] 增援需补齐："+String.join("、",DungeonLoadout.missing(actor))+"；/mycli shop menu 购买或 /mycli stash 打开个人箱。";
+        return "";
+    }
+    boolean enrollReinforcement(Player actor, Player target) {
+        if (inLobby(actor.getLocation()) || !isParticipant(target)) return !isParticipant(actor);
+        if (!reinforcementProblem(actor,target,actor.getLocation()).isEmpty()) return false;
+        if (isParticipant(actor)) return true;
+        participants.add(actor.getUniqueId());
+        try { persistRun(); } catch (RuntimeException failure) { participants.remove(actor.getUniqueId()); throw failure; }
+        joinedMessage(actor);
+        return committedCurrentRun();
+    }
+    private void joinedMessage(Player player) {
+        player.sendMessage(ChatColor.GREEN + "已加入第 "+floor+" 层试炼；清层后随队前进。"
+                +(cleared?"本层已结算，从下一层开始获得奖励。":"本层通关后可领取个人奖励。"));
+        player.sendMessage("MC_DUNGEON_JOIN floor="+floor+" participant=true rewardThisFloor="+!cleared+" nextFloorTogether=true"+attribution(player));
+    }
     boolean isExpanded() { return expanded; }
     private int maxFloor() { return challengeBuilt ? FINAL_FLOOR : expanded ? OLD_MAX_FLOOR : BASE_FLOORS; }
     private int floorX(int number) { return number <= BASE_FLOORS ? X : number <= OLD_MAX_FLOOR ? WING_X : CHALLENGE_X; }
@@ -565,7 +594,7 @@ final class DungeonManager implements Listener {
             joined.add(player);
         }
         if (joined.isEmpty()) return;
-        persistRun();
+        try { persistRun(); } catch (RuntimeException failure) { joined.forEach(p -> participants.remove(p.getUniqueId())); throw failure; }
         for (Player player : joined) {
             player.sendMessage(ChatColor.GREEN + "你已加入第 " + floor + " 层试炼队伍；本层清怪后会随队自动进入下一层。"
                     + (cleared ? "本层奖励已结算，从下一层开始获得奖励。" : "本层通关后可领取个人奖励。"));

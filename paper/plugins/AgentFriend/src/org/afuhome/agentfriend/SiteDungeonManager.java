@@ -158,6 +158,34 @@ final class SiteDungeonManager implements Listener {
     private String day(){return LocalDate.now(ZoneId.of("Asia/Shanghai")).toString();}
     private Run own(Player p){return runs.values().stream().filter(r->r.party.contains(p.getUniqueId())).findFirst().orElse(null);}
     boolean isParticipant(Player p){return own(p)!=null;}
+    String reinforcementProblem(Player actor,Player target,Location landing){
+        Run targetRun=own(target),actorRun=own(actor);
+        if(actorRun!=null&&actorRun!=targetRun)return "[team_leave_dungeon] 你仍在另一处遗迹；先 /mycli dungeon leave 正常离场，再支援。";
+        if(targetRun==null){
+            for(Run r:runs.values())if(r.site.contains(landing))return "[team_target_not_participating] 目标尚未加入这场挑战，请选择本场参战队友；/mycli dungeon status 查询。";
+            return "";
+        }
+        String problem=entryProblem(actor,targetRun,landing);
+        if(problem.isEmpty())return "";
+        if(problem.equals("equipment_required"))return "[equipment_required] 增援需补齐："+String.join("、",DungeonLoadout.missing(actor))+"；/mycli shop menu 购买或 /mycli stash 取用装备。";
+        String advice=switch(problem){
+            case "walk_to_site" -> "队友已经离开遗迹，重新查询位置";
+            case "already_in_activity_or_not_survival" -> "先正常离开当前其他活动，再来增援";
+            case "challenge_not_accepting" -> "本场正在恢复或结算，先查询本场状态";
+            case "left_this_visit" -> "你刚主动离开本场，请先走出遗迹区域，再传回增援";
+            case "party_full" -> "本场队伍已满，选择其他队伍";
+            case "claim_previous_reward_first" -> "先领取这处遗迹上一场的奖励";
+            case "conquest_profession_required" -> "先选择职业";
+            case "conquest_level_required" -> "先达到本层要求的职业等级";
+            case "previous_floor_required" -> "先完成前置正式楼层";
+            default -> "查看这处遗迹的实际准入条件";
+        };
+        return "["+problem+"] "+advice+"；/mycli dungeon info "+targetRun.site.id;
+    }
+    boolean enrollReinforcement(Player actor,Player target){
+        Run r=own(target);
+        return r==null?own(actor)==null:reinforcementProblem(actor,target,actor.getLocation()).isEmpty()&&enroll(actor,r);
+    }
     boolean hasOpenSite() {
         return ready && sites.values().stream().anyMatch(site -> !runs.containsKey(site.id));
     }
