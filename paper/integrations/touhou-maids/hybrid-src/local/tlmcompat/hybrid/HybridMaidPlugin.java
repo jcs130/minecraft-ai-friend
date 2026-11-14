@@ -98,13 +98,24 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         while(humanDialogue.size()>512)humanDialogue.remove(humanDialogue.keySet().iterator().next());
     }
     boolean sharedDialogueEnabled(EntityMaid maid){return brains!=null&&brains.allowed(maid);}
-    void nearbyConversation(Player actor,EntityMaid maid,String text,Set<UUID> recipients){
-        nearbyConversation(actor,maid,text,recipients,"near_"+UUID.randomUUID());
+    void nearbyConversation(Player actor,EntityMaid maid,NativeMaidNearbyChat.Address address,Set<UUID> recipients){
+        nearbyConversation(actor,maid,address,recipients,"near_"+UUID.randomUUID());
     }
-    void nearbyConversation(Player actor,EntityMaid maid,String text,Set<UUID> recipients,String operation){
+    void nearbyConversation(Player actor,EntityMaid maid,NativeMaidNearbyChat.Address address,Set<UUID> recipients,String operation){
         try{
             if(receipts.read(maid.getUUID(),operation)!=null)return;
-            if(!nearbyChat.allow(actor,maid,text))return;
+            var admission=nearbyChat.admit(actor,maid,address);
+            if(!admission.allowed()){
+                if(admission.retryAfterSeconds()>0){
+                    humanConversation(actor,operation);
+                    JsonObject data=new JsonObject();
+                    data.addProperty("retryAfterSeconds",admission.retryAfterSeconds());
+                    data.addProperty("message","这段交谈已收尾。约 "+admission.retryAfterSeconds()+" 秒后可在 24 格内点名说新话。");
+                    reply(actor,"chat",operation,data,"conversation_quiet");
+                }
+                return;
+            }
+            String text=address.text();
             humanConversation(actor,operation);
             social.validate(actor,maid);agentSupport.validateChat(actor,maid);
             receipts.reserve(maid.getUUID(),actor.getUniqueId(),operation,"chat",text);
@@ -603,6 +614,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             case "not_owned","owner_mismatch"->"装备、工作和运行方式由主人管理；附近交谈用 /qdmaid nearby 找真实maidId，再用 chat <maidId> <requestId> <话语>。本人女仆用 list。";
             case "out_of_range"->"先核对同一维度与实际距离；公开伙伴交谈24格、访客8格，原生本人chat仍16格。用 /qdmaid nearby 查可见对象；context仅供主人查询。";
             case "chat_busy","chat_unresolved"->"她正在处理对话或整理记忆。若是你刚发的一条，用 /qdmaid receipt <UUID> <原requestId> 查询；若是别人发起，稍后再说新话。pending 不是回复。";
+            case "conversation_quiet"->"等待 data.retryAfterSeconds，再在同一维度的附近频道点名说新话。";
             default->"/qdmaid help 查询真实用法。每次写操作保留唯一 requestId；结果不明先 receipt，不重复转移物品。";
         };
     }
@@ -611,7 +623,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         for(String line:List.of(
             "智能：/qdmaid brain <UUID> 查看当前运行方式；brain <UUID> <requestId> <返回的选项ID> 切换。brain-menu <UUID> 打开真人选择菜单，保留原身份和记忆。",
             "女仆：先 /qdmaid list 找本人 maidId；/qdmaid context <UUID> 查看生命、维度、位置和死亡遗物。",
-            "对话：同维度伙伴24格、访客8格内，可点名交谈。每段附近交谈最多120秒、6条请求，收到告别会收尾。伙伴可以说「肥鱼，跟我走」，也可直接用 follow <UUID> <requestId>。Agent用 nearby 找UUID，receipt <UUID> <原requestId> 查动作及回复。",
+            "对话：同维度伙伴24格、访客8格内，直接在附近频道说「肥鱼，你好」，也可右键点交谈。每段最多120秒、6条请求，收尾后等两分钟再点名。伙伴也可直接用 follow <UUID> <requestId>。Agent 用 nearby 找UUID，receipt <UUID> <原requestId> 查动作及回复。",
             "装备：/qdmaid inventory <UUID> 看 usableSlotIndexes（可用）与 freeSlotIndexes（空槽）；默认只有0–5可用，底层36槽不代表已解锁。transfer <UUID> <requestId> put <女仆槽> <数量> <本人槽0-35>；再 equip <UUID> <新requestId> main|off|head|chest|legs|feet <女仆槽>。空槽用于卸装；rejected回执表示此次未转移物品。",
             "工位：/qdmaid workshop <UUID> 查工位及配方；make <UUID> <requestId> <工位ID> <配方ID> [成品数量|once] [chest|backpack]。pending 表示已接单，按 receipt 查成品数量。",
             "行为：/qdmaid tasks <UUID> 查原生工作与条件；/qdmaid task <UUID> <requestId> <任务ID>。follow/stay/sit 同样用 <UUID> <requestId>。应用模式不等于完成任务。",
