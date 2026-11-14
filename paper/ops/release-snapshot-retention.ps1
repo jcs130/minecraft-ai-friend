@@ -37,18 +37,44 @@ function Get-ReleaseSnapshotPlan([string]$BackupRoot,[datetimeoffset]$AsOf=[date
  return [pscustomobject]@{Root=$full;Keep=$keep;Expired=@($rows|Where-Object {$keep-notcontains$_.Path});Ignored=$ignored;ReadOnly=$true}
 }
 
-function Assert-ReleaseRecoveryPair {
- $a='E:\MC\backups\scheduled';$b='F:\MC-backups\scheduled'
- $pairs=@(Get-ChildItem -LiteralPath $a -Directory|Where-Object {$_.Name-match'^\d{8}-\d{6}$'-and(Test-Path -LiteralPath (Join-Path $_.FullName '.complete'))-and(Test-Path -LiteralPath (Join-Path (Join-Path $b $_.Name) '.complete'))}|ForEach-Object {
-  $meta=Get-Content -LiteralPath (Join-Path $_.FullName 'backup.json') -Raw -Encoding UTF8|ConvertFrom-Json
-  if($meta.stoppedForCopy-eq$true){[pscustomobject]@{Name=$_.Name;CreatedAt=[datetimeoffset]::Parse($meta.createdAt)}}
- }|Sort-Object CreatedAt -Descending)
- if($pairs.Count-lt 3-or$pairs[0].CreatedAt-lt[datetimeoffset]::Now.AddDays(-7)){throw 'Need recent verified E/F recovery pairs before pruning'}
- foreach($rel in @('server\server.jar','server\world\level.dat')){
-  $left=Join-Path (Join-Path $a $pairs[0].Name) $rel;$right=Join-Path (Join-Path $b $pairs[0].Name) $rel
-  if((Get-FileHash -LiteralPath $left).Hash-cne(Get-FileHash -LiteralPath $right).Hash){throw 'Current E/F recovery pair differs'}
+function Get-VerifiedRecoverySnapshot([string]$Path) {
+ $root='F:\MC-backups\scheduled'
+ $full=[IO.Path]::GetFullPath($Path).TrimEnd('\')
+ if([IO.Path]::GetDirectoryName($full)-cne$root-or[IO.Path]::GetFileName($full)-notmatch'^\d{8}-\d{6}$'){
+  throw 'Expected a scheduled recovery point on F:'
  }
- return $pairs[0].Name
+ foreach($path in @('F:\MC-backups',$root,$full)){
+  $directory=Get-Item -LiteralPath $path -Force -ErrorAction Stop
+  if(-not$directory.PSIsContainer-or$directory.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)){throw 'Linked recovery point'}
+ }
+ foreach($relative in @('.complete','backup.json','server/server.jar','server/world/level.dat','ops/manage-server.ps1')){
+  if(-not(Test-Path -LiteralPath (Join-Path $full $relative) -PathType Leaf)){throw 'Incomplete F: recovery point'}
+ }
+ $meta=Get-Content -LiteralPath (Join-Path $full 'backup.json') -Raw -Encoding UTF8|ConvertFrom-Json
+ if($meta.stoppedForCopy-ne$true-or$meta.source-cne'E:\MC\server'-or$meta.serverJarSha256-notmatch'^[0-9a-fA-F]{64}$'){
+  throw 'Invalid cold recovery metadata'
+ }
+ if((Get-FileHash -LiteralPath (Join-Path $full 'server/server.jar')).Hash-ne$meta.serverJarSha256){throw 'Recovery server JAR digest mismatch'}
+ foreach($file in $meta.verifiedFiles.PSObject.Properties){
+  if($file.Name -notmatch '^(?:server|ops|ysm-private)/[A-Za-z0-9._/-]+$' -or $file.Name.Split('/') -contains '..' -or
+     $file.Value -notmatch '^[0-9a-fA-F]{64}$' -or (Get-FileHash -LiteralPath (Join-Path $full $file.Name)).Hash-ne$file.Value){
+   throw 'Recovery file digest mismatch'
+  }
+ }
+ return [pscustomobject]@{Name=[IO.Path]::GetFileName($full);CreatedAt=[datetimeoffset]::Parse($meta.createdAt)}
+}
+
+function Assert-ReleaseRecoverySnapshot {
+ $root='F:\MC-backups\scheduled'
+ $snapshots=@(Get-ChildItem -LiteralPath $root -Directory | Where-Object {
+  $_.Name-match'^\d{8}-\d{6}$' -and -not $_.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint) -and
+  (Test-Path -LiteralPath (Join-Path $_.FullName '.complete'))
+ } | Sort-Object Name -Descending)
+ if($snapshots.Count-lt 3){throw 'Need three complete F: recovery points before pruning'}
+ $verified=@($snapshots | Select-Object -First 3 | ForEach-Object { Get-VerifiedRecoverySnapshot $_.FullName })
+ $newest=$verified[0]
+ if($newest.CreatedAt-lt[datetimeoffset]::Now.AddDays(-7)){throw 'Need a recent verified F: recovery point before pruning'}
+ return $newest.Name
 }
 
 function Write-ReleaseRetentionJournal([string]$Path,$Value) {
@@ -60,14 +86,14 @@ function Write-ReleaseRetentionJournal([string]$Path,$Value) {
 
 function Invoke-ReleaseSnapshotRetention([string]$BackupRoot,[datetimeoffset]$AsOf=[datetimeoffset]::Now,[switch]$PlanOnly) {
  $full=[IO.Path]::GetFullPath($BackupRoot).TrimEnd('\')
- if($full-cnotin@('E:\MC\backups','F:\MC-backups')){throw 'Unreviewed release backup root'}
+ if($full-cne'F:\MC-backups'){throw 'Unreviewed release backup root'}
  if((Get-Item -LiteralPath $full -Force).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)){throw 'Linked backup root'}
  $plan=Get-ReleaseSnapshotPlan $full $AsOf
  if($PlanOnly){return $plan}
  # The native maintenance owns the game lease and has waited for the exact JVM.
  # Also fail closed here if any game/proxy/model listener has returned.
  Relocation-AssertCold
- $pair=Assert-ReleaseRecoveryPair
+ $pair=Assert-ReleaseRecoverySnapshot
  $journalRoot=Join-Path $full '.release-retention'
  if(Test-Path -LiteralPath $journalRoot){if((Get-Item -LiteralPath $journalRoot -Force).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)){throw 'Linked retention journal'}}
  else{New-Item -ItemType Directory -Path $journalRoot -ErrorAction Stop|Out-Null}

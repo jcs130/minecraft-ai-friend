@@ -122,9 +122,13 @@ function Deploy-PendingRuntimeRelocation([string]$backup,[string]$mirror) {
     $plan=Relocation-ValidatePlan (Get-Content -LiteralPath $pending -Raw -Encoding UTF8 | ConvertFrom-Json)
     $requested=[datetimeoffset]::Parse($plan.requestedAt)
     Relocation-AssertCold
-    $a=Relocation-Snapshot $backup 'E:\MC\backups\scheduled' $requested
-    $b=Relocation-Snapshot $mirror 'F:\MC-backups\scheduled' $requested
-    if([IO.Path]::GetFileName($a) -cne [IO.Path]::GetFileName($b)) { throw 'Runtime recovery snapshots differ.' }
+    $f=Relocation-Snapshot $(if($mirror){$mirror}else{$backup}) 'F:\MC-backups\scheduled' $requested
+    $snapshots=@($f)
+    if($mirror){
+        $previous=Relocation-Snapshot $backup 'E:\MC\backups\scheduled' $requested
+        if([IO.Path]::GetFileName($previous) -cne [IO.Path]::GetFileName($f)) { throw 'Runtime recovery snapshots differ.' }
+        $snapshots+=@($previous)
+    }
     $partition=Get-Partition -DriveLetter C -ErrorAction Stop
     if((Get-Disk -Number $partition.DiskNumber -ErrorAction Stop).BusType -ne 'NVMe') { throw 'C: is not the expected NVMe volume.' }
     $available=(Get-PSDrive C).Free
@@ -134,7 +138,7 @@ function Deploy-PendingRuntimeRelocation([string]$backup,[string]$mirror) {
     New-Item -ItemType Directory -Path $otherEvidence -Force | Out-Null
     $blocked=Join-Path $opsDir 'runtime-relocation.recovery.blocked'
     if(Test-Path -LiteralPath $blocked) { throw 'A previous runtime relocation requires inspection.' }
-    $journal=[ordered]@{releaseId=$plan.releaseId;startedAt=(Get-Date).ToString('o');phase='checking';backup=[IO.Path]::GetFileName($a);moves=@();passwordsChanged=$false}
+    $journal=[ordered]@{releaseId=$plan.releaseId;startedAt=(Get-Date).ToString('o');phase='checking';backup=[IO.Path]::GetFileName($f);moves=@();passwordsChanged=$false}
     $moved=@()
     function Save-Relocation {
         $json=$journal | ConvertTo-Json -Depth 7
@@ -149,12 +153,11 @@ function Deploy-PendingRuntimeRelocation([string]$backup,[string]$mirror) {
             if(Test-Path -LiteralPath $move.retained) { throw 'Retained source already exists; do not replay relocation.' }
             $rows=@(Relocation-Tree $move.source);$total+=($rows | Measure-Object bytes -Sum).Sum
             if($move.backup -eq 'server') {
-                Relocation-Compare $rows @(Relocation-Tree (Join-Path $a 'server'))
-                Relocation-Compare $rows @(Relocation-Tree (Join-Path $b 'server'))
+                foreach($snapshot in $snapshots) { Relocation-Compare $rows @(Relocation-Tree (Join-Path $snapshot 'server')) }
             } else {
                 foreach($relative in @('proxy\velocity.toml','proxy\plugins\LibreLogin\user-data.db','proxy\plugins\agentappearance\models.json','worker\server.properties')) {
                     $hash=(Get-FileHash -LiteralPath (Join-Path $move.source $relative) -Algorithm SHA256).Hash
-                    foreach($copy in @($a,$b)) {
+                    foreach($copy in $snapshots) {
                         if((Get-FileHash -LiteralPath (Join-Path (Join-Path $copy 'ysm-private') $relative) -Algorithm SHA256).Hash -cne $hash) { throw 'Private service backup mismatch.' }
                     }
                 }
@@ -162,7 +165,7 @@ function Deploy-PendingRuntimeRelocation([string]$backup,[string]$mirror) {
             $sources+=,@($rows)
         }
         if($available -lt $total+($plan.minimumFreeGiB*1GB)) { throw 'NVMe does not have enough room plus the reserved system space.' }
-        foreach($copy in @($a,$b)) { [IO.File]::WriteAllText((Join-Path $copy '.keep'),'Pre-NVMe runtime relocation recovery point; retain world, bank and authentication together.') }
+        foreach($copy in $snapshots) { [IO.File]::WriteAllText((Join-Path $copy '.keep'),'Pre-NVMe runtime relocation recovery point; retain world, bank and authentication together.') }
         $parent='C:\MC-active'
         if(-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent | Out-Null }
         if((Get-Item -LiteralPath $parent -Force).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) { throw 'NVMe parent cannot itself be a link.' }

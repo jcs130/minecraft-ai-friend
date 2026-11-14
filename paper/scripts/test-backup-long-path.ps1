@@ -3,9 +3,6 @@ $ErrorActionPreference='Stop'
 $tokens=$null;$errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile($MaintenanceScript,[ref]$tokens,[ref]$errors)
 if($errors.Count){throw 'Maintenance script parse failed'}
-$function=@($ast.EndBlock.Statements|Where-Object {$_ -is [Management.Automation.Language.FunctionDefinitionAst] -and $_.Name -eq 'Backup-TreeBytes'})
-if($function.Count -ne 1){throw 'Expected the size helper exactly once'}
-Invoke-Expression $function[0].Extent.Text
 $copyFunction=@($ast.EndBlock.Statements|Where-Object {$_ -is [Management.Automation.Language.FunctionDefinitionAst] -and $_.Name -eq 'Backup-CopyBytes'})
 if($copyFunction.Count -ne 1){throw 'Expected the native copier size helper exactly once'}
 Invoke-Expression $copyFunction[0].Extent.Text
@@ -18,7 +15,6 @@ try {
     $null=[IO.Directory]::CreateDirectory(('\\?\'+$deep))
     [IO.File]::WriteAllBytes(('\\?\'+(Join-Path $fixture 'short.bin')),[byte[]](1,2,3))
     [IO.File]::WriteAllBytes(('\\?\'+(Join-Path $deep 'deep.bin')),[byte[]](4,5,6,7,8))
-    if((Backup-TreeBytes $fixture) -ne 8){throw 'Short and deep files must both contribute'}
     if((Backup-CopyBytes $fixture) -ne 8){throw 'Copier preflight must include long paths'}
     $archive=Join-Path $fixture 'repairs'
     New-Item -ItemType Directory -Path $archive|Out-Null
@@ -35,10 +31,10 @@ try {
     # Remove only the fixture junction itself, never its target contents.
     [IO.Directory]::Delete($link)
     $missingRejected=$false
-    try {Backup-TreeBytes (Join-Path $fixture 'missing')|Out-Null} catch {$missingRejected=$true}
+    try {Backup-CopyBytes (Join-Path $fixture 'missing')|Out-Null} catch {$missingRejected=$true}
     if(-not $missingRejected){throw 'Missing directories must not be silently omitted'}
     $uncRejected=$false
-    try {Backup-TreeBytes '\\invalid-backup-host\share'|Out-Null} catch {$uncRejected=$true}
+    try {Backup-CopyBytes '\\invalid-backup-host\share'|Out-Null} catch {$uncRejected=$true}
     if(-not $uncRejected){throw 'Unexpected network roots must be rejected'}
     Write-Output '8 backup path checks passed, including deep files, exclusion sizing, and junction traversal.'
 } finally {

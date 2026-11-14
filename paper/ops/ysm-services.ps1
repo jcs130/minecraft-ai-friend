@@ -86,6 +86,8 @@ function Backup-YsmServices([string]$destination) {
     foreach ($legacy in @('worker\server.properties','proxy\plugins\agentappearance\models.json')) {
         if (-not $nativeMode -or (Test-Path -LiteralPath (Join-Path $c.root $legacy))) { $requiredFiles+=@($legacy) }
     }
+    $loginStore = 'proxy\plugins\LibreLogin\user-data.db'
+    if (Test-Path -LiteralPath (Join-Path $c.root $loginStore) -PathType Leaf) { $requiredFiles += $loginStore }
     foreach ($relative in $requiredFiles) {
         if ((Get-FileHash -LiteralPath (Join-Path $c.root $relative)).Hash -ne (Get-FileHash -LiteralPath (Join-Path $target $relative)).Hash) { throw "YSM private snapshot mismatch: $relative" }
     }

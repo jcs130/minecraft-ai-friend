@@ -1,7 +1,7 @@
 $ErrorActionPreference='Stop'
 $taskText=Get-Content -LiteralPath (Join-Path $PSScriptRoot '../manage-server.ps1') -Raw -Encoding UTF8
 $taskStart=$taskText.IndexOf('function CompleteSnapshots(')
-$taskEnd=$taskText.IndexOf('function Assert-MirrorHashes(',$taskStart)
+$taskEnd=$taskText.IndexOf('function Backup-CopyBytes(',$taskStart)
 Invoke-Expression $taskText.Substring($taskStart,$taskEnd-$taskStart)
 $taskTemp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
 $taskRoot=Join-Path $taskTemp ('retention-policy-fixture-'+[guid]::NewGuid().ToString('N'))

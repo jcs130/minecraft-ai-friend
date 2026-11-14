@@ -32,8 +32,13 @@ function Invoke-PaperCoreUpgrade {
     $plan = Get-Content -LiteralPath $PlanPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($plan.schema -ne 1 -or $plan.approved -ne $true -or $plan.id -notmatch '^paper-1-21-1-[a-z0-9-]{8,64}$' -or
         $plan.from -ne '1.20.6' -or $plan.to -ne '1.21.1' -or $plan.paperBuild -ne 133) { throw 'Unapproved or unsupported core upgrade plan' }
-    if ([IO.Path]::GetFullPath($LocalSnapshot) -eq [IO.Path]::GetFullPath($MirrorSnapshot)) { throw 'Two separate complete snapshots required' }
-    foreach ($snapshot in @($LocalSnapshot,$MirrorSnapshot)) {
+    if (-not $LocalSnapshot) { throw 'A complete stopped-server snapshot is required' }
+    $snapshots = @($LocalSnapshot)
+    if ($MirrorSnapshot) {
+        if ([IO.Path]::GetFullPath($LocalSnapshot) -eq [IO.Path]::GetFullPath($MirrorSnapshot)) { throw 'Recovery paths must be distinct' }
+        $snapshots += $MirrorSnapshot
+    }
+    foreach ($snapshot in $snapshots) {
         foreach ($relative in @('.complete','backup.json','server/server.jar','server/world/level.dat')) {
             if (-not (Test-Path -LiteralPath (Core-ContainedPath $snapshot $relative) -PathType Leaf)) { throw 'Complete stopped-server snapshot is missing' }
         }
@@ -55,7 +60,7 @@ function Invoke-PaperCoreUpgrade {
         $exists = Test-Path -LiteralPath $target
         if ($file.beforeSha256) {
             if (-not $exists -or (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $file.beforeSha256) { throw 'Core target changed since preparation' }
-            foreach ($snapshot in @($LocalSnapshot,$MirrorSnapshot)) {
+            foreach ($snapshot in $snapshots) {
                 $saved = Core-ContainedPath $snapshot $snapshotRelative
                 if ((Get-FileHash -LiteralPath $saved -Algorithm SHA256).Hash -ne $file.beforeSha256) { throw 'Core snapshot does not match current files' }
             }
@@ -75,7 +80,7 @@ function Invoke-PaperCoreUpgrade {
         $key = $target.ToLowerInvariant()
         if ($seen.ContainsKey($key)) { throw 'Duplicate core target' }; $seen[$key] = $true
         if ($file.sha256 -notmatch '^[A-Fa-f0-9]{64}$' -or (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $file.sha256) { throw 'Old core plugin changed' }
-        foreach ($snapshot in @($LocalSnapshot,$MirrorSnapshot)) {
+        foreach ($snapshot in $snapshots) {
             if ((Get-FileHash -LiteralPath (Core-ContainedPath $snapshot $snapshotRelative) -Algorithm SHA256).Hash -ne $file.sha256) { throw 'Old plugin snapshot mismatch' }
         }
         $saved = $target + '.disabled-' + $plan.id
@@ -110,7 +115,7 @@ function Invoke-PaperCoreUpgrade {
                 if ($file.sha256 -notmatch '^[A-Fa-f0-9]{64}$' -or $file.beforeSha256 -notmatch '^[A-Fa-f0-9]{64}$' -or
                     (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $file.beforeSha256 -or
                     (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $file.sha256) { throw 'Legacy item data changed' }
-                foreach ($snapshot in @($LocalSnapshot,$MirrorSnapshot)) {
+                foreach ($snapshot in $snapshots) {
                     if ((Get-FileHash -LiteralPath (Core-ContainedPath $snapshot ('server/' + $relative)) -Algorithm SHA256).Hash -ne $file.beforeSha256) { throw 'Legacy item snapshot mismatch' }
                 }
                 $entries += [pscustomobject]@{Target=$target;Relative=$relative;SnapshotRelative=('server/' + $relative);Source=$source;Hash=$file.sha256;Before=$true;Disable=$false}
@@ -156,6 +161,10 @@ function Invoke-PaperCoreUpgrade {
 function Deploy-PendingPaperCore([string]$localSnapshot, [string]$mirrorSnapshot) {
     $planPath = Join-Path $opsDir 'paper-core-upgrade.pending.json'
     if (-not (Test-Path -LiteralPath $planPath)) { return }
+    if (-not $mirrorSnapshot) {
+        . (Join-Path $opsDir 'release-snapshot-retention.ps1')
+        $null = Get-VerifiedRecoverySnapshot $localSnapshot
+    }
     foreach ($name in @('content-plugins.pending.json','agentfriend-deploy.pending.json','cortieye-deploy.pending.json','geyser-deploy.pending.json','server-settings.pending.json')) {
         if (Test-Path -LiteralPath (Join-Path $opsDir $name)) { throw 'Finish or withdraw other pending deployments before a core upgrade' }
     }

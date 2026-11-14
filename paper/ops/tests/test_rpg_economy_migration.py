@@ -26,9 +26,18 @@ class MigrationTest(unittest.TestCase):
     def test_legacy_writer_after_marker_is_rejected(self):
         self.apply();(self.server/m.LEGACY).write_bytes(self.config)
         with self.assertRaisesRegex(ValueError,'reappeared'):self.apply()
-    def test_both_complete_backups_required(self):
+    def test_explicit_second_backup_must_be_complete(self):
         (self.mirror/'.complete').unlink()
-        with self.assertRaisesRegex(ValueError,'both disks'):self.apply()
+        with self.assertRaisesRegex(ValueError,'Complete cold snapshot'):self.apply()
+        self.assertFalse(self.evidence.exists())
+    def test_single_complete_backup_can_install(self):
+        result=m.apply(self.server,self.backup,None,self.evidence)
+        self.assertEqual(result['total'],17)
+        self.assertEqual((self.server/self.bankpath).read_bytes(),self.bank.replace(b"'1.25'",b"'18.25'"))
+    def test_single_incomplete_backup_cannot_install(self):
+        (self.backup/'.complete').unlink()
+        with self.assertRaisesRegex(ValueError,'Complete cold snapshot'):
+            m.apply(self.server,self.backup,None,self.evidence)
         self.assertFalse(self.evidence.exists())
     def test_latest_cold_money_must_match(self):
         (self.server/self.bankpath).write_bytes(self.bank.replace(b'1.25',b'2.25'))

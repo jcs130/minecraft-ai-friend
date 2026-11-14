@@ -1,7 +1,7 @@
 $ErrorActionPreference='Stop'
 $taskText=Get-Content -LiteralPath (Join-Path $PSScriptRoot '../manage-server.ps1') -Raw -Encoding UTF8
 $taskStart=$taskText.IndexOf('function CompleteSnapshots(')
-$taskEnd=$taskText.IndexOf('function Assert-MirrorHashes(',$taskStart)
+$taskEnd=$taskText.IndexOf('function Backup-CopyBytes(',$taskStart)
 Invoke-Expression $taskText.Substring($taskStart,$taskEnd-$taskStart)
 $taskRoot=Join-Path 'E:\MC\ops\repairs\basic-survival-release-20261028' ('retention-fixture-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $taskRoot | Out-Null

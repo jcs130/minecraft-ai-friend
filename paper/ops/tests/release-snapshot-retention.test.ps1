@@ -52,7 +52,7 @@ try{
  function Get-Item {return [pscustomobject]@{Attributes=[IO.FileAttributes]::Directory}}
  function Get-ReleaseSnapshotPlan {return [pscustomobject]@{Expired=@();Keep=@();Ignored=@()}}
  function Relocation-AssertCold {throw 'SYNTHETIC_GAME_ONLINE'}
- $blocked=$false;try{Invoke-ReleaseSnapshotRetention -BackupRoot 'E:\MC\backups'}catch{$blocked=$_.Exception.Message-eq'SYNTHETIC_GAME_ONLINE'}
+ $blocked=$false;try{Invoke-ReleaseSnapshotRetention -BackupRoot 'F:\MC-backups'}catch{$blocked=$_.Exception.Message-eq'SYNTHETIC_GAME_ONLINE'}
  Check 'running game blocks even an empty cleanup before recovery or writes' $blocked
 }
 & {
@@ -61,12 +61,12 @@ try{
  # Join-Path resolves PS drives even without I/O; hosted runners have no E:.
  function Join-Path {param($Path,$ChildPath)return [IO.Path]::Combine($Path,$ChildPath)}
  $fakeName='fixture-before-refresh-20261001-r1'
- $fake=[pscustomobject]@{Name=$fakeName;Path=('E:\MC\backups\'+$fakeName);CreatedAt=$asOf.AddDays(-30);Pinned=$false;Resume=$false;MetadataSha256=('A'*64);Journal=('E:\MC\backups\.release-retention\'+$fakeName+'.json')}
+ $fake=[pscustomobject]@{Name=$fakeName;Path=('F:\MC-backups\'+$fakeName);CreatedAt=$asOf.AddDays(-30);Pinned=$false;Resume=$false;MetadataSha256=('A'*64);Journal=('F:\MC-backups\.release-retention\'+$fakeName+'.json')}
  $events=[Collections.Generic.List[string]]::new();$fault=''
  function Get-Item {return [pscustomobject]@{Attributes=[IO.FileAttributes]::Directory}}
  function Get-ReleaseSnapshotPlan {return [pscustomobject]@{Expired=@($fake);Keep=@('retained');Ignored=@()}}
  function Relocation-AssertCold {$events.Add('cold')}
- function Assert-ReleaseRecoveryPair {if($fault-eq'pair'){throw 'BAD_PAIR'};return '20261107-040000'}
+ function Assert-ReleaseRecoverySnapshot {if($fault-eq'pair'){throw 'BAD_PAIR'};return '20261107-040000'}
  function Resolve-Path {param($LiteralPath)return [pscustomobject]@{ProviderPath=$LiteralPath}}
  function Get-ChildItem {if($fault-eq'link'){return [pscustomobject]@{link=$true}}}
  function Test-Path {param($LiteralPath)return ($LiteralPath.EndsWith('.release-retention')-or$LiteralPath.EndsWith('.runtime-before.complete')-or($fault-eq'pin'-and$LiteralPath.EndsWith('.keep')))}
@@ -75,20 +75,20 @@ try{
  function Rename-Item {$events.Add('withdraw-complete')}
  function Remove-Item {$events.Add('delete');if($fault-eq'delete'){throw 'DELETE_FAILURE'}}
  function New-Item {throw 'Unexpected directory write in virtual fixture'}
- $r=Invoke-ReleaseSnapshotRetention -BackupRoot 'E:\MC\backups' -AsOf $asOf
+ $r=Invoke-ReleaseSnapshotRetention -BackupRoot 'F:\MC-backups' -AsOf $asOf
  Check 'normal cleanup commits completion after deletion' ($r.Results[0].removed-and$events.IndexOf('journal-removed')-gt$events.IndexOf('delete'))
  Check 'durable intent precedes withdrawing complete marker and deletion' ($events.IndexOf('journal-pruning')-lt$events.IndexOf('withdraw-complete')-and$events.IndexOf('withdraw-complete')-lt$events.IndexOf('delete'))
  foreach($mode in @('journal','metadata','pin','link')){
-  $fault=$mode;$events.Clear();$r=Invoke-ReleaseSnapshotRetention -BackupRoot 'E:\MC\backups' -AsOf $asOf
+  $fault=$mode;$events.Clear();$r=Invoke-ReleaseSnapshotRetention -BackupRoot 'F:\MC-backups' -AsOf $asOf
   Check ($mode+' failure prevents deletion') (-not$r.Results[0].removed-and-not$events.Contains('delete'))
  }
- $fault='delete';$events.Clear();$r=Invoke-ReleaseSnapshotRetention -BackupRoot 'E:\MC\backups' -AsOf $asOf
+ $fault='delete';$events.Clear();$r=Invoke-ReleaseSnapshotRetention -BackupRoot 'F:\MC-backups' -AsOf $asOf
  Check 'partial deletion retains durable pruning intent' (-not$r.Results[0].removed-and$events.Contains('journal-pruning')-and-not$events.Contains('journal-removed'))
- $fault='';$fake.Resume=$true;$events.Clear();$r=Invoke-ReleaseSnapshotRetention -BackupRoot 'E:\MC\backups' -AsOf $asOf
+ $fault='';$fake.Resume=$true;$events.Clear();$r=Invoke-ReleaseSnapshotRetention -BackupRoot 'F:\MC-backups' -AsOf $asOf
  Check 'reviewed interrupted deletion can finish' $r.Results[0].removed
- $fault='pair';$events.Clear();$blocked=$false;try{Invoke-ReleaseSnapshotRetention -BackupRoot 'E:\MC\backups' -AsOf $asOf}catch{$blocked=$_.Exception.Message-eq'BAD_PAIR'}
- Check 'bad recovery pair prevents all deletion' ($blocked-and-not$events.Contains('delete'))
- $fault='';$fake.Path='E:\MC\server';$events.Clear();$r=Invoke-ReleaseSnapshotRetention -BackupRoot 'E:\MC\backups' -AsOf $asOf
+ $fault='pair';$events.Clear();$blocked=$false;try{Invoke-ReleaseSnapshotRetention -BackupRoot 'F:\MC-backups' -AsOf $asOf}catch{$blocked=$_.Exception.Message-eq'BAD_PAIR'}
+ Check 'bad F: recovery point prevents all deletion' ($blocked-and-not$events.Contains('delete'))
+ $fault='';$fake.Path='E:\MC\server';$events.Clear();$r=Invoke-ReleaseSnapshotRetention -BackupRoot 'F:\MC-backups' -AsOf $asOf
  Check 'escaped planned path cannot be deleted' (-not$r.Results[0].removed-and-not$events.Contains('delete'))
 }
 Write-Output ('Release snapshot retention: '+$checks+' checks passed; production unchanged')

@@ -1,7 +1,7 @@
 $ErrorActionPreference='Stop'
 $taskText=Get-Content -LiteralPath (Join-Path $PSScriptRoot '../manage-server.ps1') -Raw -Encoding UTF8
 $taskStart=$taskText.IndexOf('function CompleteSnapshots(')
-$taskEnd=$taskText.IndexOf('function Assert-MirrorHashes(',$taskStart)
+$taskEnd=$taskText.IndexOf('function Backup-CopyBytes(',$taskStart)
 $taskFunctions=$taskText.Substring($taskStart,$taskEnd-$taskStart)
 Invoke-Expression $taskFunctions
 $script:taskCount=0
@@ -10,10 +10,9 @@ $script:taskMessages=@()
 function Log([string]$message){$script:taskMessages+=$message}
 function Listener { return $true }
 function CompleteSnapshots([string]$path){throw 'An online native backup root must not even be enumerated.'}
-PruneSnapshots 'E:\MC\backups\scheduled'
-Check ($script:taskMessages.Count -eq 1) 'Online E: pruning was not deferred'
-PruneSnapshots 'F:\MC-backups\scheduled'
-Check ($script:taskMessages.Count -eq 2) 'Online F: pruning was not deferred'
+$backupRoot='F:\MC-backups\scheduled'
+PruneSnapshots $backupRoot
+Check ($script:taskMessages.Count -eq 1) 'Online F: pruning was not deferred'
 Check (@($script:taskMessages | Where-Object {$_ -notlike '*deferred until Paper is stopped*'}).Count -eq 0) 'Missing clear deferral receipt'
 
 # Restore native selection, then exercise only a private fixture. Actual
@@ -50,5 +49,5 @@ Check ($taskErrors.Count -eq 0) 'Maintenance script does not parse'
 $taskBackup=$taskAst.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Backup-Server'},$true)
 $taskMainTry=@($taskBackup.Body.EndBlock.Statements | Where-Object {$_ -is [System.Management.Automation.Language.TryStatementAst]})[-1]
 $taskPrunes=@($taskBackup.FindAll({param($node) $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'PruneSnapshots'},$true))
-Check ($taskPrunes.Count -eq 1 -and $taskPrunes[0].Extent.StartOffset -gt $taskMainTry.Body.Extent.StartOffset -and $taskPrunes[0].Extent.EndOffset -lt $taskMainTry.Body.Extent.EndOffset) 'E: cleanup must finish before finally restarts Paper'
+Check ($taskPrunes.Count -eq 1 -and $taskPrunes[0].Extent.StartOffset -gt $taskMainTry.Body.Extent.StartOffset -and $taskPrunes[0].Extent.EndOffset -lt $taskMainTry.Body.Extent.EndOffset) 'F: cleanup must finish before finally restarts Paper'
 "Offline backup retention: $script:taskCount checks passed; production untouched"
