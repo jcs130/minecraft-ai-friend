@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.73
+
+- Idle movement can select a nearby reachable destination, follow existing routes around obstacles and step up, with bounded search/range/duration and cancellation before a new body owner. Preserve the same body queue, collision constraints, dry ground and live threat checks. Public idle decision exports support independent hosts; no model calls or game-specific script.
+
 ## 0.5.7-rc.160-preview.72
 
 - Confirm server inventory and cancellation before automatic crafting/smelting workstation placement; do not place with an optimistic or rejected hand swap.

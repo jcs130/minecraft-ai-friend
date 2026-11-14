@@ -3,6 +3,7 @@ import { Vec3 } from 'vec3';
 import { canSeeBlockAt, canSeeEntity } from './terrain.ts';
 import type { IdleBehaviorCandidate } from './idle-behavior.ts';
 import { spatialBody } from './spatial-site.ts';
+import { sampleIdleRoam, executeIdleRoam, type IdleRoam } from './idle-roam.ts';
 
 /** Protocol poses and local viewer previews available while the caller owns the body. */
 export const IDLE_ACTIONS = [
@@ -31,6 +32,7 @@ export const IDLE_ACTIONS = [
   { id: 'wave_twice', label: '空手挥两下', category: 'pose' },
   { id: 'inventory_preview', label: '短暂查看背包', category: 'interface' },
   { id: 'wander', label: '在已核验的平地闲逛两三步', category: 'move' },
+  { id: 'stroll', label: '沿附近可达路线散步', category: 'move' },
   { id: 'short_walk', label: '沿眼前平地走一小步', category: 'move' },
 ] as const;
 
@@ -42,6 +44,7 @@ interface SceneState extends Record<string, unknown> {
   targets: Partial<Record<IdleActionId, Target>>;
   movement?: { origin: Point; destination: Point };
   wander?: { origin: Point; destination: Point };
+  stroll?: IdleRoam;
 }
 
 const ANIMALS = new Set(['allay', 'armadillo', 'axolotl', 'bat', 'bee', 'camel', 'cat', 'chicken',
@@ -189,6 +192,8 @@ export function sampleIdleActions(bot: Bot, options: {
   if (options.allowMovement && !bot.currentWindow && !bot.getControlState('sneak')
     && !(['forward', 'back', 'left', 'right', 'jump', 'sprint'] as ControlState[]).some(key => bot.getControlState(key))) {
     const origin = state.origin;
+    const stroll=sampleIdleRoam(bot,options.movementAnchor ?? origin,options.random);
+    if(stroll){state.stroll=stroll;allowed.add('stroll');}
     const destination = { x: origin.x - Math.sin(bot.entity.yaw) * 1.2,
       y: origin.y, z: origin.z - Math.cos(bot.entity.yaw) * 1.2 };
     const inRange = (to: Point): boolean => distance(to, options.movementAnchor ?? origin) <= 6;
@@ -282,6 +287,11 @@ export async function executeIdleAction(bot: Bot, id: string, sceneState: Record
   const original = { yaw: bot.entity.yaw, pitch: bot.entity.pitch };
   signal.addEventListener('abort', clean, { once: true });
   try {
+    if(id==='stroll') {
+      const route=(sceneState as SceneState).stroll;
+      if(route)await executeIdleRoam(bot,route,signal,host.available);
+      return;
+    }
     if (id === 'inventory_preview') {
       if (bot.currentWindow) return;
       previewOpen = true;
