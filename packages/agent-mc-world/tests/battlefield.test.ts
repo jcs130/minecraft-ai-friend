@@ -47,6 +47,22 @@ it('requires explicit telemetry opt-in and releases its listeners on disposal', 
 });
 
 describe('programmatic battlefield observations', () => {
+  it('retires confirmed deaths, keeps despawns uncertain and isolates reused entity IDs',()=>{
+    const r=rig('1.21.1'); r.sample(1000);
+    const old=r.bot.entities[3];
+    r.bot.emit('entityGone',old);
+    delete (r.bot.entities as any)[3];
+    expect(r.sample(2000).clues?.some(c=>c.source==='last-seen')).toBe(true);
+    r.bot.emit('entityDead',old);
+    expect(r.sample(2100).clues?.some(c=>c.source==='last-seen')).toBe(false);
+    r.bot.entities[3]={...old,uuid:'new-enemy'};r.sample(2200);
+    r.bot.emit('entityDead',old);
+    expect(r.sample(2300).actors.some(a=>a.uuid==='new-enemy')).toBe(true);
+    r.bot.emit('entityDead',r.bot.entities[3]);
+    expect(r.sample(2400).actors.some(a=>a.uuid==='new-enemy')).toBe(false);
+    expect(r.sample(2400).clues?.some(c=>c.source==='last-seen')).toBe(false);
+    r.observer.close();expect(r.bot.listenerCount('entityDead')).toBe(0);
+  });
   it('clears old-world search clues when native world name changes within the same dimension type',()=>{
     const r=rig(),dispose=installWorldIdentity(r.bot as unknown as Bot);
     r.bot._client.emit('login',{worldState:{name:'minecraft:first',dimension:0}});r.sample(1000);
@@ -63,7 +79,8 @@ describe('programmatic battlefield observations', () => {
     r.bot.entities[3].position=new Vec3(7,64,0);
     const hidden=r.sample(1100);
     expect(hidden.clues).toEqual(expect.arrayContaining([expect.objectContaining({source:'last-seen',position:[3,64,0],seenAt:1000})]));
-    expect(r.sample(9001).clues?.some(c=>c.source==='last-seen')).toBe(false);
+    expect(r.sample(25000).clues?.some(c=>c.source==='last-seen')).toBe(true);
+    expect(r.sample(31000).clues?.some(c=>c.source==='last-seen')).toBe(false);
     r.bot.blockAt=(p:Vec3)=>({name:'air',position:p,shapes:[]});r.sample(10000);
     r.bot._client.emit('end');
     expect(r.observer.sample(r.bot as unknown as Bot,8,{fighting:false,emergency:false,taskId:null,step:null},12,10001).clues?.some(c=>c.source==='last-seen')).toBe(false);
@@ -85,7 +102,7 @@ describe('programmatic battlefield observations', () => {
     configureObservationPolicy(r.bot, () => ({ entityView: 'camera' }));
     expect(r.sample(1100).actors.find(e => e.entityId === 3)).toBeUndefined();
   });
-  it.each(['1.20.6', '1.21.4'])('reads health using the %s registry and keeps missing player health unknown', version => {
+  it.each(['1.20.6', '1.21.1', '1.21.4'])('reads health using the %s registry and keeps missing player health unknown', version => {
     vi.useFakeTimers(); vi.setSystemTime(1000);
     const r = rig(version);
     const index = r.bot.registry.entitiesByName.zombie.metadataKeys!.indexOf('health');

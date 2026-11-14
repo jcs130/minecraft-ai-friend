@@ -1743,6 +1743,24 @@ describe('战斗:抢占方与出手记账', () => {
  * 服务端近战在 reach≤3 时不检查遮挡；客户端视线断开时须停止挥刀，也不能将隔墙目标记作够得着。
  */
 describe('战斗:隔着方块不出手', () => {
+  it.each(['cover','despawn'] as const)('hands an unresolved %s contact back to search instead of declaring clear', async kind=>{
+    const {bot,attacks,controls}=combatRigBot([foe(7,'blaze',2.5)]),b=bot as any;
+    const r=rig(bot);r.session.onHurtBy(7,'blaze');await drive(bot as any,600);
+    const before=attacks.length;
+    if(kind==='cover')b.world.raycast=()=>({position:new Vec3(1,64,0)});
+    else delete b.entities[7];
+    await drive(bot as any,3400);
+    expect(attacks.length).toBe(before);
+    expect(r.combatReports.at(-1)).toMatchObject({reason:'lost-sight',targetDeaths:{}});
+    expect(r.session.active).toBe(false);expect(r.calls.resumed).toBe(1);
+    expect(Object.values(controls).some(Boolean)).toBe(false);r.session.stop();
+  });
+  it('prioritizes low-health retreat while a known enemy is occluded',async()=>{
+    const {bot}=combatRigBot([foe(7,'blaze',2.5)]),b=bot as any;
+    const r=rig(bot);r.session.onHurtBy(7,'blaze');await drive(bot as any,500);
+    b.world.raycast=()=>({position:new Vec3(1,64,0)});b.health=6;
+    await drive(bot as any,200);expect(r.session.reactionState().retreating).toBe(true);r.session.stop();
+  });
   it('射线被方块挡住:够得着也不挥;视线恢复才开打', async () => {
     const { bot, attacks } = combatRigBot([foe(7, 'zombie', 2.5)]);
     let blocked = true;

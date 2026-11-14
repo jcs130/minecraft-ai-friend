@@ -17,7 +17,7 @@ function rig(){
 }
 it('offers nonattacking checked short searches from coarse real sound bearings, without inventing target coordinates',()=>{
   const {bot,field}=rig(),choices=combatSearchCandidates(bot,field,true,true);
-  expect(choices).toHaveLength(3);expect(choices[0]).toMatchObject({kind:'search',source:'sound-packet'});
+  expect(choices).toHaveLength(5);expect(choices[0]).toMatchObject({kind:'search',source:'sound-packet'});
   expect(choices[0].kind==='search'&&choices[0].destination[0]).toBeCloseTo(1.2);
   expect(choices[0].kind==='search'&&choices[0].destination[2]).toBeCloseTo(0);
   expect(choices.every(c=>!('targetId' in c))).toBe(true);
@@ -33,6 +33,16 @@ it('uses recorded last-seen location, never an occluded tracked entity current p
   const choices=combatSearchCandidates(bot,field,true,true);
   expect(choices[0].kind==='search'&&choices[0].destination[2]).toBeCloseTo(-1.2);
   expect(choices[0].kind==='search'&&choices[0].destination[0]).toBeCloseTo(0);
+});
+it('prefers last-seen evidence to ambient sound and can sidestep parallel to a wall',()=>{
+  const {bot,field}=rig();
+  field.self.position=[.5,64,.5];bot.entity.position=new Vec3(.5,64,.5);
+  field.clues!.push({source:'last-seen',key:'blaze',position:[5,64,.5],seenAt:900,expiresAt:30900});
+  const floor=bot.blockAt;
+  bot.blockAt=(p:any)=>p.x>=1&&p.y>=64?{name:'stone',boundingBox:'block',shapes:[[0,0,0,1,1,1]],getProperties:()=>({})} as any:floor(p);
+  const choices=combatSearchCandidates(bot,field,true,true);
+  expect(choices.length).toBeGreaterThan(0);
+  expect(choices.every(c=>c.kind==='search'&&c.source==='last-seen'&&Math.abs(c.destination[0]-.5)<.01)).toBe(true);
 });
 it('preserves body ownership, clue expiry, real visible threats, unknown ground and danger boundaries',()=>{
   const {bot,field}=rig();

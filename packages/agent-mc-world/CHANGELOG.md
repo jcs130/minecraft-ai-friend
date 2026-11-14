@@ -1,3 +1,9 @@
+## 0.5.7-rc.160-preview.69
+
+- Keep bounded last-seen hostile clues for 30 seconds across decision latency; retire confirmed deaths without treating entity removal as death or following hidden motion.
+- Hand occluded combat contacts back as `lost-sight`, preserving low-health retreat and suspended-task recovery. Partial cover uses actual eye height and multiple body sight rays.
+- Offer checked perpendicular search steps around cover, preferring observed contacts to ambient sounds. Native 1.21.1 ray/physics replay covers reacquisition without through-wall attacks.
+
 ## 0.5.7-rc.160-preview.68
 
 - Retry undelivered combat attention on a fresh matching battlefield and suppress further shadow rankings only after the host acknowledges delivery.
