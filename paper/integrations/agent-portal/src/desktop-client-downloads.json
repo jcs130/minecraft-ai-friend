@@ -1,0 +1,18 @@
+[
+  {
+    "bytes": 8825,
+    "category": "desktop-client",
+    "channel": "website-bundle",
+    "filename": "qiandengji-java-1.21.1-neoforge-1.1.0.mrpack",
+    "framework": "minecraft",
+    "id": "desktop-client-pack",
+    "includes": "预置千灯纪主世界地址，包含原生女仆 1.5.3、YSM 2.6.5、附近语音 2.6.27 和 Controlify 3.0.1 LTS。首次导入需联网。",
+    "install": "导入 .mrpack 并用 Java 21 启动。连接手柄后，在选项 → 控制设置中打开 Controlify 并校准。",
+    "license": "模组保留各自许可，由启动器从作者官方 CDN 下载",
+    "name": "千灯纪桌面 Java 整合包",
+    "platform": "Windows / macOS / Linux · Minecraft 1.21.1 · Java 21 · NeoForge 21.1.252",
+    "sha256": "1ba659e68a2f980fd9a2ac5151405af2ffc78b449d1ed0639e8cacc5eabd70d3",
+    "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/paper/integrations/desktop-client",
+    "version": "1.1.0"
+  }
+]

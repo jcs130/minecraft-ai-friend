@@ -221,6 +221,12 @@ jobs:
         working-directory: paper/integrations/agent-portal
       - name: Verify the explicit browser before running real UI checks
         run: test -x "$PORTAL_BROWSER_EXECUTABLE" && "$PORTAL_BROWSER_EXECUTABLE" --version
+      - name: Reproduce the desktop controller import pack
+        run: >-
+          python paper/integrations/desktop-client/build.py
+          --cache "$RUNNER_TEMP/desktop-client-inputs"
+          --output "$RUNNER_TEMP/desktop-client-release"
+          --catalog paper/integrations/agent-portal/src/desktop-client-downloads.json
       - name: Check current portal and Skill download contracts
         run: node scripts/prepare-downloads.mjs --base-url https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/
         working-directory: paper/integrations/agent-portal

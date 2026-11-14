@@ -1,0 +1,24 @@
+[
+  {
+    "id": "controlify",
+    "version": "3.0.1+lts",
+    "filename": "controlify-3.0.1+lts+1.21.1-neoforge.jar",
+    "url": "https://cdn.modrinth.com/data/DOUdJVEm/versions/RqsNKKLK/controlify-3.0.1%2Blts%2B1.21.1-neoforge.jar",
+    "source": "https://modrinth.com/mod/controlify/version/RqsNKKLK",
+    "bytes": 7981721,
+    "sha1": "6d904472e1c95bd9d8b5e7c5421b8db628915e20",
+    "sha512": "cfffb25b9e62ca39cd6f54ab0b83902feda23a763ae9e345a11609f0138de1b6c3ab7a78c8fd5b7b309795e5c6d4911fd37cd7f8722a72cca6ad18e32cec461e",
+    "license": "LGPL-3.0-or-later"
+  },
+  {
+    "id": "yacl",
+    "version": "3.8.2+1.21.1-neoforge",
+    "filename": "yet_another_config_lib_v3-3.8.2+1.21.1-neoforge.jar",
+    "url": "https://cdn.modrinth.com/data/1eAoo2KR/versions/7TVdVtxF/yet_another_config_lib_v3-3.8.2%2B1.21.1-neoforge.jar",
+    "source": "https://modrinth.com/mod/yacl/version/7TVdVtxF",
+    "bytes": 1118651,
+    "sha1": "fe270c9f6e0a8142cf316944087f5109cef08bbb",
+    "sha512": "583de19b927ce8050c2b7d5e60b75accc69e325e5aac85c27994c82a9dec2e4e078343fa1d4c3a10d4bd7e0e524e0b3b246a18cf03db01e363a1e6f865adcf48",
+    "license": "LGPL-3.0-or-later"
+  }
+]

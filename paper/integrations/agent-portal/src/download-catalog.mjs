@@ -2,6 +2,7 @@ import { skillMirrorUrl } from './download-mirror.mjs';
 import offlineDownloads from './offline-downloads.json' with { type: 'json' };
 import maidClientDownloads from './maid-client-downloads.json' with { type: 'json' };
 import androidClientDownloads from './android-client-downloads.json' with { type: 'json' };
+import desktopClientDownloads from './desktop-client-downloads.json' with { type: 'json' };
 
 // Mirror original published bytes, not the current developer checkout. Large
 // binaries stay in OSS; this repository contains only their reviewed manifest.
@@ -36,13 +37,14 @@ const originalReleases = [
     includes: '约 1.11 GB，含 Node、固定后端、依赖和观战资源；仍需自己的 N.E.K.O 与可用模型。' }),
 ];
 export const packageReleases = Object.freeze([
+  ...desktopClientDownloads.map(row => Object.freeze(row)),
   ...androidClientDownloads.map(row => Object.freeze(row)),
   ...maidClientDownloads.map(row => Object.freeze(row)),
   ...offlineDownloads.map(row => Object.freeze(row)),
   ...originalReleases.map(row => Object.freeze({ ...row, category: 'advanced' })),
 ]);
 
-const aliases=Object.freeze({'/downloads/android-client':'android-client-pack','/downloads/maid-client':'maids-client-pack','/downloads/maid-mods':'maids-client-mods','/downloads/cortico-lite':'cortico-lite','/downloads/cortico':'cortico-bundle','/downloads/dsh':'dsh-bundle','/downloads/neko':'neko-base','/downloads/audio':'shared-audio','/downloads/browser':'shared-browser'});
+const aliases=Object.freeze({'/downloads/java-client':'desktop-client-pack','/downloads/android-client':'android-client-pack','/downloads/maid-client':'maids-client-pack','/downloads/maid-mods':'maids-client-mods','/downloads/cortico-lite':'cortico-lite','/downloads/cortico':'cortico-bundle','/downloads/dsh':'dsh-bundle','/downloads/neko':'neko-base','/downloads/audio':'shared-audio','/downloads/browser':'shared-browser'});
 // Existing bookmarks keep their immutable bytes; the recommended alias selects
 // the current reviewed complete package. Both use the same operator enablement.
 const legacyNekoBase = Object.freeze({id:'neko-base', filename:'qiandengji-neko-0.6.70-base-with-viewer-data.zip',
