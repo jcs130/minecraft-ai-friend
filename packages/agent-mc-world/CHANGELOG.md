@@ -2,6 +2,7 @@
 
 - Classify built-in routine reads separately from execution; a failed versioned-library read with a matching built-in routine provides its exact discovery entry without dispatching it.
 - Keep the sustained-water notice interval across brief head submersion; only offer the choice while breathing at the surface.
+- Add explicit script queue handoff through `mc.do(steps,{queue})`; `boat_trip` applies it once, then waits for native step acknowledgements. Default append remains unchanged; unsupported native Java overrides fail before dispatch.
 
 ## 0.5.7-rc.160-preview.70
 

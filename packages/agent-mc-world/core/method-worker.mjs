@@ -52,7 +52,11 @@ function capabilities(scope) {
     get() { throw new TypeError(`bot.${key} is not a live object in this worker. Use await bot.read("${key}") or await bot.read("entitySnapshot") for a detached, read-only observation.`); },
     enumerable: false,
   });
-  return { mc: harden({ capabilities: () => rpc('capabilities', {}, scope), state: () => rpc('state', {}, scope), do: steps => rpc('do', { steps }, scope),
+  return { mc: harden({ capabilities: () => rpc('capabilities', {}, scope), state: () => rpc('state', {}, scope), do: (steps, options) => {
+      if(options!==undefined&&(!options||typeof options!=='object'||Array.isArray(options)||Object.keys(options).some(k=>k!=='queue')
+        || !['append','now','afterCheckpoint'].includes(options.queue)))throw new TypeError('mc.do options must be {queue:"append"|"now"|"afterCheckpoint"}');
+      return rpc('do', { steps, ...(options===undefined?{}:{queue:options.queue}) }, scope);
+    },
     flightPlan: args => rpc('flightPlan', args, scope), swimPlan: args => rpc('swimPlan', args, scope) }), ...(bot ? { bot: harden(bot), Vec3: harden(Vec3),goals:harden({GoalBlock,GoalNear}) } : {}) };
 }
 

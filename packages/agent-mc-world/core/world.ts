@@ -2293,7 +2293,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'Read position, dimension, health, food, inventory and equipment under snapshot, which can be null. '
       + 'snapshot.entities is a bounded array of {entityId?,name,kind,distance,direction,dy,visible,observation?}; observation distinguishes visible from nearby tracked occluded/unknown entities, never inferred sound or attack permission. snapshot.entitiesOmitted reports truncation. '
       + 'snapshot.blocksScanned is false here; empty nearbyBlocks/terrain do not establish water depth or traversability. Missing fields are unknown observations. '
-      + 'await mc.do(steps) submits one ordered group to the normal executor and waits for its actual terminal result: accepted, taskId, kind, done, receipt, steps and fresh state. '
+      + 'await mc.do(steps,options?) submits one ordered group to the normal executor and waits for its actual terminal result: accepted, taskId, kind, done, receipt, steps and fresh state. Default append waits behind existing work; explicit {queue:"now"} hands over current work, {queue:"afterCheckpoint"} requests a resumable detour. '
       + 'A sent server command still needs observed effects; done is the executor result, not proof of an external quest. '
       + 'await mc.flightPlan(args) uses the same read-only geometry/budget contract as mc_flight_plan. '
       + 'Use JavaScript conditions, calculations and bounded loops to adapt to feedback. Prepare a timed route before casting; combine already-known cast/movement/blink steps with needs in one mc.do to avoid model delays. '
@@ -5084,9 +5084,11 @@ export class MinecraftWorld implements World {
     }
     if (this.nativeMethod?.session.ownsBody) throw new Error('当前原生程序已持有身体；mc.do 会等待自身，改用 bot 原生调用或结束后另起方法');
     let decision: TaskAdmissionDecision | undefined;
-    // Explicit append keeps a method's single outstanding group behind existing work.
+    if(args.queue!==undefined&&!['append','now','afterCheckpoint'].includes(String(args.queue)))throw new Error('mc.do queue must be append, now or afterCheckpoint');
+    // Preserve append by default; explicit replacement/detours use the same
+    // admission, ownership and cancellation rules as the public body tool.
     // Plain chat also follows the executor so its receipt has a real task identity.
-    const outcome = this.enqueueTool('mc_do', { steps: args.steps, queue: 'append' },
+    const outcome = this.enqueueTool('mc_do', { steps: args.steps, queue: args.queue??'append' },
       (raw) => parseSteps(raw, this.markLookup()), (value) => { decision = value; });
     const receipt = typeof outcome === 'string' ? outcome : outcome.text;
     if (!decision?.accepted) return { accepted: false, done: false, kind: 'rejected', receipt,
