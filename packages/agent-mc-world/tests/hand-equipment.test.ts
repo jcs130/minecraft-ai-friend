@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import type { Bot } from 'mineflayer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ensureHolding } from '../core/placement.ts';
+import { ensureHolding, placeBlockNearby } from '../core/placement.ts';
 import { skillEquip } from '../core/skills-craft.ts';
 import { installInventoryClickSync } from '../core/inventory-click-sync.ts';
 import { BowController } from '../core/ranged.ts';
@@ -68,6 +68,45 @@ function rig(denySwap = false, version = '1.20.6') {
 afterEach(() => vi.useRealTimers());
 
 describe('hand material server confirmation', () => {
+  it.each(['success', 'denied', 'cancelled'] as const)('automatic crafting station waits for the same 1.21.1 hand confirmation: %s', async outcome => {
+    vi.useFakeTimers();
+    const r = rig(outcome === 'denied', '1.21.1');
+    r.seed(9, 'crafting_table');
+    let cancelled = false, placed = false;
+    const controls: boolean[] = [];
+    const place = vi.fn(async () => {
+      expect(r.server.slots[36 + r.bot.quickBarSlot]?.name).toBe('crafting_table');
+      expect(r.server.selectedItem).toBeNull();
+      placed = true;
+    });
+    Object.assign(r.bot, {
+      entity: { position: new Vec3(0.5, 64, 0.5) },
+      setControlState: (_key: string, on: boolean) => controls.push(on),
+      blockAt: (p: Vec3) => ({ position: p, name: p.y === 63 ? 'stone' : placed ? 'crafting_table' : 'air',
+        boundingBox: p.y === 63 || placed ? 'block' : 'empty' }),
+      placeBlock: place,
+    });
+    const work = placeBlockNearby(r.bot, 'crafting_table', { aborted: () => cancelled } as never);
+    const result = work.then(value => ({ value, error: null }), error => ({ value: null, error }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(place).not.toHaveBeenCalled();
+    if (outcome === 'cancelled') cancelled = true;
+    await vi.runAllTimersAsync();
+    const done = await result;
+    if (outcome === 'success') {
+      expect(done.error).toBeNull();
+      expect(done.value?.name).toBe('crafting_table');
+      expect(place).toHaveBeenCalledTimes(1);
+      expect(controls.at(-1)).toBe(false);
+    } else {
+      expect(done.error).toBeTruthy();
+      expect(place).not.toHaveBeenCalled();
+      expect(controls).not.toContain(true);
+    }
+    expect(r.server.selectedItem).toBeNull();
+    expect(r.sent).toEqual([9]);
+  });
+
   it('cancelled explicit equip keeps late inventory acknowledgement but does not select or claim the weapon', async () => {
     vi.useFakeTimers();
     const r = rig(false, '1.21.1');

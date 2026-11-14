@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.72
+
+- Confirm server inventory and cancellation before automatic crafting/smelting workstation placement; do not place with an optimistic or rejected hand swap.
+
 ## 0.5.7-rc.160-preview.71
 
 - Classify built-in routine reads separately from execution; a failed versioned-library read with a matching built-in routine provides its exact discovery entry without dispatching it.
