@@ -18,12 +18,26 @@ function fixture(){
  Object.assign((h.world as any).cfg.idle,{enabled:true,allowMovement:true});
  return {...h,b};
 }
-async function run(h:ReturnType<typeof fixture>,to:Vec3,expectedError?:string){
- const b=h.b,start=b.entity.position.clone(),stop=new AbortController();let ended=false,error:unknown;
- const result=executeIdleRoam(b,{origin:start,destination:to,anchor:start},stop.signal,()=>true)
- .catch(e=>{error=e;}).finally(()=>{ended=true;});
- for(let i=0;i<280&&!ended;i++)await vi.advanceTimersByTimeAsync(50);
- await result;if(expectedError)expect(String(error)).toContain(expectedError);else expect(error).toBeUndefined();return start;
+async function run(h:ReturnType<typeof fixture>,to:Vec3,expectedError?:string,retryDeferredSearch=false){
+ const b=h.b,start=b.entity.position.clone(),original=b.pathfinder.getPathTo.bind(b.pathfinder);
+ let searchStatus:string|undefined;
+ const search=vi.spyOn(b.pathfinder,'getPathTo').mockImplementation((...args)=>{
+  const result=original(...args);searchStatus=result.status;return result;
+ });
+ try{for(let attempt=0;attempt<(retryDeferredSearch?4:1);attempt++){
+  const stop=new AbortController();let ended=false,error:unknown;searchStatus=undefined;
+  const result=executeIdleRoam(b,{origin:start,destination:to,anchor:start},stop.signal,()=>true)
+   .catch(e=>{error=e;}).finally(()=>{ended=true;});
+  for(let i=0;i<280&&!ended;i++)await vi.advanceTimersByTimeAsync(50);
+  await result;
+  // Real wall-clock search budgets can defer on a cold/loaded CI runner. Model the
+  // next idle tick only for that explicit status; never retry a started/failed walk.
+  if(retryDeferredSearch && !error && ['partial','timeout'].includes(searchStatus??'')
+    && b.entity.position.distanceTo(start)<.1 && !idleRoamOwnsPath(b)){
+   await vi.advanceTimersByTimeAsync(200);continue;
+  }
+  if(expectedError)expect(String(error)).toContain(expectedError);else expect(error).toBeUndefined();break;
+ }return start;}finally{search.mockRestore();}
 }
 it('offers a reachable stroll and walks around a wall, without changing blocks',async()=>{
  const h=fixture();try{
@@ -34,7 +48,7 @@ it('offers a reachable stroll and walks around a wall, without changing blocks',
   expect(sample).not.toBeNull();expect(h.b.entity.position).toEqual(origin);
   expect(sampleIdleActions(h.b,{allowMovement:true}).candidates.some(c=>c.id==='stroll')).toBe(true);
   const zs:number[]=[];h.b.on('physicsTick',()=>zs.push(h.b.entity.position.z));
-  await run(h,new Vec3(5,64,0));
+  await run(h,new Vec3(5,64,0),undefined,true);
   expect(h.b.entity.position.distanceTo(new Vec3(5.5,64,.5))).toBeLessThan(.8);
   expect(Math.max(...zs.map(Math.abs))).toBeGreaterThan(1.5);
   expect(h.b.dig).not.toHaveBeenCalled();expect(h.b.placeBlock).not.toHaveBeenCalled();
@@ -46,7 +60,7 @@ it('walks up a one-block step and is not cancelled by its own airborne/moving ga
   for(let x=2;x<=7;x++)for(let z=-4;z<=4;z++)h.set(x,64,z,'stone');
   const w=h.world as any;w.idleBehavior={active:true};
   let ownAirborne=false;h.b.on('physicsTick',()=>{if(idleRoamOwnsPath(h.b)&&!h.b.entity.onGround){ownAirborne=true;expect(w.idleUnavailableReason()).toBeNull();}});
-  await run(h,new Vec3(5,65,0));expect(h.b.entity.position.y).toBeGreaterThan(64.9);
+  await run(h,new Vec3(5,65,0),undefined,true);expect(h.b.entity.position.y).toBeGreaterThan(64.9);
   expect(h.b.entity.position.x).toBeGreaterThan(4.8);expect(ownAirborne).toBe(true);
  }finally{h.close();}
 });

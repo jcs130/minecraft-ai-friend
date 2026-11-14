@@ -8308,7 +8308,10 @@ export class MinecraftWorld implements World {
       return null;
     }
     const generation = this.idleGeneration();
-    if (this.idleBehavior?.executing && this.idleSceneCache?.generation === generation) return this.idleSceneCache;
+    // Selection is synchronous. Keep its observed route through selection and
+    // execution instead of randomly sampling a second destination in sceneNow.
+    // canIdle above and execute.available still recheck current body/safety state.
+    if (this.idleBehavior?.active && this.idleSceneCache?.generation === generation) return this.idleSceneCache;
     const bot = this.bridge!.bot!;
     if (this.idleMovementAnchor?.generation !== generation
       || bot.entity.position.distanceTo(this.idleMovementAnchor.position) > 14) {
