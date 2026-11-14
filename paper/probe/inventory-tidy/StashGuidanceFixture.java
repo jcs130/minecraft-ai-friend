@@ -119,7 +119,7 @@ public final class StashGuidanceFixture extends JavaPlugin {
             sender.sendMessage("STASH_QA "+out);
         }else if(args[0].equals("near-full")){
             int free=Integer.parseInt(args[2]);
-            if(free<0||free>4)throw new IllegalArgumentException("QA bag vacancy out of range");
+            if(free<0||free>36)throw new IllegalArgumentException("QA bag vacancy out of range");
             p.getInventory().clear();
             for(int slot=0;slot<36-free;slot++)
                 p.getInventory().setItem(slot,new ItemStack(slot==9?Material.COBBLESTONE:Material.GOLD_INGOT,6));

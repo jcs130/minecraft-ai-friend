@@ -45,7 +45,9 @@ const inventoryEvent=async p=>assert.match(await rc('qdstash held-event '+p.user
 const nearHint=line=>line.includes('【背包快满】');
 async function verifyOverview() {
  const a=await connect('n');
+ await nearFull(a,36);
  const other=await connect('o');
+ await nearFull(other,36);
  // Let normal join-time provision checks finish before making a controlled bag.
  await delay(4500);
  const empty=await ask(other,summaryCommand+' --json',summaryPrefix);
