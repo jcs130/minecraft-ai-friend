@@ -1227,6 +1227,7 @@ interface QueuedTask {
   startObservation?: TaskObservation;
   /** 每个定向 find 真正开跑的位置；前面的 goto 完成后才知道起点。 */
   findOrigins?: Map<number, Cell>;
+  findContinuations?: Map<number, NonNullable<SkillContext['findContinuation']>>;
   /**
    * 已经落地的各步终态。挂在任务上而不是 ctx 上:战斗/环境挂起会重建 RunningTask,
    * 挂在 ctx 上的话断点续做之后前半程的账就没了。
@@ -4480,6 +4481,8 @@ export class Executor {
     if (this.checkpointDrain?.task === t && this.checkpointDrain.phase === 'yielded') return;
     const boundary = this.checkpointDrain?.task === t && this.checkpointDrain.boundary
       ? this.checkpointDrain.resumeFrom : null;
+    const find = t.findContinuations?.get(t.stepIndex);
+    if (find) find.interrupted = true;
     this.abortTask(t, by);
     if (t.program) { this.reportCancelled(t, by, null); return; }
     const idem = reRunnable(t.steps[t.stepIndex]);
@@ -4491,6 +4494,7 @@ export class Executor {
       // 已经做掉的步跟着任务走:重建 ctx 会丢,重跑会报假失败
       absorbed: t.absorbed,
       findOrigins: t.findOrigins,
+      findContinuations: t.findContinuations,
       // 各步终态的账同理:挂起前跑成的那几步,断点被撤时还得说得出来
       stepLog: t.stepLog,
       queueTailNotified: t.queueTailNotified,
@@ -4524,6 +4528,7 @@ export class Executor {
       queueTailNotified: t.queueTailNotified,
       absorbed: t.absorbed, stepLog: t.stepLog, intended: t.intended,
       findOrigins: t.findOrigins, frozenBy: 'queue',
+      findContinuations: t.findContinuations,
       checkpointOwnerId: t.checkpointOwnerId,
       checkpointRequest: t.checkpointRequest,
       checkpointContinuation: t.checkpointContinuation,
@@ -5680,8 +5685,15 @@ export class Executor {
           catch (error) { this.opts.log.warn('尾步队列观察投递失败，任务继续', { taskId: id, err: String(error) }); }
         }
         const at = bot.entity?.position;
+        ctx.findContinuation = undefined;
         if (call.skill === 'find' && call.direction && at) {
-          (task.findOrigins ??= new Map()).set(i, feetOf(bot));
+          const origins = task.findOrigins ??= new Map();
+          if (!origins.has(i)) origins.set(i, feetOf(bot));
+          const continuations = task.findContinuations ??= new Map();
+          if (!continuations.has(i)) continuations.set(i, {
+            origin: { x: at.x, z: at.z }, completedDistance: 0, interrupted: false,
+          });
+          ctx.findContinuation = continuations.get(i);
         }
         const gotoTarget = call.skill === 'goto' ? lastAbsoluteGoto([call]) : null;
         task.goalProgressAt = gotoTarget ? startedAt : undefined;

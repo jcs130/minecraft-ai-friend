@@ -5,6 +5,26 @@ import type { CombatCandidate } from './combat-decision-types.ts';
 import { corridorSafe } from './idle-actions.ts';
 
 const directions=['北','东北','东','东南','南','西南','西','西北'];
+
+/** Recent observed starting points, not guessed enemy positions or cleared rooms. */
+export class CombatSearchHistory {
+  private scope = '';
+  private points: Array<{key:string;at:number;position:[number,number,number]}> = [];
+  private sync(scope:string, now:number):void {
+    if(this.scope!==scope){this.scope=scope;this.points=[];}
+    this.points=this.points.filter(p=>now-p.at>=0&&now-p.at<30_000).slice(-64);
+  }
+  record(scope:string,key:string,position:[number,number,number],now:number):void {
+    this.sync(scope,now);
+    this.points.push({key,position:[...position],at:now});
+  }
+  filter(scope:string,candidates:CombatCandidate[],now:number):CombatCandidate[]{
+    this.sync(scope,now);
+    return candidates.filter(c=>c.kind!=='search'||!this.points.some(p=>p.key===c.clueKey
+      &&Math.abs(p.position[1]-c.destination[1])<1
+      &&Math.hypot(p.position[0]-c.destination[0],p.position[2]-c.destination[2])<.9));
+  }
+}
 /** Optional model-selectable search, never an attack or a second planner.
  * Sound gives a coarse bearing; last-seen uses the recorded point, never the
  * hidden entity's live position. Alternative short corridors allow a checked
