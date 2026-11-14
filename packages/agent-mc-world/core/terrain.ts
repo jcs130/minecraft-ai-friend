@@ -1048,21 +1048,21 @@ export function canSeeBlockAt(bot: any, p: { x: number; y: number; z: number }):
 }
 
 /**
- * 主视角能看见这个实体:眼睛到实体半身高的射线不被方块挡。
+ * 与感知一致：眼睛到实体身体任一采样点的视线可达即算看见。
  * 水没有碰撞形状,射线穿水——清水里的鱼算看得见。
  */
 export function canSeeEntity(bot: any, e: any): boolean {
   const me = bot.entity;
   // raycast 的迭代器要求真 Vec3(内部调 .minus/.plus),裸 {x,y,z} 会在首次求交时崩
-  const eye = new Vec3(me.position.x, me.position.y + (me.height ?? 1.62), me.position.z);
-  const tgt = new Vec3(e.position.x, e.position.y + (e.height ?? 1) * 0.5, e.position.z);
-  const delta = tgt.minus(eye);
-  const dist = delta.norm();
-  if (dist < 1) return true;
+  const eye = new Vec3(me.position.x, me.position.y + (me.eyeHeight ?? 1.62), me.position.z);
   // 与方块同一条透光集:隔窗看见村民和隔窗看见箱子是同一件事
   const match = (hit: any, iter: any): boolean =>
     blocksSight(hit?.name) && iter.intersect(hit.shapes, hit.position) != null;
-  return bot.world.raycast(eye, delta.scaled(1 / dist), dist, match) === null;
+  return [0.25, 0.5, 0.85].some(part => {
+    const tgt = new Vec3(e.position.x, e.position.y + (e.height ?? 1) * part, e.position.z);
+    const delta = tgt.minus(eye), dist = delta.norm();
+    return dist < 0.001 || bot.world.raycast(eye, delta.scaled(1 / dist), dist, match) === null;
+  });
 }
 
 /**

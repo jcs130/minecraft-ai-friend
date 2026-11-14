@@ -107,9 +107,10 @@ export class BattlefieldObserver {
   private ownHealthAtMs: number | null = null;
   private detach: (() => void) | null = null;
   private clueScope: string | null = null;
+  private deadEntities = new WeakSet<object>();
   private readonly lastSeen = new Map<string,{source:'last-seen';key:string;position:[number,number,number];seenAt:number;expiresAt:number}>();
 
-  reset(): void { this.server = null; this.sequence = -1; this.healthTimes.clear(); this.ownHealthAtMs = null; this.lastSeen.clear();this.clueScope=null; }
+  reset(): void { this.server = null; this.sequence = -1; this.healthTimes.clear(); this.ownHealthAtMs = null; this.lastSeen.clear();this.clueScope=null; this.deadEntities = new WeakSet(); }
 
   bind(bot: Bot, serverChannel?: string): void {
     if (this.bot === bot) return;
@@ -124,23 +125,29 @@ export class BattlefieldObserver {
       this.healthTimes.delete(e.id);
       if (this.server) this.server.actors = this.server.actors.filter(a => a.entityId !== e.id);
     };
+    const dead = (e: Bot['entity']) => {
+      const current = bot.entities[e.id];
+      // Native entity IDs may be reused. Never retire the new entity for an old death.
+      if (current === e || (e.uuid && current?.uuid === e.uuid)) this.deadEntities.add(current);
+      this.lastSeen.delete(JSON.stringify([e.id, e.uuid ?? (current === e ? current.uuid : null)]));
+    };
     const payload = (packet: { channel?: unknown; data?: unknown }) => {
       if (serverChannel && packet.channel === serverChannel) this.noteServerPayload(packet.data);
     };
     const end = () => { this.reset(); this.detach?.(); this.bot = null; };
     const register = () => { this.lastSeen.clear();this.clueScope=null;declareDecodedChannels(bot._client,[serverChannel]); };
-    const clearClues=()=>{this.lastSeen.clear();this.clueScope=null;};
+    const clearClues=()=>{this.lastSeen.clear();this.clueScope=null;this.deadEntities=new WeakSet();};
     bot.on('death',clearClues);bot.on('respawn',clearClues);
     bot.on('spawn',register);register();
     bot._client.on('entity_metadata', metadata);
     bot._client.on('custom_payload', payload);
     bot._client.on('end', end);
-    bot.on('health', health); bot.on('entityGone', gone);
+    bot.on('health', health); bot.on('entityGone', gone); bot.on('entityDead', dead);
     this.detach = () => {
       bot._client.removeListener('entity_metadata', metadata);
       bot._client.removeListener('custom_payload', payload);
       bot._client.removeListener('end', end);
-      bot.removeListener('health', health); bot.removeListener('entityGone', gone);
+      bot.removeListener('health', health); bot.removeListener('entityGone', gone); bot.removeListener('entityDead', dead);
       bot.removeListener('spawn',register);
       bot.removeListener('death',clearClues);bot.removeListener('respawn',clearClues);
       this.detach = null;
@@ -168,7 +175,7 @@ export class BattlefieldObserver {
     const team = (name: string | undefined) => name ? bot.teamMap?.[name]?.team ?? null : null;
     const actors: BattlefieldActor[] = [];
     for (const e of Object.values(bot.entities ?? {})) {
-      if (!e?.position || e === bot.entity || e.id === bot.entity.id || e.isValid === false) continue;
+      if (!e?.position || e === bot.entity || e.id === bot.entity.id || e.isValid === false || this.deadEntities.has(e)) continue;
       const observation = entityAwareness(bot, e);
       if (!observation) continue;
       const distance = Math.hypot(e.position.x - p.x, e.position.y - p.y, e.position.z - p.z);
@@ -212,7 +219,10 @@ export class BattlefieldObserver {
       if(a.health.current===0){this.lastSeen.delete(key);continue;}
       if(a.relation==='hostile'&&a.lineOfSight===true&&a.position){
         visibleKeys.add(key);this.lastSeen.delete(key);
-        this.lastSeen.set(key,{source:'last-seen',key,position:[...a.position],seenAt:now,expiresAt:now+8_000});
+        // A hidden target is a bounded historical clue, not a current position.
+        // Keep it through a normal decision round; eight seconds lost the clue
+        // before an expired/queued selection could be resampled.
+        this.lastSeen.set(key,{source:'last-seen',key,position:[...a.position],seenAt:now,expiresAt:now+30_000});
       }
     }
     for(const [key,clue]of this.lastSeen)if(clue.expiresAt<=now)this.lastSeen.delete(key);

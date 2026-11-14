@@ -261,7 +261,7 @@ interface Foe {
   visible: boolean;
 }
 
-type EndReason = 'clear' | 'flee' | 'timeout' | 'stuck' | 'mc_stop' | 'env' | 'death' | 'gone' | 'busy' | 'preempt' | 'inhibited';
+type EndReason = 'clear' | 'lost-sight' | 'flee' | 'timeout' | 'stuck' | 'mc_stop' | 'env' | 'death' | 'gone' | 'busy' | 'preempt' | 'inhibited';
 
 /** 眼睛到实体 AABB 最近点的距离 */
 function aabbReach(bot: Bot, e: { position: Vec3; height?: number; width?: number }): number {
@@ -324,6 +324,8 @@ export class CombatSession {
   private readonly struck = new Map<number, DeathTargetIdentity>();
   /** 死亡事件先于实体表清理；本场已经死亡的实体不得继续参与威胁判断。 */
   private readonly deadIds = new Set<number>();
+  /** Seen during this engagement; disappearance is not a death receipt. */
+  private readonly unresolvedSeen = new Map<number, DeathTargetIdentity>();
   private targetDeaths = new Map<string, number>();
   private targetDeathsPending = new Map<string, number>();
   private lastKillEmitAt = 0;
@@ -836,6 +838,7 @@ export class CombatSession {
     this.targetDeathsPending = new Map();
     this.struck.clear();
     this.deadIds.clear();
+    this.unresolvedSeen.clear();
     this.swings = 0;
     this.landed = 0;
     this.lastSwingTargetId = -1;
@@ -917,6 +920,9 @@ export class CombatSession {
 
   private noteDead(e: { id?: number; uuid?: string; name?: string }): void {
     if (this.state === 'idle' || typeof e.id !== 'number') return;
+    const seen = this.unresolvedSeen.get(e.id);
+    if (seen && !matchesDeathTarget(this.bot?.entities, seen, e)) return;
+    if (seen) this.unresolvedSeen.delete(e.id);
     const selected = this.struck.get(e.id);
     if (selected && !matchesDeathTarget(this.bot?.entities, selected, e)) return;
     this.deadIds.add(e.id);
@@ -1128,14 +1134,24 @@ export class CombatSession {
     // 否则夜里 40 格内总有一只,这一局就永远收不了工。
     const visibleFoes = foes.filter((f) => f.visible);
     const clearPool = this.desperate ? visibleFoes : this.exitFoes(visibleFoes, t);
+    for (const foe of clearPool) this.unresolvedSeen.set(foe.id, captureDeathTarget(foe.ent));
     if (clearPool.length === 0) {
       if (this.emptySince === 0) this.emptySince = now;
       this.opts.ranged?.abort();
       this.rangedPendingOwner = null;
       this.hybridWeapon = 'melee';
       this.release(bot);
+      const lostSight = this.unresolvedSeen.size > 0 || foes.some(f => !f.visible);
+      if (lostSight && !this.desperate && (bot.health ?? 20) < t.fleeHealth) {
+        this.beginRetreat('flee'); return;
+      }
       if (this.tryCombatFood(bot, foes, now)) return;
-      if (now - this.emptySince >= CLEAR_HOLD_MS) this.endClear();
+      if (now - this.emptySince >= CLEAR_HOLD_MS) {
+        if (lostSight) {
+          this.opts.emit('交战目标失去视线，未确认死亡；交还身体以便沿最后目击位置或声音重新索敌。', true, false);
+          this.end('lost-sight');
+        } else this.endClear();
+      }
       return;
     }
     this.emptySince = 0;
@@ -2388,7 +2404,7 @@ export class CombatSession {
       meleeLanded: this.meleeLanded(), arrows: this.arrows, rangedLanded: this.rangedLanded });
     // 只有正常战斗收尾解冻断点。断线、环境夺权、外部抢占与死亡各自由其终态边界
     // 处理冻结队列；在这里泵回会让任务进入已断线或正在交权的执行器。
-    const resumable = reason === 'clear' || reason === 'flee' || reason === 'timeout' ||
+    const resumable = reason === 'clear' || reason === 'lost-sight' || reason === 'flee' || reason === 'timeout' ||
       reason === 'stuck' || reason === 'mc_stop' || reason === 'busy';
     const resumed = resumable ? this.opts.resumeTasks() : null;
     if (resumed) {
@@ -2398,6 +2414,10 @@ export class CombatSession {
 
   private trackTick(bot: Bot, now: number): void {
     const lease = this.trackingLease, entity = lease ? bot.entities[lease.targetId] : null;
+    if (lease && now < lease.expiresAt && !this.deadIds.has(lease.targetId)
+      && (!entity?.isValid || !entity.position || (entity.uuid ?? null) !== lease.uuid || !canSeeEntity(bot, entity))) {
+      this.trackingLease = null; this.end('lost-sight'); return;
+    }
     if (!lease || now >= lease.expiresAt || !entity?.isValid || !entity.position
       || (entity.uuid ?? null) !== lease.uuid || !canSeeEntity(bot, entity)
       || !this.scan(bot, this.opts.tuning(), 24).some(f => f.id === lease.targetId && f.visible)) {

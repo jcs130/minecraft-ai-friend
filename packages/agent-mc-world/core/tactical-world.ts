@@ -420,11 +420,12 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
           this.combatProbe.flush();
           this.emit('minecraft.combat', `[Minecraft] 战斗观察回执#${receipt.id}：${result.reason}；`
             + (result.reason === 'clear' ? '局部战斗控制器当前已无交战目标；不代表房间、楼层或副本清完，须另核对服务器进度。' : '')
+            + (result.reason === 'lost-sight' ? '目标被遮挡或离开视线，未确认死亡；身体已交还，可按最后目击或声音线索重新索敌。' : '')
             + `生命 ${result.healthBefore ?? '未知'}→${result.healthAfter ?? '未知'}，`
             + `刀 ${result.swings} 次/命中 ${result.meleeLanded} 次；`
             + `结束时战术版本 ${receipt.tacticRevision}，已发送法术 ${receipt.casts.map((cast) => cast.spell).join('、') || '无'}。`
             + `详细前后读数及施法回音用 mc_combat_tactic {"report":${receipt.id}} 读取；中断不等于败战，回执不自动证明某战术有效。`,
-          false, { trigger: ['death', 'flee', 'timeout', 'stuck'].includes(result.reason) ? 'debounce' : 'piggyback', meta: { receipt } });
+          false, { trigger: ['death', 'flee', 'timeout', 'stuck', 'lost-sight'].includes(result.reason) ? 'debounce' : 'piggyback', meta: { receipt } });
         } catch (error) {
           this.diag.write({ lane: 'combat', event: 'receipt-save-failed', msg: String(error) });
           this.emit('minecraft.event', '[Minecraft] 这场战斗的观察回执未保存，不能按已归档处理。', false,

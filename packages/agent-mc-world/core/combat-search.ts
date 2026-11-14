@@ -15,7 +15,9 @@ export function combatSearchCandidates(bot:Bot,field:Battlefield,bodyFree:boolea
     ||(field.self.health.current??0)<=0
     ||field.actors.some(a=>a.relation==='hostile'&&a.health.current!==0&&a.lineOfSight===true))return [];
   const from=field.self.position,p=new Vec3(...from);
-  for(const clue of field.clues??[]){
+  // A recorded contact takes precedence over unrelated ambient monster sounds.
+  const clues=[...(field.clues??[])].sort((a,b)=>Number(b.source==='last-seen')-Number(a.source==='last-seen'));
+  for(const clue of clues){
     if(clue.expiresAt<=field.sampledAtMs)continue;
     let dx:number,dz:number,key:string,description:string;
     if(clue.source==='sound-packet'){
@@ -35,7 +37,7 @@ export function combatSearchCandidates(bot:Bot,field:Battlefield,bodyFree:boolea
     const len=Math.hypot(dx,dz);if(!Number.isFinite(len)||len<.01)continue;
     const angle=Math.atan2(dz,dx);
     const candidates:CombatCandidate[]=[];
-    for(const [i,offset]of [0,-Math.PI/4,Math.PI/4].entries()){
+    for(const [i,offset]of [0,-Math.PI/4,Math.PI/4,-Math.PI/2,Math.PI/2].entries()){
       const to=new Vec3(p.x+1.2*Math.cos(angle+offset),p.y,p.z+1.2*Math.sin(angle+offset));
       if(!corridorSafe(bot,p,to))continue;
       candidates.push({id:`search_${i}`,kind:'search',clueKey:key,source:clue.source,destination:[to.x,to.y,to.z],
