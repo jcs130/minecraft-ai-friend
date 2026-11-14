@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.78
+
+- Preserve the selected view for boat item use without coordinates; do not retarget a solid block behind water. Separate calculated aim from unknown server hit and verify inventory plus new entity identity.
+
 ## 0.5.7-rc.160-preview.77
 
 - Handle native vehicle removal on the Bot event emitter and clear passenger attachment; resume walking after confirmed dismount without requiring an extra teleport packet. Preserve missing-position boundaries across login, death, respawn and configuration.

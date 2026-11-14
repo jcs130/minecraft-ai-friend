@@ -913,15 +913,10 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     return `${head},${v.actual}${note ? `。${note}` : ''}${facts}`;
   }
 
-  // 放船未指定 at 时使用当前视线命中的方块；无命中则受阻。
+  // 未指定 at 就保留当前视线。普通方块拾取与 BoatItem 的液体射线不同，
+  // 不能先拾取水后的方块再转向其中心，否则会改掉调用方选好的水面方向。
   if (held && isBoat(held) && !call.at) {
-    const cur = bot.blockAtCursor?.(BOAT_CURSOR_RANGE);
-    if (!cur) {
-      throw new SkillBlocked(
-        `手上是${label}而没给 at,视线 ${BOAT_CURSOR_RANGE} 格内又没有方块;放船要么看着水面/地面,要么给 at 指一格落点`,
-      );
-    }
-    return await useBoat(bot, { x: cur.position.x, y: cur.position.y, z: cur.position.z }, held, label, activateItem);
+    return await useBoat(bot, null, held, label, activateItem);
   }
 
   if (call.at) {
@@ -1204,7 +1199,7 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
  */
 /**
  * lookAt 先改本地朝向；等待物理 tick 发出朝向包后再发送 use_item。
- * 1.20.6 的 use_item 仅含 hand/sequence，1.21.2 才加入朝向字段。
+ * 朝向字段按实际协议版本交给 Mineflayer 编码；1.21.1 已包含 rotation。
  * physicsTick 与 updatePosition 同步执行，waitForTicks 续体在整次 tick 结束后恢复。
  */
 export async function aimThenUse(bot: Bot, point: Vec3, activate?: () => Promise<void>): Promise<void> {
@@ -1381,44 +1376,49 @@ export function endFrameNote(bot: Bot, cell: Cell, name = 'end_portal_frame'): s
  * 放一条船:瞄准托住它的那个面按「使用物品」,再按包里少没少、附近多没多出一条船来报。
  *
  * `at` 给空气格就瞄它脚下那格的顶面(船落进 `at` 这一格),给实心格就瞄这一格自己的
- * 顶面(船落在它上面)。两种写法都成立,回执报船最后落在哪儿,不必她先猜对哪一格。
+ * 顶面(船落在它上面)。null 保留调用方当前视线，由服务端按液体射线判定。
+ * 瞄准点不是服务端命中回执；库存减少和新实体分别确认。
  */
-export async function useBoat(bot: Bot, cell: Cell, held: string, label: string,
+export async function useBoat(bot: Bot, cell: Cell | null, held: string, label: string,
   activate?: () => Promise<void>): Promise<string> {
-  const here = blockAtCell(bot, cell);
+  const here = cell && blockAtCell(bot, cell);
   const solidHere = here !== null && !AIR_NAMES.has(here.name) && !LIQUIDS.has(here.name);
-  const face = { x: cell.x, y: solidHere ? cell.y + 1 : cell.y, z: cell.z };
-  const under = blockAtCell(bot, { x: face.x, y: face.y - 1, z: face.z });
-  if (!under || AIR_NAMES.has(under.name)) {
+  const face = cell ? { x: cell.x, y: solidHere ? cell.y + 1 : cell.y, z: cell.z } : null;
+  const under = face && blockAtCell(bot, { x: face.x, y: face.y - 1, z: face.z });
+  if (face && (!under || AIR_NAMES.has(under.name))) {
     throw new SkillBlocked(
       `${cellText(face)} 底下是${under ? zhName(under.name) : '(区块没加载)'},没有能托住船的面`,
     );
   }
   const before = invCount(bot, (n) => n === held);
   const existing = new Set(Object.keys(bot.entities));
-  await aimThenUse(bot, new Vec3(face.x + 0.5, face.y, face.z + 0.5), activate);
+  const at = face ? new Vec3(face.x + 0.5, face.y, face.z + 0.5) : bot.entity.position.clone();
+  const direction = face ? `朝 ${cellText(face)}` : '沿当前视线';
+  if (face) await aimThenUse(bot, at, activate);
+  else if (activate) await activate();
+  else await bot.activateItem();
   await sleep(USE_SETTLE_MS);
   const after = invCount(bot, (n) => n === held);
   if (after >= before) {
     throw new SkillBlocked(
-      `朝 ${cellText(face)} 放${label},船没出来:包里还是 ${after} 条`,
-      [`瞄的是 ${cellText({ x: face.x, y: face.y - 1, z: face.z })} 的${zhName(under.name)}顶面`],
+      `${direction}放${label},未确认放置:包里还是 ${after} 条`,
+      [face && under ? `计算瞄准点在 ${cellText({ x: face.x, y: face.y - 1, z: face.z })} 的${zhName(under.name)}顶面；这不是服务端实际命中结果`
+        : '保留原视线发送使用；服务端命中点与拒绝原因未回传，不能据此断言水型不支持'],
       'server',
     );
   }
-  const at = new Vec3(face.x + 0.5, face.y, face.z + 0.5);
   const spawned = Object.entries(bot.entities).filter(([id, e]) => !existing.has(id)
     && e?.isValid !== false && e?.position && /(?:^|_)(?:boat|raft)$/.test(e.name ?? '')
-    && e.position.distanceTo(at) < 4).map(([, e]) => e);
+    && e.position.distanceTo(at) < (face ? 4 : BOAT_CURSOR_RANGE + 2)).map(([, e]) => e);
   if (spawned.length === 1) {
     const boat = spawned[0];
     return `${label}使用后读到新船在 ${cellText(boat.position.floored())},entityId=${boat.id};包里 ${before} → ${after} 条;`
       + `上船可用 ${JSON.stringify({ skill: 'ride', target: boat.name, entityId: boat.id })}`;
   }
-  if (spawned.length > 1) return `朝 ${cellText(face)} 放${label}:包里 ${before} → ${after} 条,`
+  if (spawned.length > 1) return `${direction}放${label}:包里 ${before} → ${after} 条,`
     + `附近同时出现 ${spawned.length} 条新船,不能确认本次是哪一条;先观察实体再选择,不自动重放放船`;
   // 不做「包里少了=放成了」的二级软假设:两个读数分开说,落点没读到就是没读到
-  return `朝 ${cellText(face)} 放${label}:包里 ${before} → ${after} 条,但附近 4 格内未确认新的有效船实体;旧船不算本次放置,不自动重放放船`;
+  return `${direction}放${label}:包里 ${before} → ${after} 条,但附近 ${face ? 4 : BOAT_CURSOR_RANGE + 2} 格内未确认新的有效船实体;旧船不算本次放置,不自动重放放船`;
 }
 
 // ======================== ride:上/驾/下坐骑 ========================
