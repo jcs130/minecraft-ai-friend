@@ -10,6 +10,9 @@ import java.util.UUID;
 final class MaidConversationWindow {
     static final int MAX_REQUESTS = 6;
     static final long DURATION = 120_000_000_000L;
+    record Admission(boolean allowed, int retryAfterSeconds) {}
+    private static final Admission ACCEPT = new Admission(true, 0);
+    private static final Admission IGNORE = new Admission(false, 0);
     private static final Set<String> CLOSINGS = Set.of(
         "好", "好的", "好呀", "好嘞", "嗯", "嗯嗯", "收到", "明白了", "知道了", "谢谢", "谢谢你", "辛苦了",
         "再见", "拜拜", "回头聊", "晚点聊", "晚点再聊", "先不聊了", "聊到这儿", "就这样", "晚安",
@@ -21,7 +24,7 @@ final class MaidConversationWindow {
         final long until;
         long lastActivity, quietUntil = Long.MIN_VALUE;
         int requests;
-        boolean listening;
+        boolean listening, quietReported;
         String lastReply = "";
 
         Turn(UUID maid, UUID world, Object connection, long now) {
@@ -55,18 +58,26 @@ final class MaidConversationWindow {
     }
 
     /** Validate after delivery and proximity checks. Only admitted calls spend a turn. */
-    boolean allow(UUID actor, UUID maid, UUID world, Object connection, String text, long now) {
+    Admission admit(UUID actor, UUID maid, UUID world, Object connection, String text, boolean namedPartner, long now) {
         Turn turn = current(actor, maid, world, connection, now);
-        if (turn != null && (turn.quietUntil != Long.MIN_VALUE || now >= turn.until || turn.requests >= MAX_REQUESTS)) {
-            turn.quietUntil = now + DURATION;
-            return false;
-        }
         String normalized = normalize(text);
         if (CLOSINGS.contains(normalized)) {
             close(actor, maid, world, connection, now);
-            return false;
+            return IGNORE;
         }
-        return turn == null || normalized.isEmpty() || !normalized.equals(turn.lastReply);
+        if (turn != null) {
+            if (normalized.equals(turn.lastReply) && !normalized.isEmpty()) return IGNORE;
+            if (turn.quietUntil == Long.MIN_VALUE && (now >= turn.until || turn.requests >= MAX_REQUESTS)) {
+                turn.quietUntil = Math.min(now, turn.until) + DURATION;
+            }
+            if (turn.quietUntil != Long.MIN_VALUE) {
+                if (!namedPartner || turn.quietReported) return IGNORE;
+                turn.quietReported = true;
+                int seconds = (int) Math.ceilDiv(turn.quietUntil - now, 1_000_000_000L);
+                return new Admission(false, seconds);
+            }
+        }
+        return ACCEPT;
     }
 
     boolean started(UUID actor, UUID maid, UUID world, Object connection, long now) {
@@ -92,7 +103,7 @@ final class MaidConversationWindow {
     void close(UUID actor, UUID maid, UUID world, Object connection, long now) {
         Turn turn = current(actor, maid, world, connection, now);
         if (turn == null) turn = begin(actor, maid, world, connection, now);
-        turn.quietUntil = now + DURATION;
+        if (turn.quietUntil == Long.MIN_VALUE) turn.quietUntil = now + DURATION;
     }
 
     boolean mayInitiate(UUID actor, UUID maid, UUID world, Object connection, long now) {

@@ -54,6 +54,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
     private final MaidGuardDecision decision;
     private final Consumer<MaidHurtTarget.Pre> beforeMelee;
     private final Consumer<LivingIncomingDamageEvent> beforeDamage;
+    private final Consumer<net.neoforged.neoforge.event.entity.living.LivingDamageEvent.Post> afterDamage;
     private final Consumer<EntityJoinLevelEvent> onProjectile;
     private final Method dungeonCombat;
     private final Method dungeonPosition;
@@ -83,6 +84,15 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
             if (source.getEntity() instanceof EntityMaid maid && (scopedProjectile || automaticTask(maid))
                     && (!automaticTask(maid) || !canHit(maid, event.getEntity()))) event.setCanceled(true);
         };
+        afterDamage = event -> {
+            if (!Bukkit.isPrimaryThread() || event.getNewDamage() <= 0) return;
+            if (event.getSource().getEntity() instanceof EntityMaid maid
+                    && plugin.sharedDialogueEnabled(maid) && event.getEntity() instanceof Mob target
+                    && !(target.getBukkitEntity() instanceof Player) && !target.getBukkitEntity().hasMetadata("NPC")) {
+                String mode = guard.mode == null ? "MELEE" : guard.mode.name();
+                plugin.companionHit(maid,target,mode,event.getNewDamage());
+            }
+        };
         onProjectile = event -> {
             if (!event.getLevel().isClientSide() && event.getEntity() instanceof Projectile shot
                     && shot.getOwner() instanceof EntityMaid maid && automaticTask(maid)) shot.addTag(PROJECTILE_TAG);
@@ -90,12 +100,14 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, false, beforeMelee);
         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, false, beforeDamage);
         NeoForge.EVENT_BUS.addListener(onProjectile);
+        NeoForge.EVENT_BUS.addListener(afterDamage);
     }
 
     @Override public void close() {
         NeoForge.EVENT_BUS.unregister(beforeMelee);
         NeoForge.EVENT_BUS.unregister(beforeDamage);
         NeoForge.EVENT_BUS.unregister(onProjectile);
+        NeoForge.EVENT_BUS.unregister(afterDamage);
         if (decision != null) decision.close();
     }
 

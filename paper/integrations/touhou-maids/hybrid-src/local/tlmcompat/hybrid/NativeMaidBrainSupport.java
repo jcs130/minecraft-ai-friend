@@ -76,6 +76,8 @@ public final class NativeMaidBrainSupport implements Listener,AutoCloseable {
         final LLMOpenAISite site;
         ScopedClient(LLMOpenAISite site){super(http,site);this.site=site;}
         @Override public void chat(LLMCallback callback){
+            // Refresh body facts on the game thread also for native UI/tool continuations.
+            if(!Bukkit.isPrimaryThread()){if(plugin.isEnabled()&&!closed)Bukkit.getScheduler().runTask(plugin,()->chat(callback));return;}
             EntityMaid maid=callback.getMaid();
             if(!allowed(maid)||!maid.getAiChatManager().getLLMSite().id().equals(site.id())){
                 callback.onFailure(null,new IllegalStateException("SHARED_MAID_MODEL_NOT_ENABLED: only the original configured companion may use this site; query brain choices."),403);plugin.nativeModelFailed(callback,plugin.startingNativeOperation(),"SHARED_MAID_MODEL_NOT_ENABLED");return;
@@ -89,6 +91,7 @@ public final class NativeMaidBrainSupport implements Listener,AutoCloseable {
         @Override protected com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.request.ChatCompletion extraArgs(com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.request.ChatCompletion request){
             request=super.extraArgs(request);
             if(buildingRequest.get() instanceof CompanionActionCallback companion)companion.addCompanionTools(request);
+            else if(buildingRequest.get()!=null)request.systemChat(plugin.nativeSceneContext(buildingRequest.get().getMaid()));
             return request;
         }
         @Override public <T> void handleResponse(LLMCallback callback,HttpResponse<String> response,Throwable error,HttpRequest request,Consumer<T> consumer,Type type){

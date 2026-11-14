@@ -41,6 +41,12 @@ jobs:
           node --check paper/probe/inventory-tidy/stage.mjs
       - name: Check player menu navigation and single-use responses
         run: python paper/ops/test-player-ui.py
+      - name: Check native travel marker planning without touching a world
+        run: |
+          python paper/ops/test_travel_markers.py
+          node --check paper/plugins/AgentFriend/tests/verified-travel-stage.mjs
+          node --check paper/plugins/AgentFriend/tests/travel-markers-stage.mjs
+          node --check paper/integrations/touhou-maids/tests/maid-scene-stage.mjs
       - name: Check optional maid adapter without connecting
         run: |
           node --test paper/integrations/touhou-maids/tests/maid-port.test.mjs
