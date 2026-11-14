@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "release": "trial-return-voice-20261114-r1",
+  "state": "deployed-and-component-verified",
+  "verifiedAt": "2026-11-14T15:58:43.349652+08:00",
+  "deployedAt": "2026-11-14T15:50:27.9914140+08:00",
+  "previousComponentEvidence": "paper/manifests/platform-identity-companion-deployed-20261114.json",
+  "codePullRequests": [
+    236
+  ],
+  "sourceCommit": "85f1fb69c08a12d3dd46f7dc309799029696d076",
+  "mergedMain": "81718de611779b5518bef33e5e5c0dec8d46853e",
+  "ciRunIds": [
+    43570894323
+  ],
+  "components": [
+    {
+      "name": "AgentFriend",
+      "version": "0.4.47.76-trial-return",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "fae5702fd21ab7aaa3ff0719cbf4b320173fa6a78dae16bf37ead33c1bcb3e8d",
+      "processId": 27124,
+      "processStartedAt": "2026-11-14T15:47:36.2391502+08:00",
+      "narrowDeltaBase": "58b417c9088d4112a3683cdfe2b2be06ac55bacd",
+      "changedOwners": [
+        "DungeonManager",
+        "TrialGuide"
+      ],
+      "unrelatedEntriesPreserved": 676
+    },
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.35-residence-recovery",
+      "binaryUnchanged": true,
+      "sha256": "19614119a381292d1039dbb36657958671c37dc21cef02334a43810f4438f035"
+    }
+  ],
+  "voice": {
+    "maidId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+    "ownerId": "822d173a-7181-3b9b-be60-804f29b24ecc",
+    "voice": "feiyu-tlm-changchun-cn-20261111",
+    "configSha256": "7c415100f487fd266fb304ef62e5b5ce5175b460716734ce82deeb44aa242763",
+    "previousVoice": "feiyu-tlm-yezi-cn-20261111",
+    "userApproved": true,
+    "realSynthesisVerified": true,
+    "naturalProductionReceipts": [],
+    "humanHearingVerified": false
+  },
+  "guideConfig": {
+    "file": "plugins/AgentFriend/onboarding.yml",
+    "sha256": "ff5162bfb5f98ad6ee5dab86d2ae154b810effea33791c81351fb76b5924d670",
+    "oldNoticeCount": 3,
+    "newNoticeCount": 2,
+    "otherSettingsUnchanged": true,
+    "targetedReload": "success",
+    "revision": 18,
+    "ready": true,
+    "gameRestartedAgain": false
+  },
+  "acceptance": {
+    "ciJobsPassed": 6,
+    "isolatedChecks": 26,
+    "guidanceChecks": 92,
+    "normalStopAndNewProcessVerified": true,
+    "javaAndBedrockStatus": true,
+    "loginGuardReady": true,
+    "originalAgentAndObserversReauthenticated": true,
+    "cameraReady": true,
+    "originalCompanionAliveAndNearOwner": true,
+    "originalCompanionObservedHealth": 25,
+    "originalActiveAndPausedTasksPreserved": true,
+    "stateStoreCommitUnknown": false,
+    "realProductionTowerVictory": false,
+    "autonomousTaskSwitchAdoption": false
+  },
+  "rollback": {
+    "drive": "F",
+    "snapshot": "trial-return-voice-20261114-r1-20261114-154734",
+    "scope": "code and voice; separate before-onboarding.yml for guide text",
+    "preserve": "latest world, players, inventory, rewards, task/survey/return receipts and lifecycle",
+    "entryConsumed": true
+  },
+  "evidenceDirectory": "D:/codex/2026-09-14/new-chat/work/trial-exit-artifacts-20261114/release",
+  "guideDocumentation": {
+    "syncedToCurrentGoddessWorkspace": true,
+    "sha256": "96bcde090acc3ed3c68ad8255648106aa17891b2c6185ce8ef427523dcd04a4a",
+    "modelReadVerified": false
+  }
+}
