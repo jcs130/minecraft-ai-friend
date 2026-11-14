@@ -16,6 +16,13 @@ public final class TrialGuideTest {
         check(TrialGuide.route().contains("从第1层")&&!TrialGuide.route().contains("各有8"),"accurate tower route");
         check(ready.get("nextAction").toString().contains("每次新开从第1层开始")&&ready.get("nextAction").toString().contains("历史通关不自动跳层"),"repeat start cannot be mistaken for automatic checkpoint resume");
         check(TrialGuide.route().contains("每次新开从第1层开始")&&TrialGuide.route().contains("已解锁第7层驿站"),"ordinary start distinguished from unlocked rest entry");
+        for(int last:List.of(6,10,15)) {
+            var ending=TrialGuide.next(new TrialGuide.Facts(true,true,true,false,true,true,last,last,0,last,false,true,false,false,false,20,0,List.of()));
+            check(ending.get("reason").equals("wait_return"),"last floor returns instead of waiting for a nonexistent floor "+last);
+            check(ending.get("nextAction").toString().contains("自动返回入口平台"),"automatic return explained "+last);
+            check(ending.get("nextCommand").equals(TrialGuide.STATUS)&&!Boolean.TRUE.equals(ending.get("canStart")),"no duplicate start at final settlement "+last);
+        }
+        check(TrialGuide.route().contains("全部通关自动返回入口平台"),"route explains automatic final exit");
         for(var goal:GuildManager.Goal.values())check(TrialGuide.goal(goal)==Set.of("FLOOR","PARTY_FLOOR","FAST_FLOOR","NO_DEATH","LIGHT_FLOOR","STONE_FLOOR","WITCH_KILLS","CLAIMS").contains(goal.name()),"goal "+goal);
         System.out.println("TrialGuideTest: "+checks+" passed");
     }

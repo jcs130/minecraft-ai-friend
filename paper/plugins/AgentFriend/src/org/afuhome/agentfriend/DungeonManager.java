@@ -94,6 +94,7 @@ final class DungeonManager implements Listener {
     private static final long REST_DURATION_MS = 180_000L;
     private static final long REJOIN_GRACE_MS = 600_000L;
     private static final long OUTSIDE_GRACE_MS = 15_000L;
+    private static final long RETURN_RETRY_MS = 5_000L;
     private static final String RUN_STATE = "dungeon-active-run";
     private static final String OWN_OUTCOME = "dungeon-activity-outcomes.";
     private static final int TRIAL_SCHEMA_VERSION = 1;
@@ -262,6 +263,7 @@ final class DungeonManager implements Listener {
     private long lastRun;
     private UUID bossId;
     private BossBar bossBar;
+    private final Map<UUID, Long> returnAttemptAt = new HashMap<>();
 
     DungeonManager(AgentFriendPlugin plugin) {
         this.plugin = plugin;
@@ -392,9 +394,10 @@ final class DungeonManager implements Listener {
             savedIds.clear();
         }
         long interruptedAt = savedPause > 0 ? savedPause : savedAt;
+        boolean completedFinal = savedFloor == maxFloor() && plugin.getConfig().getBoolean(RUN_STATE + ".cleared", false);
         if (savedFloor < 1 || savedFloor > maxFloor() || savedIds.isEmpty()
                 || interruptedAt <= 0 || interruptedAt > now
-                || now - interruptedAt > REJOIN_GRACE_MS) {
+                || !completedFinal && now - interruptedAt > REJOIN_GRACE_MS) {
             plugin.getLogger().warning("Discarded expired or invalid dungeon run checkpoint.");
             plugin.getConfig().set(RUN_STATE, null);
             lastRun = now;
@@ -600,6 +603,13 @@ final class DungeonManager implements Listener {
         }
         var outcome = ownOutcome(player);
         if (outcome != null) out.add("lastOutcome", outcome);
+        if (!participant && outcome != null && outcome.has("returnPending")
+                && outcome.get("returnPending").getAsBoolean() && floorAt(player.getLocation()) > 0) {
+            out.addProperty("reason", "return_pending");
+            out.addProperty("nextAction", "本场已通关，奖励已保留，正在自动返回入口；若长时间未到达，请联系服主检查落点，不要重新开场");
+            out.addProperty("nextCommand", "/mycli arena leave");
+            out.addProperty("canStart", false);
+        }
         out.addProperty("floor",active?floor:0);out.addProperty("selfFloor",floorAt(player.getLocation()));out.addProperty("maxFloor",maxFloor());
         out.addProperty("remainingMobs",remaining);out.addProperty("selectedDifficulty",chosenDifficulty(player).id);
         out.addProperty("world",world()==null?"unknown":world().getName());
@@ -615,7 +625,7 @@ final class DungeonManager implements Listener {
             if(java.util.Arrays.stream(args).skip(2).anyMatch(a->!Set.of("--json","--verbose").contains(a))){player.sendMessage("§e[invalid_argument] 此查询只接受 --json 或 --verbose；未执行。命令：/mycli arena "+sub);return;}
         }
         if(sub.equals("status")&&!java.util.Arrays.asList(args).contains("--json")&&!java.util.Arrays.asList(args).contains("--verbose")){
-            var guide=guidance(player);player.sendMessage("§6[试炼塔] "+(isParticipant(player)?"本人参赛中，第"+floor+"/"+maxFloor()+"层":active?"本人未参赛；已有队伍挑战":"本人未参赛；当前空闲")+"。清层自动下楼，奖励到个人箱。详情可用 --json 或 --verbose。");showGuidance(player);return;
+            var guide=guidance(player);player.sendMessage("§6[试炼塔] "+(isParticipant(player)?"本人参赛中，第"+floor+"/"+maxFloor()+"层":active?"本人未参赛；已有队伍挑战":"本人未参赛；当前空闲")+"。清层自动下楼，全部通关自动返回入口，奖励到个人箱。详情可用 --json 或 --verbose。");showGuidance(player);return;
         }
         switch (sub) {
             case "status" -> {
@@ -980,7 +990,14 @@ final class DungeonManager implements Listener {
     }
 
     private void tick() {
+        for (Player player : Bukkit.getOnlinePlayers()) returnWinner(player);
         if (!active) return;
+        // A crash after durable rewards but before finish must not replay the final wave
+        // or strand the already successful party behind the reconnect timeout.
+        if (cleared && floor == maxFloor() && committedCurrentRun()) {
+            finish(true, "cleared", maxFloor() + " 层完成！奖励已存入个人箱子，正在自动返回入口平台。");
+            return;
+        }
         long now = System.currentTimeMillis();
         enrollPlayersOnCurrentFloor();
         pruneBossBarAudience();
@@ -1076,12 +1093,13 @@ final class DungeonManager implements Listener {
         if(plugin.lifeChallenges()!=null)plugin.lifeChallenges().roomCleared(rescueKey()+":"+floor,
                 participants.stream().map(Bukkit::getPlayer).filter(p->p!=null&&p.isOnline()&&!p.isDead()&&inFloor(p.getLocation(),floor)).map(Player::getUniqueId).collect(java.util.stream.Collectors.toSet()));
         announce(ChatColor.GREEN + "第 " + floor + "/" + maxFloor() + " 层已通关！奖励已放进个人箱子（" + credited + " 人）。");
-        if (floor == maxFloor()) finish(true, "cleared", maxFloor() + " 层完成！打开奖励箱领取，再按红色木按钮回地面。");
+        if (floor == maxFloor()) finish(true, "cleared", maxFloor() + " 层完成！奖励已存入个人箱子，正在自动返回入口平台。");
         else announce(ChatColor.YELLOW + "10 秒后全队自动进入下一层；奖励留在个人箱子，不必现在领取。");
     }
 
     @EventHandler public void onParticipantQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
+        returnAttemptAt.remove(player.getUniqueId());
         gearWarningAt.remove(player.getUniqueId());
         if (bossBar != null) bossBar.removePlayer(player);
         if (!active || !participants.contains(player.getUniqueId())) return;
@@ -1793,7 +1811,8 @@ final class DungeonManager implements Listener {
                 config.set(OWN_OUTCOME + id, null);
                 config.createSection(OWN_OUTCOME + id, Map.of(
                         "run", runId, "revision", revision, "floor", floor, "outcome", outcome,
-                        "status", won ? "completed" : "cancelled", "reason", reason, "endedAt", endedAt));
+                        "status", won ? "completed" : "cancelled", "reason", reason, "endedAt", endedAt,
+                        "returnPending", won));
             }
             config.set("dungeon-last-run", endedAt);
             config.set(RUN_STATE, null);
@@ -1817,6 +1836,66 @@ final class DungeonManager implements Listener {
             receipt.addProperty("activityType", "trial_tower");
             player.sendMessage("MC_TRIAL_RESULT " + receipt);
             if (won) plugin.agentCoach().rememberAdventure(player, "本场试炼塔已经通关");
+        }
+        if (won) for (UUID id : endedParticipants) {
+            Player player = Bukkit.getPlayer(id);
+            if (player != null) returnWinner(player);
+        }
+    }
+
+    /** The durable win receipt also owns return delivery. Never grant rewards here. */
+    private void returnWinner(Player player) {
+        UUID id = player.getUniqueId();
+        String path = OWN_OUTCOME + id;
+        var config = plugin.getConfig();
+        if (!config.getBoolean(path + ".returnPending", false)
+                || !"won".equals(config.getString(path + ".outcome"))) return;
+        if (!player.isOnline() || player.isDead() || plugin.isDowned(player)
+                || plugin.isObserver(player) || !plugin.nativeRpgMayAct(player) || isParticipant(player)) return;
+        long now = System.currentTimeMillis();
+        Long previous = returnAttemptAt.get(id);
+        if (previous != null && now - previous < RETURN_RETRY_MS) return;
+        returnAttemptAt.put(id, now);
+        try {
+            Location landing = rescueExit();
+            boolean arrived = sameWorld(player.getLocation()) && player.getLocation().distanceSquared(landing) < 4;
+            if (floorAt(player.getLocation()) > 0) {
+                // Respect protection/teleport cancellation; do not put players inside blocks.
+                Material support = landing.clone().subtract(0, 1, 0).getBlock().getType();
+                if (landing.getBlock().getType() != Material.AIR
+                        || landing.clone().add(0, 1, 0).getBlock().getType() != Material.AIR
+                        || !support.isSolid() || support == Material.MAGMA_BLOCK
+                        || support == Material.CAMPFIRE || support == Material.SOUL_CAMPFIRE) {
+                    if (previous == null) player.sendMessage(ChatColor.YELLOW + "【试炼塔·返程待处理】已通关，奖励已保留；入口平台落点受阻，服务器会自动重试。请联系服主清理入口，不要拆保护建筑。");
+                    return;
+                }
+                arrived = player.teleport(landing) && sameWorld(player.getLocation())
+                        && player.getLocation().distanceSquared(landing) < 4;
+                if (!arrived) {
+                    if (previous == null) player.sendMessage(ChatColor.YELLOW + "【试炼塔·返程待处理】已通关，奖励已保留；本次传送未到达，服务器会自动重试。也可 /mycli arena leave 返回入口。");
+                    return;
+                }
+            }
+            // Save the position before consuming the return marker. A restart may retry
+            // a pending return, but must not lose the only durable way out of the tower.
+            player.saveData();
+            String status = arrived ? "arrived" : "left_independently";
+            commitTrial(() -> {
+                config.set(path + ".returnPending", false);
+                config.set(path + ".returnStatus", status);
+            });
+            returnAttemptAt.remove(id);
+            if (bossBar != null) bossBar.removePlayer(player);
+            if (arrived) player.sendMessage(ChatColor.GREEN + "【试炼塔·返程完成】已自动返回入口平台；奖励保存在个人箱子，可用 /mycli arena stash 查看。");
+            var receipt = ownOutcome(player);
+            receipt.addProperty("schemaVersion", TRIAL_SCHEMA_VERSION);
+            receipt.addProperty("activityType", "trial_tower");
+            player.sendMessage("MC_TRIAL_RETURN " + receipt);
+        } catch (RuntimeException failure) {
+            if (previous == null) {
+                plugin.getLogger().warning("Trial return remains pending for " + id + ": " + failure.getClass().getSimpleName());
+                player.sendMessage(ChatColor.YELLOW + "【试炼塔·返程待确认】奖励和返程记录已保留，服务器会自动核对重试；无需重新挑战。");
+            }
         }
     }
 

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "release": "trial-return-voice-20261114-r1",
+  "state": "candidate-validated-not-deployed",
+  "baseMain": "15b0131fce2f54918372c7e66c7d67aa1df4ba3e",
+  "version": "0.4.47.76-trial-return",
+  "baselineSha256": "879b84565e4381aaac9e4a6cfd545cd5ad7e70115e48af7ef39f5e44471427de",
+  "candidateSha256": "fae5702fd21ab7aaa3ff0719cbf4b320173fa6a78dae16bf37ead33c1bcb3e8d",
+  "baselineSourceMatches": true,
+  "changedOwners": [
+    "DungeonManager",
+    "TrialGuide"
+  ],
+  "unrelatedEntriesPreserved": 676,
+  "productionChanged": false,
+  "verification": {
+    "isolatedChecks": 26,
+    "guidanceChecks": 92,
+    "baselineReproduced": true,
+    "normalRestartVerified": true,
+    "finalPackageNormalStopVerified": true,
+    "realGameAcceptance": false
+  },
+  "voice": {
+    "candidate": "feiyu-tlm-changchun-cn-20261111",
+    "previous": "feiyu-tlm-yezi-cn-20261111",
+    "requestedStyle": "活泼俏皮，有伙伴感",
+    "selectedBy": "assistant-candidate-following-user-style",
+    "sampleAuditionConfirmed": false,
+    "synthesisVerified": true,
+    "gameBindingChanged": false
+  },
+  "backupDrive": "F",
+  "rollback": "code/config only; preserve current world, player data, reward/outcome/return records"
+}
