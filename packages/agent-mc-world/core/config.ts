@@ -3,6 +3,8 @@ import { GAME_MEMORY_DEFAULTS, GAME_MEMORY_CONFIG_SCHEMA } from './game-memory-s
 import { COMBAT_EXECUTION_DEFAULTS } from './combat-decision-types.ts';
 import { PHOTOGRAPHY_DEFAULTS } from './photo-image.ts';
 import { OBSERVATION_DEFAULTS } from './perception-sight.ts';
+import { MINING_LIMIT_DEFAULTS } from './mining-limiter.ts';
+import { MOVEMENT_PACE_DEFAULTS } from './movement-pace.ts';
 
 
 export const MINECRAFT_DEFAULTS = {
@@ -20,10 +22,17 @@ export const MINECRAFT_DEFAULTS = {
   profilesFolder: '',
   /** Private scoped account file; only encrypted credential references are read by the client. */
   loginConfigFile: '',
+  /** Handshake/SNI host when connecting to a resolved IP. */
+  fakeHost: '',
+  /** Retry public DNS when the system resolver returns a fake 198.18.0.0/15 address. */
+  publicDnsFallback: true,
   /** Maximum gap between server keepalive packets; not an action retry budget. */
   keepAliveTimeoutMs: 60_000,
   proximityVoice: { enabled:false, audioProducerUrl:'', outputMode:'game-only' as const },
   chatDuplicateWindowMs: 120_000,
+  /** Honest mining throttle (budgets per rolling minute / 10 min, gaps, rest, warning back-off). */
+  miningLimits: structuredClone(MINING_LIMIT_DEFAULTS),
+  movementPace: structuredClone(MOVEMENT_PACE_DEFAULTS),
   deathRespawnDelayMs: 4000,
   perception: structuredClone(OBSERVATION_DEFAULTS),
   skinModel: 'classic' as 'classic' | 'slim',
@@ -227,12 +236,20 @@ export interface MinecraftConfigSection {
   auth?: 'offline' | 'microsoft';
   profilesFolder?: string;
   loginConfigFile: string;
+  /** Handshake/SNI host when `host` is a resolved IP. */
+  fakeHost?: string;
+  /** Retry public DNS when the system resolver returns a fake 198.18.0.0/15 address. Default true. */
+  publicDnsFallback?: boolean;
   /** Keepalive packet timeout in milliseconds, default 60 seconds. */
   keepAliveTimeoutMs?: number;
   /** Requested server chunk radius, 2..32; omitted preserves Mineflayer's default. Not a visibility/security boundary. */
   viewDistance?: number;
   /** Exact player-facing reply deduplication; 0 disables it, new inbound messages release it. */
   chatDuplicateWindowMs?: number;
+  /** Mining rate limiter (`worlds.minecraft.miningLimits`). Partial values override the defaults; see docs/human-pace-limits.md. */
+  miningLimits?: Partial<import('./mining-limiter.ts').MiningLimits>;
+  /** Human-pace pathfinding/turning (`worlds.minecraft.movementPace`). Partial values override the defaults. */
+  movementPace?: Partial<import('./movement-pace.ts').MovementPace>;
   /** Connection-owned death display delay, 0..15000 milliseconds. */
   deathRespawnDelayMs?: number;
   version: string;
@@ -354,7 +371,15 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
         'x-path': { kind: 'file', extensions: ['.json'] } },
       'worlds.minecraft.version': {
         type: 'string', title: '协议版本', 'x-hot': false,
-        description: 'auto 自动识别 Java 协议；也可填写 Mineflayer 支持的明确版本。渲染资产和 Java 客户端版本分别配置。',
+        description: 'auto 自动识别 Java 协议；也可填写 Mineflayer 支持的明确版本，例如 1.21.1 或 26.1。渲染资产和 Java 客户端版本分别配置。',
+      },
+      'worlds.minecraft.fakeHost': {
+        type: 'string', title: '握手域名', 'x-hot': false,
+        description: '连接已解析的 IP 时，把这个域名用于握手/SNI。通常与填写的服务器域名相同。',
+      },
+      'worlds.minecraft.publicDnsFallback': {
+        type: 'boolean', title: '公共 DNS 回退', 'x-hot': false,
+        description: '系统 DNS 返回 198.18.0.0/15 这类不可用地址时，改用公共 DNS 解析并保留原域名作为握手主机。默认开启。',
       },
       'worlds.minecraft.viewerPort': {
         type: 'integer', title: 'viewer 端口', minimum: 0, maximum: 65535, 'x-hot': false,
@@ -519,6 +544,52 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.proximityVoice.enabled': {type:'boolean',title:'游戏附近语音',description:'按需发给附近玩家，复用当前已认证连接；不自动配音游戏文字。'},
       'worlds.minecraft.proximityVoice.audioProducerUrl': {type:'string',title:'演出音频服务',description:'显式配置的音频产物服务地址。音色与 TTS 由演出扩展维护。'},
       'worlds.minecraft.proximityVoice.outputMode': {type:'string',enum:['game-only','live-and-game'],title:'游戏语音输出',description:'game-only 仅游戏；live-and-game 同一音频也进入直播队列。观众解说始终不转发游戏。','x-hot':true},
+      'worlds.minecraft.movementPace.enabled': { type: 'boolean', title: '寻路/转身按真人节奏', 'x-hot': true,
+        description: '限制转身速度、连续自动走路时长、段与段之间的停顿，以及单段最远距离。只放慢，不伪装输入。默认开启；详见 docs/human-pace-limits.md。' },
+      'worlds.minecraft.movementPace.maxYawDegPerTick': { type: 'number', title: '每 tick 最大水平转角', minimum: 1, maximum: 180, 'x-suffix': '°', 'x-hot': true,
+        description: '默认 24°/tick（约 480°/s）。180° 转身大约 8 tick，而不是一 tick 转到位。' },
+      'worlds.minecraft.movementPace.maxPitchDegPerTick': { type: 'number', title: '每 tick 最大俯仰转角', minimum: 1, maximum: 180, 'x-suffix': '°', 'x-hot': true,
+        description: '默认 16°/tick。' },
+      'worlds.minecraft.movementPace.moveBeforeRestMs': { type: 'integer', title: '连续自动走路后休息', minimum: 0, maximum: 600000, 'x-suffix': 'ms', 'x-hot': true,
+        description: '默认 75000：连续寻路约 75 秒后原地停 restMs。' },
+      'worlds.minecraft.movementPace.restMs': { type: 'integer', title: '走路休息时长', minimum: 0, maximum: 60000, 'x-suffix': 'ms', 'x-hot': true,
+        description: '默认 6000。' },
+      'worlds.minecraft.movementPace.legGapMs': { type: 'integer', title: '两段寻路之间停顿', minimum: 0, maximum: 60000, 'x-suffix': 'ms', 'x-hot': true,
+        description: '默认 1000：到达一个目标后先停再走下一段。' },
+      'worlds.minecraft.movementPace.maxLegBlocks': { type: 'integer', title: '单段寻路最远直线', minimum: 1, maximum: 1024, 'x-suffix': '格', 'x-hot': true,
+        description: '默认 96。更远的目标应拆成多段，每段之间停顿。' },
+      'worlds.minecraft.movementPace.hardStopOnWarning': { type: 'boolean', title: '警告后停止自动寻路', 'x-hot': true,
+        description: '收到 miningLimits 关键词命中的服务器警告后，本次会话不再自动寻路。默认开启。' },
+      'worlds.minecraft.miningLimits.enabled': { type: 'boolean', title: '挖矿限速', 'x-hot': true,
+        description: '按正常玩家节奏限制挖方块频率（每分钟/每 10 分钟额度、最短间隔、连续挖掘后休息），命中警告关键词时暂停并降额。只放慢，不伪装。警告文案由 warningKeywords 等配置提供，核心不写死某个服的句子。详见 docs/human-pace-limits.md。' },
+      'worlds.minecraft.miningLimits.mineralPerMinute': { type: 'integer', title: '石头/矿石每分钟上限', minimum: 1, 'x-hot': true, description: '默认 12。' },
+      'worlds.minecraft.miningLimits.mineralPer10Min': { type: 'integer', title: '石头/矿石每 10 分钟上限', minimum: 1, 'x-hot': true, description: '默认 80。' },
+      'worlds.minecraft.miningLimits.allPerMinute': { type: 'integer', title: '所有方块每分钟上限', minimum: 1, 'x-hot': true, description: '默认 24。零硬度方块（草、花）不计入。' },
+      'worlds.minecraft.miningLimits.allPer10Min': { type: 'integer', title: '所有方块每 10 分钟上限', minimum: 1, 'x-hot': true, description: '默认 160。' },
+      'worlds.minecraft.miningLimits.mineralGapMs': { type: 'integer', title: '两次挖石头/矿石最短间隔', minimum: 0, maximum: 60000, 'x-suffix': 'ms', 'x-hot': true, description: '默认 2500。' },
+      'worlds.minecraft.miningLimits.anyGapMs': { type: 'integer', title: '两次挖掘最短间隔', minimum: 0, maximum: 60000, 'x-suffix': 'ms', 'x-hot': true, description: '默认 1000，适用于所有计入的方块。' },
+      'worlds.minecraft.miningLimits.restAfterMs': { type: 'integer', title: '连续挖掘后休息', minimum: 0, maximum: 3600000, 'x-suffix': 'ms', 'x-hot': true, description: '默认 240000（连续挖 4 分钟后休息）。' },
+      'worlds.minecraft.miningLimits.restMs': { type: 'integer', title: '挖掘休息时长', minimum: 0, maximum: 600000, 'x-suffix': 'ms', 'x-hot': true, description: '默认 60000。' },
+      'worlds.minecraft.miningLimits.inlineWaitMs': { type: 'integer', title: '就地等待阈值', minimum: 0, maximum: 60000, 'x-suffix': 'ms', 'x-hot': true,
+        description: '默认 8000：短于此时长的间隔在技能内等完；更长则向规划器回报「mining budget exhausted, wait Ns」，便于改做别的事。' },
+      'worlds.minecraft.miningLimits.warningPauseMs': { type: 'integer', title: '警告后暂停挖掘', minimum: 0, maximum: 86400000, 'x-suffix': 'ms', 'x-hot': true,
+        description: 'hardStopOnWarning 关闭时生效。默认 1200000（20 分钟）。' },
+      'worlds.minecraft.miningLimits.hardStopOnWarning': { type: 'boolean', title: '警告后停止挖掘', 'x-hot': true,
+        description: '命中警告后本次进程不再挖方块。默认开启。' },
+      'worlds.minecraft.miningLimits.warningBanMarginMs': { type: 'integer', title: '挖矿禁令额外裕量', minimum: 0, maximum: 3600000, 'x-suffix': 'ms', 'x-hot': true,
+        description: '从聊天解析到「N 分钟内禁止挖」后，再额外等待这段时间。默认 300000。' },
+      'worlds.minecraft.miningLimits.warningBudgetFactor': { type: 'number', title: '警告后额度系数', minimum: 0, maximum: 1, 'x-hot': true,
+        description: '警告恢复后一段时间内的额度乘数。默认 0.5。' },
+      'worlds.minecraft.miningLimits.warningReducedMs': { type: 'integer', title: '降额持续', minimum: 0, maximum: 86400000, 'x-suffix': 'ms', 'x-hot': true,
+        description: '默认 3600000（降额一小时）。' },
+      'worlds.minecraft.miningLimits.warningKeywordsCsv': { type: 'string', title: '警告关键词', 'x-hot': true,
+        description: '逗号或竖线分隔。聊天命中任一词（再经确认正则过滤广告）即视为警告。JSON 配置也可用 miningLimits.warningKeywords 字符串数组。不同服务器把专用句子配在这里，不要写进核心代码。默认：反作弊、自动挖矿、挖矿外挂、禁止挖、自动化模组、外挂。' },
+      'worlds.minecraft.miningLimits.warningPattern': { type: 'string', title: '警告正则（可选）', 'x-hot': true,
+        description: '高级选项：与关键词是「或」关系。留空则只靠关键词。默认与关键词相同，兼容旧配置。' },
+      'worlds.minecraft.miningLimits.warningConfirmPattern': { type: 'string', title: '警告确认正则', 'x-hot': true,
+        description: '关键词命中后还须匹配此正则，用于忽略只是引用这些词的广告。留空则不做二次过滤。默认：你|检测|禁止|VL。' },
+      'worlds.minecraft.miningLimits.warningBanPattern': { type: 'string', title: '挖矿禁令正则', 'x-hot': true,
+        description: '第一个捕获组为禁止挖矿的分钟数。留空则不从聊天解析限时禁令。默认：(\\d+)\\s*分钟内禁止挖。' },
       'worlds.minecraft.chatDuplicateWindowMs': { type: 'integer', title: '相同回复去重窗口', minimum: 0, 'x-suffix': 'ms', 'x-hot': true,
         description: '只去重同频道/同私聊接收人的相同文字；收到对方新消息即允许回复。0 关闭。不限制新内容，不拦业务命令。' },
       'worlds.minecraft.reflex.fightBack': {

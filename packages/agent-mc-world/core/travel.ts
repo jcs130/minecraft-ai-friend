@@ -3,6 +3,8 @@
  *
  * 技能族要挪动身体一律经这里;谁占着寻路目标由 goalOwner 一处记账,抢占按归属判。
  */
+import { awaitMiningBudget } from './mining-limiter.ts';
+import { assertMovementAllowed } from './movement-pace.ts';
 import type { Bot } from 'mineflayer';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
@@ -754,6 +756,10 @@ async function navigateWithCheckpoints(bot: Bot, goal: InstanceType<typeof goals
 }
 
 export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goal>, ctx: SkillContext): Promise<void> {
+  {
+    const g = goal as unknown as { x?: number; y?: number; z?: number };
+    assertMovementAllowed(bot, Number.isFinite(g.x) && Number.isFinite(g.z) ? { x: g.x as number, y: g.y ?? 0, z: g.z as number } : null);
+  }
   installNavigationBoundaryGuard(bot, ctx.diag);
   const boundarySequence = navigationBoundaryFailureOf(bot)?.sequence ?? 0;
   const boundaryBlocked = (): SkillBlocked | null => {
@@ -773,7 +779,7 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
   bot.on?.('path_update', onPath);
   /** 钉住的那一档抛 `Wedged` 交给外层解卡;绕远路那一档照实受阻 */
   const stallError = (s: Stall): Error => (s.wedged ? new Wedged(s) : stallBlocked(bot, s));
-  const deadline = Date.now() + GOTO_DEADLINE_MS;
+  let deadline = Date.now() + GOTO_DEADLINE_MS;
   const supportSeq = pathSupportFailureOf(bot)?.seq ?? 0;
   const geometrySeq = groundPathIssueOf(bot)?.sequence ?? 0;
   const interactionSeq = navigationInteractionFailureOf(bot)?.sequence ?? 0;
@@ -806,6 +812,10 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
       // 中止由发起方撤销目标；watchdog 仅处理 deadline 与原地打转。
       if (ctx.aborted()) return;
       const now = Date.now();
+      // Human-pace rest (movement-pace): standing still on purpose is neither a stall nor lost time.
+      const pacer = (bot as unknown as { _movementPacer?: { restingMs(): number } })._movementPacer;
+      const resting = pacer ? pacer.restingMs() : 0;
+      if (resting > 0 && Number.isFinite(resting)) { bestAt = now; deadline = Math.max(deadline, now + 15_000); }
       if (now > deadline) {
         timedOut = true;
         writeStallProbe(bot, ctx, goal, 'timeout');
@@ -1108,6 +1118,9 @@ export async function digBlock(bot: Bot, target: NonNullable<ReturnType<Bot['blo
   if (!bot.canDigBlock(target)) {
     throw new SkillBlocked(`够不到${zhName(target.name)}(离得太远或者隔着方块),没挖成`);
   }
+  // Honest mining throttle (mining-limiter.ts): short gaps are waited here, long ones are a blocked step.
+  await awaitMiningBudget(bot as any, target.name, () => ctx.aborted(), target.hardness);
+  if (ctx.aborted()) throw new Aborted(ctx.abortedBy?.() ?? null);
   const budget = Math.max(15_000, bot.digTime(target) * 3);
   let finished = false;
   const guard = setTimeout(() => {
@@ -1117,6 +1130,7 @@ export async function digBlock(bot: Bot, target: NonNullable<ReturnType<Bot['blo
     await bot.dig(target);
   } catch (err) {
     if (ctx.aborted()) throw new Aborted(ctx.abortedBy?.() ?? null);
+    if (err instanceof SkillBlocked) throw err;
     const msg = (err as Error).message;
     if (/digging aborted/i.test(msg)) {
       throw new SkillBlocked(`挖${zhName(target.name)}挖到一半被打断了,这一块没挖完`);

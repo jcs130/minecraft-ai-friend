@@ -1,3 +1,6 @@
+import { installMovementPace, MOVEMENT_PACE_DEFAULTS, resolveMovementPace } from './movement-pace.ts';
+import { installMiningLimiter, MINING_LIMIT_DEFAULTS, resolveMiningLimits } from './mining-limiter.ts';
+import { onServerScreen, renderScreen, serverScreen, closeLocalScreen } from './server-screens.ts';
 import { compactWorkExecutionEvidence } from '../src/contracts/continuation-evidence.ts';
 import { nativeBodyBlockedReason, nativeBodyReadiness } from './body-readiness.ts';
 import { methodLearningCall } from '../src/learning/method-capability.ts';
@@ -82,7 +85,9 @@ import { AttentionReader, PERCEPTION_TOOLS, perceptionArgs, validDetection, type
 import { IdleBehaviorController, IdlePresentationContext, type IdleBehaviorScene } from './idle-behavior.ts';
 import { sampleIdleActions, executeIdleAction } from './idle-actions.ts';
 import { bossBarStageTitle, classifyBossBarTitle, readBossBarHud, renderBossBarHud } from './boss-bar.ts';
+import { readServerDisplay, renderServerDisplayHud, scoreRowText } from './server-display.ts';
 import { minecraftTextComponent } from './text-component.ts';
+import { installOpenBookObserver } from './window-protocol.ts';
 import { MinecraftChatProvenance, incomingPrivateParts } from '../src/chat-provenance.ts';
 import { configureChatDedup, noteChatInput } from './chat-dedup.ts';
 import { RAILWAY_TOOL_DECL, railwayReadout } from '../src/railway.ts';
@@ -169,6 +174,8 @@ import { DirectionalSweepBook } from './directional-sweeps.ts';
 import { containerStacks } from './containers.ts';
 import { invItemNamed, itemsInReach } from './inventory.ts';
 import { selectionMenuTitle } from './window-semantics.ts';
+import { readOpenWindow, renderWindowReadout, type WindowReadout } from './window-readout.ts';
+import { serverWindows } from './orphan-windows.ts';
 import { readEnchants } from './item-facts.ts';
 import { ItemBreakDecoder, type ItemBreakFact } from './item-break.ts';
 import { WorksBook } from './works.ts';
@@ -2691,6 +2698,16 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     }, required: [] },
   },
   {
+    name: 'mc_window',
+    tags: ['read', 'snapshot'],
+    description:
+      'Read the server window/menu that is open right now (plugin GUIs such as /menu, /rtp, /linggen): its title and every '
+      + 'container slot with item id, display name and lore lines. Read-only and instant — it clicks nothing. '
+      + 'Also reports when the server still has a window open that the client could not model (commands are then refused). '
+      + 'Use the slot numbers with mc_do {"skill":"menu_click","slot":N}; close with {"skill":"menu_close"}.',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
     name: 'mc_queue',
     tags: ['read', 'snapshot'],
     description:
@@ -3583,7 +3600,9 @@ export class MinecraftWorld implements World {
       { key: 'foodReserve', text: this.currentFoodReserve(snap, true) }];
     const last = this.lastFinishedTask;
     const bot = this.bridge.bot;
-    const hud = renderBossBarHud(readBossBarHud((bot as (Bot & { bossBars?: unknown }) | undefined)?.bossBars));
+    const display = bot ? readServerDisplay(bot) : null;
+    const hud = display ? renderServerDisplayHud(display)
+      : renderBossBarHud(readBossBarHud((bot as (Bot & { bossBars?: unknown }) | undefined)?.bossBars));
     if (hud) parts.push({ key: 'hud', text: hud });
     const running = this.executor?.status().running;
     const options = minecraftOptionsFromSnapshot(snap, bot?.registry?.foodsByName ?? {}, {
@@ -3895,6 +3914,16 @@ export class MinecraftWorld implements World {
     };
     switch (panel) {
       case 'connection': {
+        if(method==='play.close') {
+          const bot=this.bridge?.bot;
+          // Close what the server has open, including windows mineflayer never modelled.
+          const tracked=serverWindows(bot);
+          const released=tracked ? tracked.close() : null;
+          if (!tracked && bot?.currentWindow) bot.closeWindow(bot.currentWindow);
+          return {closed:!bot?.currentWindow, released};
+        }
+        if(method==='play.window') return this.windowReadout().data;
+
         if(method==='viewer.state')return this.bridge?.viewerResources()??{phase:'waiting',version:null};
         if(method==='viewer.retry'){
           if(!this.bridge)throw Error('Minecraft body is not connected');
@@ -3915,6 +3944,19 @@ export class MinecraftWorld implements World {
           viewer: { ...this.bridge?.viewerResources(), mode: this.bridge?.viewerKind ?? null, url: this.bridge?.viewerUrl ?? null },
           accounts: Object.fromEntries(Object.entries(this.accountAuth).map(([lane, auth]) => [lane, auth.snapshot()])),
           connection: this.bridge?.connectionState ?? null,
+          play: this.bridge?.bot ? {localTerrain: (()=>{
+            const b=this.bridge!.bot!,p=b.entity?.position;if(!p)return [];
+            const cells=[];
+            for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
+              const q=p.floored().offset(dx,0,dz);
+              const read=(dy:number)=>{const block=b.blockAt(q.offset(0,dy,0));return block?{name:block.name,collision:block.boundingBox}:null;};
+              cells.push({dx,dz,floor:read(-1),feet:read(0),head:read(1)});
+            }
+            return cells;
+          })(),position:this.bridge.bot.entity?.position, health:this.bridge.bot.health,
+            food:this.bridge.bot.food, yaw:this.bridge.bot.entity?.yaw, pitch:this.bridge.bot.entity?.pitch,
+            window: this.bridge.bot.currentWindow ? {id:this.bridge.bot.currentWindow.id,title:this.bridge.bot.currentWindow.title}:null,
+            display: readServerDisplay(this.bridge.bot)} : null,
           clients: { observer: (({command, ...state}) => state)(await this.client.state()),
             player: (({command, ...state}) => state)(await this.playerClient.state()) } };
       }
@@ -4478,6 +4520,8 @@ export class MinecraftWorld implements World {
       port: this.cfg.port,
       username: this.cfg.username || this.botName,
       version: this.cfg.version,
+      fakeHost: this.cfg.fakeHost || undefined,
+      publicDnsFallback: this.cfg.publicDnsFallback,
       keepAliveTimeoutMs: this.cfg.keepAliveTimeoutMs,
       viewDistance: this.cfg.viewDistance,
       deathRespawnDelayMs: this.cfg.deathRespawnDelayMs,
@@ -4995,6 +5039,10 @@ export class MinecraftWorld implements World {
         return readout.data ? {text:typeof result==='string'?result:result.text,data:readout.data} : result;
       },
       mc_view_map: async (args) => this.viewMap(args),
+      mc_window: async (args) => {
+        const readout=this.windowReadout();
+        return { text: this.toolLog('mc_window', args, readout.text), data: readout.data as unknown as Record<string, unknown> };
+      },
       mc_queue: async (args, ctx) => {
         const readout=this.queueReadout(args), result=this.readOnce('mc_queue',ctx,()=>readout);
         if(!readout.data)return result;
@@ -5491,6 +5539,13 @@ export class MinecraftWorld implements World {
         fallbackText: '[地图画面:这一轮看不了图,只有上面的文字读数]',
       }],
     };
+  }
+
+  /** mc_window: read-only open server window/menu slots (names + lore). */
+  protected windowReadout(): { text: string; data: WindowReadout } {
+    const bot = this.bridge?.bot;
+    const data = readOpenWindow(bot);
+    return { text: bot ? renderWindowReadout(data) : `[mc_window] 看不了窗口：${this.unavailableConnectionText()}`, data };
   }
 
   /** mc_bag:背包现读。与快照走同一份渲染口径(见 readouts.renderBagReadout) */
@@ -7601,6 +7656,17 @@ export class MinecraftWorld implements World {
   /** 聊天、欢迎说明与屏幕大字可早于 spawn；不依赖实体或背包装配。 */
   protected hookMessageEvents(bot: any): void {
     configureChatDedup(bot, () => this.cfg.chatDuplicateWindowMs ?? MINECRAFT_DEFAULTS.chatDuplicateWindowMs);
+    let miningLimits = resolveMiningLimits(this.cfg.miningLimits);
+    let movementPace = resolveMovementPace(this.cfg.movementPace);
+    installMiningLimiter(bot, () => {
+      try { miningLimits = resolveMiningLimits(this.cfg.miningLimits); } catch { /* keep last valid hot config */ }
+      return miningLimits;
+    },
+      (event, data) => this.diag?.write({ lane: 'event', event, msg: '服务器警告挖矿：暂停挖掘并降低挖矿额度', data }));
+    installMovementPace(bot, () => {
+      try { movementPace = resolveMovementPace(this.cfg.movementPace); } catch { /* keep last valid hot config */ }
+      return movementPace;
+    });
     if (this.hookedMessageBots.has(bot)) return;
     this.hookedMessageBots.add(bot);
     this.pendingDeathCause = null;
@@ -7860,6 +7926,16 @@ export class MinecraftWorld implements World {
     observeStatusEffects(bot);
     this.attachExtension(bot);
     this.hookMessageEvents(bot);
+    const detachBook = installOpenBookObserver(bot, (book) => {
+      if (this.bridge?.bot !== bot) return;
+      const heading = book.title ? `《${book.title}》` : '成书';
+      const author = book.author ? `，作者 ${book.author}` : '';
+      const body = book.pages.length
+        ? book.pages.map((page, index) => `${index + 1}. ${page}`).join('\n')
+        : '未能读出正文。';
+      this.emit('minecraft.event', `[Minecraft] 打开了${heading}${author}。\n${body}`, false);
+    });
+    bot.once('end', detachBook);
     const detachUses = this.serverActionWait.observeUses(bot._client, (at) =>
       this.bridge?.bot === bot ? this.useObservation(at) : undefined);
     bot._client.on('end', detachUses);
@@ -7931,6 +8007,51 @@ export class MinecraftWorld implements World {
     // GUI 演出的卡屏兜底:关窗后 2.5s(期间没再开窗)踢一次脱离→再附身,清掉摄像机侧
     // 可能没跟上的同步屏。正常路径的关窗同步几乎总是跟手,这一脚只在竞态漏网时起效;
     // 观感成本与 resyncSec 周期重下相同(每 30s 一次,五场直播没人看出来过)。
+    {
+      // /stats 一类指令在永恒世界用侧边栏计分板回答，约 15 秒后清掉；不转成事件 agent 就看不到。
+      let sidebarTimer: ReturnType<typeof setTimeout> | null = null, lastSidebar = '';
+      const onSidebar = (packet: { position?: unknown }) => {
+        const n = Number(packet?.position);
+        if (!(n === 1 || (n >= 3 && n <= 18))) return;
+        if (sidebarTimer) clearTimeout(sidebarTimer);
+        sidebarTimer = setTimeout(() => {
+          sidebarTimer = null;
+          try {
+            const board = readServerDisplay(bot as never).scoreboards.find((b) => b.slot !== 'hidden' && b.rows.length);
+            if (!board) return;
+            const rows = board.rows.map((r) => scoreRowText(r)).join('；');
+            const key = `${board.title}|${rows}`;
+            if (key === lastSidebar) return;
+            lastSidebar = key;
+            this.emit('minecraft.event', `[Minecraft] 服务端侧边栏「${board.title}」（指令结果，十几秒后消失，已记下）：${rows.slice(0, 900)}`, true);
+          } catch { /* display readout is best effort */ }
+        }, 600);
+      };
+      bot._client.on('scoreboard_display_objective', onSidebar);
+      bot.once('end', () => { bot._client.off('scoreboard_display_objective', onSidebar); if (sidebarTimer) clearTimeout(sidebarTimer); });
+    }
+    {
+      // Server refuses commands while it thinks a menu is open that this client never modeled
+      // (the ghost screen). Do what a player does: press Escape once, then tell the agent.
+      let lastEsc = 0;
+      const onRefusal = (message: string) => {
+        if (!/打开界面时无法执行指令/.test(String(message))) return;
+        const now = Date.now();
+        if (now - lastEsc < 8_000) return;
+        lastEsc = now;
+        const screen = serverScreen(bot);
+        if (screen?.kind === 'dialog' && screen.canCloseWithEscape !== false) closeLocalScreen(bot, ['dialog']);
+        const id = serverWindows(bot)?.escape();
+        this.emit('minecraft.event', `[Minecraft] 服务端说有界面开着、拒绝了指令；已像玩家按 Esc 一样发送关闭${id !== undefined ? `（窗口 #${id}）` : ''}。稍等一下再重发那条指令；若仍被拒，先 mc_window 读当前界面。`, true);
+      };
+      bot.on('messagestr', onRefusal);
+      bot.once('end', () => bot.off('messagestr', onRefusal));
+    }
+    onServerScreen(bot, (screen) => {
+      if (!screen) return;
+      this.interruptIdle('server-screen');
+      this.emit('minecraft.event', `[Minecraft] ${renderScreen(screen).split('\n').slice(0, 8).join(' ')}。服务端界面开着时会拒绝指令；用 mc_window 读，再 menu_click 选按钮或 menu_close 关闭。`, true);
+    });
     bot.on('windowOpen', () => {
       this.interruptIdle('container');
       if (this.guiKickTimer) clearTimeout(this.guiKickTimer);
@@ -8269,6 +8390,7 @@ export class MinecraftWorld implements World {
     if (this.shuttingDown || !this.host || !(this.cfg.idle ?? MINECRAFT_DEFAULTS.idle).enabled) return 'world-unavailable';
     if (!this.bridge?.connected || !this.bridge.invSynced || !bot?.entity || !queue) return 'connection-unavailable';
     if (queue.running || queue.waiting.length || queue.hold) return 'task';
+    if (this.bridge?.spawnHold && !this.bridge.spawnHold.stable()) return 'spawn-hold';
     if (this.methodOwnsBody()) return 'method';
     if (this.combat?.active) return 'combat';
     if (this.reflexes?.envActive || Date.now() < this.escapeHoldUntil) return 'reflex';
