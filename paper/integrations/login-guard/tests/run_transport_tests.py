@@ -34,7 +34,9 @@ def main():
     classes = output / "classes"
     classes.mkdir(parents=True)
     cp = os.pathsep.join(map(str, jars))
-    sources = sorted(args.source.rglob("*.java")) + sorted((ROOT / "tests").glob("*.java"))
+    sources = (sorted(args.source.rglob("*.java"))
+               + sorted((ROOT / "tests").glob("*.java"))
+               + sorted((REPO / "paper/plugins/shared/src/org/afuhome/identity").glob("*.java")))
     has_trace = (args.source / "org/afuhome/auth/VoiceTransportTrace.java").exists()
     if not has_trace:
         sources = [source for source in sources if source.name != "VoiceTransportTraceTest.java"]
@@ -45,7 +47,7 @@ def main():
     cp = str(classes) + os.pathsep + cp
     names = ["VoiceTransportTest", "VoiceOrderingTest", "VoiceTransportTraceTest", "McbotTransportTest", "AuthObservationTest", "AuthNotificationTest",
              "AuthHeartbeatRecoveryTest", "AuthMessagesTest", "FirstPasswordPolicyTest",
-             "PremiumEyePolicyTest", "PortalBridgeTest", "ConfigurationSettingsTest"]
+             "PremiumEyePolicyTest", "PortalBridgeTest", "ConfigurationSettingsTest", "IdentityHandoffTest"]
     if not has_trace:
         names.remove("VoiceTransportTraceTest")
     for name in names:

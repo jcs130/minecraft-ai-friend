@@ -4,10 +4,12 @@ import com.google.inject.Inject;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.velocitypowered.api.event.PostOrder;
+import com.velocitypowered.api.event.ResultedEvent;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.event.connection.PreLoginEvent;
+import com.velocitypowered.api.event.connection.LoginEvent;
 import com.velocitypowered.api.event.connection.PostLoginEvent;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.proxy.connection.client.ConnectedPlayer;
@@ -54,6 +56,7 @@ public final class LoginGuard {
     private LibreLoginPlugin<Player, RegisteredServer> libre;
     private Path heartbeat, attemptsFile, opsFile, eyesFile;
     private volatile EyePolicy eyes;
+    private VerifiedJavaIdentity javaIdentity;
     private PortalBridge portal;
     private final Properties attempts = new Properties();
     private volatile boolean ready;
@@ -105,6 +108,7 @@ public final class LoginGuard {
         attemptsFile=Path.of(cfg.getProperty("attempts"));
         opsFile=Path.of(cfg.getProperty("ops"));
         if(cfg.getProperty("eyes")!=null)eyesFile=Path.of(cfg.getProperty("eyes"));
+        javaIdentity = VerifiedJavaIdentity.load(server, cfg);
         if (Files.exists(attemptsFile)) try(var in=Files.newInputStream(attemptsFile)) { attempts.load(in); }
         // NanoLimbo 1.0.11 omits select_known_packs. minecraft-protocol leaves
         // its once-listener pending and replies twice when switching to Paper.
@@ -238,9 +242,18 @@ public final class LoginGuard {
     @SuppressWarnings("unchecked") private synchronized void refresh() {
         try {
             var names=new HashSet<>(List.of("corti","corticam","player","goddess"));
-            for (var row : gson.fromJson(Files.readString(opsFile), List.class)) {
-                Object name=((Map<?,?>)row).get("name"); if(name instanceof String n) names.add(key(n));
+            var bedrockOperators = new HashSet<String>();
+            for (var element : gson.fromJson(Files.readString(opsFile), com.google.gson.JsonArray.class)) {
+                var row = element.getAsJsonObject();
+                if (!row.has("name") || !row.get("name").isJsonPrimitive()) continue;
+                String name = key(row.get("name").getAsString());
+                names.add(name);
+                if (javaIdentity != null && row.has("uuid") && row.get("uuid").isJsonPrimitive()
+                        && javaIdentity.isBedrockOperator(name, row.get("uuid").getAsString())) {
+                    bedrockOperators.add(name);
+                }
             }
+            if (javaIdentity != null) names.add(key(javaIdentity.javaName()));
             reserved=Set.copyOf(names);
             if(eyesFile!=null)eyes=new EyePolicy(Files.readString(eyesFile));
             if(libre==null) {
@@ -257,7 +270,15 @@ public final class LoginGuard {
                 // The owner permits official premium sessions, including OPs.
                 // Offline administrators still need their independent password.
                 for(String n:reserved) {
+                    if (bedrockOperators.contains(n)) continue; // This exact UUID authenticates through Floodgate.
                     var u=libre.getDatabaseProvider().getByName(n);
+                    if (javaIdentity != null && javaIdentity.isJavaName(n)) {
+                        if (u == null || !javaIdentity.matchesLoginRecord(u.getUuid(), u.getPremiumUUID())) {
+                            ready = false;
+                            break;
+                        }
+                        continue;
+                    }
                     if(u==null || (!u.isRegistered() && u.getPremiumUUID()==null)) { ready=false; break; }
                 }
             }
@@ -396,6 +417,7 @@ public final class LoginGuard {
     @Subscribe(order=PostOrder.FIRST) public void premiumProfile(GameProfileRequestEvent e) {
         if(e.isOnlineMode() && e.getOriginalProfile()!=null)
             premiumProofs.put(e.getConnection().getRemoteAddress(),e.getOriginalProfile().getId());
+        if (javaIdentity != null) javaIdentity.capture(e);
     }
     private boolean premiumVerified(Player p,UUID premium) {
         return p.isOnlineMode() && premium!=null && premium.equals(premiumProofs.get(p.getRemoteAddress()));
@@ -407,6 +429,9 @@ public final class LoginGuard {
      */
     private void refreshFirstPasswords() {
         for(Player p:server.getAllPlayers()) {
+            // Official sessions already authenticated with Microsoft, or are still
+            // waiting on that proof. Only passwordless offline first visits qualify.
+            if (p.isOnlineMode()) continue;
             if(reserved.contains(key(p.getUsername())) || (eyes!=null && eyes.body(p.getUsername(),reserved)!=null))continue;
             var user=libre.getDatabaseProvider().getByName(p.getUsername());
             if(user==null || user.isRegistered() || user.getSecret()!=null)continue;
@@ -414,7 +439,8 @@ public final class LoginGuard {
                 firstPasswordSessions.add(p);
                 libre.getAuthorizationProvider().authorize(user,p,AuthenticationReason.REGISTER);
             }
-            if(authorized(p) && inPaper(p)) remindPassword(p);
+            if(firstPasswordSessions.contains(p) && authorized(p) && inPaper(p))
+                remindPassword(p);
         }
     }
     private void remindPassword(Player p) {
@@ -518,12 +544,22 @@ public final class LoginGuard {
     @Subscribe(order=PostOrder.LAST) public void preLogin(PreLoginEvent e) {
         if(!ready) { e.setResult(PreLoginEvent.PreLoginComponentResult.denied(text("登录保护准备中，请稍后重试。[MC_AUTH_UNAVAILABLE]"))); return; }
         if(!e.getResult().isAllowed())return;
+        if (javaIdentity != null && javaIdentity.isJavaName(e.getUsername())) {
+            e.setResult(PreLoginEvent.PreLoginComponentResult.forceOnlineMode());
+            return;
+        }
         // A stored premium UUID must not force every same-name connection into
         // online mode. LibreLogin's dual listener chooses an official challenge
         // from the login-start hint; only that challenge bypasses password locks.
         if(e.getResult().isOnlineModeAllowed() && !e.getResult().isForceOfflineMode())return;
         if(eyes!=null && eyes.body(e.getUsername(),reserved)!=null)return;
         if(locked(e.getUsername())>System.currentTimeMillis()) e.setResult(PreLoginEvent.PreLoginComponentResult.denied(text("此账号暂停登录十分钟，请稍后使用正确密码重试。[MC_AUTH_LOCKED]")));
+    }
+    @Subscribe(order=PostOrder.LAST) public void verifyLinkedJavaLogin(LoginEvent event) {
+        Player player = event.getPlayer();
+        if (javaIdentity != null && javaIdentity.isJavaName(player.getUsername()) && !javaIdentity.verified(player)) {
+            event.setResult(ResultedEvent.ComponentResult.denied(text("请从本人微软正版账号登录。[MC_AUTH_LINK_REQUIRED]")));
+        }
     }
     @Subscribe(order=PostOrder.LAST) public void configurationCompatibility(PostLoginEvent e) {
         if(e.getPlayer().getProtocolVersion().getProtocol()<764) return;
