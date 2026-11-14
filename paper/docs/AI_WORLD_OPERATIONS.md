@@ -275,7 +275,7 @@ AgentFriend 0.3.33 已在正式服提供该查询；Cortico 的自动挖掘入�
 
 0.3.61 起公会门内有接待员，右键打开任务、购买、装备回收和实体绿宝石交易；她调用现有余额与报价流程。0.3.86 将门内实体储物、展示物和掉落物归萌萌所有，其他人实际操作由服务器拒绝并返回 `MC_GUILD_ACCESS reason=guild_owner_only`；开箱前可 `/mycli protect container <x> <y> <z>` 查询，拒绝应停止并改去门口公共箱，见 [物品归属](GUILD_PROPERTY.md)。大厅东南侧四组原版公共双箱每组 54 格，所有人可存取，按武器、护甲、补给、杂物挂牌。Agent 先用 `/mycli guild trader|shared` 获取绝对坐标，走到公共箱旁后用 Mineflayer 标准 `openContainer`/`deposit`/`withdraw`，每次重新读取箱内库存；不要把公共箱当成个人存储，更不能自动出售他人捐赠物。公共箱体及地台保护阻止破坏结构，箱内物品可共享。坐标、施工与回退方式见 [公会接待与共享箱](GUILD_SERVICES.md)。
 
-Agent 首选走到试炼大厅实体箱 `(-594, 91, -313)`，用 Mineflayer 的 `openContainer(block)`、`containerItems()`、`deposit`、`withdraw` 处理同一个 27 格普通箱子；楼层箱和公会看板也指向本人这一箱。箱中既有已装入的试炼、公会奖励，也可存放自己的物品，按 UUID 隔离。`/mycli arena stash list|put|putslot|take` 是无法靠近箱子时的辅助入口，箱槽位号从 1 起；`stash inventory` 返回背包 0–35 号槽位。`/mycli arena rewards list` 仅返回箱满后尚未装入的奖励，清出箱格并重新开箱可自动装入，也可用 `rewards take <槽位|all>` 直接领进背包。不要把公共世界箱子当作私人箱，也不要把箱子里现有的存货与待入箱队列重复计算。
+出发前可用 `/mycli arena stash summary --json` 免费查本人十页个人箱的件数、余量、武器、防具、消耗品及所在页。带齐补给时先用 `stash list <页码>` 查实际箱槽位，再用 `stash take <1–540槽位>` 取出。背包只剩 1–3 格时，服务器会提示登记的 Agent 按 `stash inventory` 的 0–35 槽位用 `stash putslot` 存入备用物品。成功远程存取消耗 2 魔力，在试炼大厅实体箱 `(-594, 91, -313)` 旁可免费操作原版箱子。楼层箱和公会看板也指向同一份按 UUID 隔离的个人库存。`/mycli arena rewards list` 查尚未装入的奖励，清出箱格并重新开箱可自动装入，也可用 `rewards take <槽位|all>` 直接领进背包。待入箱奖励单独计数。
 
 CortiLan 的运行连接来自 `192.168.3.152`；该机的 Cortico 必须能把 `/mycli` 的系统聊天回复纳入 `mc_do` 回执，Agent 才能读到上述槽位清单并自主决策。服主机 `E:\Cortico` 的本地源码已有对应提交，但不是 152 当前运行实例；152 更新和重启前不要向玩家宣称 CortiLan 已完成联通。
 

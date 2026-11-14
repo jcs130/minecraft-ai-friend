@@ -20,6 +20,12 @@ public final class StashGuidanceCatalogTest {
         check(help("inventory tidy stash auto status").get("actionReadOnly").getAsBoolean(),"stash auto status is discoverable and read only");
         for(String action:List.of("on","off"))check(!help("inventory tidy stash auto "+action).get("actionReadOnly").getAsBoolean(),"stash auto settings are explicit: "+action);
         check(help("arena stash putslot").toString().contains("stash_full"),"deposit failure has an actionable alternative");
+        var overview=help("arena stash summary");
+        check(overview.get("actionReadOnly").getAsBoolean()&&overview.get("jsonSupported").getAsBoolean(),"whole-stash overview is a real JSON read");
+        check(overview.get("consumption").getAsString().equals("无游戏内资源消耗"),"whole-stash overview is free");
+        check(overview.get("resultQuery").getAsString().equals(PersonalStashOverview.QUERY),"copyable JSON query");
+        check(help("arena stash").getAsJsonArray("commands").get(0).getAsJsonObject().get("name").getAsString().equals("summary"),"overview is first in stash help");
+        check(!PersonalStashOverview.matchesCommand(new String[]{"arena","stash","take","1"}),"overview cannot intercept item transfers");
         check(tidy.get("resultQuery").getAsString().contains("不重放"),"unknown save results cannot be retried as completion");
         System.out.println("PASS "+checks+" stash guidance catalog assertions");
     }

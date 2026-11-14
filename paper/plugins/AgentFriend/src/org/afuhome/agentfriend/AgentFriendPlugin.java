@@ -991,6 +991,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (sender instanceof Player player && PersonalStashOverview.matchesCommand(args)) {
+            if (java.util.Arrays.stream(args).anyMatch(s -> s.equals("--help") || s.equals("-h"))) {
+                AgentCliCatalog.commandHelp(player, args);
+            } else {
+                dungeon.stashOverview(player, args);
+            }
+            return true;
+        }
         if(sender instanceof Player p&&cliRecovery!=null)cliRecovery.observe(p);
         if(sender instanceof Player p&&nativeRpg.selected()){
             if(trialRescue!=null&&trialRescue.blockCommand(p,args))return true;
@@ -3413,9 +3421,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("arena"))
             return dungeon != null && dungeon.isBuilt()
-                    ? List.of("difficulty", "entrance", "start", "rest", "status", "next", "shop", "rewards", "leave") : List.of("start", "status", "leave");
+                    ? List.of("difficulty", "entrance", "start", "rest", "status", "next", "shop", "rewards", "stash", "leave") : List.of("start", "status", "leave");
         if (args.length == 3 && args[0].equalsIgnoreCase("arena") && args[1].equalsIgnoreCase("difficulty"))
             return List.of("auto", "normal", "adventure", "apocalypse");
+        if (args.length == 3 && args[0].equalsIgnoreCase("arena") && args[1].equalsIgnoreCase("stash"))
+            return List.of("summary", "list", "inventory", "pages", "page", "putslot", "put", "take");
         if (args.length == 2 && args[0].equalsIgnoreCase("guild"))
             return List.of("hall", "board", "menu", "join", "status", "accept", "abandon", "claim", "rewards");
         if (args.length == 2 && args[0].equalsIgnoreCase("life"))
