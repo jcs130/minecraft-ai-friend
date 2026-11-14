@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parent
 ANDROID = ROOT.parent / 'android-client'
 PACK_VERSION = '1.1.0'
 NEOFORGE = '21.1.252'
+SHARED_CLIENT_MODS = ('touhou-little-maid', 'yes-steve-model', 'simple-voice-chat')
 
 # Reuse the download, checksum, NBT and reproducible ZIP routines used by the phone pack.
 spec = importlib.util.spec_from_file_location('client_pack', ANDROID / 'build.py')
@@ -19,7 +20,9 @@ spec.loader.exec_module(common)
 
 def build(cache, output, catalog=None):
     baseline = json.loads((ANDROID / 'sources.lock.json').read_bytes())
-    mods = baseline['files'] + json.loads((ROOT / 'controller.lock.json').read_bytes())
+    android_mods = {mod['id']: mod for mod in baseline['files']}
+    mods = [android_mods[mod_id] for mod_id in SHARED_CLIENT_MODS]
+    mods += json.loads((ROOT / 'controller.lock.json').read_bytes())
     cache.mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(lambda row: common.load_input(row, cache), mods))
