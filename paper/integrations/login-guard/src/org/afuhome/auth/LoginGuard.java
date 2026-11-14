@@ -75,6 +75,8 @@ public final class LoginGuard {
     private static final MinecraftChannelIdentifier AGENT_CHANNEL=MinecraftChannelIdentifier.create("qiandengji","agent");
     private static final MinecraftChannelIdentifier MCBOT_CHANNEL=MinecraftChannelIdentifier.create("mcbot","c2s");
     private static final MinecraftChannelIdentifier VOICE_CHANNEL=MinecraftChannelIdentifier.create("mcagent","voice");
+    private static final MinecraftChannelIdentifier SVC_SECRET=MinecraftChannelIdentifier.create("voicechat","secret");
+    private SvcAddressRouting svcRoutes=SvcAddressRouting.DISABLED;
     private final Set<Player> payloadPeers=ConcurrentHashMap.newKeySet();
     private final Map<String,Long> diagnosticTimes=new ConcurrentHashMap<>();
     private final VoiceTransportTrace voiceTrace=new VoiceTransportTrace(Boolean.getBoolean("qiandeng.voice.trace"));
@@ -109,6 +111,14 @@ public final class LoginGuard {
         opsFile=Path.of(cfg.getProperty("ops"));
         if(cfg.getProperty("eyes")!=null)eyesFile=Path.of(cfg.getProperty("eyes"));
         javaIdentity = VerifiedJavaIdentity.load(server, cfg);
+        configureSvcRoutes(cfg);
+        if(svcRoutes.enabled()) {
+            // The only accepted PROXY headers must originate at the local gateway.
+            if(!server.getBoundAddress().getAddress().isLoopbackAddress()) {
+                svcRoutes=SvcAddressRouting.DISABLED;
+                diagnostic("svc_route_untrusted_bind",new IllegalStateException());
+            } else server.getChannelRegistrar().register(SVC_SECRET);
+        }
         if (Files.exists(attemptsFile)) try(var in=Files.newInputStream(attemptsFile)) { attempts.load(in); }
         // NanoLimbo 1.0.11 omits select_known_packs. minecraft-protocol leaves
         // its once-listener pending and replies twice when switching to Paper.
@@ -399,6 +409,30 @@ public final class LoginGuard {
         if(!(e.getSource() instanceof Player p)||!inPaper(p)||!authorized(p)
                 ||p.getCurrentServer().filter(c->c==e.getTarget()).isEmpty())
             e.setResult(PluginMessageEvent.ForwardResult.handled());
+    }
+    void configureSvcRoutes(Properties cfg) {
+        try {svcRoutes=SvcAddressRouting.load(cfg);}
+        catch(IllegalArgumentException invalid) {
+            svcRoutes=SvcAddressRouting.DISABLED;diagnostic("svc_route_config",invalid);
+        }
+    }
+    @Subscribe(order=PostOrder.LAST,async=false) public void svcSecret(PluginMessageEvent e) {
+        if(!svcRoutes.enabled()||!e.getIdentifier().equals(SVC_SECRET)||!e.getResult().isAllowed())return;
+        if(!(e.getSource() instanceof ServerConnection backend)||!(e.getTarget() instanceof Player p)
+                ||!p.isActive()||backend.getPlayer()!=p||!authorized(p)
+                ||p.getCurrentServer().filter(c->c==backend&&c.getServerInfo().getName().equals("paper")).isEmpty()) {
+            e.setResult(PluginMessageEvent.ForwardResult.handled());return;
+        }
+        var route=svcRoutes.route(p.getRemoteAddress());
+        byte[] replacement;
+        try {replacement=SvcAddressRouting.rewrite(e.getData(),route.host());}
+        catch(IllegalArgumentException unsupported) {diagnostic("svc_route_layout",unsupported);return;}
+        if(replacement==null)return;
+        // PluginMessageEvent has no payload setter. Consume exactly this reply,
+        // after earlier vetoes, then send the otherwise identical native packet.
+        e.setResult(PluginMessageEvent.ForwardResult.handled());
+        if(!p.sendPluginMessage(SVC_SECRET,replacement))diagnostic("svc_route_send",new IllegalStateException());
+        else if(logger!=null)logger.debug("MC_SVC_ROUTE category={}",route.category());
     }
     private void notifyAuthenticated(Player p) {
         if(!p.isActive() || !inPaper(p))return;
