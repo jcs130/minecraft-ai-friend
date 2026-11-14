@@ -59,6 +59,37 @@ export function cancelControlInput(bot: Bot, reason: string, source: 'server' | 
   for (const key of lease.keys) bot.setControlState(key, false);
 }
 
+/** A measured breathing surface is a possible short meal boundary, not a ground waypoint. */
+export function surfacePauseReady(bot: Bot): boolean {
+  const state=movementReadout(bot);
+  return bot.physicsEnabled===true&&!flightState(bot).flying&&!state.vehicleAttached
+    &&state.bodyWet===true&&state.headWet===false&&state.oxygen!==null&&state.oxygen>=10
+    &&Number.isFinite(bot.entity?.velocity?.y)&&Math.abs(bot.entity.velocity.y)<0.25;
+}
+
+/** Hold buoyancy only for this owned, bounded pause; cancellation cannot clear a successor's keys. */
+export async function surfacePause<T>(bot:Bot,ctx:SkillContext,run:(check:()=>void)=>Promise<T>):Promise<T>{
+  if(!surfacePauseReady(bot))return run(()=>checkAbort(ctx));
+  if(inputs.has(bot))throw new SkillBlocked('上一段直接控制尚未交还身体');
+  checkAbort(ctx);
+  const lease:InputLease={keys:['jump'],mode:'water',finish:()=>{}};
+  inputs.set(bot,lease);
+  const release=ownNativeControlInput(bot),deadline=Date.now()+20_000;
+  const cancel=(reason:string,source:'local'|'server'='local')=>{if(inputs.get(bot)===lease)cancelControlInput(bot,reason,source);};
+  const check=()=>{checkAbort(ctx);if(lease.reason)throw new SkillBlocked(lease.reason,[],lease.source,'execution-context-changed');};
+  const tick=()=>{
+    if(inputs.get(bot)!==lease)return;
+    if(ctx.aborted()||Date.now()>=deadline){cancel('水面短暂停留已取消或超时');return;}
+    if((bot as Bot & {vehicle?:unknown}).vehicle||!bot.physicsEnabled){cancel('身体控制条件已变化');return;}
+    bot.setControlState('jump',bodyInWater(bot));
+  };
+  const death=()=>cancel('玩家已死亡','server'),respawn=()=>cancel('出生位置或维度已变化','server'),forced=()=>cancel('服务端修正了位置','server');
+  const detach=onConnectionEnd(bot,()=>cancel('Minecraft连接已结束','server'));
+  bot.on('physicsTick',tick);bot.on('death',death);bot.on('respawn',respawn);bot.on('forcedMove',forced);
+  try{tick();const result=await run(check);check();return result;}
+  finally{cancel('水面短暂停留结束');release();detach();bot.off('physicsTick',tick);bot.off('death',death);bot.off('respawn',respawn);bot.off('forcedMove',forced);}
+}
+
 /** One ground controller shares input revocation with ordinary direct control. */
 export async function groundInputSequence<T>(bot:Bot,ctx:SkillContext,
  run:(input:{check():void;keys(keys:ControlKey[]):void})=>Promise<T>):Promise<T>{

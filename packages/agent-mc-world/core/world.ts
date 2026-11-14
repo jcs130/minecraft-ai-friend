@@ -3627,6 +3627,7 @@ export class MinecraftWorld implements World {
       && JSON.stringify(observedJourney.journey.destination) === JSON.stringify(running.travel.destination) ? observedJourney : null;
     // Travel workers already subscribe to journey. Always include effective
     // movement policy, even while idle or after a failed journey ends.
+    const movement=bot?movementReadout(bot):null;
     const movementPolicy = renderPolicy(this.policy.get(), this.policyDefaults(), !this.cfg.combat.enabled,
       this.blueprintHeldScaffold(), bot?.registry);
     if (journey) {
@@ -3690,6 +3691,7 @@ export class MinecraftWorld implements World {
           }).sort((a,b)=>(a.id??-1)-(b.id??-1)),
           journeyId: journey?.id ?? null,
           journeyReason: journey?.reason ?? null,
+          surfaceWater: movement?.bodyWet===true&&movement.headWet===false&&!movement.vehicleAttached,
           journeyCues: journey?.observations.map(cue => ({ position: [...cue.position] as [number,number,number], observedAtMs: cue.observedAtMs })) ?? [] } },
       experience: { scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
         observation: { at: new Date().toISOString(), dimension: normalizeDimension(snap.dimension), position: snap.position,
@@ -8639,13 +8641,17 @@ export class MinecraftWorld implements World {
   protected journeyScope():string{return `${this.realmKey()}:${this.cfg.auth}:${this.cfg.username}`;}
   protected journeyTick(bot:Bot,cues:JourneyCue[]):void {
     const queue=this.executor?.status(),running=queue?.running,p=bot.entity.position,now=Date.now();
+    const movement=movementReadout(bot);
+    const surfaceWater=movement.bodyWet===true&&movement.headWet===false&&!movement.vehicleAttached;
     const cached=this.journeyBlocks?.generation===this.connectionGeneration&&this.journeyBlocks.dimension===normalizeDimension(dimensionOf(bot))?this.journeyBlocks.cues:[];
     const report=this.journeyObserver.observe({scope:this.journeyScope(),generation:String(this.connectionGeneration),atMs:now,
       dimension:normalizeDimension(dimensionOf(bot)),position:[p.x,p.y,p.z],
       intent:(this.cfg.journey??MINECRAFT_DEFAULTS.journey).enabled&&running?.travel
         ?{taskId:running.id,stepIndex:running.stepIndex,...running.travel}:null,
       safeToConsider:!queue?.hold&&!this.bodyInhibitReason&&!this.reflexes?.envActive&&!this.combat?.active
-        &&!this.executor?.eating&&!this.executor?.escaping&&!bot.currentWindow&&bot.entity.onGround===true&&!bodyInWater(bot),
+        &&!this.executor?.eating&&!this.executor?.escaping&&!bot.currentWindow
+        &&((bot.entity.onGround===true&&!bodyInWater(bot))||surfaceWater),
+      surfaceWater,
       cues:[...cues,...cached]});
     if(report)this.emit('minecraft.event',`[Minecraft] ${journeyOpportunityText(report)}`,false,{trigger:'debounce',meta:{journey:report}});
   }

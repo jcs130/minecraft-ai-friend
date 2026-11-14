@@ -93,7 +93,7 @@ export function minecraftOptionsFromSnapshot(snapshot: WorldSnapshot, foods: Rec
         `当前可见载具：${vehicles.join('、') || '本次近处列表未报告；非全域搜索'}`],
       checks: ['先确认已有船；没有再读当前船配方、材料及工作台', '核对放船水面、通航净空和上岸点；放船、上船、航行、上岸分别验收'],
       read: [{ tool: 'mc_bag', args: {} }, { tool: 'mc_knowledge', args: { kind: 'recipe', query: 'boat' } }, guide({ skills: ['craft', 'use', 'ride'] }),
-        { tool: 'mc_script', args:{api:'mobility'} }, {tool:'mc_script',args:{routine:{op:'read',id:'ride_route'}}}, method('ride')], source },
+        { tool: 'mc_script', args:{api:'mobility'} }, {tool:'mc_script',args:{routine:{op:'read',id:'boat_trip'}}}, method('ride')], source },
     { id: 'core.horse-travel', intents: ['travel'], title: '骑马赶路（驾驶尚不支持）', purpose: '区分观察、上马/驯服与实际驾驶能力。',
       support: 'unsupported', evidence: ['当前 ride 实现可上马和下马；不支持马/驴/骡驾驶'],
       checks: ['不能把坐上去当成能骑行；驯服、鞍、归属和可通行路线还需现场核验'], read: [guide({ skill: 'ride' })], source },

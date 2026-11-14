@@ -65,7 +65,7 @@ import { farmingClickCell, isHoeUseItem } from './farming-target.ts';
 import { publishViewerCastCommand } from './command-events.ts';
 import { skillGesture } from './skills-social.ts';
 import { skillLook } from './skills-look.ts';
-import { skillControl, waterControlActive } from './skills-control.ts';
+import { skillControl, waterControlActive, surfacePauseReady, surfacePause } from './skills-control.ts';
 import {followRoute} from './follow-route.ts';
 import {crossFire,fireRoutes,fireRouteGeometryCurrent,intentionalFireCrossing,type FireRoute} from './fire-route.ts';
 import { sendDeduplicatedChat } from './chat-dedup.ts';
@@ -810,7 +810,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
           if (moved < 4) throw new SkillBlocked('长途这一段没有足够位移，停止原路线');
           // A leg can settle before navigateWithCheckpoints polls pending work.
           // Offer that completed boundary without reviving the released path.
-          await ctx.checkpoint?.(() => settleOnGround(bot, ctx, 1_500));
+          await ctx.checkpoint?.(async() => {if(!surfacePauseReady(bot))await settleOnGround(bot, ctx, 1_500);});
           checkAbort(ctx);
         }
         sceneTarget = target;
@@ -1031,7 +1031,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
     case 'smelt': return skillSmelt(bot, call.input, call.count, call.fuel, ctx, call.at);
     case 'brew': return skillBrew(bot, call, ctx);
     case 'enchant': return skillEnchant(bot, call, ctx);
-    case 'eat': return skillEat(bot, call.item, () => checkAbort(ctx));
+    case 'eat': return surfacePause(bot,ctx,check=>skillEat(bot, call.item, check));
     case 'attack': return skillAttack(bot, call.target, call.mode ?? 'auto', ctx, call.entityId, call.weapon);
     case 'equip': return skillEquip(bot, call, ctx);
     case 'pickup': return withBlueprintGain(bot, ctx, () => skillPickup(bot, ctx, call.item));
@@ -4273,12 +4273,16 @@ export class Executor {
     const owner = goalOwnerKind(bot);
     if (owner !== null && owner !== 'task') return false;
     if (bot.currentWindow || bot.inventory?.selectedItem || !inventoryReadConfirmed(bot)) return false;
-    if (stable && bot.entity?.onGround !== true && !flightState(bot).flying) return false;
+    // Only pending meals can yield on a measured breathing surface. Inventory,
+    // construction and opaque programs still require their original dry boundary.
+    const surfaceMeal=surfacePauseReady(bot)&&this.queue.filter(q=>q.checkpointOwnerId===task.id)
+      .every(q=>q.steps.length===1&&q.steps[0]?.skill==='eat');
+    if (stable && bot.entity?.onGround !== true && !flightState(bot).flying && !surfaceMeal) return false;
     if ((!navigation && bot.pathfinder?.isMoving?.()) || bot.pathfinder?.isMining?.() || bot.pathfinder?.isBuilding?.()) return false;
     if (typeof bot.blockAt !== 'function' || !bot.entity?.position) return false;
     const foot = bot.blockAt(bot.entity.position.floored());
     const head = bot.blockAt(bot.entity.position.offset(0, 1.62, 0).floored());
-    if (!foot || !head || bodyInWater(bot) || headInWater(bot)) return false;
+    if (!foot || !head || (bodyInWater(bot)&&!surfaceMeal) || headInWater(bot)) return false;
     const hazard = hazardTouch(bot);
     return !hazard.touching && !hazard.submerged && !hazard.onFire;
   }

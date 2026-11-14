@@ -1,7 +1,7 @@
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cancelControlInput, skillControl, waterControlActive, ownNativeControlInput } from '../core/skills-control.ts';
+import { cancelControlInput, skillControl, waterControlActive, ownNativeControlInput, surfacePause } from '../core/skills-control.ts';
 import { type SkillContext, SkillBlocked } from '../core/skill-context.ts';
 import { parseSteps } from '../core/skills.ts';
 import { goals, installTreadWater, releaseBody, underwaterRouteNote, withRouteScene } from '../core/travel.ts';
@@ -11,6 +11,16 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 const fixtures: ReturnType<typeof methodHarness>[] = [];
 afterEach(() => { for (const h of fixtures.splice(0)) h.close(); });
+
+it.each(['forcedMove','respawn','death','end'])('a surface meal releases buoyancy on %s without clearing a new owner',async event=>{
+  const h=pool(69,()=>false);let finish!:()=>void;
+  const work=surfacePause(h.bot,h.ctx,async()=>new Promise<void>(resolve=>{finish=resolve;}));
+  const result=work.catch(error=>error);
+  expect(h.keys.jump).toBe(true);h.bot.emit(event);expect(h.keys.jump).toBe(false);
+  h.bot.setControlState('jump',true);finish();
+  expect(await result).toBeInstanceOf(SkillBlocked);
+  expect(h.keys.jump).toBe(true);expect(waterControlActive(h.bot)).toBe(false);
+});
 
 /** Actual pinned Prismarine collision/water physics; no manual coordinate advancement. */
 function pool(y = 69, ascent = () => true) {

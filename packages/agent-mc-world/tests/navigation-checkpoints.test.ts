@@ -5,6 +5,7 @@ import { methodHarness } from './method-harness.ts';
 import { noteGoalOwner } from '../core/travel.ts';
 import type { TaskReport } from '../core/executor.ts';
 import { createMinecraftChoiceTool } from '../src/client/choice.ts';
+import { movementReadout } from '../core/skills-control.ts';
 
 const rigs: ReturnType<typeof rig>[] = [];
 afterEach(() => { for (const r of rigs.splice(0)) r.close(); vi.useRealTimers(); });
@@ -40,6 +41,52 @@ function allyFor(h: ReturnType<typeof rig>, distance = 2) {
   Object.assign(h.bot.players,{Ally:{entity:ally}});
   return ally;
 }
+
+function waterRig(){
+  const h=rig();rigs.push(h);
+  for(let x=-5;x<=150;x++)for(let z=-5;z<=5;z++)for(let y=64;y<=68;y++)h.set(x,y,z,'water');
+  h.bot.entity.position.y=68.5;h.bot.entity.onGround=false;
+  return h;
+}
+it('native water navigation exposes a transport choice and yields a buoyant meal before resuming the same destination',async()=>{
+  const h=waterRig();h.bot.food=4;
+  Object.assign((h.world as any).bridge,{connectionState:{ready:true,phase:'online'}});
+  h.exec.submit([{skill:'goto',at:[128,68,0],walkOnly:true}],'append');
+  await vi.advanceTimersByTimeAsync(800);
+  const original=h.exec.status().running!.id;
+  expect(movementReadout(h.bot)).toMatchObject({bodyWet:true,headWet:false,vehicleAttached:false});
+  (h.world as any).journeyTick(h.bot,[]);
+  await vi.advanceTimersByTimeAsync(11_000);
+  (h.world as any).journeyTick(h.bot,[]);
+  const notice=h.host.events.find(e=>(e.meta?.journey as any)?.reason==='water');
+  expect(notice?.text).toContain('boat_trip');
+  expect(h.world.requestFacts()?.decisionStability?.route).toMatchObject({surfaceWater:true,journeyReason:'water'});
+  expect(h.exec.status().running?.id).toBe(original);
+  const waterHeight=h.bot.entity.position.y;
+  (h.bot as any).consume.mockImplementation(async()=>{
+    await new Promise(resolve=>setTimeout(resolve,1_600));h.stack.count--;h.bot.food+=3;
+  });
+  h.exec.submit([{skill:'eat',item:'beef'}],'afterCheckpoint');
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect((h.bot as any).consume,JSON.stringify(h.reports)).toHaveBeenCalledTimes(1);
+  expect(h.bot.food).toBe(7);expect(h.stack.count).toBe(1);
+  expect(h.bot.entity.position.y).toBeGreaterThan(waterHeight-.5);
+  expect(h.exec.status().running).toMatchObject({id:original,travel:{destination:[128,68,0]}});
+  expect(h.reports.filter(r=>r.kind==='suspended'&&r.taskId===original)).toHaveLength(1);
+  const resumedX=h.bot.entity.position.x;
+  await vi.advanceTimersByTimeAsync(1_000);expect(h.bot.entity.position.x).toBeGreaterThan(resumedX+1);
+});
+it.each(['submerged','low-air','container','combat'])('does not turn a %s water state into a meal checkpoint',async mode=>{
+  const h=waterRig();h.exec.submit([{skill:'goto',at:[128,68,0],walkOnly:true}],'append');
+  await vi.advanceTimersByTimeAsync(800);const original=h.exec.status().running!.id;
+  if(mode==='submerged'){h.bot.entity.position.y=65;h.bot.physicsEnabled=false;}
+  if(mode==='low-air')h.bot.oxygenLevel=3;
+  if(mode==='combat')h.internals.opts.bodyState=()=>({combatActive:true});
+  h.exec.submit(mode==='container'?[{skill:'organize'}]:[{skill:'eat',item:'beef'}],'afterCheckpoint');
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect((h.bot as any).consume).not.toHaveBeenCalled();
+  expect(h.reports.some(r=>r.kind==='suspended'&&r.taskId===original)).toBe(false);
+});
 
 it.each([2,32])('a persistent follow at distance %s yields for a meal and resumes the same task',async distance=>{
   const h=rig();rigs.push(h);const ally=allyFor(h,distance);

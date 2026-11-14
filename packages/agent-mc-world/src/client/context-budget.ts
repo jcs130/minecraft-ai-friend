@@ -53,7 +53,7 @@ export function classifyWake(event: Pick<EventEnvelope, 'type' | 'text'> & Parti
       &&['reserve','low','critical','starving'].includes(need.urgency??''))return decide(need.urgency==='critical'||need.urgency==='starving'?'danger':'goal');
     const journey=event.meta?.journey as {schema?:string;journey?:{taskId?:unknown};reason?:string}|undefined;
     if(journey?.schema==='agent-mc-journey-observation/v1'&&Number.isSafeInteger(journey.journey?.taskId)
-      &&['cue','progress'].includes(journey.reason??''))return decide('goal');
+      &&['cue','progress','water'].includes(journey.reason??''))return decide('goal');
   }
   if (kind === 'task' || kind.startsWith('task.')) return kind === 'task' ? decide('task') : { wake: false, category: 'ambient' };
   // A whole program finishes after its local substeps. Hosts waiting on that

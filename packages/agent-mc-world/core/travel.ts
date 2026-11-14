@@ -18,7 +18,7 @@ import { type Cell } from './geometry.ts';
 import { probabilisticDropsOf } from './inventory.ts';
 import { PLACE_REACH } from './cell-facts.ts';
 import { flightState } from './flight.ts';
-import { cancelControlInput, waterControlActive } from './skills-control.ts';
+import { cancelControlInput, waterControlActive, surfacePauseReady, surfacePause } from './skills-control.ts';
 import { groundPathIssueOf } from './path-waypoints.ts';
 import { corridorSafe } from './idle-actions.ts';
 import { onConnectionEnd } from './connection-end.ts';
@@ -734,8 +734,10 @@ async function navigateWithCheckpoints(bot: Bot, goal: InstanceType<typeof goals
         dropGoal(bot, 'task', '安全检查点暂停寻路', ctx.diag);
         // setGoal(null) may reject goto asynchronously. Its result must settle
         // before a meal or another path can acquire the body.
-        await navigation;
-        await settleOnGround(bot, ctx, 1_500);
+        await surfacePause(bot,ctx,async()=>{
+          await navigation;
+          if(!surfacePauseReady(bot))await settleOnGround(bot, ctx, 1_500);
+        });
       });
       if (stopped) break;
     }

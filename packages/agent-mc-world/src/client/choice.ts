@@ -48,10 +48,11 @@ function routeObservation(f: WorldRequestFacts) {
     || typeof route.fighting !== 'boolean' || typeof route.windowOpen !== 'boolean' || typeof route.cursorOccupied !== 'boolean'
     || route.hold !== null || route.fighting || route.environment !== null
     || route.goalOwner !== 'task' || route.windowOpen || route.cursorOccupied
-    || route.footing?.kind !== 'support' || route.footing.grounded !== true) return null;
+    || !(route.footing?.kind === 'support' && route.footing.grounded === true
+      || route.surfaceWater===true && route.footing?.kind==='fluid')) return null;
   if (!Array.isArray(route.entities)||route.entities.some(entity=>!Number.isFinite(entity.id)
     ||typeof entity.visible!=='boolean'||!Array.isArray(entity.position)||entity.position.length!==3||!entity.position.every(Number.isFinite))) return null;
-  if (!Array.isArray(route.journeyCues) || route.journeyId !== null && ((!route.journeyCues.length && route.journeyReason !== 'progress')
+  if (!Array.isArray(route.journeyCues) || route.journeyId !== null && ((!route.journeyCues.length && !['progress','water'].includes(route.journeyReason??''))
     || route.journeyCues.some(cue=>!Number.isFinite(cue.observedAtMs)||sample.sampledAtMs<cue.observedAtMs
       || sample.sampledAtMs-cue.observedAtMs>10_000 || !Array.isArray(cue.position) || cue.position.length!==3
       || !cue.position.every(Number.isFinite)||Math.hypot(...cue.position.map((value:number,index:number)=>value-position[index]!))>32))) return null;
