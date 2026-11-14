@@ -268,7 +268,8 @@ export class IdleBehaviorController {
   }
 
   private pick(candidates: readonly IdleBehaviorCandidate[]): string {
-    const movement = candidates.filter(c => c.category === 'move');
+    const movement = candidates.some(c=>c.id==='stroll')
+      ? candidates.filter(c=>c.id==='stroll') : candidates.filter(c => c.category === 'move');
     const other = candidates.filter(c => c.category !== 'move');
     // Select a behavior family first. Adding ten new glance variants should not
     // make authorized local strolling ten times less likely. Intervals and the

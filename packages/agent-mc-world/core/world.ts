@@ -81,6 +81,7 @@ import { attachHearing, hearingReadout } from './perception-hearing.ts';
 import { AttentionReader, PERCEPTION_TOOLS, perceptionArgs, validDetection, type DetectionEvidence } from './perception-tools.ts';
 import { IdleBehaviorController, IdlePresentationContext, type IdleBehaviorScene } from './idle-behavior.ts';
 import { sampleIdleActions, executeIdleAction } from './idle-actions.ts';
+import { idleRoamOwnsPath } from './idle-roam.ts';
 import { bossBarStageTitle, classifyBossBarTitle, readBossBarHud, renderBossBarHud } from './boss-bar.ts';
 import { minecraftTextComponent } from './text-component.ts';
 import { MinecraftChatProvenance, incomingPrivateParts } from '../src/chat-provenance.ts';
@@ -4562,15 +4563,15 @@ export class MinecraftWorld implements World {
           const origin = bot.entity.position.clone();
           try { await executeIdleAction(bot, id, scene.state, signal, {
             available: () => this.bridge?.bot === bot && this.canIdle()
-              && (!['short_walk', 'wander'].includes(id) || this.canWander())
-              && (!['short_walk', 'wander'].includes(id) || (this.cfg.idle ?? MINECRAFT_DEFAULTS.idle).allowMovement)
+              && (!['short_walk', 'wander', 'stroll'].includes(id) || this.canWander())
+              && (!['short_walk', 'wander', 'stroll'].includes(id) || (this.cfg.idle ?? MINECRAFT_DEFAULTS.idle).allowMovement)
               && this.idleGeneration() === scene.generation
-              && bot.entity.position.distanceTo(origin) < 3,
+              && bot.entity.position.distanceTo(origin) < (id === 'stroll' ? 12 : 3),
             inventoryPreview: (open) => {
               (bot as unknown as EventEmitter).emit('viewer_inventory_preview', { open });
             },
           }); } finally {
-            if (['short_walk', 'wander'].includes(id)) this.diag.write({ lane: 'body',
+            if (['short_walk', 'wander', 'stroll'].includes(id)) this.diag.write({ lane: 'body',
               event: 'idle-movement-ended', msg: id, level: 'debug', data: {
                 actionId: id, generation: scene.generation, cancelled: signal.aborted,
                 from: { x: origin.x, y: origin.y, z: origin.z },
@@ -8288,8 +8289,8 @@ export class MinecraftWorld implements World {
     if (bot.health <= 0 || bot.isSleeping) return 'inactive';
     if (bot.usingHeldItem) return 'using-item';
     if (bot.currentWindow) return 'container';
-    if (!bot.entity.onGround) return 'airborne';
-    if (bot.pathfinder?.isMoving()) return 'pathfinder-moving';
+    if (!bot.entity.onGround && !idleRoamOwnsPath(bot)) return 'airborne';
+    if (bot.pathfinder?.isMoving() && !idleRoamOwnsPath(bot)) return 'pathfinder-moving';
     if (hazardTouch(bot).touching) return 'hazard';
     // The idle action may own a short walk; other movement must settle first.
     if (!this.idleBehavior?.active) {
@@ -8310,7 +8311,7 @@ export class MinecraftWorld implements World {
     if (this.idleBehavior?.executing && this.idleSceneCache?.generation === generation) return this.idleSceneCache;
     const bot = this.bridge!.bot!;
     if (this.idleMovementAnchor?.generation !== generation
-      || bot.entity.position.distanceTo(this.idleMovementAnchor.position) > 8) {
+      || bot.entity.position.distanceTo(this.idleMovementAnchor.position) > 14) {
       this.idleMovementAnchor = { generation, position: bot.entity.position.clone() };
     }
     const presentation = this.idleContext.snapshot({ now: Date.now(), lastTask: this.lastFinishedTask,
@@ -8319,6 +8320,10 @@ export class MinecraftWorld implements World {
     const sample = sampleIdleActions(bot, {
       allowMovement: (this.cfg.idle ?? MINECRAFT_DEFAULTS.idle).allowMovement && this.canWander(),
       movementAnchor: this.idleMovementAnchor.position,
+      // Keep only the selected route, not social/visibility state. Execution
+      // rechecks terrain; vanished speakers still disappear from the fresh scene.
+      reuseStroll: this.idleBehavior?.active && this.idleSceneCache?.generation === generation
+        ? this.idleSceneCache.state.stroll as import('./idle-roam.ts').IdleRoam | undefined : undefined,
       preferredPlayer: presentation.preferredPlayer,
       ignorePlayer: name => name === this.chatName() || this.isCamera(name),
     });
@@ -8342,7 +8347,7 @@ export class MinecraftWorld implements World {
       find:'寻找目标',collect:'采集',mine:'挖掘',interact:'交互',wait:'等待' };
     const title = this.combat?.active ? reaction?.retreating ? '身体：撤离危险' : '身体：交战中'
       : queue.hold ? '身体：等待控制权' : queue.running ? `身体：${labels[queue.running.skill ?? ''] ?? '执行游戏任务'}`
-      : idle === 'wander' ? '身体：安全闲逛' : idle ? '身体：观察周围'
+      : idle === 'wander' || idle === 'stroll' ? '身体：安全闲逛' : idle ? '身体：观察周围'
       : bot.currentWindow ? '身体：查看交互窗口' : '身体：空闲，等待任务';
     const detail = queue.hold ? '任务暂时让出身体控制权' : (queue.running ? `任务 #${queue.running.id} · 第 ${queue.running.stepIndex + 1}/${queue.running.stepCount} 步`
       : reaction?.targetId != null && this.combat?.active ? `当前目标实体 #${reaction.targetId}`
