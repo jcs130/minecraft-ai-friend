@@ -138,7 +138,9 @@ export interface WorldRequestFacts {
         health:number|null;note:string|null;item:unknown }[];
       journeyId: string | null;
       /** Progress notices intentionally contain no landmark cues. Absent on older producers. */
-      journeyReason?: 'cue' | 'progress' | null;
+      journeyReason?: 'cue' | 'progress' | 'water' | null;
+      /** Live breathing-surface observation; not permission to move or a navigable water map. */
+      surfaceWater?: boolean;
       journeyCues: readonly { position: readonly [number,number,number]; observedAtMs:number }[] } };
 }
 export interface StoragePart {

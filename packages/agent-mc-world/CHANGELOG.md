@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.70
+
+- Reconsider transport during measured surface-water journeys; retain destination and expose the complete boat_trip routine without forcing an action.
+- Allow an owned meal checkpoint at a verified breathing surface, hold bounded buoyancy, and resume the original navigation after cleanup. Preserve underwater, combat, inventory and cancellation boundaries.
+
 ## 0.5.7-rc.160-preview.69
 
 - Keep bounded last-seen hostile clues for 30 seconds across decision latency; retire confirmed deaths without treating entity removal as death or following hidden motion.

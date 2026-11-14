@@ -13,6 +13,29 @@ it('normalizes the public route advice policy without treating it as path safety
 function sample():JourneySample{return{scope:'realm:account',generation:'1',atMs:1000,dimension:'overworld',position:[0,64,0],safeToConsider:true,
   intent:{taskId:1,stepIndex:0,destination:[500,64,0],dimension:'overworld'},
   cues:[{kind:'npc',key:'entity:7',label:'villager',position:[8,64,0],source:'visible-entity',observedAtMs:1000}]};}
+it('reports measured sustained water travel once, with retained task identity and a complete boat entry',()=>{
+  const observer=new JourneyObserver(),input=sample();input.cues=[];input.surfaceWater=true;
+  expect(observer.observe(input)).toBeNull();input.atMs+=9_000;expect(observer.observe(input)).toBeNull();
+  input.atMs+=1_000;const report=observer.observe(input)!;
+  expect(report).toMatchObject({reason:'water',journey:input.intent,remainingBlocks:500,goalCompleted:false});
+  expect(journeyOpportunityText(report)).toContain('boat_trip');
+  expect(journeyOpportunityText(report)).toContain('不能把放船排到');
+  expect(journeyOpportunityText(report,{guidance:false})).not.toContain('mc_script');
+  expect(classifyWake({type:'mymc.event',text:journeyOpportunityText(report),meta:{journey:report}},{wakeOn:WAKE_ACTIVE_GOAL}).wake).toBe(true);
+  input.atMs+=21_000;expect(observer.observe(input)).toBeNull();
+  input.atMs+=99_000;expect(observer.observe(input)?.reason).toBe('water');
+  input.surfaceWater=false;input.atMs+=21_000;expect(observer.observe(input)).toBeNull();
+  input.surfaceWater=true;input.atMs+=1_000;expect(observer.observe(input)).toBeNull();
+  input.atMs+=10_000;expect(observer.observe(input)?.reason).toBe('water');
+});
+it.each(['underwater','short','unsafe','new-task'])('does not infer a boat opportunity from %s or carry it over a new journey',mode=>{
+  const observer=new JourneyObserver(),input=sample();input.cues=[];input.surfaceWater=mode!=='underwater';
+  if(mode==='short')input.intent!.destination=[30,64,0];
+  if(mode==='unsafe')input.safeToConsider=false;
+  observer.observe(input);input.atMs+=11_000;
+  if(mode==='new-task')input.intent!.taskId=2;
+  expect(observer.observe(input)).toBeNull();
+});
 it('offers a fresh observed detour while retaining the original journey identity and destination',()=>{
   const observer=new JourneyObserver(),input=sample(),before=structuredClone(input),report=observer.observe(input)!;
   expect(report.journey).toEqual(input.intent);expect(report.choices).toEqual(['continue','inspect']);

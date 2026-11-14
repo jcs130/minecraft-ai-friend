@@ -42,6 +42,7 @@ describe('outcome-oriented capability discovery', () => {
     expect(boat.evidence.join('')).toContain('oak_log×3');
     expect(boat.evidence.join('')).toContain('原料≠可合成');
     expect(boat.read).toContainEqual({tool:'mc_bag',args:{}});
+    expect(boat.read).toContainEqual({tool:'mc_script',args:{routine:{op:'read',id:'boat_trip'}}});
     const unknown=minecraftOptionsFromSnapshot(snapshot({invSynced:false,inventory:[{name:'oak_log',count:3}]}),foods,state);
     expect(unknown.context.boatSupplies).toBeNull();
     expect(unknown.options.find(o=>o.id==='core.boat')!.evidence.join('')).toContain('不能推定没有木材');

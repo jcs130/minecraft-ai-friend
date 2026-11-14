@@ -117,7 +117,7 @@ async function choiceDuring(update: (facts: WorldRequestFacts) => void, category
   return {result:JSON.parse(typeof result==='string'?result:result.text),request};
 }
 describe('bounded route advice while the original goto continues', () => {
-  it.each(['progress','cue',undefined] as const)('accepts an empty cue list only for a typed %s progress observation',async reason=>{
+  it.each(['progress','water','cue',undefined] as const)('accepts an empty cue list only for a typed %s observation',async reason=>{
     const before=walkingFacts();
     before.decisionStability!.route!.journeyReason=reason;
     before.decisionStability!.route!.journeyCues=[];
@@ -125,7 +125,13 @@ describe('bounded route advice while the original goto continues', () => {
       f.decisionStability!.position=[2,64,0];
       f.parts=f.parts!.map(p=>p.key==='place'?{...p,text:p.text+' moved'}:p);
     },'route',before);
-    expect(result.result.status).toBe(reason==='progress'?'advice':'stale');
+    expect(result.result.status).toBe(reason==='progress'||reason==='water'?'advice':'stale');
+  });
+  it.each([true,false,undefined])('retains route advice while swimming only with explicit breathing-surface evidence: %s',async surface=>{
+    const before=walkingFacts(),route=before.decisionStability!.route!;
+    route.journeyReason='water';route.journeyCues=[];route.footing={kind:'fluid',block:'water',grounded:false};route.surfaceWater=surface;
+    const {result}=await choiceDuring(f=>{f.decisionStability!.position=[2,64,0];},'route',before);
+    expect(result.status).toBe(surface===true?'advice':'stale');
   });
   it.each(['teleport','combat','replacement task'] as const)('still expires progress advice on %s',async change=>{
     const before=walkingFacts();before.decisionStability!.route!.journeyReason='progress';
