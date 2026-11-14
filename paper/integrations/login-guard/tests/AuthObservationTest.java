@@ -17,7 +17,12 @@ public final class AuthObservationTest {
         if(m.getName().equals("hashCode"))return System.identityHashCode(p);
         if(m.getName().equals("equals"))return p==a[0];return call.apply(m,a);
     });}
-    static Object empty(Class<?> type){return type==boolean.class?false:type==int.class?0:type==long.class?0L:null;}
+    static Object empty(Class<?> type){
+        if(type==boolean.class)return false;
+        if(type==int.class)return 0;
+        if(type==long.class)return 0L;
+        return null;
+    }
     static void set(LoginGuard guard,String key,Object value)throws Exception {Field f=LoginGuard.class.getDeclaredField(key);f.setAccessible(true);f.set(guard,value);}
     static Object get(LoginGuard guard,String key)throws Exception {Field f=LoginGuard.class.getDeclaredField(key);f.setAccessible(true);return f.get(guard);}
     static void check(boolean value,String label){checks++;if(!value)throw new AssertionError(label);}
