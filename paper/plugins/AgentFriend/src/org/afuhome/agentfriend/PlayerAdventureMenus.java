@@ -54,7 +54,7 @@ final class PlayerAdventureMenus implements Listener {
     }
     View view(Player p,Page page,String detail){
         var buttons=new ArrayList<Button>();String content="浏览不会选职、接任务或购买。";String title=switch(page){
-            case HOME->"千灯纪 · 冒险大厅";case GROWTH->"角色与技能";case ADVENTURE->"冒险与任务";
+            case HOME->"千灯纪 · 冒险大厅";case TRAVEL->"传送与集合";case GROWTH->"角色与技能";case ADVENTURE->"冒险与任务";
             case STORAGE->"背包与仓库";case TRADE->"商城与交易";case SOCIAL->"队伍与伙伴";
             case MEMORIES->"留影与生活";case COMMON->"通用生存技能";case COMMON_DETAIL->"技能说明";
             case CHARACTER->"我的角色";case TIDY_BAG,TIDY_STASH->"确认无损合并";case PARTY->"组队大厅";case PARTY_CONFIRM->"确认组队操作";case HELP->"聊天与入门";case ERROR->"入口暂不可用";
@@ -63,6 +63,7 @@ final class PlayerAdventureMenus implements Listener {
         if(page==Page.HOME){
             content="你好，"+p.getName()+"。\n右键罗盘打开大厅；潜行右键打开快捷栏。\n选择分区，再查看具体内容。";
             buttons.add(button(4,Action.NONE,"COMPASS","欢迎，"+p.getName(),"点击图标浏览；物品只是按钮","按 Esc 关闭；CLI仍可使用"));
+            buttons.add(button(28,Action.TRAVEL,"ENDER_PEARL","传送与集合","公共地标、个人传送点、归乡、战斗增援"));
             buttons.add(button(29,Action.ONBOARDING,"OAK_SIGN","我的下一步","查看自己的当前入门建议，不自动执行"));
         }else buttons.add(button(4,Action.NONE,"PAPER",title,"先查看内容与条件，再自行决定","下方箭头返回；罗盘回到大厅"));
         if(page==Page.COMMON){

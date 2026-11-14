@@ -26,7 +26,7 @@ final class TargetGuideParticles {
     private static final class Guide {
         Location target;
         int expires, rendered;
-        Guide(Location target, int now) { this.target = target; expires = now + HEARTBEAT_TTL; rendered = now - FRAME_INTERVAL; }
+        Guide(Location target, int now, int ttl) { this.target = target; expires = now + ttl; rendered = now - FRAME_INTERVAL; }
     }
     private final AgentFriendPlugin plugin;
     private final Map<Key, Guide> active = new LinkedHashMap<>();
@@ -38,15 +38,25 @@ final class TargetGuideParticles {
         task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 1, 1);
     }
 
-    void show(Player caster, String kind, Location target) {
+    void show(Player caster, String kind, Location target) { show(caster, kind, target, HEARTBEAT_TTL); }
+    void show(Player caster, String kind, Location target, int ttl) {
+        ttl = Math.max(HEARTBEAT_TTL, Math.min(64, ttl));
         if (target == null || target.getWorld() != caster.getWorld()) { remove(caster.getUniqueId(), kind); return; }
         Key key = new Key(caster.getUniqueId(), kind);
         Guide guide = active.get(key);
         int now = Bukkit.getCurrentTick();
         if (guide == null) {
             if (active.size() >= MAX_GUIDES) return;
-            active.put(key, new Guide(target.clone(), now));
-        } else { guide.target = target.clone(); guide.expires = now + HEARTBEAT_TTL; }
+            active.put(key, new Guide(target.clone(), now, ttl));
+        } else { guide.target = target.clone(); guide.expires = now + ttl; }
+    }
+
+    void quest(Player player, String kind, com.google.gson.JsonObject guide) {
+        Location at = player.getEyeLocation();
+        var target = QuestParticleTarget.resolve(guide, at.getWorld().getUID().toString(), at.getWorld().getKey().toString(),
+                at.getWorld().getName(), at.getX(), at.getY(), at.getZ());
+        if (target == null) remove(player.getUniqueId(), kind);
+        else show(player, kind, new Location(at.getWorld(), target.x(), target.y(), target.z()), 64);
     }
 
     void remove(UUID caster, String kind) { active.remove(new Key(caster, kind)); }
@@ -66,6 +76,9 @@ final class TargetGuideParticles {
         int budget = PACKETS_PER_TICK, first = Math.floorMod(cursor++, entries.size());
         for (int i = 0; i < entries.size(); i++) {
             var entry = entries.get((first + i) % entries.size());
+            // An explicitly selected player/trader takes priority over passive task guidance.
+            if (entry.getKey().kind.startsWith("quest:") && (active.containsKey(new Key(entry.getKey().caster, "player"))
+                    || active.containsKey(new Key(entry.getKey().caster, "trade")))) continue;
             Guide guide = entry.getValue();
             if (now - guide.rendered < FRAME_INTERVAL) continue;
             Player caster = Bukkit.getPlayer(entry.getKey().caster);

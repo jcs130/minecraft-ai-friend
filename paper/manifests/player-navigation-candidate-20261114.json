@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "date": "2026-11-14",
+  "stages": {
+    "codeMerged": false,
+    "candidateValidated": true,
+    "productionDeployed": false,
+    "originalPlayerAcceptance": false
+  },
+  "baseCommit": "218633f1bd5dffcbfb296acd94e80cf88b7ab8a8",
+  "artifacts": [
+    {
+      "component": "AgentFriend",
+      "version": "0.4.47.78-player-navigation",
+      "sha256": "247aaedca90905ded41aff8afc36f47022736e6626b4e5276c5732c39cf25eef"
+    },
+    {
+      "component": "FastAsyncWorldEdit",
+      "version": "2.16.1-qd-hybrid1",
+      "sha256": "dc3ed55005e71bc298a82ecb2ac23a03a36a288e78b7be48d7b5d61f030884b2"
+    }
+  ],
+  "validation": {
+    "rules": 167,
+    "nativeNavigationAfterNormalRestart": 26,
+    "nativeSoulSpellHands": [
+      "main",
+      "off"
+    ],
+    "protectedBreakCancelled": true,
+    "productionWorldOrInventoryUsed": false
+  },
+  "evidence": {
+    "directory": "D:\\codex\\2026-09-14\\new-chat\\work\\player-maid-navigation-audit-20261114",
+    "navigationReportSha256": "669ab6c28511200d81cd6218aee341354226d2b1fea72f16c21a2e9b1eff451b",
+    "navigationLogSha256": "7c24aeb938baacaf12a5f15712376621be141d4f22fd8e553c938d64cbae7349"
+  },
+  "backupDrive": "F",
+  "preserve": [
+    "world",
+    "roles",
+    "inventories",
+    "auth",
+    "maid UUID and owner",
+    "challenge records",
+    "LoginGuard 0.1.14-svc-routing"
+  ]
+}
