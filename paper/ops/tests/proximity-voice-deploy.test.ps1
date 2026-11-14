@@ -22,7 +22,7 @@ function Plan($file){@{schema=1;id=('voice-test-'+[guid]::NewGuid().ToString('N'
 function Refuse($file,$reason){Plan $file;$failed=$false;try{Deploy-PendingContent $cold $mirror}catch{if($_ -notmatch $reason){throw};$failed=$true};if(-not $failed){throw 'Unsafe voice install accepted'};$script:checks++}
 $source=Join-Path $fixture 'voice.jar';[IO.File]::WriteAllBytes($source,[byte[]]@(1,2,3))
 $file=@{source=$source;target='QiandengVoice-0.1.0.jar';sha256=(Get-FileHash -LiteralPath $source).Hash}
-Refuse $file 'both complete cold backups'
+Refuse $file 'requires a complete cold backup'
 New-Item -ItemType File -Path (Join-Path $cold '.complete'),(Join-Path $mirror '.complete') | Out-Null
 $script:listening=$true;Refuse $file 'requires stopped Paper';$script:listening=$false
 $bad=$file.Clone();$bad.sha256='0'*64;Refuse $bad 'source hash mismatch'

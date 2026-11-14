@@ -138,14 +138,22 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     if ($plan.schema -ne 1 -or $plan.id -notmatch '^[a-z0-9-]{8,80}$') { throw 'Invalid content deployment plan' }
     $voiceChange = @($plan.files | Where-Object { Content-ProximityVoiceTarget ([string]$_.target) }).Count -gt 0 -or
         @($plan.removeJars | Where-Object { Content-ProximityVoiceJar ([string]$_.name) }).Count -gt 0
-    if ($voiceChange -and (-not $coldBackup -or -not $mirrorBackup -or
-        -not (Test-Path -LiteralPath (Join-Path $coldBackup '.complete')) -or
-        -not (Test-Path -LiteralPath (Join-Path $mirrorBackup '.complete')))) {
-        throw 'Voice deployment requires both complete cold backups'
+    if ($voiceChange -or $plan.unifyEconomy) {
+        if (-not $coldBackup -or -not (Test-Path -LiteralPath (Join-Path $coldBackup '.complete'))) {
+            throw 'This deployment requires a complete cold backup'
+        }
+        if ($mirrorBackup) {
+            if (-not (Test-Path -LiteralPath (Join-Path $mirrorBackup '.complete'))) { throw 'Specified recovery copy is incomplete' }
+        } else {
+            . (Join-Path $opsDir 'release-snapshot-retention.ps1')
+            $null = Get-VerifiedRecoverySnapshot $coldBackup
+        }
     }
     $moneyHelper = Join-Path $opsDir 'rpg-economy-migration.py'
+    $moneyBackupArgs = @('--backup', $coldBackup)
+    if ($mirrorBackup) { $moneyBackupArgs += @('--mirror', $mirrorBackup) }
     if ($plan.unifyEconomy) {
-        if ($plan.id -cne 'rpg-unified-release-20261028-r1' -or -not $coldBackup -or -not $mirrorBackup -or
+        if ($plan.id -cne 'rpg-unified-release-20261028-r1' -or
             $plan.unifyEconomy.helperSha256 -notmatch '^[A-Fa-f0-9]{64}$' -or
             (Get-FileHash -LiteralPath $moneyHelper -Algorithm SHA256).Hash -ne $plan.unifyEconomy.helperSha256) {
             throw 'Unreviewed economy migration or missing complete cold backups'
@@ -273,7 +281,7 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
             $index++
         }
         if ($plan.unifyEconomy) {
-            $moneyResult = & 'E:/MC/runtime/python-3.12.14/python.exe' -X utf8 $moneyHelper apply --release $plan.id --backup $coldBackup --mirror $mirrorBackup
+            $moneyResult = & 'E:/MC/runtime/python-3.12.14/python.exe' -X utf8 $moneyHelper apply --release $plan.id @moneyBackupArgs
             if ($LASTEXITCODE -ne 0) { throw 'Cold native economy migration failed; inspect private evidence' }
             $moneyApplied = $true
             Log ('Native gold migration: ' + ($moneyResult -join ' '))
@@ -287,7 +295,7 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     } catch {
         $failure = $_
         if ($moneyApplied) {
-            & 'E:/MC/runtime/python-3.12.14/python.exe' -X utf8 $moneyHelper rollback --release $plan.id --backup $coldBackup --mirror $mirrorBackup | Out-Null
+            & 'E:/MC/runtime/python-3.12.14/python.exe' -X utf8 $moneyHelper rollback --release $plan.id @moneyBackupArgs | Out-Null
             if ($LASTEXITCODE -ne 0) { $script:contentRecoveryBlocked = $true; Log 'CRITICAL: native economy rollback incomplete' }
         }
         if (Test-Path -LiteralPath (Join-Path $opsDir 'rpg-economy-recovery.blocked')) { $script:contentRecoveryBlocked = $true }

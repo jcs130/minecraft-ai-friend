@@ -85,9 +85,9 @@ def apply(server, backup, mirror, evidence, replace=durable):
         return {'alreadyComplete': True, 'accounts': len(receipt['accounts']), 'total': receipt['total']}
     if evidence.exists():
         raise ValueError('Migration evidence already exists; inspect rather than replay')
-    for snapshot in (backup, mirror):
+    for snapshot in (backup, mirror) if mirror is not None else (backup,):
         if not (snapshot / '.complete').is_file():
-            raise ValueError('Complete cold snapshot required on both disks')
+            raise ValueError('Complete cold snapshot required')
         for relative, before, _ in files:
             if (snapshot / 'server' / relative).read_bytes() != before:
                 raise ValueError('Cold backup differs from current bank or legacy state')
@@ -148,11 +148,14 @@ def main():
     parser.add_argument('action', choices=['apply', 'rollback'])
     parser.add_argument('--release', required=True)
     parser.add_argument('--backup', type=Path, required=True)
-    parser.add_argument('--mirror', type=Path, required=True)
+    parser.add_argument('--mirror', type=Path)
     args = parser.parse_args()
     if args.release != RELEASE or not (OPS / 'auto-start.paused').exists():
         raise ValueError('Reviewed release and cold maintenance required')
-    for snapshot, root in ((args.backup, Path('E:/MC/backups/scheduled')), (args.mirror, Path('F:/MC-backups/scheduled'))):
+    recovery_paths = [(args.backup, Path('F:/MC-backups/scheduled'))]
+    if args.mirror is not None:
+        recovery_paths = [(args.backup, Path('E:/MC/backups/scheduled')), (args.mirror, Path('F:/MC-backups/scheduled'))]
+    for snapshot, root in recovery_paths:
         if snapshot.resolve().parent != root.resolve() or not re.fullmatch(r'[0-9]{8}-[0-9]{6}', snapshot.name):
             raise ValueError('Unexpected cold backup path')
     import socket

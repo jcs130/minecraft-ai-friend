@@ -1,5 +1,5 @@
 ﻿param(
-    [ValidateSet('Start', 'Stop', 'Restart', 'Status', 'Watchdog', 'Backup', 'Mirror')]
+    [ValidateSet('Start', 'Stop', 'Restart', 'Status', 'Watchdog', 'Backup', 'VerifyBackup', 'Mirror')]
     [string]$Action = 'Status'
 )
 
@@ -8,8 +8,7 @@ $ErrorActionPreference = 'Stop'
 $OutputEncoding = [Console]::OutputEncoding
 $serverDir = 'E:\MC\server'
 $opsDir = 'E:\MC\ops'
-$backupRoot = 'E:\MC\backups\scheduled'
-$mirrorRoot = 'F:\MC-backups\scheduled'
+$backupRoot = 'F:\MC-backups\scheduled'
 $java = 'E:\MC\jdk\jdk-21.0.12.1+1\bin\java.exe'
 $node = 'C:\Users\lzl19\AppData\Local\hermes\node\node.exe'
 $lanHost = '192.168.3.163'
@@ -634,16 +633,12 @@ function PruneSnapshots([string]$path, [datetime]$asOf = (Get-Date)) {
     $root = [IO.Path]::GetFullPath($path).TrimEnd('\')
     # Millions of dependency files can stall world/auth database writes on the
     # same host. Bulk retention belongs inside the existing cold maintenance.
-    if ($root -in @('E:\MC\backups\scheduled', 'F:\MC-backups\scheduled') -and (Listener)) {
+    if ($root -ceq $backupRoot -and (Listener)) {
         Log "WARN backup cleanup deferred until Paper is stopped: $root"
         return
     }
     $completed = @(CompleteSnapshots $root)
-    # E keeps three recent full points; F carries the seven-day archive.
-    # Explicit pins remain on both drives. Recent E history is removed only
-    # when its complete F copy still passes the original mirror proof.
-    $dailyDays = if ($root -ceq 'E:\MC\backups\scheduled') { 0 } else { 7 }
-    $keep = @(RetainedSnapshots $completed $asOf $dailyDays)
+    $keep = @(RetainedSnapshots $completed $asOf)
     # Only a previous native prune's explicit marker permits resuming an
     # interrupted deletion. Unmarked partial backups remain for inspection.
     $resuming = @(Get-ChildItem -LiteralPath $root -Directory | Where-Object {
@@ -656,20 +651,14 @@ function PruneSnapshots([string]$path, [datetime]$asOf = (Get-Date)) {
     $expired = @($completed | Where-Object { $keep -notcontains $_.FullName })
     foreach ($old in @($expired + $resuming)) {
         $resolved = [IO.Path]::GetFullPath($old.FullName).TrimEnd('\')
-        if (-not $resolved.StartsWith(($root + '\'), [StringComparison]::OrdinalIgnoreCase) -or
+        if ([IO.Path]::GetDirectoryName($resolved) -cne $root -or
+            (Resolve-Path -LiteralPath $resolved).ProviderPath -cne $resolved -or
             $old.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
             throw "Unsafe backup retention path: $resolved"
         }
         try {
             if ((Test-Path -LiteralPath (Join-Path $resolved '.keep')) -or
                 (Test-Path -LiteralPath (Join-Path $resolved '.pinned'))) { continue }
-            if ($root -ceq 'E:\MC\backups\scheduled' -and
-                $old.Name.Substring(0,8) -ge $asOf.Date.AddDays(-6).ToString('yyyyMMdd') -and
-                (Test-Path -LiteralPath (Join-Path $resolved '.complete'))) {
-                $mirror = Join-Path 'F:\MC-backups\scheduled' $old.Name
-                if (-not (Test-Path -LiteralPath (Join-Path $mirror '.complete'))) { throw 'Retain recent E history until F is complete' }
-                Assert-MirrorHashes $resolved $mirror
-            }
             # Never advertise a partly deleted snapshot as a recovery point.
             # Preserve the validated absolute root before adding Win32's long-
             # path prefix for bundled client dependencies.
@@ -689,35 +678,13 @@ function PruneSnapshots([string]$path, [datetime]$asOf = (Get-Date)) {
 }
 
 function PruneReleaseSnapshots([string]$scheduledRoot, [datetime]$asOf = (Get-Date)) {
-    if ($scheduledRoot -notin @('E:\MC\backups\scheduled', 'F:\MC-backups\scheduled')) { return }
+    if ($scheduledRoot -cne $backupRoot) { return }
     if (Listener) { Log 'WARN release snapshot cleanup deferred until Paper is stopped'; return }
     try {
         . (Join-Path $opsDir 'release-snapshot-retention.ps1')
         $result = Invoke-ReleaseSnapshotRetention -BackupRoot ([IO.Path]::GetDirectoryName($scheduledRoot)) -AsOf $asOf
         foreach ($row in $result.Results) { Log ("Release snapshot retention {0}: removed={1}" -f $row.name,$row.removed) }
     } catch { Log ('WARN release snapshot retention deferred: ' + $_.Exception.GetType().Name) }
-}
-
-function Assert-MirrorHashes([string]$sourcePath, [string]$mirrorPath) {
-    foreach ($relative in @('server\server.jar', 'server\world\level.dat', 'ops\manage-server.ps1', 'backup.json')) {
-        $a = Join-Path $sourcePath $relative
-        $b = Join-Path $mirrorPath $relative
-        if (-not (Test-Path -LiteralPath $b) -or
-            (Get-FileHash -LiteralPath $a -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $b -Algorithm SHA256).Hash) {
-            throw "Mirror hash mismatch: $relative; inspect $mirrorPath"
-        }
-    }
-}
-
-function Backup-TreeBytes([string]$path) {
-    # Offline client fixtures can contain paths longer than Win32 MAX_PATH.
-    # Robocopy preserves them; use the same extended local path for the
-    # space preflight. Missing files/access errors still stop the operation.
-    $full = [IO.Path]::GetFullPath($path)
-    if ($full -notmatch '^[A-Za-z]:\\') { throw 'Backup size requires a local absolute path.' }
-    $measure = Get-ChildItem -LiteralPath ('\\?\' + $full) -Recurse -File -ErrorAction Stop |
-        Measure-Object -Property Length -Sum
-    return [int64]$measure.Sum
 }
 
 function Backup-CopyBytes([string]$path, [string[]]$excludedDirectories = @()) {
@@ -747,45 +714,23 @@ function Backup-CopyBytes([string]$path, [string[]]$excludedDirectories = @()) {
     }
 }
 
-function Mirror-LatestBackup {
-    $source = CompleteSnapshots $backupRoot | Select-Object -First 1
-    if (-not $source) { throw 'No verified local backup to mirror.' }
-    if ($source.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) { throw 'Refusing reparse-point backup source.' }
-    if (-not (Test-Path -LiteralPath 'F:\')) { throw 'Mirror drive F: is unavailable.' }
-    New-Item -ItemType Directory -Path $mirrorRoot -Force | Out-Null
-    $destination = Join-Path $mirrorRoot $source.Name
-    if (Test-Path -LiteralPath (Join-Path $destination '.complete')) {
-        Assert-MirrorHashes $source.FullName $destination
-        Log "Mirror already complete and verified: $destination"
-        return
-    }
-    $stage = "$destination.partial"
-    if ((Test-Path -LiteralPath $destination) -or (Test-Path -LiteralPath $stage)) {
-        throw "Incomplete mirror requires inspection: $destination or $stage"
-    }
-    $sourceBytes = Backup-TreeBytes $source.FullName
-    if ((Get-PSDrive -Name F).Free -lt ($sourceBytes + 1GB)) {
-        # Expired archives may be why a new mirror will not fit. Both pruning
-        # functions refuse online deletion and preserve current recovery points.
-        PruneSnapshots $mirrorRoot
-        PruneReleaseSnapshots $mirrorRoot
-        if ((Get-PSDrive -Name F).Free -lt ($sourceBytes + 1GB)) {
-            throw 'Mirror skipped: F: needs at least snapshot size plus 1 GB free.'
+function Assert-BackupDestination {
+    foreach ($path in @([IO.Path]::GetDirectoryName($backupRoot), $backupRoot)) {
+        $directory = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+        if (-not $directory.PSIsContainer -or $directory.Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+            throw "Backup skipped before stopping Paper: F: backup path is not a local directory"
         }
     }
-    New-Item -ItemType Directory -Path $stage -Force | Out-Null
-    & robocopy.exe $source.FullName $stage /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP /XF '.complete' | Out-Null
-    if ($LASTEXITCODE -ge 8) { throw "Mirror robocopy failed with exit code $LASTEXITCODE; inspect $stage" }
-    Assert-MirrorHashes $source.FullName $stage
-    $resolvedStage = [IO.Path]::GetFullPath($stage).TrimEnd('\')
-    $resolvedRoot = [IO.Path]::GetFullPath($mirrorRoot).TrimEnd('\')
-    if (-not $resolvedStage.StartsWith(($resolvedRoot + '\'), [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Unsafe mirror path: $resolvedStage"
-    }
-    Rename-Item -LiteralPath $stage -NewName $source.Name
-    New-Item -ItemType File -Path (Join-Path $destination '.complete') -Force | Out-Null
-    Log "Mirror complete: $destination"
-    PruneSnapshots $mirrorRoot
+}
+
+function Verify-LatestBackup {
+    Assert-BackupDestination
+    . (Join-Path $opsDir 'release-snapshot-retention.ps1')
+    $latest = CompleteSnapshots $backupRoot | Select-Object -First 1
+    if (-not $latest) { throw 'There is no completed backup on F:' }
+    $null = Get-VerifiedRecoverySnapshot $latest.FullName
+    Log "F: recovery point verified: $($latest.FullName)"
+    Write-Host "F: recovery point verified: $($latest.Name)"
 }
 
 function Deploy-PendingAgentFriend {
@@ -983,9 +928,10 @@ function Backup-Server {
     if (Test-Path -LiteralPath $voiceScript -PathType Leaf) {
         $sourceBytes += (Get-Item -LiteralPath $voiceScript).Length
     }
-    $freeBytes = (Get-PSDrive -Name E).Free
+    Assert-BackupDestination
+    $freeBytes = (Get-PSDrive -Name F).Free
     if ($null -eq $freeBytes -or $freeBytes -lt ($sourceBytes + 1GB)) {
-        throw "Backup skipped before stopping Paper: E: needs at least source size plus 1 GB free"
+        throw "Backup skipped before stopping Paper: F: needs at least source size plus 1 GB free"
     }
     $wasRunning = [bool](Listener)
     $wasPaused = Test-Path -LiteralPath $pausedFile
@@ -1020,7 +966,10 @@ function Backup-Server {
     try {
         if ($wasRunning) { Stop-Server }
         $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+        if (Listener) { throw 'Backup requires a stopped Paper server' }
+        Assert-BackupDestination
         $dest = Join-Path $backupRoot $stamp
+        Relocation-NewPrivateTarget $dest
         $copyDest = Join-Path $dest 'server'
         New-Item -ItemType Directory -Path $copyDest -Force | Out-Null
         & robocopy.exe $serverDir $copyDest /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
@@ -1051,6 +1000,7 @@ function Backup-Server {
             Copy-Item -LiteralPath (Join-Path 'E:\MC' $name) -Destination (Join-Path $rootCopy $name) -Force
         }
         Backup-YsmServices $dest
+        $verified = @{}
         foreach ($relative in @('server.jar','server.properties','ops.json','world\level.dat')) {
             $sourceFile = Join-Path $serverDir $relative
             $copyFile = Join-Path $copyDest $relative
@@ -1058,6 +1008,7 @@ function Backup-Server {
             $sourceHash = (Get-FileHash -LiteralPath $sourceFile -Algorithm SHA256).Hash
             $copyHash = (Get-FileHash -LiteralPath $copyFile -Algorithm SHA256).Hash
             if ($sourceHash -ne $copyHash) { throw "Backup hash mismatch: $relative" }
+            $verified["server/$($relative.Replace('\','/'))"] = $copyHash
         }
         foreach ($support in @(
             @{ Source = (Join-Path $opsDir 'manage-server.ps1'); Copy = (Join-Path $opsCopy 'manage-server.ps1') },
@@ -1073,26 +1024,25 @@ function Backup-Server {
                 throw "Backup hash mismatch: $($support.Source)"
             }
         }
-        @{ createdAt = (Get-Date).ToString('o'); source = $serverDir; stoppedForCopy = $wasRunning;
-           serverJarSha256 = (Get-FileHash -LiteralPath (Join-Path $copyDest 'server.jar') -Algorithm SHA256).Hash } |
+        foreach ($relative in @('ops/manage-server.ps1','ysm-private/proxy/plugins/LibreLogin/user-data.db',
+            'ysm-private/librelogin/user-data.db')) {
+            $file = Join-Path $dest $relative
+            if (Test-Path -LiteralPath $file -PathType Leaf) { $verified[$relative] = (Get-FileHash -LiteralPath $file).Hash }
+        }
+        @{ createdAt = (Get-Date).ToString('o'); source = $serverDir; stoppedForCopy = $true;
+           recoveryDrive = 'F'; verifiedFiles = $verified; serverJarSha256 = $verified['server/server.jar'] } |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dest 'backup.json') -Encoding UTF8
         New-Item -ItemType File -Path (Join-Path $dest '.complete') -Force | Out-Null
         Log "Backup complete: $dest"
-        # Pending deployments require both verified recovery copies before any JAR changes.
-        Mirror-LatestBackup
-        # Also retire dated release snapshots outside the scheduled directory.
-        PruneReleaseSnapshots $mirrorRoot
-        PruneReleaseSnapshots $backupRoot
-        # Finish E: retention while Paper and authentication are still stopped.
-        # A standalone Mirror also defers pruning if players are already back.
-        PruneSnapshots $backupRoot
-        Deploy-PendingRuntimeRelocation $dest (Join-Path $mirrorRoot $stamp)
-        Deploy-PendingPaperCore $dest (Join-Path $mirrorRoot $stamp)
-        Deploy-PendingContent $dest (Join-Path $mirrorRoot $stamp)
+        Deploy-PendingRuntimeRelocation $dest
+        Deploy-PendingPaperCore $dest
+        Deploy-PendingContent $dest
         Deploy-PendingServerSettings
         Deploy-PendingAgentFriend
         Deploy-PendingEyeMirror
         Deploy-PendingGeyser
+        PruneReleaseSnapshots $backupRoot
+        PruneSnapshots $backupRoot
     }
     finally {
         if ($wasRunning -and ($script:coreUpgradeRecoveryBlocked -or $script:contentRecoveryBlocked -or
@@ -1123,11 +1073,9 @@ if ($Action -eq 'Status') {
     Write-Host "Agent Eye watcher: $(if (AgentEyeWatcherProcess) { 'running' } else { 'stopped' })"
     Write-Host "Auto-start paused: $(Test-Path -LiteralPath $pausedFile)"
     $latestBackup = CompleteSnapshots $backupRoot | Select-Object -First 1
-    $latestMirror = CompleteSnapshots $mirrorRoot | Select-Object -First 1
     $backupAge = if ($latestBackup) { [math]::Round(((Get-Date) - $latestBackup.CreationTime).TotalHours, 1) } else { $null }
-    Write-Host "Latest verified backup: $(if ($latestBackup) { "$($latestBackup.Name) ($backupAge h ago)" } else { 'none' })"
-    Write-Host "Latest F: mirror: $(if ($latestMirror) { $latestMirror.Name } else { 'none' })"
-    Write-Host "E: free: $([math]::Round((Get-PSDrive -Name E).Free / 1GB, 1)) GB"
+    Write-Host "Latest completed F: backup: $(if ($latestBackup) { "$($latestBackup.Name) ($backupAge h ago)" } else { 'none' })"
+    Write-Host "F: free: $(if ($drive = Get-PSDrive -Name F -ErrorAction SilentlyContinue) { "$([math]::Round($drive.Free / 1GB, 1)) GB" } else { 'unavailable' })"
     Write-Host "Bedrock recovery pending: $(Test-Path -LiteralPath $bedrockHealthFile)"
     exit 0
 }
@@ -1162,7 +1110,8 @@ try {
             Remove-Item -LiteralPath $pausedFile -Force -ErrorAction SilentlyContinue
         }
         'Backup' { Backup-Server }
-        'Mirror' { Mirror-LatestBackup }
+        'VerifyBackup' { Verify-LatestBackup }
+        'Mirror' { Verify-LatestBackup }
         'Watchdog' {
             if (Test-Path -LiteralPath $repairFile) { Repair-NoRcon; break }
             if (Test-Path -LiteralPath $pausedFile) { exit 0 }
