@@ -23,8 +23,7 @@ async function connect(suffix){
  // These cases never drive the player. Acknowledge the server's teleport without sending movement.
  player._client.on('position',packet=>player._client.write('teleport_confirm',{teleportId:packet.teleportId}));
  await until(()=>player.entity&&player.player?.uuid,'QA login',90000);
- const x=180.5+(suffix.charCodeAt(0)-97)*8;
- await rc('minecraft:tp '+player.username+' '+x+' -59 180.5');
+ assert.match(await rc('qdstash place '+player.username),/STASH_QA placed/);
  await rc('minecraft:gamemode survival '+player.username);
  await rc('qdstash mana '+player.username);
  return player;
@@ -42,9 +41,13 @@ const summaryCommand='/mycli arena stash summary';
 const summaryPrefix='MC_STASH_OVERVIEW';
 const overviewState=player=>fixtureRead(player,'overview-state');
 const nearFull=(p,free)=>rc('qdstash near-full '+p.username+' '+free);
+const inventoryEvent=async p=>assert.match(await rc('qdstash held-event '+p.username),/STASH_QA held-event/);
 const nearHint=line=>line.includes('【背包快满】');
 async function verifyOverview() {
- const a=await connect('n'), other=await connect('o');
+ const a=await connect('n');
+ const other=await connect('o');
+ // Let normal join-time provision checks finish before making a controlled bag.
+ await delay(4500);
  const empty=await ask(other,summaryCommand+' --json',summaryPrefix);
  check('separate synthetic owner has all 540 slots free',empty.totalItems===0&&empty.occupiedSlots===0&&empty.freeSlots===540);
  await rc('qdstash overview '+a.username);
@@ -75,20 +78,21 @@ async function verifyOverview() {
 
  let cursor=a.lines.length;
  await nearFull(a,4);
- a.setQuickBarSlot(1);await delay(750);
+ await inventoryEvent(a);await delay(750);
  check('four vacancies do not trigger a warning',!a.lines.slice(cursor).some(nearHint));
  await nearFull(a,3);
- a.setQuickBarSlot(2);
- const hint=await until(()=>a.lines.slice(cursor).find(nearHint),'personal stash warning with three free slots');
+ await inventoryEvent(a);
+ const hint=await until(()=>a.lines.slice(cursor).find(nearHint),'personal stash warning with three free slots',4500)
+  .catch(async error=>{out.adviceState=await fixtureRead(a,'advice-state');out.lastMessages=a.lines.slice(-9);throw error;});
  check('registered agent receives exact private pressure, category and deposit guidance',
   hint.includes('只剩 3 格')&&hint.includes('533 格')&&hint.includes('putslot 9 6')&&hint.includes('消耗品 36'));
  check('advice sends no automatic deposit', (await read(a)).bag.find(item=>item.slot===9)?.count===6);
  cursor=a.lines.length;
- a.setQuickBarSlot(3);await delay(750);
+ await inventoryEvent(a);await delay(750);
  check('near-full notifications are rate-limited',!a.lines.slice(cursor).some(nearHint));
  cursor=other.lines.length;
  await nearFull(other,3);
- other.setQuickBarSlot(2);await delay(750);
+ await inventoryEvent(other);await delay(750);
  check('unregistered player does not receive the agent reminder',!other.lines.slice(cursor).some(nearHint));
  cursor=a.lines.length;
  await nearFull(a,0);

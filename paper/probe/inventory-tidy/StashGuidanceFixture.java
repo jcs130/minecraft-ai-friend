@@ -71,6 +71,14 @@ public final class StashGuidanceFixture extends JavaPlugin {
             }
             Object d=dungeon(),storage=method(d.getClass(),"storage").invoke(d);for(int n=0;n<10;n++)method(storage.getClass(),"write",Inventory.class,UUID.class).invoke(storage,page(p,n),p.getUniqueId());
             af.saveConfig();p.saveData();p.updateInventory();sender.sendMessage("STASH_QA reset="+args[2]);
+        }else if(args[0].equals("place")){
+            World world=Bukkit.getWorld("world");
+            int x=180+(p.getName().charAt(p.getName().length()-1)-'a')*8,z=180;
+            int y=world.getHighestBlockYAt(x,z)+4;
+            for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++)world.getBlockAt(x+dx,y-1,z+dz).setType(Material.STONE);
+            if(!p.teleport(new Location(world,x+.5,y,z+.5)))throw new IllegalStateException("QA spawn failed");
+            p.setInvulnerable(true);
+            sender.sendMessage("STASH_QA placed");
         }else if(args[0].equals("overview")){
             Object d=dungeon(),storage=method(d.getClass(),"storage").invoke(d);
             for(int n=0;n<10;n++){
@@ -117,6 +125,20 @@ public final class StashGuidanceFixture extends JavaPlugin {
                 p.getInventory().setItem(slot,new ItemStack(slot==9?Material.COBBLESTONE:Material.GOLD_INGOT,6));
             p.updateInventory();
             sender.sendMessage("STASH_QA bag-free="+free);
+        }else if(args[0].equals("held-event")){
+            Bukkit.getPluginManager().callEvent(new org.bukkit.event.player.PlayerItemHeldEvent(p,0,1));
+            sender.sendMessage("STASH_QA held-event");
+        }else if(args[0].equals("advice-state")){
+            Object feedback=field(af,"inventoryFeedback");
+            JsonObject out=new JsonObject();
+            out.addProperty("agent",(Boolean)method(af.getClass(),"isRegisteredAgent",Player.class).invoke(af,p));
+            out.addProperty("canAdvise",(Boolean)method(feedback.getClass(),"canAdviseStorage",Player.class).invoke(feedback,p));
+            out.addProperty("top",p.getOpenInventory().getTopInventory().getType().name());
+            out.addProperty("gameMode",p.getGameMode().name());
+            out.addProperty("realFree",Arrays.stream(p.getInventory().getStorageContents()).filter(item->item==null||item.getType().isAir()).count());
+            out.addProperty("notice",Objects.toString(((Map<?,?>)field(feedback,"storageNotices")).get(p.getUniqueId())));
+            out.addProperty("scheduled",((Set<?>)field(feedback,"scheduled")).contains(p.getUniqueId()));
+            sender.sendMessage("STASH_QA "+out);
         }else if(args[0].equals("mana")){
             var mana=vortex().qiandengjiMana();mana.setMana(p.getUniqueId(),mana.getMaxMana(p));
             sender.sendMessage("STASH_QA mana");
