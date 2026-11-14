@@ -48,6 +48,12 @@ function waterRig(){
   h.bot.entity.position.y=68.5;h.bot.entity.onGround=false;
   return h;
 }
+it('keeps a transport observation unknown when a partial adapter has no terrain reader',()=>{
+  const h=rig();rigs.push(h);h.bot.entity.onGround=false;
+  (h.bot as any).blockAt=undefined;
+  expect(()=>(h.world as any).journeyTick(h.bot,[])).not.toThrow();
+  expect(h.host.events.some(e=>(e.meta?.journey as any)?.reason==='water')).toBe(false);
+});
 it('native water navigation exposes a transport choice and yields a buoyant meal before resuming the same destination',async()=>{
   const h=waterRig();h.bot.food=4;
   Object.assign((h.world as any).bridge,{connectionState:{ready:true,phase:'online'}});

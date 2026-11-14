@@ -3627,7 +3627,7 @@ export class MinecraftWorld implements World {
       && JSON.stringify(observedJourney.journey.destination) === JSON.stringify(running.travel.destination) ? observedJourney : null;
     // Travel workers already subscribe to journey. Always include effective
     // movement policy, even while idle or after a failed journey ends.
-    const movement=bot?movementReadout(bot):null;
+    const movement=bot&&typeof bot.blockAt==='function'?movementReadout(bot):null;
     const movementPolicy = renderPolicy(this.policy.get(), this.policyDefaults(), !this.cfg.combat.enabled,
       this.blueprintHeldScaffold(), bot?.registry);
     if (journey) {
@@ -8641,8 +8641,8 @@ export class MinecraftWorld implements World {
   protected journeyScope():string{return `${this.realmKey()}:${this.cfg.auth}:${this.cfg.username}`;}
   protected journeyTick(bot:Bot,cues:JourneyCue[]):void {
     const queue=this.executor?.status(),running=queue?.running,p=bot.entity.position,now=Date.now();
-    const movement=movementReadout(bot);
-    const surfaceWater=movement.bodyWet===true&&movement.headWet===false&&!movement.vehicleAttached;
+    const movement=typeof bot.blockAt==='function'?movementReadout(bot):null;
+    const surfaceWater=movement?.bodyWet===true&&movement.headWet===false&&!movement.vehicleAttached;
     const cached=this.journeyBlocks?.generation===this.connectionGeneration&&this.journeyBlocks.dimension===normalizeDimension(dimensionOf(bot))?this.journeyBlocks.cues:[];
     const report=this.journeyObserver.observe({scope:this.journeyScope(),generation:String(this.connectionGeneration),atMs:now,
       dimension:normalizeDimension(dimensionOf(bot)),position:[p.x,p.y,p.z],
