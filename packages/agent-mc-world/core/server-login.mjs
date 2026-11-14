@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { execFile } from 'node:child_process';
+import { authMePasswordNbt, isAuthMeLoginDialog } from './nbt-text.mjs';
+import { writeCustomClickLengthPrefixed } from './custom-click-action.mjs';
 
 export function readProtectedCredential(file) {
   return new Promise((resolve, reject) => {
@@ -23,8 +25,16 @@ const matches = (message, markers) => markers.some(marker => message.startsWith(
 // Exact standard AuthMe receipts, not a broad "success" or "login" substring.
 // Custom markers remain available; authoritative structured state takes priority
 // over these compatibility receipts. Registration is never inferred here.
-const loginSuccessReceipts = new Set(['successful login!', 'logged-in due to session reconnection.', "you're already logged in!"]);
-const loginFailureReceipts = new Set(['wrong password!']);
+const loginSuccessReceipts = new Set([
+  'successful login!',
+  'logged-in due to session reconnection.',
+  "you're already logged in!",
+  '已成功登录！',
+  '已成功登录!',
+]);
+const loginFailureReceipts = new Set(['wrong password!', '密码错误!', '密码错误！']);
+const loginPendingNotices = ['登录数据异常，请等待登录结束', '登录数据异常,请等待登录结束'];
+const receiptText = (value) => value.replace(/^(?:\[[^\]\r\n]+\]\s*)+/, '').trim().toLowerCase();
 const failureMessages = {
   'request-not-detected': '未识别到服务器登录提示，尚未提交密码',
   'credential-read-timeout': '服务器登录凭据读取超时，尚未提交密码',
@@ -71,6 +81,7 @@ async function readAccountCredential(account, configFile) {
 export function installServerLogin(bot, options) {
   let stage = 'disabled', attempted = false, active = true, account, timer;
   let reason = null, authState = null, recoveryAttempted = false, recovering = false;
+  let dialogSubmit = false;
   let credentialGeneration = 0, timeoutMs = 30000, recoveredAt = null;
   const report = (status, detail = null) => {
     if (stage === status && reason === detail) return;
@@ -126,7 +137,12 @@ export function installServerLogin(bot, options) {
       }
     }
   } catch { account = undefined; report('blocked', 'invalid-configuration'); }
-  const stop = () => { active = false; clearTimeout(timer); bot.off('message', onMessage); bot.off('end', stop); bot.off('kicked', stop); stage = 'closed'; };
+  const stop = () => {
+    active = false; clearTimeout(timer);
+    bot.off('message', onMessage); bot.off('end', stop); bot.off('kicked', stop);
+    bot._client?.off?.('show_dialog', onDialog); bot._client?.off?.('clear_dialog', onClearDialog);
+    stage = 'closed';
+  };
   const submitCredential = (recovery = false) => {
     attempted = true; recovering = recovery;
     if (recovery) { recoveryAttempted = true; report('armed', 'reauthentication'); armTimer(); }
@@ -140,7 +156,11 @@ export function installServerLogin(bot, options) {
         if (!active || generation !== credentialGeneration || stage !== 'armed') return;
         const password = bytes.toString('utf8');
         if (!password || password.length > 128 || /\s/.test(password)) throw new Error('invalid private credential');
-        bot.chat('/' + selected.command + ' ' + password + (selected.repeatPassword === true ? ' ' + password : ''));
+        if (dialogSubmit && bot._client && typeof bot._client.writeRaw === 'function') {
+          writeCustomClickLengthPrefixed(bot._client, 'authme:prejoin-login/submit', authMePasswordNbt(password));
+        } else {
+          bot.chat('/' + selected.command + ' ' + password + (selected.repeatPassword === true ? ' ' + password : ''));
+        }
         report('submitted', recovery ? 'reauthentication' : null);
       } finally { bytes.fill(0); }
     }).catch(() => { if (active && generation === credentialGeneration && stage === 'armed') report('blocked', 'credential-unavailable'); });
@@ -156,9 +176,20 @@ export function installServerLogin(bot, options) {
       if (active && stage === 'required' && reason === 'authorization-revoked') submitCredential(true);
     });
   };
+  const onDialog = (packet) => {
+    if (!active || !account || !['armed', 'submitted', 'required'].includes(stage)) return;
+    const dialog = packet?.dialog ?? packet;
+    if (!isAuthMeLoginDialog(dialog)) return;
+    if (attempted || ['submitted', 'confirmed'].includes(stage)) return;
+    if (account.command !== 'login') return;
+    dialogSubmit = true;
+    submitCredential();
+  };
+  const onClearDialog = () => {};
   const onMessage = (message, position) => {
     if (!active || !account || !['armed', 'submitted', 'confirmed', 'required'].includes(stage) || position !== 'system') return;
     const value = message.toString().replace(/§[0-9A-FK-OR]/gi, '').trimStart();
+    if (loginPendingNotices.some(notice => value.includes(notice))) return;
     const stateMatch = /^(?:MC_AUTH_STATE|\[MC_AUTH_STATE\])\s+(\{.*\})\s*$/s.exec(value);
     if (stateMatch) {
       // Only a direct system receipt can open the gate. Unknown/malformed
@@ -191,7 +222,7 @@ export function installServerLogin(bot, options) {
     }
     const playerChat = /^(?:\[[^\]\r\n]+\]\s*)?<[^>\r\n]+>\s/.test(value);
     const loginReceipt = account.command === 'login' && !playerChat && !authState
-      ? value.replace(/^\[AuthMe\]\s*/i, '').trim().toLowerCase() : null;
+      ? receiptText(value) : null;
     if (matches(value, account.failureMarkers) || loginFailureReceipts.has(loginReceipt)) {
       report(['confirmed', 'required'].includes(stage) ? 'required' : 'blocked', 'server-rejected'); return;
     }
@@ -209,6 +240,8 @@ export function installServerLogin(bot, options) {
     submitCredential();
   };
   bot.on('message', onMessage);
+  bot._client?.on?.('show_dialog', onDialog);
+  bot._client?.on?.('clear_dialog', onClearDialog);
   bot.once('end', stop);
   bot.once('kicked', stop);
   return { stop, status: () => ({ stage, attempted }), detail: () => ({ stage, attempted, reason,

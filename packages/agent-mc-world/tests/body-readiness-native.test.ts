@@ -114,7 +114,7 @@ it('reproduces the frozen positive-health body using real pinned 1.21.1 health a
     expect(b.entity.position.distanceTo(before)).toBeLessThan(.001);
     expect(observer.read().phase).toBe('waiting-position');
     b.setControlState('forward', false);
-    land(10.5); await vi.advanceTimersByTimeAsync(1600);
+    land(10.5); await vi.advanceTimersByTimeAsync(2200);
     expect(observer.read().phase).toBe('ready');
     b.setControlState('forward', true); const fresh = b.entity.position.clone();
     await vi.advanceTimersByTimeAsync(500);

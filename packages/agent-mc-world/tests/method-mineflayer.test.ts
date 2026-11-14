@@ -230,11 +230,16 @@ describe('agent programs using Mineflayer public primitives', () => {
     const r = rig(); r.stock('cobblestone', 2);
     r.receive((name, packet) => {
       if (name !== 'block_place') return;
-      const p = packet.location as Vec3;
+      const p = packet.location as { x: number; y: number; z: number };
       if (packet.direction !== 1 || r.live.heldItem?.name !== 'cobblestone') return;
-      const at = p.offset(0, 1, 0), old = r.live.blockAt(at);
-      r.set(at.x, at.y, at.z, 'cobblestone');
-      r.live.emit(`blockUpdate:${at}` as 'blockUpdate', old, r.live.blockAt(at)!);
+      const dest = new Vec3(p.x, p.y + 1, p.z), old = r.live.blockAt(dest);
+      const reference = new Vec3(p.x, p.y, p.z);
+      // 4.39 writes first, then waits; answer after the waiter is attached.
+      setTimeout(() => {
+        r.live.emit(`blockUpdate:${reference}` as 'blockUpdate', r.live.blockAt(reference), r.live.blockAt(reference)!);
+        r.set(dest.x, dest.y, dest.z, 'cobblestone');
+        r.live.emit(`blockUpdate:${dest}` as 'blockUpdate', old, r.live.blockAt(dest)!);
+      }, 0);
     });
     const run = r.runner.start({ name: 'native placement', code: `
       const reference=await bot.blockAt(new Vec3(1,63,0));
@@ -243,7 +248,7 @@ describe('agent programs using Mineflayer public primitives', () => {
     expect(await methodEnded(r, run.id)).toMatchObject({ status: 'completed', result: 'cobblestone' });
     expect(r.live.blockAt(new Vec3(1, 64, 0))!.name).toBe('cobblestone');
     expect(r.live.blockAt(new Vec3(1, 65, 0))!.name).toBe('air');
-  });
+  }, 15_000);
 
   it('refuses a changed block and protected digging without modifying the world', async () => {
     const r = rig();

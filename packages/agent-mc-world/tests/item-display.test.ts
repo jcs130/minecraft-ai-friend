@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import { Vec3 } from 'vec3';
-import { itemCustomName } from '../core/item-display.ts';
+import { itemCustomName, itemLoreText } from '../core/item-display.ts';
 import { bagNow } from '../core/receipt.ts';
 import { containerStacks, potionText, slotStack } from '../core/containers.ts';
 import { askedLabel, invItemNamed } from '../core/inventory.ts';
@@ -155,5 +155,17 @@ describe('item instance display names', () => {
     expect(potionText(namedItem('potion', '探险补给'))).toContain('探险补给');
     expect(await skillEquip(bot as never, { skill: 'equip', item: 'player_head', hand: 'off' }))
       .toBe('大背包本来就挂在副手');
+  });
+});
+
+describe('item lore unwrap', () => {
+  it('reads 26.1 component lore NBT', () => {
+    expect(itemLoreText({
+      lore: [
+        { type: 'compound', value: { text: { type: 'string', value: '' }, extra: { type: 'list', value: { type: 'compound', value: [
+          { text: { type: 'string', value: '熟悉手脚, 也熟悉这方天地。' } },
+        ] } } } },
+      ],
+    })).toEqual(['熟悉手脚, 也熟悉这方天地。']);
   });
 });

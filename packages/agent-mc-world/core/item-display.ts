@@ -64,3 +64,22 @@ export function itemProfileSkinHash(item: ComponentItem & { name?: string; nbt?:
   const components = item.components ?? (item.componentMap ? [...item.componentMap].map(([type, value]) => ({ type, data: value.data })) : undefined);
   return itemHeadProfile({ ...item, components })?.hash ?? null;
 }
+
+/** Lore lines from 26.1 component or legacy NBT, with formatting stripped. */
+export function itemLoreText(item: {
+  lore?: unknown;
+  componentMap?: Map<string, { data?: unknown }>;
+  components?: Array<{ type?: string; data?: unknown }>;
+  nbt?: unknown;
+}): string[] {
+  const nbt = item.nbt as { value?: { display?: { value?: { Lore?: { value?: { value?: unknown } } } } } } | undefined;
+  const raw = item.lore ?? componentData(item, 'lore') ?? nbt?.value?.display?.value?.Lore?.value?.value;
+  const lines = Array.isArray(raw) ? raw : raw && typeof raw === 'object' && Array.isArray((raw as { value?: unknown }).value)
+    ? (raw as { value: unknown[] }).value : [];
+  const out: string[] = [];
+  for (const line of lines.slice(0, 32)) {
+    const textLine = chatText(unwrapNbt(line))?.replace(/§[0-9a-fk-orx]/gi, '').trim();
+    if (textLine) out.push(textLine.slice(0, 160));
+  }
+  return out;
+}

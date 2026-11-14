@@ -1,3 +1,4 @@
+import { operatorPlaySteps } from './operator-play.ts';
 import { randomUUID } from 'node:crypto';
 import { inspectToolCall } from '../contracts/call-capability.ts';
 import { resolveWorkReferences, type WorkReference } from '../contracts/work-state.ts';
@@ -295,17 +296,48 @@ export class MinecraftAgentClient {
         accounts: null, clients: null,
       };
     return { schema: 'minecraft-client-console/v1', runtime: { phase: this.phase, run: this.journal.run },
-      connection, links: this.status().links,
+      connection, links: this.status().links, facts: this.phase === 'started' ? this.requestFacts() : null,
       configuredAccounts: { agent: cfg.username, observer: cfg.client.username, player: cfg.player.username },
       configuredAuthentication: { agent: cfg.auth ?? 'offline', observer: cfg.client.auth ?? 'offline', player: cfg.player.auth ?? 'offline' },
       viewerAssetNote: 'Modern viewer assets must match the action connection version; the bundled version and hashes are pinned in release-sources.json.',
     };
   }
 
-  async operatorAction(action: string): Promise<void> {
+  async operatorAction(action: string, input?: unknown): Promise<void> {
     if (action === 'connect') return this.connect();
     if (action === 'disconnect') return this.disconnect();
     if (this.phase !== 'started') throw new Error('Connect the client environment first.');
+    if (action === 'play.window') {
+      // Read-only: the open server window/menu slots with names and lore; clicks nothing.
+      const outcome = await this.call(`${this.toolPrefix}_window`, {});
+      if ((outcome as { failed?: boolean } | undefined)?.failed) throw new Error('Window read failed.');
+      return;
+    }
+    if (action === 'play.command') {
+      // Operator diagnosis: only a fixed set of harmless server commands, through the normal chat skill
+      // (receipts and the repeat-command guard still apply). No arguments beyond the allowlist.
+      const text = (input as { command?: unknown } | undefined)?.command;
+      const allowed = ['/stats', '/home home', '/spawn', '/menu', '/linggen', '/back'];
+      if (typeof text !== 'string' || !allowed.includes(text)) throw new Error(`Command not allowed; allowed: ${allowed.join(', ')}`);
+      const outcome = await this.call(`${this.toolPrefix}_do`, { steps: [{ skill: 'chat', text }], queue: 'append' });
+      if ((outcome as { failed?: boolean } | undefined)?.failed) throw new Error('Command failed.');
+      return;
+    }
+    if (action === 'play.inspect') {
+      // Read-only inspection through the sanctioned inventory/state read tool. It is the explicit
+      // inspection the command-repetition guard asks for; it moves nothing and queues nothing.
+      if (input !== undefined && (typeof input !== 'object' || input === null || Array.isArray(input) || Object.keys(input).length))
+        throw new Error('Inspect takes no arguments');
+      const outcome = await this.call(`${this.toolPrefix}_bag`, {});
+      if ((outcome as { failed?: boolean } | undefined)?.failed) throw new Error('Inspection failed.');
+      return;
+    }
+    const steps = operatorPlaySteps(action, input);
+    if (steps) {
+      if (!steps.length) { await this.world.console?.().invoke?.('connection','play.close',[]); return; }
+      await this.call(`${this.toolPrefix}_do`, { steps, queue:'append' }); return;
+    }
+
     const method = ({ 'observer.start': 'observer.start', 'observer.stop': 'observer.stop',
       'player.start': 'player.start', 'player.stop': 'player.stop', 'viewer.retry':'viewer.retry' } as Record<string, string>)[action];
     if (!method) throw new Error('Unknown operator action.');
@@ -525,7 +557,7 @@ export class MinecraftAgentClient {
         ...(turn ? { turnId: turn.id, round: turn.round } : {}), queueExternalEvents: events => queued.push(...events) }), combined);
       const outcome: ToolOutcome = typeof result === 'string' ? { text: result } : { ...result };
       if (command) outcome.meta = { ...outcome.meta, commandRepetition: command };
-      if (!outcome.failed && /_(?:observe|state|bag|tool_help|help|protocol|query|knowledge|read_text)$/.test(name))
+      if (!outcome.failed && /_(?:observe|state|bag|window|tool_help|help|protocol|query|knowledge|read_text)$/.test(name))
         this.commandRepetition.inspected();
       if(!outcome.failed&&outcome.execution?.terminal!==false&&/_(?:observe|scout|state|tool_help)$/.test(name))this.motionReview.inspected();
       const recorded = this.learning.finish(experience,outcome);

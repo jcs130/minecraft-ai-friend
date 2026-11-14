@@ -1,6 +1,6 @@
 /** Data sent to the read-only Minecraft picture for open menus and server skills. */
 
-import { itemCustomName, itemProfileSkinHash } from './item-display.ts';
+import { itemCustomName, itemLoreText, itemProfileSkinHash } from './item-display.ts';
 import { readDamage, readDurability, readEnchants } from './item-facts.ts';
 import { minecraftTextComponent } from './text-component.ts';
 
@@ -12,6 +12,7 @@ export interface ViewerItem {
   count: number;
   metadata: number;
   customName?: string;
+  lore?: string[];
   headTextureHash?: string;
   visualDataUnavailable?: boolean;
   enchanted?: boolean;
@@ -83,6 +84,7 @@ export function viewerItem(value: unknown): ViewerItem | null {
   const item = value as Record<string, unknown>;
   if (typeof item.name !== 'string' || !finite(item.type)) return null;
   const customName = itemCustomName(item);
+  const lore = itemLoreText(item);
   const headTextureHash = item.name.replace(/^minecraft:/, '') === 'player_head' ? itemProfileSkinHash(item) : null;
   const componentMap = item.componentMap instanceof Map ? item.componentMap as Map<string, { data?: unknown }> : null;
   const enchantComponent = (componentMap?.get('enchantments')?.data ??
@@ -107,6 +109,7 @@ export function viewerItem(value: unknown): ViewerItem | null {
     count: bounded(item.count, 1, 127) ?? 1,
     metadata: bounded(item.metadata, 0, 65535) ?? 0,
     ...(customName ? { customName } : {}),
+    ...(lore.length ? { lore: lore.slice(0, 16) } : {}),
     ...(headTextureHash ? { headTextureHash } : {}),
     ...(enchanted ? { enchanted: true } : {}),
     ...(durability ? { durability } : {}),

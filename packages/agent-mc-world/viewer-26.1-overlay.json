@@ -1,0 +1,166 @@
+{
+  "schema": "maf-26.1-viewer-overlay/v1",
+  "note": "Local exact Java 26.1 vanilla viewer pack prepared with mc-visual-console tools/prepare-vanilla-viewer.mjs at lock commit 5e9405067bd1eda4a23abc06f6b70383154c9408. Not inside the locked vendor tgz; do not rewrite that tgz hash.",
+  "lockCommit": "5e9405067bd1eda4a23abc06f6b70383154c9408",
+  "preparedWith": {
+    "repository": "https://github.com/jcs130/mc-visual-console",
+    "commit": "5e9405067bd1eda4a23abc06f6b70383154c9408",
+    "minecraftData": "3.119.0",
+    "toolExtensions": [
+      "viewerVersionTexture: Java 26.1 projectile names spectral_arrow/tipped_arrow -> arrow_spectral/arrow_tipped",
+      "export-minecraft-viewer-assets.py: unwrap official {sprite, force_translucent} texture objects"
+    ]
+  },
+  "pack": {
+    "version": "26.1",
+    "prepareOutput": "/workspace/mcvc-26.1-viewer-root/versions/26.1",
+    "installedAt": [
+      "packages/agent-mc-world/dist/viewer/versions/26.1",
+      "packages/agent-mc-world/dist/runtime/dist/viewer/versions/26.1"
+    ],
+    "fileCount": 10924,
+    "audio": {
+      "requested": true,
+      "status": "prepared",
+      "minecraftVersion": "26.1",
+      "assetIndexSha1": "49107cf4e5f961b086ac4f06f3c2c56142b023dc",
+      "soundsJsonSha1": "d4bdfba22b31906e9aded146b5e71ac4e16740b1",
+      "events": 1902,
+      "files": 4544,
+      "schemaVersion": 3,
+      "numericRegistry": "minecraft-data 3.119.0 26.1; normalize holder-space 1..1902 to decoded 0..1901",
+      "blockSurfaceMap": true,
+      "browserAuditionVerified": false,
+      "levelEventIdsVerifiedFromNamed26Client": true,
+      "jukeboxLevelEventFallback26": "not enabled: modern song-registry IDs are not old item IDs; named sound packets still supported",
+      "nativeBlockCount": 1168,
+      "nativeRegistryEntries": 1902,
+      "registrySha256": "99a41e4384ee103e04f0ed8b0431e42d6d1c535928e5feb2d148e82ba9254fdc",
+      "blockSoundsSha256": "e60552dbb1d8a4cd3c24e9f6f0a8e9d47dc55e482b1c18f5a88a0c8cf4de7013",
+      "nativeMatchesRunningNormalizedTable": 1902,
+      "customBgmInstalled": false
+    },
+    "viewerContent": {
+      "schemaVersion": 1,
+      "manifestSha256": "9ec01900f43f57083ba80135561ce5f6b229d78f9a214dbbdb755cf50fb7b3a1",
+      "particleAtlasSha256": "e841c349d4b69e0381db83982e532eece421f06d94d2b1f29d1afda4b3bca53f",
+      "capabilities": {
+        "serverParticleProtocol": true,
+        "mapPixels": true,
+        "itemFrameMaps": true,
+        "heldMapPreview": true,
+        "mapDecorations": false
+      },
+      "nativeParticlePhysicsParityVerified": false,
+      "javaFramePixelParityVerified": false
+    },
+    "textDisplays": {
+      "exported": true,
+      "manifest": "public/text-display-font.json",
+      "schemaVersion": 1,
+      "manifestSha256": "7064eb7c0c9166a46de0c207cbba885dbfad5d8aeab9e991f48da195e5ce9466",
+      "assetIndexSha1": "49107cf4e5f961b086ac4f06f3c2c56142b023dc",
+      "defaultFontSourceVerified": true,
+      "javaTextPixelParityVerified": false
+    },
+    "icons": 1987,
+    "blockStatesCovered": 29873,
+    "blocks": 1170,
+    "vanillaTextures": 3664,
+    "derivedTextures": 640,
+    "paintings": 47,
+    "armorTextureCount": 17,
+    "fonts": {
+      "exported": true,
+      "tool": "packages/modern-viewer/renderer-src/tools/export-text-display-font.py",
+      "lockCommit": "5e9405067bd1eda4a23abc06f6b70383154c9408",
+      "assetIndexSha1": "49107cf4e5f961b086ac4f06f3c2c56142b023dc",
+      "clientJarSha256": "bc6194c61566b587f196090d730698f2191170f7580adb143e4ff839939d3840",
+      "manifestSha256": "7064eb7c0c9166a46de0c207cbba885dbfad5d8aeab9e991f48da195e5ce9466",
+      "files": 8,
+      "bytes": 1596704
+    },
+    "clockIcon": {
+      "alias": "public/icons/clock.png",
+      "source": "public/icons/clock_00.png",
+      "note": "Official 26.1 export emits clock_00-63 frames only; clock.png is a byte-identical alias of clock_00.png."
+    }
+  },
+  "source": {
+    "manifest": "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json",
+    "metadata": "https://piston-meta.mojang.com/v1/packages/389f92510868468e073b7a12f19e70a7bf8684cd/26.1.json",
+    "metadataSha1": "389f92510868468e073b7a12f19e70a7bf8684cd",
+    "clientUrl": "https://piston-data.mojang.com/v1/objects/191771837687b766537a8c4607cb6fad79c533a1/client.jar",
+    "clientSha1": "191771837687b766537a8c4607cb6fad79c533a1",
+    "clientSha256": "bc6194c61566b587f196090d730698f2191170f7580adb143e4ff839939d3840"
+  },
+  "browserBundleSha256": "d2046ec759bd6206a13aa19959caf3dc1e5975b24dc48e7012b50e4c5a647a48",
+  "mesherSha256": "9dff67500d63371f6fca76ad14389e82435ee158d04519b049dff5e9e6909c53",
+  "buildSource": {
+    "sourceSha256": "707b06490cd32342a6a30273a019a79f5eadb8ed7f4289261d55e3e3f420008a",
+    "sourceFiles": 423,
+    "scope": "renderer_source_host_adapters_and_asset_preparation"
+  },
+  "preparedAt": "2026-11-13T01:51:37.123Z",
+  "audio": {
+    "status": "prepared",
+    "minecraftVersion": "26.1",
+    "assetIndexSha1": "49107cf4e5f961b086ac4f06f3c2c56142b023dc",
+    "soundsJsonSha1": "d4bdfba22b31906e9aded146b5e71ac4e16740b1",
+    "events": 1902,
+    "files": 4544,
+    "schemaVersion": 3,
+    "numericRegistry": "minecraft-data 3.119.0 26.1; normalize holder-space 1..1902 to decoded 0..1901",
+    "blockSurfaceMap": true,
+    "browserAuditionVerified": false,
+    "levelEventIdsVerifiedFromNamed26Client": true,
+    "jukeboxLevelEventFallback26": "not enabled: modern song-registry IDs are not old item IDs; named sound packets still supported",
+    "nativeBlockCount": 1168,
+    "nativeRegistryEntries": 1902,
+    "registrySha256": "99a41e4384ee103e04f0ed8b0431e42d6d1c535928e5feb2d148e82ba9254fdc",
+    "blockSoundsSha256": "e60552dbb1d8a4cd3c24e9f6f0a8e9d47dc55e482b1c18f5a88a0c8cf4de7013",
+    "nativeMatchesRunningNormalizedTable": 1902,
+    "customBgmInstalled": false
+  },
+  "content": {
+    "schemaVersion": 1,
+    "manifestSha256": "9ec01900f43f57083ba80135561ce5f6b229d78f9a214dbbdb755cf50fb7b3a1",
+    "particleAtlasSha256": "e841c349d4b69e0381db83982e532eece421f06d94d2b1f29d1afda4b3bca53f",
+    "capabilities": {
+      "serverParticleProtocol": true,
+      "mapPixels": true,
+      "itemFrameMaps": true,
+      "heldMapPreview": true,
+      "mapDecorations": false
+    },
+    "nativeParticlePhysicsParityVerified": false,
+    "javaFramePixelParityVerified": false
+  },
+  "fonts": {
+    "schemaVersion": 1,
+    "manifestSha256": "7064eb7c0c9166a46de0c207cbba885dbfad5d8aeab9e991f48da195e5ce9466",
+    "assetIndexSha1": "49107cf4e5f961b086ac4f06f3c2c56142b023dc",
+    "defaultFontSourceVerified": true,
+    "javaTextPixelParityVerified": false
+  },
+  "supplementalPipeline": {
+    "command": "tools/prepare-vanilla-viewer.mjs --version 26.1 --output <root> --cache <cache> --python <pillow-python> --extras true --sounds true --javap <jdk25-javap>",
+    "objectsVerified": 4570,
+    "paletteSource": "official named net.minecraft.world.level.material.MapColor class",
+    "mapColors": 62,
+    "supportedParticleTypes": 12,
+    "frameModels": 2,
+    "limitations": [
+      "Map decoration icons not rendered",
+      "No claim of full native particle physics or Java frame pixel parity",
+      "Separate Paper appearance catalogue not generated by vanilla pack",
+      "Optional custom BGM not installed; no fake catalog generated"
+    ],
+    "officialLibrariesVerified": 55,
+    "nativeBlockSoundCount": 1168
+  },
+  "textureAliases": {
+    "entity/llama/spit.png": "entity/llama/llama_spit.png",
+    "entity/trident.png": "entity/trident/trident.png"
+  }
+}

@@ -44,6 +44,24 @@ describe('EventCondenser', () => {
     c.push([ev('[MC 插件] 槽位1 x'), ev('[MC 插件] [照片] y')]);
     expect(c.view().map(e => e.text)).toEqual(['[MC 插件] 槽位1 x']);
   });
+
+  it('condenses captured currency system chat without dropping 千灯纪 mana status or player talk', () => {
+    const c = new EventCondenser();
+    c.push([
+      ev('[MC 系统] MC_STATUS {"adventurerRank":"青铜 III","mana":20.0,"maxMana":20.0,"mainStage":"register","nextCommand":"/mycli guild join","downed":false,"playerUuid":"u"}'),
+      ev('你拥有的游戏币为:$20 - 本服的ip为:1.mcyyy.com'),
+      ev('余额：$20'),
+      ev('[系统] 您有 0 多个点劵。'),
+      ev('[结丹]<0O0O> 昨天挖了几组钻石原矿都没出灵石'),
+    ]);
+    expect(c.view().map(e => e.text)).toEqual([
+      '[服务器状态] 青铜 III；魔力 20/20；主线 register；下一步 /mycli guild join',
+      '[服务器数值] 游戏币 20',
+      '[服务器数值] 点券 0',
+      '[结丹]<0O0O> 昨天挖了几组钻石原矿都没出灵石',
+    ]);
+  });
+
   it('does not treat player messages, unknown chat or task evidence as tutorial noise', () => {
     const c = new EventCondenser();
     const messages = [

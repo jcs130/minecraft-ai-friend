@@ -31,7 +31,7 @@ export function methodHarness(version = '1.20.6', createWorld = () => new Minecr
   };
   const blockWorld = { getBlock: blockAt };
   const bot = Object.assign(new EventEmitter(), {
-    _client: Object.assign(new EventEmitter(), { write() {} }), registry, version, world: blockWorld,
+    _client: Object.assign(new EventEmitter(), { state: 'play', write() {} }), registry, version, world: blockWorld,
     game: { dimension: 'overworld', gameMode: 'survival' }, entities: {}, players: {}, health: 20, food: 20,
     time: { timeOfDay: 1000 }, rainState: 0, oxygenLevel: 20,
     entity: { id: 1, position: new Vec3(0.5, 64, 0.5), velocity: new Vec3(0, 0, 0), yaw: 0, pitch: 0,
@@ -60,8 +60,8 @@ export function methodHarness(version = '1.20.6', createWorld = () => new Minecr
     close: () => { internals.methods.stop('测试结束'); exec.shutdown(); clearInterval(timer); detach(); } };
 }
 
-export async function methodEnded(r: ReturnType<typeof methodHarness>, id: number) {
-  const end = Date.now() + 5000;
+export async function methodEnded(r: ReturnType<typeof methodHarness>, id: number, timeoutMs = 5000) {
+  const end = Date.now() + timeoutMs;
   while (r.runner.read(id)[0]?.status === 'running') {
     if (Date.now() > end) throw new Error('method did not finish');
     await new Promise(resolve => setTimeout(resolve, 10));

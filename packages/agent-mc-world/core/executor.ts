@@ -64,6 +64,7 @@ import { DirectionalSweepBook } from './directional-sweeps.ts';
 import { farmingClickCell, isHoeUseItem } from './farming-target.ts';
 import { publishViewerCastCommand } from './command-events.ts';
 import { skillGesture } from './skills-social.ts';
+import { skillMenuClick, skillMenuClose, skillSwapHands } from './skills-menu.ts';
 import { skillLook } from './skills-look.ts';
 import { skillControl, waterControlActive, surfacePauseReady, surfacePause } from './skills-control.ts';
 import {followRoute} from './follow-route.ts';
@@ -1071,6 +1072,9 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       }
     }
     case 'gesture': return skillGesture(bot, call, ctx);
+    case 'menu_click': return skillMenuClick(bot, call, ctx);
+    case 'menu_close': return skillMenuClose(bot);
+    case 'swap_hands': return skillSwapHands(bot, ctx);
     case 'chat': {
       const next = ctx.batch?.steps[(ctx.batch.index ?? 0) + 1];
       const needsWindow = call.text.startsWith('/') && consumesOpenWindow(next);

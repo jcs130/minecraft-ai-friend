@@ -4,12 +4,16 @@ import { advertiseAgentIdentity } from './server-identity.ts';
 import { declareDecodedChannels } from './decoded-channels.ts';
 import { installConfigurationPhaseGuard, configurationTransportReady } from './configuration-round.ts';
 import { installNativeBodyReadiness } from './body-readiness.ts';
+import { installRespawnWatchdog } from './respawn-watchdog.ts';
+import { installPacketTrace } from './packet-trace.ts';
+import { installServerScreens } from './server-screens.ts';
 import { installWorldIdentity } from './world-scope.ts';
 /**
  * 管理 Mineflayer 连接、重连和 prismarine-viewer。
  * 重连会替换 bot 实例，World 与执行器须通过 bridge.bot 取得当前实例。
  */
 import mineflayer from 'mineflayer';
+import { isIP } from 'node:net';
 import pathfinderPkg, { pathfinder, Movements } from 'mineflayer-pathfinder';
 
 // goals 不是 cjs-module-lexer 能静态识别的命名导出,只能从默认导出上取
@@ -51,14 +55,35 @@ import { trackMaps } from './map-view.ts';
 import { trackDamageSources } from './damage-source.ts';
 import { MinecraftAuthentication, protocolVersion } from '../src/client/authentication.ts';
 import { installServerLogin, serverLoginFailureText } from './server-login.mjs';
+import { resolveMinecraftConnectEndpoint } from './connect-endpoint.ts';
+import net from 'node:net';
+import { installOrphanWindowClose } from './orphan-windows.ts';
+import { installSpawnMovementHold, type SpawnHold } from './spawn-hold.ts';
+import { installWindowTitleUnwrap } from './window-protocol.ts';
+import { installServerDisplay } from './server-display.ts';
 import { installMountedLook } from '../src/mounted-look.ts';
 import { errorFailure, kickFailure } from './link.ts';
+
+
+function makePublicDnsConnect(host: string, port: number, handshakeHost?: string) {
+  return (client: { setSocket(socket: import('node:net').Socket): void; emit(event: string, ...args: unknown[]): void }) => {
+    void resolveMinecraftConnectEndpoint({ host, port, handshakeHost, publicDnsFallback: true }).then((endpoint) => {
+      client.setSocket(net.connect(endpoint.port, endpoint.host));
+    }).catch((err: unknown) => {
+      client.emit('error', err);
+    });
+  };
+}
 
 export interface BridgeOptions {
   host: string;
   port: number;
   username: string;
   version: string;
+  /** Handshake/SNI host when `host` is a resolved IP. */
+  fakeHost?: string;
+  /** Retry public DNS when the system resolver returns a fake 198.18.0.0/15 address. Default true. */
+  publicDnsFallback?: boolean;
   keepAliveTimeoutMs?: number;
   viewDistance?: number;
   deathRespawnDelayMs?: number;
@@ -268,6 +293,7 @@ export class Bridge {
   protected spawnedBot: mineflayer.Bot | null = null;
   protected protocolSpawned = false;
   protected serverLogin: ReturnType<typeof installServerLogin> | null = null;
+  spawnHold: SpawnHold | null = null;
   protected started = false;
   protected stopped = false;
   protected reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -564,7 +590,11 @@ export class Bridge {
     }
     let bot: mineflayer.Bot;
     try {
+      const handshakeHost = this.opts.fakeHost || (isIP(host) === 0 && host !== 'localhost' && host !== '127.0.0.1' && host !== '::1' ? host : undefined);
+      const publicDns = this.opts.publicDnsFallback !== false && isIP(host) === 0 && host !== 'localhost' && host !== '127.0.0.1' && host !== '::1' && !host.endsWith('.localhost');
       bot = mineflayer.createBot({ host, port, username, version: protocolVersion(version) || undefined,
+        ...(handshakeHost ? { fakeHost: handshakeHost } : {}),
+        ...(publicDns ? { connect: makePublicDnsConnect(host, port, handshakeHost) } : {}),
         ...(this.opts.authentication?.botOptions() ?? { auth: 'offline' as const }),
         checkTimeoutInterval: this.opts.keepAliveTimeoutMs ?? 60_000,
         ...(this.opts.viewDistance !== undefined ? { viewDistance: this.opts.viewDistance } : {}),
@@ -576,6 +606,8 @@ export class Bridge {
       return;
     }
     this._bot = bot;
+    this.bagFor(gen).register('packet-trace', installPacketTrace(bot._client as never));
+    this.bagFor(gen).register('server-screens', installServerScreens(bot as never));
     let activate = () => {};
     this.bagFor(gen).register('native-body-readiness', installNativeBodyReadiness(bot, (event, state) => {
       this.opts.diag?.write({ lane: 'world', event: `native-body-${event}`,
@@ -588,6 +620,13 @@ export class Bridge {
       () => !this.stopped && this._bot === bot && this.generation === gen && !this.opts.shuttingDown?.(),
       () => this.serverLogin?.ready() ?? false);
     this.bagFor(gen).register('death-recovery', this.deathRecovery.dispose);
+    this.bagFor(gen).register('respawn-watchdog', installRespawnWatchdog(bot as never, { onDiagnosis: (diag, final) => {
+      this.opts.diag?.write({ lane: 'world', event: final ? 'respawn-stuck' : 'respawn-check',
+        msg: `重生后身体${final ? '仍未恢复' : '未就绪'}: ${diag.phase}; 修复 ${diag.repairs.join(',') || '无'}`, data: { connectionGeneration: gen, ...diag } });
+      this.opts.log.warn(`respawn ${final ? 'stuck' : 'check'}: ${JSON.stringify(diag)}`);
+      if (final && this._bot === bot && this.generation === gen && !this.stopped) this.opts.onAlarm?.(
+        `重生后身体仍未恢复(物理未更新;存活=${diag.isAlive},生命=${diag.health},区块已载入=${diag.chunkLoaded},服务端界面=${diag.serverWindow ?? '无'})。已按原版客户端做过一次重生/加载确认；不要反复发命令或断线，等待操作者处理。`);
+    } }));
     this.bagFor(gen).register('configuration-phase-guard', installConfigurationPhaseGuard(bot));
     bot._client.on('session', session => {
       if (this._bot === bot && this.generation === gen && !this.stopped) this.opts.authentication?.acceptProtocolSession(session);
@@ -622,6 +661,15 @@ export class Bridge {
     this.protocolSpawned = false;
     this.opts.onBotCreated?.(bot);
     this.bagFor(gen).register('breathing-readings', installBreathingReadings(bot));
+    this.bagFor(gen).register('window-title-unwrap', installWindowTitleUnwrap(bot));
+    this.bagFor(gen).register('server-display', installServerDisplay(bot).stop);
+    this.bagFor(gen).register('orphan-windows', installOrphanWindowClose(bot));
+    const spawnHold = installSpawnMovementHold(bot);
+    this.spawnHold = spawnHold;
+    this.bagFor(gen).register('spawn-hold', () => {
+      spawnHold.dispose();
+      if (this.spawnHold === spawnHold) this.spawnHold = null;
+    });
     const login = installServerLogin(bot, { server: `${host}:${port}`, username,
       configFile: this.opts.loginConfigFile?.(),
       report: status => {
