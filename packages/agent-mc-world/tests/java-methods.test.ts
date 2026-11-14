@@ -38,6 +38,12 @@ function rig(){
 // Native and Mineflayer methods both start a real SES worker. Preserve the
 // upstream bounded completion window while retaining short-reply coverage.
 async function finished(r:ReturnType<typeof rig>,id:number){await vi.waitFor(()=>expect(r.m.runner.read(id)[0].status).not.toBe('running'),{timeout:5000});await vi.waitFor(()=>expect(r.events.some(e=>e.execution.evidence.localId===id)).toBe(true),{timeout:5000});return r.m.runner.read(id)[0];}
+it('rejects unsupported queue overrides without dispatching a native action',async()=>{
+ const r=rig();const reply=await r.call({code:'return await mc.do([{skill:"chat",text:"must not send"}],{queue:"now"});'});
+ const result=await finished(r,JSON.parse(reply.text).id);
+ expect(result).toMatchObject({status:'failed',error:expect.stringContaining('does not support queue overrides')});
+ expect(r.calls.some(c=>c.method==='do')).toBe(false);
+});
 it('validates background candidates without releasing a native live body reservation',async()=>{
   const r=rig();r.setHang(true);
   const live=await r.call({code:'await bot.setControlState("forward",true);'});

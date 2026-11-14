@@ -8,6 +8,17 @@ import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger } from '../
 import { inspectToolCall, toolRequiresBodyControl, CALL_CAPABILITY_SCHEMA, type ToolDef, type World } from '../src/contracts/index.ts';
 import {PROXIMITY_VOICE_TOOL} from '../core/proximity-voice-lane.ts';
 import { createMinecraftMcpServer } from '../src/mcp/server.ts';
+import { MINECRAFT_TOOL_DECLS } from '../src/extension.ts';
+
+it('classifies built-in boat routine discovery as a read, never routine execution or mixed arguments',()=>{
+ const decl=MINECRAFT_TOOL_DECLS.find(t=>t.name==='mc_script')!;
+ const actual={...decl,handler:vi.fn(async()=> 'never called')};
+ expect(inspectToolCall(actual,actual.name,{routine:{op:'read',id:'boat_trip'}})).toMatchObject({valid:true,readOnly:true,requiresBody:false});
+ expect(inspectToolCall(actual,actual.name,{routine:{op:'list'}})).toMatchObject({valid:true,readOnly:true});
+ expect(decl.readOnlyCall!({routine:{op:'run',id:'boat_trip'}})).toBe(false);
+ expect(decl.readOnlyCall!({routine:{op:'read',id:'boat_trip'},code:'move()'})).toBe(false);
+ expect(actual.handler).not.toHaveBeenCalled();
+});
 
 const tool = (): ToolDef => ({ name: 'mc_method', description: 'Read, edit or execute a method', tags: ['read','write','act'],
   parameters: { type: 'object', properties: { op: { enum: ['read','save','run'] } }, required: ['op'], additionalProperties: false },

@@ -20,6 +20,8 @@ export interface JourneySample {
   intent:JourneyIntent|null;safeToConsider:boolean;cues:readonly JourneyCue[];
   /** Actual body medium, not a biome name or a complete navigable sea route. */
   surfaceWater?:boolean;
+  /** Separates a brief submerged head from actually leaving the water. */
+  bodyWater?:boolean;
 }
 export interface JourneyOpportunity {
   schema:'agent-mc-journey-observation/v1';reason:'cue'|'progress'|'water';
@@ -44,7 +46,7 @@ export class JourneyObserver {
     const at=intent.destination,dx=at[0]!-position[0],dz=at.at(-1)!-position[2],remaining=Math.hypot(dx,dz);
     const key=JSON.stringify([sample.scope,sample.generation,dimension,intent.taskId,intent.stepIndex,at]);
     if(this.route?.key!==key){this.route={key,long:remaining>=(this.options.minTripBlocks??96),startedAt:atMs,noticeAt:atMs,noticePosition:[...position],waterSince:null,waterNoticeAt:null};this.latest=null;}
-    if(sample.surfaceWater){this.route.waterSince??=atMs;}
+    if(sample.bodyWater??sample.surfaceWater){this.route.waterSince??=atMs;}
     else {this.route.waterSince=null;this.route.waterNoticeAt=null;}
     if(!sample.safeToConsider||atMs-this.lastAt<(this.options.minIntervalMs??20_000))return null;
     for(const [key,time] of this.seen)if(atMs-time>600_000)this.seen.delete(key);
@@ -53,7 +55,7 @@ export class JourneyObserver {
     const noveltyKey=(c:JourneyCue)=>JSON.stringify([sample.scope,dimension,c.kind,
       // Different villagers/sign boards in the same small area form one encounter, not a wake-up each.
       Math.floor(c.position[0]/32),Math.floor(c.position[2]/32),c.kind==='npc'?c.label:c.key]);
-    const water=this.route.long&&remaining>=96&&this.route.waterSince!==null&&atMs-this.route.waterSince>=10_000
+    const water=sample.surfaceWater===true&&this.route.long&&remaining>=96&&this.route.waterSince!==null&&atMs-this.route.waterSince>=10_000
       &&(this.route.waterNoticeAt===null||atMs-this.route.waterNoticeAt>=120_000);
     const fresh=!water&&this.route.long?cues.filter(c=>!this.seen.has(noveltyKey(c))).slice(0,3):[];
     const elapsedMs=atMs-this.route.startedAt,netProgressBlocks=Math.hypot(position[0]-this.route.noticePosition[0],position[2]-this.route.noticePosition[2]);
@@ -78,7 +80,7 @@ export class JourneyObserver {
 }
 export function journeyOpportunityText(value:JourneyOpportunity,options:{guidance?:boolean}={}):string {
   if(value.reason==='water')return `[水路交通复核 ${value.id}｜采样 ${new Date(value.atMs).toISOString()}] `
-    +`原任务#${value.journey.taskId}仍在前往 [${value.journey.destination.join(',')}]，约余${value.remainingBlocks}格；身体连续处于水面，当前未乘坐载具。`
+    +`原任务#${value.journey.taskId}仍在前往 [${value.journey.destination.join(',')}]，约余${value.remainingBlocks}格；身体持续经过水域，此刻在水面，未乘坐载具。`
     +'这是局部接触水的实测，不证明整段海域可通航。goto 正在游泳，不会自动造船或驾驶。'
     +(options.guidance===false?'':'现在可在原执行任务内重新比较交通方式：mc_options {"intent":"water"} 读取现有船、材料和工具；mc_script routine:{op:"read",id:"boat_trip"} 读取放船→上船→分段驾驶流程。'
       +'无船时先核对配方、材料或存放处；也可明确选择继续游泳/绕陆。选择乘船是替换行进方式，保留原目的地，不能把放船排到整条长途 goto 结束之后。身体转交用明确的 queue:"now"，先核对当前状态与被替换的队列；普通短暂进食可用 afterCheckpoint。');

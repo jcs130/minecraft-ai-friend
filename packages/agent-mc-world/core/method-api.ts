@@ -74,7 +74,10 @@ const SDK_API = Object.freeze({
     + 'snapshot can be null; position/dimension/health/food/inventory/equipment are under snapshot. '
     + 'lastSwim is the last swim action report for this connection (historical, with its own taskId/time), not a live assertion that the body remains at that position. '
     + 'No block scan is performed. Missing readings are unknown. Preserve sampledAt and connectionGeneration when comparing observations.',
-  'mc.do': 'await mc.do(steps): {accepted,taskId?,kind,done,receipt,steps?,state}. '
+  'mc.do': 'await mc.do(steps, options?): {accepted,taskId?,kind,done,receipt,steps?,state}. '
+    + 'On Mineflayer, options is {queue:"append"|"now"|"afterCheckpoint"}. Default append waits behind existing work; a long goto can outlast the program deadline. '
+    + 'Use an explicit queue:"now" only for an intended handoff from current work (for example walking to boat travel), reconcile discarded queued work and retain the destination yourself. '
+    + 'afterCheckpoint requests a safe resumable detour; it is not an immediate cancellation. Native Java does not support these queue overrides and rejects them. '
     + 'Waits for this group\'s executor terminal, unlike the mc_do tool which returns on admission. '
     + 'Rejected groups have accepted:false, done:false, kind:"rejected" and no executed steps. '
     + 'Executed steps are {step,outcome,why,detail?}; step is one-based; outcome is ok/noop/fail/skip/partial/cut; why is string|null. '

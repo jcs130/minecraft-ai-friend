@@ -2282,7 +2282,8 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_script',
     tags: ['act'],
     learningCall: methodLearningCall,
-    readOnlyCall: args => !!args.find || !!args.api || ['list','read'].includes(String((args.scene as {op?:unknown}|undefined)?.op)) || ['list', 'read', 'evidence'].includes(String((args.library as { op?: unknown } | undefined)?.op)),
+    readOnlyCall: args => !!args.find || !!args.api || ['list','read'].includes(String((args.scene as {op?:unknown}|undefined)?.op)) || ['list', 'read', 'evidence'].includes(String((args.library as { op?: unknown } | undefined)?.op))
+      || Object.keys(args).length===1 && ['list','read'].includes(String((args.routine as {op?:unknown}|undefined)?.op)),
     description: 'Run an agent-authored JavaScript async function body with params and a restricted mc SDK. '
       + 'Write new feedback-controlled actions when persistent inputs, calculations or conditional sequencing are useful; this is not limited to existing named scripts. '
       + '{api:"authoring"} gives the short write/validate/save/execute/review/reuse path. {library:{op:"list",query:"purpose"}} searches only this scoped game-method library; a host procedure_find may use a different library. '
@@ -2292,7 +2293,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'Read position, dimension, health, food, inventory and equipment under snapshot, which can be null. '
       + 'snapshot.entities is a bounded array of {entityId?,name,kind,distance,direction,dy,visible,observation?}; observation distinguishes visible from nearby tracked occluded/unknown entities, never inferred sound or attack permission. snapshot.entitiesOmitted reports truncation. '
       + 'snapshot.blocksScanned is false here; empty nearbyBlocks/terrain do not establish water depth or traversability. Missing fields are unknown observations. '
-      + 'await mc.do(steps) submits one ordered group to the normal executor and waits for its actual terminal result: accepted, taskId, kind, done, receipt, steps and fresh state. '
+      + 'await mc.do(steps,options?) submits one ordered group to the normal executor and waits for its actual terminal result: accepted, taskId, kind, done, receipt, steps and fresh state. Default append waits behind existing work; explicit {queue:"now"} hands over current work, {queue:"afterCheckpoint"} requests a resumable detour. '
       + 'A sent server command still needs observed effects; done is the executor result, not proof of an external quest. '
       + 'await mc.flightPlan(args) uses the same read-only geometry/budget contract as mc_flight_plan. '
       + 'Use JavaScript conditions, calculations and bounded loops to adapt to feedback. Prepare a timed route before casting; combine already-known cast/movement/blink steps with needs in one mc.do to avoid model delays. '
@@ -4853,7 +4854,16 @@ export class MinecraftWorld implements World {
             const library = this.methodLibrary();
             let result: unknown;
             if (input.op === 'list') result = library.list(input);
-            else if (input.op === 'read') result = library.read(input.id as string, input.revision as string | undefined);
+            else if (input.op === 'read') {
+              try { result = library.read(input.id as string, input.revision as string | undefined); }
+              catch (error) {
+                const routine=typeof input.id==='string'?listWorkRoutines().find(r=>r.id===input.id||r.id.replaceAll('_','-')===input.id):undefined;
+                if(!routine)throw error;
+                throw new Error(JSON.stringify({error:'METHOD_LIBRARY_READ_FAILED',detail:String(error),executed:false,
+                  alternative:{kind:'built-in-routine',id:routine.id,read:{routine:{op:'read',id:routine.id}}},
+                  recovery:'library 是用户方法版本库；routine 是内置工作脚本。这个同名内置脚本使用上述只读入口，无需猜版本哈希；本次没有运行任何脚本。'}));
+              }
+            }
             else if (input.op === 'save') {
               if (!Number.isInteger(input.validationRunId) || Number(input.validationRunId) < 1) throw new Error('validationRunId 须为已完成的语法校验编号');
               result = library.save(input, this.methods.read(Number(input.validationRunId))[0], ctx.role);
@@ -5074,9 +5084,11 @@ export class MinecraftWorld implements World {
     }
     if (this.nativeMethod?.session.ownsBody) throw new Error('当前原生程序已持有身体；mc.do 会等待自身，改用 bot 原生调用或结束后另起方法');
     let decision: TaskAdmissionDecision | undefined;
-    // Explicit append keeps a method's single outstanding group behind existing work.
+    if(args.queue!==undefined&&!['append','now','afterCheckpoint'].includes(String(args.queue)))throw new Error('mc.do queue must be append, now or afterCheckpoint');
+    // Preserve append by default; explicit replacement/detours use the same
+    // admission, ownership and cancellation rules as the public body tool.
     // Plain chat also follows the executor so its receipt has a real task identity.
-    const outcome = this.enqueueTool('mc_do', { steps: args.steps, queue: 'append' },
+    const outcome = this.enqueueTool('mc_do', { steps: args.steps, queue: args.queue??'append' },
       (raw) => parseSteps(raw, this.markLookup()), (value) => { decision = value; });
     const receipt = typeof outcome === 'string' ? outcome : outcome.text;
     if (!decision?.accepted) return { accepted: false, done: false, kind: 'rejected', receipt,
@@ -8652,6 +8664,7 @@ export class MinecraftWorld implements World {
         &&!this.executor?.eating&&!this.executor?.escaping&&!bot.currentWindow
         &&((bot.entity.onGround===true&&!bodyInWater(bot))||surfaceWater),
       surfaceWater,
+      bodyWater: movement?.bodyWet===true&&!movement.vehicleAttached,
       cues:[...cues,...cached]});
     if(report)this.emit('minecraft.event',`[Minecraft] ${journeyOpportunityText(report)}`,false,{trigger:'debounce',meta:{journey:report}});
   }

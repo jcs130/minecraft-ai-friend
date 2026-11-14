@@ -175,6 +175,7 @@ export class JavaMethods {
     if(method==='state')return this.snapshot(signal);
     if(method==='flightPlan')throw new Error('flightPlan is unavailable on the native Java backend');
     if(method==='do'){
+      if(args.queue!==undefined)throw new Error('Native Java mc.do does not support queue overrides; no action dispatched');
       if(this.body)throw new Error('bot body session already reserved; mc.do would wait on itself');
       let command:ReturnType<typeof translateJavaLegacy>;
       try{command=translateJavaLegacy(args,await this.fresh(signal));}catch(e){return{accepted:false,done:false,kind:'rejected',receipt:String(e),steps:[],state:await this.snapshot(signal)};}
