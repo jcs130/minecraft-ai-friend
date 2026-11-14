@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.75
+
+- Release combat retreat ownership after observed surface breathing and sustained threat clearance; retain submerged/unknown breathing and recent-hit protection. Report surface escape separately from landing.
+
 ## 0.5.7-rc.160-preview.74
 
 - Keep the sampled idle route through synchronous selection instead of randomly resampling and rejecting it. Existing body, threat, terrain and cancellation checks remain active.
