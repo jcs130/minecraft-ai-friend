@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "release": "maid-scene-travel-20261114-r1",
+  "release": "maid-scene-travel-20261114-r2",
   "state": "isolated-candidate-not-deployed",
-  "preparedAt": "2026-11-14T17:53:57.270745+08:00",
+  "preparedAt": "2026-11-14T18:10:27.966481+08:00",
   "sourceBase": "8ed2eb9a00c9f1f3e75d3e4bd821ae4abecadcee",
   "includedPullRequests": [
     225
@@ -11,7 +11,7 @@
     {
       "name": "AgentFriend",
       "version": "0.4.47.77-verified-travel",
-      "sha256": "11dc62f1955784157b894eb6affb73557f962c80a6f70a8ed7328b4fd03647ed",
+      "sha256": "2eed3ddc8423290300a55e09b45ba9d8a8b20143529ba58c05bb9d6ea50d3974",
       "baselineVersion": "0.4.47.76-trial-return",
       "baselineSha256": "fae5702fd21ab7aaa3ff0719cbf4b320173fa6a78dae16bf37ead33c1bcb3e8d",
       "unchangedEntries": 663
@@ -45,8 +45,8 @@
         "passed": true
       },
       "marker-proof.json": {
-        "sha256": "20ab2c266539943b2d7224bab861cdf3fd9123cba49dc41b5dd277cb26b7e33c",
-        "checks": 16,
+        "sha256": "2d1b341dd54d35fd61f7ccd6d8b34c6001a1893120e20c29ad0fef8ba184cdf4",
+        "checks": 17,
         "passed": true
       },
       "qa6.combat.proof.json": {
@@ -63,11 +63,13 @@
     "originalEntitiesMutated": false,
     "naturalMainModelAdoptionVerified": false,
     "humanVoiceHearingVerified": false,
-    "bedrockPhysicalScreenVerified": false
+    "bedrockPhysicalScreenVerified": false,
+    "productionBeforeImagesReadOnlyMatched": true,
+    "livingEntityOccupancyGuardVerified": true
   },
   "rollback": {
     "drive": "F",
-    "candidateAndCodeBeforeImages": "F:\\MC-backups\\maid-scene-travel-20261114-r1",
+    "candidateAndCodeBeforeImages": "F:\\MC-backups\\maid-scene-travel-20261114-r2",
     "coldWorldBackupTaken": false,
     "restoreMarkersBeforeCodeDowngrade": true,
     "changedAfterImagesStopRollback": true,

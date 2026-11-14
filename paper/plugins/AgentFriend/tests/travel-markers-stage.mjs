@@ -47,6 +47,10 @@ try{
  await mkdir(journal);const writeFailure=await run('apply',hash);
  check('journal failure prevents any block mutation',writeFailure.checked===0&&writeFailure.blocked.length===1&&(await qa('markerinspect '+plan.markers[0].id)).allBefore);
  await rmdir(journal);if(oldJournal)await rename(journal+'.fixture-empty',journal);
+ await rc('minecraft:gamemode creative TravelPointQA');await qa('markeroccupy '+plan.markers[0].id);
+ const occupied=await run('apply',hash);
+ check('living entity occupancy prevents suffocation and any marker mutation',occupied.checked===0&&occupied.blocked.some(v=>v.reason==='occupied_by_living_entity')&&(await qa('markerinspect '+plan.markers[0].id)).allBefore);
+ await qa('markerarrive '+plan.markers[0].id);await rc('minecraft:gamemode survival TravelPointQA');
  report.applied=await run('apply',hash);check('all accepted markers installed',report.applied.blocked.length===0&&report.applied.checked===plan.markers.length);
  const repeated=await run('apply',hash);check('repeat installation is idempotent',repeated.blocked.length===0&&repeated.checked===plan.markers.length);
  const selected=plan.markers.find(m=>m.id==='yellowstone')||plan.markers[0];let observed=await qa('markerarrive '+selected.id);await delay(1000);

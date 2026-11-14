@@ -46,6 +46,7 @@ public final class TravelPointQa extends JavaPlugin implements Listener {
             JsonObject geometry=marker.getAsJsonObject("geometry");JsonArray reader=geometry.getAsJsonArray("reader");
             if(args[0].equals("markerarrive"))p.teleport(new Location(world,reader.get(0).getAsDouble(),reader.get(1).getAsDouble(),reader.get(2).getAsDouble()));
             JsonArray b=geometry.getAsJsonArray("beacon"),s=geometry.getAsJsonArray("sign");var beacon=world.getBlockAt(b.get(0).getAsInt(),b.get(1).getAsInt(),b.get(2).getAsInt());var sign=world.getBlockAt(s.get(0).getAsInt(),s.get(1).getAsInt(),s.get(2).getAsInt());
+            if(args[0].equals("markeroccupy"))p.teleport(beacon.getLocation().add(.5,0,.5));
             out.addProperty("beacon",beacon.getType().toString());out.addProperty("sign",sign.getType().toString());out.add("signPosition",s);
             if(sign.getState() instanceof org.bukkit.block.Sign state){out.addProperty("waxed",state.isWaxed());JsonArray lines=new JsonArray();for(String line:state.getLines())lines.add(line);out.add("signLines",lines);}
             boolean allAfter=true,allBefore=true;for(JsonElement v:geometry.getAsJsonArray("changes")){var row=v.getAsJsonObject();var at=row.getAsJsonArray("position");String current=world.getBlockAt(at.get(0).getAsInt(),at.get(1).getAsInt(),at.get(2).getAsInt()).getBlockData().getAsString();allAfter&=current.equals(row.get("after").getAsString());allBefore&=current.equals(row.get("before").getAsString());}

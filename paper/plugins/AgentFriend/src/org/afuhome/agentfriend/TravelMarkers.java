@@ -127,6 +127,12 @@ final class TravelMarkers implements Listener {
                         boolean interruptedRestore=previous!=null&&previous.get("state").getAsString().equals("restoring");
                         if(!(restoring?after||interruptedRestore&&before:before||previous!=null&&after))throw new IllegalStateException("before_image_changed");
                         if(before&&b.getState() instanceof TileState)throw new IllegalStateException("existing_block_entity");
+                        String desired=change.get(restoring?"before":"after").getAsString();
+                        if(!action.equals("audit")&&!current.equals(desired)&&Bukkit.createBlockData(desired).getMaterial().isSolid()){
+                            var volume=new org.bukkit.util.BoundingBox(b.getX(),b.getY(),b.getZ(),b.getX()+1,b.getY()+1,b.getZ()+1);
+                            if(!w.getNearbyEntities(volume,e->e instanceof org.bukkit.entity.LivingEntity&&e.isValid()&&e.getBoundingBox().overlaps(volume)).isEmpty())
+                                throw new IllegalStateException("occupied_by_living_entity");
+                        }
                     }
                     if(!restoring){
                         JsonArray anchor=m.getAsJsonArray("anchor");Location at=new Location(w,anchor.get(0).getAsDouble(),anchor.get(1).getAsDouble(),anchor.get(2).getAsDouble());
