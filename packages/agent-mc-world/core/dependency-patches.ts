@@ -1,10 +1,12 @@
 /**
- * mineflayer-pathfinder 2.4.5、prismarine-windows 2.10.0 与 mineflayer 4.37.1 的源码补丁:包一层 CommonJS 的
+ * mineflayer-pathfinder 2.4.5、prismarine-windows 2.10.0 与 mineflayer 4.37.1 / 4.39.0 的源码补丁:包一层 CommonJS 的
  * `Module.prototype._compile`,编译前改写源码。要改的状态或监听器在闭包里,运行时替换函数够不着。
  * 补丁随 World 的源码走:World 作为扩展装进别的实例时,宿主的 pnpm 不会替它打包补丁。
  *
  * 引擎子进程以 `--import` 加载本模块;测试先 import 本模块再加载依赖。
  * 每处改写的原文必须在文件里恰好出现一次,依赖升级后对不上时加载即抛错。
+ * 同一个 `/node_modules/<包>/<file>` 只能有一条 PATCHES 记录（patchFor 取第一条）；
+ * 对该文件的全部改写（含载具/set_passengers 与 26.1 时序）必须写在同一条 edits 里。
  *
  * 三个包都是 MIT 许可;mineflayer-pathfinder 的许可全文见同目录 LICENSE-mineflayer-pathfinder.txt。
  */
@@ -23,86 +25,6 @@ interface SourcePatch {
 }
 
 const PATCHES: readonly SourcePatch[] = [
-  {
-    pkg: 'mineflayer',
-    file: 'lib/plugins/entities.js',
-    edits: [{
-      find: `    const passengerEntities = passengers.map((passengerId) => fetchEntity(passengerId))
-    const vehicle = entityId === -1 ? null : bot.entities[entityId]
-
-    for (const passengerEntity of passengerEntities) {
-      const originalVehicle = passengerEntity.vehicle
-      if (originalVehicle) {
-        const index = originalVehicle.passengers.indexOf(passengerEntity)
-        originalVehicle.passengers.splice(index, 1)
-      }
-      passengerEntity.vehicle = vehicle
-      if (vehicle) {
-        vehicle.passengers.push(passengerEntity)
-      }
-    }
-
-    if (passengers.includes(bot.entity.id)) {
-      const originalVehicle = bot.vehicle
-      if (entityId === -1) {
-        bot.vehicle = null
-        bot.emit('dismount', originalVehicle)
-      } else {
-        bot.vehicle = bot.entities[entityId]
-        bot.emit('mount')
-      }
-    }`,
-      replace: `    const passengerEntities = [...new Set(passengers)].map((id) => fetchEntity(id))
-    const vehicle = entityId === -1 ? null : bot.entities[entityId]
-    const originalSelfVehicle = bot.vehicle
-    // set_passengers is a full snapshot, including the empty list on dismount.
-    if (vehicle) {
-      for (const old of vehicle.passengers || []) {
-        if (!passengerEntities.includes(old) && old.vehicle === vehicle) old.vehicle = null
-      }
-      vehicle.passengers = []
-    }
-    for (const passengerEntity of passengerEntities) {
-      const originalVehicle = passengerEntity.vehicle
-      if (originalVehicle && originalVehicle !== vehicle) {
-        const index = originalVehicle.passengers.indexOf(passengerEntity)
-        if (index >= 0) originalVehicle.passengers.splice(index, 1)
-      }
-      passengerEntity.vehicle = vehicle
-      if (vehicle) vehicle.passengers.push(passengerEntity)
-    }
-    if (passengers.includes(bot.entity.id)) {
-      bot.vehicle = vehicle
-    } else if (vehicle && originalSelfVehicle === vehicle) {
-      bot.vehicle = null
-    }
-    if (bot.vehicle !== originalSelfVehicle) {
-      if (bot.vehicle) bot.emit('mount')
-      else if (originalSelfVehicle) bot.emit('dismount', originalSelfVehicle)
-    }`,
-    }],
-  },
-  {
-    pkg: 'mineflayer',
-    file: 'lib/plugins/physics.js',
-    edits: [
-      {
-        find: `        shouldUsePhysics = true
-        bot.jumpTicks = 0`,
-        replace: `        // A delayed respawn position can arrive after set_passengers.
-        // Confirm the packet, but do not simulate walking for a mounted rider.
-        shouldUsePhysics = !bot.vehicle
-        bot.jumpTicks = 0`,
-      },
-      {
-        find: `    shouldUsePhysics = true
-    bot.jumpTicks = 0`,
-        replace: `    // Position acknowledgement does not revoke the server's vehicle attachment.
-    shouldUsePhysics = !bot.vehicle
-    bot.jumpTicks = 0`,
-      },
-    ],
-  },
   {
     pkg: 'mineflayer-pathfinder',
     file: 'lib/astar.js',
@@ -328,6 +250,21 @@ const PATCHES: readonly SourcePatch[] = [
     pkg: 'mineflayer',
     file: 'lib/plugins/physics.js',
     edits: [
+      {
+        find: `        shouldUsePhysics = true
+        bot.jumpTicks = 0`,
+        replace: `        // A delayed respawn position can arrive after set_passengers.
+        // Confirm the packet, but do not simulate walking for a mounted rider.
+        shouldUsePhysics = !bot.vehicle
+        bot.jumpTicks = 0`,
+      },
+      {
+        find: `    shouldUsePhysics = true
+    bot.jumpTicks = 0`,
+        replace: `    // Position acknowledgement does not revoke the server's vehicle attachment.
+    shouldUsePhysics = !bot.vehicle
+    bot.jumpTicks = 0`,
+      },
       {
         find: `      tickPhysics(now)
       timeAccumulator -= PHYSICS_TIMESTEP`,
@@ -832,6 +769,62 @@ const PATCHES: readonly SourcePatch[] = [
     pkg: 'mineflayer',
     file: 'lib/plugins/entities.js',
     edits: [
+      {
+      find: `    const passengerEntities = passengers.map((passengerId) => fetchEntity(passengerId))
+    const vehicle = entityId === -1 ? null : bot.entities[entityId]
+
+    for (const passengerEntity of passengerEntities) {
+      const originalVehicle = passengerEntity.vehicle
+      if (originalVehicle) {
+        const index = originalVehicle.passengers.indexOf(passengerEntity)
+        originalVehicle.passengers.splice(index, 1)
+      }
+      passengerEntity.vehicle = vehicle
+      if (vehicle) {
+        vehicle.passengers.push(passengerEntity)
+      }
+    }
+
+    if (passengers.includes(bot.entity.id)) {
+      const originalVehicle = bot.vehicle
+      if (entityId === -1) {
+        bot.vehicle = null
+        bot.emit('dismount', originalVehicle)
+      } else {
+        bot.vehicle = bot.entities[entityId]
+        bot.emit('mount')
+      }
+    }`,
+      replace: `    const passengerEntities = [...new Set(passengers)].map((id) => fetchEntity(id))
+    const vehicle = entityId === -1 ? null : bot.entities[entityId]
+    const originalSelfVehicle = bot.vehicle
+    // set_passengers is a full snapshot, including the empty list on dismount.
+    if (vehicle) {
+      for (const old of vehicle.passengers || []) {
+        if (!passengerEntities.includes(old) && old.vehicle === vehicle) old.vehicle = null
+      }
+      vehicle.passengers = []
+    }
+    for (const passengerEntity of passengerEntities) {
+      const originalVehicle = passengerEntity.vehicle
+      if (originalVehicle && originalVehicle !== vehicle) {
+        const index = originalVehicle.passengers.indexOf(passengerEntity)
+        if (index >= 0) originalVehicle.passengers.splice(index, 1)
+      }
+      passengerEntity.vehicle = vehicle
+      if (vehicle) vehicle.passengers.push(passengerEntity)
+    }
+    if (passengers.includes(bot.entity.id)) {
+      bot.vehicle = vehicle
+    } else if (vehicle && originalSelfVehicle === vehicle) {
+      bot.vehicle = null
+    }
+    if (bot.vehicle !== originalSelfVehicle) {
+      if (bot.vehicle) bot.emit('mount')
+      else if (originalSelfVehicle) bot.emit('dismount', originalSelfVehicle)
+    }`,
+    },
+
       {
         // 1.21.9+ sends entity velocity as lpVec3, which minecraft-protocol already decodes to
         // blocks/tick; mineflayer still divided by 8000 (the old short encoding), so knockback and
