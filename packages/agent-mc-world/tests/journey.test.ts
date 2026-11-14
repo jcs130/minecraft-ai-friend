@@ -13,6 +13,16 @@ it('normalizes the public route advice policy without treating it as path safety
 function sample():JourneySample{return{scope:'realm:account',generation:'1',atMs:1000,dimension:'overworld',position:[0,64,0],safeToConsider:true,
   intent:{taskId:1,stepIndex:0,destination:[500,64,0],dimension:'overworld'},
   cues:[{kind:'npc',key:'entity:7',label:'villager',position:[8,64,0],source:'visible-entity',observedAtMs:1000}]};}
+it('retains the water notice cooldown while bobbing, never advising a submerged head',()=>{
+ const observer=new JourneyObserver(),input=sample();input.cues=[];input.bodyWater=true;input.surfaceWater=true;
+ observer.observe(input);input.atMs=11000;expect(observer.observe(input)?.reason).toBe('water');
+ input.atMs=32000;input.surfaceWater=false;expect(observer.observe(input)).toBeNull();
+ input.atMs=45000;input.surfaceWater=true;expect(observer.observe(input)).toBeNull();
+ input.atMs=131000;expect(observer.observe(input)?.reason).toBe('water');
+ input.atMs=152000;input.bodyWater=false;input.surfaceWater=false;observer.observe(input);
+ input.atMs=153000;input.bodyWater=true;input.surfaceWater=true;expect(observer.observe(input)).toBeNull();
+ input.atMs=163000;expect(observer.observe(input)?.reason).toBe('water');
+});
 it('reports measured sustained water travel once, with retained task identity and a complete boat entry',()=>{
   const observer=new JourneyObserver(),input=sample();input.cues=[];input.surfaceWater=true;
   expect(observer.observe(input)).toBeNull();input.atMs+=9_000;expect(observer.observe(input)).toBeNull();

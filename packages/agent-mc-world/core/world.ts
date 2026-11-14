@@ -2282,7 +2282,8 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_script',
     tags: ['act'],
     learningCall: methodLearningCall,
-    readOnlyCall: args => !!args.find || !!args.api || ['list','read'].includes(String((args.scene as {op?:unknown}|undefined)?.op)) || ['list', 'read', 'evidence'].includes(String((args.library as { op?: unknown } | undefined)?.op)),
+    readOnlyCall: args => !!args.find || !!args.api || ['list','read'].includes(String((args.scene as {op?:unknown}|undefined)?.op)) || ['list', 'read', 'evidence'].includes(String((args.library as { op?: unknown } | undefined)?.op))
+      || Object.keys(args).length===1 && ['list','read'].includes(String((args.routine as {op?:unknown}|undefined)?.op)),
     description: 'Run an agent-authored JavaScript async function body with params and a restricted mc SDK. '
       + 'Write new feedback-controlled actions when persistent inputs, calculations or conditional sequencing are useful; this is not limited to existing named scripts. '
       + '{api:"authoring"} gives the short write/validate/save/execute/review/reuse path. {library:{op:"list",query:"purpose"}} searches only this scoped game-method library; a host procedure_find may use a different library. '
@@ -4853,7 +4854,16 @@ export class MinecraftWorld implements World {
             const library = this.methodLibrary();
             let result: unknown;
             if (input.op === 'list') result = library.list(input);
-            else if (input.op === 'read') result = library.read(input.id as string, input.revision as string | undefined);
+            else if (input.op === 'read') {
+              try { result = library.read(input.id as string, input.revision as string | undefined); }
+              catch (error) {
+                const routine=typeof input.id==='string'?listWorkRoutines().find(r=>r.id===input.id||r.id.replaceAll('_','-')===input.id):undefined;
+                if(!routine)throw error;
+                throw new Error(JSON.stringify({error:'METHOD_LIBRARY_READ_FAILED',detail:String(error),executed:false,
+                  alternative:{kind:'built-in-routine',id:routine.id,read:{routine:{op:'read',id:routine.id}}},
+                  recovery:'library 是用户方法版本库；routine 是内置工作脚本。这个同名内置脚本使用上述只读入口，无需猜版本哈希；本次没有运行任何脚本。'}));
+              }
+            }
             else if (input.op === 'save') {
               if (!Number.isInteger(input.validationRunId) || Number(input.validationRunId) < 1) throw new Error('validationRunId 须为已完成的语法校验编号');
               result = library.save(input, this.methods.read(Number(input.validationRunId))[0], ctx.role);
@@ -8652,6 +8662,7 @@ export class MinecraftWorld implements World {
         &&!this.executor?.eating&&!this.executor?.escaping&&!bot.currentWindow
         &&((bot.entity.onGround===true&&!bodyInWater(bot))||surfaceWater),
       surfaceWater,
+      bodyWater: movement?.bodyWet===true&&!movement.vehicleAttached,
       cues:[...cues,...cached]});
     if(report)this.emit('minecraft.event',`[Minecraft] ${journeyOpportunityText(report)}`,false,{trigger:'debounce',meta:{journey:report}});
   }

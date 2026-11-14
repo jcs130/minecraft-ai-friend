@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.71
+
+- Classify built-in routine reads separately from execution; a failed versioned-library read with a matching built-in routine provides its exact discovery entry without dispatching it.
+- Keep the sustained-water notice interval across brief head submersion; only offer the choice while breathing at the surface.
+
 ## 0.5.7-rc.160-preview.70
 
 - Reconsider transport during measured surface-water journeys; retain destination and expose the complete boat_trip routine without forcing an action.
