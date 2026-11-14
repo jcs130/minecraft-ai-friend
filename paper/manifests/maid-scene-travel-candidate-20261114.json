@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "release": "maid-scene-travel-20261114-r2",
+  "release": "maid-scene-travel-20261114-r3",
   "state": "isolated-candidate-not-deployed",
-  "preparedAt": "2026-11-14T18:10:27.966481+08:00",
+  "preparedAt": "2026-11-14T18:22:16.611293+08:00",
   "sourceBase": "8ed2eb9a00c9f1f3e75d3e4bd821ae4abecadcee",
   "includedPullRequests": [
     225
@@ -11,7 +11,7 @@
     {
       "name": "AgentFriend",
       "version": "0.4.47.77-verified-travel",
-      "sha256": "2eed3ddc8423290300a55e09b45ba9d8a8b20143529ba58c05bb9d6ea50d3974",
+      "sha256": "0aad900040404da5c878d18a207e97e83996f9f13356b4e81131eedbe667b430",
       "baselineVersion": "0.4.47.76-trial-return",
       "baselineSha256": "fae5702fd21ab7aaa3ff0719cbf4b320173fa6a78dae16bf37ead33c1bcb3e8d",
       "unchangedEntries": 663
@@ -31,7 +31,7 @@
     "coalescedAliases": 9,
     "calibrationWarnings": 7,
     "compactMarkersWithoutBuff": 3,
-    "isolatedPlanSha256": "81141ad771eb8e06f75a826237b7a734d62e2e00273f897a702e1beccef965a2",
+    "isolatedPlanSha256": "f19bf4633fbf283f3b02f64fdfa53a211ac074a0a793607917b268fda849ae8f",
     "nativeAuditBlocked": 0,
     "privateCoordinatesPublished": false,
     "productionPlanMustBeRefreshed": true,
@@ -45,8 +45,8 @@
         "passed": true
       },
       "marker-proof.json": {
-        "sha256": "2d1b341dd54d35fd61f7ccd6d8b34c6001a1893120e20c29ad0fef8ba184cdf4",
-        "checks": 17,
+        "sha256": "6111947c02651c0ae76c7b516476bbe086c7f13f13b1865fdc63423c7ef10d78",
+        "checks": 20,
         "passed": true
       },
       "qa6.combat.proof.json": {
@@ -65,11 +65,13 @@
     "humanVoiceHearingVerified": false,
     "bedrockPhysicalScreenVerified": false,
     "productionBeforeImagesReadOnlyMatched": true,
-    "livingEntityOccupancyGuardVerified": true
+    "livingEntityOccupancyGuardVerified": true,
+    "partialMarkerRollbackRedThenGreen": true,
+    "partialRollbackRestartVerified": true
   },
   "rollback": {
     "drive": "F",
-    "candidateAndCodeBeforeImages": "F:\\MC-backups\\maid-scene-travel-20261114-r2",
+    "candidateAndCodeBeforeImages": "F:\\MC-backups\\maid-scene-travel-20261114-r3",
     "coldWorldBackupTaken": false,
     "restoreMarkersBeforeCodeDowngrade": true,
     "changedAfterImagesStopRollback": true,

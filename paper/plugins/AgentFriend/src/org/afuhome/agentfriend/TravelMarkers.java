@@ -86,7 +86,7 @@ final class TravelMarkers implements Listener {
         Set<String> ids=new HashSet<>();Set<Cell> cells=new HashSet<>();List<JsonObject> markers=new ArrayList<>();
         for(JsonElement value:rows){JsonObject m=value.getAsJsonObject();validate(m);if(!ids.add(m.get("id").getAsString()))throw new IllegalArgumentException("duplicate_id");
             for(JsonElement change:changes(m))if(!cells.add(cell(m,change.getAsJsonObject().get("position"))))throw new IllegalArgumentException("overlap");markers.add(m);}
-        last=new JsonObject();last.addProperty("plan",args[1]);last.addProperty("action",args[0]);last.addProperty("finished",false);last.addProperty("checked",0);last.add("blocked",new JsonArray());
+        last=new JsonObject();last.addProperty("plan",args[1]);last.addProperty("action",args[0]);last.addProperty("finished",false);last.addProperty("checked",0);last.add("blocked",new JsonArray());last.add("skipped",new JsonArray());
         busy=true;run(sender,args[0],args[1],markers,0,new HashSet<>());sender.sendMessage("MC_TRAVEL_MARKERS accepted=true query=aftravelmarkers status "+args[1]);
     }
     private void run(CommandSender sender,String action,String hash,List<JsonObject> rows,int i,Set<World> touched){
@@ -99,7 +99,15 @@ final class TravelMarkers implements Listener {
             }last.addProperty("finished",true);sender.sendMessage("MC_TRAVEL_MARKERS status=finished action="+action+" count="+i+" plan="+hash);}
             catch(Exception e){healthy=false;last.addProperty("finished",true);last.addProperty("uncertain",true);sender.sendMessage("MC_TRAVEL_MARKERS status=uncertain journal_preserved=true error="+e.getClass().getSimpleName());}finally{busy=false;}return;
         }
-        JsonObject m=rows.get(i);World w=Bukkit.getWorld(m.get("worldName").getAsString());
+        JsonObject m=rows.get(i);
+        // The write-ahead record exists before any edit. A stopped batch may
+        // never reach later rows; rollback must leave those rows alone and
+        // still finalize the earlier restored records, including after restart.
+        if(action.equals("rollback")&&!installed.containsKey(m.get("id").getAsString())){
+            last.getAsJsonArray("skipped").add(m.get("id").getAsString());last.addProperty("checked",last.get("checked").getAsInt()+1);
+            Bukkit.getScheduler().runTaskLater(plugin,()->run(sender,action,hash,rows,i+1,touched),1L);return;
+        }
+        World w=Bukkit.getWorld(m.get("worldName").getAsString());
         if(w==null){failed(m,"world_unavailable");if(action.equals("audit"))Bukkit.getScheduler().runTaskLater(plugin,()->run(sender,action,hash,rows,i+1,touched),1L);else{last.addProperty("finished",true);busy=false;}return;}
         Set<Long> chunks=new HashSet<>();for(JsonElement v:changes(m)){Cell c=cell(m,v.getAsJsonObject().get("position"));chunks.add(((long)(c.x>>4)<<32)|((c.z>>4)&0xffffffffL));}
         for(String key:List.of("anchor")){JsonArray p=m.getAsJsonArray(key);int x=(int)Math.floor(p.get(0).getAsDouble()),z=(int)Math.floor(p.get(2).getAsDouble());chunks.add(((long)(x>>4)<<32)|((z>>4)&0xffffffffL));}

@@ -28,7 +28,8 @@ try{
  let hash=await freeze(plan);
  if(process.env.MARKER_RESTART_PLAN){
   const existing=await qa('markerinspect '+plan.markers[0].id);
-  check('normal restart preserves native geometry and protections',existing.allAfter&&existing.waxed&&existing.breakProtected&&existing.explosionProtected);
+  if(process.env.MARKER_PARTIAL_RECOVERY==='1')check('normal restart retains a partially restored journal safely',existing.allBefore&&existing.breakProtected);
+  else check('normal restart preserves native geometry and protections',existing.allAfter&&existing.waxed&&existing.breakProtected&&existing.explosionProtected);
   const cleaned=await run('rollback',hash);check('restart journal restores exact originals',cleaned.blocked.length===0);
   plan=JSON.parse(await readFile(process.env.MARKER_RESTART_PLAN,'utf8'));hash=await freeze(plan);
  }
@@ -51,6 +52,15 @@ try{
  const occupied=await run('apply',hash);
  check('living entity occupancy prevents suffocation and any marker mutation',occupied.checked===0&&occupied.blocked.some(v=>v.reason==='occupied_by_living_entity')&&(await qa('markerinspect '+plan.markers[0].id)).allBefore);
  await qa('markerarrive '+plan.markers[0].id);await rc('minecraft:gamemode survival TravelPointQA');
+ if(plan.markers.length>1){
+  await rc('minecraft:gamemode creative TravelPointQA');await qa('markeroccupy '+plan.markers[1].id);
+  const partial=await run('apply',hash);
+  check('later occupied marker stops a partial batch at its durable boundary',partial.checked===1&&partial.blocked.some(v=>v.id===plan.markers[1].id&&v.reason==='occupied_by_living_entity')&&(await qa('markerinspect '+plan.markers[0].id)).allAfter);
+  await qa('markerarrive '+plan.markers[0].id);await rc('minecraft:gamemode survival TravelPointQA');
+  const restored=await run('rollback',hash);
+  check('partial batch rollback skips never-installed markers and restores originals',restored.blocked.length===0&&(await qa('markerinspect '+plan.markers[0].id)).allBefore);
+  const replay=await run('rollback',hash);check('completed rollback can be queried or repeated without editing blocks',replay.blocked.length===0&&replay.skipped.length===plan.markers.length);
+ }
  report.applied=await run('apply',hash);check('all accepted markers installed',report.applied.blocked.length===0&&report.applied.checked===plan.markers.length);
  const repeated=await run('apply',hash);check('repeat installation is idempotent',repeated.blocked.length===0&&repeated.checked===plan.markers.length);
  const selected=plan.markers.find(m=>m.id==='yellowstone')||plan.markers[0];let observed=await qa('markerarrive '+selected.id);await delay(1000);
