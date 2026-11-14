@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "version": "1.0.0-preview.1",
+  "version": "1.0.0-preview.3",
   "minecraft": "1.21.1",
-  "neoforge": "21.1.248",
+  "neoforge": "21.1.252",
   "java": 21,
   "serverAddress": "micro.kangqiang.site:25702",
   "files": [
@@ -38,6 +38,18 @@
       "sha1": "8aded3a22614a8e1641973623e7817dccea513fa",
       "sha512": "35a9411d71de86071501f6b42088585a1be6e90b03cafe75d89b53e913a5af9d5cdfa40a098d95908af63237577e58f6263ce4f676deec58aca2de0758eba9dd",
       "license": "ARR; unmodified official client, downloaded directly from Modrinth"
+    },
+    {
+      "id": "control-flex",
+      "version": "0.8.9-beta.3",
+      "filename": "controlflex-0.8.9-beta.3-mc1.21.1-neoforge.jar",
+      "url": "https://github.com/ControlFlexMC/control-flex/releases/download/v0.8.9-beta.3/controlflex-0.8.9-beta.3-mc1.21.1-neoforge.jar",
+      "source": "https://github.com/ControlFlexMC/control-flex/releases/tag/v0.8.9-beta.3",
+      "bytes": 7149612,
+      "sha1": "c51134304996a1c23a87ee76444f6d221cee0656",
+      "sha512": "5901db192f1dea2df2d8a34c7b499e0bb8a9d4793fe0b77682a501cfa78f29c1ec02597118a56dc09b4896d5a1628e282b4780554ae1b8db73f68611efae7279",
+      "sha256": "db26e60925fcace8fa47b75dcadc47581ef90cb574a947c3d315b0c7b87a0b99",
+      "license": "Original release asset downloaded from the author; license notices retained"
     }
   ],
   "compiler": {

@@ -44,7 +44,7 @@ export const packageReleases = Object.freeze([
   ...originalReleases.map(row => Object.freeze({ ...row, category: 'advanced' })),
 ]);
 
-const aliases=Object.freeze({'/downloads/java-client':'desktop-client-pack','/downloads/android-client':'android-client-pack','/downloads/maid-client':'maids-client-pack','/downloads/maid-mods':'maids-client-mods','/downloads/cortico-lite':'cortico-lite','/downloads/cortico':'cortico-bundle','/downloads/dsh':'dsh-bundle','/downloads/neko':'neko-base','/downloads/audio':'shared-audio','/downloads/browser':'shared-browser'});
+const aliases=Object.freeze({'/downloads/java-client':'desktop-client-pack','/downloads/android-client':'android-client-pack','/downloads/android-native-client':'android-native-client-pack','/downloads/maid-client':'maids-client-pack','/downloads/maid-mods':'maids-client-mods','/downloads/cortico-lite':'cortico-lite','/downloads/cortico':'cortico-bundle','/downloads/dsh':'dsh-bundle','/downloads/neko':'neko-base','/downloads/audio':'shared-audio','/downloads/browser':'shared-browser'});
 // Existing bookmarks keep their immutable bytes; the recommended alias selects
 // the current reviewed complete package. Both use the same operator enablement.
 const legacyNekoBase = Object.freeze({id:'neko-base', filename:'qiandengji-neko-0.6.70-base-with-viewer-data.zip',

@@ -9,8 +9,8 @@ let executablePath;
 for (const candidate of [process.env.PORTAL_BROWSER_EXECUTABLE, '/usr/bin/google-chrome', '/usr/bin/chromium'].filter(Boolean)) {
   try { await fs.access(candidate); executablePath = candidate; break; } catch {}
 }
-test('Android import and voice instructions fit portrait, landscape and desktop', {skip: !executablePath}, async t => {
-  const f = await siteFixture(t, {downloads: {baseUrl: 'https://downloads.example.test/releases/', enabledPackages: ['android-client-pack']}});
+test('Android import and native gamepad instructions fit portrait, landscape and desktop', {skip: !executablePath}, async t => {
+  const f = await siteFixture(t, {downloads: {baseUrl: 'https://downloads.example.test/releases/', enabledPackages: ['android-client-pack', 'android-native-client-pack']}});
   const browser = await puppeteer.launch({executablePath, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage']});
   t.after(() => browser.close());
   const page = await browser.newPage(), errors = [];
@@ -22,11 +22,14 @@ test('Android import and voice instructions fit portrait, landscape and desktop'
     await page.goto(f.origin + '/downloads.html#android-client', {waitUntil: 'networkidle0'});
     await page.waitForSelector('#android-client-downloads a[download]');
     assert.equal(await page.$eval('html', node => node.scrollWidth <= innerWidth), true, `downloads ${width}`);
-    assert.match(await page.$eval('#android-client-downloads', node => node.textContent), /兼容预览/);
+    assert.equal(await page.$$eval('#android-client-downloads a[download]', nodes => nodes.length), 2);
+    assert.match(await page.$eval('#android-client-downloads', node => node.textContent), /原生手柄预览.*SDL 直通/s);
     if (artifacts) await page.screenshot({path: path.join(artifacts, `android-downloads-${width}.png`), fullPage: true});
     await page.goto(f.origin + '/android.html', {waitUntil: 'networkidle0'});
     assert.equal(await page.$eval('html', node => node.scrollWidth <= innerWidth), true, `guide ${width}`);
     assert.equal(await page.$$eval('header.site-header', rows => rows.length), 1);
+    assert.equal(await page.$eval('a[download]', link => link.pathname), '/downloads/android-native-client');
+    assert.match(await page.$eval('main', node => node.textContent), /手柄输入模式.*SDL 直通/s);
     if (artifacts) await page.screenshot({path: path.join(artifacts, `android-guide-${width}.png`), fullPage: true});
   }
   assert.deepEqual(errors, []);
