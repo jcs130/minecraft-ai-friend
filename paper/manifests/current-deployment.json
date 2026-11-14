@@ -1,11 +1,11 @@
 {
-  "inventoryScope": "component_runtime_verified_20261114_trial_return_voice",
-  "currentComponentEvidence": "paper/manifests/trial-return-voice-deployed-20261114.json",
+  "inventoryScope": "component_runtime_verified_20261114_maid_scene_travel",
+  "currentComponentEvidence": "paper/manifests/maid-scene-travel-deployed-20261114.json",
   "acceptanceDocument": "paper/docs/SERVER_UPDATES.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-and-component-verified",
-  "latestRelease": "trial-return-voice-20261114-r1",
-  "verifiedAt": "2026-11-14T15:58:43.349652+08:00",
+  "latestRelease": "maid-scene-travel-20261114-r3",
+  "verifiedAt": "2026-11-14T19:07:58.311839+08:00",
   "releaseDocument": "paper/docs/SERVER_UPDATES.md",
   "numenHostingCurrent": {
     "state": "deployed-and-component-verified",
