@@ -40,16 +40,21 @@ def main():
     has_trace = (args.source / "org/afuhome/auth/VoiceTransportTrace.java").exists()
     if not has_trace:
         sources = [source for source in sources if source.name != "VoiceTransportTraceTest.java"]
+    has_svc = (args.source / "org/afuhome/auth/SvcAddressRouting.java").exists()
+    if not has_svc:
+        sources = [source for source in sources if source.name != "SvcPacketTest.java"]
     sources += sorted((ROOT / "tests/org").rglob("*.java"))
     subprocess.run([args.java, "com.sun.tools.javac.Main", "-proc:none", "-encoding", "UTF-8",
                     "-source", "21", "-target", "21", "-cp", cp, "-d", str(classes),
                     *map(str, sources)], check=True)
     cp = str(classes) + os.pathsep + cp
-    names = ["VoiceTransportTest", "VoiceOrderingTest", "VoiceTransportTraceTest", "McbotTransportTest", "AuthObservationTest", "AuthNotificationTest",
+    names = ["SvcAddressTest", "SvcPacketTest", "VoiceTransportTest", "VoiceOrderingTest", "VoiceTransportTraceTest", "McbotTransportTest", "AuthObservationTest", "AuthNotificationTest",
              "AuthHeartbeatRecoveryTest", "AuthMessagesTest", "FirstPasswordPolicyTest",
              "PremiumEyePolicyTest", "PortalBridgeTest", "ConfigurationSettingsTest", "IdentityHandoffTest"]
     if not has_trace:
         names.remove("VoiceTransportTraceTest")
+    if not has_svc:
+        names.remove("SvcPacketTest")
     for name in names:
         qualified = name if name == "PremiumEyePolicyTest" else "org.afuhome.auth." + name
         subprocess.run([args.java, "-ea", "-cp", cp, qualified], check=True)

@@ -30,7 +30,7 @@ public final class VoiceSubscriptionMatrixTest {
                 var registry=VelocityEventManager.class.getDeclaredField("handlersByType");registry.setAccessible(true);
                 var rows=((com.google.common.collect.Multimap<?,?>)registry.get(events)).values();
                 int count=0;for(Object row:rows){var et=row.getClass().getDeclaredField("eventType");et.setAccessible(true);if(et.get(row)==com.velocitypowered.api.event.connection.PluginMessageEvent.class)count++;}
-                if(count!=5)throw new AssertionError("Expected all five actual payload subscriptions, got "+count);
+                if(count!=6)throw new AssertionError("Expected all six actual payload subscriptions, got "+count);
                 var observed=new ArrayList<Integer>();var futures=new ArrayList<CompletableFuture<?>>();
                 for(int n=0;n<3;n++)futures.add(events.fire(fixture.event(reply,new byte[]{2,(byte)n})).thenAccept(e->{if(e.getResult().isAllowed())observed.add((int)e.getData()[1]);}));
                 workers.reverse();CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
