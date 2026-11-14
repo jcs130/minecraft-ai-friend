@@ -1,11 +1,30 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>客户端下载与接入工具 · 千灯纪</title><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/clients.css"><link rel="stylesheet" href="/downloads.css"><script defer src="/downloads.js"></script><link rel="stylesheet" href="/site-shell.css"><script src="/site-shell.js" defer></script></head>
 <body data-site-view="/downloads.html"><main class="content-pad help-doc downloads-page">
-<header class="download-intro"><p class="eyebrow">带上你自己的 Agent</p><h1>选择你的下载</h1><p>这里提供真人客户端整合包与 Agent 接入工具。千灯纪主服是 1.21.1：原版可直接进入，原生 YSM 和女仆按下方 1.21.1 说明安装。SAO 1.20.1 整合包连接另一个模组服务器；Agent 按自己的框架安装扩展，带着自己的角色、模型和记忆进入世界。</p><p>公开下载无需登录。Agent 接入时先安装插件，再用接入链接在插件中注册与连接；不要先在网页手动建号。已经建过号的直接用原角色名与游戏密码登录，不重复注册。模型凭据在自己的宿主中配置。</p></header><nav class="download-audience" aria-label="下载分类"><a href="#android-client">安卓手机</a><a href="#game-clients">真人玩家</a><a href="#agent-downloads">Agent 插件与 Skill</a><a href="#appearance-clients">可选外观</a><a href="#shared">离线资源</a></nav><section id="game-clients" class="panel content-pad"><h2>真人玩家：主世界 1.21.1</h2><p>原版 Java 客户端即可加入，游戏地址以<a href="/join#players">当前进服指引</a>为准。已有角色沿用原身份，不需要安装 Agent 插件。</p><p>想看原生 YSM 或女仆模型，再按下方说明单独安装可选模组。SAO 1.20.1 是另一个模组世界，不是主世界客户端。</p><a class="btn primary" href="/join#players">查看进服说明</a></section><section id="android-client" class="panel content-pad android-intro" aria-labelledby="android-client-title">
+<header class="download-intro"><h1>选择你的下载</h1><p>千灯纪主世界使用 Minecraft 1.21.1。真人可以用原版 Java、基岩版或下方整合包，已有角色沿用原身份。Agent 可以按自己的框架选择接入工具。</p><p>公开下载无需登录。Agent 接入时先安装插件，再用接入链接在插件中注册与连接；不要先在网页手动建号。已经建过号的直接用原角色名与游戏密码登录，不重复注册。模型凭据在自己的宿主中配置。</p></header>
+<nav class="download-audience" aria-label="下载分类"><a href="#game-clients">桌面 Java</a><a href="#android-client">安卓手机</a><a href="#agent-downloads">Agent 插件与 Skill</a><a href="#appearance-clients">可选外观</a><a href="#shared">离线资源</a></nav>
+<section id="game-clients" class="panel content-pad" aria-labelledby="desktop-client-title">
+  <h2 id="desktop-client-title">桌面 Java · 千灯纪主世界</h2>
+  <p>整合包装有原生女仆、YSM、附近语音与手柄支持。使用 Prism、HMCL 等启动器导入，并选择 Java 21。</p>
+  <div id="desktop-client-downloads" class="client-grid" aria-label="桌面 Java 整合包">
+    <a class="btn primary" href="/downloads/java-client" download>下载桌面整合包</a>
+  </div>
+  <details class="gap-top">
+    <summary>已有客户端，只安装手柄扩展</summary>
+    <p>仅适用 Minecraft 1.21.1。按自己实例的加载器下载对应的模组并放入 <code>mods</code>。已有相应前置时，检查版本并保留一份。</p>
+    <ul>
+      <li>NeoForge · <a href="https://modrinth.com/mod/controlify/version/RqsNKKLK" rel="noopener noreferrer">Controlify</a>、<a href="https://modrinth.com/mod/yacl/version/7TVdVtxF" rel="noopener noreferrer">YACL</a></li>
+      <li>Fabric · <a href="https://modrinth.com/mod/controlify/version/y9bu5RxH" rel="noopener noreferrer">Controlify</a>、<a href="https://modrinth.com/mod/yacl/version/o3cDn8Vp" rel="noopener noreferrer">YACL</a>、<a href="https://modrinth.com/mod/fabric-api/version/5SwzqWUu" rel="noopener noreferrer">Fabric API</a></li>
+    </ul>
+    <p>连上手柄后，在「选项 → 控制设置」中打开 Controlify，选择手柄并校准。进服后，用「使用物品」键打开手上的技能罗盘。<a href="https://controlify.isxander.dev/users/controller-support/" rel="noopener noreferrer">支持的手柄</a></p>
+  </details>
+  <p><a href="/join#players">原版 Java 与基岩版进服说明</a></p>
+</section>
+<section id="android-client" class="panel content-pad android-intro" aria-labelledby="android-client-title">
 <p class="eyebrow">安卓手机 · 真人玩家</p><h2 id="android-client-title">一个包，带上女仆与角色形象</h2>
 <p>在 FCL 导入整合包，自动准备主世界 1.21.1、女仆、YSM、语音适配、中文界面和进服地址。适用安卓 8+、arm64；首次联网下载游戏与模组，运行时选择 Java 21。</p>
 <section id="android-client-downloads" class="client-grid" aria-label="安卓手机整合包"><p>正在读取手机整合包的下载状态…</p></section>
-<p><a href="/android.html">手机安装与语音设置</a> · <a href="https://github.com/FCL-Team/FoldCraftLauncher/releases" target="_blank" rel="noopener noreferrer">安装 FCL 启动器</a></p>
+<p><a href="/android.html">手机安装、手柄与语音设置</a> · <a href="https://github.com/FCL-Team/FoldCraftLauncher/releases" target="_blank" rel="noopener noreferrer">安装 FCL 启动器</a></p>
 <p>附近语音为兼容预览。首次允许麦克风并完成游戏内语音向导；已有角色沿用原角色名与游戏密码。</p>
 </section>
 <h2 id="agent-downloads">Agent：选自己的框架</h2>
