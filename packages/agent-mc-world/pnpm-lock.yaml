@@ -24,11 +24,11 @@ importers:
         specifier: 25.9.23
         version: 25.9.23
       minecraft-data:
-        specifier: 3.112.0
-        version: 3.112.0
+        specifier: 3.119.0
+        version: 3.119.0
       mineflayer:
-        specifier: 4.37.1
-        version: 4.37.1
+        specifier: 4.39.0
+        version: 4.39.0
       mineflayer-pathfinder:
         specifier: 2.4.5
         version: 2.4.5(prismarine-registry@1.12.0)
@@ -1114,11 +1114,11 @@ packages:
     engines: {node: '>=4'}
     hasBin: true
 
-  minecraft-data@3.112.0:
-    resolution: {integrity: sha512-U+BJ+3zFcTmi6X936sKNBRgocr17t7poNg40+yE3ng7B0wNWwqpndzqJ4cGfjBcclgFghEoOyXvcgIS4MPDRYQ==}
-
   minecraft-data@3.117.0:
     resolution: {integrity: sha512-glKv0EEmVwKvJwdNAKAal2P7gi/nijU9rEMp8gJmqYYRVswS6hA0q9566lcGHH07Ocmpqw5bMRbARC25pR13gA==}
+
+  minecraft-data@3.119.0:
+    resolution: {integrity: sha512-RElo0o2RooEzpeQO+QEHzTmHVTgOdbbomGQYBmWIaU1pupEmAItQb+LpJyL2EDXmpKicOU4swtBVzwIWae5l5g==}
 
   minecraft-folder-path@1.2.0:
     resolution: {integrity: sha512-qaUSbKWoOsH9brn0JQuBhxNAzTDMwrOXorwuRxdJKKKDYvZhtml+6GVCUrY5HRiEsieBEjCUnhVpDuQiKsiFaw==}
@@ -1130,8 +1130,8 @@ packages:
   mineflayer-pathfinder@2.4.5:
     resolution: {integrity: sha512-Jh3JnUgRLwhMh2Dugo4SPza68C41y+NPP5sdsgxRu35ydndo70i1JJGxauVWbXrpNwIxYNztUw78aFyb7icw8g==}
 
-  mineflayer@4.37.1:
-    resolution: {integrity: sha512-kchZCJb1znzz8ZhE0+gLQ3e2t/9xUsqUy/IM/sGfceINxi3h6KXKY9luaUEa59vnD/x0OKwYdERY4sscm0ErNQ==}
+  mineflayer@4.39.0:
+    resolution: {integrity: sha512-HptE++dIG55aRmT7GIj3QComS6MhEXstE3RJSuYMFhLtobsQhJJsqWmY9ObfiLp84MrS6Q4Em+wUH0rVQMXLJw==}
     engines: {node: '>=22'}
 
   mojangson@2.1.0:
@@ -2604,9 +2604,9 @@ snapshots:
 
   mime@1.6.0: {}
 
-  minecraft-data@3.112.0: {}
-
   minecraft-data@3.117.0: {}
+
+  minecraft-data@3.119.0: {}
 
   minecraft-folder-path@1.2.0: {}
 
@@ -2648,7 +2648,7 @@ snapshots:
       - prismarine-registry
       - supports-color
 
-  mineflayer@4.37.1:
+  mineflayer@4.39.0:
     dependencies:
       minecraft-data: 3.117.0
       minecraft-protocol: 1.68.0

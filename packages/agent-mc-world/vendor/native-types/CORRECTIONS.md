@@ -11,3 +11,4 @@ These files describe the pinned native dependencies used by the optional server-
 - `@types/readable-stream`: express the optional stream symbol member as a mapped type for TypeScript 5.7.
 
 All eight public code entrypoints are checked with `skipLibCheck: false` in both Bundler and NodeNext resolution. Updating native dependencies requires reviewing these copies and hashes again. The SDK, MCP and neutral contracts do not require native Bot declarations.
+- `mineflayer@4.39.0` / `minecraft-data@3.119.0`: declaration copies for the 26.1 client bump. Import paths were relocated like the previous pins; minecraft-data needed no syntax corrections.

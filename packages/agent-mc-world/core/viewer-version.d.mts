@@ -1,5 +1,6 @@
 export const PRIMARY_VIEWER_VERSION: '1.21.1';
 export function assertViewerVersion(version: string): string;
+export function viewerVersionOrderKey(version: string): number;
 export function viewerVersionAssets(root: string, version: string): Promise<string>;
 export interface ViewerAssetSelection {directory:string;requestedVersion:string;assetVersion:string;mode:'exact'|'compatible'}
 export function selectViewerAssets(root:string,version:string):Promise<ViewerAssetSelection>;

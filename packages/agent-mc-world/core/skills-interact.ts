@@ -30,6 +30,7 @@ import { isBabyPiglin } from './piglin.ts';
 import { DIRECTION_ZH, bearing, canSeeEntity, droppedStackOf } from './terrain.ts';
 import { findEntity, gotoGoal, reachCell } from './travel.ts';
 import { type SkillCall } from './skills.ts';
+import { renderScreen, serverScreen } from './server-screens.ts';
 import { skillTrade } from './skills-gather.ts';
 import { wornItemNamed } from './inventory.ts';
 import { consumeHeldFood, equipNamed } from './skills-craft.ts';
@@ -1174,6 +1175,10 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
   checkAbort(ctx);
   const note = useInvNote(beforeInv, bot);
   const handNote = handChangedAfterUse ? ';使用请求发送后主手发生变化，未对新主手发送松开使用' : '';
+  const openedScreen = serverScreen(bot);
+  if (openedScreen && (openedScreen.kind === 'book' || openedScreen.kind === 'dialog')) {
+    return `用了${label};${renderScreen(openedScreen)}\n用 mc_window 读，用 menu_close 关闭${note ? `；${note}` : ''}${handNote}`;
+  }
   if (bot.currentWindow && bot.currentWindow !== beforeWindow) {
     const opened = windowSnapshot(bot.currentWindow as unknown as Parameters<typeof windowSnapshot>[0]);
     const menu = selectionMenuTitle(bot.currentWindow.title);

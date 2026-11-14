@@ -55,6 +55,13 @@ export const DEFAULT_CONDENSE_RULES: readonly CondenseRule[] = [
     return `[服务器状态] ${join(j.adventurerRank, j.mana !== undefined && `魔力 ${j.mana}/${j.maxMana}`, j.mainStage && `主线 ${j.mainStage}`,
       j.downed && '倒地', j.inDungeon && '副本中', j.inPvp && 'PVP 中', j.nextCommand && `下一步 ${j.nextCommand}`)}`;
   } },
+  { id: 'currency-chat', match: /你拥有的游戏币为:|余额：|您有\s*-?\d+\s*多个点[劵券]/, action: 'latest',
+    key: (_e, m) => 'currency:' + (/点[劵券]/.test(m[0]) ? '点券' : '游戏币'),
+    rewrite: text => {
+      if (/您有\s*(-?\d+)\s*多个点[劵券]/.test(text)) return `[服务器数值] 点券 ${RegExp.$1}`;
+      const coins = text.match(/你拥有的游戏币为:\s*\$?\s*(-?\d+)/) || text.match(/余额[:：]\s*\$?\s*(-?\d+)/);
+      return coins ? `[服务器数值] 游戏币 ${coins[1]}` : text;
+    } },
   { id: 'guide-next', match: /MC_GUIDE_NEXT \{/, action: 'latest', rewrite: text => {
     const j = json(text, 'MC_GUIDE_NEXT');
     return j ? `[服务器引导] ${join(j.title, j.message, j.nextCommand && `下一步 ${j.nextCommand}`)}` : text;
@@ -87,7 +94,8 @@ function acceptsDefaultRule(event: EventEnvelope): boolean {
   if (event.execution || kind === 'task' || kind.startsWith('goal')) return false;
   if (kind !== 'chat') return ['event', 'memory', 'task.queue', 'world.snapshot'].includes(kind);
   if (event.senderKey || typeof event.meta?.uname === 'string' || event.meta?.channel === 'private') return false;
-  return /^\[MC (?:登录消息|系统|插件)\]/u.test(event.text ?? '');
+  return /^\[MC (?:登录消息|系统|插件)\]/u.test(event.text ?? '')
+    || /^(?:你拥有的游戏币为:|余额：|\[系统\] 您有\s*-?\d+\s*多个点[劵券])/.test(event.text ?? '');
 }
 
 export class EventCondenser {

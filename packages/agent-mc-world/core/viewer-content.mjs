@@ -28,7 +28,14 @@ export function viewerParticlePacket(packet, { version = '1.20.6', protocol } = 
   if (name === 'dust' || name === 'dust_color_transition') {
     if (!data) return null;
     let color, colorEnd, scale;
-    if (name === 'dust') { color = [data.red, data.green, data.blue]; scale = data.scale; }
+    if (version === '26.1') {
+      const unpack = value => Number.isInteger(value) ? [((value>>>16)&255)/255,((value>>>8)&255)/255,(value&255)/255] : null;
+      color=unpack(name==='dust'?data.color:data.fromColor);
+      if(name==='dust_color_transition') colorEnd=unpack(data.toColor);
+      scale=data.scale;
+      if(!color || name==='dust_color_transition'&&!colorEnd)return null;
+    }
+    else if (name === 'dust') { color = [data.red, data.green, data.blue]; scale = data.scale; }
     else {
       color = [data.fromRed, data.fromGreen, data.fromBlue];
       // Protocol 766 writes two vectors then scale. Some minecraft-data releases
@@ -101,7 +108,7 @@ export function cachedMapFrame(entity, registry) {
 }
 
 export function createViewerContentBridge(bot, { now = Date.now, schedule = setInterval, unschedule = clearInterval } = {}) {
-  if (!['1.20.6','1.21.1'].includes(bot.version)) throw Error('viewer_content_version_unsupported');
+  if (!['1.20.6','1.21.1','26.1'].includes(bot.version)) throw Error('viewer_content_version_unsupported');
   const protocol = bot._client, maps = new Map(), frames = new Map(), textEntities=new Map(), textDisplays=new Map(), listeners = new Set(), hooks = [], socketDrainers=new Set(), socketDisposers=new Set();
   let epoch = 0, queue = [], disposed = false;
   const diagnostics = { particles: 0, droppedParticles: 0, mapPatches: 0, rejected: 0, subscriberErrors: 0, cachedFrames: 0, cachedTextDisplays:0, rejectedTextDisplays:0 };

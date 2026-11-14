@@ -1938,7 +1938,7 @@ export function snapshotFromBot(
   const onGround = Boolean(me.onGround);
   const motion: Motion =
     inWater && speed > 0.5 ? 'swimming'
-      : !onGround && vy < -1.5 ? 'falling'
+      : !onGround && vy < -1.5 && footing.kind !== 'support' ? 'falling'
         : !onGround && vy > 1.5 ? 'rising'
           : speed < 0.5 ? 'still'
             : speed > 5.2 ? 'sprinting' : 'walking';

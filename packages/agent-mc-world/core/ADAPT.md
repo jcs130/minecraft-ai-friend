@@ -64,3 +64,18 @@ Minecraft 服务端换一个版本,客户端这边要跟着改的事实记在这
 
 台架在 `scratch/mc-bench/`(不入库):`rig.ts` 起真服务端配真执行器,`BENCH_JAR` 选服务端
 jar、`BENCH_VERSION` 选协议版本。
+
+
+## 26.1: AuthMe 预登录对话框、窗口标题 NBT、无 open_window 的 GUI
+
+**版本边界** 官方 mineflayer 4.39.0 的 `testedVersions` 含 `26.1`（协议 775）。4.37.1 没有这条协议。不改服务端。
+
+**进服卡点** 配置阶段 `show_dialog`（`authme:prejoin-login/submit`），不是先靠聊天 `/login`。`custom_click_action` 必须按 1.21.6+ 原版写成 VarInt 长度前缀 + 匿名 NBT；minecraft-data 仍把该字段标成带有无标志位的 `option anonymousNbt`，按库默认写法提交会被忽略。不要对这个对话框发 `accept_code_of_conduct`。
+
+**窗口标题** `open_window.windowTitle` 是匿名 NBT，直接 `toString()` 会得到 `[object Object]`。在 mineflayer 入库前解包。
+
+**隐藏 GUI** 有的插件只发 `window_items`、不发 `open_window`。mineflayer 关不掉这个窗口，之后指令会报「打开界面时无法执行指令」。在宽限期（默认 200ms）内等不到 `open_window` 就按 window id 发 `close_window`。村民窗那种「先 items 后 open」仍给宽限期，不会误关。
+
+**出生点** 领地出生点可能无提示地把位置拽回去。进服后默认先站着，等首个 play 位置稳定约 1.5 秒再允许闲逛；宿主显式移动不拦截。
+
+**DNS** 部分环境会把域名解析到 `198.18.0.0/15`。默认回退公共 DNS，连解析到的 IP，并把原域名作为 `fakeHost` 做握手。不写死某个服的 IP。
