@@ -80,6 +80,11 @@ const PATCHES: readonly SourcePatch[] = [
       if (bot.vehicle) bot.emit('mount')
       else if (originalSelfVehicle) bot.emit('dismount', originalSelfVehicle)
     }`,
+    }, {
+      find: `  // dismounting when the vehicle is gone
+  bot._client.on('entityGone', (entity) => {`,
+      replace: `  // entity_destroy emits entityGone on Bot, not its protocol Client.
+  bot.on('entityGone', (entity) => {`,
     }],
   },
   {
@@ -87,10 +92,16 @@ const PATCHES: readonly SourcePatch[] = [
     file: 'lib/plugins/physics.js',
     edits: [
       {
+        find: `  let shouldUsePhysics = false`,
+        replace: `  let shouldUsePhysics = false
+  let hasCurrentPosition = false`,
+      },
+      {
         find: `        shouldUsePhysics = true
         bot.jumpTicks = 0`,
         replace: `        // A delayed respawn position can arrive after set_passengers.
         // Confirm the packet, but do not simulate walking for a mounted rider.
+        hasCurrentPosition = true
         shouldUsePhysics = !bot.vehicle
         bot.jumpTicks = 0`,
       },
@@ -98,8 +109,35 @@ const PATCHES: readonly SourcePatch[] = [
         find: `    shouldUsePhysics = true
     bot.jumpTicks = 0`,
         replace: `    // Position acknowledgement does not revoke the server's vehicle attachment.
+    hasCurrentPosition = true
     shouldUsePhysics = !bot.vehicle
     bot.jumpTicks = 0`,
+      },
+      {
+        find: `  bot.on('mount', () => { shouldUsePhysics = false })
+  bot.on('death', () => {
+    shouldUsePhysics = false`,
+        replace: `  bot.on('mount', () => { shouldUsePhysics = false })
+  bot.on('dismount', () => {
+    // A native detach or destroyed vehicle returns control to walking. It
+    // does not supply a missing post-login/respawn/configuration position.
+    shouldUsePhysics = hasCurrentPosition && !bot.vehicle && bot.health > 0
+  })
+  bot._client.on('state', (state) => {
+    if (state === 'configuration') { hasCurrentPosition = false; shouldUsePhysics = false }
+  })
+  bot.on('death', () => {
+    hasCurrentPosition = false
+    shouldUsePhysics = false`,
+      },
+      {
+        find: `  bot.on('respawn', () => { shouldUsePhysics = false })
+  bot.on('login', () => {
+    shouldUsePhysics = false`,
+        replace: `  bot.on('respawn', () => { hasCurrentPosition = false; shouldUsePhysics = false })
+  bot.on('login', () => {
+    hasCurrentPosition = false
+    shouldUsePhysics = false`,
       },
     ],
   },

@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.77
+
+- Handle native vehicle removal on the Bot event emitter and clear passenger attachment; resume walking after confirmed dismount without requiring an extra teleport packet. Preserve missing-position boundaries across login, death, respawn and configuration.
+- Report exact boat-recovery prerequisites rather than implying that any failure means a passenger is aboard; recheck grounding after the awaited look before attacking an empty boat.
+
 ## 0.5.7-rc.160-preview.76
 
 - Preserve directional-search origin and completed legs across combat suspension; never count interrupting motion as a complete searched corridor.

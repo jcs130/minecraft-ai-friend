@@ -24,3 +24,10 @@ it('rechecks passengers after turning toward the boat',async()=>{
  const attack=vi.fn();Object.assign(h.bot,{entities:{9:boat},attack,lookAt:async()=>{passengers.push(h.bot.entity);}});
  await expect(recoverBoat(h.bot as never,9,{aborted:()=>false} as never)).rejects.toThrow('已有乘客');expect(attack).not.toHaveBeenCalled();
 });
+it('reports an ungrounded recovery without inventing a passenger, and rechecks after look',async()=>{
+ const h=methodHarness('1.21.1');h.close();Object.assign(h.bot.world,{raycast:()=>null});
+ const boat={id:9,name:'boat',position:new Vec3(1.5,64,.5),isValid:true,height:.6,width:1.4,passengers:[]};
+ const attack=vi.fn();Object.assign(h.bot,{entities:{9:boat},attack,lookAt:async()=>{h.bot.entity.onGround=false;}});
+ let failure='';try{await recoverBoat(h.bot as never,9,{aborted:()=>false} as never);}catch(e){failure=String(e);}
+ expect(failure).toContain('自己尚未确认着地');expect(failure).not.toContain('已有乘客');expect(attack).not.toHaveBeenCalled();
+});
