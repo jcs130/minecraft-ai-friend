@@ -1,11 +1,11 @@
 {
-  "inventoryScope": "component_runtime_verified_20261114_server_pr207_trial",
-  "currentComponentEvidence": "paper/manifests/server-pr207-trial-deployed-20261114.json",
+  "inventoryScope": "component_runtime_verified_20261114_platform_identity_companion",
+  "currentComponentEvidence": "paper/manifests/platform-identity-companion-deployed-20261114.json",
   "acceptanceDocument": "paper/docs/SERVER_UPDATES.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-and-component-verified",
-  "latestRelease": "server-pr207-trial-20261114-r1",
-  "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
+  "latestRelease": "platform-identity-companion-20261114-r1",
+  "verifiedAt": "2026-11-14T13:48:07+08:00",
   "releaseDocument": "paper/docs/SERVER_UPDATES.md",
   "numenHostingCurrent": {
     "state": "deployed-and-component-verified",
@@ -1581,9 +1581,19 @@
       "evidence": "paper/manifests/server-pr207-trial-deployed-20261114.json"
     },
     "QiandengjiMaidBridge": {
-      "version": "0.1.34-autonomous-companion",
-      "sha256": "bae659e41e5b4d09a37b403b6943f67896bb6b52717a489df3f61cde75ca769a",
-      "evidence": "paper/manifests/server-pr207-trial-deployed-20261114.json"
+      "version": "0.1.35-residence-recovery",
+      "sha256": "19614119a381292d1039dbb36657958671c37dc21cef02334a43810f4438f035",
+      "evidence": "paper/manifests/platform-identity-companion-deployed-20261114.json"
+    },
+    "PlatformIdentity": {
+      "version": "0.1.0",
+      "sha256": "7aea3fba20c7438958d253402dda4e4b0c73f1ee2086b47a95a0e85be8c447ce",
+      "evidence": "paper/manifests/platform-identity-companion-deployed-20261114.json"
+    },
+    "LoginGuard": {
+      "version": "0.1.13-platform-identity",
+      "sha256": "e9ace15683212178fca983f00ad87d94b9c6e6d88a43ff43685958918ac10ae7",
+      "evidence": "paper/manifests/platform-identity-companion-deployed-20261114.json"
     },
     "QiandengjiRpg": {
       "version": "0.2.22-dungeon-readiness",
@@ -1617,7 +1627,9 @@
     }
   },
   "componentEvidenceByName": {
-    "QiandengjiMaidBridge": "paper/manifests/server-pr207-trial-deployed-20261114.json",
+    "QiandengjiMaidBridge": "paper/manifests/platform-identity-companion-deployed-20261114.json",
+    "PlatformIdentity": "paper/manifests/platform-identity-companion-deployed-20261114.json",
+    "LoginGuard": "paper/manifests/platform-identity-companion-deployed-20261114.json",
     "AgentFriend": "paper/manifests/server-pr207-trial-deployed-20261114.json",
     "QiandengjiRpg": "paper/manifests/server-pr207-trial-deployed-20261114.json",
     "VortexRPG": "paper/manifests/rpg-party-maid-deployed-20261113.json",
@@ -1628,9 +1640,14 @@
   },
   "latestVerifiedComponents": {
     "QiandengjiMaidBridge": {
-      "version": "0.1.34-autonomous-companion",
-      "artifactSha256": "bae659e41e5b4d09a37b403b6943f67896bb6b52717a489df3f61cde75ca769a",
-      "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json"
+      "version": "0.1.35-residence-recovery",
+      "artifactSha256": "19614119a381292d1039dbb36657958671c37dc21cef02334a43810f4438f035",
+      "manifest": "paper/manifests/platform-identity-companion-deployed-20261114.json"
+    },
+    "PlatformIdentity": {
+      "version": "0.1.0",
+      "artifactSha256": "7aea3fba20c7438958d253402dda4e4b0c73f1ee2086b47a95a0e85be8c447ce",
+      "manifest": "paper/manifests/platform-identity-companion-deployed-20261114.json"
     },
     "AgentFriend": {
       "version": "0.4.47.75-trial-gear",
@@ -1653,9 +1670,9 @@
       "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
     },
     "LoginGuard": {
-      "version": "0.1.12-ordered-voice",
-      "artifactSha256": "58b53c94e682382b5d9061434eb08ccf4620dae97ea05a89d887d02a8082ba0a",
-      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
+      "version": "0.1.13-platform-identity",
+      "artifactSha256": "e9ace15683212178fca983f00ad87d94b9c6e6d88a43ff43685958918ac10ae7",
+      "manifest": "paper/manifests/platform-identity-companion-deployed-20261114.json"
     },
     "AgentVision": {
       "version": "0.1.4",
@@ -1691,7 +1708,8 @@
   "currentRuntime": {
     "AgentFriend": "0.4.47.75-trial-gear",
     "CortiEyeMirror": "0.1.21-hud-baseline",
-    "QiandengjiMaidBridge": "0.1.34-autonomous-companion",
+    "QiandengjiMaidBridge": "0.1.35-residence-recovery",
+    "PlatformIdentity": "0.1.0",
     "embeddedCore": "0.5.7-rc.160-preview.37",
     "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
     "plugins": 57,
@@ -1701,7 +1719,7 @@
     "QiandengVoice": "0.1.7",
     "WorldObserver": "0.1.4-maid-ysm",
     "website": "0.8.41",
-    "LoginGuard": "0.1.12-ordered-voice",
+    "LoginGuard": "0.1.13-platform-identity",
     "AgentVision": "0.1.4",
     "hostedNumenCore": "0.5.7-rc.160-preview.68",
     "numen_hosted": "0.1.5-hosted.2",
