@@ -5,6 +5,7 @@ import java.nio.file.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.security.MessageDigest;
+import io.vortexcore.VortexCorePlugin;
 import org.bukkit.*;
 import org.bukkit.command.*;
 import org.bukkit.entity.*;
@@ -26,8 +27,17 @@ public final class StashGuidanceFixture extends JavaPlugin {
     private Object field(Object target,String name)throws Exception{Field f=target.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(target);}
     private Object dungeon()throws Exception{return method(af.getClass(),"dungeon").invoke(af);}
     private Inventory page(Player p,int page)throws Exception{Object d=dungeon(),storage=method(d.getClass(),"storage").invoke(d);return(Inventory)method(storage.getClass(),"page",UUID.class,int.class).invoke(storage,p.getUniqueId(),page);}
+    private VortexCorePlugin vortex(){return (VortexCorePlugin)Bukkit.getPluginManager().getPlugin("VortexRPG");}
     private ItemStack marked(Material m,String name){ItemStack i=new ItemStack(m,1);var meta=i.getItemMeta();meta.setDisplayName(name);i.setItemMeta(meta);return i;}
-    private String hash(ItemStack[] items)throws Exception{MessageDigest h=MessageDigest.getInstance("SHA-256");for(ItemStack i:items){h.update((byte)(i==null?0:1));if(i!=null)h.update(i.serializeAsBytes());}return HexFormat.of().formatHex(h.digest());}
+    private String hash(ItemStack[] items)throws Exception{
+        MessageDigest digest=MessageDigest.getInstance("SHA-256");
+        for(ItemStack item:items){
+            boolean occupied=item!=null&&!item.getType().isAir()&&item.getAmount()>0;
+            digest.update((byte)(occupied?1:0));
+            if(occupied)digest.update(item.serializeAsBytes());
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){try{
         if(sender instanceof Player||args.length<2)throw new IllegalArgumentException("Console QA action and actor only");
         Player p=Bukkit.getPlayerExact(args[1]);if(p==null||!p.getName().matches("ag_RUStash[a-z0-9]{1,4}")
@@ -61,6 +71,55 @@ public final class StashGuidanceFixture extends JavaPlugin {
             }
             Object d=dungeon(),storage=method(d.getClass(),"storage").invoke(d);for(int n=0;n<10;n++)method(storage.getClass(),"write",Inventory.class,UUID.class).invoke(storage,page(p,n),p.getUniqueId());
             af.saveConfig();p.saveData();p.updateInventory();sender.sendMessage("STASH_QA reset="+args[2]);
+        }else if(args[0].equals("overview")){
+            Object d=dungeon(),storage=method(d.getClass(),"storage").invoke(d);
+            for(int n=0;n<10;n++){
+                Inventory inv=page(p,n);
+                inv.clear();
+                method(storage.getClass(),"write",Inventory.class,UUID.class).invoke(storage,inv,p.getUniqueId());
+            }
+            // Keep one live, unsaved item on the first page and only saved data on the last.
+            page(p,0).setItem(18,new ItemStack(Material.IRON_HELMET));
+            Inventory last=page(p,9);
+            last.setItem(44,new ItemStack(Material.BREAD,12));
+            last.setItem(45,new ItemStack(Material.TIPPED_ARROW,24));
+            last.setItem(46,new ItemStack(Material.DIAMOND_SWORD));
+            last.setItem(47,new ItemStack(Material.STONE,50));
+            ItemStack staff=marked(Material.BLAZE_ROD,"QA apprentice staff");
+            var meta=staff.getItemMeta();
+            meta.getPersistentDataContainer().set(new NamespacedKey("vortexrpg","vortex_item_id"),PersistentDataType.STRING,"mage_apprentice_staff");
+            staff.setItemMeta(meta);
+            last.setItem(48,staff);
+            last.setItem(49,marked(Material.BLAZE_ROD,"Ordinary renamed rod"));
+            method(storage.getClass(),"write",Inventory.class,UUID.class).invoke(storage,last,p.getUniqueId());
+            ((Inventory[])((Map<?,?>)field(storage,"pages")).get(p.getUniqueId()))[9]=null;
+            af.getConfig().set("dungeon-rewards."+p.getUniqueId()+".emerald",14);
+            var mana=vortex().qiandengjiMana();
+            mana.setMana(p.getUniqueId(),mana.getMaxMana(p));
+            sender.sendMessage("STASH_QA overview");
+        }else if(args[0].equals("overview-state")){
+            Object d=dungeon(),storage=method(d.getClass(),"storage").invoke(d);
+            Inventory[] loaded=(Inventory[])((Map<?,?>)field(storage,"pages")).get(p.getUniqueId());
+            JsonObject out=new JsonObject();
+            out.addProperty("lastPageLoaded",loaded!=null&&loaded[9]!=null);
+            out.addProperty("bagHash",hash(p.getInventory().getStorageContents()));
+            out.addProperty("armorHash",hash(p.getInventory().getArmorContents()));
+            out.addProperty("liveFirstPageHash",hash(page(p,0).getContents()));
+            out.addProperty("pending",af.getConfig().getInt("dungeon-rewards."+p.getUniqueId()+".emerald"));
+            out.addProperty("mana",vortex().qiandengjiMana().getMana(p.getUniqueId()));
+            out.addProperty("configHash",HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(af.getDataFolder().toPath().resolve("config.yml")))));
+            sender.sendMessage("STASH_QA "+out);
+        }else if(args[0].equals("near-full")){
+            int free=Integer.parseInt(args[2]);
+            if(free<0||free>4)throw new IllegalArgumentException("QA bag vacancy out of range");
+            p.getInventory().clear();
+            for(int slot=0;slot<36-free;slot++)
+                p.getInventory().setItem(slot,new ItemStack(slot==9?Material.COBBLESTONE:Material.GOLD_INGOT,6));
+            p.updateInventory();
+            sender.sendMessage("STASH_QA bag-free="+free);
+        }else if(args[0].equals("mana")){
+            var mana=vortex().qiandengjiMana();mana.setMana(p.getUniqueId(),mana.getMaxMana(p));
+            sender.sendMessage("STASH_QA mana");
         }else if(args[0].equals("read")){
             JsonObject out=new JsonObject();out.addProperty("bagHash",hash(p.getInventory().getStorageContents()));out.addProperty("armorHash",hash(p.getInventory().getArmorContents()));out.addProperty("offhandHash",hash(new ItemStack[]{p.getInventory().getItemInOffHand()}));
             out.addProperty("protectedHash",hash(new ItemStack[]{p.getInventory().getItem(0),p.getInventory().getItem(1),p.getInventory().getItem(11),p.getInventory().getItem(12),p.getInventory().getItem(13),p.getInventory().getItem(14),p.getInventory().getItem(15)}));

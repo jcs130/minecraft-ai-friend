@@ -1731,7 +1731,7 @@ final class DungeonManager implements Listener {
             plugin.getConfig().set(claimPath, gameDay);
             plugin.saveConfig();
             p.sendTitle(ChatColor.GOLD + "第 " + floor + " 层过关", ChatColor.YELLOW + "奖励已存入个人箱子", 5, 55, 10);
-            p.sendMessage(ChatColor.GOLD + "奖励在本层宝箱或地面大厅的个人箱里；像普通箱子一样取放。");
+            p.sendMessage(ChatColor.GOLD + "可在本层或地面大厅开个人箱。免费查余量、武器及补给：" + PersonalStashOverview.COMMAND);
             credited++;
         }
         // Publish reward attribution only after the actual awards and clear checkpoint are durable.
@@ -2137,8 +2137,12 @@ final class DungeonManager implements Listener {
     private void stashCommand(Player player, String[] args) {
         if (args.length == 2) { openStash(player); return; }
         UUID id = player.getUniqueId();
-        Inventory inv = liveStash(id);
         String action = args[2].toLowerCase(Locale.ROOT);
+        if (action.equals("summary")) {
+            stashOverview(player, args);
+            return;
+        }
+        Inventory inv = liveStash(id);
         if (action.equals("inventory") && args.length == 3) {
             for (int slot = 0; slot < 36; slot++) {
                 ItemStack item = player.getInventory().getItem(slot);
@@ -2164,7 +2168,7 @@ final class DungeonManager implements Listener {
             // Listing is read-only. Ledger rewards are materialized on opening,
             // so an empty stored page must not imply that a new reward was lost.
             int queued=queuedRewardEntries(id);
-            if(queued>0)player.sendMessage("另有 "+queued+" 项待入箱奖励已保存，打开个人箱后装入；命令：/mycli arena stash（远程需travel，2魔力）。");
+            if(queued>0)player.sendMessage("另有 "+queued+" 项待入箱奖励已保存，打开个人箱后装入；命令：/mycli arena stash（远程开箱 2 魔力）。");
             return;
         }
         if (action.equals("putslot") && args.length == 5) {
@@ -2248,7 +2252,8 @@ final class DungeonManager implements Listener {
             ItemStack source = inv.getItem(slot%54);
             if (source == null || source.getType().isAir()) {
                 player.sendMessage("MC_STASH_TAKE slot=" + (slot + 1) + " moved=0 reason=empty");
-                player.sendMessage("§e此个人箱槽为空；/mycli arena stash list 查看全部页面的物品与实际槽号，再 take 指定非空槽。"); return;
+                player.sendMessage("§e此个人箱槽为空；/mycli arena stash list " + (slot / PagedPersonalStash.PAGE_SIZE + 1)
+                        + " 查该页实际槽号，或 " + PersonalStashOverview.COMMAND + " 查其他有货页面。"); return;
             }
             if (!remoteStashReady(player)) return;
             ItemStack part = source.clone();
@@ -2268,7 +2273,27 @@ final class DungeonManager implements Listener {
                     + part.getType().name().toLowerCase(Locale.ROOT) + " moved=" + moved);
             return;
         }
-        player.sendMessage("用法：/mycli arena stash [inventory|list|put <物品ID> <数量>|putslot <背包槽位> <数量>|take <箱槽位> [数量]]");
+        player.sendMessage("§e用 /mycli arena stash --help 查看完整用法；免费查十页库存：" + PersonalStashOverview.COMMAND);
+    }
+    PersonalStashOverview stashOverview(UUID owner, PagedPersonalStash.Snapshot snapshot) {
+        return new PersonalStashOverview(snapshot, queuedRewardEntries(owner));
+    }
+    void stashOverview(Player player, String[] args) {
+        boolean json = args.length == 4 && (args[0].equals("--json") || args[3].equals("--json"));
+        if (args.length != 3 && !json) {
+            plugin.communication().error(player, "INVALID_ARGUMENT", "只读查询用法：" + PersonalStashOverview.QUERY,
+                    false, PersonalStashOverview.QUERY);
+            return;
+        }
+        if (plugin.isObserver(player)) {
+            plugin.communication().error(player, "OBSERVER_NOT_OWNER", "请用本人游玩账号查询个人箱。",
+                    false, PersonalStashOverview.QUERY);
+            return;
+        }
+        UUID owner = player.getUniqueId();
+        var result = stashOverview(owner, stashSnapshot(owner));
+        if (json) player.sendMessage("MC_STASH_OVERVIEW " + result.json());
+        else player.sendMessage("§b【远程个人箱】" + result.text() + " 下一步 " + result.nextCommand());
     }
     private boolean nearStash(Player player) {
         Location at = player.getLocation();

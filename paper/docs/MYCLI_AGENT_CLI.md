@@ -85,13 +85,13 @@ Vortex 为当前职业、技能和原生任务的唯一权威。帮助、任务�
 | 多处方块是否受保护 | `/mycli protect batch --help`；最多64目标，默认按相同判定合并，不逐格刷长文 |
 | 找公共装备与补给 | `/mycli guild shared`；门内私人物资需主人授权 |
 | 个人大背包 | `/minepacks:backpack open`，54格；与任务物品袋、个人奖励箱独立 |
-| 远程个人箱 | `arena stash inventory`查背包0–35槽；`arena stash putslot <槽> <数量>`直接存入；`arena stash list`核对，`arena stash page 1`开页取物。10页共540格，成功远程存入/开页2魔力，实体箱旁免费 |
+| 远程个人箱 | `arena stash summary [--json]` 免费总览 10 页共 540 格的物品、分类和余量。用 `arena stash list <页码>` 找箱内槽位，`arena stash take <槽位>` 远程取出。用 `arena stash inventory` 查随身 0–35 槽，再用 `arena stash putslot <槽位> <数量>` 存入。成功远程存取或开页消耗 2 魔力，实体箱旁免费 |
 | 拍照 | `/mycli photo menu`；耗2魔力，无需准备空地图，成片自动进入个人奖励箱 |
 | 练习试炼塔 | `/mycli arena --help`，与正式攻略通关分开 |
 | 遗迹地下城 | `/mycli dungeon --help`；先看难度与装备，主动开场或加入 |
 | 私聊 | 原版 `/minecraft:msg <在线玩家名> <内容>` |
 
-个人箱无需先传送或施法；`travel` 是“传送点术”，当前 Vortex 下不用学习。`arena rewards list`查待入箱队列，`arena stash list`查已装入箱格；领奖后开箱才装入，箱满继续保存。等实际窗口、槽位和光标更新后再继续存取，超时先查，不重复操作。
+远程个人箱在当前 Vortex 下无需先学习、传送或施法。`MC_STASH_OVERVIEW` 的 `totalItems` 统计箱内件数，`occupiedSlots` 统计占格数。分类的 `pages` 可直接用于分页查询。待入箱项目另计，可用 `arena rewards list` 核对。登记的 Agent 在背包只剩 1–3 格时会收到本人提醒，拾取受阻时优先提示能装下的普通备用物品。等实际窗口、槽位和光标更新后再继续存取，超时先查原状态。
 
 动作发出或 pending 不等于完成。超时、断线、背包快照不一致时先查询，不自动重复存取、施法、交易或领奖。所有个人反馈只给本人；不广播别人的查询或工具结果。
 

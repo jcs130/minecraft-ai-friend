@@ -2,6 +2,8 @@ package org.afuhome.agentfriend;
 
 import com.google.gson.*;
 import java.util.*;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
@@ -12,6 +14,7 @@ import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerAttemptPickupItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.ItemStack;
 
 /** Read the action player's actual inventory; successful player gifts get private receipts only. */
@@ -24,11 +27,14 @@ final class InventoryFeedback implements Listener {
     private final Map<UUID, List<Gift>> pending = new HashMap<>();
     private final Map<UUID, Set<String>> explained = new HashMap<>();
     private final Set<UUID> scheduled = new HashSet<>();
-    private final Map<UUID, Long> fullHints = new HashMap<>();
+    private final Map<UUID, StorageNotice> storageNotices = new HashMap<>();
+    private static final int LOW_FREE_SLOTS = 3;
+    private static final long NOTICE_INTERVAL_MS = 60_000;
     private static final Set<Material> PLAIN_SURPLUS=Set.of(Material.COBBLESTONE,Material.COBBLED_DEEPSLATE,
             Material.DIRT,Material.STONE,Material.ANDESITE,Material.DIORITE,Material.GRANITE,
             Material.WHEAT_SEEDS,Material.ROTTEN_FLESH);
     private record Gift(UUID giver, ItemStack item, int amount, int beforeCount, EntityPickupItemEvent event) {}
+    private record StorageNotice(long sentAt, boolean full) {}
     InventoryFeedback(AgentFriendPlugin plugin) {
         this.plugin = plugin; identity = new ItemIdentity(plugin);tidy=new InventoryTidy(plugin);
         Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -49,7 +55,7 @@ final class InventoryFeedback implements Listener {
         if(action.equals("tidy")){tidy.command(p,args);return;}
         if (action.equals("item") || action.equals("物品")) { inspect(p, args); return; }
         if (!Set.of("status", "refresh", "状态", "刷新").contains(action)) {
-            p.sendMessage("§e用 /mycli inventory 查服务器随身背包；refresh 同步显示；item <0–35|hand> 查物品真实名称和用法。54格大背包需另行打开；个人奖励箱用 /mycli arena stash。"); return;
+            p.sendMessage("§e用 /mycli inventory 查随身背包；refresh 同步显示；item <0–35|hand> 查物品用法。54格大背包需另行打开；免费查个人箱余量和分类用 " + PersonalStashOverview.COMMAND + "。"); return;
         }
         if (action.equals("refresh") || action.equals("刷新")) {
             long now = System.currentTimeMillis();
@@ -66,7 +72,8 @@ final class InventoryFeedback implements Listener {
             identity.describe(item).append(row, false); ItemAppearances.appendDescription(item, row); rows.add(row);
         }
         p.sendMessage("§b【服务器随身背包】" + rows.size() + "格有物品，" + empty + "格空位；含快捷栏，不含54格大背包、任务物品袋和个人奖励箱。显示不一致用 /mycli inventory refresh；收到装备也请查看快捷栏。");
-        if(empty==0)storageHint(p,false);
+        if (empty == 0 && canAdviseStorage(p)) storageHint(p, 0, false, false);
+        else p.sendMessage("§7免费查看个人箱的武器、防具、消耗品与剩余格数：" + PersonalStashOverview.COMMAND);
         // Prismarine-chat messagestr is limited to 4096 characters. Send complete
         // bounded pages, retaining schemaVersion/id/amount/slot fields for clients.
         List<List<JsonObject>> pages = new ArrayList<>(); List<JsonObject> batch = new ArrayList<>(); int chars = 0;
@@ -108,7 +115,12 @@ final class InventoryFeedback implements Listener {
     }
     private void scheduleNotice(Player p, long delay) {
         UUID id = p.getUniqueId(); if (!scheduled.add(id)) return;
-        Bukkit.getScheduler().runTaskLater(plugin, () -> { scheduled.remove(id); if (p.isOnline() && !plugin.isObserver(p)) {showKnown(p, true);tidy.queueAuto(p);} }, delay);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            scheduled.remove(id);
+            if (!p.isOnline() || plugin.isObserver(p)) return;
+            showKnown(p, true);
+            if (!tidy.queueAuto(p)) remindNearFull(p);
+        }, delay);
     }
     private void showKnown(Player p, boolean onlyNew) {
         Set<String> seen = explained.computeIfAbsent(p.getUniqueId(), ignored -> new HashSet<>());
@@ -136,31 +148,73 @@ final class InventoryFeedback implements Listener {
         // No world scan or forced inventory refresh; do not cancel natural pickup.
         ItemStack item=event.getItem().getItemStack();
         if(item==null||item.getType().isAir())return;
-        storageHint(p,true);
+        if (canAdviseStorage(p) && !tidy.queueAuto(p)) storageHint(p, 0, true, true);
     }
-    private void storageHint(Player p,boolean cooldown){
-        if(cooldown&&tidy.queueAuto(p))return;
-        long now=System.currentTimeMillis();
-        if(cooldown&&now-fullHints.getOrDefault(p.getUniqueId(),0L)<60000)return;
-        fullHints.put(p.getUniqueId(),now);
-        var capacity=plugin.dungeon().stashSnapshot(p.getUniqueId());
-        String next=capacity.occupied()==PagedPersonalStash.CAPACITY
-                ?"个人箱已满（540/540），先 "+InventoryTidy.STASH_PREVIEW+" 预览可腾出的箱格。"
-                :"先 /mycli inventory tidy 合并普通堆叠；/mycli trade recycle list --json 查可回收装备。";
-        // Main inventory first; never nominate held, named, bound or custom gear.
-        for(int i=0;i<36;i++){
-            int slot=(i+9)%36;ItemStack item=p.getInventory().getItem(slot);
-            if(slot==p.getInventory().getHeldItemSlot()||item==null||!PLAIN_SURPLUS.contains(item.getType())
-                    ||item.hasItemMeta()||plugin.isSoulbound(item))continue;
-            int room=capacity.roomFor(item);if(room<1)continue;
-            int amount=Math.min(item.getAmount(),room);
-            next="可先存「"+identity.describe(item).name()+"」×"+amount+"。命令：/mycli arena stash putslot "+slot+" "+amount;break;
+    private boolean canAdviseStorage(Player player) {
+        return player.isOnline() && !player.isDead() && !plugin.isObserver(player) && !plugin.isDowned(player)
+                && !plugin.pvpParticipant(player)
+                && (player.getGameMode() == GameMode.SURVIVAL || player.getGameMode() == GameMode.ADVENTURE);
+    }
+    private void remindNearFull(Player player) {
+        InventoryType top = player.getOpenInventory().getTopInventory().getType();
+        if (!canAdviseStorage(player) || !plugin.isRegisteredAgent(player)
+                || top != InventoryType.CRAFTING && top != InventoryType.PLAYER) return;
+        int free = 0;
+        for (ItemStack item : player.getInventory().getStorageContents()) {
+            if ((item == null || item.getType().isAir()) && ++free > LOW_FREE_SLOTS) return;
         }
-        p.sendMessage("§e【inventory_full】"+(cooldown?"物品未全部装入背包。":"随身没有空槽。")+next+"存箱成功2魔力，无需开界面或传送；moved=0时停止重复。普通石头、圆石和黏土不能装备回收。明确销毁普通杂物：/mycli inventory tidy --discard-common；开启本人自动清理：/mycli inventory tidy auto on --discard-common（保留快捷栏与特殊物品）。");
-        p.sendMessage(net.kyori.adventure.text.Component.text("【点击合并背包】 ")
-                .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli inventory tidy"))
-                .append(net.kyori.adventure.text.Component.text("【点击装备回收】")
-                .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli trade recycle menu"))));
+        storageHint(player, free, false, true);
+    }
+    private void storageHint(Player player, int free, boolean pickupBlocked, boolean automatic) {
+        UUID id = player.getUniqueId();
+        boolean full = free == 0;
+        long now = System.currentTimeMillis();
+        StorageNotice recent = storageNotices.get(id);
+        if (automatic && recent != null && now - recent.sentAt() < NOTICE_INTERVAL_MS
+                && (!full || recent.full())) return;
+        storageNotices.values().removeIf(notice -> now - notice.sentAt() >= NOTICE_INTERVAL_MS);
+        storageNotices.put(id, new StorageNotice(now, full));
+
+        var snapshot = plugin.dungeon().stashSnapshot(id);
+        var overview = plugin.dungeon().stashOverview(id, snapshot);
+        boolean writesBlocked = plugin.inventoryTidy().stashWritesBlocked(id);
+        String deposit = writesBlocked ? null : suggestedDeposit(player, snapshot);
+        String next;
+        if (deposit != null) {
+            next = deposit + "。成功远程存入 2 魔力。";
+        } else if (writesBlocked) {
+            next = "个人箱存盘待核对，可以先查询。";
+        } else if (overview.freeSlots() == 0) {
+            next = "先用 " + InventoryTidy.STASH_PREVIEW + " 预览能释放的箱格。";
+        } else {
+            next = "用 /mycli arena stash inventory 查随身槽位，再用 stash putslot 存备用物品。成功远程存入 2 魔力。";
+        }
+        String warning = pickupBlocked ? "物品未全部装入背包。" : full ? "随身没有空槽。" : "随身背包只剩 " + free + " 格。";
+        player.sendMessage("§e" + (full ? "【inventory_full】" : "【背包快满】") + warning + overview.text() + " " + next);
+        player.sendMessage(Component.text("【查看个人箱汇总】 " + PersonalStashOverview.COMMAND)
+                .clickEvent(ClickEvent.runCommand(PersonalStashOverview.COMMAND)));
+        if (full && deposit == null) {
+            player.sendMessage(Component.text("【合并背包】 ")
+                    .clickEvent(ClickEvent.runCommand("/mycli inventory tidy"))
+                    .append(Component.text("【装备回收】")
+                            .clickEvent(ClickEvent.runCommand("/mycli trade recycle menu"))));
+        }
+    }
+    private String suggestedDeposit(Player player, PagedPersonalStash.Snapshot snapshot) {
+        // Main inventory first; never nominate held, named, bound or custom gear.
+        for (int index = 0; index < 36; index++) {
+            int slot = (index + 9) % 36;
+            ItemStack item = player.getInventory().getItem(slot);
+            if (slot == player.getInventory().getHeldItemSlot() || item == null || item.getAmount() <= 0
+                    || !PLAIN_SURPLUS.contains(item.getType()) || item.hasItemMeta() || plugin.isSoulbound(item)) continue;
+            int amount = Math.min(64, Math.min(item.getAmount(), snapshot.roomFor(item)));
+            if (amount > 0) {
+                return "可先存「" + identity.describe(item).name() + "」×" + amount
+                        + (amount < item.getAmount() ? "（本次只能存入部分）" : "")
+                        + "，用 /mycli arena stash putslot " + slot + " " + amount;
+            }
+        }
+        return null;
     }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void pickup(EntityPickupItemEvent event) {
@@ -196,7 +250,7 @@ final class InventoryFeedback implements Listener {
                 .filter(sample::isSimilar).mapToInt(ItemStack::getAmount).sum();
     }
     @EventHandler public void quit(PlayerQuitEvent event) {
-        UUID id = event.getPlayer().getUniqueId(); refreshed.remove(id); explained.remove(id); scheduled.remove(id); fullHints.remove(id);
+        UUID id = event.getPlayer().getUniqueId(); refreshed.remove(id); explained.remove(id); scheduled.remove(id);
         tidy.forget(id);
     }
 }

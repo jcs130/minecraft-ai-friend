@@ -781,7 +781,7 @@ final class SiteDungeonManager implements Listener {
                 plugin.getConfig().set(history+".nextCommands",List.of("/mycli arena rewards","/mycli arena stash"));
             }
         });
-        runResult(p,"claim",chosen,claimedRun);p.sendMessage("§a"+(sites.containsKey(chosen)?label(sites.get(chosen)):"遗迹远征")+"奖励已保存到待入箱队列；打开个人箱时装入，箱满会保留。命令：/mycli arena stash；只查待入箱奖励：/mycli arena rewards list。重复领取不会再次发奖。");
+        runResult(p,"claim",chosen,claimedRun);p.sendMessage("§a"+(sites.containsKey(chosen)?label(sites.get(chosen)):"遗迹远征")+"奖励已保存到待入箱队列；打开个人箱时装入，箱满会保留。开箱 /mycli arena stash；免费查库存和待入箱数量 "+PersonalStashOverview.COMMAND+"。重复领取不会再次发奖。");
         plugin.agentCoach().rememberAdventure(p, "遗迹攻略奖励已经领取");
     }
     private void tick(){

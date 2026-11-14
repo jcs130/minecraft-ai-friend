@@ -159,6 +159,7 @@ final class TrialRescueManager implements Listener {
         if (Set.of("help", "status", "list", "explain", "rules", "progress", "capabilities").contains(root)) return true;
         if(root.equals("challenge")){try{return ChallengeCli.parse(args).readOnly();}catch(IllegalArgumentException invalid){return false;}}
         if(root.equals("protect")||root.equals("保护")){try{ProtectionQuery.parse(args);return true;}catch(IllegalArgumentException invalid){return false;}}
+        if (PersonalStashOverview.matchesCommand(args)) return args.length == 3;
         return Set.of("arena", "dungeon").contains(root)
                 && (args.length == 1 || Set.of("status", "layout", "info", "list", "loot").contains(args[1].toLowerCase(Locale.ROOT)));
     }
