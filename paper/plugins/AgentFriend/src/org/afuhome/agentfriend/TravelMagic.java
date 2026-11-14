@@ -52,6 +52,12 @@ final class TravelMagic implements Listener {
         spellTeleports.put(player.getUniqueId(), System.currentTimeMillis() + 2000L);
     }
 
+    boolean teleportChecked(Player player, Location destination, String id, String name, int mana) {
+        homeLandings.put(player.getUniqueId(), destination.clone());
+        try { return teleport(player, destination, id, name, mana); }
+        finally { homeLandings.remove(player.getUniqueId()); }
+    }
+
     boolean teleport(Player player, Location destination, String id, String name, int mana) {
         if (!plugin.professions().basicAllowed(player,id.equals("home") ? "home" : id.equals("support") ? "support" : "travel")) return false;
         if (player.getGameMode() == GameMode.SPECTATOR) {
@@ -72,7 +78,7 @@ final class TravelMagic implements Listener {
             internal.add(player.getUniqueId());
             try { player.teleport(departure); }
             finally { internal.remove(player.getUniqueId()); }
-            player.sendMessage("§e[unsafe_destination] 归乡目标被其他插件改为不安全位置，已尝试返回出发点；未耗魔。下一步：/mycli waypoint list");
+            player.sendMessage("§e[unsafe_destination] 传送目标被其他插件改为不安全位置，已尝试返回出发点；未耗魔。下一步：/mycli waypoint list");
             return false;
         }
         if (!plugin.spendMana(player, mana)) {

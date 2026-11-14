@@ -29,7 +29,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
     private AutonomousDecision lastDecision;
     private record ActionCue(String mode,UUID threat,String observation){}
     private record AutonomousDecision(EntityMaid maid,long revision,ActionCue cue){}
-    private record VisibleChange(long sequence,long at,String text){}
+    private record VisibleChange(long sequence,long at,UUID world,String text){}
     private final Map<UUID,VisibleChange> changes=new HashMap<>();
     private long changeSequence;
     private final Map<String,JsonObject> actionResults=new HashMap<>();
@@ -94,8 +94,9 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         JsonObject result=receipts.finish(maid.getUUID(),operation,"pending",observation);
         if(deliveredTo==null&&!proactive)for(UUID id:call.listeners){Player listener=Bukkit.getPlayer(id);if(listener!=null)listener.sendMessage(net.kyori.adventure.text.Component.text("[附近·女仆] "+actor.getName()+" → "+maid.getName().getString()+"："+text,net.kyori.adventure.text.format.NamedTextColor.AQUA));}
         List<LLMMessage> messages=new ArrayList<>();
+        messages.add(LLMMessage.systemChat(maid,sceneFacts(maid,actor)));
         if(cue!=null){
-            messages.add(LLMMessage.systemChat(maid,"你是千灯纪的冒险伙伴。根据服务器现场事实独立决定自己的下一步。"+
+            messages.add(LLMMessage.systemChat(maid,"你是肥鱼，和可米平等相处的冒险伙伴，直接叫可米，不称主人。根据服务器现场事实独立决定自己的下一步。"+
                 "伙伴正在冒险时，遇到确认的敌人优先中断自己安排的休息或工作并护卫。"+
                 "伙伴继续出发时，考虑收竿跟上。需要执行就调用一次工具，确实没有适合的动作才输出[[结束]]。"+
                 "无法用文字执行动作，不发问、不催促、不声称已经击中或走到。"));
@@ -376,9 +377,10 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
             var location=maid.getBukkitEntity().getLocation();var world=partner.getWorld();
             String biome=world.getBiome(location).getKey().toString(),period=world.getTime()<13000?"白天":"夜晚";
             VisibleChange change=changes.get(maid.getUUID());
+            if(change!=null&&!change.world.equals(world.getUID()))change=null;
             if(change!=null&&now-change.at<10_000_000_000L)continue; // Let a real operation finish before inviting conversation.
             if(change!=null&&now-change.at>180_000_000_000L)change=null;
-            if(!initiative.opportunity(now,true,world.getUID().toString(),location.getX(),location.getZ(),change==null?0:change.sequence))continue;
+            if(!initiative.opportunity(now,true,scene(maid),location.getX(),location.getZ(),change==null?0:change.sequence))continue;
             String operation="companion_"+UUID.randomUUID();
             String facts="两位伙伴当前在同一维度、相距24格内；仅检查了肥鱼身边8格的可见近邻威胁，不能据此保证整段路安全。世界="+world.getName()+"，生物群系="+biome+"，时段="+period+"，天气="+(world.hasStorm()?"降雨或降雪":"晴")+"。可米生命="+partner.getHealth()+"/"+partner.getMaxHealth()+"，肥鱼生命="+maid.getHealth()+"/"+maid.getMaxHealth()+"。仅表示当前观察，不推断任务进度。";
             if(change!=null)facts+="刚才在现场看到："+change.text+"；这不表示任务完成。";
@@ -388,6 +390,40 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
                 plugin.reply(partner,"chat",operation,result,null);
             }catch(Exception unavailable){plugin.getLogger().warning("Companion conversation not completed; inspect original request "+operation+" ("+unavailable.getClass().getSimpleName()+")");}
         }
+    }
+    // Capture current body facts on the server thread, not guessed from a player's words.
+    String sceneFacts(EntityMaid maid, Player actor) {
+        var at=maid.getBukkitEntity().getLocation();var world=at.getWorld();
+        JsonObject facts=new JsonObject();
+        facts.addProperty("observedAt",java.time.Instant.now().toString());
+        facts.addProperty("world",world.getName());facts.addProperty("dimension",world.getKey().toString());
+        facts.addProperty("biome",world.getBiome(at).getKey().toString());
+        facts.addProperty("period",world.getTime()%24000<13000?"白天":"夜晚");
+        facts.addProperty("weather",world.hasStorm()?"降水":"晴");
+        facts.addProperty("health",maid.getHealth());facts.addProperty("maximumHealth",maid.getMaxHealth());
+        facts.addProperty("task",maid.getTask().getUid().toString());
+        facts.addProperty("hand",net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(maid.getMainHandItem().getItem()).toString());
+        facts.addProperty("sitting",maid.isMaidInSittingPose());facts.addProperty("residence",maid.isHomeModeEnable());
+        facts.addProperty("speakerDistance",Math.round(Math.sqrt(at.distanceSquared(actor.getLocation()))));
+        var guard=plugin.companionScene(maid);JsonObject mode=new JsonObject();
+        for(String key:List.of("state","guardMode","systemOneStatus","lastSystemOneSelectionAt"))if(guard.has(key))mode.add(key,guard.get(key));
+        facts.add("guard",mode);
+        JsonArray visible=new JsonArray();
+        for(var mob:maid.level().getEntitiesOfClass(net.minecraft.world.entity.Mob.class,maid.getBoundingBox().inflate(8),m->m.isAlive())){
+            if(visible.size()>=4)break;
+            if(mob==maid||mob.isNoAi()||mob.isInvulnerable()||maid.isAlliedTo(mob)||mob.getBukkitEntity().hasMetadata("NPC")||maid.distanceToSqr(mob)>64||!maid.hasLineOfSight(mob))continue;
+            boolean attacking=mob.getTarget()==maid||mob.getTarget()!=null&&mob.getTarget().getUUID().equals(maid.getOwnerUUID());
+            if(!attacking&&(!(mob instanceof net.minecraft.world.entity.monster.Enemy)||mob instanceof net.minecraft.world.entity.NeutralMob))continue;
+            JsonObject enemy=new JsonObject();enemy.addProperty("type",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString());
+            enemy.addProperty("distance",Math.round(Math.sqrt(maid.distanceToSqr(mob))));enemy.addProperty("attackingPartner",attacking);visible.add(enemy);
+        }
+        facts.add("visibleThreatsWithin8",visible);
+        return "本轮现场实测："+facts+"。只知道8格内可见威胁，不保证远处安全。模式设置不等于命中或击杀，没收到真实完成回执不能说已完成任务。结合眼前的人、地形和战况简短回应；战斗时优先行动，不用长篇闲聊。";
+    }
+    void combatObserved(EntityMaid maid,net.minecraft.world.entity.Mob target,String mode,float damage){
+        if(!enabled(maid)||!Float.isFinite(damage)||damage<=0)return;
+        changes.put(maid.getUUID(),new VisibleChange(++changeSequence,System.nanoTime(),maid.getBukkitEntity().getWorld().getUID(),
+            "肥鱼以"+mode+"方式实际命中"+net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(target.getType())+"，伤害="+damage+"；这只证明本次命中，不代表击杀或完成任务"));
     }
     private static String scene(EntityMaid maid){var p=maid.getBukkitEntity().getLocation();var w=p.getWorld();return w.getUID()+":"+w.getBiome(p).getKey()+":"+(w.getTime()<13000)+":"+w.hasStorm();}
     @org.bukkit.event.EventHandler(priority=org.bukkit.event.EventPriority.MONITOR,ignoreCancelled=true)
@@ -405,7 +441,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         for(String id:plugin.registeredMaids().keySet()){
             EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(UUID.fromString(id)));
             if(maid==null||!enabled(maid)||!actor.getUniqueId().equals(maid.getOwnerUUID())||!actor.canSee(maid.getBukkitEntity())||!actor.getWorld().equals(maid.getBukkitEntity().getWorld())||at.distanceSquared(maid.getBukkitEntity().getLocation())>64||!MaidConversationRange.within(maid,actor,MaidConversationRange.PARTNER))continue;
-            changes.put(maid.getUUID(),new VisibleChange(++changeSequence,System.nanoTime(),text));
+            changes.put(maid.getUUID(),new VisibleChange(++changeSequence,System.nanoTime(),at.getWorld().getUID(),text));
         }
     }
 }

@@ -232,7 +232,15 @@ final class WaypointManager implements Listener {
         json.addProperty("page", page); json.addProperty("pages", pages); json.addProperty("total", all.size()); json.addProperty("limit", limit());
         JsonArray entries = new JsonArray();
         for (Point v : all.subList((page - 1) * PAGE_SIZE, Math.min(page * PAGE_SIZE, all.size()))) {
-            entries.add(json(v, shared));
+            JsonObject entry = json(v, shared);
+            Location at = v.location();
+            String landing = at == null ? "world_unavailable" : !at.getWorld().isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4)
+                    ? "not_loaded_not_checked" : safe(p, at);
+            entry.addProperty("landingStatus", landing == null ? "checked_safe" : landing);
+            entry.addProperty("landingChecked", at != null && at.getWorld().isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4));
+            entry.addProperty("sameWorld", at != null && at.getWorld().equals(p.getWorld()));
+            if (at != null && at.getWorld().equals(p.getWorld())) entry.addProperty("distanceBlocks", (int)Math.ceil(at.distance(p.getLocation())));
+            entries.add(entry);
             p.sendMessage(ChatColor.AQUA + v.name + " · " + label(v) + (shared ? " · " + v.ownerName : "")
                     + " → /mycli goto " + (shared ? "shared:" + v.share : "personal:" + v.name));
         }
@@ -303,14 +311,14 @@ final class WaypointManager implements Listener {
         UUID request = UUID.randomUUID(), player = p.getUniqueId(); requests.put(player, request);
         reply.accept(new Outcome(false, "loading"));
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (requests.remove(player, request) && Bukkit.getPlayer(player) != null) reply.accept(new Outcome(false, "timeout"));
+            if (requests.remove(player, request) && Bukkit.getPlayer(player) == p) reply.accept(new Outcome(false, "timeout"));
         }, 200L);
         try { ExistingChunkAccess.load(plugin, at.getWorld(), at.getBlockX() >> 4, at.getBlockZ() >> 4).whenComplete((chunk, error) -> {
             if (!plugin.isEnabled()) return;
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!requests.remove(player, request)) return;
                 Player online = Bukkit.getPlayer(player);
-                if (online == null) return;
+                if (online == null || online != p) return;
                 boolean ticket = chunk != null && chunk.addPluginChunkTicket(plugin);
                 try {
                     String reason = actor(online, false);
@@ -334,8 +342,8 @@ final class WaypointManager implements Listener {
                         if (!query.testState(BukkitAdapter.adapt(online.getLocation()), WorldGuardPlugin.inst().wrapPlayer(online), Flags.EXIT)) reason = "protected_exit";
                     } catch (RuntimeException | LinkageError unavailable) { reason = "protection_unavailable"; }
                     if (reason != null) { reply.accept(new Outcome(false, reason)); return; }
-                    online.sendMessage("MC_DESTINATION id=" + raw + " " + LocationOutput.fields(landing));
-                    boolean moved = plugin.travelMagic().teleport(online, landing, raw, "传送点术·" + title, mana);
+                    boolean moved = plugin.travelMagic().teleportChecked(online, landing, raw, "传送点术·" + title, mana);
+                    if (moved) online.sendMessage("MC_DESTINATION id=" + raw + " " + LocationOutput.fields(online.getLocation()));
                     reply.accept(new Outcome(moved, moved ? "ok" : "teleport_rejected"));
                     plugin.refreshAgentState(online);
                 } finally { if (ticket) chunk.removePluginChunkTicket(plugin); }
@@ -355,6 +363,11 @@ final class WaypointManager implements Listener {
         j.addProperty("dimension", v.dimension); j.addProperty("world", v.world.toString());
         j.addProperty("x", v.x); j.addProperty("y", v.y); j.addProperty("z", v.z);
         j.addProperty("shared", !v.share.isEmpty()); j.addProperty("available", v.location() != null);
+        j.addProperty("source", "player_named_bookmark"); j.addProperty("worldLoaded", v.location() != null);
+        j.addProperty("worldName", v.location() == null ? v.dimension : v.location().getWorld().getName());
+        j.addProperty("worldLabel", v.location() == null ? v.dimension : LocationOutput.worldLabel(v.location().getWorld()));
+        j.addProperty("landingChecked", false); j.addProperty("availabilityMeaning", "world_loaded_only_recheck_before_travel");
+        j.addProperty("meaning", "玩家命名的坐标；名字不是官方副本、结构或任务入口的认证。传送前重新核对落点。");
         j.addProperty("target", shared && !v.share.isEmpty() ? "shared:" + v.share : "personal:" + v.name);
         if (!v.share.isEmpty()) j.addProperty("shareCode", v.share);
         return j;
@@ -391,7 +404,9 @@ final class WaypointManager implements Listener {
             case "world_border" -> "地点已在世界边界之外。";
             case "world_unavailable", "chunk_unavailable", "timeout" -> "目的地暂不可用，请稍后重试。";
             case "point_changed" -> "地点已被修改、删除或撤回分享，请重新查询。";
-            case "protected_entry", "protected_exit", "protection_unavailable", "teleport_rejected" -> "保护规则或施法条件拒绝传送。";
+            case "protected_entry" -> "目的地拒绝进入；请让地点管理者开放通行，或 /mycli waypoint 选择公共入口。未传送、未耗魔。";
+            case "protected_exit" -> "当前位置限制离开；先 /mycli land here 核对区域，再用活动的正常离场方式。未传送、未耗魔。";
+            case "protection_unavailable", "teleport_rejected" -> "保护检查或传送被拒绝；未耗魔。/mycli status 核对魔力和参战状态，/mycli waypoint 另选公开入口。";
             case "moved" -> "等待时已移动，传送取消。";
             case "busy" -> "已有传送正在准备中，请等待结果。";
             case "not_enough_mana" -> "魔力不足，需要 6 魔力。";
@@ -403,8 +418,8 @@ final class WaypointManager implements Listener {
     }
     private String label(Point v) {
         World w = Bukkit.getWorld(v.world);
-        return (w == null ? "世界未加载" : switch (w.getEnvironment()) { case NETHER -> "下界"; case THE_END -> "末地"; default -> "主世界"; })
-                + " " + (int) v.x + "," + (int) v.y + "," + (int) v.z;
+        return (w == null ? "世界未加载：" + v.dimension : LocationOutput.worldLabel(w) + " (" + w.getName() + ")")
+                + " " + (int)Math.floor(v.x) + "," + (int)Math.floor(v.y) + "," + (int)Math.floor(v.z);
     }
     private ItemStack item(Material type, String title, String... lore) {
         ItemStack stack = new ItemStack(type); ItemMeta meta = stack.getItemMeta(); meta.setDisplayName(title); meta.setLore(List.of(lore)); stack.setItemMeta(meta); return stack;
