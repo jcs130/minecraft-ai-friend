@@ -52,11 +52,14 @@ test('native gamepad preview has an independent activation, direct link and down
   assert.equal(release.url, '/downloads/' + native.filename);
 });
 
-test('phone page offers both packs and documents SDL passthrough', async t => {
+test('phone download and setup pages link to the latest native pack', async t => {
   const f = await siteFixture(t, { downloads: { baseUrl, enabledPackages: [regular.id, native.id] } });
   const html = await (await fetch(f.origin + '/downloads.html')).text();
   const dom = new JSDOM(html, { url: f.origin + '/downloads.html', runScripts: 'outside-only' });
   t.after(() => dom.window.close());
+  const fallback = dom.window.document.querySelector('#android-client-downloads a[download]');
+  assert.equal(fallback.getAttribute('href'), '/downloads/android-native-client');
+  assert.match(html, /已补上通话键/);
   dom.window.fetch = url => fetch(new URL(url, f.origin));
   dom.window.eval(await fs.readFile(new URL('../public/downloads.js', import.meta.url), 'utf8'));
   const deadline = Date.now() + 4000;
@@ -64,7 +67,11 @@ test('phone page offers both packs and documents SDL passthrough', async t => {
     await new Promise(resolve => setTimeout(resolve, 10));
   const card = dom.window.document.querySelector('#android-client-downloads .download-card');
   assert.ok(card);
-  assert.equal(card.querySelector('a[download]').getAttribute('download'), native.filename);
+  const link = card.querySelector('a[download]');
+  assert.equal(link.getAttribute('download'), native.filename);
+  const redirect = await fetch(link.href, { method: 'HEAD', redirect: 'manual' });
+  assert.equal(redirect.status, 307);
+  assert.equal(redirect.headers.get('x-checksum-sha256'), native.sha256);
   assert.match(card.textContent, /兼容预览/);
   assert.match(card.textContent, /实机验证/);
   assert.deepEqual(
