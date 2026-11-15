@@ -2,6 +2,22 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync, gunzipSync } from 'node:zlib';
+import { operationInventory, type OperationObservation } from '../../core/operation-experience.ts';
+
+/** Physical inventory only. Omitted/invalid stacks remain unknown, not an empty bag. */
+export function nativeOperationObservation(state: Record<string, any> | null): OperationObservation | null {
+  if (!state?.connected) return null;
+  const items = state.inventory;
+  const valid = Array.isArray(items) && items.every(i => i && Number.isInteger(i.slot)
+    && (i.empty === true || typeof i.name === 'string' && Number.isSafeInteger(i.count) && i.count >= 0))
+    && new Set(items.map(i => i.slot)).size === items.length;
+  return { at: state.sampledAt, dimension: typeof state.dimension === 'string' ? state.dimension.replace(/^minecraft:/, '') : null,
+    position: Array.isArray(state.position) && state.position.length === 3 && state.position.every(Number.isFinite)
+      ? { x: state.position[0], y: state.position[1], z: state.position[2] } : null,
+    health: typeof state.health === 'number' && Number.isFinite(state.health) ? state.health : null,
+    food: typeof state.food === 'number' && Number.isFinite(state.food) ? state.food : null,
+    inventory: valid ? operationInventory(items.filter(i => !i.empty), true) : null };
+}
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 export class NativeEvidenceArchive {
   constructor(private readonly directory: string) {}

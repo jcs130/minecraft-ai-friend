@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.84
+
+- Add scoped JitRL candidate advice and exact-receipt feedback to the shared game notebook. Preserve null outcomes, full typed-choice probabilities and native physical inventory evidence. Ranking uses no model calls or automatic body/skill adoption.
+
 ## 0.5.7-rc.160-preview.83
 
 - Match block protection replies, queries and navigation caches by native server level identity instead of the physics dimension type. Preserve exact-cell denials, legacy fallback and cross-world isolation without adding a permission-query requirement.

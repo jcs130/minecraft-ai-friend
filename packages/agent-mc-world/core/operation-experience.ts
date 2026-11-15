@@ -29,12 +29,13 @@ export type OperationDecision = {
   model?: string | null; elapsedMs?: number | null; inputTokens?: number | null; outputTokens?: number | null;
   sessionId?: string; contextHash?: string;
   recalledMemoryRefs?: string[];
+  controller?: OperationAttribution['controller'];
   policy?: import('./policy-evidence.ts').PolicyEvidence;
 };
 export type OperationExperience = {
   schema: 'agent-mc-experience/v1'; id: string; scopeKey: string; run: string; requestId: string;
   at: string; updatedAt: string; kind: 'decision' | 'operation'; tool: string; operations: string[];
-  inputHash: string; parameters: Record<string,unknown>[]; attribution: OperationAttribution; decision: OperationDecision | null;
+  inputHash: string; actionHash?: string; parameters: Record<string,unknown>[]; attribution: OperationAttribution; decision: OperationDecision | null;
   before: OperationObservation | null; after: OperationObservation | null;
   execution: Pick<ExecutionReceipt, 'kind' | 'id' | 'phase' | 'terminal'> | null;
   dispatch: 'pending' | 'returned' | 'rejected' | 'unknown'; elapsedMs: number | null;
@@ -60,6 +61,11 @@ export function operationStepEffects(receipt?: ExecutionReceipt): NonNullable<Op
   });
 }
 export const experienceHash = (v: unknown): string => createHash('sha256').update(stable(v)).digest('hex');
+/** Bind a proposed action to its exact execution, allowing host tool namespaces. */
+export function operationActionHash(tool: string, args: Record<string, unknown>): string {
+  const suffix = /^(?:[a-zA-Z][\w.-]*_)?(script|do|act|combat_tactic|flight_plan|chat|interact|move)$/.exec(tool)?.[1];
+  return experienceHash([suffix ?? tool, args]);
+}
 function stable(v: unknown): string {
   if (v === undefined) return 'null';
   if (!v || typeof v !== 'object') return JSON.stringify(v);
@@ -120,6 +126,7 @@ function normalizedDecision(v: OperationDecision): OperationDecision {
   if (new Set(candidates.map(c => c.id)).size !== candidates.length) throw new Error('Duplicate decision candidates');
   if (v.selected !== null && !candidates.some(c => c.id === v.selected)) throw new Error('Unknown selected candidate');
   return { id:bounded(v.id,'decisionId'), category:bounded(v.category,'category',80), selected:v.selected, status:bounded(v.status,'status',80), candidates,
+    ...(v.controller ? {controller:attribution({controller:v.controller}).controller} : {}),
     model: v.model ? bounded(v.model,'model',160) : null, elapsedMs:count(v.elapsedMs), inputTokens:count(v.inputTokens), outputTokens:count(v.outputTokens),
     ...(v.sessionId ? {sessionId:bounded(v.sessionId,'sessionId')} : {}),
     ...(v.contextHash && /^[a-f0-9]{64}$/.test(v.contextHash) ? {contextHash:v.contextHash} : {}),
@@ -193,12 +200,12 @@ export class OperationExperienceBook {
     }
     const at=new Date().toISOString();
     return this.save(scope,{schema:'agent-mc-experience/v1',id,scopeKey:operationScopeKey(scope),run,requestId,at,updatedAt:at,
-      kind:'operation',tool,operations:operationNames(args),inputHash,parameters:parameters(args),attribution:a,decision:null,
+      kind:'operation',tool,operations:operationNames(args),inputHash,actionHash:operationActionHash(tool,args),parameters:parameters(args),attribution:a,decision:null,
       before:operationObservation(before),after:null,execution:null,dispatch:'pending',elapsedMs:null,goalVerified:false},true);
   }
   decision(scope: GameMemoryScope, run: string, value: OperationDecision, before: OperationObservation | null) {
     const decision=normalizedDecision(value);
-    const row=this.begin(scope,run,`decision:${decision.id}`, 'host-decision', {},before,{controller:'system1',sessionId:decision.sessionId,decisionId:decision.id,policy:decision.policy});
+    const row=this.begin(scope,run,`decision:${decision.id}`, 'host-decision', {},before,{controller:decision.controller??'system1',sessionId:decision.sessionId,decisionId:decision.id,policy:decision.policy});
     if (row.decision) {if(experienceHash(row.decision)!==experienceHash(decision)) throw new Error('Decision ID conflict');return row;}
     return this.save(scope,{...row,kind:'decision',decision,before:null,after:row.before,dispatch:'returned',elapsedMs:decision.elapsedMs??null,updatedAt:new Date().toISOString()});
   }

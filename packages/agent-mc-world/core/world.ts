@@ -5010,6 +5010,7 @@ export class MinecraftWorld implements World {
             scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
             serviceScope: { realm: this.serverRealmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
             dimension: bot?.entity && bot.game?.dimension ? normalizeDimension(bot.game.dimension) : null,
+            observation: () => this.requestFacts()?.experience?.observation ?? null,
             capture: () => {
               const snap = this.snapshot({ scanBlocks: false });
               if (!snap || !bot?.entity || !bot.game?.dimension) throw new Error('Minecraft not connected; cannot capture historical cached facts as current');

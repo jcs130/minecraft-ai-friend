@@ -46,6 +46,7 @@ describe('explicit host choice', () => {
     Object.assign(host, { decisions: { request } });
     const result = JSON.parse(String(await tool.handler(args, ctx)));
     expect(result.status).toBe('advice'); expect(result.inputTokens).toBeNull();
+    expect(result.probabilities).toEqual({bridge:.9,_inspect:.1}); expect(result.outputTokens).toBeNull();
     expect(request.mock.calls[0][0].questions.action.criteria).toEqual({ bridge: '走已见桥面', _inspect: expect.any(String) });
     expect(request.mock.calls[0][1].provider).toBeUndefined();
     expect(result.execution).toContain('未执行');
