@@ -7,3 +7,8 @@ coverage/
 scratch/
 !vendor/native-types/
 !vendor/native-types/**
+
+# Local 永恒世界 viewer session (never commit credentials or live status)
+private-mcyyy-viewer.json
+private-mcyyy-viewer-status.json
+private-mcyyy-*.json

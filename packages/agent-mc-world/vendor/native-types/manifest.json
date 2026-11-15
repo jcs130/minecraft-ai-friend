@@ -504,6 +504,24 @@
       "upstreamSha256": "e083384623f90cfa7e8d2aa7efe78c51095a04ad51d1f82c3e4052689666895d",
       "license": "MIT",
       "sha256": "b0014236a0b771c3af786924737eb4288fda328649620398d3f8b8c6e4e35088"
+    },
+    {
+      "package": "minecraft-data",
+      "version": "3.119.0",
+      "path": "index.d.ts",
+      "file": "minecraft-data@3.119.0/minecraft-data/index.d.ts",
+      "upstreamSha256": "1b232aaac4d9e8cf8b25f4804743992fdee464b919f0d7f8db1346184fe31048",
+      "license": "MIT",
+      "sha256": "1b232aaac4d9e8cf8b25f4804743992fdee464b919f0d7f8db1346184fe31048"
+    },
+    {
+      "package": "mineflayer",
+      "version": "4.39.0",
+      "path": "index.d.ts",
+      "file": "mineflayer@4.39.0/mineflayer/index.d.ts",
+      "upstreamSha256": "4784111cc839eeeddec979c297c4c18bf984ebc25e0852407d81f469fd38aa83",
+      "license": "MIT",
+      "sha256": "f159effa4489e6a24ef810f4c9548916591c1760ce1ad179dd621dedba9c298a"
     }
   ]
 }

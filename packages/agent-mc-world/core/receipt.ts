@@ -185,6 +185,9 @@ export function describeSkill(c: SkillCall, heldItem?: string | null): string {
       return c.item ? `从 ${spot} 的容器取出 ${c.count ?? 1} 个${zhName(c.item)}` : `掏空 ${spot} 的容器`;
     }
     case 'chat': return `说: ${c.text}`;
+    case 'menu_click': return typeof c.slot === 'number' && c.slot >= 0 ? `点菜单第 ${c.slot} 格` : `点菜单「${c.name ?? ''}」`;
+    case 'menu_close': return '关闭服务端菜单';
+    case 'swap_hands': return '按交换主副手键（F）';
     case 'gesture': return `向 ${c.name}${c.motion === 'wave' ? '挥手' : c.motion === 'bow' ? '鞠躬' : '点头'}`;
   }
 }

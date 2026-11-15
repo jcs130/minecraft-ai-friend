@@ -79,6 +79,21 @@ export function unknownCraftItemText(bot: Bot, name: string): string {
 }
 
 /**
+ * If a craft is only short on planks but the bag already has matching logs or stems,
+ * tell the agent to craft those planks first instead of listing unrelated wood types.
+ */
+export function plankSourceHint(items: Array<{ name: string; count: number }>, nameOf: (n: string) => string = zhName): string {
+  const logs = new Map<string, number>();
+  for (const it of items) {
+    const m = /^(.*_)(log|stem)$/.exec(it.name);
+    if (m && it.count > 0) logs.set(it.name, (logs.get(it.name) ?? 0) + it.count);
+  }
+  if (!logs.size) return '';
+  const list = [...logs.entries()].map(([n, c]) => `${nameOf(n)}×${c}`).join('、');
+  return `；包里已有${list}，可先 craft 成对应木板`;
+}
+
+/**
  * craft:配方齐不齐。与 skillCraft 问的是同一份数据(标签配方或 recipesAll + 背包),
  * 所以它说凑不齐,真跑也一定凑不齐 —— 台架 `bench-precheck.ts` 锁死这条蕴含。
  */
@@ -129,7 +144,9 @@ function precheckCraft(bot: Bot, call: Extract<SkillCall, { skill: 'craft' }>): 
   const more = tied.length > CRAFT_TIED_MAX
     ? `;这些只是缺口并列的配方示例，不是仅允许这些材料；还有 ${tied.length - CRAFT_TIED_MAX} 条配方缺口一样多` : '';
   const gaps = tied.slice(0, CRAFT_TIED_MAX).join(' 或 ');
-  return { level: 'hard', text: `做${label}还差 ${gaps}${more}`, rule: 'craft.short' };
+  const mentionsPlanks = /木板|_planks/.test(gaps);
+  const logHint = mentionsPlanks ? plankSourceHint(bot.inventory.items(), (n) => zhName(n)) : '';
+  return { level: 'hard', text: `做${label}还差 ${gaps}${more}${logHint}`, rule: 'craft.short' };
 }
 
 /** eat:点名的食物是否存在。与 skillEat 共用精确物品 id 口径。 */

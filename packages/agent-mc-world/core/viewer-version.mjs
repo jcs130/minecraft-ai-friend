@@ -9,6 +9,15 @@ export function assertViewerVersion(version) {
   return version;
 }
 
+/** Chronological Java edition key: year-based 25+ releases follow the 1.x line.
+ * Raw major/minor distance would treat 26.1 as closer to 1.20.6 than 1.21.11. */
+export function viewerVersionOrderKey(version) {
+  const [major, minor, patch = 0] = version.split('.').map(Number);
+  const era = major >= 25 ? 2 : 1;
+  return era * 1e9 + major * 1e6 + minor * 1e3 + patch;
+}
+
+
 /** Select the explicitly packaged version, without substituting an approximate registry or picture. */
 export async function viewerVersionAssets(root, version) {
   assertViewerVersion(version);
@@ -41,8 +50,7 @@ export async function selectViewerAssets(root,version) {
     }catch(error){if(error.code==='ENOENT')continue;throw error;}
     if(client.runtimeRegistryVersion!==1||client.preset||manifest.minecraftVersion!==client.minecraftVersion)continue;
     assertViewerVersion(manifest.minecraftVersion);
-    const target=version.split('.').map(Number),asset=manifest.minecraftVersion.split('.').map(Number);
-    const distance=Math.abs((target[0]??0)-(asset[0]??0))*1e6+Math.abs((target[1]??0)-(asset[1]??0))*1e3+Math.abs((target[2]??0)-(asset[2]??0));
+    const distance=Math.abs(viewerVersionOrderKey(version)-viewerVersionOrderKey(manifest.minecraftVersion));
     candidates.push({directory,assetVersion:manifest.minecraftVersion,distance});
   }
   candidates.sort((a,b)=>a.distance-b.distance||a.assetVersion.localeCompare(b.assetVersion));
@@ -87,6 +95,13 @@ export function viewerVersionTexture(relative, version) {
     const armor = /^models\/armor\/([a-z_]+)_layer_([12])(_overlay)?\.png$/.exec(texture);
     if (armor) texture = `entity/equipment/${armor[2] === '2' ? 'humanoid_leggings' : 'humanoid'}/${armor[1] === 'turtle' ? 'turtle_scute' : armor[1]}${armor[3] ?? ''}.png`;
     if (texture === 'entity/elytra.png') texture = 'entity/equipment/wings/elytra.png';
+  }
+  // Java 26.1 renamed projectile entity textures (spectral_arrow -> arrow_spectral).
+  if (major >= 26) {
+    if (texture === 'entity/llama/spit.png') texture = 'entity/llama/llama_spit.png';
+    if (texture === 'entity/trident.png') texture = 'entity/trident/trident.png';
+    if (texture === 'entity/projectiles/spectral_arrow.png') texture = 'entity/projectiles/arrow_spectral.png';
+    if (texture === 'entity/projectiles/tipped_arrow.png') texture = 'entity/projectiles/arrow_tipped.png';
   }
   return `textures/${version}/${texture}`;
 }

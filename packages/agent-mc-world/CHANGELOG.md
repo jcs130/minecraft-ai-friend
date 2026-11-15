@@ -1,4 +1,4 @@
-## 0.5.7-rc.160-preview.82
+## 0.5.7-rc.160-preview.83
 
 - Match block protection replies, queries and navigation caches by native server level identity instead of the physics dimension type. Preserve exact-cell denials, legacy fallback and cross-world isolation without adding a permission-query requirement.
 

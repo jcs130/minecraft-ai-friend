@@ -150,6 +150,9 @@ export type SkillCall = StepBounds & (
   | { skill: 'server_travel'; command: string; at: Anchor; within: number; dimension?: string }
   | { skill: 'chat'; text: string }
   | { skill: 'gesture'; name: string; motion: 'wave' | 'bow' | 'nod' | 'beckon' | 'shake_head' }
+  | { skill: 'menu_click'; slot?: number; name?: string; button?: 'left' | 'right' }
+  | { skill: 'menu_close' }
+  | { skill: 'swap_hands' }
   | {
       skill: 'use';
       item?: string;
@@ -1987,6 +1990,27 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
       { key: 'motion', kind: 'enum', required: true, values: ['wave', 'bow', 'nod', 'beckon', 'shake_head'],
         error: 'gesture 的 motion 只认 wave/bow/nod/beckon/shake_head' },
     ],
+  },
+  {
+    name: 'menu_click',
+    doc: `{"skill":"menu_click","slot":13}           点当前服务端菜单（/rtp、/linggen、/menu 等插件界面）的第 13 格；先用 mc_window 读格子名与说明
+{"skill":"menu_click","name":"觉醒"}       按名称或说明文字点唯一匹配的格子；多格匹配时改用 slot
+只点菜单区，不点背包格。名称或说明含点券/购买/出售/交易/价格等的格子会被拒绝，不花钱。点完读服务端消息和位置确认效果。`,
+    fields: [
+      { key: 'slot', kind: 'int', lo: -1, hi: 89, def: -1, unit: '格', doc: '-1 或不写 = 按 name 选' },
+      { key: 'name', kind: 'string', hint: '格子显示名或说明中的文字' },
+      { key: 'button', kind: 'enum', values: ['left', 'right'], error: 'menu_click 的 button 只认 left/right' },
+    ],
+  },
+  {
+    name: 'menu_close',
+    doc: `{"skill":"menu_close"}  关闭当前服务端菜单/窗口，包括客户端没建出来但服务端仍开着的（服务端说「打开界面时无法执行指令」时用）`,
+    fields: [],
+  },
+  {
+    name: 'swap_hands',
+    doc: `{"skill":"swap_hands"}  按一次交换主副手键（F）。主副手都空时，很多服务器用它打开主菜单；手里有东西时会交换主副手物品`,
+    fields: [],
   },
 ];
 

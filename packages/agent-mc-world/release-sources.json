@@ -22,7 +22,8 @@
       "1.21.1": "exact-version-separate-download",
       "1.20.6": "exact-version-separate-download",
       "1.21.11": "disabled-no-original-audio-pack",
-      "1.21.5": "disabled-no-original-audio-pack"
+      "1.21.5": "disabled-no-original-audio-pack",
+      "26.1": "official-index-hash-verified-local-generated-overlay"
     },
     "deferredAudioInput": {
       "package": "agent-mc-world@0.5.7-rc.85",
@@ -94,6 +95,44 @@
         },
         "preset": null,
         "armorTextureCount": 15
+      },
+      {
+        "version": "26.1",
+        "clientJarSha256": "bc6194c61566b587f196090d730698f2191170f7580adb143e4ff839939d3840",
+        "officialClientSha1": "191771837687b766537a8c4607cb6fad79c533a1",
+        "metadataSha1": "389f92510868468e073b7a12f19e70a7bf8684cd",
+        "browserBundleSha256": "d2046ec759bd6206a13aa19959caf3dc1e5975b24dc48e7012b50e4c5a647a48",
+        "mesherSha256": "9dff67500d63371f6fca76ad14389e82435ee158d04519b049dff5e9e6909c53",
+        "buildSource": {
+          "sourceSha256": "707b06490cd32342a6a30273a019a79f5eadb8ed7f4289261d55e3e3f420008a",
+          "sourceFiles": 423,
+          "scope": "renderer_source_host_adapters_and_asset_preparation"
+        },
+        "preset": null,
+        "armorTextureCount": 17,
+        "overlay": "viewer-26.1-overlay.json",
+        "notInLockedVendorTgz": true,
+        "textDisplays": {
+          "schemaVersion": 1,
+          "manifestSha256": "7064eb7c0c9166a46de0c207cbba885dbfad5d8aeab9e991f48da195e5ce9466",
+          "assetIndexSha1": "49107cf4e5f961b086ac4f06f3c2c56142b023dc",
+          "defaultFontSourceVerified": true,
+          "javaTextPixelParityVerified": false
+        },
+        "viewerContent": {
+          "schemaVersion": 1,
+          "manifestSha256": "9ec01900f43f57083ba80135561ce5f6b229d78f9a214dbbdb755cf50fb7b3a1",
+          "particleAtlasSha256": "e841c349d4b69e0381db83982e532eece421f06d94d2b1f29d1afda4b3bca53f",
+          "capabilities": {
+            "serverParticleProtocol": true,
+            "mapPixels": true,
+            "itemFrameMaps": true,
+            "heldMapPreview": true,
+            "mapDecorations": false
+          },
+          "nativeParticlePhysicsParityVerified": false,
+          "javaFramePixelParityVerified": false
+        }
       }
     ],
     "runtimeRegistryVersion": 1,

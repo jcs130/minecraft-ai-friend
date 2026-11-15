@@ -48,6 +48,17 @@ function privateParts(message: ChatMessage, registry: unknown, direction: 'incom
 export const incomingPrivateParts = (message: ChatMessage, registry?: unknown) => privateParts(message, registry, 'incoming');
 export const outgoingPrivateParts = (message: ChatMessage, registry?: unknown) => privateParts(message, registry, 'outgoing');
 
+/** A warning may pause the body only on a native system notice. Player chat,
+ * whispers, overlays and events without provenance are observations, not control. */
+export function isServerNotice(message: unknown, position: unknown, sender?: unknown): boolean {
+  if (position !== 'system' || !message || typeof message !== 'object'
+    || (sender != null && sender !== '00000000-0000-0000-0000-000000000000')) return false;
+  const component = message as ChatMessage;
+  if (component.unsigned) return false;
+  const key = component.translate ?? component.json?.translate ?? '';
+  return !key.startsWith('chat.type.') && !key.startsWith('commands.message.display.');
+}
+
 export class MinecraftChatProvenance {
   private readonly sources = new WeakMap<object, MessageSource>();
 
