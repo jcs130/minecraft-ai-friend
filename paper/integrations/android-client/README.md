@@ -1,6 +1,6 @@
 # 千灯纪安卓客户端导入包
 
-本目录构建 **1.0.0-preview.3** 原生手柄预览。既有 **1.0.0-preview.1** 仍可通过 `/downloads/android-client` 获取。
+本目录构建 **1.0.0-preview.4** 原生手柄预览。既有 **1.0.0-preview.1** 仍可通过 `/downloads/android-client` 获取。
 
 FCL 导入一个 `.mrpack`，自动准备 Minecraft 1.21.1 / NeoForge 21.1.252、Control Flex 0.8.9-beta.3、原生女仆 1.5.3、YSM 2.6.5、SVC 2.6.27，预置服务器地址、中文界面、手机画质及安卓音频配置。
 
@@ -15,6 +15,10 @@ FCL 导入一个 `.mrpack`，自动准备 Minecraft 1.21.1 / NeoForge 21.1.252�
 [Control Flex 0.8.9-beta.3](https://github.com/ControlFlexMC/control-flex/releases/tag/v0.8.9-beta.3) 提供对应 Minecraft 1.21.1 / NeoForge 的原版构建和 Android ARM64 JNI。清单固定发布者的 SHA256、Modrinth 格式的 SHA1/SHA512 及下载地址。其 Android 后端复用 FCL 的 SDL3，由游戏模组读取实际摇杆轴与按钮。游戏启动后在 FCL 侧栏设置 `SDL_DIRECT`。手柄键位由 Control Flex 的游戏内设置管理。
 
 Control Flex 的客户端 `config/controlflex/analog/server-whitelist.json` 只为预置的主世界域名和端口开启连续模拟移动。其他远程地址继续使用模组默认策略。
+
+## 手柄语音
+
+SVC 2.6.27 的通话键初始未绑定，按键通话读取按下和松开的状态。预览包给这项动作设置 F8，并使用 Control Flex 对单个 SVC 动作的事件及状态通道。打包时从锁定的 Control Flex 发行件读取三个原模板，各追加一条 HOLD 通话键。推荐和 Basic 方案使用右侧面键，Bedrock 方案使用左侧面键。触屏方案可单独使用 F8。Mic 授权、语音向导和 SVC 的模式选择由玩家完成。
 
 ## SVC 安卓调查与实现
 
@@ -32,7 +36,7 @@ Control Flex 的客户端 `config/controlflex/analog/server-whitelist.json` 只�
 ```sh
 python paper/integrations/android-client/build.py --cache /tmp/qd-android-inputs --output /tmp/qd-android-release
 python paper/integrations/android-client/verify.py \
-  --pack /tmp/qd-android-release/qiandengji-android-1.21.1-neoforge-1.0.0-preview.3.mrpack \
+  --pack /tmp/qd-android-release/qiandengji-android-1.21.1-neoforge-1.0.0-preview.4.mrpack \
   --cache /tmp/qd-android-inputs \
   --catalog paper/integrations/agent-portal/src/android-client-downloads.json
 ```

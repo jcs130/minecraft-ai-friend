@@ -50,7 +50,10 @@ const aliases=Object.freeze({'/downloads/java-client':'desktop-client-pack','/do
 const legacyNekoBase = Object.freeze({id:'neko-base', filename:'qiandengji-neko-0.6.70-base-with-viewer-data.zip',
   bytes:321124552, sha256:'701716c351f8cd3dd43b0837b34131b793648eab740e60d4145748fea59e2dc2'});
 const legacyNeko109 = Object.freeze({"id":"neko-base","filename":"NEKO-MC-0.6.109-Windows.zip","sha256":"624ef18e011ef6681cfa1c2e963745e815582130a77b812e0fc525e2fcd4e5d4","bytes":1107341175});
+const legacyFclNative = Object.freeze({id:'android-native-client-pack', filename:'qiandengji-android-1.21.1-neoforge-1.0.0-preview.3.mrpack',
+  bytes:55283, sha256:'76e8f1f05fa11b28100711be2c23d4bd28b0794a6d6ea48006a7bfaee9c9e1ba'});
 export const packageAt = pathname => packageReleases.find(row => pathname === '/downloads/' + row.filename || aliases[pathname]===row.id)
+  || (pathname === '/downloads/' + legacyFclNative.filename ? legacyFclNative : undefined)
   || (pathname === '/downloads/' + legacyNekoBase.filename ? legacyNekoBase : undefined)
   || (pathname === '/downloads/' + legacyNeko109.filename ? legacyNeko109 : undefined)
   || (pathname === '/downloads/jcs130-dsh-minecraft-agent-0.3.0-rc.12.tgz' ? {id:'dsh-adapter',filename:'jcs130-dsh-minecraft-agent-0.3.0-rc.12.tgz',bytes:77648,sha256:'2beb51ba045226cd6802620063964b03fcaecfb405ff781a998803a4ab497184'} : undefined)

@@ -47,8 +47,22 @@ def verify_pack(pack, cache, catalog=None):
             native = jar.read('native/android-arm64-v8a/libgamepadjni.so')
             require(native[:5] == b'\x7fELF\x02' and struct.unpack_from('<H', native, 18)[0] == 183, 'Android ARM64 SDL JNI binary')
             require(not any(name.startswith('native/android-') and name.endswith('/libSDL3.so') for name in jar.namelist()), 'launcher owns the Android SDL3 runtime')
+            for name, button in [('recommend', 'buttonB'), ('basic', 'buttonB'), ('bedrock', 'buttonX')]:
+                profile = json.loads(outer.read(f'overrides/config/controlflex/profiles/{name}.json'))
+                require(profile['mainActionBindings'].pop('voicechat:key.push_to_talk') == button + '|HOLD',
+                        f'hold-to-talk binding for {name}')
+                require(profile == json.loads(jar.read(f'controlflex/templates/{name}.json')), f'upstream {name} profile otherwise unchanged')
         options = outer.read('overrides/options.txt').decode().splitlines()
-        require(not any(line.startswith('key_') for line in options), 'no launcher keyboard mapping overrides')
+        require(options[0] == 'version:3955', '1.21.1 options bypass numeric legacy key migration')
+        require([line for line in options if line.startswith('key_')] == ['key_key.push_to_talk:key.keyboard.f8'],
+                'only the SVC talk key is seeded for the dispatch channel')
+        require(b'Copyright (c) 2026 ControlFlexMC' in outer.read('overrides/LICENSES/ControlFlex-0.8.9-beta.3-MIT.txt'), 'Control Flex profile license retained')
+        compat = json.loads(outer.read('overrides/config/controlflex/compat/user/voicechat.json'))
+        svc, = [row for row in lock['files'] if row['id'] == 'simple-voice-chat']
+        require(compat == {'mod_id': 'voicechat', 'mod_name': 'Simple Voice Chat', 'mod_versions': [{
+            'version': svc['version'].removeprefix('neoforge-'),
+            'inGameKeys': {'key.push_to_talk': {'channels': ['keyMapping', 'eventBus', 'glfwPoll']}},
+        }]}, 'only the SVC action receives the sustained key state')
         host, port = lock['serverAddress'].rsplit(':', 1)
         whitelist = json.loads(outer.read('overrides/config/controlflex/analog/server-whitelist.json'))
         require(whitelist == {'version': 1, 'entries': [{'kind': 'address', 'host': host, 'port': int(port)}]}, 'analog movement enabled only for the configured remote server')
@@ -68,9 +82,11 @@ def verify_pack(pack, cache, catalog=None):
             require(struct.unpack_from('>H', jar.read('de/maxhenkel/shim/NativeAudio.class'), 6)[0] == 52, 'bridge Java 8 bytecode')
             native_hash = hashlib.sha256(jar.read('natives/libaudioshim.so')).hexdigest()
         voice = dict(line.split('=', 1) for line in outer.read('overrides/config/voicechat/voicechat-client.properties').decode().splitlines() if line and not line.startswith('#'))
+        require(voice['config_version'] == '1', 'SVC reads the reviewed client settings without legacy migration')
         require(voice['use_natives'] == 'false' and voice['java_microphone_implementation'] == 'true', 'Java Opus and microphone fallbacks selected')
         require(voice['microphone'] == 'Android AudioRecord', 'actual upstream microphone name selected')
         require(voice['muted'] == 'true' and voice['onboarding_finished'] == 'false', 'first-use microphone decision retained')
+        require(voice['microphone_activation_type'] == 'PTT', 'sending requires the talk button after setup')
         nbt = outer.read('overrides/servers.dat')
         require(nbt.startswith(b'\x0a\x00\x00') and lock['serverAddress'].encode() in nbt and nbt.endswith(b'\x00\x00'), 'preconfigured Java server-list NBT')
         provenance = json.loads(outer.read('overrides/qiandengji-android-manifest.json'))
