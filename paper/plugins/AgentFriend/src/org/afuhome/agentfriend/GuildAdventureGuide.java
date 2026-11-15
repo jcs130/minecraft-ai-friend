@@ -8,7 +8,7 @@ final class GuildAdventureGuide {
     record Hint(String message, String command) { }
     record Rotation(Hint hint, int nextIndex) { }
 
-    private static final int ROUTE_COUNT = 5;
+    private static final int ROUTE_COUNT = 6;
     private static final List<String> CAVE_TASKS = List.of(
             "tm_local_mine_journal", "tm_cave_lantern_survey", "tm_mineshaft_echoes");
     private static final List<String> RUIN_TASKS = List.of(
@@ -33,8 +33,16 @@ final class GuildAdventureGuide {
 
     static Rotation next(int cursor, boolean joined, boolean promotions, boolean ruins,
                          boolean camera, Predicate<String> available) {
+        return next(cursor, joined, promotions, ruins, camera, false, available);
+    }
+
+    static Rotation next(int cursor, boolean joined, boolean promotions, boolean ruins,
+                         boolean camera, boolean activeContract, Predicate<String> available) {
         for (int offset = 0; offset < ROUTE_COUNT; offset++) {
             int route = (Math.floorMod(cursor, ROUTE_COUNT) + offset) % ROUTE_COUNT;
+            // A long expedition occupies the quest slot, not every activity.
+            // Never recommend another contract or an exam that competes for that slot.
+            if (activeContract && route < 3) continue;
             Hint hint = switch (route) {
                 case 0 -> joined
                         ? new Hint("委托交付积累公会声望；到下一阶前先查实际晋级条件。公会段位与职业等级分开。",
@@ -46,10 +54,15 @@ final class GuildAdventureGuide {
                 case 3 -> ruins ? new Hint("想打逐室遗迹？单人或结伴都可；查开放地点和装备要求，遇到占用就换目标。",
                         "/mycli dungeon list") : null;
                 case 4 -> camera ? photo("沿途看到值得记录的景物") : null;
+                case 5 -> joined || activeContract ? new Hint("初始村试炼塔用于练习战斗，每次从第一层开始；艾恩葛朗特与各地遗迹是另一类攻略。先查本场状态与准入，再自行决定是否参加。",
+                        "/mycli arena status") : null;
                 default -> throw new AssertionError(route);
             };
-            if (hint != null) return new Rotation(hint, (route + 1) % ROUTE_COUNT);
+            if (hint != null) {
+                if (activeContract) hint = new Hint("当前委托和进度保留，不必放弃或重接；想换节奏时可自行选择。" + hint.message(), hint.command());
+                return new Rotation(hint, (route + 1) % ROUTE_COUNT);
+            }
         }
-        throw new AssertionError("The guild route is always available");
+        throw new AssertionError("Guild registration or the trial status query is always available");
     }
 }

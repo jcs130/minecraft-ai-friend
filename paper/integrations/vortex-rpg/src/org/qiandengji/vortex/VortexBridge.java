@@ -52,6 +52,7 @@ public final class VortexBridge extends JavaPlugin {
             items=vortex.qiandengjiItems();
             registeredEffects=loadRegisteredEffects();
             Objects.requireNonNull(quests);Objects.requireNonNull(mana);
+            new QuestReadyNotifier(this,quests);
             validateShops();Bukkit.getPluginManager().registerEvents(new TwinCityGates(this),this);
             Bukkit.getPluginManager().registerEvents(new LegacyRpgCommands(),this);
             vortex.spellbookService().addCastListener((player,id)->Bukkit.getScheduler().runTask(this,()->{
@@ -426,7 +427,7 @@ public final class VortexBridge extends JavaPlugin {
     }
     private void skills(Player p,UnifiedPlayer state,BridgeRules.Request r){
         if(Set.of("explain","status").contains(r.action())&&r.arguments().size()==1){skills(p,state,new BridgeRules.Request(r.group(),"info",r.arguments(),r.json(),r.help()));return;}
-        if(r.action().equals("list")&&r.arguments().equals(List.of("common"))){emit(p,r,Map.of("common",SkillTransition.COMMON,"queryOnly",true),"基础：home归乡、selfheal圣愈、food饱食、blink闪现、starbolt星芒箭、frostnova寒霜、give造物；其他通用：travel/prospect/night/feather。无需选职或学习，耗魔与冷却按详情。详情：/mycli skills info <ID>");return;}
+        if(r.action().equals("list")&&r.arguments().equals(List.of("common"))){emit(p,r,Map.of("common",SkillTransition.COMMON,"queryOnly",true),"生存：selfheal圣愈、food饱食、night夜视、feather羽落；战斗：starbolt星芒箭、frostnova霜环（控制与灭火）；移动：home归乡、blink闪现、travel传送点、team队友增援、support支援、leap跃空；探索与留影：prospect探矿、give造物、fireworks烟花、starlight星尘。无需选职或学习；耗魔与冷却查 /mycli skills info <ID>。职业技能、学习点与天赋另在 /mycli skills list。");return;}
         switch(r.action()){
             case "tree"->{noArgs(r);var tree=vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).orElseThrow(()->new IllegalArgumentException("先选择职业；/mycli profession list"));
                 async(p,r,vortex.qiandengjiTalents().talentData(p.getUniqueId()).thenApply(data->Map.<String,Object>of("talentPoints",data.talentPoints(),"allocated",data.allocatedNodes(),"nodes",tree.nodes(),"summary","天赋点 "+data.talentPoints()+"；"+String.join("、",tree.nodes().values().stream().map(n->n.id()+" "+n.displayName()+"("+n.cost()+"点)").toList())+"。查看条件：/mycli skills info <ID>")),"天赋资料暂不可用");}

@@ -264,6 +264,9 @@ final class WaypointManager implements Listener {
         return reason == null ? safe(p, at) : reason;
     }
     private String safe(Player p, Location at) {
+        return safe(p, at, "");
+    }
+    private String safe(Player p, Location at, String destination) {
         World w = at.getWorld();
         if (w == null) return "world_unavailable";
         int x = at.getBlockX(), y = at.getBlockY(), z = at.getBlockZ();
@@ -271,7 +274,7 @@ final class WaypointManager implements Listener {
                 || w.getEnvironment() == World.Environment.NETHER && y >= w.getLogicalHeight()) return "unsafe_height";
         if (!w.getWorldBorder().isInside(at.clone().add(.3, 0, .3)) || !w.getWorldBorder().isInside(at.clone().add(-.3, 0, -.3))) return "world_border";
         if (!w.isChunkLoaded(x >> 4, z >> 4)) return "chunk_unavailable";
-        if (plugin.dungeon().deniesEdit(at) || plugin.namedTravelActivityArea(at)) return "activity_area";
+        if (plugin.dungeon().deniesEdit(at) || plugin.namedTravelActivityArea(at, destination)) return "activity_area";
         // A safe recorded path/farmland/slab can have a fractional feet height.
         // Validate its actual collision shape and full body, not an assumed whole cube below floor(y).
         HomeLanding.Issue issue = HomeLanding.exactIssue(p, at);
@@ -331,7 +334,7 @@ final class WaypointManager implements Listener {
                         try {
                             landing = selectLanding.get();
                             if (landing == null || landing.getWorld() != at.getWorld()) reason = "unsafe_landing";
-                            else reason = safe(online, landing);
+                            else reason = safe(online, landing, raw);
                         } catch (RuntimeException | LinkageError unavailable) {
                             reason = "chunk_unavailable";
                             plugin.getLogger().warning("Travel landing validation unavailable: " + unavailable.getClass().getSimpleName());

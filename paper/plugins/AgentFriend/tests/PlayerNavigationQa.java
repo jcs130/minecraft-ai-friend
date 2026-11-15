@@ -59,6 +59,12 @@ public final class PlayerNavigationQa extends JavaPlugin implements Listener {
     @SuppressWarnings("unchecked") private void run(CommandSender sender,String[] args)throws Exception{
         Player actor=player("NavActorQA"),target=player("NavTargetQA");Object trial=call(af,"dungeon"),sites=call(af,"siteDungeons"),rpg=call(af,"nativeRpg");
         switch(args[0]){
+            case "freezemana" -> {
+                // Payment assertions use fixed mana; this fixture exists only in the disposable server.
+                Object mana=call(Bukkit.getPluginManager().getPlugin("VortexRPG"),"qiandengjiMana");
+                call(mana,"stop");
+                sender.sendMessage("NAV_MANA_REGEN paused_for_isolated_payment_checks");
+            }
             case "setup" -> {
                 cancel=false;set(trial,"active",false);((Set<?>)get(trial,"participants")).clear();((Map<?,?>)get(sites,"runs")).clear();
                 if(enemy!=null)enemy.remove();((Set<?>)get(trial,"mobs")).clear();
@@ -67,6 +73,7 @@ public final class PlayerNavigationQa extends JavaPlugin implements Listener {
                 for(Player p:List.of(actor,target)){p.setOp(false);p.setGameMode(GameMode.SURVIVAL);gear(p);p.setHealth(Math.min(20,p.getMaxHealth()));p.setFoodLevel(20);}
                 World world=Bukkit.getWorld("world");Location departure=new Location(world,0.5,66,.5);floor(departure);actor.teleport(departure);
                 Location arrival=new Location(world,-589.5,args[1].equals("trial")?68:90,-304.5);
+                if(args[1].equals("public"))arrival=new Location(world,-589.5,91,-321.5);
                 if(args[1].equals("site")){
                     var catalog=(Map<String,Object>)get(sites,"sites");Object site=catalog.values().stream().filter(s->{try{return call(s,"id").equals("qa_readiness");}catch(Exception e){return false;}}).findFirst().orElseThrow();
                     Object room=((List<?>)call(site,"rooms")).getFirst();arrival=(Location)call(room,"center",new Class<?>[]{World.class},Bukkit.getWorld((String)call(site,"world")));
@@ -95,6 +102,34 @@ public final class PlayerNavigationQa extends JavaPlugin implements Listener {
             case "cancel" -> cancel=Boolean.parseBoolean(args[1]);
             case "failcommit" -> {failCommit=Boolean.parseBoolean(args[1]);if(!failCommit)((Set<?>)get(sites,"blockedCheckpoints")).clear();}
             case "nogear" -> actor.getInventory().clear();
+            case "blockentrance" -> {
+                World w=Bukkit.getWorld("world");
+                for(int x=-594;x<=-586;x++)for(int z=-326;z<=-318;z++)for(int y=88;y<=95;y++)w.getBlockAt(x,y,z).setType(Material.STONE,false);
+            }
+            case "waypointtrial" -> {
+                // The public entrance exception must not bless a player bookmark in a combat room.
+                World w=Bukkit.getWorld("world");Location at=new Location(w,-589.5,68,-304.5);floor(at);
+                Object waypoints=call(af,"waypoints");
+                Object reason=call(waypoints,"safe",new Class<?>[]{Player.class,Location.class},actor,at);
+                sender.sendMessage("NAV_BOOKMARK "+reason);
+            }
+            case "entranceprotection" -> sender.sendMessage("NAV_PROTECTED "+call(af,"inBuild",new Class<?>[]{Location.class},new Location(Bukkit.getWorld("world"),-589.5,91,-321.5)));
+            case "entrancebounds" -> {
+                World w=Bukkit.getWorld("world");Class<?>[] signature={Location.class,String.class};JsonObject bounds=new JsonObject();
+                bounds.addProperty("official",(Boolean)call(af,"namedTravelActivityArea",signature,new Location(w,-589.5,91,-321.5),"arena"));
+                bounds.addProperty("personal",(Boolean)call(af,"namedTravelActivityArea",signature,new Location(w,-589.5,91,-321.5),"personal:arena"));
+                bounds.addProperty("shared",(Boolean)call(af,"namedTravelActivityArea",signature,new Location(w,-589.5,91,-321.5),"shared:arena"));
+                bounds.addProperty("beyondRadius",(Boolean)call(af,"namedTravelActivityArea",signature,new Location(w,-589.5,91,-317.5),"arena"));
+                bounds.addProperty("belowCorridor",(Boolean)call(af,"namedTravelActivityArea",signature,new Location(w,-589.5,87,-321.5),"arena"));
+                sender.sendMessage("NAV_BOUNDS "+bounds);
+            }
+            case "denyentry" -> {
+                var manager=com.sk89q.worldguard.WorldGuard.getInstance().getPlatform().getRegionContainer().get(com.sk89q.worldedit.bukkit.BukkitAdapter.adapt(Bukkit.getWorld("world")));
+                if(Boolean.parseBoolean(args[1])){
+                    var region=new com.sk89q.worldguard.protection.regions.ProtectedCuboidRegion("qa_trial_entrance_deny",com.sk89q.worldedit.math.BlockVector3.at(-594,85,-326),com.sk89q.worldedit.math.BlockVector3.at(-586,99,-318));
+                    region.setPriority(10000);region.setFlag(com.sk89q.worldguard.protection.flags.Flags.ENTRY,com.sk89q.worldguard.protection.flags.StateFlag.State.DENY);manager.addRegion(region);
+                }else manager.removeRegion("qa_trial_entrance_deny");
+            }
             case "cooldown" -> ((Map<?,?>)get(af,"teamTeleportAt")).clear();
             case "menu" -> call(get(af,"playerAdventureMenus"),"open",new Class<?>[]{Player.class},actor);
             case "particles" -> {

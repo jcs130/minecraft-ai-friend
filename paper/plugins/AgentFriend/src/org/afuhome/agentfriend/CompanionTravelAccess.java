@@ -8,6 +8,11 @@ import org.bukkit.entity.Player;
 /** Read-only game checks used by the native companion bridge. */
 public final class CompanionTravelAccess {
     private CompanionTravelAccess() { }
+    public static Location companionRescueTarget(Player partner, org.bukkit.entity.LivingEntity companion) {
+        if(!Bukkit.isPrimaryThread()||!(Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin)
+                ||!plugin.isEnabled()||plugin.trialRescue()==null)return null;
+        return plugin.trialRescue().companionTarget(partner,companion);
+    }
 
     public static boolean mayRejoin(Player partner, Location landing) {
         return Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin

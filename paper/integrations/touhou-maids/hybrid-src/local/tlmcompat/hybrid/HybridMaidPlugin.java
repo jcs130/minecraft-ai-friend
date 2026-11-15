@@ -56,6 +56,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private NativeMaidWorkshop workshops;
     private NativeMaidResidence residence;
     private NativeMaidOwnerTravel ownerTravel;
+    private CompanionRespawn respawns;
     public void followTrialTransfer(Player partner, Location from, int stage) {
         if (Bukkit.isPrimaryThread() && ownerTravel!=null) ownerTravel.followTrialTransfer(partner,from,stage);
     }
@@ -66,6 +67,12 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     void rememberResidenceDeparture(EntityMaid maid){agentSupport.rememberResidenceDeparture(maid);}
     void companionTick(EntityMaid maid){if(companion!=null)companion.tick(maid);}
     boolean closingInToGuard(EntityMaid maid){return companion!=null&&companion.closingIn(maid);}
+    boolean rescuingTeammate(EntityMaid maid){return companion!=null&&companion.rescuing(maid);}
+    public boolean eligibleRescueCompanion(Player owner, org.bukkit.entity.Entity entity) {
+        EntityMaid maid=nativeMaid(entity);
+        return Bukkit.isPrimaryThread() && maid!=null && owner!=null && owner.getUniqueId().equals(maid.getOwnerUUID())
+            && sharedDialogueEnabled(maid) && companion!=null && companion.rescueEligible(maid,owner);
+    }
     boolean companionCombatPosition(Player owner,Location position){return companion!=null&&companion.combatPosition(owner,position);}
     UUID companionVisibleThreat(EntityMaid maid,Player owner){return companion==null?null:companion.visibleThreat(maid,owner);}
     boolean companionPartnerThreat(EntityMaid maid,Player owner){return companion!=null&&companion.visibleAttackOnPartner(maid,owner);}
@@ -109,6 +116,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         while(humanDialogue.size()>512)humanDialogue.remove(humanDialogue.keySet().iterator().next());
     }
     boolean sharedDialogueEnabled(EntityMaid maid){return brains!=null&&brains.allowed(maid);}
+    boolean configuredCompanionIdentity(EntityMaid maid){return brains!=null&&brains.identityMatches(maid);}
     void nearbyConversation(Player actor,EntityMaid maid,NativeMaidNearbyChat.Address address,Set<UUID> recipients){
         nearbyConversation(actor,maid,address,recipients,"near_"+UUID.randomUUID());
     }
@@ -176,12 +184,14 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             companion=new NativeMaidCompanionSupport(this);
             NativeMaidOwnerTravel travel=new NativeMaidOwnerTravel(this);
             ownerTravel=travel;
+            respawns=new CompanionRespawn(this,travel);
             residence=NativeMaidResidence.open(this,travel);
             social=new NativeMaidSocialSupport(this,receipts);
             nearbyChat=new NativeMaidNearbyChat(this);
             speech=NativeMaidSpeech.create(this);
             getServer().getMessenger().registerOutgoingPluginChannel(this,CHANNEL);
             getServer().getPluginManager().registerEvents(this,this);
+            getServer().getPluginManager().registerEvents(new SoulTalismanGuidance(),this);
             getCommand("qdmaid").setExecutor(this);
             pluginPayloads=new HybridPluginPayloads(this);projection=new VanillaMaidProjection(this); menus=new NativeMaidInventory(this);worldPermissions=new NativeWorldPermissions(this);legacyTransport=new LegacyMaidTransport(this);nativeTransport=new NativeMaidTransport(this);
             getServer().getPluginManager().registerEvents(menus,this);
@@ -194,7 +204,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             getLogger().info("Native TLM integration ready: "+TaskManager.getTaskMap().size()+" original tasks; no model loop");
         }catch(Throwable error){getLogger().severe("Native maid integration disabled: "+error);error.printStackTrace();getServer().getPluginManager().disablePlugin(this);}
     }
-    @Override public void onDisable(){if(residence!=null)residence.close();if(workshops!=null)workshops.close();if(companion!=null)companion.close();if(speech!=null)speech.close();if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
+    @Override public void onDisable(){if(respawns!=null)respawns.close();if(residence!=null)residence.close();if(workshops!=null)workshops.close();if(companion!=null)companion.close();if(speech!=null)speech.close();if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
     private void bindOnMain(EntityMaid maid){
         Bukkit.getScheduler().runTask(this,()->{try{if(maid.isAlive()&&owner(maid)!=null){bind(maid);if(agentSupport!=null)agentSupport.observeLoaded(maid);}}catch(Exception error){getLogger().warning("Native NPC binding preserved: "+error.getMessage());}});
     }
@@ -270,6 +280,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         agentSupport.enrich(actor,id,data);
         if(maid!=null&&companion!=null)data.add("companion",companion.describe(maid));
         if(residence!=null)residence.describe(id,data);
+        if(maid!=null&&respawns!=null)respawns.describe(maid,data);
         data.addProperty("sampledAt",java.time.Instant.now().toString());return data;
     }
     private JsonObject catalog(Player actor,UUID id){

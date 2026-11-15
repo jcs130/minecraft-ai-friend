@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate_not_deployed",
+  "sourceBase": "91890e8819cb1f5a16ec493953e26003cef9db93",
+  "backupDrive": "F",
+  "components": {
+    "af": {
+      "version": "0.4.47.80-rpg-usability",
+      "sha256": "bfc4b6527e429ad9cfe0400c4b58724cf18dc35e908988967c91020a221d014a",
+      "baselineSha256": "247aaedca90905ded41aff8afc36f47022736e6626b4e5276c5732c39cf25eef",
+      "baselineExact": true
+    },
+    "maid": {
+      "version": "0.1.37-rescue-guidance",
+      "sha256": "ba4fc844c77a035d4779e56314f9766b770bd288c8eb352137543dea6cda1391",
+      "baselineSha256": "fb7f329cad5cce33b213da6da5f787c67ef5a99eacd222f5e639dab6aaca0fba",
+      "baselineExact": true
+    },
+    "rpg": {
+      "version": "0.2.30-quest-guidance",
+      "sha256": "88f80916df4a1b18cb24b4982f030940c6f7473e91799333e07dd0b843e43c4a",
+      "baselineSha256": "029438983ec0e4b96ac73ba4b74f41e153137c4ce2bbbdd9799db0bd3690f4c5",
+      "baselineExact": true
+    }
+  },
+  "evidence": [
+    {
+      "source": "usability-r10-usability-client",
+      "sha256": "1defc3710c7b2b874937d7ecacc3502070ceccd68a87ab3a22a0f6f2d54d497f",
+      "checks": 23,
+      "passed": true
+    },
+    {
+      "source": "usability-r10-rescue-client",
+      "sha256": "68ee468cb2f14039fc26d890327ca50916588ce9b8172fed86c6e090a93ce049",
+      "checks": 11,
+      "passed": true
+    },
+    {
+      "source": "usability-r10-public-trial-candidate",
+      "sha256": "a158bad48c1967ed3bf7cd6e6dac8c7e4a25cc85453237bc26fc605e99d7f892",
+      "checks": 16,
+      "passed": true
+    },
+    {
+      "source": "usability-r10-navigation-candidate",
+      "sha256": "46d03827081cd5154a24b052203157af4ff2ac5c651b1ec68b13fd8001a5b72d",
+      "checks": 26,
+      "passed": true
+    },
+    {
+      "source": "usability-r6-respawn-candidate",
+      "sha256": "c85da2ddd6bf9298b46da7c9ec5344bb92ac17c8b263984530577279e81a7971",
+      "checks": 9,
+      "passed": true
+    },
+    {
+      "source": "usability-r6-respawn-restart",
+      "sha256": "f4b16b41e20388d7b67a7cc39829729388a347035f0cb52275f0c4bd08770ce1",
+      "checks": 3,
+      "passed": true
+    }
+  ],
+  "ruleGroups": 14,
+  "reproducibleBuild": true,
+  "productionMutated": false,
+  "pendingAcceptance": [
+    "normal production startup",
+    "physical shared chest installation after preflight",
+    "KangQiang native first soul claim while online",
+    "Java and Bedrock human UI",
+    "original CorMy adoption and Feiyu real encounter rescue"
+  ]
+}

@@ -58,6 +58,16 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
     private final Consumer<EntityJoinLevelEvent> onProjectile;
     private final Method dungeonCombat;
     private final Method dungeonPosition;
+    private final Method rescueTarget;
+    private UUID rescuing;
+    boolean rescuing(EntityMaid maid){return maid.getUUID().equals(rescuing);}
+    boolean rescueEligible(EntityMaid maid,Player owner){return eligible(maid,owner)&&!lowHealth(maid)
+        && (automaticTask(maid)||maid.getTask().getUid().toString().equals(MaidCompanionActions.IDLE));}
+    private Location rescueTarget(EntityMaid maid,Player owner){
+        if(rescueTarget==null)return null;
+        try{return (Location)rescueTarget.invoke(null,owner,maid.getBukkitEntity());}
+        catch(ReflectiveOperationException|LinkageError unavailable){return null;}
+    }
     // The existing brain routing admits one configured original maid.
     private Guard guard = new Guard();
 
@@ -66,6 +76,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         magic = NativeMaidMagicSupport.create();
         dungeonCombat = dungeonAccess("mayGuardDungeonTarget", Player.class, org.bukkit.entity.Entity.class, org.bukkit.entity.Entity.class);
         dungeonPosition = dungeonAccess("companionCombatPosition", Player.class, Location.class);
+        rescueTarget = dungeonAccess("companionRescueTarget", Player.class, org.bukkit.entity.LivingEntity.class);
         var config = plugin.getConfig();
         int port = config.getInt("companion.system-one-port", 8090);
         decision = config.getBoolean("companion.system-one", true) && port > 0 && port <= 65535
@@ -275,6 +286,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
             guard.maid = maid;
         }
         Player owner = owner(maid);
+        rescuing=null;
         guard.closingIn = false;
         boolean manualTask = !automaticTask(maid) && !maid.getTask().getUid().toString().equals(MaidCompanionActions.IDLE);
         if (manualTask || !eligible(maid, owner) || lowHealth(maid)) {
@@ -285,6 +297,16 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
             return;
         }
 
+        Location rescue=rescueTarget(maid,owner);
+        if(rescue!=null){
+            stopNative(maid);restoreHand(maid);clearPlan(maid);rescuing=maid.getUUID();
+            guard.state="rescuing_teammate";
+            if(maid.getBukkitEntity().getLocation().distanceSquared(rescue)>6.25)
+                net.minecraft.world.entity.ai.behavior.BehaviorUtils.setWalkAndLookTargetMemories(maid,
+                    new net.minecraft.core.BlockPos(rescue.getBlockX(),rescue.getBlockY(),rescue.getBlockZ()),.55F,2);
+            else { maid.getNavigation().stop(); maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET); }
+            return;
+        }
         long now = System.nanoTime();
         var threats = new ArrayList<>(maid.level().getEntitiesOfClass(Mob.class, maid.getBoundingBox().inflate(8), mob -> hostile(maid, owner, mob)));
         threats.sort(Comparator.comparing((Mob mob) -> !attacksPartner(maid, mob)).thenComparingDouble(maid::distanceToSqr));

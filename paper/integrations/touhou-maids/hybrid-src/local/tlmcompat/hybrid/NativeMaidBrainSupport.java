@@ -106,7 +106,8 @@ public final class NativeMaidBrainSupport implements Listener,AutoCloseable {
         void failed(LLMCallback callback,String reason){Selection selection=selections.get(callback);plugin.nativeModelFailed(callback,selection==null?null:selection.operation,reason);}
     }
     boolean isScoped(EntityMaid maid){return binding!=null&&maid.getUUID().equals(maidId);}
-    boolean allowed(EntityMaid maid){return !closed&&plugin.isEnabled()&&isScoped(maid)&&ownerId.equals(maid.getOwnerUUID())&&maid.isAlive()&&!maid.isRemoved();}
+    boolean identityMatches(EntityMaid maid){return !closed&&plugin.isEnabled()&&isScoped(maid)&&ownerId.equals(maid.getOwnerUUID());}
+    boolean allowed(EntityMaid maid){return identityMatches(maid)&&maid.isAlive()&&!maid.isRemoved()&&!maid.getPersistentData().contains(CompanionRespawn.TAG);}
     Selection selection(LLMCallback callback){return selections.get(callback);}
     UUID boundMaid(){return maidId;}
     boolean current(LLMCallback callback){

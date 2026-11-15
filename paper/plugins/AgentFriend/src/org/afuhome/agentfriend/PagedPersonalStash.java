@@ -77,7 +77,7 @@ final class PagedPersonalStash implements Listener {
         return left;
     }
     void select(Player p) {
-        Inventory inv=Bukkit.createInventory(null,27,"个人箱分页 · 共540格");
+        Inventory inv=Bukkit.createInventory(null,27,"个人仓库 · 10页540格");
         for(int i=0;i<PAGES;i++) {
             Inventory page=page(p.getUniqueId(),i);int used=0;
             for(ItemStack item:page.getContents())if(item!=null&&!item.getType().isAir())used++;
@@ -85,6 +85,9 @@ final class PagedPersonalStash implements Listener {
             meta.setDisplayName("第"+(i+1)+"页 · "+used+"/54格");
             meta.setLore(List.of("全局槽位 "+(i*54+1)+"–"+((i+1)*54),"实体箱旁免费；远程开启2魔力","原版箱子操作；不同玩家库存隔离"));icon.setItemMeta(meta);inv.setItem(i,icon);
         }
+        ItemStack help=new ItemStack(Material.WRITABLE_BOOK);var meta=help.getItemMeta();
+        meta.setDisplayName("个人仓库 ≠ 大背包 ≠ 共享箱");
+        meta.setLore(List.of("上方十个箱子分别打开第1至10页，共540格。","仅本人可取；每页54格均可用，没有装饰占位。","大背包另外54格；共享箱存入后其他人可领取。"));help.setItemMeta(meta);inv.setItem(22,help);
         selectors.put(inv,p.getUniqueId());p.openInventory(inv);
     }
     @EventHandler public void click(InventoryClickEvent e) {

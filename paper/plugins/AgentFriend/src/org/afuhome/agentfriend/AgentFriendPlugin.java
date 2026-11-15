@@ -178,7 +178,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             new CompassButton(5, Material.EXPERIENCE_BOTTLE, "技能成长", "查看战斗、探索与采集熟练度", "menu:mastery"),
             new CompassButton(6, Material.BOOK, "法术图鉴", "分页阅读全部基础与职业技能；查看不施法", "menu:spell_guide"),
             new CompassButton(7, Material.BLAZE_ROD, "灵纹法杖", "绑定技能后手持使用；绑定本身不施法", "menu:focus"),
-            new CompassButton(8, Material.CHEST, "个人试炼箱 · 奖励与照片", "左键直接开箱；右键选10页540格；远程开箱2魔力；与大背包独立", "stash"),
+            new CompassButton(8, Material.CHEST, "个人仓库 · 10页540格", "点击选择任意页；奖励与照片在这里；远程开页2魔力；与54格大背包独立", "stash"),
             new CompassButton(9, Material.LODESTONE, "传送地点", "公共、命名与分享地点；成功传送消耗魔力", "menu:places"),
             new CompassButton(10, Material.PLAYER_HEAD, "找队友", "追踪队友方向，或消耗魔力安全传送", "menu:players"),
             new CompassButton(11, Material.GRASS_BLOCK, "领地与物品归属", "查看领地主人、授权与储物权限", "lands"),
@@ -188,8 +188,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             new CompassButton(15, Material.BELL, "居民事务板", "近郊探索、讨伐、照片与遗迹调查", "world:board"),
             new CompassButton(16, Material.OAK_SAPLING, "村庄新生活", "居民聊天、新手实习、商店与世界活动", "world:menu"),
             new CompassButton(17, Material.SPYGLASS, "女神相机 · 拍照", "点击选择第一人称、第三人称、俯视或清晰海报；成片自动进入个人奖励箱", "photo"),
-            new CompassButton(18, Material.BLAZE_POWDER, "战斗法术", "星芒箭、霜环与焰浪；按原规则消耗魔力", "menu:combat"),
-            new CompassButton(19, Material.ELYTRA, "探索法术", "跃空、飞行、傀儡、心眼与支援传送", "menu:utility"),
+            new CompassButton(18, Material.BLAZE_POWDER, "通用战斗与生存", "星芒箭、霜环、治疗；职业技能在角色成长中查看", "menu:combat"),
+            new CompassButton(19, Material.RABBIT_FOOT, "探索与传送", "跃空、闪现、传送点与队友支援", "menu:utility"),
             new CompassButton(20, Material.SPYGLASS, "探矿术", "选择矿种，成功扫描才消耗魔力", "menu:prospect"),
             new CompassButton(21, Material.CRAFTING_TABLE, "造物术", "固定生活物资；成功造物消耗魔力", "menu:conjure"),
             new CompassButton(22, Material.FIREWORK_ROCKET, "观赏法术", "烟花与星尘；均有魔力与冷却要求", "menu:cosmetic"),
@@ -240,6 +240,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private GuildHallManager guildHall;
     private GuildSharedStorage guildShared;
     private GuildStorageOwnership guildStorage;
+    private TrialSharedSupplies trialSharedSupplies;
+    TrialSharedSupplies trialSharedSupplies(){return trialSharedSupplies;}
     private PvpArenaManager pvpArena;
     private TrialRoadManager trialRoad;
     private CombatSpells combatSpells;
@@ -425,6 +427,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         getCommand("mycli").setExecutor(this);
         getCommand("mycli").setTabCompleter(this);
         dungeon = new DungeonManager(this);
+        trialSharedSupplies = new TrialSharedSupplies(this);
         trialButtons = new TrialEntranceControls(this);
         guild = new GuildManager(this, dungeon);
         lifeGuild = new LifeGuildManager(this, dungeon);
@@ -638,7 +641,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return dungeonParticipant(player) || pvpArena != null && pvpArena.blocksNamedTravel(player);
     }
     boolean namedTravelActivityArea(Location at) {
-        return arenaBuilt && inBuild(at) || pvpArena != null && pvpArena.namedTravelArea(at)
+        return namedTravelActivityArea(at, "");
+    }
+    boolean namedTravelActivityArea(Location at, String destination) {
+        // Only the official entrance may cross its construction-protection corridor.
+        // Personal bookmarks, combat rooms, PvP and other encounters retain admission checks.
+        boolean publicEntrance = "arena".equals(destination) && sameWorld(at)
+                && Math.pow(at.getX() - (X + .5), 2) + Math.pow(at.getZ() - (Z - 16.5), 2)
+                    <= HomeLanding.RADIUS * HomeLanding.RADIUS
+                && Math.abs(at.getY() - (FLOOR + 1)) <= HomeLanding.VERTICAL;
+        return arenaBuilt && inBuild(at) && !publicEntrance || pvpArena != null && pvpArena.namedTravelArea(at)
                 || siteDungeons != null && siteDungeons.activityArea(at);
     }
     void refreshAgentState(Player player) { if (agentStatePublisher != null) agentStatePublisher.afterCast(player); }
@@ -1200,6 +1212,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 sender.sendMessage("只允许服务器控制台审计公会物品归属。"); return true;
             }
             guildStorage.audit(sender); return true;
+        }
+        if(args.length==3&&args[0].equalsIgnoreCase("admin")&&args[1].equalsIgnoreCase("trialsupplies")){
+            if(sender instanceof ConsoleCommandSender||sender instanceof RemoteConsoleCommandSender)trialSharedSupplies.admin(sender,args[2]);
+            else sender.sendMessage("共享箱由服主统一安装；玩家使用 /mycli guild shared 查看位置。");
+            return true;
         }
         if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("sharedstorage")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
@@ -2612,7 +2629,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         else if (action.startsWith("profession:")) professions.open(p, action.substring(11));
         else if (action.startsWith("world:")) worldLife.command(p, new String[]{"world", action.substring(6), "menu"});
         else switch (action) {
-            case "stash" -> { if (rightClick) dungeon.openStashPages(p); else dungeon.openStash(p); }
+            case "stash" -> dungeon.openStashPages(p);
             case "photo" -> photoCamera.menu(p);
             case "book" -> p.openBook(statusBook(p));
             case "lands" -> lands.open(p, 1);
@@ -2630,6 +2647,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     private int menuCloseSlot(String page, int size) { return page.equals("skills") ? 35 : size - 1; }
     private void openMenu(Player p, String page) {
+        if(nativeRpg.selected()&&(isSpellGuidePage(page)||Set.of("combat","utility").contains(page))){
+            playerAdventureMenus.open(p,AdventureMenuModel.Page.COMMON,"");return;
+        }
+        if(nativeRpg.selected()&&page.equals("mastery")){
+            playerAdventureMenus.open(p,AdventureMenuModel.Page.CHARACTER,"");return;
+        }
         if (isSpellGuidePage(page)) {
             int requested = page.equals("spell_guide") ? spellGuidePages.getOrDefault(p.getUniqueId(), 0) : spellGuidePage(page);
             page = "spell_guide:" + spellGuidePage("spell_guide:" + requested);

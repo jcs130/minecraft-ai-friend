@@ -324,7 +324,7 @@ final class GuildManager implements Listener {
                 plugin.guildHall().traderInfo(player);
                 if (plugin.guildHall().nearTrader(player)) plugin.guildHall().openReceptionMenu(player);
             }
-            case "shared", "storage", "共享箱" -> plugin.guildHall().storageInfo(player);
+            case "shared", "storage", "共享箱" -> {plugin.guildHall().storageInfo(player);plugin.trialSharedSupplies().describe(player);}
             case "travel", "远征" -> {
                 if (args.length < 3) player.sendMessage(ChatColor.YELLOW
                         + "用法：/mycli guild travel <遗迹ID>；可选 "
