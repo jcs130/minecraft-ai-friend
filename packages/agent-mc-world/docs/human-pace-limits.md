@@ -31,7 +31,7 @@ See also `core/mining-limiter.ts` and `core/movement-pace.ts`.
 | `warningBanMarginMs` | `300000` | Extra wait after a parsed “N minutes no digging” line. |
 | `warningBudgetFactor` | `0.5` | Budget multiplier after the pause/ban, for `warningReducedMs`. |
 | `warningReducedMs` | `3600000` | How long the reduced budgets last (1 hour). |
-| `warningKeywords` | `反作弊`, `自动挖矿`, `挖矿外挂`, `禁止挖`, `自动化模组`, `外挂` | Substrings; any hit is a warning candidate. JSON may use a string array or a comma/pipe-separated string. The settings UI key is `warningKeywordsCsv` (same value as a string). |
+| `warningKeywords` | `反作弊`, `自动挖矿`, `挖矿外挂`, `禁止挖`, `自动化模组`, `外挂` | Substrings; any hit is a warning candidate. JSON may use a string array or a comma/pipe-separated string. The settings schema exposes this canonical array; hosts without string-list editing display it read-only. Edit the JSON field there. The legacy `warningKeywordsCsv` input is still accepted when the canonical field is absent, but is not advertised as a separate writable setting. |
 | `warningPattern` | the same terms as a regex | Optional extra regex, *or*ed with the keywords. Empty = keywords only. Kept so older configs that only set a pattern still work. |
 | `warningConfirmPattern` | `你\|检测\|禁止\|VL` | A keyword/pattern hit must also match this (case-insensitive) so advertisements that only quote the words are ignored. Empty = no extra filter. |
 | `warningBanPattern` | `(\d+)\s*分钟内禁止挖` | First capture group = minutes of a mineral dig ban. Empty = do not parse a timed ban from chat. |

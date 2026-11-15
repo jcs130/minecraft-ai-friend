@@ -3,6 +3,7 @@ export type ProtectStatus = 'deny' | 'unknown' | 'allow_likely';
 export interface ProtectCell { x: number; y: number; z: number }
 export interface ProtectReply {
   action: ProtectAction;
+  /** Server level key when available; historical field name, not a dimension-type alias. */
   dimension: string;
   x: number; y: number; z: number;
   status: ProtectStatus;

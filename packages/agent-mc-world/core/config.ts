@@ -582,8 +582,10 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
         description: '警告恢复后一段时间内的额度乘数。默认 0.5。' },
       'worlds.minecraft.miningLimits.warningReducedMs': { type: 'integer', title: '降额持续', minimum: 0, maximum: 86400000, 'x-suffix': 'ms', 'x-hot': true,
         description: '默认 3600000（降额一小时）。' },
-      'worlds.minecraft.miningLimits.warningKeywordsCsv': { type: 'string', title: '警告关键词', 'x-hot': true,
-        description: '逗号或竖线分隔。仅无玩家来源的服务端系统通知参与匹配，普通聊天和私聊不会停机。JSON 配置也可用 miningLimits.warningKeywords 字符串数组。不同服务器把专用句子配在这里，不要写进核心代码。默认：反作弊、自动挖矿、挖矿外挂、禁止挖、自动化模组、外挂。' },
+      // Forms without string-list editing render this canonical value read-only.
+      // A separate CSV alias is shadowed by the persisted array and must not be advertised.
+      'worlds.minecraft.miningLimits.warningKeywords': { type: 'array', title: '警告关键词', 'x-hot': true,
+        description: '字符串列表。不支持字符串列表编辑的配置面板只读显示，可通过 JSON 配置修改 warningKeywords。仅来自服务端的系统通知参与匹配，普通聊天和私聊不会触发。' },
       'worlds.minecraft.miningLimits.warningPattern': { type: 'string', title: '警告正则（可选）', 'x-hot': true,
         description: '高级选项：与关键词是「或」关系。留空则只靠关键词。默认与关键词相同，兼容旧配置。' },
       'worlds.minecraft.miningLimits.warningConfirmPattern': { type: 'string', title: '警告确认正则', 'x-hot': true,

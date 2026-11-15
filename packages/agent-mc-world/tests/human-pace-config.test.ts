@@ -27,21 +27,26 @@ describe('miningLimits / movementPace config', () => {
     expect(movementPaceErrors(MOVEMENT_PACE_DEFAULTS)).toEqual([]);
   });
 
-  it('the rhythm schema exposes every limiter and pace field (hot-reloadable)', () => {
+  it('the rhythm schema exposes supported limiter and pace fields (hot-reloadable)', () => {
     const props = MINECRAFT_RHYTHM_CONFIG_GROUP.schema.properties as Record<string, unknown>;
     const miningKeys = Object.keys(MINING_LIMIT_DEFAULTS) as string[];
     const paceKeys = Object.keys(MOVEMENT_PACE_DEFAULTS) as string[];
     for (const key of miningKeys) {
-      // The settings schema uses a CSV string; JSON configs still use warningKeywords: string[].
-      if (key === 'warningKeywords') {
-        expect(props['worlds.minecraft.miningLimits.warningKeywordsCsv'], key).toBeTruthy();
-        continue;
-      }
       expect(props[`worlds.minecraft.miningLimits.${key}`], key).toBeTruthy();
     }
     for (const key of paceKeys) {
       expect(props[`worlds.minecraft.movementPace.${key}`], key).toBeTruthy();
     }
+  });
+
+  it('keeps canonical keyword edits effective without advertising an unwritable form alias', () => {
+    const props = MINECRAFT_RHYTHM_CONFIG_GROUP.schema.properties;
+    expect(props['worlds.minecraft.miningLimits.warningKeywords']).toMatchObject({type:'array'});
+    expect(props).not.toHaveProperty('worlds.minecraft.miningLimits.warningKeywordsCsv');
+    const saved = {...structuredClone(MINECRAFT_DEFAULTS.miningLimits), warningKeywords: ['fixture warning']};
+    expect(resolveMiningLimits(saved).warningKeywords).toEqual(['fixture warning']);
+    expect(resolveMiningLimits({...saved,warningKeywords:[]}).warningKeywords).toEqual([]);
+    expect(resolveMiningLimits(saved).enabled).toBe(false);
   });
 
   it('merges partials, accepts a CSV or pipe-separated keyword string, and keeps unspecified defaults', () => {

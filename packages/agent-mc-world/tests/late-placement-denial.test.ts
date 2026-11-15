@@ -7,6 +7,7 @@ import { Bridge } from '../core/bridge.ts';
 import { installMineflayerFixes } from '../core/mineflayer-fixes.ts';
 import { parseServerActionDenial } from '../core/server-feedback.ts';
 import type { ProtectCell, ProtectReply } from '../core/protection-port.ts';
+import { installWorldIdentity, readWorldIdentity } from '../core/world-scope.ts';
 
 const require = createRequire(import.meta.url);
 const registry = require('minecraft-data')('1.21.1');
@@ -15,7 +16,7 @@ const Blocks = dependency('prismarine-block')('1.21.1');
 const dest = new Vec3(2, 64, 0), ref = dest.offset(0, -1, 0);
 const log = { info() {}, warn() {}, error() {}, debug() {} };
 
-function rig(denyAfter: number | null, options: { path?: boolean; foreign?: 'cell' | 'dimension'; confirmThird?: boolean } = {}) {
+function rig(denyAfter: number | null, options: { path?: boolean; foreign?: 'cell' | 'dimension'; confirmThird?: boolean; world?: string } = {}) {
   const events = new EventEmitter();
   let sends = 0, placed = false;
   const phases: string[] = [];
@@ -40,15 +41,19 @@ function rig(denyAfter: number | null, options: { path?: boolean; foreign?: 'cel
     cortiProtectCheck: async (_action: string, cell: ProtectCell, phase = 'before') => {
       phases.push(phase);
       return (bridge as unknown as { observedPlaceDenial(dimension: string, cell: ProtectCell): ProtectReply | null })
-        .observedPlaceDenial('overworld', cell);
+        .observedPlaceDenial(readWorldIdentity(bot).key ?? 'overworld', cell);
     },
   }) as unknown as Bot;
   const bridge = new Bridge({ host: 'offline-fixture', port: 25565, username: 'fixture', version: '1.21.1', viewerPort: 0,
     log: log as never, onSpawn() {}, onDisconnect() {} });
   Object.assign(bridge, { _bot: bot });
+  if (options.world) {
+    installWorldIdentity(bot);
+    bot._client.emit('login', { worldState: { name: options.world, dimension: 0 } });
+  }
   function deny() {
     const reply = parseServerActionDenial('MC_PROTECTION ' + JSON.stringify({ schemaVersion: 1, action: 'place', status: 'deny', allowed: false,
-      world: options.foreign === 'dimension' ? 'minecraft:the_nether' : 'minecraft:overworld',
+      world: options.foreign === 'dimension' ? 'minecraft:the_nether' : options.world ?? 'minecraft:overworld',
       x: dest.x + (options.foreign === 'cell' ? 1 : 0), y: dest.y, z: dest.z,
       retrySameAction: false, reason: 'generated_structure' }))!;
     bridge.noteServerActionDenied(reply);
@@ -59,6 +64,17 @@ function rig(denyAfter: number | null, options: { path?: boolean; foreign?: 'cel
 }
 
 describe('cached exact-cell denial before a placement retry', () => {
+  it.each([false, true])('stops native-world placement retries although the physics type is overworld (path=%s)', async path => {
+    vi.useFakeTimers();
+    try {
+      const r = rig(2, { path, world: 'minecraft:fixture_temple' });
+      const result = r.place().then(() => null, error => error as Error);
+      await vi.runAllTimersAsync();
+      expect((await result)?.message).toContain('deny');
+      expect(r.sends()).toBe(2);
+      expect(r.bot.game.dimension).toBe('overworld');
+    } finally { vi.useRealTimers(); }
+  });
   it.each([false, true])('stops before the third send when denial arrives after the second (path=%s)', async path => {
     vi.useFakeTimers();
     try {
