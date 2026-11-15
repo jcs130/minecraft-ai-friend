@@ -172,7 +172,9 @@ export function createMinecraftChoiceTool(host: () => WorldHost | null,
         const uncertain = answer.choiceProbability < .65 || answer.choice === '_inspect';
         const result = JSON.stringify({ decisionId:ctx.callId??randomUUID(),status: uncertain ? 'inspect' : 'advice', choice: uncertain ? null : answer.choice,
           probability: Number(answer.choiceProbability.toFixed(3)), scene: before.revision, expiresAt: start + deadline.age,
+          probabilities: answer.probabilities, probabilitySource: 'decision-provider-declared',
           elapsedMs: Date.now() - start, execution: '未执行，行动前核验', model:response.model??null,inputTokens: response.usage?.input_tokens ?? null,
+          outputTokens: response.usage?.output_tokens ?? null,
           ...(before.route && after?.route ? {routeTolerance:{horizontalBlocks:Number(routeTolerance(before.route,after.route,now-start).toFixed(3)),
             verticalBlocks:ROUTE_VERTICAL_DRIFT,risk:before.route.risk||after.route.risk,meaning:'建议有效期，不是通行许可'}}:{}),
           recalledMemoryRefs:lessons.map(l=>l.reference) });

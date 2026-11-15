@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import { GameMemoryLearning } from './game-memory-learning.ts';
 import { OperationExperienceBook } from './operation-experience.ts';
+import { JitRlBook } from './jitrl.ts';
 import { artifactRef } from './game-memory-learning-contract.ts';
 import { memoryRequest, validateMemoryTransport } from './game-memory-http.ts';
 import { CPU_MEMORY_VECTOR_VERSION, cpuMemoryVector, cpuMemorySimilarity } from './memory-cpu-vector.ts';
@@ -161,7 +162,12 @@ export class GameMemoryService {
     const cfg = { ...GAME_MEMORY_DEFAULTS, ...config };
     if (args.action === 'experience') {
       if (!this.directory) throw new Error('Persistent dataDir is required for operation experience');
-      return new OperationExperienceBook(this.directory).query(args, ctx, this.book);
+      const book = new OperationExperienceBook(this.directory);
+      if (['policy_help', 'policy_status', 'rank', 'feedback'].includes(String(args.operation)))
+        return new JitRlBook(this.directory, (scope, id) => book.get(scope, id)).execute(args, ctx);
+      const result = await book.query(args, ctx, this.book);
+      return args.operation === 'help' || !args.operation ? { ...result,
+        policyLearning: 'Use experience/policy_help for JitRL rank/feedback: local candidate probability correction from measured, scope-bound operation receipts.' } : result;
     }
     if (args.action === 'search' && args.preference !== undefined) cfg.readPreference = args.preference as GameMemoryConfig['readPreference'];
     if (!['local', 'local-vector', 'vector', 'remote'].includes(cfg.mode)) throw new Error('Unknown memory mode');

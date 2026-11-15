@@ -22,6 +22,7 @@ import { COMBAT_TACTIC_TOOL } from '../../core/combat-tool.ts';
 import { createJavaMemoryAccess, type JavaClientServices } from './java-memory.ts';
 import { MessageInbox, messageInboxHost } from './message-inbox.ts';
 import { withToolHelp } from './tool-help.ts';
+import { nativeOperationObservation } from './native-evidence.ts';
 
 export const JAVA_CLIENT_ENVIRONMENT = `You control an actual rendered Minecraft Java client through agent-mc-java/v1. The host owns goals, personality, models and memory. The client bridge owns one actual body queue. It never launches a game, reconnects, simulates OS input or runs a model.
 Query mc_capabilities, mc_operations and mc_help before acting. Claim mc_control explicitly, then renew the lease before expiry. Disconnect releases your own lease and keys. Identity is the actual server-assigned UUID and exact server address; offline servers do not require Microsoft authentication. Never control a different player or server after an identity change.
@@ -139,9 +140,7 @@ export class JavaClientWorld implements World {
         guards: { body: [state.uuid, state.username, state.server, state.generation, state.dimension,state.reflexScope??null], authorization: this.connectionReadiness() } },
       ...(native ? {experience:{scope:{realm:`java:${native.expectedServer.toLowerCase().replace(/:25565$/, '')}`,
         account:`uuid:${native.expectedUuid.replaceAll('-', '').toLowerCase()}`,agent:this.services?.agentName??native.controllerId},
-        observation:state.connected?{at:state.sampledAt,dimension:typeof state.dimension==='string'?state.dimension:null,
-          position:state.position?.length===3?{x:state.position[0],y:state.position[1],z:state.position[2]}:null,
-          health:typeof state.health==='number'?state.health:null,food:typeof state.food==='number'?state.food:null,inventory:null}:null}}:{}) };
+        observation:nativeOperationObservation(state)}}:{}) };
   }
   connectionReadiness() {
     if (!this.state?.connected) return { ready: false, phase: this.host ? 'offline' : 'detached' };

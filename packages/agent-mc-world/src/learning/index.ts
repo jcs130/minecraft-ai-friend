@@ -1,4 +1,6 @@
 /** Opt-in game-only dataset recording; importing starts no collection, inference or body control. */
+export { JitRlBook, reweightJitRl } from '../../core/jitrl.ts';
+export type { JitRlCandidate, JitRlNeighbour } from '../../core/jitrl.ts';
 export * from './assessment.ts';
 export * from './archive.ts';
 export * from './follower.ts';

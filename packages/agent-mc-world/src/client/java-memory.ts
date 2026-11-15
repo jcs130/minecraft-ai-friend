@@ -5,7 +5,7 @@ import { PlayerMemoryRecall } from '../../core/game-memory-player.ts';
 import type { JavaClientState } from '../contracts/java-client.ts';
 import type { MinecraftClientConfig } from './config.ts';
 import type { ToolDef } from './contracts.ts';
-import { compactNativeItems } from './native-evidence.ts';
+import { compactNativeItems, nativeOperationObservation } from './native-evidence.ts';
 import type { MessageInboxOptions } from './message-inbox.ts';
 
 /** Host-owned storage and identity binding; never creates or reconnects a body. */
@@ -47,9 +47,10 @@ export function createJavaMemoryAccess(cfg: MinecraftClientConfig, services: Jav
         if (!scope || !scope.realm.slice(5) || !/^uuid:[a-f0-9]{32}$/.test(scope.account) || !scope.agent)
           throw new Error('Java memory requires an explicit native server, UUID and agent/controller identity');
         // Historical retrieval/notes must not depend on a body RPC, lease or launcher.
-        const fresh = args.action === 'capture' ? await readFresh(ctx.signal) : null;
+        const fresh = args.action === 'capture' || args.action === 'experience' && args.operation === 'rank' ? await readFresh(ctx.signal) : null;
         ctx.signal?.throwIfAborted();
         const result = await memory.execute(args, { scope, dimension: dimensionOf(fresh ?? current()),
+          observation: () => nativeOperationObservation(fresh),
           capture: () => {
             const dimension = dimensionOf(fresh);
             if (!fresh?.connected || !dimension) throw new Error('Native body disconnected; current facts cannot be captured');
