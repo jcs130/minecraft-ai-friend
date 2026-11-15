@@ -62,10 +62,13 @@ export function projectDecisionEvidence(items: readonly DecisionEvidenceItem[], 
     const { text, ...reference } = items[index];
     const entry: typeof omitted[number] = { ...reference, index, originalChars: text.length };
     omitted.push(entry); result.nextOffset = index + 1 < items.length ? index + 1 : null;
-    if (size() > maxChars - 16) {
+    if (size() > maxChars) {
       omitted[omitted.length - 1] = { index, originalChars: text.length, metadataTruncated: true };
-      if (size() > maxChars - 16) { omitted.pop(); break; }
+      if (size() > maxChars) { omitted.pop(); break; }
     }
+  }
+  if (index === offset && offset < items.length) {
+    throw new RangeError('Evidence envelope leaves no room for an original reference');
   }
   result.nextOffset = index < items.length ? index : null;
   result.omittedIndexComplete = result.omittedCount === omitted.length;
