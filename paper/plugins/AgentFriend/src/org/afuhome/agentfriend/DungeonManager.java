@@ -86,7 +86,6 @@ final class DungeonManager implements Listener {
             -40, -28, -16, -4, 8};
     private static final int[] RADII = {12, 12, 12, 12, 12, 12, 16, 18, 18, 20,
             22, 22, 22, 22, 24};
-    private static final double BUTTON_GROUP_RADIUS_SQUARED = 12.0 * 12.0;
     private static final long COOLDOWN_MS = 180_000L;
     private static final long RUN_TIMEOUT_MS = 3_600_000L;
     private static final long FLOOR_TIMEOUT_MS = 480_000L;
@@ -554,20 +553,95 @@ final class DungeonManager implements Listener {
         return new Location(world(), X - 5.5, LOBBY_Y + 2.5, Z - 7.5);
     }
 
-    private boolean nearLobbyButton(Player player, Location button) {
-        Location at = player.getLocation();
-        return player.isOnline() && !player.isDead() && !plugin.isObserver(player)
-                && (player.getGameMode()==GameMode.SURVIVAL||player.getGameMode()==GameMode.ADVENTURE)
-                && sameWorld(at) && Math.abs(at.getY() - button.getY()) <= 4
-                && at.distanceSquared(button) <= BUTTON_GROUP_RADIUS_SQUARED;
+    private boolean onLobbyPlatform(Player player) {
+        return player.isOnline() && inLobby(player.getLocation());
     }
 
-    private List<Player> groupNearLobbyButton(Location button) {
-        List<Player> group = new ArrayList<>();
-        for (Player player : Bukkit.getOnlinePlayers())
-            if (nearLobbyButton(player, button) && !plugin.pvpParticipant(player)
-                    && (plugin.siteDungeons() == null || !plugin.siteDungeons().isParticipant(player))) group.add(player);
-        return group;
+    private record Admission(Player player, String reason, String detail, String nextCommand,
+                             List<String> missingEquipment) {
+        boolean ready() { return reason.isEmpty(); }
+    }
+
+    private Admission admission(Player player) {
+        String reason = "", detail = "", next = "/mycli arena status";
+        List<String> missing = List.of();
+        if (!player.isOnline() || player.isDead() || plugin.isDowned(player)) {
+            reason = "actor_unavailable"; detail = "离线、死亡或倒地，需先恢复行动"; next = "/mycli status";
+        } else if (plugin.isObserver(player) || player.hasMetadata("NPC")
+                || !Set.of(GameMode.SURVIVAL, GameMode.ADVENTURE).contains(player.getGameMode())) {
+            reason = "actor_unavailable"; detail = "需要本人存活的生存／冒险角色，观战与创造模式不能参赛"; next = "/mycli status";
+        } else if (plugin.pvpParticipant(player)) {
+            reason = "other_activity"; detail = "仍在 PvP 竞技场，需先正常结束或退出"; next = "/mycli status";
+        } else if (plugin.siteDungeons() != null && plugin.siteDungeons().isParticipant(player)) {
+            reason = "other_activity"; detail = "仍在遗迹场次，需先正常结束或退出"; next = "/mycli dungeon status";
+        } else {
+            missing = List.copyOf(DungeonLoadout.missing(player));
+            if (!missing.isEmpty()) {
+                reason = "equipment_missing"; detail = "缺少：" + String.join("、", missing);
+                next = DungeonLoadoutRules.SUPPLIES;
+            }
+        }
+        return new Admission(player, reason, detail, next, missing);
+    }
+
+    // The entire walkable lobby is the opt-in gathering area. Do not pull in bridge
+    // passersby, players on other floors/worlds, or non-playing camera/NPC accounts.
+    private List<Admission> platformAssembly() {
+        return Bukkit.getOnlinePlayers().stream().filter(this::onLobbyPlatform)
+            .filter(p -> !plugin.isObserver(p) && !p.hasMetadata("NPC") && p.getGameMode() != GameMode.SPECTATOR)
+            .sorted(java.util.Comparator.comparing(Player::getName)).map(this::admission).toList();
+    }
+
+    private com.google.gson.JsonObject assemblyReceipt(List<Admission> assembly, String phase, boolean started, int targetFloor) {
+        var out = new com.google.gson.JsonObject();
+        out.addProperty("schemaVersion", 1); out.addProperty("phase", phase);
+        out.addProperty("groupRule", "lobby_platform"); out.addProperty("runStarted", started);
+        out.addProperty("targetFloor", targetFloor); out.addProperty("world", world() == null ? "unknown" : world().getName());
+        out.add("bounds", new com.google.gson.Gson().toJsonTree(Map.of("min", List.of(X-11, LOBBY_Y, Z-11),
+            "maxBlock", List.of(X+11, LOBBY_Y+8, Z+11))));
+        var rows = new com.google.gson.JsonArray(); int ready = 0, entered = 0;
+        for (Admission entry : assembly) {
+            Player p = entry.player();
+            boolean arrived = started && participants.contains(p.getUniqueId()) && inFloor(p.getLocation(), targetFloor);
+            String status = !entry.ready() ? "rejected" : phase.equals("preview") ? "ready"
+                : phase.equals("blocked") ? "not_started" : arrived ? "entered" : "transfer_failed";
+            var row = new com.google.gson.JsonObject();
+            row.addProperty("name", p.getName()); row.addProperty("uuid", p.getUniqueId().toString());
+            row.addProperty("status", status); row.addProperty("reason", status.equals("transfer_failed") ? "teleport_failed" : entry.reason());
+            row.addProperty("detail", status.equals("transfer_failed") ? "传送未成功，未加入本场；请核对落点与传送拦截" : entry.detail());
+            row.addProperty("nextCommand", entry.nextCommand());
+            row.add("missingEquipment", new com.google.gson.Gson().toJsonTree(entry.missingEquipment())); rows.add(row);
+            if (entry.ready()) ready++; if (arrived) entered++;
+        }
+        out.add("members", rows); out.addProperty("eligibleCount", ready); out.addProperty("enteredCount", entered);
+        return out;
+    }
+
+    String[] assemblyMenuLore(Player viewer) {
+        List<String> lines = new ArrayList<>(List.of("整个平台内合格玩家一起进入", "观战角色不参赛；缺条件会点名提示"));
+        var assembly = platformAssembly();
+        for (Admission entry : assembly.stream().limit(8).toList())
+            lines.add(entry.player().getName() + "：" + (entry.ready() ? "已就绪" : entry.detail()));
+        if (assembly.size() > 8) lines.add("其余 " + (assembly.size()-8) + " 人见 /mycli arena status --json");
+        if (!onLobbyPlatform(viewer)) lines.add("请先进入围墙内的集合平台；桥上不计入队伍");
+        lines.add("点击时重新检查；全队采用你选定的难度");
+        return lines.toArray(String[]::new);
+    }
+
+    private void reportAssembly(Player starter, List<Admission> assembly, boolean started, int targetFloor, boolean attempted) {
+        var receipt = assemblyReceipt(assembly, attempted ? "result" : "blocked", started, targetFloor);
+        starter.sendMessage("§6[试炼集结] " + (started ? "已入场 " + receipt.get("enteredCount").getAsInt() + " 人。" : "本场未启动。")
+            + "按整个平台集结；桥上和观战角色不计入。未入场者可补齐条件后再支援队友。");
+        for (var element : receipt.getAsJsonArray("members")) {
+            var row = element.getAsJsonObject(); String status = row.get("status").getAsString();
+            String result = status.equals("entered") ? "已入场" : status.equals("not_started") ? "已就绪，本场未启动"
+                : row.get("detail").getAsString() + "。下一步：" + row.get("nextCommand").getAsString();
+            String message = (status.equals("entered") ? "§a" : "§e") + "[试炼集结] " + row.get("name").getAsString() + "：" + result;
+            starter.sendMessage(message);
+            Player p = Bukkit.getPlayer(UUID.fromString(row.get("uuid").getAsString()));
+            if (p != null && !p.equals(starter) && (status.equals("rejected") || status.equals("transfer_failed"))) p.sendMessage(message);
+        }
+        starter.sendMessage("MC_TRIAL_ASSEMBLY " + receipt);
     }
 
     private void enrollPlayersOnCurrentFloor() {
@@ -619,8 +693,18 @@ final class DungeonManager implements Listener {
         long cooldown=active?0:Math.max(0,COOLDOWN_MS-(System.currentTimeMillis()-lastRun));
         var facts=new TrialGuide.Facts(built,isParticipant(player),active,pausedAt>0,spawned,cleared,floor,floorAt(player.getLocation()),
             remaining,maxFloor(),plugin.isObserver(player),plugin.nativeRpgMayAct(player),plugin.isDowned(player),plugin.pvpParticipant(player)
-            ||plugin.siteDungeons()!=null&&plugin.siteDungeons().isParticipant(player),world()!=null&&nearLobbyButton(player,lobbyButton()),mana,cooldown,DungeonLoadout.missing(player));
+            ||plugin.siteDungeons()!=null&&plugin.siteDungeons().isParticipant(player),world()!=null&&onLobbyPlatform(player),mana,cooldown,DungeonLoadout.missing(player));
         var out=new com.google.gson.Gson().toJsonTree(TrialGuide.next(facts)).getAsJsonObject();
+        Location at = player.getLocation();
+        if (Set.of("reach_trial_entrance", "travel_mana_required", "mana_unknown").contains(out.get("reason").getAsString())
+                && sameWorld(at) && Math.abs(at.getBlockX()-X)<=2 && at.getBlockZ()>=Z-23 && at.getBlockZ()<=Z-12
+                && at.getY()>=LOBBY_Y && at.getY()<=LOBBY_Y+5) {
+            out.addProperty("reason", "enter_gathering_platform");
+            out.addProperty("nextAction", "已到入口桥，不用再次传送。穿过入口门走进围墙内集合平台（主世界 world -590,91,-313），再点开始或 /mycli arena start；桥上路人不会自动入队");
+            out.addProperty("nextCommand", TrialGuide.STATUS);
+            out.addProperty("requiresWorldAction", true);
+            out.add("walkTarget", new com.google.gson.Gson().toJsonTree(Map.of("world", "world", "x", X, "y", LOBBY_Y+1, "z", Z-8)));
+        }
         out.addProperty("schemaVersion", TRIAL_SCHEMA_VERSION);
         boolean participant = isParticipant(player);
         out.addProperty("activityType","trial_tower");out.addProperty("participant",participant);out.addProperty("active",active);
@@ -644,6 +728,7 @@ final class DungeonManager implements Listener {
         out.addProperty("world",world()==null?"unknown":world().getName());
         if(world()!=null){out.addProperty("worldKey",world().getKey().toString());out.addProperty("worldUuid",world().getUID().toString());}
         out.add("entrance",new com.google.gson.Gson().toJsonTree(Map.of("x",-596,"y",92,"z",-313)));
+        if (onLobbyPlatform(player)) out.add("assembly", assemblyReceipt(platformAssembly(), "preview", false, 1));
         return out;
     }
     private void showGuidance(Player player){var guide=guidance(player);player.sendMessage("§e[试炼下一步] "+guide.get("nextAction").getAsString()+"。命令："+guide.get("nextCommand").getAsString());}
@@ -837,13 +922,7 @@ final class DungeonManager implements Listener {
     }
 
     private void start(Player starter) {
-        if(starter.isDead()||plugin.isDowned(starter)||plugin.isObserver(starter)
-            ||!Set.of(GameMode.SURVIVAL,GameMode.ADVENTURE).contains(starter.getGameMode())){starter.sendMessage("§e[actor_unavailable] 当前角色不能参赛；未开场。命令：/mycli status");return;}
-        if (plugin.siteDungeons() != null && plugin.siteDungeons().isParticipant(starter)) {
-            starter.sendMessage(ChatColor.RED + "你正在遗迹地下城中；先完成或 dungeon leave 再参加试炼塔。"); return;
-        }
-        if (starter.getGameMode() == GameMode.SPECTATOR) { starter.sendMessage(ChatColor.RED + "旁观者不能启动挑战；请使用生存角色，/mycli arena status 查看入口和规则。"); return; }
-        if (!nearLobbyButton(starter, lobbyButton())) {
+        if (!onLobbyPlatform(starter)) {
             showGuidance(starter);return;
         }
         if (active) { starter.sendMessage(ChatColor.YELLOW + "已有队伍在挑战试炼塔；/mycli arena status 查看，等本场结束后再开场，或 dungeon list 选择别处。"); return; }
@@ -852,18 +931,24 @@ final class DungeonManager implements Listener {
             starter.sendMessage(ChatColor.YELLOW + "试炼场休息中，还需 " + ((COOLDOWN_MS - (now - lastRun) + 999) / 1000) + " 秒。");
             return;
         }
-        if(!DungeonLoadout.ready(starter))return;
-        List<Player> group = groupNearLobbyButton(lobbyButton()).stream().filter(DungeonLoadout::ready).toList();
+        List<Admission> assembly = platformAssembly();
+        if (!admission(starter).ready()) {
+            if (assembly.stream().noneMatch(a -> a.player().equals(starter))) assembly = List.of(admission(starter));
+            reportAssembly(starter, assembly, false, 1, false); return;
+        }
+        List<Player> group = assembly.stream().filter(Admission::ready).map(Admission::player).toList();
         if (group.isEmpty()) return;
         participants.clear(); mobs.clear();
         difficulty = chosenDifficulty(starter);
         if (enterFloor(1, group) == 0) {
+            reportAssembly(starter, assembly, false, 1, true);
             starter.sendMessage(ChatColor.RED + "【试炼塔】入口传送失败，本场未启动；/mycli status 查魔力，/mycli arena status 核对入口；站在安全处再试，持续失败联系服主。"); return;
         }
         active = true;
         runStartedAt = now;
         runId = UUID.randomUUID().toString();
         persistRun();
+        reportAssembly(starter, assembly, true, 1, true);
         for (UUID id : participants) {
             Player player = Bukkit.getPlayer(id);
             if (player == null || !player.isOnline()) continue;
@@ -872,7 +957,7 @@ final class DungeonManager implements Listener {
                     10, 65, 15);
             sendStart(player, starter);
         }
-        announce(ChatColor.GOLD + "" + maxFloor() + " 层" + difficulty.label + "试炼开始！入口按钮附近 " + participants.size()
+        announce(ChatColor.GOLD + "" + maxFloor() + " 层" + difficulty.label + "试炼开始！集合平台内 " + participants.size()
                 + " 人已组队进入。每层清怪立刻恢复生命、魔力并清除负面状态，10 秒后自动下楼；奖励留在个人箱子。");
     }
 
@@ -893,19 +978,20 @@ final class DungeonManager implements Listener {
             starter.sendMessage(ChatColor.YELLOW + "试炼场休息中，还需 "
                     + ((COOLDOWN_MS - (now - lastRun) + 999) / 1000) + " 秒。"); return;
         }
-        List<Player> group = nearLobbyButton(starter, lobbyButton())
-                ? groupNearLobbyButton(lobbyButton()) : List.of(starter);
-        if(!DungeonLoadout.ready(starter))return;
-        group=group.stream().filter(DungeonLoadout::ready).toList();
+        List<Admission> assembly = onLobbyPlatform(starter) ? platformAssembly() : List.of(admission(starter));
+        if (!admission(starter).ready()) { reportAssembly(starter, assembly, false, REST_FLOOR, false); return; }
+        List<Player> group = assembly.stream().filter(Admission::ready).map(Admission::player).toList();
         participants.clear(); mobs.clear();
         difficulty = chosenDifficulty(starter);
         if (enterFloor(REST_FLOOR, group) == 0) {
+            reportAssembly(starter, assembly, false, REST_FLOOR, true);
             starter.sendMessage(ChatColor.RED + "驿站传送失败，挑战未启动；/mycli status 查魔力与状态，/mycli arena status 查驿站条件；持续失败联系服主。"); return;
         }
         active = true;
         runStartedAt = now;
         runId = UUID.randomUUID().toString();
         persistRun();
+        reportAssembly(starter, assembly, true, REST_FLOOR, true);
         for (UUID id : participants) {
             Player player = Bukkit.getPlayer(id);
             if (player != null && player.isOnline()) sendStart(player, starter);
@@ -978,7 +1064,7 @@ final class DungeonManager implements Listener {
             ? plugin.travelMagic().teleport(player, landing, "arena:rest", "深层驿站传送术", TravelMagic.DISTANT_MANA)
             : player.teleport(landing);
         if (arrived && inFloor(player.getLocation(), number)) CompanionTravelAccess.followTrialTransfer(player, from, number);
-        return arrived;
+        return arrived && inFloor(player.getLocation(), number);
     }
 
     private Location center(int number) {

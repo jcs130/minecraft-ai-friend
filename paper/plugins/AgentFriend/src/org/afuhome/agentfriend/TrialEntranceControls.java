@@ -99,7 +99,7 @@ final class TrialEntranceControls {
             b.addProperty("command", "/mycli arena difficulty " + c.id()); buttons.add(b);
         }
         out.add("buttons", buttons);
-        sender.sendMessage("试炼塔：主世界world（-596,92,-313）；普通绿、冒险橙、末日紫。/mycli goto arena 前往（6魔力）；穿齐护甲、带武器、伙伴到按钮12格内，一人 /mycli arena start，开场免费。每次新开从第1层开始，历史通关不自动跳层；清层自动下楼。按实体按钮不是必需步骤。");
+        sender.sendMessage(TrialGuide.route() + " 普通绿、冒险橙、末日紫；按实体按钮不是必需步骤。菜单和 arena status --json 可核对平台名单及缺少条件。");
         if(json)sender.sendMessage("MC_TRIAL_BUTTONS " + out);
     }
     boolean handleInteract(PlayerInteractEvent event) {
