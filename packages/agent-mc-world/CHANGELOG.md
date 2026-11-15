@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.81
+
+- Ensure tight decision-evidence pages advance through compact original references; explicitly reject envelopes that cannot fit even one reference (upstream PR #248).
+
 ## 0.5.7-rc.160-preview.80
 
 - Bound the full serialized decision evidence envelope, including metadata, escaped text and omitted references. Add ordered pages and stable numeric references for recovering oversized originals without losing explicit omission boundaries.
