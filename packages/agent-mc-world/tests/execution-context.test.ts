@@ -65,6 +65,22 @@ describe('source-owned execution context', () => {
     expect(()=>projectDecisionEvidence(originals,{envelope:{complete:true}})).toThrow(/Reserved/);
   });
 
+  it('keeps compact references when host metadata takes nearly all of the budget', () => {
+    const original = {id:'fact:large', kind:'fact' as const, source:'server', observedAt:null,
+      text:'a'.repeat(2000), read:{path:'b'.repeat(20000)}};
+    const options = {maxChars:1024,envelope:{body:'x'.repeat(747)}};
+    const page = projectDecisionEvidence([original, original], options);
+    expect(page.items).toEqual([]);
+    expect(page.omitted).toEqual([{index:0,originalChars:2000,metadataTruncated:true}]);
+    expect(page.nextOffset).toBe(1);
+    expect(page.evidenceChars).toBe(JSON.stringify(page).length);
+    expect(page.evidenceChars).toBeLessThanOrEqual(1024);
+    const last = projectDecisionEvidence([original, original], {...options,offset:page.nextOffset!});
+    expect(last.omitted.map(item => item.index)).toEqual([1]);
+    expect(last.nextOffset).toBeNull();
+    expect(last.evidenceChars).toBeLessThanOrEqual(1024);
+  });
+
   it('includes producer-required current state for a body owner while preserving optional focus and semantic digests', () => {
     const current = {
       executionPartKeys: ['queue', 'lastTask'],
