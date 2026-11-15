@@ -33,6 +33,21 @@ function setup() {
 }
 const experienceId = (out: string | ToolOutcome) => ((out as ToolOutcome).meta!.experience as { id: string }).id;
 
+it('direct World host delivers comparable failures in readable text without replaying the body', async () => {
+  const f=setup(), args={steps:[{skill:'goto',at:[4,64,0]}]}; let calls=0;
+  const handler=vi.fn(async()=>({text:'accepted',execution:{...accepted,id:`native:${++calls}`}}));
+  const action=f.wrap(handler);
+  const first=await action.handler(args,f.ctx) as ToolOutcome;
+  await f.host.pushEvent({source:'mymc',type:'mymc.task',text:'blocked',
+    execution:{...first.execution!,phase:'blocked',terminal:true}});
+  const second=await action.handler(args,{...f.ctx,callId:'second'}) as ToolOutcome;
+  expect(second.text).toContain('[Comparable operation evidence]');
+  expect(second.text).toContain(experienceId(first));
+  expect(second).toMatchObject({execution:{phase:'accepted',terminal:false},
+    meta:{experience:{counterexamples:[{id:experienceId(first),historical:true,goalVerified:false}]}}});
+  expect(handler).toHaveBeenCalledTimes(2);
+});
+
 it('direct World actions retain original receipts and join a terminal preceding admission', async () => {
   const f = setup();
   const action = f.wrap(async () => {

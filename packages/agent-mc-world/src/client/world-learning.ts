@@ -83,7 +83,10 @@ export class WorldOperationLearning {
       }
       const memoryStatus = tool.name.endsWith('_memory') && ['help', 'experience'].includes(String(args.action));
       if (outcome.execution?.kind === 'observation' || (!experience && !decision && !memoryStatus)) return result;
-      return { ...outcome, meta: { ...outcome.meta,
+      return { ...outcome,
+        text: experience?.counterexamples?.length
+          ? outcome.text + '\n[Comparable operation evidence]\n' + JSON.stringify(experience) : outcome.text,
+        meta: { ...outcome.meta,
         ...(experience || decision ? { experience: experience ?? decision } : {}),
         ...(memoryStatus ? { operationLearning: { run: active.run, ...collector.status() } } : {}),
       } };
