@@ -562,7 +562,10 @@ export class MinecraftAgentClient {
       if(!outcome.failed&&outcome.execution?.terminal!==false&&/_(?:observe|scout|state|tool_help)$/.test(name))this.motionReview.inspected();
       const recorded = this.learning.finish(experience,outcome);
       // Observation artifacts have immutable metadata shared by capture and later reads.
-      if(recorded&&outcome.execution?.kind!=='observation') outcome.meta={...outcome.meta,experience:recorded};
+      if(recorded&&outcome.execution?.kind!=='observation') {
+        outcome.meta={...outcome.meta,experience:recorded};
+        if(recorded.counterexamples?.length) outcome.text += '\n[Comparable operation evidence]\n'+JSON.stringify(recorded);
+      }
       if(name.endsWith('_choose')) {
         // Only schema-owned choice metadata; never retain candidate prose or the model request.
         try { const chosen=JSON.parse(outcome.text), candidates=Array.isArray(args.candidates)?args.candidates:[];
@@ -642,7 +645,10 @@ export class MinecraftAgentClient {
     const state = { signature, controller, pending: true, promise: null as unknown as Promise<ToolOutcome> };
     this.tacticCalls.set(callId, state);
     const promise = Promise.resolve().then(() => { signal.throwIfAborted(); return invoke(); }).then(outcome => {
-      const recorded=this.learning.finish(experience,outcome);if(recorded)outcome.meta={...outcome.meta,experience:recorded};
+      const recorded=this.learning.finish(experience,outcome);if(recorded){
+        outcome.meta={...outcome.meta,experience:recorded};
+        if(recorded.counterexamples?.length)outcome.text+='\n[Comparable operation evidence]\n'+JSON.stringify(recorded);
+      }
       this.requests.write({ requestId: callId, signature, phase: 'returned', outcome });
       return outcome;
     }, error => { this.learning.finish(experience,null);this.requests.write({ requestId: callId, signature, phase: 'failed', error: String(error) }); throw error; })

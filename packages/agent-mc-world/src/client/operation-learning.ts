@@ -63,7 +63,13 @@ export class ClientOperationLearning {
           early.scopeKey===operationScopeKey(p.scope)?early.sample:null);this.early.delete(key);}
         else if(!e.terminal)this.pending.set(key,p);
       }
-      return {id:row.id,protocol:row.schema,dispatch:row.dispatch,goalVerified:false};
+      // Recall errors must not erase a successfully recorded receipt or make a
+      // dispatched body call look retryable. Only factual failures are projected.
+      const counterexamples=this.safe(()=>this.book.counterexamples(p.scope,row))??[];
+      return {id:row.id,protocol:row.schema,dispatch:row.dispatch,goalVerified:false,
+        ...(counterexamples.length?{counterexamples,
+          policyHelp:{action:'experience',operation:'policy_help'},
+          interpretation:'Historical failures of the same arguments in a comparable scene; not current blockers or learned rewards. Read original evidence, check changed prerequisites, or compare executable alternatives with rank. No action was prevented or replaced.'}:{})};
     });
   }
   execution(receipt:ExecutionReceipt){
