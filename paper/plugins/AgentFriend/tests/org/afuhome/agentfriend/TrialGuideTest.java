@@ -9,6 +9,8 @@ public final class TrialGuideTest {
         for(var row:cases.entrySet()){var result=TrialGuide.next(facts(row.getKey()));check(result.get("reason").equals(row.getValue()),row.getKey());check(Boolean.TRUE.equals(result.get("queryOnly")),"read only "+row.getKey());}
         var ready=TrialGuide.next(facts("ready"));check(ready.get("entryMana").equals(0),"actual normal entry is free");check(ready.get("travelMana").equals(6)&&ready.get("checkpointMana").equals(8),"travel costs distinct");
         check(ready.get("nextCommand").equals("/mycli arena start")&&Boolean.TRUE.equals(ready.get("canStart")),"one exact action");
+        check(ready.get("groupRule").equals("lobby_platform")&&!ready.containsKey("radius"),"whole platform instead of a misleading button radius");
+        check(TrialGuide.route().contains("缺条件者点名提示")&&TrialGuide.route().contains("桥上不计入"),"grouping boundary and rejection feedback explained");
         check(TrialGuide.next(facts("far_ready")).get("nextCommand").equals(TrialGuide.TRAVEL),"no crypt routing");
         check(TrialGuide.next(facts("participant_fighting")).get("requiresWorldAction").equals(true),"query is not fighting");
         check(TrialGuide.next(facts("busy")).get("nextCommand").equals("/mycli dungeon list"),"busy chooses alternative");

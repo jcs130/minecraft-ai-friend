@@ -2860,7 +2860,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(16, dungeon.hasActiveRun()
                     ? item(Material.BARRIER, "§c已有队伍在挑战", "当前：" + dungeon.activeDifficultyLabel() + "；请等本轮结束")
                     : item(Material.LIME_CONCRETE, "§a开始" + selected + "试炼",
-                            "附近玩家一起进入；按下即开场", "全队采用你当前选定的难度"));
+                            dungeon.assemblyMenuLore(p)));
             inv.setItem(22, item(Material.ARROW, "§7返回传送罗盘"));
         } else if (page.equals("guild")) {
             guild.fillBoard(p, inv);

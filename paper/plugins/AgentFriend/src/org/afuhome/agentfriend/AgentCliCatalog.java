@@ -243,7 +243,7 @@ final class AgentCliCatalog {
         add(specs,"pvp.lobby","adventure","teleport","/mycli pvp lobby","前往天空竞技场观众平台","竞技场已建；比赛中不可用；6 魔力","本人 MC_PVP、MC_TRAVEL 与大厅绝对坐标");
         add(specs,"pvp.board","adventure","read","/mycli pvp board","查看积分榜","在线玩家","私人 MC_PVP_RANK 列表");
         add(specs,"arena.start","adventure","write","/mycli arena start","与入口按钮附近队友一起开始试炼；组队全员倒地才失败撤离","在入口且符合组队/冷却条件；队友靠近4格停留10秒或清场可复活倒地者","挑战开始或拒绝原因；倒地回执 MC_TRIAL_RESCUE");
-        add(specs,"arena.entrance","adventure","read","/mycli arena entrance [--json]","查询主世界三个按钮、坐标与准确开场步骤；命令可代替按钮","查询免费；先goto arena（6魔力），伙伴到按钮12格内，一人arena start（免费）","显式JSON返回MC_TRIAL_BUTTONS；未加载区块为未知，不猜入口被拆");
+        add(specs,"arena.entrance","adventure","read","/mycli arena entrance [--json]","查询主世界三个按钮、坐标与准确开场步骤；命令可代替按钮","查询免费；goto arena（6魔力）到入口桥后走进平台，一人arena start（免费），整个平台合格玩家同行，缺条件者点名提示","显式JSON返回MC_TRIAL_BUTTONS；未加载区块为未知，不猜入口被拆");
         add(specs,"arena.difficulty","adventure","write","/mycli arena difficulty [auto|normal|adventure|apocalypse]","按冒险者公会等级自动匹配，或手动选择下次本人发起试炼的难度；高等级打低难度奖励减少","在线玩家；多人由按钮发起者决定，奖励按各自等级结算","私有 MC_DUNGEON_DIFFICULTY 回执，含推荐档位与选择模式");
         add(specs,"arena.rest","adventure","teleport","/mycli arena rest","从远处直达深层驿站并继续挑战","满足驿站解锁与挑战条件；每名入场者 8 魔力","成功后 MC_TRAVEL 或拒绝原因");
         add(specs,"arena.next","adventure","write","/mycli arena next","查询自动下楼状态；在驿站可触发 10 秒后出发","挑战进行中；驿站需已清场","倒计时/状态");

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate_not_deployed",
+  "validatedAt": "2026-11-16T00:03:03.031071+08:00",
+  "sourceBase": "e3c07d7a00bf33ef3207c382ba39f70a991118c7",
+  "backupDrive": "F",
+  "component": {
+    "version": "0.4.47.81-trial-platform",
+    "baselineSha256": "bfc4b6527e429ad9cfe0400c4b58724cf18dc35e908988967c91020a221d014a",
+    "sha256": "df8010b3a318ec8e47943aa77842f403496d1bca7c54229d788a8268561e4b62",
+    "baselineExact": true,
+    "changedOwners": [
+      "DungeonManager",
+      "AgentFriendPlugin",
+      "TrialGuide",
+      "TrialEntranceControls",
+      "AgentCliCatalog"
+    ]
+  },
+  "evidence": [
+    {
+      "id": "baseline",
+      "checks": 11,
+      "passed": 4,
+      "sha256": "e1e9e0d9b79c169e35cea25101a6852b323fa491016d68578d556b4f08fa3a7b"
+    },
+    {
+      "id": "candidate",
+      "checks": 60,
+      "passed": 60,
+      "sha256": "004a83b2052a075ff8446b2bcb996e266a985c6a1f55d3c53c838ecc4a0829ad"
+    },
+    {
+      "id": "normal-stop-seed",
+      "checks": 1,
+      "passed": 1,
+      "sha256": "361d4329d9be58c58d35d83338afa5f5f14f310e22d693d7396e71995302b924"
+    },
+    {
+      "id": "restart-receipt",
+      "checks": 10,
+      "passed": 10,
+      "sha256": "c984e9fddedfc4a3bfbfcda34f30a5ed3559e96e427c7ec3d30f09334841c06c"
+    },
+    {
+      "id": "contracts",
+      "checks": 17,
+      "passed": 17,
+      "sha256": "54f406247cc81a88142613b40e1a35599caff1210fe00f761cd530f149c0530c"
+    }
+  ],
+  "formalGameAcceptance": false,
+  "limitations": [
+    "Synthetic Java-protocol clients on isolated Youer 1.21.1; no real player operated",
+    "Restart receipt rechecked with same-floor tolerance for natural half-block settling; original strict assertion failure retained",
+    "No production installation or restart; existing runtime guide needs one-line update"
+  ]
+}
