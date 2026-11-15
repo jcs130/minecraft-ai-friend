@@ -4,7 +4,13 @@ import { advertiseAgentIdentity } from './server-identity.ts';
 import { declareDecodedChannels } from './decoded-channels.ts';
 import { installConfigurationPhaseGuard, configurationTransportReady } from './configuration-round.ts';
 import { installNativeBodyReadiness } from './body-readiness.ts';
-import { installWorldIdentity } from './world-scope.ts';
+import { installWorldIdentity, readWorldIdentity } from './world-scope.ts';
+/** Protection replies name a server level; Mineflayer dimension is only its physics type.
+ * Retain the legacy type key only when no native level name was received. */
+function protectionWorld(bot: mineflayer.Bot): string {
+  return readWorldIdentity(bot).key ?? String(bot.game.dimension);
+}
+
 /**
  * 管理 Mineflayer 连接、重连和 prismarine-viewer。
  * 重连会替换 bot 实例，World 与执行器须通过 bridge.bot 取得当前实例。
@@ -319,18 +325,18 @@ export class Bridge {
       return;
     }
     const x = Math.floor(p.x), y = Math.floor(p.y), z = Math.floor(p.z);
-    this.protection.noteDenied(String(bot.game.dimension), x, y, z, type);
+    this.protection.noteDenied(protectionWorld(bot), x, y, z, type);
     if (target?.position && typeof bot.stopDigging === 'function') bot.stopDigging();
     this.opts.diag?.write({ lane: 'path', event: 'protection-denied',
       msg: `服务端拒绝破坏 (${x}, ${y}, ${z})；寻路以后不再把这格列为可挖`,
-      data: { cell: { x, y, z }, type, reason, protection: this.protection.status(String(bot.game.dimension)) },
+      data: { cell: { x, y, z }, type, reason, protection: this.protection.status(protectionWorld(bot)) },
       incident: true, taskId: this.opts.taskId?.() ?? undefined });
   }
 
   /** Cache exactly the denied action/cell. A late result cannot abort unrelated work. */
   noteServerActionDenied(reply: ProtectReply): boolean {
     const bot=this._bot;
-    if (!bot || reply.status!=='deny' || reply.dimension.replace(/^minecraft:/,'')!==String(bot.game.dimension).replace(/^minecraft:/,'')) return false;
+    if (!bot || reply.status!=='deny' || reply.dimension.replace(/^minecraft:/,'')!==protectionWorld(bot).replace(/^minecraft:/,'')) return false;
     if (reply.action==='place') {
       const key=`${reply.dimension.replace(/^minecraft:/,'')}|${reply.x},${reply.y},${reply.z}`;
       this.observedPlaceDenials.set(key,{reply,until:Date.now()+300_000});
@@ -339,7 +345,7 @@ export class Bridge {
     }
     const cell=bot.blockAt(new Vec3(reply.x,reply.y,reply.z),false);
     if (!cell || cell.name==='air' || cell.name==='cave_air' || cell.name==='void_air') return false;
-    this.protection.noteDenied(String(bot.game.dimension),reply.x,reply.y,reply.z,cell.type);
+    this.protection.noteDenied(protectionWorld(bot),reply.x,reply.y,reply.z,cell.type);
     const target=bot.targetDigBlock;
     const matches=!!target && target.position.x===reply.x && target.position.y===reply.y && target.position.z===reply.z;
     if (matches) bot.stopDigging();
@@ -689,7 +695,7 @@ export class Bridge {
     bot.on('physicsTick', () => {
       if (heldPathAction) queryHeldAction();
       if (!releaseProtectionWalk || protectionBackoff.active(bot.entity?.position,
-        String(bot.game?.dimension ?? 'overworld'))) return;
+        protectionWorld(bot))) return;
       releaseProtectionWalk();
       releaseProtectionWalk = null;
       if (this._bot === bot && this.liveMovements) bot.pathfinder.setMovements(this.liveMovements);
@@ -697,7 +703,8 @@ export class Bridge {
         msg: '离开保护密集区域或退避到期，恢复普通寻路规则' });
     });
     this.serverProtection = this.createProtectionPort(bot, (reply) => {
-        if (this._bot !== bot || !this.liveMovements) return;
+        if (this._bot !== bot || !this.liveMovements
+          || reply.dimension.replace(/^minecraft:/, '') !== protectionWorld(bot).replace(/^minecraft:/, '')) return;
         const resolvedHeldPath = heldPathAction && heldPathAction.key ===
           `${reply.action}|${reply.dimension.replace(/^minecraft:/, '')}|${reply.x},${reply.y},${reply.z}`;
         if (resolvedHeldPath) {
@@ -728,18 +735,18 @@ export class Bridge {
     });
     (bot as mineflayer.Bot & { cortiProtectionPreflight?: () => boolean }).cortiProtectionPreflight =
       () => this.opts.protectionPreflight?.() === true;
-    const serverCheck=this.serverProtection ? protectionCheck(this.serverProtection, () => String(bot.game.dimension),
+    const serverCheck=this.serverProtection ? protectionCheck(this.serverProtection, () => protectionWorld(bot),
       () => this.opts.protectionPreflight?.() === true) : null;
     (bot as mineflayer.Bot & { cortiProtectCheck?: ReturnType<typeof protectionCheck> })
       .cortiProtectCheck = async (action,cell,phase) => {
-        const denied=action==='place'?this.observedPlaceDenial(String(bot.game.dimension),cell):null;
+        const denied=action==='place'?this.observedPlaceDenial(protectionWorld(bot),cell):null;
         return denied ?? (serverCheck ? serverCheck(action,cell,phase) : null);
       };
     (bot as mineflayer.Bot & { cortiBreakVerdict?: (block: { position: { x: number; y: number; z: number }; type: number }) =>
       'allowed' | 'protected' | 'unknown' }).cortiBreakVerdict = (block) =>
-      this.serverProtection?.verdict('break', String(bot.game.dimension), block.position) === 'deny'
+      this.serverProtection?.verdict('break', protectionWorld(bot), block.position) === 'deny'
         ? 'protected'
-        : this.protection.verdict(String(bot.game.dimension), block.position.x, block.position.y, block.position.z, block.type);
+        : this.protection.verdict(protectionWorld(bot), block.position.x, block.position.y, block.position.z, block.type);
     this._invSynced = false;
     // 包里地图的整张画面服务端只在登录后第一刻推一次,早于 spawn;挂在 spawn 上就只剩增量
     trackMaps(bot);
@@ -760,7 +767,7 @@ export class Bridge {
       bot.on('path_update', (result) => {
         if (this._bot !== bot) return;
         if (this.opts.protectionPreflight?.() !== true) { heldPathAction = null; return; }
-        const dimension = String(bot.game.dimension);
+        const dimension = protectionWorld(bot);
         const gate = holdUnverifiedPathAction(result, bot.entity.position,
           (action, cell): ProtectStatus | null => protect.verdict(action, dimension, cell));
         if (!gate) return;
@@ -1013,14 +1020,14 @@ export class Bridge {
     setDigBackoff(movements, (x, y, z) => this.digBackedOff(x, y, z) || (workCell?.(x, y, z) ?? false));
     setProtectedCells(movements, (x, y, z, type) =>
       (this.opts.protectionPreflight?.() === true
-        ? this.protection.denied(String(bot.game.dimension), x, y, z, type)
-        : this.protection.verdict(String(bot.game.dimension), x, y, z, type) === 'protected')
-      || (this.serverProtection?.verdict('break', String(bot.game.dimension), { x, y, z }) === 'deny')
+        ? this.protection.denied(protectionWorld(bot), x, y, z, type)
+        : this.protection.verdict(protectionWorld(bot), x, y, z, type) === 'protected')
+      || (this.serverProtection?.verdict('break', protectionWorld(bot), { x, y, z }) === 'deny')
       || (this.opts.protectionPreflight?.() === true
-        && this.serverProtection?.verdict('break', String(bot.game.dimension), { x, y, z }) === 'unknown'));
+        && this.serverProtection?.verdict('break', protectionWorld(bot), { x, y, z }) === 'unknown'));
     setProtectedPlaceCells(movements, (x, y, z) => {
-      if (this.observedPlaceDenial(String(bot.game.dimension),{x,y,z})) return true;
-      const verdict = this.serverProtection?.verdict('place', String(bot.game.dimension), { x, y, z });
+      if (this.observedPlaceDenial(protectionWorld(bot),{x,y,z})) return true;
+      const verdict = this.serverProtection?.verdict('place', protectionWorld(bot), { x, y, z });
       return verdict === 'deny' || (this.opts.protectionPreflight?.() === true && verdict === 'unknown');
     });
     const costs = this.opts.movementCosts?.();
@@ -1244,7 +1251,7 @@ export class Bridge {
           doors: nearbyDoorStates(bot),
           canDig: bot.pathfinder?.movements?.canDig ?? null,
           canOpenDoors: bot.pathfinder?.movements?.canOpenDoors ?? null,
-          protection: this.protection.status(String(bot.game?.dimension ?? 'overworld')),
+          protection: this.protection.status(protectionWorld(bot)),
           pathAgeMs: lastPathAt ? Date.now() - lastPathAt : null,
           path: lastPath,
         } : { reason }, stuck);

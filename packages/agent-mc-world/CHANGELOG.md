@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.82
+
+- Match block protection replies, queries and navigation caches by native server level identity instead of the physics dimension type. Preserve exact-cell denials, legacy fallback and cross-world isolation without adding a permission-query requirement.
+
 ## 0.5.7-rc.160-preview.81
 
 - Ensure tight decision-evidence pages advance through compact original references; explicitly reject envelopes that cannot fit even one reference (upstream PR #248).
