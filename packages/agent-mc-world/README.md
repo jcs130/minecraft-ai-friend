@@ -295,6 +295,9 @@ The engine-only build works without a viewer archive and labels that omission in
 
 See [client setup](docs/minecraft-client.md), [accounts](docs/online-accounts.md),
 [protocol](docs/protocol-v1.md) and [host integration](docs/harness.md).
+For honest, configurable mining and pathfinding pace (including a 永恒世界 / mcyyy example), see
+[human-pace limits](docs/human-pace-limits.md). Java 26.1 client adaptations are in
+[Java 26.1 client](docs/java-26.1-client.md).
 For confirmed inventory operations and recovery after a timeout, see
 [inventory synchronization](docs/inventory-synchronization.md).
 Historical import licenses and hashes remain in `provenance/` and

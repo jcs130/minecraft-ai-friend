@@ -1,6 +1,9 @@
 import { Vec3 } from 'vec3';
 import { WATER_BLOCKS } from './fluid-blocks.ts';
 
+/** One gravity tick (0.08 b/tick ×0.98 drag ×20) plus slack, in blocks/second. */
+export const SETTLED_VY = 1.6;
+
 export interface FootingReading {
   kind: 'support' | 'fluid' | 'air' | 'unknown';
   block: string | null;
@@ -41,7 +44,15 @@ export function footingFromBot(bot: any): FootingReading {
       }
     }
   }
-  if (best && grounded !== false) return { kind: 'support', block: best.block, at: best.at, grounded };
+  // A server position correction/teleport clears onGround and the next client
+  // physics tick adds one gravity step (~-1.57 b/s) before the landing tick.
+  // Feet exactly on a collision top with at most that vertical speed is
+  // standing, not falling; do not narrate a transient flag as a fall.
+  const vy = Number(bot.entity.velocity?.y);
+  const settled = Number.isFinite(vy) && vy * 20 >= -SETTLED_VY;
+  if (best && (grounded !== false || settled)) {
+    return { kind: 'support', block: best.block, at: best.at, grounded };
+  }
   // Grounded physics is positive contact evidence, even when its support cannot
   // be identified. Never turn that discrepancy or an unloaded cell into "air".
   if (unknown || grounded === true) return { kind: 'unknown', block: null, grounded };

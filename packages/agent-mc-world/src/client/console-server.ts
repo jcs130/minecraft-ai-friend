@@ -8,12 +8,12 @@ import type { ExperimentsSnapshot } from '../decisions/harness2-monitor.ts';
 
 export interface ClientConsolePort {
   operatorState(): Promise<unknown>;
-  operatorAction(action: string): Promise<void>;
+  operatorAction(action: string, input?: unknown): Promise<void>;
   metrics: { snapshot(phase: string): unknown };
   status(): { phase: string };
   experiments?(): ExperimentsSnapshot;
 }
-const actions = new Set(['connect', 'disconnect', 'observer.start', 'observer.stop', 'player.start', 'player.stop','viewer.retry']);
+const actions = new Set(['connect', 'disconnect', 'observer.start', 'observer.stop', 'player.start', 'player.stop','viewer.retry','play.inspect','play.window','play.command','play.menu','play.close','play.look','play.walk']);
 export interface ClientConsolePresentation {
   /** Explicit local host pages allowed to embed this UI. Control APIs keep their own Origin/nonce checks. */
   embedOrigins?: readonly string[];
@@ -105,13 +105,14 @@ export async function serveClientConsole(port: number, runtime: ClientConsolePor
         body += chunk.toString();
         if (body.length > 4096) { json(413, { error: 'Request too large.' }); return; }
       }
-      const action = (JSON.parse(body) as { action?: unknown }).action;
+      const requestBody = JSON.parse(body) as { action?: unknown; input?: unknown };
+      const action = requestBody.action;
       if (typeof action !== 'string' || !actions.has(action)) { json(400, { error: 'Unknown action.' }); return; }
       if (!nativeClients && /^(?:observer|player)\./.test(action)) { json(403, { error: 'Native client launchers are not enabled by this host.' }); return; }
       if (closing || operations.get(action)?.status === 'running') { json(409, { error: 'This action is already running or the console is closing.' }); return; }
       const record: { status: 'running' | 'completed' | 'failed'; at: string; error?: string } = { status: 'running', at: new Date().toISOString() };
       operations.set(action, record);
-      const task = Promise.resolve().then(() => runtime.operatorAction(action)).then(() => { record.status = 'completed'; }, () => {
+      const task = Promise.resolve().then(() => (requestBody.input === undefined ? runtime.operatorAction(action) : runtime.operatorAction(action, requestBody.input))).then(() => { record.status = 'completed'; }, () => {
         record.status = 'failed'; record.error = '操作未完成，请查看连接或客户端状态。';
       }).finally(() => pending.delete(task));
       pending.add(task);

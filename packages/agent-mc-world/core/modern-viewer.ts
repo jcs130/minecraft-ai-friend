@@ -20,6 +20,7 @@ import { biomeIdMap, remapViewerChunkBiomes } from './viewer-biome.ts';
 import { viewerLight } from './viewer-light.ts';
 import { minimapSnapshot } from './viewer-minimap.ts';
 import { viewerBossBars, viewerItem, viewerPlayerAbsorption, viewerTradeList, windowSnapshot, type ViewerSkills, type ViewerTrades } from './viewer-state.ts';
+import { readServerDisplay, viewerScoreboardState } from './server-display.ts';
 import { observeViewerArmAnimation, observeViewerAttack, observeViewerRangedUse, observeViewerShieldUse, viewerMovementState, viewerSheepAppearance } from './viewer-entity-state.ts';
 import { viewerGoal, viewerRoute, type ViewerRoute } from './viewer-tactics.ts';
 import { observeViewerCastCommands } from './command-events.ts';
@@ -52,6 +53,7 @@ import { observeStatusEffects, remainingEffectTicks } from './status-effects.ts'
 import { viewerPlayerSkin } from './viewer-player-skin.ts';
 import { configuredPlayerSkin, type LocalPlayerSkin } from './viewer-local-skin.ts';
 import type { ViewerRelay } from './relay-port.ts';
+import { viewerServerScreen, SERVER_SCREEN_SCRIPT } from './viewer-server-screen.ts';
 export { viewerItem } from './viewer-state.ts';
 
 export function viewerMessageKind(message: { translate?: string; toString(): string }, position: string, registry?: unknown,
@@ -74,7 +76,60 @@ const { WorldView } = require('prismarine-viewer/viewer/lib/worldView.js') as {
 };
 
 const VIEW_DISTANCE = 5;
-const MANA_CSS = `.corti-mana-bar{height:5px;margin-top:7px;background:#294852;border-radius:5px;overflow:hidden}.corti-mana-bar span{display:block;height:100%;width:0;background:linear-gradient(90deg,#447acb,#8de9ff);box-shadow:0 0 9px #87dafa;transition:width .3s ease}`;
+const MANA_CSS = `[data-corti-mana-vital]:not([data-ready="1"]),#corti-skills:not([data-ready="1"]){display:none!important}.corti-mana-bar{height:5px;margin-top:7px;background:#294852;border-radius:5px;overflow:hidden}.corti-mana-bar span{display:block;height:100%;width:0;background:linear-gradient(90deg,#447acb,#8de9ff);box-shadow:0 0 9px #87dafa;transition:width .3s ease}`;
+
+export const MANA_READY_CSS = '#corti-server-stats{position:fixed;right:14px;top:80px;z-index:8;background:#11242cee;color:#eff;padding:10px;border:1px solid #aec;border-radius:7px;font:13px system-ui;max-width:260px;box-sizing:border-box}#corti-right-column{position:fixed;top:64px;right:14px;z-index:35;display:flex;flex-direction:column;align-items:stretch;gap:8px;width:min(360px,calc(100vw - 28px));max-height:calc(100vh - 200px);overflow-y:auto;overscroll-behavior:contain;pointer-events:none}#corti-right-column>*{pointer-events:auto;position:static!important;top:auto!important;right:auto!important;width:100%!important;max-width:none!important;margin:0!important;flex:0 0 auto}#corti-right-column>[hidden]{display:none!important}#corti-right-column .agent-activity-list{max-height:min(38vh,300px);overflow-y:auto}#corti-server-stats strong,#corti-server-stats small{display:block}#corti-server-stats small{font-size:10px;opacity:.7}[data-corti-mana-vital]:not([data-ready="1"]),#corti-skills:not([data-ready="1"]){display:none!important}';
+export const MANA_READY_SCRIPT = `(() => {
+  // Dock right-side HUD cards into one column so the thinking panel cannot cover readouts.
+  const dock = () => {
+    const stats = document.getElementById('corti-server-stats'), agent = document.getElementById('agent-activity');
+    if (!stats && !agent) return;
+    // The docked viewer layout owns a right rail that adopts both cards in order; never pull them out of it.
+    if (document.body && document.body.hasAttribute('data-viewer-layout')) return;
+    let column = document.getElementById('corti-right-column');
+    if (!column) { column = document.createElement('div'); column.id = 'corti-right-column'; document.body.append(column); }
+    if (stats && column.firstElementChild !== stats) column.prepend(stats);
+    if (agent && agent.parentElement !== column) column.append(agent);
+  };
+  const sync = () => {
+    dock();
+    const label = document.querySelector('[data-corti-mana-label], [data-mana]');
+    const text = label && label.textContent ? label.textContent : '';
+    const known = /[0-9]/.test(text) && !text.includes('--/--');
+    for (const node of document.querySelectorAll('[data-corti-mana-vital]')) node.setAttribute('data-ready', known ? '1' : '0');
+    const skills = document.getElementById('corti-skills');
+    if (!skills) return;
+    const filled = skills.querySelector('[data-skill-list] .corti-skill, [data-ability-list] .corti-ability');
+    skills.setAttribute('data-ready', (known || filled) ? '1' : '0');
+  };
+  const stats = async () => {
+    try {
+      const response = await fetch('/server-display', {cache:'no-store'});
+      if (!response.ok) return;
+      const data = await response.json();
+      let root = document.getElementById('corti-server-stats');
+      if (!root) { root = document.createElement('aside'); root.id='corti-server-stats'; document.body.append(root); }
+      dock();
+      root.replaceChildren(); root.hidden = !(data.stats && data.stats.length);
+      if (root.hidden) return;
+      const title=document.createElement('strong'); title.textContent='服务器读数'; root.append(title);
+      for (const stat of data.stats.slice(0,16)) {
+        const row=document.createElement('div'); row.textContent=stat.label+' '+stat.value;
+        row.title=stat.source+' · '+new Date(stat.at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})+' Asia/Shanghai · '+stat.text;
+        if (Date.now()-stat.at>300000) row.textContent+='（历史）';
+        root.append(row);
+      }
+      const footer=document.createElement('small'); footer.textContent='悬停查看来源与收包时间'; root.append(footer);
+    } catch {}
+  };
+  const start = () => {
+    stats(); setInterval(stats,2000);
+    sync();
+    if (document.body) new MutationObserver(sync).observe(document.body, { subtree: true, childList: true, characterData: true });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+  else start();
+})();`;
 const COMBAT_CSS = `.corti-combat-floats{position:fixed;inset:0;z-index:10;pointer-events:none;overflow:hidden}.corti-combat-float{position:absolute;color:#fff7ee;font:800 23px/1.1 system-ui;text-shadow:0 2px 2px #18111b,0 0 8px #161322;white-space:nowrap;transform:translate(-50%,-50%);animation:corti-damage-number 1.15s ease-out both}.corti-combat-float.is-critical{color:#ffdf46;font-size:30px;font-weight:1000;text-shadow:0 2px 2px #422600,0 0 13px #ffb328}@keyframes corti-damage-number{0%{opacity:0;transform:translate(-50%,-50%) scale(.75)}16%{opacity:1;transform:translate(-50%,-67%) scale(1.12)}72%{opacity:1}100%{opacity:0;transform:translate(-50%,-320%) scale(.96)}}@media(prefers-reduced-motion:reduce){.corti-combat-float{animation-duration:.7s}}`;
 const TACTICS_CSS = `.corti-tactical-canvas{position:fixed;inset:0;z-index:5;width:100%;height:100%;pointer-events:none}.corti-tactical-legend{position:fixed;z-index:8;top:55px;left:50%;transform:translateX(-50%);display:flex;gap:8px;max-width:calc(100vw - 28px);pointer-events:none}.corti-tactical-legend[hidden]{display:none}.corti-tactical-legend span{padding:5px 10px;border:1px solid currentColor;border-radius:5px;background:#10242be6;box-shadow:0 2px 12px #000a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:700 12px/1.2 system-ui;text-shadow:1px 1px #000}.corti-tactical-move{color:#8affb7}.corti-tactical-attack{color:#ff8888}@media(max-width:700px){.corti-tactical-legend{top:49px;flex-direction:column;gap:3px;max-width:52vw}.corti-tactical-legend span{font-size:10px;padding:3px 6px}}`;
 const STATUS_VIGNETTE_CSS = `.corti-status-vignette{position:fixed;inset:0;z-index:2;pointer-events:none;opacity:0;transition:opacity .35s ease;background:radial-gradient(ellipse at center,transparent 40%,#407b2466 77%,#245810aa 100%),radial-gradient(circle at 11% 83%,#98db5b66 0 1.2%,transparent 2.5%),radial-gradient(circle at 85% 19%,#97d85980 0 .8%,transparent 2%);box-shadow:inset 0 0 34px #416b30;mix-blend-mode:screen}.corti-status-vignette.is-poisoned{opacity:1;animation:corti-poison-breathe 2.4s ease-in-out infinite}@keyframes corti-poison-breathe{0%,100%{filter:saturate(.8)}50%{filter:saturate(1.5) brightness(1.12)}}@media(prefers-reduced-motion:reduce){.corti-status-vignette.is-poisoned{animation:none}}`;
@@ -156,7 +211,7 @@ const PAGE = `<!doctype html>
 <div class="dungeon-hover-card" id="dungeon-hover-card" hidden><span id="dungeon-hover-icon"></span><strong id="dungeon-hover-title"></strong><small id="dungeon-hover-subtitle"></small><em id="dungeon-hover-action"></em></div>
 <div class="entity-context-menu" id="entity-context-menu" hidden><header><strong data-context-title></strong><small data-context-subtitle></small></header><div data-context-summary></div><div data-context-actions></div></div>
 <aside class="entity-detail-card" id="entity-detail-card" hidden><button type="button" data-detail-close>关闭</button><h2 id="entity-detail-title" data-detail-title></h2><p data-detail-subtitle></p><div data-detail-rows></div></aside>
-<script type="module" src="/index.js"></script><script src="/speech-bubble.js" defer></script></body></html>`;
+<script type="module" src="/index.js"></script><script src="/speech-bubble.js" defer></script><script src="/server-screen.js" defer></script></body></html>`;
 
 const CSS = `html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#080d12;color:#f3f5f6;font:14px/1.4 system-ui,sans-serif}
 canvas{position:absolute;inset:0;width:100%;height:100%;display:block}.boot{position:fixed;inset:0;z-index:5;display:grid;place-items:center;text-align:center;background:#080d12;color:#e6eeee;pointer-events:none}.boot.is-compact{inset:auto 12px 12px auto;display:block;padding:6px 9px;border-radius:6px;background:#101923dd}.boot.is-error{pointer-events:auto;color:#ffbdad}.viewer-hud{display:none}.corti-crosshair{position:fixed;z-index:3;top:50%;left:50%;width:30px;height:30px;transform:translate(-50%,-50%);background:url('/textures/gui/sprites/hud/crosshair.png') center/30px 30px no-repeat;image-rendering:pixelated;pointer-events:none}.corti-survival{position:fixed;z-index:3;bottom:8px;left:50%;width:364px;transform:translateX(-50%);pointer-events:none;image-rendering:pixelated;filter:drop-shadow(0 2px 2px #0009)}.corti-armor,.corti-air{height:18px;display:flex;gap:0}.corti-armor:empty,.corti-air:empty{display:none}.corti-vitals{height:20px;display:flex;justify-content:space-between}.corti-vitals>div{display:flex;flex-direction:row}.corti-vitals>div:last-child{flex-direction:row-reverse}.corti-icon{width:16px;height:18px;flex:none;background-position:left top;background-repeat:no-repeat;background-size:18px 18px}.corti-xp{position:relative;width:364px;height:10px;margin:2px 0 5px;background:url('/textures/gui/sprites/hud/experience_bar_background.png') left top/364px 10px no-repeat}.corti-xp-fill{height:10px;background:url('/textures/gui/sprites/hud/experience_bar_progress.png') left top/364px 10px no-repeat}.corti-level{position:absolute;bottom:59px;left:50%;transform:translateX(-50%);font:bold 20px/20px monospace;color:#80ff20;text-shadow:2px 2px #163500,-2px 2px #163500,2px -2px #163500,-2px -2px #163500;white-space:nowrap}.corti-level:empty{display:none}.corti-hotbar{position:relative;width:364px;height:44px;background:url('/textures/gui/sprites/hud/hotbar.png') center/364px 44px no-repeat}.corti-hotbar-selection{position:absolute;top:-2px;left:4px;width:48px;height:46px;background:url('/textures/gui/sprites/hud/hotbar_selection.png') center/48px 46px no-repeat}.corti-hotbar-slots{position:absolute;top:5px;left:8px;display:flex}.corti-slot{position:relative;width:40px;height:36px}.corti-slot img{position:absolute;top:2px;left:4px;width:32px;height:32px;object-fit:contain;image-rendering:pixelated}.corti-slot-count{position:absolute;right:0;bottom:-2px;color:#fff;font:bold 17px/18px monospace;text-shadow:2px 2px #222,-1px -1px #222}.corti-slot[title]{cursor:default}body>[hidden]{display:none!important}`;
@@ -352,7 +407,7 @@ function diggingShape(block: { shapes?: number[][] }): { position: { x: number; 
 
 function entityAttribute(entity: Record<string, unknown>, suffix: string): number | null {
   const attrs = entity.attributes as Record<string, { value?: number; modifiers?: Array<{ amount?: number; operation?: number }> }> | undefined;
-  const match = Object.entries(attrs ?? {}).find(([name]) => name === suffix || name.endsWith(`.${suffix}`));
+  const match = Object.entries(attrs ?? {}).find(([name]) => name === suffix || name.endsWith(`.${suffix}`) || name.endsWith(`:${suffix}`));
   if (!match || !Number.isFinite(match[1].value)) return null;
   const base = match[1].value!;
   const modifiers = match[1].modifiers ?? [];
@@ -502,7 +557,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
   const mergeViewerSpellCatalogue = (previous: ViewerSkills | null, abilities: NonNullable<ViewerSkills['abilities']>, seen: boolean) => serverProtocol?.mergeViewerSpellCatalogue(previous,abilities,seen) ?? previous!;
   const parseViewerCustomEvent = (channel: unknown, data: unknown) => serverProtocol?.parseViewerCustomEvent(channel,data) ?? null;
   const speechRelay = options.relay;
-  const content = ['1.20.6','1.21.1'].includes(bot.version) ? createViewerContentBridge(bot) : null;
+  const content = ['1.20.6','1.21.1','26.1'].includes(bot.version) ? createViewerContentBridge(bot) : null;
   const appearance = serverProtocol?.createAppearance?.(bot) ?? null;
   const agentVisuals = createViewerAgentBridge(bot, { getFlightState: () => flightState(bot) });
   // Container serialization is already supplied by this host; preserve its richer trade/property state.
@@ -769,7 +824,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
         const photo = pathname === '/photo/' || query.get('photo') === '1' && query.get('clean') === '1';
         const document = photo ? await viewerPhotoPage(root, viewMode) : await viewerPageHtml(root, viewMode, PAGE,
           '<iframe class="corti-speech-bubble" id="corti-speech-bubble" title="主播语音气泡" aria-label="主播语音气泡" hidden></iframe>',
-          '<script src="/speech-bubble.js" defer></script>');
+          '<script src="/speech-bubble.js" defer></script><script src="/viewer-hud-compat.js" defer></script><script src="/server-screen.js" defer></script>');
         const page=document.replace(/<head\b[^>]*>/i,'$&<script src="/viewer-runtime.js"></script>');
         const readyScript = photo ? page.match(/<script>([\s\S]*?)<\/script>/)?.[1] : undefined;
         const scriptPolicy = "'self' 'unsafe-eval'" + (readyScript
@@ -780,12 +835,26 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       }
       if (pathname === '/viewer.css') {
         const legacyCss = CSS + HUD_CSS + '.corti-offhand{position:absolute;left:-45px;top:4px;width:40px;height:36px;background:#505050bb;border:2px solid #a8a8a8;box-sizing:border-box;box-shadow:inset 2px 2px #272727,inset -2px -2px #ddd}' + DURABILITY_CSS + ENCHANT_CSS + ENCHANT_GLOW_CSS + PANELS_CSS + MANA_CSS + ABILITY_CSS + ABILITY_ICON_CSS + CAST_CSS + SKILL_TONE_CSS + NOTICE_CSS + COMBAT_CSS + TACTICS_CSS + EXTRA_FEEDBACK_CSS + VIEWER_LAYOUT_CSS + SPEECH_BUBBLE_CSS + PRESENTATION_CSS + STATUS_VIGNETTE_CSS + THEME_SURFACE_CSS + ABILITY_LAYOUT_CSS;
-        const style = viewerVersionCss(await viewerPageCss(root, legacyCss, SPEECH_BUBBLE_CSS), assetVersion);
+        const style = viewerVersionCss(await viewerPageCss(root, legacyCss, SPEECH_BUBBLE_CSS + MANA_READY_CSS), assetVersion);
         res.writeHead(200, { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'no-store' });
         res.end(style); return;
       }
       if (pathname === '/speech-bubble.js') {
         res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' }); res.end(speakerScript); return;
+      }
+      if (pathname === '/server-screen.js') {
+        res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        res.end(SERVER_SCREEN_SCRIPT); return;
+      }
+      if (pathname === '/server-screen') {
+        let body: unknown = { kind: 'none' };
+        try { body = viewerServerScreen(bot); } catch { body = { kind: 'none' }; }
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        res.end(JSON.stringify(body)); return;
+      }
+      if (pathname === '/viewer-hud-compat.js') {
+        res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        res.end(MANA_READY_SCRIPT); return;
       }
       if(pathname==='/viewer-runtime.js'){
         res.writeHead(200,{'content-type':'application/javascript; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'});
@@ -795,6 +864,10 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       if (pathname === '/speech-source') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
         res.end('{"available":false,"reason":"performance_bridge_not_configured"}'); return;
+      }
+      if (pathname === '/server-display') {
+        res.writeHead(200, { 'content-type':'application/json', 'cache-control':'no-store' });
+        res.end(JSON.stringify(readServerDisplay(bot))); return;
       }
       if (pathname === '/healthz') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
@@ -846,13 +919,28 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
         await headTextures.serve(req, res, pathname, bot);
         return;
       }
+      if (pathname === '/favicon.ico') {
+        // Official pack item icon; no blank or fabricated bytes.
+        const icon = await readFile(path.join(root, 'public', 'icons', 'grass_block.png')).catch(() => null);
+        if (!icon) { res.writeHead(204, { 'cache-control': 'no-store' }).end(); return; }
+        res.writeHead(200, { 'content-type': 'image/png', 'content-length': icon.length, 'cache-control': 'public, max-age=86400',
+          'x-content-type-options': 'nosniff' }).end(icon); return;
+      }
       const relative = pathname.replace(/^\/(third|3dview)\//, '/').slice(1);
+      if (relative === 'player-appearances/config.json') {
+        const installed = await readFile(path.join(root, 'public', 'player-appearances', 'config.json')).catch(() => null);
+        if (!installed) {
+          // Optional bundled appearance catalogue is not installed for this deployment: 204 = absent.
+          res.writeHead(204, { 'cache-control': 'no-store', 'x-mc-appearance-catalog': 'not-installed' }).end(); return;
+        }
+      }
       const range = typeof req.headers.range === 'string' ? req.headers.range : undefined;
       if(relative==='mesher.js'&&compatibleMesher!==null){
         res.writeHead(200,{'content-type':'application/javascript; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'});
         res.end(compatibleMesher);return;
       }
       if (relative === 'index.js' && await serveViewerAsset(res, root, 'dist/modern-viewer.js', 'no-store', range)) return;
+      if (relative === 'text-display-font.json' && await serveViewerAsset(res, path.join(root, 'public'), relative, 'no-store', range)) return;
       if (await serveViewerAsset(res, path.join(root, 'public'), relative, undefined, range,sharedAssets)) return;
       if(selected.mode==='compatible'){
         const material=relative===`blocksStates/${bot.version}.json`?`blocksStates/${assetVersion}.json`
@@ -911,6 +999,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       const signature = JSON.stringify(snapshot);
       if (signature === lastBlockEntities) return false;
       lastBlockEntities = signature;
+      headTextures.observeValue(snapshot);
       socket.emit('blockEntities', snapshot);
       return true;
     };
@@ -1004,11 +1093,9 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     let scoreboardSignature = '';
     const publishScoreboard = () => {
       if (!active || !socket.connected) return;
-      const board = bot.scoreboard?.sidebar;
-      const rows = (board?.items ?? []).filter(item => item && !item.name.startsWith('#'))
-        .slice(0, 15).map(item => ({ name: minecraftTextComponent(item.displayName).slice(0, 80),
-          value: Number.isFinite(item.value) ? item.value : 0 }));
-      const state = { title: board ? minecraftTextComponent(board.title).slice(0, 80) : '', rows };
+      const display = readServerDisplay(bot);
+      socket.emit('serverDisplayState', display);
+      const state = viewerScoreboardState(display);
       const signature = JSON.stringify(state);
       if (signature === scoreboardSignature) return;
       scoreboardSignature = signature;
@@ -1054,7 +1141,9 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       if (!knownEntities.has(id) && knownEntities.size >= 128) return;
       const complete = full || !knownEntities.has(id);
       const velocity = entity.velocity;
-      socket.emit(complete ? 'entity' : 'entityMoved', complete ? viewerEntity(bot, entity, fishingBobberOwners, options.remoteTextures) :
+      const fullEntity = complete ? viewerEntity(bot, entity, fishingBobberOwners, options.remoteTextures) : null;
+      if (fullEntity) headTextures.observeValue(fullEntity);
+      socket.emit(complete ? 'entity' : 'entityMoved', fullEntity ??
         { id: entity.id, pos: { x: entity.position.x, y: entity.position.y, z: entity.position.z }, yaw: entity.yaw, pitch: entity.pitch,
           headYaw: (entity as unknown as { headYaw?: number }).headYaw,
           ...(transientEntity(entity) && velocity && [velocity.x, velocity.y, velocity.z].every(Number.isFinite)

@@ -3,15 +3,24 @@
 ## Password-server compatibility
 
 With an explicitly configured, server/account-bound `command:"login"` credential,
-a direct system message containing `/login` also counts as a request. This covers
+a direct system message containing `/login` also counts as a request.
+
+On Java 26.1 AuthMe servers the primary path is the configuration-phase
+`show_dialog` (`authme:prejoin-login/submit`) with a length-prefixed anonymous
+NBT password payload. Chat `/login` remains a one-shot fallback only after a
+system prompt. A transient `登录数据异常，请等待登录结束` notice is not failure;
+wait for `已成功登录！` or the English receipts below.
+
+ This covers
 AuthMe's comma and plugin-prefix variants without changing existing request markers.
 Player chat and common forwarded player wrappers are excluded; `/loginx` and
 `/register` never trigger this fallback. A configured registration action still
 requires its own explicit markers. No password configuration means no automatic
 login command.
 
-The standard AuthMe success and session-reconnection receipts are recognized as
-exact messages, optionally with its `[AuthMe]` prefix. They do not match quoted,
+The standard AuthMe success and session-reconnection receipts, including the
+Chinese `已成功登录！` form, are recognized as exact messages, optionally with an
+`[AuthMe]`, `[玩家系统]` or similar bracket prefix. They do not match quoted,
 negated or player-chat text, and cannot override structured authorization state.
 A standard wrong-password receipt blocks further submission. These compatibility
 receipts come from the [official AuthMe message definitions](https://github.com/AuthMe/AuthMeReloaded/blob/master/authme-core/src/main/resources/messages/messages_en.yml).
