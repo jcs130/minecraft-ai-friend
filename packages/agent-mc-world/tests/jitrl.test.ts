@@ -37,11 +37,13 @@ describe('paper-derived local policy update', () => {
     expect(r.candidates[1]!.posterior).toBeCloseTo(.4 * Math.exp(.5) / (.6 * Math.exp(-.5) + .4 * Math.exp(.5)), 12);
     expect(r.candidates[1]!.posterior).toBeGreaterThan(.6);
   });
-  it('keeps priors for empty or single-action evidence and deduplicates examples', () => {
+  it('keeps empty priors but does not preserve a failed action just because alternatives are untried', () => {
     expect(reweightJitRl(candidates, []).candidates[0]!.posterior).toBeCloseTo(.6);
     const n = { id: 'a', actionHash: 'bread', value: -1 };
     const r = reweightJitRl(candidates, [n, n]);
-    expect(r.sampleSize).toBe(1); expect(r.candidates[0]!.posterior).toBeCloseTo(.6);
+    expect(r.sampleSize).toBe(1); expect(r.candidates[0]!.posterior).toBeLessThan(.5);
+    expect(r.candidates[1]).toMatchObject({ q: null, estimatedQ: 0, samples: 0, estimateSource: 'unobserved-neutral' });
+    expect(r.candidates[1]!.posterior).toBeCloseTo(.4 * Math.exp(.5) / (.6 + .4 * Math.exp(.5)), 12);
   });
   it('keeps zero priors at zero and never selects an unavailable candidate', () => {
     expect(reweightJitRl([{ ...candidates[0]!, prior: 1 }, { ...candidates[1]!, prior: 0 }], []).candidates[1]!.posterior).toBe(0);
@@ -53,7 +55,7 @@ describe('real memory service, receipt credit and restart', () => {
   it('corrects a held-out decision only after both actions have measured outcomes', async () => {
     const first = await rank('trial-1'); expect(first.suggestedChoice).toBe('bread');
     await feedback(first.decisionId, execution('bad', actions[0], { food: 10, health: 16 }));
-    const second = await rank('trial-2'); expect(second.suggestedChoice).toBe('bread');
+    const second = await rank('trial-2'); expect(second.suggestedChoice).toBe('carrot');
     await feedback(second.decisionId, execution('good', actions[1], { food: 14 }), 'carrot');
     service = new GameMemoryService(new GameMemoryBook(dir), dir);
     const heldOut = await rank('held-out');

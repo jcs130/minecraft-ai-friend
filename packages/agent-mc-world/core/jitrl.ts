@@ -25,9 +25,15 @@ export function reweightJitRl(candidates: readonly JitRlCandidate[], neighbours:
   const rows = ready.map(c => {
     const matches = evidence.filter(n => n.actionHash === c.actionHash);
     const q = matches.length ? matches.reduce((sum, n) => sum + n.value, 0) / matches.length : null;
-    return { ...c, prior: c.prior / total, samples: matches.length, q, advantage: q === null || baseline === null ? 0 : q - baseline };
+    // A missing action has a neutral *estimate*, not an observed success. Using
+    // zero advantage instead would make one repeatedly failed action equal to
+    // every untried alternative (Q_failed === V), preserving the bad prior forever.
+    const estimatedQ = q ?? 0;
+    return { ...c, prior: c.prior / total, samples: matches.length, q, estimatedQ,
+      estimateSource: q === null ? 'unobserved-neutral' : 'measured',
+      advantage: baseline === null ? 0 : estimatedQ - baseline };
   });
-  // Do not force optimistic exploration or amplify a single unopposed action's evidence.
+  // No optimistic reward or random exploration. Readiness and zero priors remain authoritative.
   const scale = Math.max(0, ...rows.map(c => Math.abs(c.advantage)));
   const logits = rows.map(c => c.prior === 0 ? -Infinity : Math.log(c.prior) + beta * (scale ? c.advantage / scale : 0));
   const max = Math.max(...logits), weights = logits.map(l => Math.exp(l - max)), sum = weights.reduce((a, b) => a + b, 0);

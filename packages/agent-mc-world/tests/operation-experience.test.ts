@@ -19,6 +19,65 @@ const sample=(x=0)=>({at:new Date().toISOString(),dimension:'overworld',position
 const accepted={kind:'task' as const,id:'epoch:1',phase:'accepted' as const,terminal:false,goalCompleted:false as const};
 const completed={...accepted,phase:'completed' as const,terminal:true};
 
+it('projects bounded failures into normal SDK replies without blocking or replaying the body',async()=>{
+  const data=dir();let calls=0;
+  const tool:ToolDef={name:'mc_do',tags:['act'],description:'',parameters:{},handler:async()=>{
+    calls++;return {text:'blocked by observed obstacle',execution:{...completed,id:`task:${calls}`,phase:'blocked'}};}};
+  const world={id:'minecraft',tools:()=>[tool],envPromptVars:()=>({}),start:async()=>{},stop:async()=>{},
+    requestFacts:()=>({text:'',snapshotTypes:[],experience:{scope,observation:sample()}})};
+  const client=new MinecraftAgentClient({dataDir:data,log:nullLogger(),cfg:{...structuredClone(MINECRAFT_CLIENT_DEFAULTS),host:'example.test',username:'Test'}},world);
+  await client.connect();
+  try{
+    const args={steps:[{skill:'goto',at:[3,64,0]}]};
+    const first=await client.call('mc_do',args,'failure-1');
+    const second=await client.call('mc_do',args,'failure-2');
+    expect(first.text).not.toContain('Comparable operation');
+    expect(second.text).toContain('Comparable operation evidence');
+    const data=second.meta!.experience as any;
+    expect(data.counterexamples).toHaveLength(1);
+    expect(data.counterexamples[0]).toMatchObject({id:(first.meta!.experience as any).id,execution:{phase:'blocked'},observedDelta:{distance:0},historical:true,goalVerified:false});
+    expect(JSON.stringify(data).length).toBeLessThan(2400);
+    expect(second.execution).toMatchObject({id:'task:2',phase:'blocked'});
+    expect(await client.call('mc_do',args,'failure-2')).toEqual(second);
+    expect(calls).toBe(2);
+  }finally{await client.disconnect();}
+});
+
+it('does not recall unrelated scenes, cancelled work, pending work or duplicate physical executions',()=>{
+  const book=new OperationExperienceBook(dir()),args={steps:[{skill:'goto',at:[3,64,0]}]};
+  const add=(id:string,overrides:Record<string,any>={},phase:any='blocked',physical=id)=>{
+    const row=book.begin(scope,'run',id,'mc_do',args,{...sample(),...overrides});
+    book.finish(scope,row.id,{text:'',execution:{...completed,id:physical,phase,terminal:phase!=='accepted'}},sample(),1);return row;
+  };
+  const failed=add('failed');add('alias',{},'blocked','failed');
+  add('cancelled',{},'cancelled');add('pending',{},'accepted');
+  add('other-world',{dimension:'the_nether'});add('other-position',{position:{x:100,y:64,z:0}});
+  add('supplied',{inventory:{ender_pearl:10}});add('unknown',{inventory:null});
+  const current=book.begin(scope,'run','next','mc_do',args,sample());
+  const found=book.counterexamples(scope,current);
+  expect(found).toHaveLength(1);expect(found[0]!.execution.id).toBe(failed.execution?.id??'failed');
+  expect(book.counterexamples({...scope,account:'other'},current)).toEqual([]);
+  const changed=book.begin(scope,'run','changed','mc_do',{steps:[{skill:'goto',at:[9,64,0]}]},sample());
+  expect(book.counterexamples(scope,changed)).toEqual([]);
+  expect(book.counterexamples(scope,{...current,at:new Date(Date.now()+25*3600_000).toISOString()})).toEqual([]);
+  add('recovered',{},'completed');
+  expect(book.counterexamples(scope,{...current,at:new Date().toISOString()})).toEqual([]);
+});
+
+it('caps evidence reads and output and never manufactures missing effect observations',()=>{
+  const book=new OperationExperienceBook(dir()),args={skill:'goto',at:[3,64,0]};
+  for(let i=0;i<70;i++){
+    const r=book.begin(scope,'run',`r${i}`,'mc_do',args,sample());
+    book.finish(scope,r.id,{text:'',execution:{...completed,id:`t${i}`,phase:'blocked'}},null,1);
+  }
+  const row=book.begin(scope,'run','now','mc_do',args,sample());
+  const spy=vi.spyOn(book,'get'),found=book.counterexamples(scope,row);
+  expect(found).toHaveLength(3);expect(spy.mock.calls.length).toBeLessThanOrEqual(64);
+  expect(found[0]!.observedDelta).toEqual({distance:null,health:null,food:null});
+  spy.mockClear();book.counterexamples(scope,{...row,actionHash:'different'});
+  expect(spy.mock.calls.length).toBeLessThanOrEqual(64);
+});
+
 it('honors observed top-level experience pagination and rejects conflicting or silently ignored arguments',async()=>{
   const directory=dir(),book=new OperationExperienceBook(directory),memory=new GameMemoryBook(directory);
   for(let i=0;i<12;i++)book.begin(scope,'run',`req-${i}`,'mc_do',{skill:'inspect'},sample());

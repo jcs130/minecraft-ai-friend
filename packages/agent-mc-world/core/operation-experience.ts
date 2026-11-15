@@ -170,6 +170,46 @@ export class OperationExperienceBook {
     const file = join(this.folder(scope),'recent.json');
     return existsSync(file) ? JSON.parse(readFileSync(file,'utf8')) : [];
   }
+  /** Small, factual counterexamples for the same action in a comparable scene.
+   * Not a policy veto, inferred lesson, reward, or permanent context. */
+  counterexamples(scope: GameMemoryScope, current: OperationExperience) {
+    const before = current.before;
+    if (current.scopeKey !== operationScopeKey(scope) || !current.actionHash || !before?.dimension || !before.position || !before.inventory
+      || before.health === null || before.food === null) return [];
+    if (current.execution?.terminal && current.execution.phase === 'completed' && current.after) return [];
+    const found = [], physical = new Set<string>();
+    // Keep hot-path work bounded independently of the durable evidence archive.
+    for (const id of this.recentIds(scope).slice(-64).reverse()) {
+      if (id === current.id) continue;
+      const row = this.get(scope, id), prior = row.before, e = row.execution;
+      if (row.kind !== 'operation' || row.actionHash !== current.actionHash || !prior?.position
+        || prior.dimension !== before.dimension || !prior.inventory || prior.health === null || prior.food === null
+        || experienceHash(prior.inventory) !== experienceHash(before.inventory)
+        || Math.abs(prior.health - before.health) > 4 || Math.abs(prior.food - before.food) > 4
+        || Math.hypot(prior.position.x - before.position.x, prior.position.y - before.position.y, prior.position.z - before.position.z) > 16
+        || !e?.terminal) continue;
+      const age = Date.parse(current.at) - Date.parse(row.updatedAt);
+      if (!Number.isFinite(age) || age < 0 || age > 24 * 3600_000) continue;
+      // A more recent comparable native completion supersedes the old failure
+      // for this advisory only; original evidence and goal verification survive.
+      if (e.phase === 'completed' && row.after) break;
+      if (!['failed', 'blocked'].includes(e.phase)) continue;
+      const key = `${row.run}:${e.kind}:${e.id}`;
+      if (current.execution && key === `${current.run}:${current.execution.kind}:${current.execution.id}`) continue;
+      if (physical.has(key)) continue;
+      physical.add(key);
+      const after = row.after?.dimension === prior.dimension ? row.after : null;
+      found.push({ id: row.id, run: row.run, at: row.updatedAt, execution: e,
+        rpcElapsedMs: row.elapsedMs,
+        observedDelta: {
+          distance: after?.position ? Math.hypot(after.position.x - prior.position.x, after.position.y - prior.position.y, after.position.z - prior.position.z) : null,
+          health: after?.health !== null && after?.health !== undefined ? after.health - prior.health : null,
+          food: after?.food !== null && after?.food !== undefined ? after.food - prior.food : null,
+        }, historical: true, goalVerified: false });
+      if (found.length === 3) break;
+    }
+    return found;
+  }
   private recent(scope:GameMemoryScope,input:Record<string,unknown>){
     const ids=this.recentIds(scope);
     const rows = ids.slice().reverse().map(id=>this.get(scope,id)).filter(r =>
