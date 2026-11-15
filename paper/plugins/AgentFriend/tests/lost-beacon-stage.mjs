@@ -123,8 +123,16 @@ async function onMenu(bot, slot, item) {
 }
 
 async function prepare(bot) {
-  bot.chat('/mycli profession choose knight');
-  await delay(950);
+  const profile = () => capture(bot, '/mycli profession status --json', 'MC_RPG ');
+  const ready = await until(async () => {
+    const value = await profile();
+    return typeof value.class === 'string' && value;
+  }, 18000, 'Vortex profile loaded');
+  if (ready.class === 'none') {
+    const result = await capture(bot, '/mycli profession choose knight --json', 'MC_RPG ');
+    assert.notEqual(result.success, false, JSON.stringify(result));
+  }
+  await until(async () => (await profile()).class === 'knight', 10000, 'actual Vortex class');
   await qa('equip ' + bot.username);
 }
 
@@ -168,7 +176,8 @@ try {
     check('real escort is alive at start', startActor.type === 'VILLAGER' && startActor.health > 0);
     const moving = until(async () => {
       const actor = (await qa()).actors.find(e => e.id === startActor.id);
-      return actor && actor.health > 0 && Math.hypot(actor.position[0] - startActor.position[0], actor.position[2] - startActor.position[2]) > 1;
+      return actor && actor.health > 0
+        && Math.hypot(actor.position[0] - startActor.position[0], actor.position[2] - startActor.position[2]) > 1 ? actor : null;
     }, 20000, 'same NPC moves on foot');
     const [moved] = await Promise.all([moving, walk(host, [777,69,-1160], 1)]);
     check('same living escort moved through the passage', moved.health > 0);

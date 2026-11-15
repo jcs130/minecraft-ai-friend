@@ -32,6 +32,8 @@ def main():
     plugin = (root / "src/org/afuhome/agentfriend/AgentFriendPlugin.java").read_text(encoding="utf-8")
     native = method(plugin, "void nativeSiteCompleted(Player p,String site,String run)")
     complete = method(site, "private void complete(Run r)")
+    eligibility_signature = "private boolean rewardEligible(Run r, UUID id)"
+    eligibility = method(site, eligibility_signature) if eligibility_signature in site else ""
     guidance = method(site, "private static void outcomeGuidance(Map<String,Object> data)") if "private static void outcomeGuidance(Map<String,Object> data)" in site else "private static void outcomeGuidance(Map<String,Object> data){}"
     durable = method(exams, "private static boolean durableSurvey(Run r)")
     durable += "\n" + (method(exams, "private static boolean durableRecord(Run r)") if "private static boolean durableRecord(Run r)" in exams else "private static boolean durableRecord(Run r){return durableSurvey(r);}")
@@ -77,7 +79,16 @@ public class ExamCompletionProbe {
  static class Site {String id="synthetic_crypt",name="Synthetic";List<String> rooms=List.of("one","two","three");int conquestFloor=0,emeralds=8,bonusCount=1;Bonus bonus=new Bonus();}
  static class Bonus {String name(){return "STONE";}}
  static class Mode {int reward=1;}
- static class Run {String id=UUID.randomUUID().toString();Site site=new Site();long started=200;int stage=3;Mode mode=new Mode();Map<UUID,Integer> attendance=new LinkedHashMap<>();Map<Integer,Set<UUID>> roomAttendance=new HashMap<>();}
+ static class BeaconExpedition {
+  static final int BRIEFING=0,CAMP=3,STAGES=6;
+  record Progress(int additionalMaterials){int rewardCount(int base){return base+additionalMaterials;}}
+ }
+ static class Run {
+  String id=UUID.randomUUID().toString();Site site=new Site();long started=200;int stage=3;Mode mode=new Mode();
+  Map<UUID,Integer> attendance=new LinkedHashMap<>();Map<Integer,Set<UUID>> roomAttendance=new HashMap<>();
+  BeaconExpedition.Progress beacon;
+  int stages(){return beacon==null?site.rooms.size():BeaconExpedition.STAGES;}
+ }
  static class Manager {
   static final String ROOT="site-dungeons";Plugin plugin=new Plugin();int ends,applications;
   String day(){return "2030-01-01";}Object receipt(UUID id,String site){return plugin.config.receipts.get(ROOT+".receipts."+id+"."+site);}
@@ -86,6 +97,7 @@ public class ExamCompletionProbe {
   List<String> missingRooms(Run r,UUID id){List<String> out=new ArrayList<>();for(int i=0;i<r.stage;i++)if(r.roomAttendance.containsKey(i)&&!r.roomAttendance.get(i).contains(id))out.add("missing");return out;}
   List<String> unverifiedRooms(Run r){List<String> out=new ArrayList<>();for(int i=0;i<r.stage;i++)if(!r.roomAttendance.containsKey(i))out.add("unknown");return out;}
   __COMPLETE__
+  __REWARD_ELIGIBILITY__
   __GUIDANCE__
  }
  static Exam.Run exam(String primitive,String... proofs){Exam.Run r=new Exam.Run();r.definition=new Definition(primitive,List.of(proofs));return r;}
@@ -101,6 +113,7 @@ public class ExamCompletionProbe {
   test("bystander cannot certify or receive rewards",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);r.attendance.put(p.id,0);m.complete(r);check(m.plugin.config.writes==0&&m.plugin.exams.count==0);});
   test("old dungeon start cannot satisfy a later exam",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);r.started=50;m.complete(r);check(m.plugin.config.writes==1&&m.plugin.exams.count==0);});
   test("expired exam cannot gain proof",()->{Player p=new Player();Manager m=manager(p);m.plugin.exams.active.expires=1;m.complete(run(p));check(m.plugin.exams.count==0);});
+  __BEACON_CASES__
   test("unknown start is rejected",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);r.started=0;m.complete(r);check(m.plugin.exams.count==0);});
   for(String state:List.of("cancelled","interrupted","submitted","ready"))test("terminal exam stays "+state,()->{Player p=new Player();Manager m=manager(p);m.plugin.exams.active.state=state;m.complete(run(p));check(m.plugin.exams.count==0&&m.plugin.exams.active.state.equals(state));});
   test("survey is transport durable",()->check(Exam.durableRecord(exam("contract_record","survey"))));
@@ -127,7 +140,22 @@ public class ExamCompletionProbe {
  }
 }
 '''
-    generated = template.replace("__COMPLETE__", complete).replace("__DURABLE__", durable).replace("__PROOF__", proof).replace("__NATIVE__", native).replace("__LIFECYCLE__", lifecycle).replace("__GUIDANCE__", guidance)
+    beacon_cases = r'''
+  test("chapter briefing and camp attendance alone cannot grant a reward",()->{
+   Player p=new Player();Manager m=manager(p);Run r=new Run();r.beacon=new BeaconExpedition.Progress(2);r.stage=r.stages();
+   r.attendance.put(p.id,2);r.roomAttendance.put(0,Set.of(p.id));r.roomAttendance.put(3,Set.of(p.id));
+   m.complete(r);check(m.plugin.config.writes==0&&m.plugin.exams.count==0);
+  });
+  test("chapter combat attendance uses actual last stage and bound material value",()->{
+   Player p=new Player();Manager m=manager(p);Run r=new Run();r.beacon=new BeaconExpedition.Progress(2);r.stage=r.stages();
+   r.attendance.put(p.id,1);r.roomAttendance.put(5,Set.of(p.id));m.complete(r);
+   var receipt=m.plugin.config.receipts.values().iterator().next();
+   check(receipt.get("bossParticipant").equals(true)&&receipt.get("count").equals(3)&&m.plugin.exams.count==0);
+  });
+''' if eligibility else ""
+    generated = template.replace("__COMPLETE__", complete).replace("__REWARD_ELIGIBILITY__", eligibility)
+    generated = generated.replace("__BEACON_CASES__", beacon_cases).replace("__DURABLE__", durable).replace("__PROOF__", proof)
+    generated = generated.replace("__NATIVE__", native).replace("__LIFECYCLE__", lifecycle).replace("__GUIDANCE__", guidance)
     args.output.mkdir(parents=True, exist_ok=False)
     source = args.output / "ExamCompletionProbe.java"
     source.write_text(generated, encoding="utf-8")
