@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.86
+
+- Deliver comparable operation evidence in direct World tool text as well as SDK/MCP replies; preserve native receipt identity and do not replay the body.
+
 ## 0.5.7-rc.160-preview.85
 
 - Deliver bounded comparable native failure evidence in ordinary SDK/MCP action replies; supersede it after a comparable completion without replaying, vetoing or inventing rewards. Correct JitRL unknown-action estimates so a measured negative outcome can change a held-out choice. Keep unknown Q, readiness, original receipts and goal-success boundaries explicit.
@@ -423,3 +427,6 @@ Add optional nearby voice through the existing authenticated connection, canonic
 - Treat server-confirmed mounting separately from death or world changes. Retain the verified position epoch while Mineflayer suspends walking physics, including reconnect packet ordering, without trusting stale vehicle pointers.
 - Add the optional `boat_trip` script for observed placement, exact-entity mounting, bounded waypoints, checked shore landing and verified empty-boat recovery. Preserve cancellation, single-body ownership and partial results.
 - Keep current water-travel choices ahead of large terrain details in route decisions; expose the new script and recovery contract through the shared SDK/MCP help.
+## 0.5.7-rc.160-preview.86
+
+- Deliver comparable operation evidence in direct World tool text as well as SDK/MCP replies; preserve native receipt identity and do not replay the body.
