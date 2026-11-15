@@ -156,7 +156,7 @@ final class AdditionalEyeMirrors implements Listener {
                 UUID targetId = recipient.getUniqueId();
                 if (!attachedTargets.contains(targetId)) return;
                 if (CortiEyeMirrorPlugin.isMachineReceipt(event.getPacket(), type)) return;
-                PacketContainer packet = event.getPacket().shallowClone();
+                PacketContainer packet = EyePresentationPacket.capture(event.getPacket());
                 String signature = isChat(type) ? signature(packet, type) : null;
                 Bukkit.getScheduler().runTaskLater(plugin,
                         () -> forward(targetId, type, packet, signature), signature == null ? 1L : 2L);
@@ -463,10 +463,10 @@ final class AdditionalEyeMirrors implements Listener {
                 }
                 if (++session.effectPackets > 128) continue;
             }
-            PacketContainer copy = original.shallowClone();
+            PacketContainer copy;
             if (isEffect(type)) {
-                if (copy.getIntegers().size() == 0
-                        || copy.getIntegers().read(0) != target.getEntityId()) continue;
+                copy = EyePresentationPacket.retargetEffect(original, target.getEntityId(), camera.getEntityId());
+                if (copy == null) continue;
                 PotionEffectType effect;
                 if (type == PacketType.Play.Server.ENTITY_EFFECT) {
                     effect = CraftPotionEffectType.minecraftHolderToBukkit(
@@ -479,7 +479,8 @@ final class AdditionalEyeMirrors implements Listener {
                     if (effect == PotionEffectType.NIGHT_VISION) continue;
                     session.effects.remove(effect);
                 }
-                copy.getIntegers().write(0, camera.getEntityId());
+            } else {
+                copy = EyePresentationPacket.capture(original);
             }
             try { protocol.sendServerPacket(camera, copy, false); }
             catch (RuntimeException error) {

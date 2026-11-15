@@ -1041,8 +1041,6 @@ function Backup-Server {
         Deploy-PendingAgentFriend
         Deploy-PendingEyeMirror
         Deploy-PendingGeyser
-        PruneReleaseSnapshots $backupRoot
-        PruneSnapshots $backupRoot
     }
     finally {
         if ($wasRunning -and ($script:coreUpgradeRecoveryBlocked -or $script:contentRecoveryBlocked -or
@@ -1058,6 +1056,9 @@ function Backup-Server {
             Remove-Item -LiteralPath $pausedFile -Force -ErrorAction SilentlyContinue
         }
     }
+    # Retention can take minutes. Finish the verified backup and any required restart first.
+    PruneReleaseSnapshots $backupRoot
+    PruneSnapshots $backupRoot
 }
 
 if ($Action -eq 'Status') {

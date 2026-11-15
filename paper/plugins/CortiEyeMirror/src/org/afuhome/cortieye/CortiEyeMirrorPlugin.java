@@ -152,7 +152,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
                 if (isMachineReceipt(event.getPacket(), type)) return;
                 if (isChat(type) && !mirrorChat) return;
                 if (type == PacketType.Play.Server.ADVANCEMENTS && !mirrorAdvancements) return;
-                PacketContainer copy = event.getPacket().shallowClone();
+                PacketContainer copy = EyePresentationPacket.capture(event.getPacket());
                 String signature = isChat(type) ? signature(copy, type) : null;
                 // Broadcast chat also reaches the camera normally. Give that packet two ticks to arrive.
                 long delay = signature == null ? 1L : 2L;
@@ -247,7 +247,7 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
         for (PacketType type : PRESENTATION) {
             long typeStarted = System.nanoTime();
             try {
-                if (!type.isSupported()) continue;
+                if (!type.isSupported() || EyePresentationPacket.usesNativePacket(type)) continue;
                 protocol.createPacket(type, false).shallowClone();
                 warmed++;
             } catch (RuntimeException | LinkageError error) {
@@ -260,8 +260,8 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
             }
         }
         getLogger().info(String.format(Locale.ROOT,
-                "Presentation clone warmup (%s): %d/%d packet types in %.1f ms; slowest %s %.1f ms; no packets sent",
-                pass, warmed, PRESENTATION.length, (System.nanoTime() - started) / 1_000_000.0,
+                "Presentation clone warmup (%s): %d packet types in %.1f ms; slowest %s %.1f ms; no packets sent",
+                pass, warmed, (System.nanoTime() - started) / 1_000_000.0,
                 slowestType, slowestNanos / 1_000_000.0));
     }
 
@@ -555,8 +555,8 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
                 || type == PacketType.Play.Server.REMOVE_ENTITY_EFFECT) {
             // Effect packets address an entity. Remap target -> camera so the camera's
             // client renders HUD effect icons and vision shaders as its own view.
-            if (copy.getIntegers().size() == 0
-                    || copy.getIntegers().read(0) != target.getEntityId()) return;
+            copy = EyePresentationPacket.retargetEffect(copy, target.getEntityId(), camera.getEntityId());
+            if (copy == null) return;
             PotionEffectType effectType;
             if (type == PacketType.Play.Server.ENTITY_EFFECT) {
                 ClientboundUpdateMobEffectPacket handle =
@@ -571,7 +571,6 @@ public final class CortiEyeMirrorPlugin extends JavaPlugin implements Listener {
                 if (cameraNightVision && effectType.equals(PotionEffectType.NIGHT_VISION)) return;
                 mirroredEffects.remove(effectType);
             }
-            copy.getIntegers().write(0, camera.getEntityId());
         }
         if (signature != null) {
             Long alreadySeen = cameraChat.get(signature);
