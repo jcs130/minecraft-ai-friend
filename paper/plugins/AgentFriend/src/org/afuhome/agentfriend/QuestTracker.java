@@ -50,6 +50,7 @@ final class QuestTracker implements Listener {
         BarColor color=QuestGuidance.flag(guide,"ready")?BarColor.GREEN:BarColor.BLUE;
         if(current.bar.getColor()!=color)current.bar.setColor(color);
         audience(p,current.bar);
+        if(plugin.targetGuides()!=null)plugin.targetGuides().quest(p,"quest:commission",guide);
     }
     private void audience(Player owner,BossBar bar) {
         Set<Player> wanted=new HashSet<>();wanted.add(owner);wanted.addAll(plugin.attachedEyes(owner));
@@ -64,7 +65,7 @@ final class QuestTracker implements Listener {
             if(!visible(p)||!entry.getValue().run.equals(run))remove(entry.getKey());else audience(p,entry.getValue().bar);
         }
     }
-    void remove(UUID id) {Tracked old=bars.remove(id);if(old!=null)old.bar.removeAll();refreshed.remove(id);}
+    void remove(UUID id) {if(plugin.targetGuides()!=null)plugin.targetGuides().remove(id,"quest:commission");Tracked old=bars.remove(id);if(old!=null)old.bar.removeAll();refreshed.remove(id);}
     @EventHandler public void quit(PlayerQuitEvent e) {remove(e.getPlayer().getUniqueId());prune();}
-    void close() {cleanup.cancel();bars.values().forEach(t->t.bar.removeAll());bars.clear();refreshed.clear();}
+    void close() {cleanup.cancel();for(UUID id:Set.copyOf(bars.keySet()))remove(id);bars.values().forEach(t->t.bar.removeAll());bars.clear();refreshed.clear();}
 }

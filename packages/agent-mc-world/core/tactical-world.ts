@@ -16,7 +16,7 @@ import { combatLoadout } from './combat-loadout.ts';
 import { CombatProgramRunner, CombatProgramBusyError, CombatProgramSceneChangedError, combatProgramCandidates, combatProgramHash, combatProgramSelection, validCombatProgram } from './combat-program.ts';
 import { combatRulesError, type CombatRule } from './combat-rules.ts';
 import { combatMayTakeTask, diverseCombatOptions } from './combat-options.ts';
-import { combatSearchCandidates } from './combat-search.ts';
+import { combatSearchCandidates, CombatSearchHistory } from './combat-search.ts';
 import { COMBAT_TACTIC_TOOL } from './combat-tool.ts';
 import { validCombatRoutines, type CombatRoutine } from './combat-routines.ts';
 import { validMeleeWeaponOrder } from './weapon-capabilities.ts';
@@ -39,6 +39,7 @@ protected lastCombatDecision: { atMs: number; generation: number; outcome: unkno
 private readonly routineGraphs = new Map<string, ProcedureGraph | Error>();
 private routineAdmission: RoutineAdmission | null = null;
 private routineError: string | null = null;
+private readonly searchHistory = new CombatSearchHistory();
 private readonly combatProbe: CombatProgramProbe;
   constructor(options: MinecraftWorldOptions, protected readonly tactics = new CombatAbilities(new CombatTacticBook(options.dataDir ? join(options.dataDir,'minecraft-combat-tactics.json') : null))) {
     super(options); this.combatProbe = new CombatProgramProbe(options.dataDir ? join(options.dataDir, 'combat-probes') : null);
@@ -302,8 +303,9 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
     const stroll: CombatCandidate[] = walk ? [{ id: 'idle_wander', kind: 'idle', action: 'wander',
       destination: [walk.destination.x, walk.destination.y, walk.destination.z],
       intent: 'Stroll two or three steps on verified safe nearby ground while the body is free; yield immediately to tasks or danger. This does not complete a goal or a trade.' }] : [];
-    const search=combatSearchCandidates(bot,battlefield,control.bodyFree&&!queue?.running&&!queue?.waiting.length,
-      cfg.allowMovement&&!bot.currentWindow&&!(this.executor?.eating??false));
+    const search=this.searchHistory.filter(JSON.stringify([this.realmKey(),battlefield.connectionGeneration,battlefield.dimension]),
+      combatSearchCandidates(bot,battlefield,control.bodyFree&&!queue?.running&&!queue?.waiting.length,
+        cfg.allowMovement&&!bot.currentWindow&&!(this.executor?.eating??false)),now);
     const choices = [...reactions, ...frame.candidates, ...search, ...routines, ...stroll];
     if(frame.actionPool)frame.actionPool.push(...search);
     if (frame.actionPool) frame.actionPool.push(...stroll);
@@ -375,6 +377,8 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
     }
     if (candidate.kind === 'idle') return this.idleBehavior?.startSelected(candidate.action) ?? false;
     if(candidate.kind==='search'){
+      if(!this.searchHistory.filter(JSON.stringify([this.realmKey(),current.battlefield.connectionGeneration,current.battlefield.dimension]),
+        [candidate],current.battlefield.sampledAtMs).length)return false;
       const queue=this.executor?.status(),p=bot.entity.position,to=new Vec3(...candidate.destination);
       if(!this.executor||queue?.running||queue?.waiting.length||queue?.hold||this.combat?.active||this.methodOwnsBody()
         ||bot.currentWindow||!corridorSafe(bot,p,to))return false;
@@ -383,6 +387,8 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
       const yawDeg=Math.atan2(Math.sin(targetYaw-bot.entity.yaw),Math.cos(targetYaw-bot.entity.yaw))*180/Math.PI;
       const result=this.executor.submitDetailed([{skill:'control',keys:['forward'],durationMs:250,mode:'ground',yawDeg}], 'append');
       if(!result.accepted||result.taskId===undefined)return false;
+      this.searchHistory.record(JSON.stringify([this.realmKey(),current.battlefield.connectionGeneration,current.battlefield.dimension]),
+        candidate.clueKey,[p.x,p.y,p.z],current.battlefield.sampledAtMs);
       this.routineAdmission={runId:result.taskId,execution:{kind:'task',id:`${this.executionEpoch}:${result.taskId}`,
         phase:'accepted',terminal:false,goalCompleted:false,evidence:{source:'search-clue',clueKey:candidate.clueKey}}};
       return true;

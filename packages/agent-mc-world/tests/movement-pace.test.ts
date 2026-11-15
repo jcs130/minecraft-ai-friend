@@ -1,9 +1,12 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
-import { MovementPacer, MOVEMENT_PACE_DEFAULTS, stepRotation, installMovementPace, assertMovementAllowed } from '../core/movement-pace.ts';
-import { installMiningLimiter, MINING_LIMIT_DEFAULTS, MiningLimiter, miningBlockedMessage } from '../core/mining-limiter.ts';
+import { MovementPacer, MOVEMENT_PACE_DEFAULTS as BASE_MOVEMENT_PACE, stepRotation, installMovementPace, assertMovementAllowed } from '../core/movement-pace.ts';
+import { installMiningLimiter, MINING_LIMIT_DEFAULTS as BASE_MINING_LIMITS, MiningLimiter, miningBlockedMessage } from '../core/mining-limiter.ts';
 import { SkillBlocked } from '../core/skill-context.ts';
 import fs from 'node:fs';
+
+const MINING_LIMIT_DEFAULTS = { ...BASE_MINING_LIMITS, enabled: true };
+const MOVEMENT_PACE_DEFAULTS = { ...BASE_MOVEMENT_PACE, enabled: true };
 
 describe('movement pace (human-level, deterministic)', () => {
   it('turns at most 24°/tick: a 180° turn takes several ticks, never a snap', () => {
@@ -35,7 +38,7 @@ describe('movement pace (human-level, deterministic)', () => {
     const pacer = installMovementPace(bot, () => MOVEMENT_PACE_DEFAULTS);
     assertMovementAllowed(bot, { x: 50, y: 64, z: 0 });
     expect(() => assertMovementAllowed(bot, { x: 200, y: 64, z: 0 })).toThrow(/route leg too long/);
-    bot.emit('messagestr', '[反作弊] 检测到你疑似在使用自动化模组，继续使用将被临时封禁');
+    bot.emit('messagestr', '[反作弊] 检测到你疑似在使用自动化模组，继续使用将被临时封禁', 'system', {});
     expect(pacer.hardStopped).toBe(true); expect(lim.hardStopped).toBe(true);
     expect(bot.pathfinder.goal).toBeNull(); expect(bot.cleared).toBe(true);
     expect(bot._pacePause()).toBe(true);

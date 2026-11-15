@@ -2,6 +2,7 @@ import { skillMirrorUrl } from './download-mirror.mjs';
 import offlineDownloads from './offline-downloads.json' with { type: 'json' };
 import maidClientDownloads from './maid-client-downloads.json' with { type: 'json' };
 import androidClientDownloads from './android-client-downloads.json' with { type: 'json' };
+import desktopClientDownloads from './desktop-client-downloads.json' with { type: 'json' };
 
 // Mirror original published bytes, not the current developer checkout. Large
 // binaries stay in OSS; this repository contains only their reviewed manifest.
@@ -36,19 +37,23 @@ const originalReleases = [
     includes: '约 1.11 GB，含 Node、固定后端、依赖和观战资源；仍需自己的 N.E.K.O 与可用模型。' }),
 ];
 export const packageReleases = Object.freeze([
+  ...desktopClientDownloads.map(row => Object.freeze(row)),
   ...androidClientDownloads.map(row => Object.freeze(row)),
   ...maidClientDownloads.map(row => Object.freeze(row)),
   ...offlineDownloads.map(row => Object.freeze(row)),
   ...originalReleases.map(row => Object.freeze({ ...row, category: 'advanced' })),
 ]);
 
-const aliases=Object.freeze({'/downloads/android-client':'android-client-pack','/downloads/maid-client':'maids-client-pack','/downloads/maid-mods':'maids-client-mods','/downloads/cortico-lite':'cortico-lite','/downloads/cortico':'cortico-bundle','/downloads/dsh':'dsh-bundle','/downloads/neko':'neko-base','/downloads/audio':'shared-audio','/downloads/browser':'shared-browser'});
+const aliases=Object.freeze({'/downloads/java-client':'desktop-client-pack','/downloads/android-client':'android-client-pack','/downloads/android-native-client':'android-native-client-pack','/downloads/maid-client':'maids-client-pack','/downloads/maid-mods':'maids-client-mods','/downloads/cortico-lite':'cortico-lite','/downloads/cortico':'cortico-bundle','/downloads/dsh':'dsh-bundle','/downloads/neko':'neko-base','/downloads/audio':'shared-audio','/downloads/browser':'shared-browser'});
 // Existing bookmarks keep their immutable bytes; the recommended alias selects
 // the current reviewed complete package. Both use the same operator enablement.
 const legacyNekoBase = Object.freeze({id:'neko-base', filename:'qiandengji-neko-0.6.70-base-with-viewer-data.zip',
   bytes:321124552, sha256:'701716c351f8cd3dd43b0837b34131b793648eab740e60d4145748fea59e2dc2'});
 const legacyNeko109 = Object.freeze({"id":"neko-base","filename":"NEKO-MC-0.6.109-Windows.zip","sha256":"624ef18e011ef6681cfa1c2e963745e815582130a77b812e0fc525e2fcd4e5d4","bytes":1107341175});
+const legacyFclNative = Object.freeze({id:'android-native-client-pack', filename:'qiandengji-android-1.21.1-neoforge-1.0.0-preview.3.mrpack',
+  bytes:55283, sha256:'76e8f1f05fa11b28100711be2c23d4bd28b0794a6d6ea48006a7bfaee9c9e1ba'});
 export const packageAt = pathname => packageReleases.find(row => pathname === '/downloads/' + row.filename || aliases[pathname]===row.id)
+  || (pathname === '/downloads/' + legacyFclNative.filename ? legacyFclNative : undefined)
   || (pathname === '/downloads/' + legacyNekoBase.filename ? legacyNekoBase : undefined)
   || (pathname === '/downloads/' + legacyNeko109.filename ? legacyNeko109 : undefined)
   || (pathname === '/downloads/jcs130-dsh-minecraft-agent-0.3.0-rc.12.tgz' ? {id:'dsh-adapter',filename:'jcs130-dsh-minecraft-agent-0.3.0-rc.12.tgz',bytes:77648,sha256:'2beb51ba045226cd6802620063964b03fcaecfb405ff781a998803a4ab497184'} : undefined)

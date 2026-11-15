@@ -595,14 +595,11 @@ final class GuildHallManager implements Listener {
         receptionMenus.remove(event.getInventory());
     }
 
+    Location destination() { return built && ready ? new Location(world, x + .5, y + 1, z + 4.5, 180, 0) : null; }
+
     void teleport(Player player) {
         if (!built || !ready) { player.sendMessage(ChatColor.RED + "公会大厅尚未开放；可用 /mycli guild board 查询任务，或联系服主核对大厅状态。"); return; }
-        Location landing = new Location(world, x + .5, y + 1, z + 4.5, 180, 0);
-        if (!landing.getBlock().getType().isAir() || !landing.clone().add(0, 1, 0).getBlock().getType().isAir()) {
-            player.sendMessage(ChatColor.RED + "公会大厅入口受阻，传送取消。"); return;
-        }
-        if (plugin.travelMagic().teleport(player, landing, "guild", "公会传送术", TravelMagic.LOCAL_MANA)) player.sendMessage(ChatColor.GOLD
-                + "已到冒险者公会；右键任务牌查看今日委托。 " + LocationOutput.fields(landing));
+        plugin.travelPublic(player, "guild", "冒险者公会", destination());
     }
 
     boolean handleInteract(PlayerInteractEvent event) {

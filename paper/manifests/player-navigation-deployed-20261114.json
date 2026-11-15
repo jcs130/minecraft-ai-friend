@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "release": "player-navigation-20261114-r1",
+  "verifiedAt": "2026-11-14T15:01:37.174Z",
+  "pullRequest": 245,
+  "sourceCommit": "46d6714d59e98d13b8ffba900da438ae0e262c87",
+  "mergeCommit": "b01723ed1a4c3716324984bd824aa0f472f2abe9",
+  "stages": {
+    "codeMerged": true,
+    "candidateValidated": true,
+    "productionDeployed": true,
+    "originalPlayerAcceptance": false
+  },
+  "components": {
+    "AgentFriend": {
+      "version": "0.4.47.78-player-navigation",
+      "sha256": "247aaedca90905ded41aff8afc36f47022736e6626b4e5276c5732c39cf25eef"
+    },
+    "FastAsyncWorldEdit": {
+      "version": "2.16.1-qd-hybrid1",
+      "sha256": "dc3ed55005e71bc298a82ecb2ac23a03a36a288e78b7be48d7b5d61f030884b2"
+    },
+    "QiandengjiMaidBridge": {
+      "version": "0.1.36-scene-speech",
+      "changed": false
+    }
+  },
+  "validation": {
+    "rules": 167,
+    "isolatedAfterNormalRestart": 26,
+    "nativeSoulSpellHands": [
+      "main",
+      "off"
+    ],
+    "productionReadOnlyChecks": 13,
+    "ciRun": 43605843749,
+    "ciChecks": 6
+  },
+  "runtime": {
+    "oldGamePid": 42492,
+    "newGamePid": 13744,
+    "cameraReady": true,
+    "javaAndBedrockReadiness": true
+  },
+  "backup": {
+    "drive": "F",
+    "path": "F:\\MC-backups\\repairs\\player-navigation-20261114-r1-20261114-225237",
+    "filesVerified": 21688,
+    "bytesVerified": 7328844228,
+    "complete": true,
+    "serverManifestSha256": "268dafc7f64763dc8f34d66f5b8ecfd87af18cc5572d844023cf4f2b2badb65c"
+  },
+  "preservation": {
+    "allUnrelatedServerFilesVerifiedBeforeRestart": 21686,
+    "originalCredentials": 81,
+    "originalCredentialsUnchanged": true,
+    "worldRollbackPerformed": false,
+    "realInventoryTested": false
+  },
+  "voiceRouting": {
+    "pullRequest": 243,
+    "version": "0.1.14-svc-routing",
+    "deployedAt": "2026-11-14T22:01:50.2051219+08:00",
+    "sha256": "520fb50af707f50adfda551250db1d1524f5865e669d9ab4b85174c083e75ebe",
+    "preservedByThisRestart": true,
+    "padAudioAcceptance": false
+  },
+  "remainingAcceptance": [
+    "Original KangQiang soul-spell use",
+    "Phone/Bedrock UI appearance",
+    "Actual Pad SVC hearing and microphone",
+    "Natural client/Agent reinforcement adoption"
+  ],
+  "rollback": "Only the two reviewed JAR preimages; never restore older world, accounts, inventories, challenge or lifecycle receipts.",
+  "evidence": {
+    "release": "E:\\MC\\ops\\repairs\\player-navigation-20261114-r1",
+    "postflight": "D:\\codex\\2026-09-14\\new-chat\\work\\player-maid-navigation-audit-20261114\\production-verification.json",
+    "postflightSha256": "5b340df6e609f84107a271fb369b157c9a3b0024afdda273f23d44c79567ca08"
+  }
+}

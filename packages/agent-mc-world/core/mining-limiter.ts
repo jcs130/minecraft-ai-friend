@@ -13,6 +13,7 @@
  * hardcode a new server's chat into this file.
  */
 import { SkillBlocked } from './skill-context.ts';
+import { isServerNotice } from '../src/chat-provenance.ts';
 
 export interface MiningLimits {
   enabled: boolean;
@@ -68,7 +69,7 @@ export interface MiningLimits {
  * ores / 5 min), so a ten-minute cap matters as much as the per-minute one.
  */
 export const MINING_LIMIT_DEFAULTS: MiningLimits = {
-  enabled: true,
+  enabled: false,
   mineralPerMinute: 12,
   mineralPer10Min: 80,
   allPerMinute: 24,
@@ -113,6 +114,8 @@ function compileRe(pattern: string, flags?: string): RegExp | null {
 /** True when this chat line should be treated as a mining/automation warning under `limits`. */
 export function isMiningWarningText(text: string, limits: MiningLimits): boolean {
   if (!text) return false;
+  // Legacy/plugin system packets can contain rendered player quotations.
+  if (/^\s*</.test(text.replace(/§[0-9A-FK-ORX]/gi, ''))) return false;
   const hitKeyword = (limits.warningKeywords ?? []).some((k) => k && text.includes(k));
   const hitPattern = compileRe(limits.warningPattern)?.test(text) ?? false;
   if (!hitKeyword && !hitPattern) return false;
@@ -170,7 +173,7 @@ export function resolveMiningLimits(partial?: Partial<MiningLimits> | Record<str
   for (const key of Object.keys(MINING_LIMIT_DEFAULTS) as (keyof MiningLimits)[]) {
     if (src[key] === undefined) continue;
     if (key === 'warningKeywords') out.warningKeywords = splitWarningKeywords(src.warningKeywords);
-    else if (key === 'enabled' || key === 'hardStopOnWarning') out[key] = Boolean(src[key]);
+    else if (key === 'enabled' || key === 'hardStopOnWarning') out[key] = src[key] as boolean;
     else if (typeof MINING_LIMIT_DEFAULTS[key] === 'number') out[key] = Number(src[key]) as never;
     else if (typeof MINING_LIMIT_DEFAULTS[key] === 'string') out[key] = String(src[key] ?? '') as never;
   }
@@ -257,7 +260,7 @@ export class MiningLimiter {
   /** Feed a chat line; returns true when it is an anti-cheat / auto-mining warning. */
   onChat(text: string): boolean {
     const c = this.cfg();
-    if (!isMiningWarningText(text, c)) return false;
+    if (!c.enabled || !isMiningWarningText(text, c)) return false;
     const t = this.now();
     this.lastWarning = { at: t, text: text.slice(0, 200) };
     this.pauseUntil = c.hardStopOnWarning ? Infinity : Math.max(this.pauseUntil, t + c.warningPauseMs);
@@ -300,7 +303,8 @@ export function installMiningLimiter(bot: AnyBot, limits: () => MiningLimits | u
   if (!bot._miningLimiter) {
     const limiter = new MiningLimiter(() => ({ ...MINING_LIMIT_DEFAULTS, ...(limits() ?? {}) }));
     bot._miningLimiter = limiter;
-    bot.on('messagestr', (text: string) => {
+    bot.on('messagestr', (text: string, position: string, message: unknown, sender?: string) => {
+      if (!isServerNotice(message, position, sender)) return;
       if (limiter.onChat(String(text))) {
         diag?.('mining-warning', { text: String(text).slice(0, 200), status: limiter.status() });
         bot.emit?.('miningWarning', String(text));

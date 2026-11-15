@@ -135,8 +135,10 @@ export async function resolveMinecraftConnectEndpoint(options: ResolveEndpointOp
   const srvName = `_minecraft._tcp.${host}`;
   let target = host;
   let resolvedPort = port;
-  const srv = await lookup(srvName, 'SRV');
-  if (srv.srv?.name && srv.srv.port) {
+  // Match minecraft-protocol: an explicit port must never be replaced by SRV.
+  // SRV is optional discovery, so a timeout must not block a valid direct A/AAAA route.
+  const srv = port === 25565 ? await lookup(srvName, 'SRV').catch(() => ({ srv: null })) : { srv: null };
+  if (srv.srv?.name && Number.isInteger(srv.srv.port) && srv.srv.port > 0 && srv.srv.port <= 65535) {
     target = srv.srv.name;
     resolvedPort = srv.srv.port;
   }

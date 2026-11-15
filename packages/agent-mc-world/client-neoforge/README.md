@@ -45,3 +45,12 @@ success is implied by a successful build; check the actual renderer and pixels.
 Source build, packaged checks, installation and live model/game rendering are
 separate acceptance stages. The original YSM/maid mods and their assets are not
 rewritten or bundled by this companion.
+
+With the existing appearance profile's `writeDiagnostics` enabled, the companion
+also writes `diagnostics/agentmc-ysm-native.json` every 100 client ticks. It reports
+the original mod version, channel advertisement, negotiated channel version and
+up to 64 sorted catalogue IDs. Official YSM 2.6.5 uses protocol `2.6.0`; these are
+different version domains. A negotiated channel does not prove models arrived,
+and a catalogue entry does not prove rendered geometry. Check freshness and the
+actual connection. This diagnostic never changes attributes, sends a handshake,
+reloads models or enables a legacy bridge.

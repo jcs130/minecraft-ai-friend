@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "release": "platform-identity-companion-20261114-r1",
+  "state": "deployed-and-component-verified",
+  "verifiedAt": "2026-11-14T13:48:07+08:00",
+  "previousComponentEvidence": "paper/manifests/server-pr207-trial-deployed-20261114.json",
+  "mergedMain": "dd2668d27713aeec5f3727c2f2bd21516f0ff217",
+  "codePullRequests": [233, 234],
+  "ciRunIds": [43561380862, 43561503222],
+  "components": [
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.35-residence-recovery",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "19614119a381292d1039dbb36657958671c37dc21cef02334a43810f4438f035",
+      "sourceCommit": "8da36533b3e2bb9e27397388ffd40b59053b7789",
+      "processId": 43444,
+      "processStartedAt": "2026-11-14T13:41:03.2856469+08:00"
+    },
+    {
+      "name": "PlatformIdentity",
+      "version": "0.1.0",
+      "loadedPath": "E:/MC/server/plugins/PlatformIdentity-0.1.0.jar",
+      "sha256": "7aea3fba20c7438958d253402dda4e4b0c73f1ee2086b47a95a0e85be8c447ce",
+      "sourceCommit": "2b9339013c3da547f61c995ccf086f6a7673b07d",
+      "processId": 43444,
+      "processStartedAt": "2026-11-14T13:41:03.2856469+08:00"
+    },
+    {
+      "name": "LoginGuard",
+      "version": "0.1.13-platform-identity",
+      "loadedPath": "E:/MC/private/ysm/proxy/plugins/LoginGuard-0.1.10.jar",
+      "sha256": "e9ace15683212178fca983f00ad87d94b9c6e6d88a43ff43685958918ac10ae7",
+      "sourceCommit": "2b9339013c3da547f61c995ccf086f6a7673b07d",
+      "processId": 8144,
+      "processStartedAt": "2026-11-14T13:43:51.4239291+08:00"
+    }
+  ],
+  "acceptance": {
+    "publicJavaAndBedrockStatus": true,
+    "loginGuardReady": true,
+    "ordinaryAgentAndObserversReauthenticated": true,
+    "canonicalOpAndLandPermissionVerified": true,
+    "separateExistingPlayerFilesAndLandOwnershipPreserved": true,
+    "ownerDeviceSignIn": "pending",
+    "isolatedBothPlatformsUseExistingPlayerData": true,
+    "isolatedProofSources": "synthetic-platform-identities-on-real-velocity-and-youer",
+    "originalCompanionRecalledAndObservedFollowing": true,
+    "originalCompanionObservedNearOwnerAfterRestart": true,
+    "isolatedSafeReunionWithSameUuidAndInventory": true
+  },
+  "rollback": {
+    "drive": "F",
+    "snapshot": "platform-identity-companion-20261114-r1-134101",
+    "scope": "pre-change components, login settings, operator settings and original data evidence",
+    "order": "revoke new grants before restoring old login guard, restore code and configuration at normal stop, preserve latest players, world and authentication data"
+  }
+}

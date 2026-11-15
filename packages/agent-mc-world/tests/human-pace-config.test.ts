@@ -21,6 +21,8 @@ describe('miningLimits / movementPace config', () => {
     expect(MINECRAFT_DEFAULTS.movementPace).toEqual(MOVEMENT_PACE_DEFAULTS);
     expect(resolveMiningLimits(undefined)).toEqual(MINING_LIMIT_DEFAULTS);
     expect(resolveMovementPace(null)).toEqual(MOVEMENT_PACE_DEFAULTS);
+    expect(MINING_LIMIT_DEFAULTS.enabled).toBe(false);
+    expect(MOVEMENT_PACE_DEFAULTS.enabled).toBe(false);
     expect(miningLimitErrors(MINING_LIMIT_DEFAULTS)).toEqual([]);
     expect(movementPaceErrors(MOVEMENT_PACE_DEFAULTS)).toEqual([]);
   });
@@ -56,6 +58,8 @@ describe('miningLimits / movementPace config', () => {
   });
 
   it('rejects out-of-range numbers and broken regexes', () => {
+    expect(() => resolveMiningLimits({ enabled: 'false' } as unknown as Record<string, unknown>)).toThrow(/enabled/);
+    expect(() => resolveMovementPace({ hardStopOnWarning: 'false' } as unknown as Record<string, unknown>)).toThrow(/hardStopOnWarning/);
     expect(() => resolveMiningLimits({ mineralPerMinute: 0 })).toThrow(HumanPaceConfigError);
     expect(() => resolveMiningLimits({ warningBudgetFactor: 1.5 })).toThrow(/warningBudgetFactor/);
     expect(() => resolveMiningLimits({ warningPattern: '(' })).toThrow(/warningPattern/);
@@ -66,6 +70,7 @@ describe('miningLimits / movementPace config', () => {
 
   it('treats warning phrases as data: custom keywords match, defaults do not leak into an empty list', () => {
     const custom = resolveMiningLimits({
+      enabled: true,
       warningKeywords: ['MY_SERVER_FLAG'],
       warningPattern: '',
       warningConfirmPattern: '',

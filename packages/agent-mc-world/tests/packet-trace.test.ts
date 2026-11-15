@@ -15,11 +15,13 @@ describe('packet trace', () => {
     client.write('chat_command', { command: 'stats' });
     client.write('block_dig', { status: 2, location: { x: 1, y: 2, z: 3 }, face: 1, sequence: 7 });
     client.emit('packet', { dialog: { data: { title: 'AuthMe 登录', inputs: [] } } }, { name: 'show_dialog' });
+    client.emit('packet', { content: JSON.stringify({ text: 'private-message-token-1234' }), isActionBar: false }, { name: 'system_chat' });
     client.emit('packet', { location: { x: 1, y: 2, z: 3 }, type: 0 }, { name: 'block_change' });
     dispose();
     const text = readFileSync(file, 'utf8');
     expect(sent).toEqual(['chat_command', 'chat_command', 'block_dig']);
     expect(text).not.toContain('hunter2');
+    expect(text).not.toContain('private-message-token-1234');
     expect(text).toContain('"cmd":"[auth]"');
     expect(text).toContain('"cmd":"stats"');
     expect(text).toContain('"redacted":"auth-dialog"');

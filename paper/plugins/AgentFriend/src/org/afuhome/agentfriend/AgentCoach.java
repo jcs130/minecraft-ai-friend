@@ -336,7 +336,7 @@ final class AgentCoach implements Listener {
         if (!recentAdventure && now - state.joinedAt < seconds("adventure-first-seconds", 1200)) return false;
         if (now < state.nextAdventureCheck) return false;
         state.nextAdventureCheck = now + ADVENTURE_POLL_MS;
-        if (plugin.guild().hasActiveContract(player) || plugin.skillAssessments().busy(player)) return false;
+        if (plugin.skillAssessments().busy(player)) return false;
         var data = player.getPersistentDataContainer();
         if (recentAdventure) {
             if (!plugin.photoCamera().readyForReminder(player, now)) return false;
@@ -350,6 +350,7 @@ final class AgentCoach implements Listener {
                 data.getOrDefault(adventureIndexKey, PersistentDataType.INTEGER, 0),
                 plugin.guild().hasJoined(player), plugin.skillAssessments().promotionsEnabled(),
                 plugin.siteDungeons().hasOpenSite(), plugin.photoCamera().readyForReminder(player, now),
+                plugin.guild().hasActiveContract(player),
                 id -> plugin.taskMarket().availableOffer(player, id));
         sendAdventure(player, now, rotation.hint());
         data.set(adventureIndexKey, PersistentDataType.INTEGER, rotation.nextIndex());

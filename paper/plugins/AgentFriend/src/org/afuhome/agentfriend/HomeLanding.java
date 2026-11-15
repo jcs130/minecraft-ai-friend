@@ -43,6 +43,14 @@ final class HomeLanding {
         height = Math.max(1.8, player.getHeight());
     }
 
+    HomeLanding(Location anchor) {
+        this.anchor=anchor==null?null:anchor.clone();world=anchor==null?null:anchor.getWorld();halfWidth=.3;height=1.8;
+    }
+    static Issue exactIssue(Location at) {
+        try { return new HomeLanding(at).inspect(at); }
+        catch (ScanLimit limit) { return new Issue("scan_limit", "落点安全检查达到上限"); }
+    }
+
     Selection select() {
         if (world == null || !finite(anchor)) return new Selection(null, new Issue("world_unavailable", "村庄传送点未就绪"), 0);
         int cx = anchor.getBlockX() >> 4, cz = anchor.getBlockZ() >> 4;
@@ -90,7 +98,13 @@ final class HomeLanding {
         catch (ScanLimit limit) { return new Issue("scan_limit", "落点安全检查达到上限"); }
     }
 
-    private Issue inspect(Location at) {
+    static Issue walkIssue(Location at) {
+        try { return new HomeLanding(at).inspect(at,false); }
+        catch (ScanLimit limit) { return new Issue("scan_limit", "路线检查达到上限"); }
+    }
+
+    private Issue inspect(Location at) { return inspect(at,true); }
+    private Issue inspect(Location at, boolean fullSupport) {
         if (world == null || at == null || at.getWorld() != world || !finite(at)) return new Issue("wrong_world", "目标世界或坐标无效");
         if (Math.pow(at.getX() - anchor.getX(), 2) + Math.pow(at.getZ() - anchor.getZ(), 2) > RADIUS * RADIUS + EPS
                 || Math.abs(at.getY() - anchor.getY()) > VERTICAL + EPS) return new Issue("outside_search", "目标超出村庄安全搜索范围");
@@ -112,8 +126,8 @@ final class HomeLanding {
                 }
         // All four footprint corners and the center need support at the exact feet height.
         double inset = halfWidth - .02;
-        for (double[] point : new double[][]{{at.getX(), at.getZ()}, {at.getX()-inset, at.getZ()-inset},
-                {at.getX()-inset, at.getZ()+inset}, {at.getX()+inset, at.getZ()-inset}, {at.getX()+inset, at.getZ()+inset}}) {
+        for (double[] point : fullSupport ? new double[][]{{at.getX(), at.getZ()}, {at.getX()-inset, at.getZ()-inset},
+                {at.getX()-inset, at.getZ()+inset}, {at.getX()+inset, at.getZ()-inset}, {at.getX()+inset, at.getZ()+inset}} : new double[][]{{at.getX(),at.getZ()}}) {
             boolean supported = false;
             for (int y = (int)Math.floor(at.getY() - EPS); y >= (int)Math.floor(at.getY() - EPS) - 1; y--) {
                 Cell cell = cell((int)Math.floor(point[0]), y, (int)Math.floor(point[1]));

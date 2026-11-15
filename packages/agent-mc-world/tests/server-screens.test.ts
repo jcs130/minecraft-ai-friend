@@ -43,7 +43,7 @@ describe('server screens (26.1 dialogs / books / death)', () => {
   it('tracks show_dialog/clear_dialog, ignores AuthMe login dialogs, and shows it in mc_window', () => {
     const { bot, client } = rig();
     const seen: unknown[] = []; onServerScreen(bot, (x) => seen.push(x?.title ?? null));
-    client.emit('show_dialog', { dialog: { type: 'compound', name: '', value: { title: s('登录'), body: { type: 'compound', value: { type: s('minecraft:plain_message'), contents: s('请输入密码') } }, inputs: { type: 'list', value: { type: 'compound', value: [{ type: s('minecraft:text'), key: s('password') }] } } } } });
+    client.emit('show_dialog', { dialog: { type: 'compound', name: '', value: { title: s('登录'), body: { type: 'compound', value: { type: s('minecraft:plain_message'), contents: s('请输入密码') } }, inputs: { type: 'list', value: { type: 'compound', value: [{ type: s('minecraft:text'), key: s('password') }] } }, actions: { type: 'list', value: { type: 'compound', value: [{ action: { type: 'compound', value: { id: s('authme:prejoin-login/submit') } } }] } } } } });
     expect(serverScreen(bot)).toBeNull();
     client.emit('show_dialog', nbtDialog());
     expect(serverScreen(bot)?.title).toBe('修仙统计');

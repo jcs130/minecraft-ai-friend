@@ -32,7 +32,7 @@ export interface MovementPace {
 }
 
 export const MOVEMENT_PACE_DEFAULTS: MovementPace = {
-  enabled: true,
+  enabled: false,
   maxYawDegPerTick: 24,
   maxPitchDegPerTick: 16,
   moveBeforeRestMs: 75_000,
@@ -80,7 +80,7 @@ export function resolveMovementPace(partial?: Partial<MovementPace> | Record<str
   const out: MovementPace = { ...MOVEMENT_PACE_DEFAULTS };
   for (const key of Object.keys(MOVEMENT_PACE_DEFAULTS) as (keyof MovementPace)[]) {
     if (src[key] === undefined) continue;
-    if (key === 'enabled' || key === 'hardStopOnWarning') out[key] = Boolean(src[key]);
+    if (key === 'enabled' || key === 'hardStopOnWarning') out[key] = src[key] as boolean;
     else out[key] = Number(src[key]) as never;
   }
   const errors = movementPaceErrors(out);
@@ -144,6 +144,7 @@ export function installMovementPace(bot: AnyBot, pace: () => MovementPace): Move
   bot.on('physicsTick', () => pacer.tick(Boolean(bot.pathfinder?.isMoving?.())));
   bot.on('goal_reached', () => pacer.goalReached());
   bot.on('miningWarning', () => {
+    if (!resolved().enabled) return;
     pacer.warn();
     if (pacer.hardStopped) { try { bot.pathfinder?.setGoal?.(null); } catch {} try { bot.clearControlStates?.(); } catch {} }
   });

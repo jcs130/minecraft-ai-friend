@@ -17,6 +17,7 @@ public final class NeoClientPlatform {
  public NeoClientPlatform(IEventBus modBus){
   new org.cortico.minecraft.CorticoClientLogin().onInitializeClient();
   new org.agentmc.appearance.ClientAppearances().onInitializeClient();
+  YsmNativeDiagnostics.initialize();
   modBus.addListener((RegisterKeyMappingsEvent e)->ClientRuntime.KeyBindingHelper.keys().forEach(e::register));
   modBus.addListener((RegisterPayloadHandlersEvent e)->ClientRuntime.registerPayloads(e));
   NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn e)->{
@@ -29,6 +30,7 @@ public final class NeoClientPlatform {
    var client=Minecraft.getInstance();
    if(!started){started=true;for(var listener:ClientRuntime.ClientLifecycleEvents.CLIENT_STARTED.snapshot())listener.accept(client);}
    for(var listener:ClientRuntime.ClientTickEvents.END_CLIENT_TICK.snapshot())listener.accept(client);
+   YsmNativeDiagnostics.tick(client);
   });
   NeoForge.EVENT_BUS.addListener((ClientChatReceivedEvent.System e)->{
    boolean allow=true;for(var listener:ClientRuntime.ClientReceiveMessageEvents.ALLOW_GAME.snapshot())allow&=listener.accept(e.getMessage(),e.isOverlay());

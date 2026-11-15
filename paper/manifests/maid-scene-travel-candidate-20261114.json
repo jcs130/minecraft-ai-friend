@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "release": "maid-scene-travel-20261114-r3",
+  "state": "isolated-candidate-not-deployed",
+  "preparedAt": "2026-11-14T18:22:16.611293+08:00",
+  "sourceBase": "8ed2eb9a00c9f1f3e75d3e4bd821ae4abecadcee",
+  "includedPullRequests": [
+    225
+  ],
+  "components": [
+    {
+      "name": "AgentFriend",
+      "version": "0.4.47.77-verified-travel",
+      "sha256": "0aad900040404da5c878d18a207e97e83996f9f13356b4e81131eedbe667b430",
+      "baselineVersion": "0.4.47.76-trial-return",
+      "baselineSha256": "fae5702fd21ab7aaa3ff0719cbf4b320173fa6a78dae16bf37ead33c1bcb3e8d",
+      "unchangedEntries": 663
+    },
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.36-scene-speech",
+      "sha256": "fb7f329cad5cce33b213da6da5f787c67ef5a99eacd222f5e639dab6aaca0fba",
+      "baselineVersion": "0.1.35-residence-recovery",
+      "baselineSha256": "19614119a381292d1039dbb36657958671c37dc21cef02334a43810f4438f035",
+      "unchangedEntries": 87
+    }
+  ],
+  "markers": {
+    "sourcePoints": 78,
+    "physicalMarkers": 69,
+    "coalescedAliases": 9,
+    "calibrationWarnings": 7,
+    "compactMarkersWithoutBuff": 3,
+    "isolatedPlanSha256": "f19bf4633fbf283f3b02f64fdfa53a211ac074a0a793607917b268fda849ae8f",
+    "nativeAuditBlocked": 0,
+    "privateCoordinatesPublished": false,
+    "productionPlanMustBeRefreshed": true,
+    "automaticCreationForFutureWaypoints": false
+  },
+  "verification": {
+    "proofs": {
+      "travel-proof.json": {
+        "sha256": "4a43c62c6edb6d9679cdae73b67af3593debb375bd1ff376bf7864f7e68090fa",
+        "checks": 32,
+        "passed": true
+      },
+      "marker-proof.json": {
+        "sha256": "6111947c02651c0ae76c7b516476bbe086c7f13f13b1865fdc63423c7ef10d78",
+        "checks": 20,
+        "passed": true
+      },
+      "qa6.combat.proof.json": {
+        "sha256": "bdd0bb17880a219e222cdd3d87b46091b1f776998450f771d8067fdc72342f19",
+        "checks": 32,
+        "passed": true
+      }
+    },
+    "policyAssertions": 202,
+    "quietRecoveryRedThenGreen": true,
+    "markerPlannerTests": 11,
+    "productionRestarted": false,
+    "productionMarkersInstalled": false,
+    "originalEntitiesMutated": false,
+    "naturalMainModelAdoptionVerified": false,
+    "humanVoiceHearingVerified": false,
+    "bedrockPhysicalScreenVerified": false,
+    "productionBeforeImagesReadOnlyMatched": true,
+    "livingEntityOccupancyGuardVerified": true,
+    "partialMarkerRollbackRedThenGreen": true,
+    "partialRollbackRestartVerified": true
+  },
+  "rollback": {
+    "drive": "F",
+    "candidateAndCodeBeforeImages": "F:\\MC-backups\\maid-scene-travel-20261114-r3",
+    "coldWorldBackupTaken": false,
+    "restoreMarkersBeforeCodeDowngrade": true,
+    "changedAfterImagesStopRollback": true,
+    "preserve": "latest world, original maid/player identity, ownership, inventory, model/voice, authentication, tasks, work orders and lifecycle/action receipts"
+  }
+}

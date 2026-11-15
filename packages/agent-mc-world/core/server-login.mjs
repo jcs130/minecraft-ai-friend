@@ -34,7 +34,7 @@ const loginSuccessReceipts = new Set([
 ]);
 const loginFailureReceipts = new Set(['wrong password!', '密码错误!', '密码错误！']);
 const loginPendingNotices = ['登录数据异常，请等待登录结束', '登录数据异常,请等待登录结束'];
-const receiptText = (value) => value.replace(/^(?:\[[^\]\r\n]+\]\s*)+/, '').trim().toLowerCase();
+const receiptText = (value) => value.replace(/^\[(?:AuthMe|玩家系统)\]\s*/i, '').trim().toLowerCase();
 const failureMessages = {
   'request-not-detected': '未识别到服务器登录提示，尚未提交密码',
   'credential-read-timeout': '服务器登录凭据读取超时，尚未提交密码',
@@ -144,6 +144,7 @@ export function installServerLogin(bot, options) {
     stage = 'closed';
   };
   const submitCredential = (recovery = false) => {
+    if (recovery) dialogSubmit = false;
     attempted = true; recovering = recovery;
     if (recovery) { recoveryAttempted = true; report('armed', 'reauthentication'); armTimer(); }
     const selected = account, generation = ++credentialGeneration;
@@ -185,7 +186,7 @@ export function installServerLogin(bot, options) {
     dialogSubmit = true;
     submitCredential();
   };
-  const onClearDialog = () => {};
+  const onClearDialog = () => { dialogSubmit = false; };
   const onMessage = (message, position) => {
     if (!active || !account || !['armed', 'submitted', 'confirmed', 'required'].includes(stage) || position !== 'system') return;
     const value = message.toString().replace(/§[0-9A-FK-OR]/gi, '').trimStart();

@@ -94,6 +94,7 @@ final class DungeonManager implements Listener {
     private static final long REST_DURATION_MS = 180_000L;
     private static final long REJOIN_GRACE_MS = 600_000L;
     private static final long OUTSIDE_GRACE_MS = 15_000L;
+    private static final long RETURN_RETRY_MS = 5_000L;
     private static final String RUN_STATE = "dungeon-active-run";
     private static final String OWN_OUTCOME = "dungeon-activity-outcomes.";
     private static final int TRIAL_SCHEMA_VERSION = 1;
@@ -262,6 +263,7 @@ final class DungeonManager implements Listener {
     private long lastRun;
     private UUID bossId;
     private BossBar bossBar;
+    private final Map<UUID, Long> returnAttemptAt = new HashMap<>();
 
     DungeonManager(AgentFriendPlugin plugin) {
         this.plugin = plugin;
@@ -295,6 +297,35 @@ final class DungeonManager implements Listener {
 
     boolean isBuilt() { return built; }
     boolean isParticipant(Player player) { return active && participants.contains(player.getUniqueId()); }
+    String reinforcementProblem(Player actor, Player target, Location landing) {
+        boolean same = isParticipant(target);
+        if (isParticipant(actor) && !same) return "[team_leave_trial] 你仍在另一场试炼；先 /mycli arena leave 正常离场，再支援。";
+        if (inLobby(landing)) return isParticipant(actor) ? "[team_leave_trial] 你仍在试炼中；先 /mycli arena leave 正常离场，再到入口集合。" : "";
+        if (floorAt(landing) == 0) return same ? "[team_trial_target_moved] 队友已离开当前层；重新 /mycli locate list 核对位置。" : "";
+        if (!same || !inFloor(landing, floor)) return "[team_trial_not_current] 只能增援参战队友所在的当前层；入口平台可正常集合，/mycli arena status 查看本场。";
+        if (!committedCurrentRun()) return "[team_trial_unconfirmed] 本场存档暂未确认，先 /mycli arena status 查询；请勿重复报名。";
+        if (plugin.pvpParticipant(actor) || plugin.siteDungeons()!=null && plugin.siteDungeons().isParticipant(actor))
+            return "[team_leave_activity] 先正常离开当前活动，再支援试炼；/mycli status 查看离场方法。";
+        if (actor.getGameMode()!=GameMode.SURVIVAL && actor.getGameMode()!=GameMode.ADVENTURE || plugin.isObserver(actor))
+            return "[team_survival_required] 请使用生存或冒险角色增援。";
+        if (!isParticipant(actor) && !DungeonLoadout.missing(actor).isEmpty())
+            return "[equipment_required] 增援需补齐："+String.join("、",DungeonLoadout.missing(actor))+"；/mycli shop menu 购买或 /mycli stash 打开个人箱。";
+        return "";
+    }
+    boolean enrollReinforcement(Player actor, Player target) {
+        if (inLobby(actor.getLocation()) || !isParticipant(target)) return !isParticipant(actor);
+        if (!reinforcementProblem(actor,target,actor.getLocation()).isEmpty()) return false;
+        if (isParticipant(actor)) return true;
+        participants.add(actor.getUniqueId());
+        try { persistRun(); } catch (RuntimeException failure) { participants.remove(actor.getUniqueId()); throw failure; }
+        joinedMessage(actor);
+        return committedCurrentRun();
+    }
+    private void joinedMessage(Player player) {
+        player.sendMessage(ChatColor.GREEN + "已加入第 "+floor+" 层试炼；清层后随队前进。"
+                +(cleared?"本层已结算，从下一层开始获得奖励。":"本层通关后可领取个人奖励。"));
+        player.sendMessage("MC_DUNGEON_JOIN floor="+floor+" participant=true rewardThisFloor="+!cleared+" nextFloorTogether=true"+attribution(player));
+    }
     boolean isExpanded() { return expanded; }
     private int maxFloor() { return challengeBuilt ? FINAL_FLOOR : expanded ? OLD_MAX_FLOOR : BASE_FLOORS; }
     private int floorX(int number) { return number <= BASE_FLOORS ? X : number <= OLD_MAX_FLOOR ? WING_X : CHALLENGE_X; }
@@ -392,9 +423,10 @@ final class DungeonManager implements Listener {
             savedIds.clear();
         }
         long interruptedAt = savedPause > 0 ? savedPause : savedAt;
+        boolean completedFinal = savedFloor == maxFloor() && plugin.getConfig().getBoolean(RUN_STATE + ".cleared", false);
         if (savedFloor < 1 || savedFloor > maxFloor() || savedIds.isEmpty()
                 || interruptedAt <= 0 || interruptedAt > now
-                || now - interruptedAt > REJOIN_GRACE_MS) {
+                || !completedFinal && now - interruptedAt > REJOIN_GRACE_MS) {
             plugin.getLogger().warning("Discarded expired or invalid dungeon run checkpoint.");
             plugin.getConfig().set(RUN_STATE, null);
             lastRun = now;
@@ -562,7 +594,7 @@ final class DungeonManager implements Listener {
             joined.add(player);
         }
         if (joined.isEmpty()) return;
-        persistRun();
+        try { persistRun(); } catch (RuntimeException failure) { joined.forEach(p -> participants.remove(p.getUniqueId())); throw failure; }
         for (Player player : joined) {
             player.sendMessage(ChatColor.GREEN + "你已加入第 " + floor + " 层试炼队伍；本层清怪后会随队自动进入下一层。"
                     + (cleared ? "本层奖励已结算，从下一层开始获得奖励。" : "本层通关后可领取个人奖励。"));
@@ -600,6 +632,13 @@ final class DungeonManager implements Listener {
         }
         var outcome = ownOutcome(player);
         if (outcome != null) out.add("lastOutcome", outcome);
+        if (!participant && outcome != null && outcome.has("returnPending")
+                && outcome.get("returnPending").getAsBoolean() && floorAt(player.getLocation()) > 0) {
+            out.addProperty("reason", "return_pending");
+            out.addProperty("nextAction", "本场已通关，奖励已保留，正在自动返回入口；若长时间未到达，请联系服主检查落点，不要重新开场");
+            out.addProperty("nextCommand", "/mycli arena leave");
+            out.addProperty("canStart", false);
+        }
         out.addProperty("floor",active?floor:0);out.addProperty("selfFloor",floorAt(player.getLocation()));out.addProperty("maxFloor",maxFloor());
         out.addProperty("remainingMobs",remaining);out.addProperty("selectedDifficulty",chosenDifficulty(player).id);
         out.addProperty("world",world()==null?"unknown":world().getName());
@@ -615,7 +654,7 @@ final class DungeonManager implements Listener {
             if(java.util.Arrays.stream(args).skip(2).anyMatch(a->!Set.of("--json","--verbose").contains(a))){player.sendMessage("§e[invalid_argument] 此查询只接受 --json 或 --verbose；未执行。命令：/mycli arena "+sub);return;}
         }
         if(sub.equals("status")&&!java.util.Arrays.asList(args).contains("--json")&&!java.util.Arrays.asList(args).contains("--verbose")){
-            var guide=guidance(player);player.sendMessage("§6[试炼塔] "+(isParticipant(player)?"本人参赛中，第"+floor+"/"+maxFloor()+"层":active?"本人未参赛；已有队伍挑战":"本人未参赛；当前空闲")+"。清层自动下楼，奖励到个人箱。详情可用 --json 或 --verbose。");showGuidance(player);return;
+            var guide=guidance(player);player.sendMessage("§6[试炼塔] "+(isParticipant(player)?"本人参赛中，第"+floor+"/"+maxFloor()+"层":active?"本人未参赛；已有队伍挑战":"本人未参赛；当前空闲")+"。清层自动下楼，全部通关自动返回入口，奖励到个人箱。详情可用 --json 或 --verbose。");showGuidance(player);return;
         }
         switch (sub) {
             case "status" -> {
@@ -778,7 +817,7 @@ final class DungeonManager implements Listener {
         if ((lobbyChest || (n > 0 && block.getX() == chestX(n) && block.getY() == Y[n - 1] + 1
                 && block.getZ() == chestZ(n))) && block.getType() == Material.CHEST) {
             event.setCancelled(true);
-            openStash(event.getPlayer());
+            openStashPages(event.getPlayer());
             return true;
         }
         if (plugin.trialButtons().handleInteract(event)) return true;
@@ -980,7 +1019,14 @@ final class DungeonManager implements Listener {
     }
 
     private void tick() {
+        for (Player player : Bukkit.getOnlinePlayers()) returnWinner(player);
         if (!active) return;
+        // A crash after durable rewards but before finish must not replay the final wave
+        // or strand the already successful party behind the reconnect timeout.
+        if (cleared && floor == maxFloor() && committedCurrentRun()) {
+            finish(true, "cleared", maxFloor() + " 层完成！奖励已存入个人箱子，正在自动返回入口平台。");
+            return;
+        }
         long now = System.currentTimeMillis();
         enrollPlayersOnCurrentFloor();
         pruneBossBarAudience();
@@ -1076,12 +1122,13 @@ final class DungeonManager implements Listener {
         if(plugin.lifeChallenges()!=null)plugin.lifeChallenges().roomCleared(rescueKey()+":"+floor,
                 participants.stream().map(Bukkit::getPlayer).filter(p->p!=null&&p.isOnline()&&!p.isDead()&&inFloor(p.getLocation(),floor)).map(Player::getUniqueId).collect(java.util.stream.Collectors.toSet()));
         announce(ChatColor.GREEN + "第 " + floor + "/" + maxFloor() + " 层已通关！奖励已放进个人箱子（" + credited + " 人）。");
-        if (floor == maxFloor()) finish(true, "cleared", maxFloor() + " 层完成！打开奖励箱领取，再按红色木按钮回地面。");
+        if (floor == maxFloor()) finish(true, "cleared", maxFloor() + " 层完成！奖励已存入个人箱子，正在自动返回入口平台。");
         else announce(ChatColor.YELLOW + "10 秒后全队自动进入下一层；奖励留在个人箱子，不必现在领取。");
     }
 
     @EventHandler public void onParticipantQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
+        returnAttemptAt.remove(player.getUniqueId());
         gearWarningAt.remove(player.getUniqueId());
         if (bossBar != null) bossBar.removePlayer(player);
         if (!active || !participants.contains(player.getUniqueId())) return;
@@ -1731,7 +1778,7 @@ final class DungeonManager implements Listener {
             plugin.getConfig().set(claimPath, gameDay);
             plugin.saveConfig();
             p.sendTitle(ChatColor.GOLD + "第 " + floor + " 层过关", ChatColor.YELLOW + "奖励已存入个人箱子", 5, 55, 10);
-            p.sendMessage(ChatColor.GOLD + "奖励在本层宝箱或地面大厅的个人箱里；像普通箱子一样取放。");
+            p.sendMessage(ChatColor.GOLD + "可在本层或地面大厅开个人箱。免费查余量、武器及补给：" + PersonalStashOverview.COMMAND);
             credited++;
         }
         // Publish reward attribution only after the actual awards and clear checkpoint are durable.
@@ -1793,7 +1840,8 @@ final class DungeonManager implements Listener {
                 config.set(OWN_OUTCOME + id, null);
                 config.createSection(OWN_OUTCOME + id, Map.of(
                         "run", runId, "revision", revision, "floor", floor, "outcome", outcome,
-                        "status", won ? "completed" : "cancelled", "reason", reason, "endedAt", endedAt));
+                        "status", won ? "completed" : "cancelled", "reason", reason, "endedAt", endedAt,
+                        "returnPending", won));
             }
             config.set("dungeon-last-run", endedAt);
             config.set(RUN_STATE, null);
@@ -1817,6 +1865,66 @@ final class DungeonManager implements Listener {
             receipt.addProperty("activityType", "trial_tower");
             player.sendMessage("MC_TRIAL_RESULT " + receipt);
             if (won) plugin.agentCoach().rememberAdventure(player, "本场试炼塔已经通关");
+        }
+        if (won) for (UUID id : endedParticipants) {
+            Player player = Bukkit.getPlayer(id);
+            if (player != null) returnWinner(player);
+        }
+    }
+
+    /** The durable win receipt also owns return delivery. Never grant rewards here. */
+    private void returnWinner(Player player) {
+        UUID id = player.getUniqueId();
+        String path = OWN_OUTCOME + id;
+        var config = plugin.getConfig();
+        if (!config.getBoolean(path + ".returnPending", false)
+                || !"won".equals(config.getString(path + ".outcome"))) return;
+        if (!player.isOnline() || player.isDead() || plugin.isDowned(player)
+                || plugin.isObserver(player) || !plugin.nativeRpgMayAct(player) || isParticipant(player)) return;
+        long now = System.currentTimeMillis();
+        Long previous = returnAttemptAt.get(id);
+        if (previous != null && now - previous < RETURN_RETRY_MS) return;
+        returnAttemptAt.put(id, now);
+        try {
+            Location landing = rescueExit();
+            boolean arrived = sameWorld(player.getLocation()) && player.getLocation().distanceSquared(landing) < 4;
+            if (floorAt(player.getLocation()) > 0) {
+                // Respect protection/teleport cancellation; do not put players inside blocks.
+                Material support = landing.clone().subtract(0, 1, 0).getBlock().getType();
+                if (landing.getBlock().getType() != Material.AIR
+                        || landing.clone().add(0, 1, 0).getBlock().getType() != Material.AIR
+                        || !support.isSolid() || support == Material.MAGMA_BLOCK
+                        || support == Material.CAMPFIRE || support == Material.SOUL_CAMPFIRE) {
+                    if (previous == null) player.sendMessage(ChatColor.YELLOW + "【试炼塔·返程待处理】已通关，奖励已保留；入口平台落点受阻，服务器会自动重试。请联系服主清理入口，不要拆保护建筑。");
+                    return;
+                }
+                arrived = player.teleport(landing) && sameWorld(player.getLocation())
+                        && player.getLocation().distanceSquared(landing) < 4;
+                if (!arrived) {
+                    if (previous == null) player.sendMessage(ChatColor.YELLOW + "【试炼塔·返程待处理】已通关，奖励已保留；本次传送未到达，服务器会自动重试。也可 /mycli arena leave 返回入口。");
+                    return;
+                }
+            }
+            // Save the position before consuming the return marker. A restart may retry
+            // a pending return, but must not lose the only durable way out of the tower.
+            player.saveData();
+            String status = arrived ? "arrived" : "left_independently";
+            commitTrial(() -> {
+                config.set(path + ".returnPending", false);
+                config.set(path + ".returnStatus", status);
+            });
+            returnAttemptAt.remove(id);
+            if (bossBar != null) bossBar.removePlayer(player);
+            if (arrived) player.sendMessage(ChatColor.GREEN + "【试炼塔·返程完成】已自动返回入口平台；奖励保存在个人箱子，可用 /mycli arena stash 查看。");
+            var receipt = ownOutcome(player);
+            receipt.addProperty("schemaVersion", TRIAL_SCHEMA_VERSION);
+            receipt.addProperty("activityType", "trial_tower");
+            player.sendMessage("MC_TRIAL_RETURN " + receipt);
+        } catch (RuntimeException failure) {
+            if (previous == null) {
+                plugin.getLogger().warning("Trial return remains pending for " + id + ": " + failure.getClass().getSimpleName());
+                player.sendMessage(ChatColor.YELLOW + "【试炼塔·返程待确认】奖励和返程记录已保留，服务器会自动核对重试；无需重新挑战。");
+            }
         }
     }
 
@@ -2127,7 +2235,14 @@ final class DungeonManager implements Listener {
         if(moved)plugin.saveConfig();
         plugin.inventoryTidy().onStashOpen(player);
         if (plugin.inventoryTidy().stashWritesBlocked(id)) return;
-        player.sendMessage("个人箱第"+(page+1)+"/10页，共540格；/mycli arena stash pages 选择其他页。");
+        player.sendMessage("§e个人仓库第"+(page+1)+"/10页，共540格；本页54格不是全部库存。罗盘→背包与仓库→个人仓库可选任意页。");
+        var navigation=net.kyori.adventure.text.Component.text("[打开10页目录] ")
+            .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli arena stash pages"));
+        if(page>0)navigation=navigation.append(net.kyori.adventure.text.Component.text(" [上一页] ")
+            .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli arena stash page "+page)));
+        if(page+1<PagedPersonalStash.PAGES)navigation=navigation.append(net.kyori.adventure.text.Component.text(" [下一页] ")
+            .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli arena stash page "+(page+2))));
+        player.sendMessage(navigation);
         stashMenus.put(inv, id);
         player.openInventory(inv);
         if (player.getOpenInventory().getTopInventory() == inv) chargeRemoteStash(player);
@@ -2137,8 +2252,12 @@ final class DungeonManager implements Listener {
     private void stashCommand(Player player, String[] args) {
         if (args.length == 2) { openStash(player); return; }
         UUID id = player.getUniqueId();
-        Inventory inv = liveStash(id);
         String action = args[2].toLowerCase(Locale.ROOT);
+        if (action.equals("summary")) {
+            stashOverview(player, args);
+            return;
+        }
+        Inventory inv = liveStash(id);
         if (action.equals("inventory") && args.length == 3) {
             for (int slot = 0; slot < 36; slot++) {
                 ItemStack item = player.getInventory().getItem(slot);
@@ -2164,7 +2283,7 @@ final class DungeonManager implements Listener {
             // Listing is read-only. Ledger rewards are materialized on opening,
             // so an empty stored page must not imply that a new reward was lost.
             int queued=queuedRewardEntries(id);
-            if(queued>0)player.sendMessage("另有 "+queued+" 项待入箱奖励已保存，打开个人箱后装入；命令：/mycli arena stash（远程需travel，2魔力）。");
+            if(queued>0)player.sendMessage("另有 "+queued+" 项待入箱奖励已保存，打开个人箱后装入；命令：/mycli arena stash（远程开箱 2 魔力）。");
             return;
         }
         if (action.equals("putslot") && args.length == 5) {
@@ -2248,7 +2367,8 @@ final class DungeonManager implements Listener {
             ItemStack source = inv.getItem(slot%54);
             if (source == null || source.getType().isAir()) {
                 player.sendMessage("MC_STASH_TAKE slot=" + (slot + 1) + " moved=0 reason=empty");
-                player.sendMessage("§e此个人箱槽为空；/mycli arena stash list 查看全部页面的物品与实际槽号，再 take 指定非空槽。"); return;
+                player.sendMessage("§e此个人箱槽为空；/mycli arena stash list " + (slot / PagedPersonalStash.PAGE_SIZE + 1)
+                        + " 查该页实际槽号，或 " + PersonalStashOverview.COMMAND + " 查其他有货页面。"); return;
             }
             if (!remoteStashReady(player)) return;
             ItemStack part = source.clone();
@@ -2268,7 +2388,27 @@ final class DungeonManager implements Listener {
                     + part.getType().name().toLowerCase(Locale.ROOT) + " moved=" + moved);
             return;
         }
-        player.sendMessage("用法：/mycli arena stash [inventory|list|put <物品ID> <数量>|putslot <背包槽位> <数量>|take <箱槽位> [数量]]");
+        player.sendMessage("§e用 /mycli arena stash --help 查看完整用法；免费查十页库存：" + PersonalStashOverview.COMMAND);
+    }
+    PersonalStashOverview stashOverview(UUID owner, PagedPersonalStash.Snapshot snapshot) {
+        return new PersonalStashOverview(snapshot, queuedRewardEntries(owner));
+    }
+    void stashOverview(Player player, String[] args) {
+        boolean json = args.length == 4 && (args[0].equals("--json") || args[3].equals("--json"));
+        if (args.length != 3 && !json) {
+            plugin.communication().error(player, "INVALID_ARGUMENT", "只读查询用法：" + PersonalStashOverview.QUERY,
+                    false, PersonalStashOverview.QUERY);
+            return;
+        }
+        if (plugin.isObserver(player)) {
+            plugin.communication().error(player, "OBSERVER_NOT_OWNER", "请用本人游玩账号查询个人箱。",
+                    false, PersonalStashOverview.QUERY);
+            return;
+        }
+        UUID owner = player.getUniqueId();
+        var result = stashOverview(owner, stashSnapshot(owner));
+        if (json) player.sendMessage("MC_STASH_OVERVIEW " + result.json());
+        else player.sendMessage("§b【远程个人箱】" + result.text() + " 下一步 " + result.nextCommand());
     }
     private boolean nearStash(Player player) {
         Location at = player.getLocation();

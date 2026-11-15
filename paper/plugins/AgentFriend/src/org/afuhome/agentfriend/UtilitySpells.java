@@ -117,7 +117,7 @@ final class UtilitySpells implements Listener {
             return;
         }
         if (!begin(player, "leap", 4)) return;
-        int rank = plugin.mastery().rank(player, "leap");
+        int rank = plugin.nativeRpg().selected()?1:plugin.mastery().rank(player, "leap");
         Vector velocity = player.getVelocity();
         velocity.setY(1.12 + (rank - 1) * 0.04);
         player.setVelocity(velocity);

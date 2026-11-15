@@ -11,6 +11,40 @@ import { rideDrive } from '../core/skills-interact.ts';
 
 const req = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
+it.each(['destroy', 'empty-passengers', 'before-position', 'after-respawn', 'after-configuration'] as const)('recovers from native vehicle release without inventing a new position: %s', async mode => {
+  vi.useFakeTimers(); vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+  const h=methodHarness('1.21.1'); h.close(); const b=h.bot as unknown as Bot;
+  Object.assign(b,{supportFeature:b.registry.supportFeature}); const self=b.entity;
+  req('mineflayer/lib/plugins/entities.js')(b); b.entity=self; b.entities[self.id]=self;
+  const boat={id:9,name:'boat',isValid:true,passengers:[],position:new Vec3(.5,64,.5),width:1.4,height:.6};
+  b.entities[9]=boat as never; b.entities[10]={...boat,id:10,passengers:[]} as never;
+  const observer=installNativeBodyReadiness(b);
+  req('mineflayer/lib/plugins/physics.js')(b,{physicsEnabled:true});
+  let dismounts=0;b.on('dismount',()=>dismounts++);
+  const position=()=>b._client.emit('position',{x:.5,y:64,z:.5,yaw:0,pitch:0,flags:0,teleportId:1});
+  try {
+    b.emit('login');
+    if(mode!=='before-position'){position();await vi.advanceTimersByTimeAsync(100);}
+    b._client.emit('set_passengers',{entityId:9,passengers:[self.id]});
+    if(mode==='after-respawn'){b.emit('death');b.emit('respawn');}
+    if(mode==='after-configuration')b._client.emit('state','configuration');
+    b._client.emit('entity_destroy',{entityIds:[10]});
+    expect(b.vehicle).toBe(boat);expect(dismounts).toBe(0);
+    if(mode==='empty-passengers')b._client.emit('set_passengers',{entityId:9,passengers:[]});
+    else b._client.emit('entity_destroy',{entityIds:[9]});
+    expect(b.vehicle).toBeNull();expect(self.vehicle).toBeNull();expect(dismounts).toBe(1);
+    await vi.advanceTimersByTimeAsync(150);
+    if(mode==='before-position'||mode==='after-respawn'||mode==='after-configuration') {
+      expect(observer.read().phase).toBe('waiting-position');
+      const from=self.position.clone();b.setControlState('forward',true);await vi.advanceTimersByTimeAsync(500);
+      expect(self.position.distanceTo(from)).toBeLessThan(.001);b.setControlState('forward',false);
+      position();await vi.advanceTimersByTimeAsync(mode==='after-respawn'?1600:100);
+    }
+    expect(observer.read().phase).toBe('ready');
+    const from=self.position.clone();b.setControlState('forward',true);await vi.advanceTimersByTimeAsync(500);
+    expect(self.position.distanceTo(from)).toBeGreaterThan(.1);
+  } finally {b.emit('end');observer.dispose();}
+});
 it.each([false, true])('drives after real set_passengers over deep water with mount before first position=%s', async mountFirst => {
   vi.useFakeTimers(); vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
   const h = methodHarness('1.21.1'); h.close(); const b = h.bot as unknown as Bot;

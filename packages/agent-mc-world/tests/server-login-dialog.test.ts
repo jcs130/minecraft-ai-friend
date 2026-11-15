@@ -60,6 +60,37 @@ const dialogNbt = {
 };
 
 describe('AuthMe configuration-phase dialog login', () => {
+  it('does not submit credentials into an unrelated password dialog', async () => {
+    const r = fixture();
+    r.client.emit('show_dialog', { dialog: { title: { text: '登录' }, inputs: [{ key: 'password' }],
+      actions: [{ action: { id: 'shop:password' } }] } });
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(r.raw).toEqual([]); expect(r.sentChat).toEqual([]);
+    r.login.stop();
+  });
+
+  it('does not treat an arbitrary bracketed speaker as a login authority', () => {
+    const r = fixture();
+    r.messages('[AnotherPlayer] 已成功登录！');
+    expect(r.login.ready()).toBe(false);
+    r.login.stop();
+  });
+
+  it('reauthenticates through chat after the initial configuration dialog was closed', async () => {
+    const r = fixture();
+    r.client.emit('show_dialog', { dialog: dialogNbt });
+    await settle(() => r.raw.length === 1);
+    r.client.emit('clear_dialog');
+    r.messages('MC_AUTH_STATE {"username":"Agent","authorized":true,"status":"authenticated"}');
+    expect(r.login.ready()).toBe(true);
+    r.client.state = 'play';
+    r.messages('MC_AUTH_DENIED login required');
+    await settle(() => r.sentChat.length + r.raw.length === 2);
+    expect(r.raw).toHaveLength(1);
+    expect(r.sentChat).toEqual(['/login fixture-pass']);
+    r.login.stop();
+  });
+
   it('submits a length-prefixed password payload once and waits for the success receipt', async () => {
     const r = fixture();
     r.client.emit('show_dialog', { dialog: dialogNbt });

@@ -261,6 +261,7 @@ final class AgentCliCatalog {
         add(specs,"arena.rewards.list","storage","read","/mycli arena rewards list","只读查看待入箱奖励；首次开箱前及箱满时都可能有","在线玩家","MC_REWARD、MC_REWARD_SUMMARY");
         add(specs,"arena.rewards.take","storage","item","/mycli arena rewards take <0–7|9–17|all>","领取尚未入箱的奖励；箱内物品用 stash take","背包有空位；远程成功领取 2 魔力，实体箱旁免费","领取结果与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.stash","storage","gui","/mycli arena stash","本人540格个人箱；Agent可直接putslot存、list查、take取，无需开界面","基础远程存箱已可用；成功远程开页2魔力，实体箱旁免费，无需学习或先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
+        add(specs,"arena.stash.summary","storage","read",PersonalStashOverview.COMMAND+" [--json]","免费总览十页个人箱的剩余格数、物品件数、武器防具、消耗品与所在页","仅本人；随时远程查询；未入箱的奖励另计","MC_STASH_OVERVIEW 含 categories、freeSlots、pendingRewardEntries、nextCommand");
         add(specs,"arena.stash.pages","storage","gui","/mycli arena stash pages","原版菜单选择10页个人箱","每页54格；无需学习，成功远程开页2魔力","原版分页选择菜单");
         add(specs,"arena.stash.page","storage","gui","/mycli arena stash page <1–10>","打开个人箱指定页","原槽位1–54保留，全局最大540","原版54格箱子");
         add(specs,"commission","adventure","read","/mycli commission list|mine|info <ID>|menu","查看玩家委托和本人履历","报酬使用统一RPG金币；每单一位接单者","MC_COMMISSION_LIST / MC_COMMISSION");
@@ -423,7 +424,7 @@ final class AgentCliCatalog {
             for(String id:List.of("arena.stash","arena.stash.pages","arena.stash.page")){
                 Spec old=specs.get(id);specs.put(id,new Spec(id,old.category(),old.mode(),old.usage(),old.summary(),"成功远程开页2魔力，实体箱旁免费；通用travel已可用，无需学习；未开箱时不扣费",old.returns()));
             }
-            Spec inventory=specs.get("inventory");specs.put("inventory",new Spec("inventory",inventory.category(),inventory.mode(),inventory.usage(),"查随身物品；个人箱、共享补给也从这里找","仅本人；大背包：/minepacks:backpack open；个人箱：/mycli arena stash；共享补给：/mycli guild shared",inventory.returns()));
+            Spec inventory=specs.get("inventory");specs.put("inventory",new Spec("inventory",inventory.category(),inventory.mode(),inventory.usage(),"查随身物品；个人箱、共享补给也从这里找","仅本人；大背包：/minepacks:backpack open；免费查个人箱："+PersonalStashOverview.COMMAND+"；共享补给：/mycli guild shared",inventory.returns()));
             nativeSpec(specs,"arena.recycle","group","/mycli arena recycle list|quote bag|chest <槽> [数量]|sell <报价ID>|status","多余武器护甲回收为RPG金币；先报价再确认；不会自动出售","手持、穿戴、绑定/任务/职业法器不回收；石头木头存个人箱；旧试炼余额按1:1迁入同一金币账户");
             nativeSpec(specs,"arena.recycle.sell","item","/mycli arena recycle sell <报价ID>","按5分钟有效的原物品报价出售，等待真实金币到账","只执行一次；未知或pending不重发，查arena recycle status并联系服主；金币余额trade wallet");
             nativeSpec(specs,"arena.recycle.status","read","/mycli arena recycle status","查RPG金币服务、余额与待对账回收","只读，不补发金币或物品；arena wallet是同一金币余额的兼容入口");
@@ -511,7 +512,7 @@ final class AgentCliCatalog {
                 // Parameterised leaf commands (e.g. cast heal) are matched above. Unknown
                 // subcommands must not silently fall back to a parent help page.
                 if(words.size()>matched)throw new IllegalArgumentException("未知子命令；用 "+path+" --help 查看");
-                var order=switch(prefix){case ""->nativeRpg?List.of("intro","status","profession","skills","tasks","dungeon","inventory"):List.of("status","tasks","skills","dungeon","profession","inventory","rules");case "dungeon."->List.of("list","info","status","start","join","claim","leave");case "guild."->List.of("status","shared","party","board","exam","stash");case "guild.party."->List.of("status","create","invite","accept","leave","disband","menu");case "arena."->List.of("status","stash","rewards","list","start","join","leave");case "trade."->List.of("wallet","shop","recycle","auction","menu","find","info");case "trade.auction."->List.of("list","info","sell","buy","mine","cancel","collect");default->List.of("status","list","info");};
+                var order=switch(prefix){case ""->nativeRpg?List.of("intro","status","profession","skills","tasks","dungeon","inventory"):List.of("status","tasks","skills","dungeon","profession","inventory","rules");case "dungeon."->List.of("list","info","status","start","join","claim","leave");case "guild."->List.of("status","shared","party","board","exam","stash");case "guild.party."->List.of("status","create","invite","accept","leave","disband","menu");case "arena."->List.of("status","stash","rewards","list","start","join","leave");case "arena.stash."->List.of("summary","list","putslot","take","inventory","pages","page");case "trade."->List.of("wallet","shop","recycle","auction","menu","find","info");case "trade.auction."->List.of("list","info","sell","buy","mine","cancel","collect");default->List.of("status","list","info");};
                 var list=new ArrayList<>(children.values());
                 list.sort(java.util.Comparator.comparingInt((Spec s)->idEmptyPriority(prefix,s.id(),order)).thenComparing(Spec::id));
                 int pages=Math.max(1,(list.size()+PAGE_SIZE-1)/PAGE_SIZE);if(page>pages)throw new IllegalArgumentException("页码范围1–"+pages);
@@ -552,7 +553,7 @@ final class AgentCliCatalog {
         String key=prefix.isEmpty()?id:id.substring(prefix.length());
         return order.contains(key)?order.indexOf(key):order.size();
     }
-    private static boolean jsonSupported(String id){return id.startsWith("inventory.tidy")||Set.of("arena.wallet","arena.loot","arena.shop.list","arena.shop.buy","arena.recycle","arena.recycle.list","arena.recycle.quote","arena.recycle.sell","arena.recycle.status").contains(id)|| id.startsWith("trade.auction")||id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return id.equals("arena.stash.summary")||id.startsWith("inventory.tidy")||Set.of("arena.wallet","arena.loot","arena.shop.list","arena.shop.buy","arena.recycle","arena.recycle.list","arena.recycle.quote","arena.recycle.sell","arena.recycle.status").contains(id)|| id.startsWith("trade.auction")||id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -660,6 +661,7 @@ final class AgentCliCatalog {
         if(id.startsWith("inventory.tidy.stash"))query="/mycli arena stash list [页码]；/mycli inventory tidy stash auto status；存盘未确认时联系服主核对原requestId";
         else if(id.startsWith("inventory.tidy"))query="/mycli inventory；/mycli inventory tidy auto status；存盘未确认时联系服主核对原requestId，不重放整理";
         if(id.startsWith("challenge"))query="/mycli challenge status；/mycli challenge result [场次UUID]";
+        if(id.equals("arena.stash.summary"))query=PersonalStashOverview.QUERY;
         if(id.startsWith("admin.blockaccess."))query="mycli admin blockaccess status --json";
         if(id.startsWith("protect"))query="原命令重新查询当前权限；详情在原命令后加 --verbose；查询不代表操作完成";
         if(id.startsWith("archive"))query="/mycli archive info <作品UUID>；/mycli archive list；物品操作核对本人背包，结果未知不重放";

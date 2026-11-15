@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "release": "maid-scene-travel-20261114-r3",
+  "state": "deployed-and-component-verified",
+  "verifiedAt": "2026-11-14T19:07:58.311839+08:00",
+  "deployedAt": "2026-11-14T19:00:08.0239268+08:00",
+  "previousComponentEvidence": "paper/manifests/trial-return-voice-deployed-20261114.json",
+  "codePullRequests": [
+    225,
+    238
+  ],
+  "sourceCommit": "656cb0bede8aaae20138080f987416e0a78b6cc8",
+  "mergedMain": "f24e3374fa282073a707bca788f282e8d453acf4",
+  "ciRunIds": [
+    43585078618
+  ],
+  "components": [
+    {
+      "name": "AgentFriend",
+      "version": "0.4.47.77-verified-travel",
+      "loadedArtifactPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "resolvedArtifactPath": "C:\\MC-active\\youer-tlm-0.1.4-20261030-115513\\plugins\\AgentFriend-0.4.47.59-shop-rpg.jar",
+      "sha256": "0aad900040404da5c878d18a207e97e83996f9f13356b4e81131eedbe667b430",
+      "previousSha256": "fae5702fd21ab7aaa3ff0719cbf4b320173fa6a78dae16bf37ead33c1bcb3e8d",
+      "processId": 42492,
+      "processStartedAt": "2026-11-14T18:57:13+08:00",
+      "versionReadBack": true
+    },
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.36-scene-speech",
+      "loadedArtifactPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "resolvedArtifactPath": "C:\\MC-active\\youer-tlm-0.1.4-20261030-115513\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "fb7f329cad5cce33b213da6da5f787c67ef5a99eacd222f5e639dab6aaca0fba",
+      "previousSha256": "19614119a381292d1039dbb36657958671c37dc21cef02334a43810f4438f035",
+      "processId": 42492,
+      "processStartedAt": "2026-11-14T18:57:13+08:00",
+      "versionReadBack": true
+    }
+  ],
+  "markers": {
+    "sourcePoints": 78,
+    "installedMarkers": 69,
+    "sharedAliases": 9,
+    "calibrationWarnings": 7,
+    "compactWithoutBuff": 3,
+    "planSha256": "f19bf4633fbf283f3b02f64fdfa53a211ac074a0a793607917b268fda849ae8f",
+    "nativeAuditBeforeAndAfterPassed": true,
+    "worldSavedAndAllSignTextReadBack": true,
+    "protectionJournalRows": 69,
+    "automaticFutureWaypointConstruction": false,
+    "privateCoordinatesPublished": false
+  },
+  "companion": {
+    "originalMaidId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+    "originalOwnerId": "822d173a-7181-3b9b-be60-804f29b24ecc",
+    "originalAliveAndInvulnerable": true,
+    "recallRequest": "ops-reunion-20261114-1853",
+    "followProfileBefore": {
+      "walk": 20,
+      "stop": 16,
+      "safeRecoveryFrom": 64
+    },
+    "followProfileAfter": {
+      "walk": 6,
+      "stop": 3,
+      "safeRecoveryFrom": 12
+    },
+    "profileSurvivedNormalRestart": true,
+    "postRestartSamples": 12,
+    "maximumObservedDistance": 5.963251036356162,
+    "maximumOwnerDisplacementInSingleSampleWindow": 0.9749999999999943,
+    "longMovingOwnerRouteVerified": false,
+    "forcedOwnerMovement": false,
+    "voice": "feiyu-tlm-changchun-cn-20261111",
+    "voiceConfigSha256": "7c415100f487fd266fb304ef62e5b5ce5175b460716734ce82deeb44aa242763",
+    "originalEntityRevivedOrReplaced": false
+  },
+  "verification": {
+    "isolatedMaids": 32,
+    "isolatedTravel": 32,
+    "isolatedMarkers": 20,
+    "policyAssertions": 202,
+    "plannerChecks": 11,
+    "ciJobsPassed": 6,
+    "javaAndBedrockHealthPassed": true,
+    "authenticationFresh": true,
+    "cameraReadyAfterMaintenance": true,
+    "originalMainModelAdoptionVerified": false,
+    "humanVoiceHearingVerified": false,
+    "bedrockPhysicalScreenVerified": false,
+    "liveNaturalCombatSpeechVerified": false
+  },
+  "maintenance": {
+    "noticesSeconds": [
+      180,
+      60,
+      10
+    ],
+    "oldGamePid": 27124,
+    "oldGameExitedNormally": true,
+    "newGamePid": 42492,
+    "backupDrive": "F",
+    "coldBackup": "F:\\MC-backups\\repairs\\maid-scene-travel-20261114-r3-20261114-185707",
+    "coldRegionEvidenceFiles": 121,
+    "reviewedBlockBeforeImages": 871,
+    "firstLauncherFailedBeforeStop": true,
+    "launchFix": "Use the same PowerShell executable as the successful preflight; legacy Windows PowerShell inherited an incompatible module search path.",
+    "requiresWindowsElevation": false,
+    "codeEntryConsumed": true,
+    "websiteTtsAndSystemOneArtifactsChanged": false
+  },
+  "evidenceRoot": "F:\\MC-backups\\maid-scene-travel-20261114-r3\\evidence",
+  "evidence": {
+    "deployment.json": {
+      "sha256": "4f76696c51d711623c8fe1576c7f7939dbb20dd9e7a8910c64fa11004b095a36"
+    },
+    "markers-production-before.json": {
+      "sha256": "c7b70b7ef78340c9698bf58d22c53a436ee7f6fde0b4ec4dd30a418ea9eafd26"
+    },
+    "markers-production-install.json": {
+      "sha256": "0530651a3fd53e31e1fb287cddfcfa319452b2bb9063a9549a3a17331a680f3f"
+    },
+    "markers-production-after.json": {
+      "sha256": "c7b70b7ef78340c9698bf58d22c53a436ee7f6fde0b4ec4dd30a418ea9eafd26"
+    },
+    "markers-disk-verified.json": {
+      "sha256": "b5038034336cfcc6c1320ff3d8145431cf2b1ce7649ec7a5eda975b09f9137b8"
+    },
+    "feiyu-follow-adjustment.json": {
+      "sha256": "d5077293fa00f218fd654b26af3d7db848cc7beca2a185f4e5c8f0b22704579c"
+    },
+    "feiyu-follow-before-restart.json": {
+      "sha256": "c5a814d4fef5adb5eaa158bd9fbcb751bae168770225c167964b496e02739b67"
+    },
+    "feiyu-follow-after-restart.json": {
+      "sha256": "6661086509edce5e2a8a2c4903da11af8ede5cc162651235c37f81fa460444e2"
+    },
+    "feiyu-follow-moving-owner.json": {
+      "sha256": "83d5667602346a9535baedcd9ae0308e9d00f26ec8c95102385a641914c3243d"
+    }
+  },
+  "rollback": {
+    "markersBeforeCodeDowngrade": true,
+    "onlyExactBlockPostImages": true,
+    "keepProtectionIfLaterConstructionBlocksRecovery": true,
+    "neverRestoreOldWorldPlayerAuthenticationOrReceiptSnapshots": true,
+    "followProfileOnlyRestoreIfCurrentStillMatches": true
+  }
+}

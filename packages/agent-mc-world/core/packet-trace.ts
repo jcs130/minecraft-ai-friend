@@ -47,8 +47,7 @@ export function summarizeIncoming(name: string, d: any): Record<string, unknown>
     case 'respawn': return { world: d.worldState?.name, copy: d.copyMetadata };
     case 'update_health': return { hp: d.health, food: d.food };
     case 'death_combat_event': return { player: d.playerId };
-    case 'system_chat': return { overlay: d.isActionBar ?? d.overlay ?? null, len: textOf(d.content).length,
-      head: short(textOf(d.content).replace(/\s+/g, ' '), 40) };
+    case 'system_chat': return { overlay: d.isActionBar ?? d.overlay ?? null, len: textOf(d.content).length };
     case 'custom_payload': return { channel: d.channel, len: d.data?.length };
     case 'set_title_text': case 'action_bar': return { text: short(textOf(d.text), 60) };
     case 'boss_bar': return { action: d.action };

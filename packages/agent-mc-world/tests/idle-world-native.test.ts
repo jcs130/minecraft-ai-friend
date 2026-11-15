@@ -39,3 +39,19 @@ it('honors body holds, scripts and local anchor without moving as a side effect 
   expect(Object.values(r.keys).some(Boolean)).toBe(false);
  }finally{r.close();}
 });
+
+it('keeps only the route during selection and a body hold still revokes it',()=>{
+ const r=methodHarness('1.21.1'),w=r.world as any,b=r.bot as any;
+ try{
+  Object.assign(w.cfg.idle,{enabled:true,allowMovement:true});
+  b.getControlState=(key:string)=>!!r.keys[key as keyof typeof r.keys];b.pathfinder.isMoving=()=>false;
+  const selected=w.idleScene();expect(selected.candidates.some((c:any)=>c.category==='move')).toBe(true);
+  const origin=b.entity.position.clone();
+  selected.state.stroll={origin,destination:origin.offset(0,0,5),anchor:origin};
+  w.idleBehavior={active:true,executing:false};
+  const fresh=w.idleScene();
+  expect(fresh).not.toBe(selected);expect(fresh.state.stroll).toBe(selected.state.stroll);
+  const status=r.exec.status.bind(r.exec);r.exec.status=()=>({...status(),hold:{reason:'stay'}} as any);
+  expect(w.idleScene()).toBeNull();expect(w.idleSceneCache).toBeNull();
+ }finally{r.close();}
+});

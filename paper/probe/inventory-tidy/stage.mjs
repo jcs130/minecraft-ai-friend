@@ -4,16 +4,116 @@ const stage=process.env.STASH_QA_STAGE,root=process.env.STASH_QA_REPORT_ROOT,anc
 assert(stage&&root&&anchor&&bridge);assert.equal(await fs.readFile(stage+'/.shop-qa','utf8'),'FRESH_RPG_SHOP_QA_NO_PLAYER_DATA');
 const properties=await fs.readFile(stage+'/server.properties','utf8');assert(/^server-ip=127\.0\.0\.1$/m.test(properties)&&/^server-port=25928$/m.test(properties)&&/^rcon.port=25929$/m.test(properties));
 const {command}=await import(pathToFileURL(bridge)),mf=createRequire(anchor)('mineflayer');const rc=s=>command(s,15000,{port:25929,properties:stage+'/server.properties'});
-const baseline=process.argv.includes('--baseline'),restart=process.argv.includes('--restart'),faults=process.argv.includes('--faults'),out={at:new Date().toISOString(),baseline,restart,faults,checks:[],productionChanged:false,syntheticAccountsOnly:true},bots=[];
+const baseline=process.argv.includes('--baseline'),restart=process.argv.includes('--restart'),faults=process.argv.includes('--faults'),overview=process.argv.includes('--overview'),out={at:new Date().toISOString(),baseline,restart,faults,overview,checks:[],productionChanged:false,syntheticAccountsOnly:true},bots=[];
 const check=(label,ok)=>{out.checks.push({label,passed:!!ok});console.log((ok?'PASS ':'FAIL ')+label);if(!ok&&!baseline)throw Error(label);};
 const until=async(f,label,ms=20000)=>{for(let end=Date.now()+ms;Date.now()<end;){const r=await f();if(r)return r;await delay(80);}throw Error('Timed out: '+label);};
 let last=0;async function ask(p,s,prefix){await delay(Math.max(0,1100-(Date.now()-last)));last=Date.now();const at=p.lines.length;p.chat(s);await until(()=>p.lines.length>at,s);await delay(350);const lines=p.lines.slice(at);if(!prefix)return lines.join('\n');const line=lines.find(l=>l.startsWith(prefix+' '));assert(line,'No '+prefix+' receipt for '+s+'; '+lines.join('\n'));return JSON.parse(line.slice(prefix.length+1));}
-async function connect(suffix){const p=mf.createBot({host:'127.0.0.1',port:25928,version:'1.21.1',username:'ag_RUStash'+suffix,auth:'offline',hideErrors:true});bots.push(p);p.lines=[];p.on('messagestr',s=>p.lines.push(s));p.on('error',e=>out.clientError=String(e));await until(()=>p.entity&&p.player?.uuid,'QA login',90000);const x=180.5+(suffix.charCodeAt(0)-97)*8;await rc('minecraft:tp '+p.username+' '+x+' -59 180.5');await rc('minecraft:gamemode survival '+p.username);await rc('qduse mana '+p.username+' 200');return p;}
+async function connect(suffix){
+ const player=mf.createBot({host:'127.0.0.1',port:25928,version:'1.21.1',
+  username:'ag_RUStash'+suffix,auth:'offline',hideErrors:true,
+  plugins:{physics:false},
+ });
+ bots.push(player);player.lines=[];
+ player.on('messagestr',text=>player.lines.push(text));
+ player.on('error',error=>out.clientError=String(error));
+ player.on('kicked',reason=>out.clientError=JSON.stringify(reason));
+ player.once('login',()=>player._client.write('custom_payload',{
+  channel:'minecraft:register',data:Buffer.from(['mcagent:board','mcagent:market'].join(String.fromCharCode(0))),
+ }));
+ // These cases never drive the player. Acknowledge the server's teleport without sending movement.
+ player._client.on('position',packet=>player._client.write('teleport_confirm',{teleportId:packet.teleportId}));
+ await until(()=>player.entity&&player.player?.uuid,'QA login',90000);
+ assert.match(await rc('qdstash place '+player.username),/STASH_QA placed/);
+ await rc('minecraft:gamemode survival '+player.username);
+ await rc('qdstash mana '+player.username);
+ return player;
+}
 const setup=(p,mode='full')=>rc('qdstash reset '+p.username+' '+mode);
-const read=async p=>JSON.parse((await rc('qdstash read '+p.username)).split('STASH_QA ')[1].trim());
+async function fixtureRead(player, action) {
+ const response=await rc('qdstash '+action+' '+player.username);
+ const json=response.split('STASH_QA ')[1];
+ assert(json,'Fixture '+action+' failed for '+player.username+': '+response);
+ return JSON.parse(json.trim());
+}
+const read=player=>fixtureRead(player,'read');
 const row=(v,n)=>v.bag.find(r=>r.slot===n);
+const summaryCommand='/mycli arena stash summary';
+const summaryPrefix='MC_STASH_OVERVIEW';
+const overviewState=player=>fixtureRead(player,'overview-state');
+const nearFull=(p,free)=>rc('qdstash near-full '+p.username+' '+free);
+const inventoryEvent=async p=>assert.match(await rc('qdstash held-event '+p.username),/STASH_QA held-event/);
+const nearHint=line=>line.includes('【背包快满】');
+async function verifyOverview() {
+ const a=await connect('n');
+ await nearFull(a,36);
+ const other=await connect('o');
+ await nearFull(other,36);
+ // Let normal join-time provision checks finish before making a controlled bag.
+ await delay(4500);
+ const empty=await ask(other,summaryCommand+' --json',summaryPrefix);
+ check('separate synthetic owner has all 540 slots free',empty.totalItems===0&&empty.occupiedSlots===0&&empty.freeSlots===540);
+ await rc('qdstash overview '+a.username);
+ const otherMessages=other.lines.length;
+ const before=await overviewState(a);
+ const summary=await ask(a,summaryCommand+' --json',summaryPrefix);
+ assert.deepEqual(summary.categories,{
+  weapons:{items:2,occupiedSlots:2,pages:[10]},
+  armor:{items:1,occupiedSlots:1,pages:[1]},
+  consumables:{items:36,occupiedSlots:2,pages:[10]},
+  other:{items:51,occupiedSlots:2,pages:[10]},
+ });
+ check('exact category quantities, distinct occupied slots, and page indexes',
+  summary.pageCount===10&&summary.pageSize===54&&summary.totalItems===90&&summary.occupiedSlots===7&&summary.freeSlots===533);
+ check('pending rewards have their own counter and usable next command',
+  summary.pendingRewardEntries===1&&summary.nextCommand==='/mycli arena rewards list');
+ const plain=await ask(a,summaryCommand);
+ check('plain results display actual pieces and capacity in one private message',
+  plain.includes('7/540')&&plain.includes('90 件')&&plain.includes('武器及法器 2')&&plain.includes('消耗品 36'));
+ const error=await ask(a,summaryCommand+' '+other.username+' --json','MC_QUERY_ERROR');
+ check('no target argument or cross-player inventory access',error.errorCode==='INVALID_ARGUMENT');
+ const after=await overviewState(a);
+ assert.deepEqual(after,before);
+ check('summary leaves saved data, live page, inventory, mana and reward queue unchanged',
+  !before.lastPageLoaded&&after.pending===14&&!a.currentWindow);
+ check('another connection never receives the owner inventory summary',
+  !other.lines.slice(otherMessages).some(line=>line.startsWith(summaryPrefix)||line.includes('个人箱 7/540')));
+
+ let cursor=a.lines.length;
+ await nearFull(a,4);
+ await inventoryEvent(a);await delay(750);
+ check('four vacancies do not trigger a warning',!a.lines.slice(cursor).some(nearHint));
+ await nearFull(a,3);
+ await inventoryEvent(a);
+ const hint=await until(()=>a.lines.slice(cursor).find(nearHint),'personal stash warning with three free slots',4500)
+  .catch(async error=>{out.adviceState=await fixtureRead(a,'advice-state');out.lastMessages=a.lines.slice(-9);throw error;});
+ check('registered agent receives exact private pressure, category and deposit guidance',
+  hint.includes('只剩 3 格')&&hint.includes('533 格')&&hint.includes('putslot 9 6')&&hint.includes('消耗品 36'));
+ check('advice sends no automatic deposit', (await read(a)).bag.find(item=>item.slot===9)?.count===6);
+ cursor=a.lines.length;
+ await inventoryEvent(a);await delay(750);
+ check('near-full notifications are rate-limited',!a.lines.slice(cursor).some(nearHint));
+ cursor=other.lines.length;
+ await nearFull(other,3);
+ await inventoryEvent(other);await delay(750);
+ check('unregistered player does not receive the agent reminder',!other.lines.slice(cursor).some(nearHint));
+ cursor=a.lines.length;
+ await nearFull(a,0);
+ await rc('qdstash drop '+a.username);
+ const full=await until(()=>a.lines.slice(cursor).find(line=>line.includes('【inventory_full】')),'full inventory event bypasses a recent near-full reminder');
+ check('the first blocked pickup escalates without moving anything',full.includes('物品未全部装入背包')&&full.includes('putslot 9 6'));
+ a.quit();
+ await delay(900);
+ const same=await connect('n');
+ await nearFull(same,0);
+ await rc('qdstash drop '+same.username);
+ await delay(4400);
+ check('reconnecting does not bypass the warning interval',
+  !same.lines.some(line=>line.includes('【inventory_full】')));
+}
 try{
  await until(async()=>{try{return(await rc('version StashGuidanceQA')).includes('version');}catch{return false;}},'isolated startup',180000);
+ if(overview) await verifyOverview();
+ else {
  const a=await connect(faults?'c':restart?'b':'a');
  if(faults){
  await setup(a);const before=await read(a);await rc('qdstash saveblock '+a.username+' on');
@@ -76,6 +176,7 @@ try{
  await ask(a,'/mycli inventory tidy auto off --json','MC_INVENTORY_TIDY');
  }
  }
+ }
  await rc('minecraft:save-all flush');
 }catch(error){out.error=String(error);console.log(out.error);}
-finally{for(const p of bots)p.quit();out.passed=!out.error&&out.checks.every(c=>c.passed);await fs.mkdir(root,{recursive:true});await fs.writeFile(root+'/stash-'+(baseline?'baseline':faults?'faults':restart?'restart':'candidate')+'.json',JSON.stringify(out,null,2));console.log(JSON.stringify(out));if(!out.passed)process.exitCode=1;}
+finally{for(const p of bots)p.quit();out.passed=!out.error&&out.checks.every(c=>c.passed);await fs.mkdir(root,{recursive:true});await fs.writeFile(root+'/stash-'+(overview?(baseline?'overview-baseline':'overview'):baseline?'baseline':faults?'faults':restart?'restart':'candidate')+'.json',JSON.stringify(out,null,2));console.log(JSON.stringify(out));if(!out.passed)process.exitCode=1;}

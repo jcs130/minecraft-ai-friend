@@ -258,7 +258,7 @@ public final class NativeMaidAgentSupport implements Listener {
             UUID id=UUID.fromString(entry.getKey());registered.add(id);
             EntityMaid loaded=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
             if(loaded!=null){
-                try{if(registeredOwner(loaded)!=null){plugin.companionTick(loaded);following.tick(loaded,plugin.closingInToGuard(loaded));}else following.unavailable(id);}catch(Exception error){plugin.getLogger().fine("Native following observation unavailable: "+error.getClass().getSimpleName());}
+                try{if(registeredOwner(loaded)!=null&&!loaded.getPersistentData().contains(CompanionRespawn.TAG)){plugin.companionTick(loaded);if(!plugin.rescuingTeammate(loaded))following.tick(loaded,plugin.closingInToGuard(loaded));}else following.unavailable(id);}catch(Exception error){plugin.getLogger().fine("Native following observation unavailable: "+error.getClass().getSimpleName());}
                 if(lifecycleDue)observeLoaded(loaded);
             }else following.unavailable(id);
             if(!lifecycleDue)continue;

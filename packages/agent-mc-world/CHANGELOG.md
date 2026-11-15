@@ -1,3 +1,52 @@
+## 0.5.7-rc.160-preview.81
+
+- Ensure tight decision-evidence pages advance through compact original references; explicitly reject envelopes that cannot fit even one reference (upstream PR #248).
+
+## 0.5.7-rc.160-preview.80
+
+- Bound the full serialized decision evidence envelope, including metadata, escaped text and omitted references. Add ordered pages and stable numeric references for recovering oversized originals without losing explicit omission boundaries.
+- Add opt-in read-only native YSM diagnostics for the official NeoForge 2.6.5 client. Distinguish the 2.6.5 release from its normal 2.6.0 protocol, channel negotiation and actual model catalogue; do not send a handshake or substitute server model state.
+
+## 0.5.7-rc.160-preview.79
+
+- Detour boats around small banks on loaded water, checking the swept hull and rider clearance before every tick. Keep bounded search, cancellation, server correction and explicit blocked receipts; no automatic dismount.
+
+## 0.5.7-rc.160-preview.78
+
+- Preserve the selected view for boat item use without coordinates; do not retarget a solid block behind water. Separate calculated aim from unknown server hit and verify inventory plus new entity identity.
+
+## 0.5.7-rc.160-preview.77
+
+- Handle native vehicle removal on the Bot event emitter and clear passenger attachment; resume walking after confirmed dismount without requiring an extra teleport packet. Preserve missing-position boundaries across login, death, respawn and configuration.
+- Report exact boat-recovery prerequisites rather than implying that any failure means a passenger is aboard; recheck grounding after the awaited look before attacking an empty boat.
+
+## 0.5.7-rc.160-preview.76
+
+- Preserve directional-search origin and completed legs across combat suspension; never count interrupting motion as a complete searched corridor.
+- Avoid immediate reverse search steps to recently checked origins for the same clue; scope and expire observed local search history.
+
+## 0.5.7-rc.160-preview.75
+
+- Release combat retreat ownership after observed surface breathing and sustained threat clearance; retain submerged/unknown breathing and recent-hit protection. Report surface escape separately from landing.
+
+## 0.5.7-rc.160-preview.74
+
+- Keep the sampled idle route through synchronous selection instead of randomly resampling and rejecting it. Existing body, threat, terrain and cancellation checks remain active.
+
+## 0.5.7-rc.160-preview.73
+
+- Idle movement can select a nearby reachable destination, follow existing routes around obstacles and step up, with bounded search/range/duration and cancellation before a new body owner. Preserve the same body queue, collision constraints, dry ground and live threat checks. Public idle decision exports support independent hosts; no model calls or game-specific script.
+
+## 0.5.7-rc.160-preview.72
+
+- Confirm server inventory and cancellation before automatic crafting/smelting workstation placement; do not place with an optimistic or rejected hand swap.
+
+## 0.5.7-rc.160-preview.71
+
+- Classify built-in routine reads separately from execution; a failed versioned-library read with a matching built-in routine provides its exact discovery entry without dispatching it.
+- Keep the sustained-water notice interval across brief head submersion; only offer the choice while breathing at the surface.
+- Add explicit script queue handoff through `mc.do(steps,{queue})`; `boat_trip` applies it once, then waits for native step acknowledgements. Default append remains unchanged; unsupported native Java overrides fail before dispatch.
+
 ## 0.5.7-rc.160-preview.70
 
 - Reconsider transport during measured surface-water journeys; retain destination and expose the complete boat_trip routine without forcing an action.

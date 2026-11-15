@@ -958,7 +958,7 @@ export async function placeBlockNearby(
 ): Promise<{ x: number; y: number; z: number; name: string; block: NonNullable<ReturnType<Bot['blockAt']>> }> {
   const item = bot.inventory.items().find((i) => i.name === block || i.name.endsWith(`_${block}`));
   if (!item) throw new SkillBlocked(`包里没有${zhName(block)}`);
-  await bot.equip(item, 'hand');
+  await equipHandConfirmed(bot, item, () => checkAbort(ctx));
   const me = bot.entity.position.floored();
   let tried = 0;
   let lastError = '';

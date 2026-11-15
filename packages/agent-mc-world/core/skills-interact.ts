@@ -6,6 +6,7 @@
  */
 import { Vec3 } from 'vec3';
 import { recoverBoat } from './boat-recovery.ts';
+import { boatDetour, type BoatPoint } from './boat-detour.ts';
 import type { Bot } from 'mineflayer';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { isDeepStrictEqual } from 'node:util';
@@ -914,15 +915,10 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     return `${head},${v.actual}${note ? `。${note}` : ''}${facts}`;
   }
 
-  // 放船未指定 at 时使用当前视线命中的方块；无命中则受阻。
+  // 未指定 at 就保留当前视线。普通方块拾取与 BoatItem 的液体射线不同，
+  // 不能先拾取水后的方块再转向其中心，否则会改掉调用方选好的水面方向。
   if (held && isBoat(held) && !call.at) {
-    const cur = bot.blockAtCursor?.(BOAT_CURSOR_RANGE);
-    if (!cur) {
-      throw new SkillBlocked(
-        `手上是${label}而没给 at,视线 ${BOAT_CURSOR_RANGE} 格内又没有方块;放船要么看着水面/地面,要么给 at 指一格落点`,
-      );
-    }
-    return await useBoat(bot, { x: cur.position.x, y: cur.position.y, z: cur.position.z }, held, label, activateItem);
+    return await useBoat(bot, null, held, label, activateItem);
   }
 
   if (call.at) {
@@ -1209,7 +1205,7 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
  */
 /**
  * lookAt 先改本地朝向；等待物理 tick 发出朝向包后再发送 use_item。
- * 1.20.6 的 use_item 仅含 hand/sequence，1.21.2 才加入朝向字段。
+ * 朝向字段按实际协议版本交给 Mineflayer 编码；1.21.1 已包含 rotation。
  * physicsTick 与 updatePosition 同步执行，waitForTicks 续体在整次 tick 结束后恢复。
  */
 export async function aimThenUse(bot: Bot, point: Vec3, activate?: () => Promise<void>): Promise<void> {
@@ -1386,44 +1382,49 @@ export function endFrameNote(bot: Bot, cell: Cell, name = 'end_portal_frame'): s
  * 放一条船:瞄准托住它的那个面按「使用物品」,再按包里少没少、附近多没多出一条船来报。
  *
  * `at` 给空气格就瞄它脚下那格的顶面(船落进 `at` 这一格),给实心格就瞄这一格自己的
- * 顶面(船落在它上面)。两种写法都成立,回执报船最后落在哪儿,不必她先猜对哪一格。
+ * 顶面(船落在它上面)。null 保留调用方当前视线，由服务端按液体射线判定。
+ * 瞄准点不是服务端命中回执；库存减少和新实体分别确认。
  */
-export async function useBoat(bot: Bot, cell: Cell, held: string, label: string,
+export async function useBoat(bot: Bot, cell: Cell | null, held: string, label: string,
   activate?: () => Promise<void>): Promise<string> {
-  const here = blockAtCell(bot, cell);
+  const here = cell && blockAtCell(bot, cell);
   const solidHere = here !== null && !AIR_NAMES.has(here.name) && !LIQUIDS.has(here.name);
-  const face = { x: cell.x, y: solidHere ? cell.y + 1 : cell.y, z: cell.z };
-  const under = blockAtCell(bot, { x: face.x, y: face.y - 1, z: face.z });
-  if (!under || AIR_NAMES.has(under.name)) {
+  const face = cell ? { x: cell.x, y: solidHere ? cell.y + 1 : cell.y, z: cell.z } : null;
+  const under = face && blockAtCell(bot, { x: face.x, y: face.y - 1, z: face.z });
+  if (face && (!under || AIR_NAMES.has(under.name))) {
     throw new SkillBlocked(
       `${cellText(face)} 底下是${under ? zhName(under.name) : '(区块没加载)'},没有能托住船的面`,
     );
   }
   const before = invCount(bot, (n) => n === held);
   const existing = new Set(Object.keys(bot.entities));
-  await aimThenUse(bot, new Vec3(face.x + 0.5, face.y, face.z + 0.5), activate);
+  const at = face ? new Vec3(face.x + 0.5, face.y, face.z + 0.5) : bot.entity.position.clone();
+  const direction = face ? `朝 ${cellText(face)}` : '沿当前视线';
+  if (face) await aimThenUse(bot, at, activate);
+  else if (activate) await activate();
+  else await bot.activateItem();
   await sleep(USE_SETTLE_MS);
   const after = invCount(bot, (n) => n === held);
   if (after >= before) {
     throw new SkillBlocked(
-      `朝 ${cellText(face)} 放${label},船没出来:包里还是 ${after} 条`,
-      [`瞄的是 ${cellText({ x: face.x, y: face.y - 1, z: face.z })} 的${zhName(under.name)}顶面`],
+      `${direction}放${label},未确认放置:包里还是 ${after} 条`,
+      [face && under ? `计算瞄准点在 ${cellText({ x: face.x, y: face.y - 1, z: face.z })} 的${zhName(under.name)}顶面；这不是服务端实际命中结果`
+        : '保留原视线发送使用；服务端命中点与拒绝原因未回传，不能据此断言水型不支持'],
       'server',
     );
   }
-  const at = new Vec3(face.x + 0.5, face.y, face.z + 0.5);
   const spawned = Object.entries(bot.entities).filter(([id, e]) => !existing.has(id)
     && e?.isValid !== false && e?.position && /(?:^|_)(?:boat|raft)$/.test(e.name ?? '')
-    && e.position.distanceTo(at) < 4).map(([, e]) => e);
+    && e.position.distanceTo(at) < (face ? 4 : BOAT_CURSOR_RANGE + 2)).map(([, e]) => e);
   if (spawned.length === 1) {
     const boat = spawned[0];
     return `${label}使用后读到新船在 ${cellText(boat.position.floored())},entityId=${boat.id};包里 ${before} → ${after} 条;`
       + `上船可用 ${JSON.stringify({ skill: 'ride', target: boat.name, entityId: boat.id })}`;
   }
-  if (spawned.length > 1) return `朝 ${cellText(face)} 放${label}:包里 ${before} → ${after} 条,`
+  if (spawned.length > 1) return `${direction}放${label}:包里 ${before} → ${after} 条,`
     + `附近同时出现 ${spawned.length} 条新船,不能确认本次是哪一条;先观察实体再选择,不自动重放放船`;
   // 不做「包里少了=放成了」的二级软假设:两个读数分开说,落点没读到就是没读到
-  return `朝 ${cellText(face)} 放${label}:包里 ${before} → ${after} 条,但附近 4 格内未确认新的有效船实体;旧船不算本次放置,不自动重放放船`;
+  return `${direction}放${label}:包里 ${before} → ${after} 条,但附近 ${face ? 4 : BOAT_CURSOR_RANGE + 2} 格内未确认新的有效船实体;旧船不算本次放置,不自动重放放船`;
 }
 
 // ======================== ride:上/驾/下坐骑 ========================
@@ -1917,6 +1918,28 @@ export function rideObstacleText(hits: readonly RideObstacle[], zhV: string): st
   return `直走和贴墙滑都过不去:${parts.join(';')}`;
 }
 
+/** Swept, same-height water edges only. A detour cannot invent a climb, cross
+ * dry ground/lava/unloaded cells or squeeze a boat through a player-size gap. */
+export function boatWaterEdge(bot: Bot, from: BoatPoint, to: BoatPoint,
+  hull: { width: number; height: number }): boolean {
+  if (Math.abs(from.y - to.y) > 1e-6) return false;
+  const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.z - from.z) / .1));
+  for (let i = 0; i <= steps; i++) {
+    const x = from.x + (to.x - from.x) * i / steps, z = from.z + (to.z - from.z) * i / steps;
+    if (rideObstacle(bot, x, from.y, z, hull)) return false;
+    const hw = hull.width / 2 - VEHICLE_HULL_EPS;
+    for (let cx = Math.floor(x - hw); cx <= Math.floor(x + hw); cx++) {
+      for (let cz = Math.floor(z - hw); cz <= Math.floor(z + hw); cz++) {
+        if (blockAtCell(bot, { x: cx, y: Math.floor(from.y - .01), z: cz })?.name !== 'water') return false;
+      }
+    }
+    // Do not detour a rider under a water ceiling or through an unknown head cell.
+    const head = blockAtCell(bot, { x: Math.floor(x), y: Math.floor(from.y + RIDER_OVER_VEHICLE + PLAYER_EYE), z: Math.floor(z) });
+    if (!head || LIQUIDS.has(head.name)) return false;
+  }
+  return true;
+}
+
 /**
  * 玩家控制的载具由骑手客户端发送 vehicle_move 绝对坐标，服务端做碰撞和纠偏。
  * Mineflayer 无载具物理，此处每 tick 小步移动并转向；仅转头不能驱动载具。
@@ -1951,8 +1974,10 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
   const pos = vehicle.position.clone();
   const start = { x: pos.x, z: pos.z };
   let corrections = 0;
+  let detour: BoatPoint[] = [], detours = 0;
   const onCorrect = (p: { x: number; y: number; z: number }): void => {
     corrections += 1;
+    detour = []; // A server correction invalidates the old local route origin.
     pos.set(p.x, p.y, p.z);
     if(vehicleOf(bot)===vehicle) {
       vehicle.position.set(p.x,p.y,p.z);
@@ -1970,10 +1995,12 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
     for (;;) {
       checkAbort(ctx);
       if (vehicleOf(bot)!==vehicle) { stalledWhy = '坐骑已脱离或身份变化，停止旧坐骑控制'; break; }
-      const dx = to.x + 0.5 - pos.x;
-      const dz = to.z + 0.5 - pos.z;
+      if (Math.hypot(to.x + .5 - pos.x, to.z + .5 - pos.z) <= RIDE_ARRIVE_R) break;
+      while (detour.length && Math.hypot(detour[0].x - pos.x, detour[0].z - pos.z) < 1e-6) detour.shift();
+      const waypoint = detour[0];
+      const dx = (waypoint?.x ?? to.x + .5) - pos.x;
+      const dz = (waypoint?.z ?? to.z + .5) - pos.z;
       const dist = Math.hypot(dx, dz);
-      if (dist <= RIDE_ARRIVE_R) break;
       if (Date.now() - startedAt > capMs) {
         stalledWhy = `跑满了时限(${Math.round(capMs / 1000)}s)还没到`;
         break;
@@ -1989,8 +2016,8 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
       const along = Math.min(step, dist);
       const tries = [
         { mx: (dx / dist) * along, mz: (dz / dist) * along },
-        { mx: Math.sign(dx) * Math.min(step, Math.abs(dx)), mz: 0 },
-        { mx: 0, mz: Math.sign(dz) * Math.min(step, Math.abs(dz)) },
+        ...(!waypoint ? [{ mx: Math.sign(dx) * Math.min(step, Math.abs(dx)), mz: 0 },
+          { mx: 0, mz: Math.sign(dz) * Math.min(step, Math.abs(dz)) }] : []),
       ];
       let move: { nx: number; ny: number; nz: number; ux: number; uz: number } | null = null;
       const blocked: RideObstacle[] = [];
@@ -1999,8 +2026,9 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
         if (len < RIDE_MIN_SLIDE) continue;
         const nx = pos.x + t.mx;
         const nz = pos.z + t.mz;
-        const ny = rideGroundY(bot, nx, pos.y, nz);
+        const ny = waypoint ? waypoint.y : rideGroundY(bot, nx, pos.y, nz);
         if (ny === null) continue;
+        if (waypoint && !boatWaterEdge(bot, pos, { x: nx, y: ny, z: nz }, hull)) continue;
         const hit = rideObstacle(bot, nx, ny, nz, hull);
         // 原版只在「原处不重叠」时才拒重叠的落点;已经嵌着的身子往哪挪服务端都收
         const wedged = hit?.kind === 'hull' && rideObstacle(bot, pos.x, pos.y, pos.z, hull)?.kind === 'hull';
@@ -2009,6 +2037,13 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
         break;
       }
       if (!move) {
+        detour = [];
+        if ((vname === 'boat' || isBoat(vname)) && detours < 4) {
+          const route = boatDetour(pos, { x: to.x + .5, y: pos.y, z: to.z + .5 }, (from, next) => {
+            checkAbort(ctx); return boatWaterEdge(bot, from, next, hull);
+          });
+          if (route?.length) { detour = route; detours++; continue; }
+        }
         stalledWhy = blocked.length > 0
           ? rideObstacleText(blocked, zhV)
           : '前面那一格落不了脚(悬崖/墙/区块没加载)';
@@ -2032,7 +2067,8 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
   const secs = Math.round((Date.now() - startedAt) / 1000);
   const where = cellText(cellOfVec(pos));
   const left = Math.round(Math.hypot(to.x + 0.5 - pos.x, to.z + 0.5 - pos.z));
-  const fixNote = corrections > 0 ? `;路上服务端纠了 ${corrections} 次位置` : '';
+  const fixNote = (corrections > 0 ? `;路上服务端纠了 ${corrections} 次位置` : '')
+    + (detours ? `;局部水面绕行 ${detours} 次（只代表本段，不证明整条水路畅通）` : '');
   if (stalledWhy) {
     // Blocking a route does not make dismounting safe, especially over water.
     // Keep the current attachment and let the caller choose a different route

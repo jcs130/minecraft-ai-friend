@@ -105,10 +105,8 @@ export function windowTitleText(title, rawTitle) {
 export function isAuthMeLoginDialog(dialog) {
   const unwrapped = unwrapNbt(dialog);
   const ids = collectActionIds(unwrapped);
-  if (ids.includes('authme:prejoin-login/submit')) return true;
-  const title = windowTitleText(unwrapped && unwrapped.title);
-  const encoded = JSON.stringify(unwrapped ?? '');
-  return title.includes('登录') && encoded.includes('"password"');
+  // A title or password field alone can also belong to a shop or another plugin.
+  return ids.includes('authme:prejoin-login/submit');
 }
 
 export function authMePasswordNbt(password) {

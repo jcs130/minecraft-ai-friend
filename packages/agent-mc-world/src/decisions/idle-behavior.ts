@@ -1,5 +1,6 @@
 import { parseTypedChoice } from '../../core/support/typed-decision.ts';
 export { IdlePresentationContext, type IdleContextInput } from '../../core/idle-behavior.ts';
+export { sampleIdleRoam, executeIdleRoam, idleRoamOwnsPath, type IdleRoam } from '../../core/idle-roam.ts';
 
 export interface IdleBehaviorConfig {
   enabled: boolean;

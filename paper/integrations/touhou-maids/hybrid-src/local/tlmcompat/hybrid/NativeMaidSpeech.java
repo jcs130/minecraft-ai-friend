@@ -43,6 +43,8 @@ final class NativeMaidSpeech implements AutoCloseable {
     private volatile boolean closed;
     private boolean historyInitialized;
     private long nextAmbient;
+    private long lastSpeech = Long.MIN_VALUE;
+    private final MaidCombatSpeech combatPolicy = new MaidCombatSpeech();
     private volatile Job active;
     private final MaidSpeechQueue<Job> waiting=new MaidSpeechQueue<>();
     private String lastState="ready",lastReason="",lastRequest="";
@@ -50,6 +52,7 @@ final class NativeMaidSpeech implements AutoCloseable {
     private static final class Job {
         final EntityMaid maid;final String request,text,kind;final UUID world;final Map<UUID,Stamp> listeners;final MaidVoiceClips.Clip original;
         volatile Set<UUID> audible=Set.of();volatile boolean cancelled,exhausted;boolean finished;final AtomicInteger offers=new AtomicInteger();
+        final long created = System.nanoTime();
         AudioPlayer player;OpusEncoder encoder;UUID channel;LocationalAudioChannel spatial;Future<?> media;int offset;
         Job(EntityMaid maid,String request,String text,String kind,Map<UUID,Stamp> listeners,MaidVoiceClips.Clip original){this.maid=maid;this.request=request;this.text=text;this.kind=kind;this.listeners=Map.copyOf(listeners);this.original=original;world=maid.getBukkitEntity().getWorld().getUID();}
     }
@@ -95,6 +98,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         out.addProperty("voiceGainDb",gainDb);
         out.addProperty("partnerRangeBlocks",MaidConversationRange.PARTNER);out.addProperty("visitorRangeBlocks",MaidConversationRange.VISITOR);
         out.addProperty("ambientSource",originalClips==null?"native_event_chinese_tts":"original_chinese_recordings");
+        out.addProperty("combatTrigger","confirmed_damage");out.addProperty("combatMinimumGapSeconds",30);out.addProperty("combatMaximumAgeSeconds",12);
         out.addProperty("ambientIdleEnabled",false);out.addProperty("ambientMinimumGapSeconds",90);
         out.addProperty("replyCharacterLimit",MaidShortReply.LIMIT);out.addProperty("waitingReply",waiting.peek()!=null);out.addProperty("maximumReplyWaitSeconds",10);
         if(originalClips!=null)out.addProperty("ambientPack",originalClips.pack());
@@ -115,20 +119,20 @@ final class NativeMaidSpeech implements AutoCloseable {
     private void submit(EntityMaid maid,String request,String raw,String kind,Set<UUID> allowed,MaidVoiceClips.Clip original){
         if(!valid(maid)||request.length()>48)return;
         String text=MaidShortReply.text(raw);if(text.isEmpty())return;
-        if(!kind.equals("ambient"))nextAmbient=System.nanoTime()+MaidAmbientPolicy.GLOBAL_GAP;
-        if(!kind.equals("ambient"))plugin.conversationSpoken();
+        if(!MaidCombatSpeech.lowPriority(kind))nextAmbient=System.nanoTime()+MaidAmbientPolicy.GLOBAL_GAP;
+        if(!MaidCombatSpeech.lowPriority(kind))plugin.conversationSpoken();
         if(!maid.getAiChatManager().getTTSModel().isBlank()){lastState="unavailable";lastReason="native_tts_already_configured";return;}
         Map<UUID,Stamp> listeners=listeners(maid,allowed);
         // Quiet/unattended areas must not create thousands of ambient receipt files.
-        if(kind.equals("ambient")&&listeners.isEmpty())return;
+        if(MaidCombatSpeech.lowPriority(kind)&&listeners.isEmpty())return;
         try{
             if(receipts.read(maidId,request)!=null)return; // Never replay a voice whose outcome survived restart.
             receipts.reserve(maidId,ownerId,request,"speech",voice+"\n"+kind+"\n"+text+(original==null?"":"\n"+original.sourceSha256()));
             Job job=new Job(maid,request,text,kind,listeners,original);
             if(listeners.isEmpty()){finish(job,"skipped","no_connected_voice_listener");return;}
-            if(active!=null&&active.kind.equals("ambient")&&!kind.equals("ambient"))cancel("ambient_interrupted_for_reply");
+            if(active!=null&&MaidCombatSpeech.lowPriority(active.kind)&&!MaidCombatSpeech.lowPriority(kind))cancel("ambient_interrupted_for_reply");
             if(active!=null){
-                if(kind.equals("ambient")){finish(job,"skipped","companion_already_speaking");return;}
+                if(MaidCombatSpeech.lowPriority(kind)){finish(job,"skipped","companion_already_speaking");return;}
                 // Reserve the original request once; keep only the freshest reply, never a backlog.
                 finishRecord(job,"queued","previous_reply_playing");
                 Job displaced=waiting.offer(job,System.nanoTime());
@@ -141,13 +145,14 @@ final class NativeMaidSpeech implements AutoCloseable {
     }
     private void begin(Job job){
         active=job;
+        lastSpeech=System.nanoTime();
         try{
             refresh(job);if(job.audible.isEmpty()||api==null){finish(job,"cancelled","audience_or_entity_changed");return;}
-            if(job.kind.equals("ambient"))plugin.conversationSpoken();finishRecord(job,"preparing","");
+            if(MaidCombatSpeech.lowPriority(job.kind))plugin.conversationSpoken();finishRecord(job,"preparing","");
             if(job.original!=null){play(job,job.original.samples());return;}
-            short[] cached=job.kind.equals("ambient")?ambientCache.get(job.text):null;
+            short[] cached=MaidCombatSpeech.lowPriority(job.kind)?ambientCache.get(job.text):null;
             if(cached!=null){play(job,cached);return;}
-            job.media=worker.submit(()->{try{short[] pcm=synthesize(job);main(()->{if(job!=active)return;if(job.kind.equals("ambient")){ambientCache.put(job.text,pcm);while(ambientCache.size()>16)ambientCache.remove(ambientCache.keySet().iterator().next());}play(job,pcm);});}
+            job.media=worker.submit(()->{try{short[] pcm=synthesize(job);main(()->{if(job!=active)return;if(MaidCombatSpeech.lowPriority(job.kind)){ambientCache.put(job.text,pcm);while(ambientCache.size()>16)ambientCache.remove(ambientCache.keySet().iterator().next());}play(job,pcm);});}
                 catch(Exception error){main(()->{if(job==active)finish(job,"failed","media_unavailable_no_replay");});}});
         }catch(Exception error){finish(job,"failed","speech_preparation_unavailable_no_replay");}
     }
@@ -169,6 +174,7 @@ final class NativeMaidSpeech implements AutoCloseable {
     }
     private void play(Job job,short[] pcm){
         if(job!=active)return;refresh(job);
+        if(job.kind.equals("combat")&&!MaidCombatSpeech.fresh(job.created,System.nanoTime())){finish(job,"skipped","combat_scene_expired");return;}
         if(job.audible.isEmpty()||api==null){finish(job,"cancelled","audience_or_entity_changed");return;}
         try{
             // Positional packets also play when the client projects or temporarily lacks the native entity UUID.
@@ -193,6 +199,22 @@ final class NativeMaidSpeech implements AutoCloseable {
     }
     private void finish(Job job,String state,String reason){if(job.finished)return;job.finished=true;try{finishRecord(job,state,reason);}catch(Exception error){if(active==job||active==null){lastState="unknown";lastReason="speech_receipt_unavailable_no_replay";}}if(active==job)active=null;}
     private void cancel(String reason){Job job=active;if(job==null)return;job.cancelled=true;job.audible=Set.of();if(job.media!=null)job.media.cancel(true);if(job.player!=null)job.player.stopPlaying();finish(job,"cancelled",reason);}
+    void combat(EntityMaid maid, String mode, float damage) {
+        if (!Bukkit.isPrimaryThread() || !valid(maid)) return;
+        long now = System.nanoTime();
+        List<Player> audience = maid.getBukkitEntity().getLocation().getNearbyPlayers(MaidConversationRange.PARTNER).stream()
+            .filter(p -> p.isOnline() && !p.isDead() && p.canSee(maid.getBukkitEntity()) && MaidConversationRange.hears(maid,p)).toList();
+        boolean busy = active != null || waiting.peek() != null || lastSpeech != Long.MIN_VALUE && now-lastSpeech < 10_000_000_000L;
+        String text = combatPolicy.hit(now,damage,mode,!audience.isEmpty(),busy);
+        if (text == null) return;
+        lastSpeech = now;
+        nextAmbient = now + MaidAmbientPolicy.GLOBAL_GAP;
+        String operation = "c_" + UUID.randomUUID();
+        for (Player p : audience) p.sendMessage("[附近·女仆] " + maid.getName().getString() + "：" + text);
+        plugin.publishPublicSpeech(maid,operation,text,audience.size());
+        plugin.conversationSpoken();
+        submit(maid,operation,text,"combat",null);
+    }
     private void ambient(EntityMaid maid,String sound){
         if(!Bukkit.isPrimaryThread()||!valid(maid)||System.nanoTime()<nextAmbient||active!=null||waiting.peek()!=null)return;
         var target=maid.getTarget();boolean fighting=target!=null&&target.isAlive()&&maid.distanceToSqr(target)<=64&&maid.hasLineOfSight(target);

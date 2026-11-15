@@ -130,24 +130,24 @@ final class NativeMaidOwnerTravel implements Listener {
         return landing;
     }
 
-    void recoverFollowing(EntityMaid maid, Player owner) {
+    boolean recoverFollowing(EntityMaid maid, Player owner) {
         Location origin = maid.getBukkitEntity().getLocation();
         Location target = owner.getLocation();
         if (!canTravel(owner) || maid.isSleeping() || maid.isPassenger() || maid.isVehicle()
                 || maid.isMaidInSittingPose() || maid.isHomeModeEnable() || maid.isNoAi() || !maid.canBrainMoving()
                 || plugin.editingMaidInventory(maid) || plugin.workshops().busy(maid.getUUID())
-                || !maid.getTask().getUid().toString().equals(MaidCompanionActions.IDLE)) return;
+                || !idleOrAutoDefending(maid)) return false;
         int range;
         try {
             range = NativeMaidFollowSupport.limits(maid).recoverBeyond();
         } catch (IllegalArgumentException invalidProfile) {
-            return;
+            return false;
         }
         boolean combat = plugin.companionCombatPosition(owner, target);
         if (origin.getWorld().equals(target.getWorld()) && origin.distanceSquared(target) <= range * range
-                && (!combat || plugin.companionCombatPosition(owner, origin))) return;
+                && (!combat || plugin.companionCombatPosition(owner, origin))) return false;
         Location landing = safe(target, candidate -> !combat || plugin.companionCombatPosition(owner, candidate), true);
-        if (landing == null || !transfer(maid, landing)) return;
+        if (landing == null || !transfer(maid, landing)) return false;
         EntityMaid arrived = HybridMaidPlugin.nativeMaid(Bukkit.getEntity(maid.getUUID()));
         if (arrived != null) {
             arrived.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
@@ -155,6 +155,7 @@ final class NativeMaidOwnerTravel implements Listener {
             arrived.getNavigation().stop();
             plugin.rememberResidenceDeparture(arrived);
         }
+        return arrived != null;
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -271,8 +272,13 @@ final class NativeMaidOwnerTravel implements Listener {
         boolean temporaryWait = idle && MaidCompanionActions.waiting(maid)
                 && maid.isMaidInSittingPose() && maid.isHomeModeEnable() && !maid.isPassenger() && !maid.isVehicle();
         if (!temporaryWait && (maid.isMaidInSittingPose() || maid.isHomeModeEnable() || !maid.canBrainMoving())) return null;
-        boolean defending = !maid.getPersistentData().getString("qiandengji_auto_defence_task").isEmpty();
-        return idle || defending ? maid : null;
+        return idleOrAutoDefending(maid) ? maid : null;
+    }
+
+    private static boolean idleOrAutoDefending(EntityMaid maid) {
+        String task = maid.getTask().getUid().toString();
+        return task.equals(MaidCompanionActions.IDLE)
+            || task.equals(maid.getPersistentData().getString("qiandengji_auto_defence_task"));
     }
 
     private static int departureRange(EntityMaid maid) {

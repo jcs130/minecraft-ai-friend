@@ -2,7 +2,11 @@
 
 Honest throttles so the agent mines and walks at a normal player's pace. They only *slow the bot down*: rolling budgets, minimum gaps, rest breaks, and capped turn rates. They do not add input noise, spoof identity, or probe a server's detection threshold.
 
+Both throttles are **opt-in** (`enabled: false`) so existing worlds keep their movement and mining behavior. Enable them explicitly for a server that requires these limits.
+
 Both blocks live under `worlds.minecraft` (the same object as `host` / `version`). Partial values override the defaults; omitted keys keep the defaults below. Invalid values are rejected (`HumanPaceConfigError`). A typo in a hot-reloaded field keeps the last valid config rather than crashing a dig mid-tick.
+
+Only native system notices without a player sender can trigger warning back-off. Public chat, whispers, overlays, quoted player lines and events without source metadata do not stop the body. Custom plugins that repackage player speech as untyped system text require a narrowly scoped server-only warning pattern.
 
 The phrase list that counts as a server warning is **configuration data**, not a new core check. Put a server's own chat (for example a timed dig ban, or “自动化模组”) in `warningKeywords` / `warningPattern` / `warningBanPattern`. Do not hardcode a new server's strings into `core/`.
 
@@ -12,7 +16,7 @@ See also `core/mining-limiter.ts` and `core/movement-pace.ts`.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | Master switch. `false` disables the throttle (and warning back-off). |
+| `enabled` | `false` | Master switch. `false` disables the throttle (and warning back-off). |
 | `mineralPerMinute` | `12` | Stone, deepslate, ores and similar, per rolling minute. |
 | `mineralPer10Min` | `80` | Same, per rolling 10 minutes. |
 | `allPerMinute` | `24` | Every counted block (logs, dirt, sand, …) per minute. Zero-hardness blocks (grass, flowers) are not counted. |
@@ -22,7 +26,7 @@ See also `core/mining-limiter.ts` and `core/movement-pace.ts`.
 | `restAfterMs` | `240000` | After this much continuous mining (no pause ≥ `restMs`), rest. |
 | `restMs` | `60000` | Length of that rest. |
 | `inlineWaitMs` | `8000` | Waits up to this long are waited in place; longer ones become a blocked skill result (`mining budget exhausted, wait Ns`) so the planner can do something else. |
-| `hardStopOnWarning` | `true` | After a matched warning, no digging for the rest of the process. |
+| `hardStopOnWarning` | `true` | After a matched native system warning, no digging for the rest of the process. |
 | `warningPauseMs` | `1200000` | When `hardStopOnWarning` is false, pause this long after a warning (20 min). |
 | `warningBanMarginMs` | `300000` | Extra wait after a parsed “N minutes no digging” line. |
 | `warningBudgetFactor` | `0.5` | Budget multiplier after the pause/ban, for `warningReducedMs`. |
@@ -36,7 +40,7 @@ See also `core/mining-limiter.ts` and `core/movement-pace.ts`.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` | Master switch. |
+| `enabled` | `false` | Master switch. |
 | `maxYawDegPerTick` | `24` | Yaw cap per physics tick (~480°/s). A 180° turn takes about 8 ticks instead of a snap. |
 | `maxPitchDegPerTick` | `16` | Pitch cap per tick. |
 | `moveBeforeRestMs` | `75000` | After this much continuous pathfinding, stand still `restMs`. |

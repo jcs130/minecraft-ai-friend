@@ -185,6 +185,8 @@ return finish(null,[]);
 `;
 
 const BOAT_TRIP = `const ROUTINE_ID = 'boat_trip';\n` + COMMON + String.raw`
+let firstBodyStep=true;
+const boatStep=async steps=>{const options=firstBodyStep&&params.queue?{queue:params.queue}:undefined;firstBodyStep=false;return mc.do(steps,options);};
 const count=s=>s && s.snapshot && s.snapshot.invSynced===true && Array.isArray(s.snapshot.inventory)
   ?s.snapshot.inventory.filter(i=>i.name===params.item).reduce((n,i)=>n+i.count,0):null;
 const all=async()=>{const s=await bot.read('entitySnapshot');return s && s.availability && s.availability.entities?s.entities:null;};
@@ -196,7 +198,7 @@ if(entityId===undefined){
   if(!params.placeAt)return finish('placement_or_entity_required',params.waypoints);
   const before=await all(),n=count(state);if(!before || n===null)return finish('placement_observation_unavailable',params.waypoints);
   if(n<1)return finish('boat_item_missing',params.waypoints);
-  const from=position(state),g=await mc.do([{skill:'use',item:params.item,at:params.placeAt}]);
+  const from=position(state),g=await boatStep([{skill:'use',item:params.item,at:params.placeAt}]);
   state=g.state;stop=unsafe();record(params.placeAt,from,g,false);
   if(stop || !g.done)return finish(stop || 'placement_blocked',params.waypoints);
   const after=await all(),near=after?Object.values(after).filter(e=>e && !before[e.id] && e.name==='boat' && e.isValid===true
@@ -206,11 +208,11 @@ if(entityId===undefined){
 }
 const vehicle=()=>mounted() && mounted().entityId===entityId;
 if(!vehicle()){
- const from=position(state),g=await mc.do([{skill:'ride',target:'boat',entityId}]);state=g.state;stop=unsafe();record(null,from,g,!stop&&vehicle());
+ const from=position(state),g=await boatStep([{skill:'ride',target:'boat',entityId}]);state=g.state;stop=unsafe();record(null,from,g,!stop&&vehicle());
  if(stop || !g.done || !vehicle())return finish(stop || 'mount_unconfirmed',params.waypoints,{entityId});
 }
 for(let i=0;i<params.waypoints.length;i++){
- const at=params.waypoints[i],from=position(state),g=await mc.do([{skill:'ride',target:'boat',entityId,to:at}]);
+ const at=params.waypoints[i],from=position(state),g=await boatStep([{skill:'ride',target:'boat',entityId,to:at}]);
  state=g.state;stop=unsafe();const p=mounted() && mounted().position;
  const met=!stop&&vehicle()&&valid(p)&&Math.hypot(p.x-at[0]-.5,p.z-at[2]-.5)<=2.5;
  record(at,from,g,met);if(stop || !g.done || !met)return finish(stop || 'vehicle_arrival_unconfirmed',params.waypoints.slice(i),{entityId});
@@ -222,17 +224,17 @@ const feet=await bot.blockAt(shore),head=await bot.blockAt([shore[0],shore[1]+1,
 const clear=b=>b && b.boundingBox==='empty' && !['water','lava','fire','soul_fire','powder_snow'].includes(b.name);
 if(!clear(feet)||!clear(head)||!floor||floor.boundingBox!=='block'||['magma_block','campfire','soul_campfire','cactus'].includes(floor.name))
  return finish('shore_support_unverified_stay_aboard',[shore],{entityId});
-let from=position(state),g=await mc.do([{skill:'ride',off:true}]);state=g.state;stop=unsafe();record(shore,from,g,!mounted());
+let from=position(state),g=await boatStep([{skill:'ride',off:true}]);state=g.state;stop=unsafe();record(shore,from,g,!mounted());
 if(stop || !g.done || mounted())return finish(stop || 'dismount_unconfirmed',[shore],{entityId});
-from=position(state);g=await mc.do([{skill:'goto',at:shore,dimension:params.dimension,exact:true,walkOnly:true}]);
+from=position(state);g=await boatStep([{skill:'goto',at:shore,dimension:params.dimension,exact:true,walkOnly:true}]);
 state=g.state;stop=unsafe();const landed=!stop&&distance(position(state),center(shore))<1&&state.movement && state.movement.onGround===true;
 record(shore,from,g,landed);if(!g.done||!landed)return finish(stop || 'shore_arrival_unconfirmed',[shore],{entityId});
 if(!params.recoverAtEnd)return finish(null,[],{entityId,recovered:false});
 const beforeRecovery=count(state);if(beforeRecovery===null)return finish('inventory_unverified_before_recovery',[],{entityId});
-from=position(state);g=await mc.do([{skill:'ride',target:'boat',entityId,recover:true}]);state=g.state;stop=unsafe();record(null,from,g,false);
+from=position(state);g=await boatStep([{skill:'ride',target:'boat',entityId,recover:true}]);state=g.state;stop=unsafe();record(null,from,g,false);
 if(stop || !g.done)return finish(stop || 'boat_recovery_blocked',[],{entityId});
 if(count(state)<=beforeRecovery){
- from=position(state);g=await mc.do([{skill:'pickup',item:params.item}]);state=g.state;stop=unsafe();record(null,from,g,count(state)>beforeRecovery);
+ from=position(state);g=await boatStep([{skill:'pickup',item:params.item}]);state=g.state;stop=unsafe();record(null,from,g,count(state)>beforeRecovery);
 }
 const recovered=!stop && count(state)!==null && count(state)>beforeRecovery;
 return finish(recovered?null:stop || 'boat_pickup_unconfirmed',[],{entityId,recovered,boatInventoryDelta:count(state)===null?null:count(state)-beforeRecovery});
@@ -241,9 +243,10 @@ return finish(recovered?null:stop || 'boat_pickup_unconfirmed',[],{entityId,reco
 export const MOVEMENT_ROUTINES = [
   {id:'boat_trip',title:'放船、驾驶与岸边回收',description:'单身体队列执行一段已观察的水路；分别核验新船身份、乘坐、路点、上岸及回收物品。',
     conditions:['item指定实际普通船物品，不自动猜木种或造中间材料；placeAt放新船，或entityId复用已确认的船',
+      '已有长途任务时明确 queue:"now" 才在首个身体步骤替换它；默认append等待旧任务，可能超过脚本预算。替换前核对队列并自行保留目的地；后续步骤按原生回执顺序执行',
       'waypoints最多8段；没有shore就留在船上；shore须是5格内已加载且实测支撑/净空的干燥岸点',
       'recoverAtEnd:true只回收点名空普通船；箱船与其他乘客不会被清除。所有失败保留实体ID/剩余路线，不重放放船或强制下水'],
-    parameters:{type:'object',additionalProperties:false,properties:{...shared,
+    parameters:{type:'object',additionalProperties:false,properties:{...shared,queue:{enum:['append','now','afterCheckpoint']},
       item:{type:'string',pattern:'^(oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry)_boat$|^bamboo_raft$'},
       placeAt:cell,entityId:{type:'integer',minimum:0,maximum:2147483647},waypoints:route,shore:cell,recoverAtEnd:{type:'boolean'}},
       required:['dimension','item','waypoints'],oneOf:[{properties:{placeAt:cell,entityId:false},required:['placeAt']},

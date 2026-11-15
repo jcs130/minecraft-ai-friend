@@ -48,6 +48,39 @@ function waterRig(){
   h.bot.entity.position.y=68.5;h.bot.entity.onGround=false;
   return h;
 }
+
+it('directional find keeps its original 64-block route through repeated combat suspension', async () => {
+  const h=rig();rigs.push(h);h.bot.food=20;
+  const origin=h.bot.entity.position.clone();
+  h.exec.submit([{skill:'find',target:'water',direction:'east',distance:64}],'append');
+  await vi.advanceTimersByTimeAsync(3_000);
+  const original=h.exec.status().running!.id;
+  const firstGoal=h.bot.pathfinder.goal as any;
+  for(let n=0;n<3;n++){
+    h.exec.suspend('战斗');
+    await vi.advanceTimersByTimeAsync(200);
+    // Escape owns the body while suspended. It must not move the search origin.
+    h.bot.entity.position.x+=4;
+    h.exec.resume();
+    await vi.advanceTimersByTimeAsync(700);
+    expect(h.exec.status().running?.id,JSON.stringify(h.reports)).toBe(original);
+    expect((h.bot.pathfinder.goal as any).x).toBeLessThanOrEqual(Math.round(origin.x+64));
+  }
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(h.exec.status().running).toBeNull();
+  expect(h.bot.entity.position.x-origin.x).toBeLessThanOrEqual(66);
+  expect(h.bot.entity.position.x-origin.x).toBeGreaterThan(60);
+  const done=h.reports.find(r=>r.kind==='done'&&r.taskId===original);
+  expect(JSON.stringify(done)).toContain('原路点');
+  expect(JSON.stringify(done)).not.toContain('走满了');
+  expect(firstGoal.x).toBeLessThanOrEqual(Math.round(origin.x+48));
+  // A second task has its own budget, even when its skill and direction match.
+  const nextStart=h.bot.entity.position.x;
+  h.exec.submit([{skill:'find',target:'water',direction:'east',distance:24}],'append');
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(h.bot.entity.position.x-nextStart).toBeGreaterThan(20);
+  expect(h.bot.entity.position.x-nextStart).toBeLessThanOrEqual(26);
+});
 it('keeps a transport observation unknown when a partial adapter has no terrain reader',()=>{
   const h=rig();rigs.push(h);h.bot.entity.onGround=false;
   (h.bot as any).blockAt=undefined;

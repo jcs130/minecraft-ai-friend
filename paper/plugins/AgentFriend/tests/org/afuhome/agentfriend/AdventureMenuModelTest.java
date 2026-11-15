@@ -9,7 +9,7 @@ public final class AdventureMenuModelTest {
     private static int checks;
     private static void check(boolean ok,String why){checks++;if(!ok)throw new AssertionError(why);}
     public static void main(String[] args)throws Exception{
-        for(Page page:List.of(Page.HOME,Page.GROWTH,Page.ADVENTURE,Page.STORAGE,Page.TRADE,Page.SOCIAL,Page.MEMORIES)){
+        for(Page page:List.of(Page.HOME,Page.TRAVEL,Page.GROWTH,Page.ADVENTURE,Page.STORAGE,Page.TRADE,Page.SOCIAL,Page.MEMORIES)){
             List<Button> buttons=category(page);
             check(buttons.size()>=4&&buttons.size()<=6,"small category size "+page);
             check(buttons.stream().map(Button::slot).distinct().count()==buttons.size(),"unique content slots "+page);
@@ -25,6 +25,8 @@ public final class AdventureMenuModelTest {
             check(rows.stream().noneMatch(s->s.contains("§")||s.contains("\n")||s.contains("\t")),"no format/control spill");
             check(rows.stream().allMatch(s->{for(int i=0;i<s.length();i++){char c=s.charAt(i);if(Character.isHighSurrogate(c)){if(++i>=s.length()||!Character.isLowSurrogate(s.charAt(i)))return false;}else if(Character.isLowSurrogate(c))return false;}return true;}),"surrogate pairs intact");
         }
+        check(destination(Action.TRAVEL)==Page.TRAVEL,"travel is one navigation action, never a cast");
+        check(category(Page.TRAVEL).stream().anyMatch(b->b.action()==Action.COMMON_DETAIL&&b.payload().equals("home")),"home shows spell details first");
         UUID owner=UUID.randomUUID(),other=UUID.randomUUID();Ticket ticket=new Ticket(owner,1000);
         check(partyAction("create",true,false,null).equals("create"),"explicit own party creation");
         check(partyAction("create",false,false,null)==null,"unknown party state never creates");

@@ -7,10 +7,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class AdventureMenuModel {
     static final int SIZE=36;
     static final int[] CONTENT={10,11,12,13,14,15,16,19,20,21,22,23,24,25};
-    enum Page { HOME,GROWTH,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,COMMON_DETAIL,CHARACTER,TIDY_BAG,TIDY_STASH,PARTY,PARTY_CONFIRM,HELP,ERROR }
+    enum Page { HOME,TRAVEL,GROWTH,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,COMMON_DETAIL,CHARACTER,TIDY_BAG,TIDY_STASH,PARTY,PARTY_CONFIRM,HELP,ERROR }
     enum Action {
-        NONE,CLOSE,BACK,HOME,GROWTH,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,CHARACTER,HELP,
-        CLASS_MENU,SKILL_MENU,TALENT_MENU,QUEST_MENU,COMMON_DETAIL,COMMON_USE,
+        NONE,CLOSE,BACK,HOME,TRAVEL,GROWTH,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,CHARACTER,HELP,
+        CLASS_MENU,SKILL_MENU,TALENT_MENU,QUEST_MENU,COMMON_DETAIL,COMMON_PAGE,COMMON_USE,
         TRAINING_MENU,CONQUEST_MENU,DUNGEON_MENU,GUILD_MENU,CONTRACT_MENU,PLACES_MENU,
         BACKPACK,STASH,TIDY_BAG,TIDY_STASH,TIDY_BAG_CONFIRM,TIDY_STASH_CONFIRM,
         SHOP_MENU,RECYCLE_MENU,AUCTION_MENU,PARTY,PARTY_CONFIRM,PARTY_APPLY,PARTY_MENU,PLAYERS_MENU,WAYPOINTS_MENU,
@@ -33,7 +33,7 @@ final class AdventureMenuModel {
     }
     static Button button(int slot,Action action,String icon,String title,String... lore){return new Button(slot,action,"",icon,title,List.of(lore));}
     static Page destination(Action action){return switch(action){
-        case HOME->Page.HOME;case GROWTH->Page.GROWTH;case ADVENTURE->Page.ADVENTURE;case STORAGE->Page.STORAGE;
+        case HOME->Page.HOME;case TRAVEL->Page.TRAVEL;case GROWTH->Page.GROWTH;case ADVENTURE->Page.ADVENTURE;case STORAGE->Page.STORAGE;
         case TRADE->Page.TRADE;case SOCIAL->Page.SOCIAL;case MEMORIES->Page.MEMORIES;case COMMON->Page.COMMON;
         case CHARACTER->Page.CHARACTER;case TIDY_BAG->Page.TIDY_BAG;case TIDY_STASH->Page.TIDY_STASH;case PARTY->Page.PARTY;case HELP->Page.HELP;
         default->null;
@@ -52,27 +52,32 @@ final class AdventureMenuModel {
         case HOME->List.of(
             button(10,Action.GROWTH,"EXPERIENCE_BOTTLE","角色与技能","选择职业、学习技能、查看成长"),
             button(13,Action.ADVENTURE,"FILLED_MAP","冒险与任务","练习塔、正式攻略与探索遗迹"),
-            button(16,Action.STORAGE,"CHEST","背包与仓库","大背包、个人箱与无损整理"),
+            button(16,Action.STORAGE,"CHEST","个人仓库与背包","个人仓库10页540格；随身大背包另计54格"),
             button(19,Action.TRADE,"GOLD_INGOT","商城与交易","买补给、回收装备、玩家交易行"),
             button(22,Action.SOCIAL,"PLAYER_HEAD","队伍与伙伴","组队、找队友、支援与传送点"),
             button(25,Action.MEMORIES,"PAINTING","留影与生活","拍照、阅读日记与更换外观"));
+        case TRAVEL->List.of(
+            button(10,Action.PLACES_MENU,"COMPASS","公共地点传送","村庄、试炼塔入口与已开放的地标","成功传送才消耗魔力"),
+            button(13,Action.WAYPOINTS_MENU,"LODESTONE","我的传送点","保存当前地点，选择已保存地点快速移动","先查看目的地和消耗"),
+            button(16,Action.PLAYERS_MENU,"PLAYER_HEAD","找队友 · 战斗增援","选队友，再点传送；支持跨世界和战斗增援","进入副本会检查装备并自动登记参战"),
+            new Button(22,Action.COMMON_DETAIL,"home","ENDER_PEARL","归乡术",List.of("查看归乡目的地、魔力和冷却，再点击施放")));
         case GROWTH->List.of(
             button(10,Action.CHARACTER,"PLAYER_HEAD","我的角色","查看实际等级、经验、生命与魔力"),
             button(12,Action.CLASS_MENU,"IRON_CHESTPLATE","选择职业","先查看职业，再自行确认选择","浏览不会替你选职"),
             button(14,Action.SKILL_MENU,"ENCHANTED_BOOK","职业技能","查看、学习与装备职业技能","学习的点数和条件以详情为准"),
             button(16,Action.TALENT_MENU,"NETHER_STAR","天赋树","打开自己的天赋界面","先看条件，再确认分配"),
-            button(20,Action.COMMON,"BLAZE_ROD","通用生存技能","归乡、治疗、饱食、闪现等13项","先看说明，再点击使用"),
+            button(20,Action.COMMON,"BLAZE_ROD","通用生存技能","归乡、治疗、闪现、跃空及留影特效","先看说明，再点击使用"),
             button(24,Action.LEGACY_SHORTCUTS,"COMPASS","常用快捷栏","熟悉技能后使用快捷罗盘","潜行右键罗盘也能直接打开"));
         case ADVENTURE->List.of(
             button(10,Action.TRAINING_MENU,"WOODEN_SWORD","村庄练习塔","练技能、协作与生存","每次新开从第一层开始"),
             button(12,Action.CONQUEST_MENU,"IRON_SWORD","艾恩葛朗特攻略","查看正式楼层、准备条件与入口","与村庄练习塔分别结算"),
             button(14,Action.DUNGEON_MENU,"MAP","主题遗迹","查看不同遗迹的难度和路线","到首室开始；遗迹内自动同队"),
-            button(16,Action.QUEST_MENU,"WRITABLE_BOOK","RPG任务板","选择当前适合自己的任务","先看目标，再自行接取"),
+            button(16,Action.QUEST_MENU,"WRITABLE_BOOK","RPG任务 · 5个接取名额","侧栏5/5表示接取名额已满，不是目标进度","查看每项目标；完成、放弃后名额才能释放"),
             button(20,Action.CONTRACT_MENU,"LECTERN","公会委托","探索、讨伐、制作与工程委托","不要求先种田"),
             button(24,Action.GUILD_MENU,"GOLD_NUGGET","冒险者公会","查看声望、晋级与考试","职业等级与公会段位分别查看"));
         case STORAGE->List.of(
             button(10,Action.BACKPACK,"BARREL","随身大背包","打开本人54格大背包","与远程个人箱分别存放"),
-            button(12,Action.STASH,"ENDER_CHEST","远程个人箱","打开页码选择，查看全部10页","任务奖励和购买商品也在这里"),
+            button(12,Action.STASH,"ENDER_CHEST","个人仓库 · 10页540格","打开十个页码按钮，选择任意一页","任务奖励和购买商品也在这里"),
             button(14,Action.TIDY_BAG,"CHEST","合并背包堆叠","整理前会再次确认","只合并同组件物品，不丢弃、不出售"),
             button(16,Action.TIDY_STASH,"HOPPER","整理个人箱","合并全部10页的堆叠，装备排在前面","保留物品，整理后请重新查看槽位"),
             button(22,Action.RECYCLE_MENU,"GOLD_INGOT","回收多余装备","先查看报价和保留范围","不会因为打开页面就卖掉物品"));

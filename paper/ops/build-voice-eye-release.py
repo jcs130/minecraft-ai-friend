@@ -42,7 +42,7 @@ def main():
  run(sys.executable,REPO/'paper/integrations/proximity-voice/build.py','--paper',a.server,'--svc',svc,'--jdk',a.jdk,'--out',out/'voice-full')
  reports['voice']=narrow(paths['voice'],out/'voice-full/QiandengVoice-0.1.6.jar',candidate/'QiandengVoice.jar',['dev/god/godvoice/'+n for n in ('PaperVoicePlugin','VoiceUploads','VoiceUploadTrace')],'0.1.6')
  run(sys.executable,REPO/'paper/integrations/login-guard/build.py','--proxy',a.proxy,'--jdk',a.jdk,'--output',out/'login-full')
- reports['login']=narrow(paths['login'],out/'login-full/LoginGuard-0.1.12.jar',candidate/'LoginGuard.jar',['org/afuhome/auth/LoginGuard','org/afuhome/auth/VoiceTransportTrace'],'0.1.12-ordered-voice')
+ reports['login']=narrow(paths['login'],out/'login-full/LoginGuard-0.1.13.jar',candidate/'LoginGuard.jar',['org/afuhome/auth/'+n for n in ('LoginGuard','VoiceTransportTrace','VerifiedJavaIdentity')]+['org/afuhome/identity/'+n for n in ('PlatformIdentity','IdentityHandoff')],'0.1.13-platform-identity')
  (out/'build.json').write_text(json.dumps({'productionChanged':False,'baselines':{k:dict(path=str(paths[k]),sha256=PINS[k][1]) for k in paths},'artifacts':reports},indent=2)+'\n')
  print(json.dumps(reports))
 if __name__=='__main__':main()

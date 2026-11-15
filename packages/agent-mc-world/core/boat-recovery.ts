@@ -11,19 +11,26 @@ export async function recoverBoat(bot: Bot, entityId: number, ctx: SkillContext)
   const counts = () => bot.inventory.items().filter(i => /_boat$|_raft$/.test(i.name) && !i.name.includes('chest'))
     .reduce((sum, i) => sum + i.count, 0);
   const before = counts(); let hits = 0;
+  const requireEmptyGroundedBoat = () => {
+    const reasons: string[] = [];
+    if (mounted()) reasons.push('自己当前仍乘坐载具');
+    if (bot.entity.onGround !== true) reasons.push('自己尚未确认着地');
+    if (!Array.isArray(boat.passengers)) reasons.push('船的乘客名单未同步');
+    const passengers = [...(Array.isArray(boat.passengers) ? boat.passengers : []),
+      ...Object.values(bot.entities).filter(e => e?.vehicle === boat)];
+    if (passengers.length) reasons.push(`船已有乘客（实体编号 ${[...new Set(passengers.map(e => e.id))].slice(0, 4).join('、')}）`);
+    if (reasons.length) throw new SkillBlocked(`回收前提未满足：${reasons.join('；')}。已停止，未攻击；未报告的条件不是失败原因，不推测乘客身份。`);
+  };
   for (; hits < 8; hits++) {
     checkAbort(ctx);
     if (bot.entities[entityId] !== boat || !boat.isValid) break;
-    if (mounted() || !bot.entity.onGround || !Array.isArray(boat.passengers) || boat.passengers.length
-      || Object.values(bot.entities).some(e => e?.vehicle === boat))
-      throw new SkillBlocked('回收前提变化：须站稳且船内没有乘客；已停止，不自动下水或赶走乘客');
+    requireEmptyGroundedBoat();
     if (boat.position.distanceTo(bot.entity.position) > 3 || !canSeeEntity(bot, boat))
       throw new SkillBlocked('点名空船不在3格内可见范围，未追船；在岸边重新观察落点');
     await bot.lookAt(boat.position.offset(0, .3, 0)); checkAbort(ctx);
     // Revalidate after the awaited look; a passenger may have boarded meanwhile.
     if (bot.entities[entityId] !== boat || !boat.isValid) break;
-    if (boat.passengers.length || Object.values(bot.entities).some(e => e?.vehicle === boat))
-      throw new SkillBlocked('船已有乘客，取消回收；未继续攻击');
+    requireEmptyGroundedBoat();
     bot.attack(boat); await sleep(350);
   }
   checkAbort(ctx);

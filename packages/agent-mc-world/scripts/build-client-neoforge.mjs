@@ -12,7 +12,7 @@ const mapper=await clientSourceMappings(opt('--mappings')),records=[],sources=[]
 async function add(file,translate=true){const b=await fs.readFile(file),name=path.basename(file),dest=src+'/'+name;records.push({path:path.relative(root,file).replaceAll('\\','/'),sha256:hash(b)});await fs.writeFile(dest,translate?mapper.translate(b.toString('utf8')):b);sources.push(dest);}
 for(const name of['CorticoClientLogin','LoginSession','ReconnectSession','InitialPerspective','LoginSessionCheck','ReconnectSessionCheck','InitialPerspectiveCheck'])await add(root+'/client-login/'+name+'.java');
 for(const name of['AppearancePolicy','AppearancePolicyCheck','ClientAppearances'])await add(root+'/client-appearance/'+name+'.java');
-for(const name of['ClientRuntime','NeoClientPlatform','YsmAccess','YsmHudTargetMixin','YsmNeoContractCheck'])await add(owner+'/'+name+'.java',false);
+for(const name of['ClientRuntime','NeoClientPlatform','YsmNativeDiagnostics','YsmAccess','YsmHudTargetMixin','YsmNeoContractCheck'])await add(owner+'/'+name+'.java',false);
 await add(root+'/client-graphics/WindowGraphicsMixin.java');
 const paths=new Set();for(const lib of[...version.libraries,...base.libraries]){const p=lib.downloads?.artifact?.path;if(p&&p.endsWith('.jar'))paths.add(game+'/libraries/'+p);}
 paths.add(game+'/libraries/net/neoforged/neoforge/21.1.252/neoforge-21.1.252-client.jar');
@@ -25,6 +25,6 @@ const checks=[];for(const name of['AppearancePolicyCheck','LoginSessionCheck','R
 checks.push(run('java',['-cp',classes+path.delimiter+cp,'YsmNeoContractCheck',ysm]).trim());
 await fs.mkdir(classes+'/META-INF',{recursive:true});await fs.copyFile(owner+'/neoforge.mods.toml',classes+'/META-INF/neoforge.mods.toml');await fs.copyFile(owner+'/agentmc-client-neoforge.mixins.json',classes+'/agentmc-client-neoforge.mixins.json');
 await fs.writeFile(classes+'/agentmc-graphics-neoforge.mixins.json',JSON.stringify({required:true,minVersion:'0.8',package:'org.agentmc.graphics.mixin',compatibilityLevel:'JAVA_21',client:['WindowGraphicsMixin'],injectors:{defaultRequire:1}}));
-const artifact=out+'/agentmc-client-platform-0.1.3-neoforge.jar';run('jar',['--create','--file',artifact,'-C',classes,'org','-C',classes,'META-INF','-C',classes,'agentmc-client-neoforge.mixins.json','-C',classes,'agentmc-graphics-neoforge.mixins.json']);
+const artifact=out+'/agentmc-client-platform-0.1.4-neoforge.jar';run('jar',['--create','--file',artifact,'-C',classes,'org','-C',classes,'META-INF','-C',classes,'agentmc-client-neoforge.mixins.json','-C',classes,'agentmc-graphics-neoforge.mixins.json']);
 const report={schema:'agent-mc-client-native-build/v1',at:new Date().toISOString(),minecraft:'1.21.1',loader:'21.1.252',artifact,sha256:hash(await fs.readFile(artifact)),sources:records,mapping:mapper.report(),checks,work,classpath:[...paths],runtimeConnections:0,installed:false};
 await fs.writeFile(out+'/build-report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({artifact,sha256:report.sha256,checks}));

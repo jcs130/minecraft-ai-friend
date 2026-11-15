@@ -40,6 +40,55 @@ final class TrialRescueManager implements Listener {
     private final Map<UUID, Long> lastNotice = new HashMap<>();
     private final TrialRescueVisuals visuals = new TrialRescueVisuals();
     private int ticks;
+    private record Companion(UUID owner, long observed) { }
+    private final Map<UUID, Companion> companions = new HashMap<>();
+
+    /** A registered native maid can assist its actual participant; no new player or reward identity. */
+    Location companionTarget(Player owner, LivingEntity body) {
+        if (!Bukkit.isPrimaryThread() || owner == null || body == null) return null;
+        Team team = team(owner.getUniqueId());
+        if (!companionEligible(owner, body, team)) { companions.remove(body.getUniqueId()); return null; }
+        companions.put(body.getUniqueId(), new Companion(owner.getUniqueId(), System.currentTimeMillis()));
+        if (team.paused) return null;
+        return downs.values().stream().filter(d -> same(team,d) && Bukkit.getPlayer(d.player)!=null
+                && body.getWorld()==d.anchor.getWorld() && body.getLocation().distanceSquared(d.anchor)<=32*32
+                && (d.rescuer==null || d.rescuer.equals(body.getUniqueId())))
+            .sorted(Comparator.comparing((Down d)->!d.player.equals(owner.getUniqueId()))
+                .thenComparingDouble(d->body.getLocation().distanceSquared(d.anchor)))
+            .map(d->d.anchor.clone()).findFirst().orElse(null);
+    }
+    private boolean companionEligible(Player owner, LivingEntity body, Team team) {
+        if (team==null || !team.members.contains(owner.getUniqueId()) || !owner.isOnline() || owner.isDead()
+                || !body.isValid() || body.isDead() || body.getWorld()!=owner.getWorld()
+                || !team.contains.test(owner.getLocation()) || !team.contains.test(body.getLocation())
+                || body.getLocation().distanceSquared(owner.getLocation())>32*32) return false;
+        var bridge=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");
+        if(bridge==null||!bridge.isEnabled())return false;
+        try{return Boolean.TRUE.equals(bridge.getClass().getMethod("eligibleRescueCompanion",Player.class,Entity.class).invoke(bridge,owner,body));}
+        catch(ReflectiveOperationException|LinkageError unavailable){return false;}
+    }
+    private List<LivingEntity> companions(Team team) {
+        var result=new ArrayList<LivingEntity>();long now=System.currentTimeMillis();
+        companions.entrySet().removeIf(e->now-e.getValue().observed>1500);
+        for(var row:companions.entrySet()) {
+            Player owner=Bukkit.getPlayer(row.getValue().owner);
+            Entity body=Bukkit.getEntity(row.getKey());
+            if(owner!=null && body instanceof LivingEntity living && companionEligible(owner,living,team))result.add(living);
+        }
+        return result;
+    }
+    private LivingEntity rescuer(Team team, Down d) {
+        Entity entity=d.rescuer==null?null:Bukkit.getEntity(d.rescuer);
+        if(!(entity instanceof LivingEntity living)||!near(living.getLocation(),d.anchor)||!team.contains.test(living.getLocation()))return null;
+        Player target=Bukkit.getPlayer(d.player);
+        if(target==null||!living.hasLineOfSight(target))return null;
+        if(living instanceof Player player)return standing(player)&&team.members.contains(player.getUniqueId())?player:null;
+        return companions(team).contains(living)?living:null;
+    }
+    private String rescuerName(Down d) {
+        Entity body=d.rescuer==null?null:Bukkit.getEntity(d.rescuer);
+        return body==null?"":body.getName();
+    }
 
     TrialRescueManager(AgentFriendPlugin plugin) {
         this.plugin = plugin;
@@ -61,7 +110,7 @@ final class TrialRescueManager implements Listener {
     }
     private boolean same(Team team, Down d) { return team != null && team.id.equals(d.team); }
     private boolean covers(Team team, Player p) {
-        return team != null && (team.members.size() >= 2 || team.id.startsWith("site:"))
+        return team != null && (team.members.size() >= 2 || team.id.startsWith("site:") || !companions(team).isEmpty())
                 && team.contains.test(p.getLocation());
     }
     boolean rescueActive(Player p) {
@@ -102,7 +151,8 @@ final class TrialRescueManager implements Listener {
         p.setFallDistance(0);
         persist();
         audit(d, "downed", "lethal_damage");
-        tell(team, team.members.size()==1?"§c本次遭到致命伤害，正在返回遗迹存档点；背包装备保留，整场第三次战败才结束。":"§c" + p.getName() + " 已倒地！队友靠近4格并停留10秒可自动救起；清完本层/本室也会自动复活。");
+        boolean alone=team.members.size()==1&&companions(team).isEmpty();
+        tell(team, alone?"§c本次遭到致命伤害，正在返回遗迹存档点；背包装备保留，整场第三次战败才结束。":"§c" + p.getName() + " 已倒地！队友或随行伙伴靠近4格并停留10秒可自动救起；清完本层/本室也会自动复活。");
         for (UUID id : team.members) {
             Player member = Bukkit.getPlayer(id);
             if (member != null) member.sendMessage("MC_TRIAL_RESCUE status=downed player=" + p.getUniqueId()
@@ -111,7 +161,7 @@ final class TrialRescueManager implements Listener {
                 member.sendMessage("§e[系统·队友救援] 用现有移动能力走到倒地队友4格内并连续停留10秒，无需点击或施法。"
                         + "救援离开范围会重新计时；也可清完本层/本室自动复活队友。arena status / dungeon status 可重新查询倒地坐标。");
         }
-        p.sendTitle(team.members.size()==1?"§e返回存档点":"§c倒地等待救援",team.members.size()==1?"§e正在恢复，背包装备保留":"§e队友靠近10秒，或清场后自动复活", 5, 80, 10);
+        p.sendTitle(alone?"§e返回存档点":"§c倒地等待救援",alone?"§e正在恢复，背包装备保留":"§e队友/伙伴靠近10秒，或清场后自动复活", 5, 80, 10);
         display(p, d, team, System.currentTimeMillis());
     }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -159,6 +209,7 @@ final class TrialRescueManager implements Listener {
         if (Set.of("help", "status", "list", "explain", "rules", "progress", "capabilities").contains(root)) return true;
         if(root.equals("challenge")){try{return ChallengeCli.parse(args).readOnly();}catch(IllegalArgumentException invalid){return false;}}
         if(root.equals("protect")||root.equals("保护")){try{ProtectionQuery.parse(args);return true;}catch(IllegalArgumentException invalid){return false;}}
+        if (PersonalStashOverview.matchesCommand(args)) return args.length == 3;
         return Set.of("arena", "dungeon").contains(root)
                 && (args.length == 1 || Set.of("status", "layout", "info", "list", "loot").contains(args[1].toLowerCase(Locale.ROOT)));
     }
@@ -251,7 +302,7 @@ final class TrialRescueManager implements Listener {
             if (handled.add(team.id)) {
                 if (team.roomCleared.getAsBoolean()) { reviveTeam(team.id, "room_cleared"); continue; }
                 boolean survivor = team.members.stream().anyMatch(uuid -> standing(Bukkit.getPlayer(uuid))
-                        || Bukkit.getPlayer(uuid) == null && !downs.containsKey(uuid));
+                        || Bukkit.getPlayer(uuid) == null && !downs.containsKey(uuid)) || !companions(team).isEmpty();
                 if (!survivor) { team.wipe.run(); continue; }
             }
             if (!downs.containsKey(id)) continue;
@@ -261,25 +312,37 @@ final class TrialRescueManager implements Listener {
             if (p.getWorld() != d.anchor.getWorld() || p.getLocation().distanceSquared(d.anchor) > .01) teleport(p, d.anchor);
             if (team.paused) reset(d, "paused");
             else {
-                Player rescuer = d.rescuer == null ? null : Bukkit.getPlayer(d.rescuer);
-                if (now - d.lastTick > 1000 || !standing(rescuer) || !team.members.contains(d.rescuer)
-                        || !team.contains.test(rescuer.getLocation()) || !near(rescuer.getLocation(), d.anchor)) reset(d, "rescuer_unavailable");
+                LivingEntity rescuer = rescuer(team,d);
+                if (now - d.lastTick > 1000 || rescuer==null) reset(d, "rescuer_unavailable");
                 if (d.rescuer == null) {
-                    rescuer = team.members.stream().map(Bukkit::getPlayer).filter(this::standing)
-                            .filter(member -> team.contains.test(member.getLocation()) && near(member.getLocation(), d.anchor))
-                            .min(Comparator.comparing(member -> member.getUniqueId().toString())).orElse(null);
+                    var candidates=new ArrayList<LivingEntity>();
+                    team.members.stream().map(Bukkit::getPlayer).filter(this::standing).forEach(candidates::add);
+                    candidates.addAll(companions(team));
+                    rescuer = candidates.stream()
+                            .filter(member -> team.contains.test(member.getLocation()) && near(member.getLocation(), d.anchor) && member.hasLineOfSight(p))
+                            .min(Comparator.comparing((LivingEntity member)->!(member instanceof Player))
+                                .thenComparing(member -> member.getUniqueId().toString())).orElse(null);
                     if (rescuer != null) {
                         d.rescuer = rescuer.getUniqueId(); d.since = now;
                         audit(d, "rescuing", "nearby_teammate");
-                        rescuer.sendMessage("§e[系统·队友救援] 正在救援 " + p.getName() + "，保持4格内10秒即可复活队友。");
-                        rescuer.sendMessage("MC_TRIAL_RESCUE status=rescuing target=" + id + " radius=4 seconds=10");
+                        if(rescuer instanceof Player helper) {
+                            helper.sendMessage("§e[系统·队友救援] 正在救援 " + p.getName() + "，保持4格内10秒即可复活队友。");
+                            helper.sendMessage("MC_TRIAL_RESCUE status=rescuing target=" + id + " radius=4 seconds=10");
+                        }
                         p.sendMessage("§a[队友救援] " + rescuer.getName() + " 正在救你，请看上方绿色救援进度条。");
                     }
                 }
-                if (d.rescuer != null && now - d.since >= RESCUE_MS) { revive(id, "nearby_teammate"); continue; }
+                if (d.rescuer != null && now - d.since >= RESCUE_MS) { revive(id, Bukkit.getPlayer(d.rescuer)!=null?"nearby_teammate":"native_companion"); continue; }
             }
             d.lastTick = now;
             display(p, d, team, now);
+        }
+        if(ticks%80==0)for(Down d:downs.values()) {
+            Team team=team(d.player);if(team==null||team.paused||d.rescuer!=null)continue;
+            Player target=Bukkit.getPlayer(d.player);if(target==null)continue;
+            for(UUID id:team.members){Player helper=Bukkit.getPlayer(id);if(!standing(helper))continue;
+                helper.sendMessage("§e[救援优先] "+target.getName()+" 仍在倒地；"+LocationOutput.fields(d.anchor)+"。靠近4格并保持视线10秒自动扶起；无需施法。查询 /mycli arena status --json 或 /mycli dungeon status --json。");
+            }
         }
         visuals.flush(this::downed);
     }
@@ -288,7 +351,7 @@ final class TrialRescueManager implements Listener {
         long elapsed = elapsed(d, now);
         int percent = (int) (elapsed * 100 / RESCUE_MS);
         String remaining = String.format(Locale.ROOT, "%.1f", (RESCUE_MS - elapsed) / 1000.0);
-        Player rescuer = d.rescuer == null ? null : Bukkit.getPlayer(d.rescuer);
+        Entity rescuer = d.rescuer == null ? null : Bukkit.getEntity(d.rescuer);
         BarColor colour = team.paused ? BarColor.PURPLE : rescuer == null ? BarColor.YELLOW : BarColor.GREEN;
         String title = team.paused ? "§d" + p.getName() + " 倒地 · 副本暂停，恢复后重新救援"
                 : rescuer == null ? "§e" + p.getName() + " 倒地 · 靠近金色圈内4格停留10秒 / 清场复活"
@@ -371,14 +434,14 @@ final class TrialRescueManager implements Listener {
         int count=team==null?0:team.members.size();
         state.addProperty("active",team!=null);state.addProperty("team",team==null?"":team.id);
         state.addProperty("rescueActive",rescueHere);
-        state.addProperty("participants",count);state.addProperty("rescueEnabled",count>=2);
+        state.addProperty("participants",count);state.addProperty("rescueEnabled",count>=2||team!=null&&!companions(team).isEmpty());
         state.addProperty("lifeState",downed(p)?"downed":p.isDead()?"dead":"alive");
         state.addProperty("keepInventory",Boolean.TRUE.equals(p.getWorld().getGameRuleValue(GameRule.KEEP_INVENTORY)));
-        if(count<2)state.addProperty("instruction",count==1?"当前本场仅登记1人，不启用队友救援；死亡是否掉物以实际死亡回执为准。想组队：先原生邀请并接受，全员到首室由队长开场。":"尚未参加试炼/遗迹场次。原生组队后全员到首室，由队长开场；本场登记2人以上才启用倒地救援。");
+        if(count<2&&(team==null||companions(team).isEmpty()))state.addProperty("instruction",count==1?"当前本场仅登记1人，不启用队友救援；死亡是否掉物以实际死亡回执为准。想组队：先原生邀请并接受，全员到首室由队长开场。":"尚未参加试炼/遗迹场次。原生组队后全员到首室，由队长开场；本场登记2人以上才启用倒地救援。");
         Map<String,Object> checkpoint=plugin.siteDungeons().checkpointState(p.getUniqueId());
         if(!checkpoint.isEmpty()){
             state.add("checkpoint",new Gson().toJsonTree(checkpoint));
-            state.addProperty("instruction",(count>1?"致命伤害先倒地，队友4格内停留10秒或清室可复活；救援成功不扣次数。":"单人致命伤害自动返回存档点，背包装备保留。")+"单人或全队战败回上个存档点，整场第3次战败才结束；断线和服务器故障不扣次数。剩余机会 "+checkpoint.get("attemptsRemaining")+"/3。");
+            state.addProperty("instruction",(count>1||team!=null&&!companions(team).isEmpty()?"致命伤害先倒地，队友或随行伙伴4格内停留10秒或清室可复活；救援成功不扣次数。":"单人致命伤害自动返回存档点，背包装备保留。")+"单人或全队战败回上个存档点，整场第3次战败才结束；断线和服务器故障不扣次数。剩余机会 "+checkpoint.get("attemptsRemaining")+"/3。");
         }
         if(team==null)state.addProperty("instruction","当前没有有效试炼/遗迹参战身份，存档点与倒地救援未生效；历史场次和旧坐标不能作为救援保证。查询：/mycli dungeon status。");
         else if(!rescueHere)state.addProperty("instruction","当前不满足本场救援条件（登记人数、范围或生存状态）；此处不保证倒地或返回存档点。先查本场状态并核对维度、位置：/mycli dungeon status。");
@@ -395,11 +458,15 @@ final class TrialRescueManager implements Listener {
             target.addProperty("remainingMs", RESCUE_MS - progress);
             target.addProperty("phase", team.paused ? "paused" : d.rescuer == null ? "waiting" : "rescuing");
             target.addProperty("rescuerUuid", d.rescuer == null ? "" : d.rescuer.toString());
-            Player rescuer = d.rescuer == null ? null : Bukkit.getPlayer(d.rescuer);
-            target.addProperty("rescuerName", rescuer == null ? "" : rescuer.getName());
+            target.addProperty("rescuerName", rescuerName(d));
+            target.addProperty("rescuerKind",d.rescuer==null?"none":Bukkit.getPlayer(d.rescuer)==null?"native_companion":"player");
+            target.addProperty("nextAction",d.rescuer==null?"前往上述同世界坐标，距离不超过4格、保持视线并连续停留10秒；不用重复施法。":"同一救援者保持距离与视线，等待剩余时间结束。");
             teammates.add(target);
         }
-        state.add("downedTeammates", teammates); return state;
+        state.add("downedTeammates", teammates);
+        state.addProperty("rescueNeeded",!teammates.isEmpty());
+        if(!teammates.isEmpty())state.addProperty("nextAction","优先救援：按downedTeammates的世界和坐标靠近4格，保持视线10秒。继续清场也能复活；未到位不计进度。");
+        return state;
     }
     void report(Player p) { p.sendMessage("MC_TRIAL_RESCUE_STATE " + state(p)); }
     private void persist() {

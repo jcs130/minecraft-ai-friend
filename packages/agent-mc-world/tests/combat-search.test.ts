@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { Vec3 } from 'vec3';
 import type { Bot } from 'mineflayer';
 import type { Battlefield } from '../core/battlefield.ts';
-import { combatSearchCandidates } from '../core/combat-search.ts';
+import { combatSearchCandidates, CombatSearchHistory } from '../core/combat-search.ts';
 import { combatRequest } from '../src/decisions/combat-request.ts';
 
 function rig(){

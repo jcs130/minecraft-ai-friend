@@ -26,6 +26,32 @@ interface SourcePatch {
 
 const PATCHES: readonly SourcePatch[] = [
   {
+    pkg: 'minecraft-protocol',
+    file: 'src/transforms/serializer.js',
+    edits: [{
+      find: `  const mergedProtocol = merge(mcData.protocol, customPackets?.[mcData.version.majorVersion] ?? {})`,
+      replace: `  const mergedProtocol = merge(mcData.protocol, customPackets?.[mcData.version.majorVersion] ?? {})
+  // minecraft-data 3.119.0 inserted the removed banner-pattern serializer into
+  // protocol 767. That shifts every recipe after id 10 and drops declare_recipes
+  // packets from ordinary 1.21.1 servers. Keep newer protocols untouched.
+  if (mcData.version.version === 767) {
+    const recipe = mergedProtocol.play?.toClient?.types?.packet_declare_recipes
+    const fields = recipe?.[1]?.[0]?.type?.[1]?.type?.[1]
+    const typeField = Array.isArray(fields) && fields.find(field => field.name === 'type')
+    const mappings = typeField?.type?.[1]?.mappings
+    if (mappings?.[11] === 'minecraft:crafting_special_banneraddpattern' &&
+        mappings?.[23] === 'minecraft:crafting_decorated_pot') {
+      const corrected = structuredClone(recipe)
+      const correctedType = corrected[1][0].type[1].type[1].find(field => field.name === 'type')
+      correctedType.type[1].mappings = Object.fromEntries(Object.entries(mappings)
+        .filter(([id]) => Number(id) !== 11)
+        .map(([id, name]) => [Number(id) > 11 ? Number(id) - 1 : Number(id), name]))
+      mergedProtocol.play.toClient.types.packet_declare_recipes = corrected
+    }
+  }`,
+    }],
+  },
+  {
     pkg: 'mineflayer-pathfinder',
     file: 'lib/astar.js',
     edits: [{
@@ -251,10 +277,16 @@ const PATCHES: readonly SourcePatch[] = [
     file: 'lib/plugins/physics.js',
     edits: [
       {
+        find: `  let shouldUsePhysics = false`,
+        replace: `  let shouldUsePhysics = false
+  let hasCurrentPosition = false`,
+      },
+      {
         find: `        shouldUsePhysics = true
         bot.jumpTicks = 0`,
         replace: `        // A delayed respawn position can arrive after set_passengers.
         // Confirm the packet, but do not simulate walking for a mounted rider.
+        hasCurrentPosition = true
         shouldUsePhysics = !bot.vehicle
         bot.jumpTicks = 0`,
       },
@@ -262,8 +294,35 @@ const PATCHES: readonly SourcePatch[] = [
         find: `    shouldUsePhysics = true
     bot.jumpTicks = 0`,
         replace: `    // Position acknowledgement does not revoke the server's vehicle attachment.
+    hasCurrentPosition = true
     shouldUsePhysics = !bot.vehicle
     bot.jumpTicks = 0`,
+      },
+      {
+        find: `  bot.on('mount', () => { shouldUsePhysics = false })
+  bot.on('death', () => {
+    shouldUsePhysics = false`,
+        replace: `  bot.on('mount', () => { shouldUsePhysics = false })
+  bot.on('dismount', () => {
+    // A native detach or destroyed vehicle returns control to walking. It
+    // does not supply a missing post-login/respawn/configuration position.
+    shouldUsePhysics = hasCurrentPosition && !bot.vehicle && bot.health > 0
+  })
+  bot._client.on('state', (state) => {
+    if (state === 'configuration') { hasCurrentPosition = false; shouldUsePhysics = false }
+  })
+  bot.on('death', () => {
+    hasCurrentPosition = false
+    shouldUsePhysics = false`,
+      },
+      {
+        find: `  bot.on('respawn', () => { shouldUsePhysics = false })
+  bot.on('login', () => {
+    shouldUsePhysics = false`,
+        replace: `  bot.on('respawn', () => { hasCurrentPosition = false; shouldUsePhysics = false })
+  bot.on('login', () => {
+    hasCurrentPosition = false
+    shouldUsePhysics = false`,
       },
       {
         find: `      tickPhysics(now)
@@ -769,6 +828,12 @@ const PATCHES: readonly SourcePatch[] = [
     pkg: 'mineflayer',
     file: 'lib/plugins/entities.js',
     edits: [
+      {
+        find: `  // dismounting when the vehicle is gone
+  bot._client.on('entityGone', (entity) => {`,
+        replace: `  // entity_destroy emits entityGone on Bot, not its protocol Client.
+  bot.on('entityGone', (entity) => {`,
+      },
       {
       find: `    const passengerEntities = passengers.map((passengerId) => fetchEntity(passengerId))
     const vehicle = entityId === -1 ? null : bot.entities[entityId]

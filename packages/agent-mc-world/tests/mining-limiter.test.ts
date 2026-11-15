@@ -1,9 +1,11 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
-import { MiningLimiter, MINING_LIMIT_DEFAULTS, installMiningLimiter, isMineral, awaitMiningBudget } from '../core/mining-limiter.ts';
+import { MiningLimiter, MINING_LIMIT_DEFAULTS as BASE_MINING_LIMITS, installMiningLimiter, isMineral, awaitMiningBudget } from '../core/mining-limiter.ts';
 import { SkillBlocked } from '../core/skill-context.ts';
 
 function clock(start = 1_000_000) { let t = start; return { now: () => t, add: (ms: number) => { t += ms; } }; }
+
+const MINING_LIMIT_DEFAULTS = { ...BASE_MINING_LIMITS, enabled: true };
 
 describe('mining limiter (honest throttle)', () => {
   it('classifies stone, deepslate and ores as minerals but not logs, dirt or stone bricks', () => {
@@ -63,7 +65,7 @@ describe('mining limiter (honest throttle)', () => {
     const t0 = Date.now(); await bot.dig({ name: 'stone' });
     expect(Date.now() - t0).toBeGreaterThanOrEqual(20);
     expect(digs).toEqual(['stone', 'stone']);
-    bot.emit('messagestr', '[反作弊] 检测到你疑似在使用作弊客户端(VL 257),继续使用将被处罚!');
+    bot.emit('messagestr', '[反作弊] 检测到你疑似在使用作弊客户端(VL 257),继续使用将被处罚!', 'system', {});
     const err = await awaitMiningBudget(bot, 'oak_log', () => false).catch((e) => e);
     expect(err).toBeInstanceOf(SkillBlocked);
     expect(err.message).toMatch(/mining budget exhausted, wait \d+s/);

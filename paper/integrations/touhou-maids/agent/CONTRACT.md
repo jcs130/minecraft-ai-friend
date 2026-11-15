@@ -64,6 +64,8 @@
 
 每段附近交谈从第一条起最多 120 秒、6 条请求。文字、语音识别、点名和直接接话共用这段限额。收到告别或模型选择收尾时会结束。`closed` 是无台词的终态，`replied` 可带 `conversationClosed`。动作在 `observation.actions` 中独立报告。收到 `applied` 或 `appliedMode` 时按真实状态继续行动。回复为空也能查询原动作回执。交谈收尾后仍可用 `/qdmaid follow <maidId> <requestId>` 切换。短等 60 秒后由原生 AI 恢复随行。
 
+0.1.35 中，收尾后的两分钟从收尾时起算。等待期间第一次由绑定伙伴点名的新话可收到一次 `conversation_quiet` 与 `data.retryAfterSeconds`。到时直接在附近频道说「肥鱼，……」或使用 `/qdmaid chat <maidId> <requestId> <话语>`。
+
 `context.fishing` 提供原生钓鱼任务、主手鱼竿、工作时段、乘坐、抛竿和最近一次实际收竿的状态。先给主手装备鱼竿，带到有空椅子或船的水边。`touhou_little_maid:fishing` 已设置表示开始执行任务。用 `hookActive` 观察抛竿，用 `lastRetrievedAt` 观察收竿，再查看附近掉落或 `inventory`。切回 `follow` 会离开钓鱼座位。其他原生任务及条件通过 `tasks` 查询。
 
 **0.1.25 过门随行已部署**：下界门换维度成功后，服务端使用角色实际抵达的地点安排随行。跨维度接应半径读取女仆的跟随配置，肥鱼为 32 格；同世界的远距传送沿用原规则。原伙伴需要在出发时已加载、可移动并处于随行状态，目标附近也要有已加载的安全落点。跨维度后请通过 context 核对当前维度、位置和 ownerDistance。

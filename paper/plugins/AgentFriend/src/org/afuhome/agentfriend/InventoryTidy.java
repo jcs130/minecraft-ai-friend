@@ -7,6 +7,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.command.CommandSender;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 
 /** Explicit own-inventory maintenance. No selling, world drops or body queue. */
@@ -74,12 +75,15 @@ final class InventoryTidy {
                 || item.getType() == Material.BOW || item.getType() == Material.CROSSBOW || item.getType() == Material.SHIELD) return 0;
         if (item.hasItemMeta()) {
             var data = item.getItemMeta().getPersistentDataContainer();
-            if (data.has(VORTEX_PROFESSION_ITEM) || data.has(VORTEX_ITEM) && switch (item.getType()) {
-                case BLAZE_ROD, BOOK, BONE, CLOCK -> true;
-                default -> false;
-            }) return 0;
+            if (data.has(VORTEX_PROFESSION_ITEM) || vortexCombatFocus(item.getType(), data)) return 0;
         }
         return common(item) ? 2 : 1;
+    }
+    static boolean vortexCombatFocus(Material material, PersistentDataContainer data) {
+        return switch (material) {
+            case BLAZE_ROD, BOOK, BONE, CLOCK -> data.has(VORTEX_ITEM);
+            default -> false;
+        };
     }
     private boolean enabled(Player p){return plugin.getConfig().getBoolean(SETTINGS+p.getUniqueId()+".enabled",false);}
     private boolean discard(Player p){return plugin.getConfig().getBoolean(SETTINGS+p.getUniqueId()+".discard-common",false);}

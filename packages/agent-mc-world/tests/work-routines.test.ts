@@ -156,6 +156,22 @@ describe('reviewed Mineflayer work routines', () => {
     }
   });
 
+  it('recovers a built-in boat routine mistakenly requested from the versioned method library without running it',async()=>{
+    const r=methodHarness();
+    try {
+      const tool=r.world.tools().find(t=>t.name==='mc_script')!;
+      for(const id of ['boat_trip','boat-trip']){
+        const outcome=await tool.handler({library:{op:'read',id}},{role:'main',log:r.host.log});
+        expect(outcome).toMatchObject({failed:true});
+        expect(JSON.stringify(outcome)).toContain('METHOD_LIBRARY_READ_FAILED');
+        expect(JSON.stringify(outcome)).toContain('boat_trip');
+      }
+      expect(r.runner.read()).toEqual([]);expect(r.exec.currentTask).toBeNull();
+      const read=await tool.handler({routine:{op:'read',id:'boat_trip'}},{role:'main',log:r.host.log});
+      expect(String(read)).toContain('boat_trip');expect(r.runner.read()).toEqual([]);
+    }finally{r.close();}
+  });
+
   it('runs through the actual tool and preserves cancellation while queued work has not executed', async () => {
     const r = methodHarness();
     try {

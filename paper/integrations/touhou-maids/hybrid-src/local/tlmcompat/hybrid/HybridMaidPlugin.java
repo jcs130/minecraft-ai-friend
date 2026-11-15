@@ -56,6 +56,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private NativeMaidWorkshop workshops;
     private NativeMaidResidence residence;
     private NativeMaidOwnerTravel ownerTravel;
+    private CompanionRespawn respawns;
     public void followTrialTransfer(Player partner, Location from, int stage) {
         if (Bukkit.isPrimaryThread() && ownerTravel!=null) ownerTravel.followTrialTransfer(partner,from,stage);
     }
@@ -66,6 +67,12 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     void rememberResidenceDeparture(EntityMaid maid){agentSupport.rememberResidenceDeparture(maid);}
     void companionTick(EntityMaid maid){if(companion!=null)companion.tick(maid);}
     boolean closingInToGuard(EntityMaid maid){return companion!=null&&companion.closingIn(maid);}
+    boolean rescuingTeammate(EntityMaid maid){return companion!=null&&companion.rescuing(maid);}
+    public boolean eligibleRescueCompanion(Player owner, org.bukkit.entity.Entity entity) {
+        EntityMaid maid=nativeMaid(entity);
+        return Bukkit.isPrimaryThread() && maid!=null && owner!=null && owner.getUniqueId().equals(maid.getOwnerUUID())
+            && sharedDialogueEnabled(maid) && companion!=null && companion.rescueEligible(maid,owner);
+    }
     boolean companionCombatPosition(Player owner,Location position){return companion!=null&&companion.combatPosition(owner,position);}
     UUID companionVisibleThreat(EntityMaid maid,Player owner){return companion==null?null:companion.visibleThreat(maid,owner);}
     boolean companionPartnerThreat(EntityMaid maid,Player owner){return companion!=null&&companion.visibleAttackOnPartner(maid,owner);}
@@ -76,6 +83,17 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     void resetNearbyConversation(Player actor,String reason){if(social!=null)social.reset(actor,reason);}
     boolean mayInitiateConversation(Player actor,EntityMaid maid){return nearbyChat!=null&&nearbyChat.mayInitiate(actor,maid);}
     void conversationSpoken(){if(social!=null)social.spoken();}
+    String nativeSceneContext(EntityMaid maid){
+        Player partner=Bukkit.getPlayer(maid.getOwnerUUID());
+        String persona="【服务器伙伴设定，覆盖通用模板的主仆称呼】你是肥鱼，与可米平等相处，活泼俏皮、有主见。直接叫可米，不用主人、主公或Master。一次一句，优先15至28字，最多40字；只谈现场相关内容，动作靠真实工具执行，不靠说已经完成。音色不代表角色身份。";
+        return persona+(social!=null&&partner!=null&&partner.getWorld().equals(maid.getBukkitEntity().getWorld())
+            &&MaidConversationRange.within(maid,partner,MaidConversationRange.PARTNER)?social.sceneFacts(maid,partner):"伙伴当前不在可见交谈范围，不能臆测其状态。");
+    }
+    JsonObject companionScene(EntityMaid maid){return companion==null?new JsonObject():companion.describe(maid);}
+    void companionHit(EntityMaid maid,net.minecraft.world.entity.Mob target,String mode,float damage){
+        if(social!=null)social.combatObserved(maid,target,mode,damage);
+        if(speech!=null)speech.combat(maid,mode,damage);
+    }
     void speakPublicReply(EntityMaid maid,String operation,String text,Set<UUID> audience){if(speech!=null)speech.reply(maid,operation,text,audience);}
     private final Map<String,Boolean> publishedDialogue=new LinkedHashMap<>();
     void publishPublicSpeech(EntityMaid maid,String operation,String text,int delivered){
@@ -98,13 +116,25 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         while(humanDialogue.size()>512)humanDialogue.remove(humanDialogue.keySet().iterator().next());
     }
     boolean sharedDialogueEnabled(EntityMaid maid){return brains!=null&&brains.allowed(maid);}
-    void nearbyConversation(Player actor,EntityMaid maid,String text,Set<UUID> recipients){
-        nearbyConversation(actor,maid,text,recipients,"near_"+UUID.randomUUID());
+    boolean configuredCompanionIdentity(EntityMaid maid){return brains!=null&&brains.identityMatches(maid);}
+    void nearbyConversation(Player actor,EntityMaid maid,NativeMaidNearbyChat.Address address,Set<UUID> recipients){
+        nearbyConversation(actor,maid,address,recipients,"near_"+UUID.randomUUID());
     }
-    void nearbyConversation(Player actor,EntityMaid maid,String text,Set<UUID> recipients,String operation){
+    void nearbyConversation(Player actor,EntityMaid maid,NativeMaidNearbyChat.Address address,Set<UUID> recipients,String operation){
         try{
             if(receipts.read(maid.getUUID(),operation)!=null)return;
-            if(!nearbyChat.allow(actor,maid,text))return;
+            var admission=nearbyChat.admit(actor,maid,address);
+            if(!admission.allowed()){
+                if(admission.retryAfterSeconds()>0){
+                    humanConversation(actor,operation);
+                    JsonObject data=new JsonObject();
+                    data.addProperty("retryAfterSeconds",admission.retryAfterSeconds());
+                    data.addProperty("message","这段交谈已收尾。约 "+admission.retryAfterSeconds()+" 秒后可在 24 格内点名说新话。");
+                    reply(actor,"chat",operation,data,"conversation_quiet");
+                }
+                return;
+            }
+            String text=address.text();
             humanConversation(actor,operation);
             social.validate(actor,maid);agentSupport.validateChat(actor,maid);
             receipts.reserve(maid.getUUID(),actor.getUniqueId(),operation,"chat",text);
@@ -154,12 +184,14 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             companion=new NativeMaidCompanionSupport(this);
             NativeMaidOwnerTravel travel=new NativeMaidOwnerTravel(this);
             ownerTravel=travel;
+            respawns=new CompanionRespawn(this,travel);
             residence=NativeMaidResidence.open(this,travel);
             social=new NativeMaidSocialSupport(this,receipts);
             nearbyChat=new NativeMaidNearbyChat(this);
             speech=NativeMaidSpeech.create(this);
             getServer().getMessenger().registerOutgoingPluginChannel(this,CHANNEL);
             getServer().getPluginManager().registerEvents(this,this);
+            getServer().getPluginManager().registerEvents(new SoulTalismanGuidance(),this);
             getCommand("qdmaid").setExecutor(this);
             pluginPayloads=new HybridPluginPayloads(this);projection=new VanillaMaidProjection(this); menus=new NativeMaidInventory(this);worldPermissions=new NativeWorldPermissions(this);legacyTransport=new LegacyMaidTransport(this);nativeTransport=new NativeMaidTransport(this);
             getServer().getPluginManager().registerEvents(menus,this);
@@ -172,7 +204,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             getLogger().info("Native TLM integration ready: "+TaskManager.getTaskMap().size()+" original tasks; no model loop");
         }catch(Throwable error){getLogger().severe("Native maid integration disabled: "+error);error.printStackTrace();getServer().getPluginManager().disablePlugin(this);}
     }
-    @Override public void onDisable(){if(residence!=null)residence.close();if(workshops!=null)workshops.close();if(companion!=null)companion.close();if(speech!=null)speech.close();if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
+    @Override public void onDisable(){if(respawns!=null)respawns.close();if(residence!=null)residence.close();if(workshops!=null)workshops.close();if(companion!=null)companion.close();if(speech!=null)speech.close();if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
     private void bindOnMain(EntityMaid maid){
         Bukkit.getScheduler().runTask(this,()->{try{if(maid.isAlive()&&owner(maid)!=null){bind(maid);if(agentSupport!=null)agentSupport.observeLoaded(maid);}}catch(Exception error){getLogger().warning("Native NPC binding preserved: "+error.getMessage());}});
     }
@@ -248,6 +280,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         agentSupport.enrich(actor,id,data);
         if(maid!=null&&companion!=null)data.add("companion",companion.describe(maid));
         if(residence!=null)residence.describe(id,data);
+        if(maid!=null&&respawns!=null)respawns.describe(maid,data);
         data.addProperty("sampledAt",java.time.Instant.now().toString());return data;
     }
     private JsonObject catalog(Player actor,UUID id){
@@ -603,6 +636,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             case "not_owned","owner_mismatch"->"装备、工作和运行方式由主人管理；附近交谈用 /qdmaid nearby 找真实maidId，再用 chat <maidId> <requestId> <话语>。本人女仆用 list。";
             case "out_of_range"->"先核对同一维度与实际距离；公开伙伴交谈24格、访客8格，原生本人chat仍16格。用 /qdmaid nearby 查可见对象；context仅供主人查询。";
             case "chat_busy","chat_unresolved"->"她正在处理对话或整理记忆。若是你刚发的一条，用 /qdmaid receipt <UUID> <原requestId> 查询；若是别人发起，稍后再说新话。pending 不是回复。";
+            case "conversation_quiet"->"等待 data.retryAfterSeconds，再在同一维度的附近频道点名说新话。";
             default->"/qdmaid help 查询真实用法。每次写操作保留唯一 requestId；结果不明先 receipt，不重复转移物品。";
         };
     }
@@ -611,7 +645,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         for(String line:List.of(
             "智能：/qdmaid brain <UUID> 查看当前运行方式；brain <UUID> <requestId> <返回的选项ID> 切换。brain-menu <UUID> 打开真人选择菜单，保留原身份和记忆。",
             "女仆：先 /qdmaid list 找本人 maidId；/qdmaid context <UUID> 查看生命、维度、位置和死亡遗物。",
-            "对话：同维度伙伴24格、访客8格内，可点名交谈。每段附近交谈最多120秒、6条请求，收到告别会收尾。伙伴可以说「肥鱼，跟我走」，也可直接用 follow <UUID> <requestId>。Agent用 nearby 找UUID，receipt <UUID> <原requestId> 查动作及回复。",
+            "对话：同维度伙伴24格、访客8格内，直接在附近频道说「肥鱼，你好」，也可右键点交谈。每段最多120秒、6条请求，收尾后等两分钟再点名。伙伴也可直接用 follow <UUID> <requestId>。Agent 用 nearby 找UUID，receipt <UUID> <原requestId> 查动作及回复。",
             "装备：/qdmaid inventory <UUID> 看 usableSlotIndexes（可用）与 freeSlotIndexes（空槽）；默认只有0–5可用，底层36槽不代表已解锁。transfer <UUID> <requestId> put <女仆槽> <数量> <本人槽0-35>；再 equip <UUID> <新requestId> main|off|head|chest|legs|feet <女仆槽>。空槽用于卸装；rejected回执表示此次未转移物品。",
             "工位：/qdmaid workshop <UUID> 查工位及配方；make <UUID> <requestId> <工位ID> <配方ID> [成品数量|once] [chest|backpack]。pending 表示已接单，按 receipt 查成品数量。",
             "行为：/qdmaid tasks <UUID> 查原生工作与条件；/qdmaid task <UUID> <requestId> <任务ID>。follow/stay/sit 同样用 <UUID> <requestId>。应用模式不等于完成任务。",
