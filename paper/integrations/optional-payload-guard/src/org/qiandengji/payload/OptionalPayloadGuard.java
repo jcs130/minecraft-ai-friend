@@ -11,7 +11,6 @@ import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.PostOrder;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.connection.PluginMessageEvent;
-import com.velocitypowered.api.event.player.ServerPostConnectEvent;
 import com.velocitypowered.api.event.proxy.*;
 import com.velocitypowered.api.plugin.*;
 import com.velocitypowered.api.proxy.Player;
@@ -22,7 +21,7 @@ import com.google.inject.Inject;
 import java.time.Duration;
 
 /** Scope optional extension packets to their original connection's declared decoders. */
-@Plugin(id="optionalpayloadguard",name="OptionalPayloadGuard",version="0.1.2",dependencies={@Dependency(id="packetevents")})
+@Plugin(id="optionalpayloadguard",name="OptionalPayloadGuard",version="0.1.3",dependencies={@Dependency(id="packetevents")})
 public final class OptionalPayloadGuard {
     private static final MinecraftChannelIdentifier YSM=MinecraftChannelIdentifier.from(YsmAcknowledgementHandoff.CHANNEL);
     private final ProxyServer server;
@@ -53,32 +52,42 @@ public final class OptionalPayloadGuard {
         };
         PacketEvents.getAPI().getEventManager().registerListener(listener);
     }
-    @Subscribe(order=PostOrder.LAST) public void acknowledgement(PluginMessageEvent event){
-        // Observe the original client message without changing its forwarding result.
-        // A backend, another connection, a different version or model/action payload
-        // cannot seed the handoff. This is never a login or decoder-capability grant.
-        if(!YSM.equals(event.getIdentifier())||!event.getResult().isAllowed()
-                ||!(event.getSource() instanceof Player player)
-                ||!(event.getTarget() instanceof ServerConnection target)||target.getPlayer()!=player)return;
-        if(handoff.received(player,event.getData()))schedule(player);
+    @Subscribe(order=PostOrder.LAST)
+    public void ysmMessage(PluginMessageEvent event) {
+        if (!YSM.equals(event.getIdentifier()) || !event.getResult().isAllowed()) return;
+        if (event.getSource() instanceof Player player && event.getTarget() instanceof ServerConnection backend && backend.getPlayer() == player) {
+            if (registered(backend, "auth")) event.setResult(PluginMessageEvent.ForwardResult.handled());
+            else if (currentGame(player, backend)) handoff.received(player, backend, event.getData());
+        } else if (event.getSource() instanceof ServerConnection backend && event.getTarget() instanceof Player player && backend.getPlayer() == player) {
+            // YSM acknowledges only the first greeting on the physical client connection.
+            // The authentication lobby leaves that handshake to the game server.
+            if (registered(backend, "auth")) event.setResult(PluginMessageEvent.ForwardResult.handled());
+            else if (currentGame(player, backend) && handoff.queueForGreeting(player, backend, event.getData())) schedule(player, backend);
+        }
     }
-    @Subscribe(order=PostOrder.LAST) public void connected(ServerPostConnectEvent event){schedule(event.getPlayer());}
-    @Subscribe public void disconnected(DisconnectEvent event){handoff.left(event.getPlayer());}
-    private boolean current(Player player,ServerConnection connection){
-        return player.isActive()&&server.getPlayer(player.getUniqueId()).orElse(null)==player
-                &&player.getCurrentServer().orElse(null)==connection&&connection.getPlayer()==player
-                &&server.getServer("paper").orElse(null)==connection.getServer();
+
+    @Subscribe public void disconnected(DisconnectEvent event) { handoff.left(event.getPlayer()); }
+
+    private boolean registered(ServerConnection connection, String backend) {
+        return server.getServer(backend).filter(expected -> expected == connection.getServer()).isPresent();
     }
-    private void schedule(Player player){
-        ServerConnection connection=player.getCurrentServer().orElse(null);
-        if(connection==null||!current(player,connection)||!handoff.queue(player,connection))return;
-        server.getScheduler().buildTask(this,()->{
-            if(!current(player,connection))return;
-            byte[] original=handoff.take(player,connection);
-            if(original==null)return;
-            if(connection.sendPluginMessage(YSM,original))handoff.delivered(player,connection);
-            else schedule(player); // At most two attempts on this exact backend connection.
-        }).delay(Duration.ofMillis(500)).schedule();
+
+    private boolean currentGame(Player player, ServerConnection connection) {
+        return player.isActive() && server.getPlayer(player.getUniqueId()).orElse(null) == player
+                && player.getCurrentServer().orElse(null) == connection && registered(connection, "paper");
+    }
+
+    private void schedule(Player player, ServerConnection connection) {
+        server.getScheduler().buildTask(this, () -> {
+            if (!currentGame(player, connection)) return;
+            byte[] original = handoff.take(player, connection);
+            if (original == null) return;
+            try {
+                connection.sendPluginMessage(YSM, original);
+            } catch (IllegalStateException disconnected) {
+                // The connection can close between checking it and submitting the write.
+            }
+        }).delay(Duration.ofMillis(250)).schedule();
     }
     @Subscribe public void stop(ProxyShutdownEvent event){
         server.getScheduler().tasksByPlugin(this).forEach(task->task.cancel());

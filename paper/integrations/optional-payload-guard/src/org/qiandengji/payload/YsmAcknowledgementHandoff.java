@@ -4,41 +4,56 @@ import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
-/** Keeps only a genuinely received original 2.6.0 version acknowledgement. */
+/** An original acknowledgement can follow a physical client to a replacement game connection. */
 final class YsmAcknowledgementHandoff {
-    static final String CHANNEL="yes_steve_model:2_6_0";
-    private static final byte[] ACK={52,5,'2','.','6','.','0'};
+    static final String CHANNEL = "yes_steve_model:2_6_0";
+    private static final byte[] GREETING = {51, 5, '2', '.', '6', '.', '0'};
+    private static final byte[] ACK = {52, 5, '2', '.', '6', '.', '0'};
+
     private static final class Session {
         final byte[] acknowledgement;
-        Object backend;
-        int attempts;
-        boolean pending,delivered;
-        Session(byte[] bytes){acknowledgement=bytes.clone();}
-    }
-    private final Map<Object,Session> sessions=new IdentityHashMap<>();
+        Object acknowledgedBackend;
+        Object pendingBackend;
+        Object attemptedBackend;
 
-    synchronized boolean received(Object player,byte[] bytes){
-        if(player==null||!Arrays.equals(ACK,bytes))return false;
-        if(sessions.containsKey(player))return true;
-        if(sessions.size()>=512)return false;
-        sessions.put(player,new Session(bytes));return true;
+        Session(Object backend, byte[] bytes) {
+            acknowledgedBackend = backend;
+            acknowledgement = bytes.clone();
+        }
     }
-    synchronized boolean queue(Object player,Object backend){
-        Session session=sessions.get(player);
-        if(session==null||backend==null)return false;
-        if(session.backend!=backend){session.backend=backend;session.attempts=0;session.pending=false;session.delivered=false;}
-        if(session.pending||session.delivered||session.attempts>=2)return false;
-        session.pending=true;return true;
+
+    private final Map<Object, Session> sessions = new IdentityHashMap<>();
+
+    synchronized boolean received(Object player, Object backend, byte[] bytes) {
+        if (player == null || backend == null || !Arrays.equals(ACK, bytes)) return false;
+        Session session = sessions.get(player);
+        if (session != null) {
+            session.acknowledgedBackend = backend;
+            return true;
+        }
+        if (sessions.size() >= 512) return false;
+        sessions.put(player, new Session(backend, bytes));
+        return true;
     }
-    synchronized byte[] take(Object player,Object backend){
-        Session session=sessions.get(player);
-        if(session==null||session.backend!=backend||!session.pending)return null;
-        session.pending=false;session.attempts++;return session.acknowledgement.clone();
+
+    synchronized boolean queueForGreeting(Object player, Object backend, byte[] bytes) {
+        Session session = sessions.get(player);
+        if (session == null || backend == null || !Arrays.equals(GREETING, bytes)) return false;
+        if (session.acknowledgedBackend == backend || session.pendingBackend == backend || session.attemptedBackend == backend) return false;
+        session.pendingBackend = backend;
+        return true;
     }
-    synchronized void delivered(Object player,Object backend){
-        Session session=sessions.get(player);
-        if(session!=null&&session.backend==backend)session.delivered=true;
+
+    synchronized byte[] take(Object player, Object backend) {
+        Session session = sessions.get(player);
+        if (session == null || backend == null || session.pendingBackend != backend) return null;
+        session.pendingBackend = null;
+        if (session.acknowledgedBackend == backend) return null;
+        session.attemptedBackend = backend;
+        return session.acknowledgement.clone();
     }
-    synchronized void left(Object player){sessions.remove(player);}
-    synchronized void clear(){sessions.clear();}
+
+    synchronized void left(Object player) { sessions.remove(player); }
+
+    synchronized void clear() { sessions.clear(); }
 }
