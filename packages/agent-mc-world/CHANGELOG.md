@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.80
+
+- Bound the full serialized decision evidence envelope, including metadata, escaped text and omitted references. Add ordered pages and stable numeric references for recovering oversized originals without losing explicit omission boundaries.
+- Add opt-in read-only native YSM diagnostics for the official NeoForge 2.6.5 client. Distinguish the 2.6.5 release from its normal 2.6.0 protocol, channel negotiation and actual model catalogue; do not send a handshake or substitute server model state.
+
 ## 0.5.7-rc.160-preview.79
 
 - Detour boats around small banks on loaded water, checking the swept hull and rider clearance before every tick. Keep bounded search, cancellation, server correction and explicit blocked receipts; no automatic dismount.

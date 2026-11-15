@@ -40,6 +40,30 @@ describe('source-owned execution context', () => {
     expect(marker).not.toHaveProperty('taskId');
     expect(marker).not.toHaveProperty('completed');
   });
+  it('budgets the complete serialized projection and pages every omitted original', () => {
+    const originals = Array.from({length: 90}, (_, i) => ({id:`fact:${i}`,kind:'fact' as const,
+      source:'server',observedAt:null,text:'CURRENT_FACT_\n"'.repeat(800),
+      read:{tool:'read',id:`fact:${i}`,assignmentId:'same-assignment'}}));
+    for (const maxChars of [1024, 2048, 6000, 24000]) {
+      const covered = new Set<number>(); let offset = 0;
+      for (let page = 0; page < 90; page++) {
+        const view = projectDecisionEvidence(originals,{maxChars,offset,envelope:{assignmentId:'same-assignment'}});
+        expect(JSON.stringify(view).length).toBe(view.evidenceChars);
+        expect(view.evidenceChars).toBeLessThanOrEqual(maxChars);
+        for (const item of [...view.items,...view.omitted]) covered.add(item.index);
+        if (view.nextOffset === null) break;
+        expect(view.nextOffset).toBeGreaterThan(offset); offset = view.nextOffset;
+      }
+      expect(covered.size).toBe(originals.length);
+    }
+    const huge = projectDecisionEvidence([{...originals[0],read:{path:'x'.repeat(20000)}}],{maxChars:1024});
+    expect(huge.omitted).toEqual([{index:0,originalChars:originals[0].text.length,metadataTruncated:true}]);
+    expect(huge.complete).toBe(false);
+    expect(JSON.stringify(huge).length).toBeLessThanOrEqual(1024);
+    expect(()=>projectDecisionEvidence(originals,{maxChars:1024,envelope:{body:'x'.repeat(1024)}})).toThrow(/envelope/);
+    expect(()=>projectDecisionEvidence(originals,{offset:-1})).toThrow(/page/);
+    expect(()=>projectDecisionEvidence(originals,{envelope:{complete:true}})).toThrow(/Reserved/);
+  });
 
   it('includes producer-required current state for a body owner while preserving optional focus and semantic digests', () => {
     const current = {
