@@ -1,0 +1,41 @@
+diff --git a/paper/src/main/java/com/hpfxd/spectatorplus/paper/sync/handler/screen/ScreenSyncHandler.java b/paper/src/main/java/com/hpfxd/spectatorplus/paper/sync/handler/screen/ScreenSyncHandler.java
+index 8c0ffcf..0d8d667 100644
+--- a/paper/src/main/java/com/hpfxd/spectatorplus/paper/sync/handler/screen/ScreenSyncHandler.java
++++ b/paper/src/main/java/com/hpfxd/spectatorplus/paper/sync/handler/screen/ScreenSyncHandler.java
+@@ -11,0 +12 @@ import org.bukkit.Bukkit;
++import org.bukkit.entity.Entity;
+@@ -135 +136 @@ public class ScreenSyncHandler implements Listener {
+-        this.setScreen(spectator, screen);
++        this.setScreen(spectator, target.getUniqueId(), screen);
+@@ -141 +142 @@ public class ScreenSyncHandler implements Listener {
+-        this.setScreen(spectator, screen);
++        this.setScreen(spectator, targetView.getPlayer().getUniqueId(), screen);
+@@ -147 +148 @@ public class ScreenSyncHandler implements Listener {
+-        this.setScreen(spectator, screen);
++        this.setScreen(spectator, targetView.getPlayer().getUniqueId(), screen);
+@@ -153 +154 @@ public class ScreenSyncHandler implements Listener {
+-        this.setScreen(spectator, screen);
++        this.setScreen(spectator, targetView.getPlayer().getUniqueId(), screen);
+@@ -156 +157,6 @@ public class ScreenSyncHandler implements Listener {
+-    private void setScreen(Player spectator, SyncedScreen screen) {
++    private void setScreen(Player spectator, UUID expectedTarget, SyncedScreen screen) {
++        final Entity target = spectator.getSpectatorTarget();
++        if (!spectator.isOnline() || target == null || !target.getUniqueId().equals(expectedTarget)
++                || !spectator.getWorld().equals(target.getWorld())) {
++            return;
++        }
+@@ -166 +172 @@ public class ScreenSyncHandler implements Listener {
+-        this.plugin.getSyncController().sendPacket(spectator, ClientboundScreenSyncPacket.of(spectator.getSpectatorTarget().getUniqueId(), screen.isSurvivalInventory(), screen.isRequestedByClient(), true));
++        this.plugin.getSyncController().sendPacket(spectator, ClientboundScreenSyncPacket.of(expectedTarget, screen.isSurvivalInventory(), screen.isRequestedByClient(), true));
+@@ -250 +256,10 @@ public class ScreenSyncHandler implements Listener {
+-                Bukkit.getScheduler().runTask(this.plugin, () -> this.openSyncedContainer(spectator, view));
++                Bukkit.getScheduler().runTask(this.plugin, () -> {
++                    if (!spectator.isOnline() || !target.isOnline() || spectator.getSpectatorTarget() != target
++                            || !spectator.hasPermission(PERMISSION) || this.isViewingSyncedScreen(spectator)) {
++                        return;
++                    }
++                    final InventoryView currentView = target.getOpenInventory();
++                    if (currentView.getType() != InventoryType.CRAFTING && currentView.getType() != InventoryType.CREATIVE) {
++                        this.openSyncedContainer(spectator, currentView);
++                    }
++                });
