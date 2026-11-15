@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "1.0.0-preview.3",
+  "version": "1.0.0-preview.4",
   "minecraft": "1.21.1",
   "neoforge": "21.1.252",
   "java": 21,
@@ -49,7 +49,8 @@
       "sha1": "c51134304996a1c23a87ee76444f6d221cee0656",
       "sha512": "5901db192f1dea2df2d8a34c7b499e0bb8a9d4793fe0b77682a501cfa78f29c1ec02597118a56dc09b4896d5a1628e282b4780554ae1b8db73f68611efae7279",
       "sha256": "db26e60925fcace8fa47b75dcadc47581ef90cb574a947c3d315b0c7b87a0b99",
-      "license": "Original release asset downloaded from the author; license notices retained"
+      "license": "MIT at v0.8.9-beta.3; original release JAR; source template notice preserved",
+      "licenseSource": "https://github.com/ControlFlexMC/control-flex/blob/v0.8.9-beta.3/LICENSE"
     }
   ],
   "compiler": {

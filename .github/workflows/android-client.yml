@@ -37,7 +37,7 @@ jobs:
       - name: Verify actual pack, SDL3 configuration, audio SPI and website checksum
         run: >-
           python paper/integrations/android-client/verify.py
-          --pack "$RUNNER_TEMP/android-release/qiandengji-android-1.21.1-neoforge-1.0.0-preview.3.mrpack"
+          --pack "$RUNNER_TEMP/android-release/qiandengji-android-1.21.1-neoforge-1.0.0-preview.4.mrpack"
           --cache "$RUNNER_TEMP/android-inputs"
           --catalog paper/integrations/agent-portal/src/android-client-downloads.json
       - name: Install Chinese fonts for browser review

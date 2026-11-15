@@ -7,6 +7,7 @@ import { packageAt } from '../src/download-catalog.mjs';
 
 const regular = packageAt('/downloads/android-client');
 const native = packageAt('/downloads/android-native-client');
+const oldNative = '/downloads/qiandengji-android-1.21.1-neoforge-1.0.0-preview.3.mrpack';
 const baseUrl = 'https://downloads.example.test/releases/';
 
 test('Android download keeps the existing explicit activation and fixed-byte redirect', async t => {
@@ -40,6 +41,10 @@ test('native gamepad preview has an independent activation, direct link and down
       assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
     }
   }
+  assert.equal(native.version, '1.0.0-preview.4');
+  const legacy = await fetch(f.origin + oldNative, { redirect: 'manual' });
+  assert.equal(legacy.status, 307);
+  assert.equal(legacy.headers.get('x-checksum-sha256'), '76e8f1f05fa11b28100711be2c23d4bd28b0794a6d6ea48006a7bfaee9c9e1ba');
   const { packages } = await (await fetch(f.origin + '/api/v1/downloads')).json();
   const release = packages.find(row => row.id === native.id);
   assert.equal(release.androidDeviceVerified, false);
@@ -76,5 +81,7 @@ test('phone page offers both packs and documents SDL passthrough', async t => {
   assert.match(text, /href="\/downloads\/android-native-client"/);
   assert.match(text, /SDL 直通/);
   assert.match(text, /连续模拟移动/);
+  assert.match(text, /Xbox <strong>B<\/strong>/);
+  assert.match(text, /音量触发.*解除麦克风静音/);
   assert.doesNotMatch(text, /检查映射|手机已实测/);
 });

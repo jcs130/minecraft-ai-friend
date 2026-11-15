@@ -21,6 +21,8 @@ BRIDGE_NAME = 'qiandengji-android-audio-1.0.1-qiandengji.1.jar'
 NATIVE_CLASS = 'de/maxhenkel/shim/NativeAudio.class'
 FCL_RELEASE = '1.3.4.6'
 NATIVE_PACK_ID = 'android-native-client-pack'
+VOICE_PTT_KEY = 'key.push_to_talk'
+VOICE_PROFILE_BUTTONS = {'recommend': 'buttonB', 'basic': 'buttonB', 'bedrock': 'buttonX'}
 
 
 def encoded(value):
@@ -148,7 +150,22 @@ def server_list(address):
     return b'\x0a\x00\x00' + tag(9, 'servers', b'\x0a' + struct.pack('>i', 1) + server) + b'\x00'
 
 
-def make_pack(lock, bridge):
+def voice_controller_files(control_flex, voice_version):
+    config = {'mod_id': 'voicechat', 'mod_name': 'Simple Voice Chat', 'mod_versions': [{
+        'version': voice_version.removeprefix('neoforge-'),
+        'inGameKeys': {VOICE_PTT_KEY: {'channels': ['keyMapping', 'eventBus', 'glfwPoll']}},
+    }]}
+    files = {'overrides/config/controlflex/compat/user/voicechat.json': encoded(config)}
+    with zipfile.ZipFile(io.BytesIO(control_flex)) as jar:
+        for name, button in VOICE_PROFILE_BUTTONS.items():
+            profile = json.loads(jar.read(f'controlflex/templates/{name}.json'))
+            profile['mainActionBindings']['voicechat:' + VOICE_PTT_KEY] = button + '|HOLD'
+            files[f'overrides/config/controlflex/profiles/{name}.json'] = encoded(profile)
+    files['overrides/LICENSES/ControlFlex-0.8.9-beta.3-MIT.txt'] = text_input('LICENSE.ControlFlex.txt')
+    return files
+
+
+def make_pack(lock, bridge, control_flex):
     version = lock['version']
     filename = f'qiandengji-android-1.21.1-neoforge-{version}.mrpack'
     index = {
@@ -161,6 +178,7 @@ def make_pack(lock, bridge):
                    'env': {'client': 'required', 'server': 'unsupported'},
                    'downloads': [row['url']], 'fileSize': row['bytes']} for row in lock['files']]}
     voice = '''# Qiandengji Android compatibility preview. Microphone starts muted.
+config_version=1
 use_natives=false
 java_microphone_implementation=true
 microphone=Android AudioRecord
@@ -173,7 +191,7 @@ denoiser=false
 audio_type=NORMAL
 voice_chat_volume=1.0
 '''.encode()
-    options = b'lang:zh_cn\nrenderDistance:6\nsimulationDistance:5\nmaxFps:60\nguiScale:3\n'
+    options = b'version:3955\nlang:zh_cn\nrenderDistance:6\nsimulationDistance:5\nmaxFps:60\nguiScale:3\nkey_key.push_to_talk:key.keyboard.f8\n'
     host, port = lock['serverAddress'].rsplit(':', 1)
     analog_servers = encoded({'version': 1, 'entries': [{'kind': 'address', 'host': host, 'port': int(port)}]})
     provenance = {
@@ -181,7 +199,7 @@ voice_chat_volume=1.0
         'serverAddress': lock['serverAddress'], 'source': 'https://github.com/jcs130/minecraft-ai-friend',
         'channel': 'android-native-gamepad-preview', 'androidDeviceVerified': False,
         'gamepad': {'mode': 'SDL_DIRECT', 'mod': 'controlflex', 'recommendedFcl': FCL_RELEASE,
-                    'physicalAndroidDeviceVerified': False},
+                    'physicalAndroidDeviceVerified': False, 'voicePushToTalk': VOICE_PROFILE_BUTTONS},
         'voiceEndToEndVerified': False, 'officialGameModsModified': False,
         'audioBridgeModified': True, 'audioBridgeSha256': digest(bridge),
         'contents': [row['id'] + ' ' + row['version'] for row in lock['files']],
@@ -189,6 +207,7 @@ voice_chat_volume=1.0
                         'Native sticks, buttons and reconnection must be checked on device.',
                         'Microphone permission, input/output and public UDP must be checked on device.',
                         'Native denoising, automatic gain and SVC recording are disabled in Java fallback.']}
+    svc, = [row for row in lock['files'] if row['id'] == 'simple-voice-chat']
     files = {'modrinth.index.json': encoded(index),
              'overrides/mods/' + BRIDGE_NAME: bridge,
              'overrides/config/voicechat/voicechat-client.properties': voice,
@@ -198,7 +217,8 @@ voice_chat_volume=1.0
              'overrides/README-Qiandengji-Android.md': text_input('PLAYER_GUIDE.md'),
              'overrides/qiandengji-android-manifest.json': encoded(provenance),
              'overrides/LICENSES/Android-Audio-Shim-MIT.txt': text_input('LICENSE.upstream.txt'),
-             'overrides/LICENSES/UPSTREAM-SOURCES.json': encoded(lock)}
+             'overrides/LICENSES/UPSTREAM-SOURCES.json': encoded(lock),
+             **voice_controller_files(control_flex, svc['version'])}
     data = archive(files)
     row = {
         'id': NATIVE_PACK_ID, 'framework': 'minecraft', 'category': 'android-client',
@@ -208,7 +228,7 @@ voice_chat_volume=1.0
         'license': '音频适配 MIT；其余模组由启动器从原作者下载',
         'sourceUrl': 'https://github.com/jcs130/minecraft-ai-friend/tree/main/paper/integrations/android-client',
         'install': 'FCL 导入为独立实例，运行时选 Java 21。连接手柄后在游戏侧栏启用「手柄控制」，输入模式选「SDL 直通」。',
-        'includes': 'Control Flex 0.8.9-beta.3、女仆 1.5.3、YSM 2.6.5、附近语音与主世界地址。',
+        'includes': '含 Control Flex、女仆、YSM 和附近语音。默认手柄方案按住右侧面键说话。',
         'compatibilityNote': '兼容预览。手机上的摇杆、按键和语音仍待实机验证。',
         'androidDeviceVerified': False}
     return filename, data, row
@@ -219,9 +239,11 @@ def build(cache, output, java='java'):
     cache.mkdir(parents=True, exist_ok=True)
     rows = [*lock['files'], lock['audioShim'], lock['compiler']]
     with ThreadPoolExecutor(max_workers=4) as pool:
-        inputs = list(pool.map(lambda row: load_input(row, cache), rows))
-    bridge = build_bridge(inputs[-2], lock['audioShim'], cache / lock['compiler']['filename'], java)
-    filename, data, row = make_pack(lock, bridge)
+        inputs = dict(zip((row['filename'] for row in rows), pool.map(lambda row: load_input(row, cache), rows)))
+    controller, = [row for row in lock['files'] if row['id'] == 'control-flex']
+    bridge = build_bridge(inputs[lock['audioShim']['filename']], lock['audioShim'],
+                          cache / lock['compiler']['filename'], java)
+    filename, data, row = make_pack(lock, bridge, inputs[controller['filename']])
     output.mkdir(parents=True, exist_ok=True)
     results = {filename: data, 'android-client-downloads.json': encoded([row]),
                'release.json': encoded({'schema': 1, 'version': lock['version'], 'artifacts': [row],
