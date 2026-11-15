@@ -817,7 +817,7 @@ final class DungeonManager implements Listener {
         if ((lobbyChest || (n > 0 && block.getX() == chestX(n) && block.getY() == Y[n - 1] + 1
                 && block.getZ() == chestZ(n))) && block.getType() == Material.CHEST) {
             event.setCancelled(true);
-            openStash(event.getPlayer());
+            openStashPages(event.getPlayer());
             return true;
         }
         if (plugin.trialButtons().handleInteract(event)) return true;
@@ -2235,7 +2235,14 @@ final class DungeonManager implements Listener {
         if(moved)plugin.saveConfig();
         plugin.inventoryTidy().onStashOpen(player);
         if (plugin.inventoryTidy().stashWritesBlocked(id)) return;
-        player.sendMessage("个人箱第"+(page+1)+"/10页，共540格；/mycli arena stash pages 选择其他页。");
+        player.sendMessage("§e个人仓库第"+(page+1)+"/10页，共540格；本页54格不是全部库存。罗盘→背包与仓库→个人仓库可选任意页。");
+        var navigation=net.kyori.adventure.text.Component.text("[打开10页目录] ")
+            .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli arena stash pages"));
+        if(page>0)navigation=navigation.append(net.kyori.adventure.text.Component.text(" [上一页] ")
+            .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli arena stash page "+page)));
+        if(page+1<PagedPersonalStash.PAGES)navigation=navigation.append(net.kyori.adventure.text.Component.text(" [下一页] ")
+            .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli arena stash page "+(page+2))));
+        player.sendMessage(navigation);
         stashMenus.put(inv, id);
         player.openInventory(inv);
         if (player.getOpenInventory().getTopInventory() == inv) chargeRemoteStash(player);

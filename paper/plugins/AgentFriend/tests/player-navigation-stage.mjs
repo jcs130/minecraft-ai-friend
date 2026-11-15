@@ -18,6 +18,9 @@ async function until(f,name,ms=18000){for(let end=Date.now()+ms;Date.now()<end;)
 async function spawn(name){const b=createBot({host:'127.0.0.1',port:26461,username:name,auth:'offline',version:'1.21.1',physicsEnabled:false,hideErrors:true});bots.push(b);b.lines=[];b.particles=0;b.on('messagestr',line=>b.lines.push(line));b.on('error',e=>report.errors??=[]);b._client.on('world_particles',p=>{if(p.particle?.type==='end_rod'||JSON.stringify(p).includes('end_rod'))b.particles++});installRecipePacketBypass(b._client);await until(()=>b.entity&&b.player?.uuid,name,45000);return b}
 try{
  const actor=await spawn('NavActorQA'),target=await spawn('NavTargetQA');
+ // Join-time starter items are unrelated to travel and are delivered after 40 ticks.
+ await wait(3000);
+ await qa('freezemana');
  const attempt=async()=>{const at=actor.lines.length;actor.chat('/mycli locate tp NavTargetQA');await until(()=>actor.lines.slice(at).some(l=>/已安全抵达|未耗魔|队友附近|传送冷却|传送被/.test(l)),'teleport response');const result=await qa('status');return {...result,lines:actor.lines.slice(at)}};
  for(const kind of ['lobby','trial','site']){
   const before=await qa('setup '+kind);await wait(500);const after=await attempt();report[kind]={before,after};

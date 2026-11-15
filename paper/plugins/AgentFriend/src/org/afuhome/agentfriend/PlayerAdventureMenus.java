@@ -64,14 +64,18 @@ final class PlayerAdventureMenus implements Listener {
             content="你好，"+p.getName()+"。\n右键罗盘打开大厅；潜行右键打开快捷栏。\n选择分区，再查看具体内容。";
             buttons.add(button(4,Action.NONE,"COMPASS","欢迎，"+p.getName(),"点击图标浏览；物品只是按钮","按 Esc 关闭；CLI仍可使用"));
             buttons.add(button(28,Action.TRAVEL,"ENDER_PEARL","传送与集合","公共地标、个人传送点、归乡、战斗增援"));
-            buttons.add(button(29,Action.ONBOARDING,"OAK_SIGN","我的下一步","查看自己的当前入门建议，不自动执行"));
+            buttons.add(button(30,Action.STASH,"ENDER_CHEST","个人仓库 · 10页540格","直接选择页码；与大背包、公共箱分开"));
+            buttons.add(button(29,Action.ONBOARDING,"OAK_SIGN","我的下一步","查看职业、通用技能、公会委托和任务交付建议"));
         }else buttons.add(button(4,Action.NONE,"PAPER",title,"先查看内容与条件，再自行决定","下方箭头返回；罗盘回到大厅"));
         if(page==Page.COMMON){
-            content="13项通用技能无需选职。先点技能看效果、条件和消耗；在说明页主动使用。";
-            for(int i=0;i<NativeRpg.COMMON_IDS.size();i++){
+            content=NativeRpg.COMMON_IDS.size()+"项通用技能无需选职；公用同一个魔力池。选择页码，再点技能看条件和消耗。";
+            int pageNumber=detail.equals("2")?1:0,start=pageNumber*CONTENT.length;
+            for(int i=start;i<Math.min(start+CONTENT.length,NativeRpg.COMMON_IDS.size());i++){
                 String id=NativeRpg.COMMON_IDS.get(i);var e=guide(id);
-                buttons.add(new Button(CONTENT[i],Action.COMMON_DETAIL,id,e.icon().name(),e.name(),List.of(e.costLine(),"点击查看说明；此处不会施法")));
+                buttons.add(new Button(CONTENT[i-start],Action.COMMON_DETAIL,id,e.icon().name(),e.name(),List.of(e.costLine(),"点击查看说明；此处不会施法")));
             }
+            if(pageNumber>0)buttons.add(new Button(28,Action.COMMON_PAGE,"1","ARROW","通用技能 · 上一页",List.of("不施法、不扣魔力")));
+            if(start+CONTENT.length<NativeRpg.COMMON_IDS.size())buttons.add(new Button(30,Action.COMMON_PAGE,"2","ARROW","通用技能 · 下一页",List.of("跃空与留影特效也在通用目录中")));
         }else if(page==Page.COMMON_DETAIL){
             if(!NativeRpg.COMMON.contains(detail))return view(p,Page.COMMON,"");
             var e=guide(detail);title=e.name();
@@ -133,7 +137,7 @@ final class PlayerAdventureMenus implements Listener {
         }else if(page==Page.HELP){
             content="普通聊天与全服喊话以服务器当前设置为准。点击下方按钮获取当前范围与准确用法。\n大多数功能无需打指令：右键罗盘 → 选择分区。\n原生子菜单关闭后，再右键罗盘即可回到大厅。";
             buttons.add(button(10,Action.ONBOARDING,"OAK_SIGN","查询聊天与入门","返回当前聊天规则和本人下一步"));
-            buttons.add(button(14,Action.COMMON,"BLAZE_ROD","生存技能","13项通用技能的实际说明"));
+            buttons.add(button(14,Action.COMMON,"BLAZE_ROD","生存技能","全部通用技能的实际效果和使用条件"));
         }else if(page==Page.ERROR){
             content="这次入口未能确认完成，已停止。若是交易、学习或领取，不要连续重试；先查原记录或联系服主并说明时间。";
             buttons.add(button(13,Action.NONE,"BARRIER","服务暂不可用",content));
@@ -174,6 +178,7 @@ final class PlayerAdventureMenus implements Listener {
         Page target=destination(b.action());
         if(target!=null){open(p,target,"");return;}
         if(b.action()==Action.BACK){open(p,parent(view.page()),"");return;}
+        if(b.action()==Action.COMMON_PAGE){open(p,Page.COMMON,b.payload());return;}
         if(b.action()==Action.COMMON_DETAIL){open(p,Page.COMMON_DETAIL,b.payload());return;}
         if(b.action()==Action.PARTY_CONFIRM){open(p,Page.PARTY_CONFIRM,b.payload());return;}
         if(b.action()==Action.CLOSE)return;
