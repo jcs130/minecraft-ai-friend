@@ -1,0 +1,28 @@
+{
+  "name": "agent-mc-memory",
+  "version": "0.1.0-phase1",
+  "private": true,
+  "type": "module",
+  "description": "Hierarchical, bi-temporal memory for resident Minecraft agents: cold episode log, temporal knowledge graph (local or Graphiti sidecar) and memory tools",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "packageManager": "pnpm@11.5.0",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "smoke:local": "tsx scripts/smoke.ts --backend local",
+    "smoke:graphiti": "tsx scripts/smoke.ts --backend graphiti"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "4.23.15",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
