@@ -26,7 +26,7 @@ record ResidentConfig(int schema, int planningSeconds, List<Resident> residents)
     record Home(String dimension, Point door, Point bed, String facing, Point sign, String signFacing,
                 Point work, Area interior, List<Furniture> furniture) {}
     record Resident(UUID maidId, String name, String profession, String nativeTask, Home home,
-                    Area workArea, List<String> mineBlocks, List<String> buildBlocks, boolean autonomous, Appearance appearance) {}
+                    Area workArea, List<String> mineBlocks, List<String> buildBlocks, boolean autonomous, Appearance appearance,boolean roamingWork) {}
     static ResidentConfig read(Path path, MaidAgentsServer agents) throws java.io.IOException {
         if(!Files.exists(path)) return new ResidentConfig(1,180,List.of());
         if(Files.size(path)>128*1024) throw new IllegalArgumentException("residents_config_too_large");

@@ -21,6 +21,14 @@ public final class CompanionTravelAccess {
             && plugin.isEnabled() && plugin.nativeRpgMayAct(partner);
     }
 
+    /** A registered NPC may lead another NPC; never borrow its creator's privileges. */
+    public static boolean mayInviteResidentEntity(Entity partner, Location landing) {
+        if(partner instanceof Player player)return mayInviteResident(player,landing);
+        if(!Bukkit.isPrimaryThread()||!partner.isValid()||partner.isDead()||!ResidentCli.isResident(partner.getUniqueId()))return false;
+        Player actor=ResidentCli.find(partner.getUniqueId());
+        return actor!=null&&mayInviteResident(actor,landing);
+    }
+
     public static boolean mayRejoin(Player partner, Location landing) {
         return Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin
             && plugin.isEnabled() && plugin.nativeRpgMayAct(partner) && !plugin.namedTravelBlocked(partner)

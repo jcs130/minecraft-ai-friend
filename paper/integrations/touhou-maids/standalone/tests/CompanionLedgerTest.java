@@ -72,6 +72,14 @@ public final class CompanionLedgerTest {
         catch (java.io.IOException expected) { checks++; }
         check(journal.recall(npc, player).getFirst().get("reply").equals("你好阿岚"));
         check(new CompanionJournal(dir.resolve("journal")).latest(npc, player).get("reply").equals("你好阿岚"));
+        journal.action(npc,turn,java.util.Map.of("requestId",turn.toString(),"action","cast","completed",true,"manaSpent",5));
+        var ownAction=new CompanionJournal(dir.resolve("journal")).recall(npc,npc).getFirst();
+        check(ownAction.get("kind").equals("resident_action") && ownAction.get("sourceRequestId").equals(turn.toString()));
+        check(!ownAction.get("id").equals(turn.toString()) && ownAction.get("reply").toString().contains("\"completed\":true"));
+        check(journal.latest(npc,player).get("reply").equals("你好阿岚"));
+        try {journal.action(npc,turn,java.util.Map.of("completed",false));throw new AssertionError("action evidence overwritten");}
+        catch(java.io.IOException expected){checks++;}
+        check(journal.recall(npc,npc).size()==1 && journal.recall(npc,npc).getFirst().get("reply").toString().contains("\"completed\":true"));
         UUID interrupted = UUID.randomUUID();
         journal.append(npc, interrupted, "request", java.util.Map.of("id", interrupted.toString(), "maidId", npc.toString(), "speakerId", visitor.toString()));
         check(journal.latest(npc, visitor).get("status").equals("unknown"));

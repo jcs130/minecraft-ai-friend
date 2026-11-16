@@ -5,19 +5,19 @@ import java.util.Set;
 import java.util.UUID;
 
 /** Native dialogue is structured content, never a permission to invoke arbitrary tools. */
-record CompanionDecision(String reply, String action, String targetNpc, String spokenReply, String command) {
+record CompanionDecision(String reply, String action, String targetNpc, String spokenReply, String command, com.google.gson.JsonObject bodyAction) {
     static CompanionDecision parse(String text, boolean social) {
         try {
             if (text == null || text.length() > 8192) throw new IllegalArgumentException();
             var object = JsonParser.parseString(text).getAsJsonObject();
-            if (!Set.of("reply", "action", "targetNpc", "spokenReply", "command").containsAll(object.keySet()) ||
+            if (!Set.of("reply", "action", "targetNpc", "spokenReply", "command", "bodyAction").containsAll(object.keySet()) ||
                     !object.has("reply") || !object.has("action")) throw new IllegalArgumentException();
             for (String key : Set.of("reply", "action")) if (!object.get(key).isJsonPrimitive() ||
                     !object.getAsJsonPrimitive(key).isString()) throw new IllegalArgumentException();
             String reply = object.get("reply").getAsString(), action = object.get("action").getAsString();
             if (reply.isBlank() || reply.codePointCount(0, reply.length()) > 140 || reply.contains("---") ||
                     reply.codePoints().anyMatch(Character::isISOControl) ||
-                    !Set.of("talk", "decline", "join", "follow", "stay", "work", "dismiss", "invite", "talk_to", "cli").contains(action))
+                    !Set.of("talk", "decline", "join", "follow", "stay", "work", "dismiss", "invite", "talk_to", "cli", "act").contains(action))
                 throw new IllegalArgumentException();
             boolean directed = Set.of("invite", "talk_to").contains(action);
             String target = null;
@@ -43,7 +43,14 @@ record CompanionDecision(String reply, String action, String targetNpc, String s
                 if(command.isBlank()||command.length()>3500||command.codePoints().anyMatch(Character::isISOControl))throw new IllegalArgumentException();
             }
             if(action.equals("cli")!=(command!=null))throw new IllegalArgumentException();
-            return new CompanionDecision(reply, action, target, spoken, command);
+            com.google.gson.JsonObject body=null;
+            if(object.has("bodyAction")&&!object.get("bodyAction").isJsonNull()) {
+                if(!object.get("bodyAction").isJsonObject())throw new IllegalArgumentException();
+                body=object.getAsJsonObject("bodyAction").deepCopy();ResidentContract.validate(body);
+                if(body.get("action").getAsString().equals("cli"))throw new IllegalArgumentException();
+            }
+            if(action.equals("act")!=(body!=null))throw new IllegalArgumentException();
+            return new CompanionDecision(reply, action, target, spoken, command, body);
         } catch (RuntimeException bad) { throw new IllegalArgumentException("invalid_npc_decision"); }
     }
 }

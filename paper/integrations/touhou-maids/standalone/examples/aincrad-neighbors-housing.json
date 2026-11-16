@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Survey and character design, not deployment config; new independent native identities and memory scopes required",
+  "initialDimension": "minecraft:aincrad",
+  "homeIsDimensionRestriction": false,
+  "productionChanged": false,
+  "sourceTerrainSha256": "94db07c591f198f3b02f3f227e1d7996cec6d22966e4ca03ff3be924486a7f95",
+  "characters": [
+    {
+      "id": "shu",
+      "name": "黍",
+      "spawnEnabled": false,
+      "installationState": "surveyed_not_deployed",
+      "profession": "farmer",
+      "role": "草药师 · 田园与水土",
+      "persona": "温和、从容，珍惜粮食与土地，喜欢栽培作物、料理和帮助邻里。按黍的角色形象进行居民化演绎；能够协商或拒绝邀请，角色背景不当作本世界已发生的经历。",
+      "home": {
+        "dimension": "minecraft:aincrad",
+        "door": {
+          "x": -672,
+          "y": 67,
+          "z": 977
+        },
+        "bed": {
+          "x": -669,
+          "y": 67,
+          "z": 978
+        },
+        "facing": "east",
+        "sign": {
+          "x": -674,
+          "y": 67,
+          "z": 975
+        },
+        "signFacing": "north",
+        "work": {
+          "x": -671,
+          "y": 67,
+          "z": 979
+        },
+        "interior": {
+          "min": {
+            "x": -673,
+            "y": 67,
+            "z": 978
+          },
+          "max": {
+            "x": -668,
+            "y": 70,
+            "z": 979
+          }
+        },
+        "furniture": [
+          {
+            "at": {
+              "x": -668,
+              "y": 67,
+              "z": 979
+            },
+            "block": "minecraft:barrel"
+          },
+          {
+            "at": {
+              "x": -669,
+              "y": 67,
+              "z": 979
+            },
+            "block": "minecraft:crafting_table"
+          }
+        ]
+      },
+      "appearance": {
+        "modelId": "qd_hub_shu.ysm",
+        "texture": "texture",
+        "sha256": "6fb1e1c945c5838f6068d71aa3bf26af099b345bf3cb911b1131873978137425",
+        "author": "烈鸟比百",
+        "source": "https://ysmhub.top/models/import-6fb1e1c945c5-172f5a4b",
+        "declaredLicense": "CC BY-NC-SA"
+      },
+      "captionLanguage": "zh-CN",
+      "voice": null,
+      "nativeTaskSelection": "Choose a validated task and actual supplies during provisioning; housing tests used idle",
+      "bodyId": null,
+      "memoryScope": null
+    },
+    {
+      "id": "saber_alter",
+      "name": "阿尔托莉雅〔Alter〕",
+      "spawnEnabled": false,
+      "installationState": "surveyed_not_deployed",
+      "profession": "guardian",
+      "role": "守护剑士 · 近战与护卫",
+      "persona": "寡言果断、重视承诺和实力，对同伴的安全认真负责。按 Saber Alter 的角色形象进行居民化演绎，不声称拥有未学会的宝具或未装备的武器；本世界经历只来自自己的记忆。",
+      "home": {
+        "dimension": "minecraft:aincrad",
+        "door": {
+          "x": -672,
+          "y": 67,
+          "z": 891
+        },
+        "bed": {
+          "x": -669,
+          "y": 67,
+          "z": 889
+        },
+        "facing": "east",
+        "sign": {
+          "x": -674,
+          "y": 67,
+          "z": 893
+        },
+        "signFacing": "south",
+        "work": {
+          "x": -671,
+          "y": 67,
+          "z": 890
+        },
+        "interior": {
+          "min": {
+            "x": -673,
+            "y": 67,
+            "z": 889
+          },
+          "max": {
+            "x": -668,
+            "y": 70,
+            "z": 890
+          }
+        },
+        "furniture": [
+          {
+            "at": {
+              "x": -668,
+              "y": 67,
+              "z": 890
+            },
+            "block": "minecraft:barrel"
+          },
+          {
+            "at": {
+              "x": -669,
+              "y": 67,
+              "z": 890
+            },
+            "block": "minecraft:crafting_table"
+          }
+        ]
+      },
+      "appearance": {
+        "modelId": "qd_hub_saber_alter.ysm",
+        "texture": "default",
+        "sha256": "5f97aca2a1d672300b7d9e38df329d90da811c74c96334762a17b6c1161e242f",
+        "author": "墓野奈奈 / zoe / 随便取名字的萌新",
+        "source": "https://ysmhub.top/models/import-5f97aca2a1d6-241cf699",
+        "declaredLicense": "CC BY-NC-SA"
+      },
+      "captionLanguage": "zh-CN",
+      "voice": null,
+      "nativeTaskSelection": "Choose a validated task and actual supplies during provisioning; housing tests used idle",
+      "bodyId": null,
+      "memoryScope": null
+    }
+  ]
+}

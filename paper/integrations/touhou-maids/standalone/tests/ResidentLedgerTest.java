@@ -26,6 +26,12 @@ public final class ResidentLedgerTest {
         reject("command: not a field",()->validate("{\"action\":\"rest\",\"command\":\"op me\"}"));
         reject("channel:",()->validate("{\"action\":\"say\",\"text\":\"secret\",\"channel\":\"private\"}"));
         check(ResidentContract.describe().get("reachBlocks").equals(5));
+        check(validate("{\"action\":\"rest\",\"reason\":\"等天亮再工作。\"}").equals("rest"));
+        reject("reason: string",()->validate("{\"action\":\"rest\",\"reason\":{\"command\":\"op\"}}"));
+        check(ResidentContract.holdsPosition(JsonParser.parseString("{\"action\":\"cli\",\"command\":\"photo take trip third 1\"}").getAsJsonObject()));
+        check(!ResidentContract.holdsPosition(JsonParser.parseString("{\"action\":\"cli\",\"command\":\"photo status\"}").getAsJsonObject()));
+        check(!ResidentContract.holdsPosition(JsonParser.parseString("{\"action\":\"cli\",\"command\":\"archive create photo take|trip\"}").getAsJsonObject()));
+        check(!ResidentContract.holdsPosition(JsonParser.parseString("{\"action\":\"rest\"}").getAsJsonObject()));
         UUID body=UUID.randomUUID(),other=UUID.randomUUID(),request=UUID.randomUUID();
         var state=new ResidentState(root.resolve("state"));check(state.load(body)==null);
         state.locate(body,"minecraft:overworld",-100,35);state.begin(body,request);
@@ -55,6 +61,11 @@ public final class ResidentLedgerTest {
         var bilingual=CompanionDecision.parse("{\"reply\":\"一起走吧。\",\"spokenReply\":\"一緒に行こう。\",\"action\":\"talk\"}",false);
         check(bilingual.reply().equals("一起走吧。")&&bilingual.spokenReply().equals("一緒に行こう。"));
         check(CompanionDecision.parse("{\"reply\":\"好。\",\"action\":\"talk\"}",false).spokenReply()==null);
+        check(CompanionDecision.parse("{\"reply\":\"我先加速。\",\"action\":\"act\",\"bodyAction\":{\"action\":\"cast\",\"skill\":\"sprint\"}}",false).bodyAction().get("skill").getAsString().equals("sprint"));
+        reject("invalid_npc_decision",()->CompanionDecision.parse("{\"reply\":\"好。\",\"action\":\"act\"}",false));
+        reject("invalid_npc_decision",()->CompanionDecision.parse("{\"reply\":\"好。\",\"action\":\"talk\",\"bodyAction\":{\"action\":\"rest\"}}",false));
+        reject("invalid_npc_decision",()->CompanionDecision.parse("{\"reply\":\"好。\",\"action\":\"act\",\"bodyAction\":{\"action\":\"walk\",\"to\":{\"x\":1,\"y\":2,\"z\":3}}}",false));
+        reject("invalid_npc_decision",()->CompanionDecision.parse("{\"reply\":\"好。\",\"action\":\"act\",\"bodyAction\":{\"action\":\"cli\",\"command\":\"op name\"}}",false));
         check(CompanionDecision.parse("{\"reply\":\"我来写一本旅行书。\",\"action\":\"cli\",\"command\":\"archive create 旅记|今天看到了湖泊。\"}",false).command().startsWith("archive create"));
         reject("invalid_npc_decision",()->CompanionDecision.parse("{\"reply\":\"好。\",\"action\":\"cli\"}",false));
         reject("invalid_npc_decision",()->CompanionDecision.parse("{\"reply\":\"好。\",\"action\":\"talk\",\"command\":\"photo take test\"}",false));

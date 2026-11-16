@@ -30,6 +30,34 @@ public final class RecruitmentProbe {
                 var source = ctx.getSource();
                 var server = source.getServer();
                 ServerPlayer player = server.getPlayerList().getPlayerByName("NpcModelQA");
+                if(a[0].equals("npc-ask")) {
+                    UUID speakerId=UUID.fromString(a[1]);String[] rest=a[2].split(" ",2);UUID target=UUID.fromString(rest[0]);EntityMaid speaker=null;
+                    for(var level:server.getAllLevels())if(level.getEntity(speakerId)instanceof EntityMaid found)speaker=found;
+                    if(speaker==null)throw new IllegalArgumentException("test_body_missing");
+                    try {
+                        var type=Class.forName("local.qdj.maids.brain.MaidAgentsMod");var running=type.getDeclaredField("running");running.setAccessible(true);var runtime=running.get(null);
+                        var get=runtime.getClass().getDeclaredMethod("companions");get.setAccessible(true);var companions=get.invoke(runtime);
+                        var ask=companions.getClass().getDeclaredMethod("ask",net.minecraft.world.entity.LivingEntity.class,UUID.class,String.class,int.class);ask.setAccessible(true);
+                        return tell(source,ask.invoke(companions,speaker,target,rest[1],1));
+                    }catch(ReflectiveOperationException failed){throw new IllegalArgumentException(failed);}
+                }
+                if(a[0].equals("block")) {
+                    var xyz=(a[1]+" "+a[2]).split(" ");var pos=new net.minecraft.core.BlockPos(Integer.parseInt(xyz[0]),Integer.parseInt(xyz[1]),Integer.parseInt(xyz[2]));
+                    var block=source.getLevel().getBlockState(pos);
+                    return tell(source,Map.of("id",net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block.getBlock()).toString(),"state",block.toString()));
+                }
+                if(a[0].equals("photo-hold")) {
+                    UUID id=UUID.fromString(a[1]);EntityMaid maid=null;
+                    for(var level:server.getAllLevels())if(level.getEntity(id) instanceof EntityMaid found)maid=found;
+                    if(maid==null)throw new IllegalArgumentException("test_body_missing");
+                    try {
+                    var type=Class.forName("local.qdj.maids.brain.MaidAgentsMod");var get=type.getDeclaredMethod("residents");get.setAccessible(true);var residents=get.invoke(null);
+                    var submit=residents.getClass().getDeclaredMethod("submit",UUID.class,UUID.class,com.google.gson.JsonObject.class);submit.setAccessible(true);
+                    var input=com.google.gson.JsonParser.parseString("{\"action\":\"cli\",\"command\":\"photo take acceptance third 1\"}").getAsJsonObject();
+                    UUID request=UUID.randomUUID();Object receipt=submit.invoke(residents,id,request,input);
+                    return tell(source,Map.of("requestId",request.toString(),"receipt",receipt,"canMove",maid.canBrainMoving(),"noAi",maid.isNoAi()));
+                    }catch(ReflectiveOperationException failed){throw new IllegalArgumentException(failed);}
+                }
                 if(a[0].equals("arena-start")||a[0].equals("arena-info")){
                     if(player==null)throw new IllegalArgumentException("QA player not connected");
                     try{
@@ -122,6 +150,9 @@ public final class RecruitmentProbe {
                     result.put("bubbleCount", maid.getChatBubbleManager().getChatBubbleDataCollection().size());
                     result.put("ysm", maid.getYsmModelId());
                     result.put("sleeping",maid.isSleeping());
+                    result.put("dimension",maid.level().dimension().location().toString());
+                    result.put("canMove",maid.canBrainMoving());result.put("noAi",maid.isNoAi());
+                    result.put("rpg",maid.getPersistentData().getCompound("tlm_resident_rpg").toString());
                     result.put("mainhand",maid.getMainHandItem().toString());
                     return tell(source, result);
                 }

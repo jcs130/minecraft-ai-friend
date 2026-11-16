@@ -20,6 +20,10 @@ public final class MaidAgentsMod {
         return java.util.Map.copyOf(out);
     }
     static MaidResidents residents(){return running==null?null:running.residents();}
+    /** Transient action ownership, never a persisted NoAI/sitting change. */
+    public static boolean residentHoldsPosition(java.util.UUID id) {
+        var current=running;return current!=null&&current.residents()!=null&&current.residents().holdsPosition(id);
+    }
     static boolean managed(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid) {
         return running!=null&&running.agent(maid.getUUID())!=null&&running.agent(maid.getUUID()).matches(maid);
     }

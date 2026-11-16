@@ -1,4 +1,6 @@
-# 艾因格朗特居民 0.3.0
+# 艾因格朗特居民
+
+2026-11-17：0.3.2 为已构建的隔离候选，正式仍为 0.3.1。跨维度同行、临时导航锚点、组队施法/换装和拍照持有导航见[逐项验收](../../../docs/NPC_ACCEPTANCE_20261117.md)。初始住宅在艾因格朗特，当前身体可以前往其他维度；不是所有玩家玩法、所有模型客户端都已完成适配。
 
 本版已于 2026-11-16 以合并 JAR 安装到千灯纪，第一位居民是艾因格朗特的桐人；见[正式记录与边界](../../../docs/AINCRAD_RESIDENTS_DEPLOYED_20261116.md)。它在 0.2.0 对话招募、多人同行、NPC 互聊及独立记忆上增加住房、原生生活行动、领地检查和角色外观选择。身体仍是车万女仆实体，寻路、工作、战斗和睡眠使用原生 AI，不加入服务器玩家列表。
 
@@ -14,7 +16,7 @@
 
 ## 构建与安装形态
 
-普通 NeoForge 使用独立 `tlm-maid-agents-0.3.0.jar`。千灯纪已有 `qiandengji_maid_brain` 时必须使用合并构建：
+普通 NeoForge 使用独立 `tlm-maid-agents` JAR。千灯纪已有 `qiandengji_maid_brain` 时必须使用合并构建：
 
 ```sh
 python build.py --server /path/to/isolated-neoforge --maid /path/to/original-tlm.jar --javac /path/to/jdk21/bin/javac --hybrid-brain /path/to/current-qiandengji-maid-brain.jar --output /path/to/candidate.jar --bundle /path/to/candidate.zip
@@ -57,6 +59,7 @@ Youer 还需要 AgentFriend 的 `residentProtection` 和居民身份适配。用
 | `... plan` | 让已选择的模型决定一个动作，返回请求 UUID |
 | `... act <REQUEST_UUID> <JSON>` | 串行提交一个动作，原 UUID 查询结果 |
 | `... receipt <REQUEST_UUID>` | 查询受理、执行或未知结果，不重放 |
+| `... travel-receipt <REQUEST_UUID>` | 管理员查询原同行传送结果及原身体当前的位置；二者分列，不把现在到场当作旧动作成功 |
 | `... protect {"action":"container","at":{"x":127,"y":81,"z":102}}` | 按该 NPC 自己的身份查询领地；未知不能当作允许 |
 | `... home-check` / `... furnish <REQUEST_UUID>` | 查看住房计划／明确安装并绑定原生日程 |
 | `... appearance` | 核验本地模型 SHA256，选择模型并回读 ID/贴图；不下载、不换身体 |
@@ -69,6 +72,10 @@ Youer 还需要 AgentFriend 的 `residentProtection` 和居民身份适配。用
 ```
 
 坐标必须是同维度绝对整数 `at:{x,y,z}`，不猜缺项或将 `to` 改成 `at`。移动单次最多 96 格，挖建触达 5 格，输入 4096 字符，动作截止 90 秒。挖掘与放置分别需要已观察的 `expectedBlock`、`expectedItem`；物品完整组件、方块状态、控制修订号和权限在实际执行时重查。挖掘使用真实工具、耗时、耐久、掉落与原生事件；放置消耗材料，不能用管理命令伪造成功。复杂机器、多格结构和载具不是这个基础放置接口的已验范围。
+
+0.3.2 的 `home` 使用登记的住宅维度，跨维度或超过局部移动距离时走有限魔力传送；普通 `walk` 不猜其他维度。`roamingWork` 默认 `false`，保持旧工作区规则。显式设为 `true` 才允许在当前维度按挖建清单和本人领地权限工作；它不取消触达、视线、物品、碰撞或原生事件检查。
+
+模型观察中的 `inventorySlots` 给出真实槽位、物品 ID/名称/数量/耐久；`rpg.abilities` 给出本人的技能效果、耗魔、总冷却和剩余冷却。`resourceReady` 仅表示当前魔力足够且冷却结束，目标与权限仍需执行时检查。聊天决策 `act` 嵌入同一 `ResidentContract`，随行中可施法/换装/发言，只有工作模式可局部走路和挖建。`photo take` 暂时持有原生导航，状态查询和档案阅读不会冻结身体。
 
 回执通过 `MC_RESIDENT` 私有命令回复。`accepted` 只是受理；`completed` 只表示这一步的实测终态，选择工作不等于完成收获。`partial` 报实际变化；`unknown` 保留执行阻塞和原请求，不自动重复消耗。已接收的模型规划可查询 `planning_no_action_dispatched`；重启时没有持久动作记录的规划返回未知，不能凭空宣称已执行。
 

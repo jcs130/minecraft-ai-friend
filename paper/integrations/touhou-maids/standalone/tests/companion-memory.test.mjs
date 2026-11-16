@@ -53,6 +53,24 @@ test('shared external scope, duplicate identity and simultaneous writers are rej
   await assert.rejects(runOnce(cfg),{code:'EEXIST'});
 });
 
+test('a dialogue and its actual action import separately, with own-action recall and the original request reference',async t=>{
+  const {cfg,evidence}=await fixture(t);
+  const request='30000000-0000-0000-0000-000000000031',action='30000000-0000-0000-0000-000000000041';
+  await evidence(npc,a,request,'我先试试疾步');
+  await writeFile(join(cfg.journalRoot,npc,action+'-result.json'),JSON.stringify({schemaVersion:1,
+    id:action,maidId:npc,speakerId:npc,at:1001,channel:'internal',kind:'resident_action',
+    sourceRequestId:request,message:'实际施法结果',status:'recorded',
+    reply:JSON.stringify({requestId:request,action:'cast',completed:true,manaSpent:5})}));
+  assert.equal((await runOnce(cfg))[0].imported,2);
+  const own=JSON.parse(await readFile(join(cfg.journalRoot,npc,`recall-${npc}.json`),'utf8'));
+  assert.equal(own.items.length,1);
+  assert.equal(own.items[0].evidence.sourceRequestId,request);
+  assert.equal(JSON.parse(own.items[0].evidence.reply).completed,true);
+  const dialogue=JSON.parse(await readFile(join(cfg.journalRoot,npc,`recall-${a}.json`),'utf8'));
+  assert.equal(dialogue.items.length,1);assert.equal(dialogue.items[0].evidence.reply,'我先试试疾步');
+  assert.equal((await runOnce(cfg))[0].imported,0);
+});
+
 test('unavailable PowerContext keeps durable local evidence and performs no unconfirmed write replay',async t=>{
   const {cfg,evidence}=await fixture(t);
   await evidence(npc,a,'30000000-0000-0000-0000-000000000031','网络断开时也要记住');

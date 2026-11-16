@@ -29,6 +29,8 @@ final class ResidentCommands {
         root.then(Commands.literal("resident-actions").executes(c->reply(c.getSource(),runtime.get(),r->ResidentContract.describe())));
         root.then(Commands.literal("residents").executes(c->reply(c.getSource(),runtime.get(),r->r.ids().stream().map(r::publicView).toList())));
         var body=Commands.argument("residentId",UuidArgument.uuid());
+        body.then(Commands.literal("travel-receipt").requires(s->s.hasPermission(2)).then(Commands.argument("requestId",UuidArgument.uuid())
+            .executes(c->reply(c.getSource(),runtime.get(),r->r.travelReceipt(UuidArgument.getUuid(c,"residentId"),UuidArgument.getUuid(c,"requestId"))))));
         body.then(Commands.literal("status").executes(c->reply(c.getSource(),runtime.get(),r->c.getSource().hasPermission(2)?r.observe(UuidArgument.getUuid(c,"residentId")):r.publicView(UuidArgument.getUuid(c,"residentId")))));
         body.then(Commands.literal("receipt").requires(s->s.hasPermission(2)).then(Commands.argument("requestId",UuidArgument.uuid())
             .executes(c->reply(c.getSource(),runtime.get(),r->r.receipt(UuidArgument.getUuid(c,"residentId"),UuidArgument.getUuid(c,"requestId"))))));
