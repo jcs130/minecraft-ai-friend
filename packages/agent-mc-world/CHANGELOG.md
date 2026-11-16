@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.91
+
+- Export the exact get/score/review input schemas used by the trajectory validators. Task-scoped consumers can expose real nested score fields instead of relying on prose beside an opaque input object. Help and execution share the same definitions; no game/model execution is added.
+
 ## 0.5.7-rc.160-preview.90
 
 - Add completed multi-step trajectory evaluation, discounted returns, explicit score revisions/review and evidence-linked reuse. Preserve unknown outcomes, cancelled work, original terminals and net-change contradictions; never treat score adoption as verified learning.

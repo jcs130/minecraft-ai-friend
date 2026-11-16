@@ -84,6 +84,15 @@ No approval, rejection, merge, restore, deletion, scope management, flush, skill
 
 ## Persistence, failure and recovery
 
+Trajectory evaluators can import `trajectoryEvaluationInputSchema` from
+`agent-mc-world/learning` for `trajectory_get`, `trajectory_score`, and
+`trajectory_review`. These are generated from the executable validators and
+also returned by `experience/trajectory_help`. A scoped host may bind its known
+episode/evaluator identities in code while exposing the remaining typed fields;
+it must reject explicit mismatched identities and retain original provenance.
+Do not rely on prose help to make an opaque object usable by a constrained tool
+decoder. This contract does not score, adopt a policy, or replay an action by itself.
+
 The local notebook's original revisions remain authoritative for notebook searches. Service-generated content stays separately attributed; the core does not pretend it wrote or personally verified that content.
 
 Local and cloud have complementary roles. Use task-selected notebook search preferences for recent evidence; use explicit `prepare` for cloud-organized historical experience. Validated `prepare`/`artifact`/`source` reads have a bounded local fallback (7 days, 128 exact requests per service/game binding). An outage returns `status:cached` with fetch time/age and `currentServiceStateVerified:false`; it does not claim the remote service responded. Authorization failures, deletion/not-found, invalid responses and caller cancellation never use stale fallback. Capabilities, candidate decisions, Dream state and write receipts are not knowledge-cache entries. This cache does not auto-install a Skill or rewrite local lessons. See [dual memory and replication](game-memory.md#local-and-cloud-roles).

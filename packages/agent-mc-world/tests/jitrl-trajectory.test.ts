@@ -5,7 +5,8 @@ import {join} from 'node:path';
 import {GameMemoryBook,GAME_MEMORY_TOOL,type GameMemoryContext} from '../core/game-memory.ts';
 import {GameMemoryService} from '../core/game-memory-service.ts';
 import {OperationExperienceBook,type OperationObservation} from '../core/operation-experience.ts';
-import {discountedTrajectoryReturns} from '../core/jitrl-trajectory.ts';
+import {discountedTrajectoryReturns,trajectoryEvaluationInputSchema} from '../core/jitrl-trajectory.ts';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv-provider.js';
 import {inspectToolCall} from '../src/contracts/call-capability.ts';
 
 let dir:string,ctx:GameMemoryContext,operations:OperationExperienceBook,service:GameMemoryService;
@@ -35,6 +36,20 @@ const score=(e:{id:string;ids:string[]},values:(number|null)[],previous=0)=>call
   evaluator:{id:'critic',model:'test-model',version:'rubric-v1'},critique:`Full trajectory reviewed; revision ${previous+1}`,
   rewards:e.ids.map((experienceId,i)=>({experienceId,value:values[i],reason:'Evidence from this step and subsequent native outcome'}))});
 const adopt=(id:string,revision=1)=>call('trajectory_review',{episodeId:id,expectedScoreRevision:revision,select:revision,reason:'Reviewed full timeline, rewards and measured net change'});
+it('publishes executable evaluation contracts for constrained tool calls, not opaque objects',async()=>{
+  const validate=new AjvJsonSchemaValidator();
+  const get=validate.getValidator(trajectoryEvaluationInputSchema('trajectory_get'));
+  expect(get({}).valid).toBe(false);
+  expect(get({episodeId:'a'.repeat(64),offset:0,limit:8}).valid).toBe(true);
+  const scoreSchema=trajectoryEvaluationInputSchema('trajectory_score');
+  const check=validate.getValidator(scoreSchema);
+  expect(check({episodeId:'a'.repeat(64),expectedScoreRevision:0}).valid).toBe(false);
+  expect(check({episodeId:'a'.repeat(64),expectedScoreRevision:0,evaluator:{id:'critic',model:null,version:'v1'},critique:'Unknown native outcome',rewards:[{experienceId:'b'.repeat(64),value:null,reason:'No verified terminal'}]}).valid).toBe(true);
+  const help=await call('trajectory_help');
+  expect((help.schemas as any).trajectory_score).toEqual(scoreSchema);
+  (scoreSchema.properties as any).rewards={};
+  expect((trajectoryEvaluationInputSchema('trajectory_score').properties as any).rewards.items).toBeTruthy();
+});
 beforeEach(()=>{
   vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-11-16T00:00:00Z'));
   dir=mkdtempSync(join(tmpdir(),'multi-jitrl-'));ctx={scope,dimension:'overworld',observation:()=>sample()};
