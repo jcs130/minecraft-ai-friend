@@ -22,13 +22,29 @@ public final class MaidBrainControl {
     private record SiteHandler(UUID lease,UUID maid,Function<LLMOpenAISite,LLMClient> factory){}
     private static final Map<String,SiteHandler> sites=new ConcurrentHashMap<>();
     private static final Handler CLOSED=new Handler(new UUID(0,0),false,callback->false,(before,after)->{});
+    private static volatile String managedSitePrefix;
     private MaidBrainControl(){}
+
+    /** Standalone servers reserve a prefix for shared sites even when their binding is offline. */
+    static void reserveSitePrefix(String prefix){
+        if(prefix.isBlank())throw new IllegalArgumentException("Managed site prefix required");
+        managedSitePrefix=prefix;
+    }
+    private static boolean reserved(String site){
+        String prefix=managedSitePrefix;
+        return prefix!=null&&site.startsWith(prefix);
+    }
+    private static LLMClient unavailable(){
+        return callback->callback.onFailure(null,new IllegalStateException("MAID_BRAIN_NOT_BOUND"),403);
+    }
     public static final class Registration implements AutoCloseable {
         private final UUID maid,lease;private final Set<String> siteIds;
         private Registration(UUID maid,UUID lease,Set<String> siteIds){this.maid=maid;this.lease=lease;this.siteIds=siteIds;}
         @Override public void close(){
             handlers.computeIfPresent(maid,(id,current)->current.lease.equals(lease)?CLOSED:current);
-            for(String id:siteIds)sites.computeIfPresent(id,(key,current)->current.lease.equals(lease)?new SiteHandler(lease,maid,site->callback->callback.onFailure(null,new IllegalStateException("MAID_BRAIN_STOPPED"),503)):current);
+            for(String id:siteIds)sites.computeIfPresent(id,(key,current)->current.lease.equals(lease)
+                    ? (reserved(id)?null:new SiteHandler(lease,maid,site->callback->callback.onFailure(null,new IllegalStateException("MAID_BRAIN_STOPPED"),503)))
+                    : current);
         }
     }
     public static synchronized Registration bind(UUID maid,Set<String> siteIds,Function<LLMOpenAISite,LLMClient> factory,Predicate<LLMCallback> verify,BiConsumer<LLMCallback,LLMCallback> carry){
@@ -56,7 +72,11 @@ public final class MaidBrainControl {
     private static final class HookedSite extends LLMOpenAISite {
         final LLMOpenAISite original;
         HookedSite(LLMOpenAISite original){super(original.id(),original.icon(),original.url(),original.enabled(),original.secretKey(),original.hasThinkingField(),original.headers(),original.modelEntries());this.original=original;}
-        @Override public LLMClient client(){SiteHandler hook=sites.get(id());return hook==null?original.client():hook.factory.apply(this);}
+        @Override public LLMClient client(){
+            SiteHandler hook=sites.get(id());
+            if(hook!=null)return hook.factory.apply(this);
+            return reserved(id())?unavailable():original.client();
+        }
     }
     static void register(ToolRegister register){
         for(ITool<?> tool:new ArrayList<>(ToolRegister.getAllTools().values()))register.register(wrap(tool));
@@ -74,7 +94,7 @@ public final class MaidBrainControl {
         @Override public boolean trigger(EntityMaid maid,ChatCompletion completion){return original.trigger(maid,completion);}
         private Handler handler(LLMCallback callback){return handlers.get(callback.getMaid().getUUID());}
         private boolean valid(Handler handler,LLMCallback callback){return handler==null||handler.verify.test(callback);}
-        private LLMCallback denied(String id,LLMCallback callback){return callback.addToolResult(id,"MAID_BRAIN_CHANGED: old action was not executed. Read current brain selection and original receipt; do not replay it.");}
+        private LLMCallback denied(String id,LLMCallback callback){return callback.addToolResult("MAID_BRAIN_CHANGED: old action was not executed. Read current brain selection and original receipt; do not replay it.",id);}
         @Override public LLMCallback onCall(String id,T value,LLMCallback callback){
             Handler handler=handler(callback);if(!valid(handler,callback))return denied(id,callback);
             LLMCallback next=original.onCall(id,value,callback);if(handler!=null)handler.carry.accept(callback,next);return next;

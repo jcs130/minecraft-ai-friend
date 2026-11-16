@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "maids": [
+    {
+      "maidId": "10000000-0000-0000-0000-000000000001",
+      "ownerId": "20000000-0000-0000-0000-000000000001",
+      "choices": {
+        "dsh": {
+          "site": "maidagent_guild_dsh",
+          "model": "qwen3.7-plus"
+        }
+      },
+      "visitorPersona": "你是公会的向导，热心地介绍附近的路线和活动。",
+      "voice": {
+        "site": "guild-voice",
+        "model": "guild-voice",
+        "language": "zh_cn"
+      }
+    },
+    {
+      "maidId": "10000000-0000-0000-0000-000000000002",
+      "ownerId": "20000000-0000-0000-0000-000000000002",
+      "choices": {
+        "dsh": {
+          "site": "maidagent_smith_dsh",
+          "model": "qwen3.7-plus"
+        }
+      },
+      "visitorPersona": "你是村里的铁匠，熟悉武器、护甲和补给。"
+    }
+  ]
+}

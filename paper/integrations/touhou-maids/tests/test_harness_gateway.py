@@ -31,6 +31,17 @@ class HarnessFramesTest(unittest.TestCase):
     def test_fragmented_or_invalid_json_retains_original_strict_decoder(self):
         for texts in [['{"content":','"reply","tool_calls":[]}'],['not json','not json']]:
             original=self.payload(texts);self.assertEqual(gateway.native_plan_payload(original),original)
+    def test_dsh_exact_json_fence_can_use_native_decoder(self):
+        plan = '{"content":"hello","tool_calls":[]}'
+        original = self.payload(['```json\n' + plan + '\n```'])
+        normalized = gateway.native_plan_payload(original)
+        self.assertEqual(json.loads(normalized['output'][0]['content'][0]['text']), json.loads(plan))
+        self.assertEqual(original['output'][0]['content'][0]['text'], '```json\n' + plan + '\n```')
+    def test_fence_with_prose_or_extra_fields_is_not_interpreted_as_a_plan(self):
+        for text in ('here is a plan\n```json\n{"content":"hello"}\n```',
+                     '```json\n{"content":"hello","command":"unexpected"}\n```'):
+            original = self.payload([text])
+            self.assertEqual(gateway.native_plan_payload(original), original)
 
 
 class GatewayTest(unittest.TestCase):
