@@ -38,6 +38,7 @@ integration?.attachClient(client);          // binds the body only when AGENT_HA
 | `src/gateway/` | message protocol v1, auth/tokens, limits, transport-free core, HTTP/WS/SSE server |
 | `src/sdk/client.ts` | dependency-free TS client SDK (WS with auto-resume, or HTTP polling) |
 | `src/server/serve.ts`, `cli.ts` | hosted runtime entry (`pnpm serve`) |
+| `src/body/` | unified body adapter `agent-mc-body/v1`: Mineflayer, Numen (hosted / mcbot), Touhou Little Maid, `guardBody` safety |
 | `src/testing/fake-world.ts` | offline fake body for tests/demos |
 | `examples/` | TS third-party agent, stdlib-only Python agent |
 
@@ -54,3 +55,21 @@ pnpm serve --fake-body --data-dir /tmp/harness-demo &
 HARNESS_TOKEN_ENV=NEKO_TOKEN pnpm example:agent
 HARNESS_TOKEN_ENV=NEKO_TOKEN python3 examples/python_agent.py
 ```
+
+## Unified body adapter (`agent-mc-body/v1`)
+
+The harness never talks to a body directly: it uses `BodyAdapter` (`src/body/types.ts`): perception events, action verbs,
+lifecycle (spawn / reconnect / destroy), identity + world scope, capability discovery, health, and safety hooks.
+
+```ts
+import { MaidBodyAdapter, guardBody } from 'agent-mc-harness';
+const body = guardBody(new MaidBodyAdapter({ connection: ownerBot, maidId, serverId: 'survival' })); // anti-cheat stop + pace limits
+await body.spawn();                       // binds an existing maid; never creates one
+harness.attachBody(body, { execute: true });
+await harness.submitIntent({ goal: 'come here', constraints: { steps: [{ tool: 'body:follow', args: {} }] } });
+```
+
+Bodies: Mineflayer (`MineflayerBodyAdapter`, agent-mc-world client), Numen (`numenHostedAdapter()` for numen-hosting, or
+`NumenBodyAdapter` + `McbotNumenPort` over the owner's connection), Touhou Little Maid (`MaidBodyAdapter`, touhou-maids
+`maid-port.mjs`). Steps are `body:<verb>` / `body:native:<name>`; unsupported steps are refused before execution.
+Capability matrix, reuse map and gaps: `docs/agent-harness-body-adapter.md`.

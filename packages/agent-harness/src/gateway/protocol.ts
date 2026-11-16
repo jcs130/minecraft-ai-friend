@@ -11,7 +11,7 @@ export const GATEWAY_PROTOCOL = 'agent-mc-harness-gateway' as const;
 export const GATEWAY_VERSION = 1 as const;
 export const SUPPORTED_VERSIONS: readonly number[] = [1];
 
-export const REQUEST_TYPES = ['hello', 'submit_intent', 'update_intent', 'control', 'get_summary', 'subscribe', 'unsubscribe', 'pull_events', 'ping'] as const;
+export const REQUEST_TYPES = ['hello', 'submit_intent', 'update_intent', 'control', 'get_summary', 'get_body', 'subscribe', 'unsubscribe', 'pull_events', 'ping'] as const;
 export type RequestType = typeof REQUEST_TYPES[number];
 export type ResponseType = 'result' | 'error' | 'welcome' | 'pong' | 'event';
 
@@ -31,7 +31,7 @@ export class GatewayError extends Error {
 export interface RequestEnvelope<T extends RequestType = RequestType> { v: 1; id: string; type: T; ts?: string; agent?: string; payload: PayloadOf<T> }
 export interface ResponseEnvelope<P = unknown> { v: 1; id: string; re?: string; type: ResponseType; ts: string; payload: P }
 
-const KINDS: readonly HarnessEventKind[] = ['death', 'task_completed', 'task_failed', 'interaction', 'skill', 'player_presence', 'intent_state', 'reflection'];
+const KINDS: readonly HarnessEventKind[] = ['death', 'task_completed', 'task_failed', 'interaction', 'skill', 'player_presence', 'intent_state', 'reflection', 'safety', 'body'];
 const STATES: readonly IntentState[] = ['queued', 'active', 'paused', 'done', 'cancelled', 'failed'];
 const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
 
@@ -43,6 +43,7 @@ export interface Payloads {
   update_intent: { intentId: string; goal?: string; priority?: PriorityInput; constraints?: ConstraintsPayload };
   control: { action: 'pause' | 'resume' | 'cancel' | 'get' | 'list'; intentId?: string; reason?: string; states?: IntentState[]; limit?: number };
   get_summary: { topic?: string; maxTokens?: number };
+  get_body: { include?: Array<'capabilities' | 'health' | 'snapshot'> };
   subscribe: { minSeverity?: 1 | 2 | 3; kinds?: HarnessEventKind[]; after?: number; stream?: string };
   unsubscribe: { subscription: string };
   pull_events: { after?: number; limit?: number; minSeverity?: 1 | 2 | 3; kinds?: HarnessEventKind[]; stream?: string };
@@ -152,6 +153,7 @@ const PAYLOAD: { [T in RequestType]: (p: Obj) => Payloads[T] } = {
     return { action, intentId, reason: str(p, 'reason', 200), states: list(p, 'states', STATES, 6), limit: int(p, 'limit', 1, 100) };
   },
   get_summary: p => { keys(p, ['topic', 'maxTokens'], 'get_summary'); return { topic: str(p, 'topic', 100), maxTokens: int(p, 'maxTokens', 80, 800) }; },
+  get_body: p => { keys(p, ['include'], 'get_body'); return { include: list(p, 'include', ['capabilities', 'health', 'snapshot'] as const, 3) }; },
   subscribe: p => {
     keys(p, ['minSeverity', 'kinds', 'after', 'stream'], 'subscribe');
     return { minSeverity: severity(p), kinds: list(p, 'kinds', KINDS, KINDS.length), after: int(p, 'after', 0, Number.MAX_SAFE_INTEGER), stream: str(p, 'stream', 128) };

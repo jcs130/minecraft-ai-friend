@@ -44,17 +44,24 @@ within 10 s. Requests carrying an `Origin` header are refused unless that origin
 
 | type | payload | result payload |
 | --- | --- | --- |
-| `hello` | `{ token?, protocols?: [1], client?: {name, version} }` | `welcome`: `{ protocol, v, session, agent, admin, anonymous, stream, latest, limits, server: {execute, exclusiveBody} }` |
+| `hello` | `{ token?, protocols?: [1], client?: {name, version} }` | `welcome`: `{ protocol, v, session, agent, admin, anonymous, stream, latest, limits, server: {execute, exclusiveBody}, body: {kind, transport, lifecycle, verbs, nativeActions, events} \| null }` |
 | `submit_intent` | `{ goal (≤500), priority?: 0..100 \| low\|normal\|high\|urgent, constraints?: { steps?: [{tool, args, note?}] (1..20), deadlineMs?, rules?: string[] }, hostRef? }` | `{ intentId, state }` |
 | `update_intent` | `{ intentId, goal?, priority?, constraints? }` (one of the three) | `{ intent }` |
 | `control` | `{ action: pause\|resume\|cancel\|get\|list, intentId?, reason?, states?, limit? }` | `{ intent }` / `{ intents }` / `{ executor }` |
 | `get_summary` | `{ topic? (≤100), maxTokens? (80..800, default 300) }` | `{ summary: { text, tokens, budget, truncated, generatedAt } }` |
+| `get_body` | `{ include?: [capabilities\|health\|snapshot] }` (default capabilities+health) | `{ body: { kind, lifecycle, identity, capabilities?, health?, snapshot? } \| null }` (identity `scope`/`ownerId` only for admins) |
 | `subscribe` | `{ minSeverity?: 1\|2\|3, kinds?: [...], after?: seq, stream? }` (push transports only) | `{ subscription, stream, latest, replay, streamReset, dropped }` |
 | `unsubscribe` | `{ subscription }` | `{ subscription, unsubscribed: true }` |
 | `pull_events` | `{ after?, limit? (≤100), minSeverity?, kinds?, stream? }` | `{ events, cursor, latest, stream, streamReset, dropped, hasMore }` |
 | `ping` | `{ nonce? }` | `pong`: `{ nonce, latest }` |
 
-Event kinds: `death`, `task_completed`, `task_failed`, `interaction`, `skill`, `player_presence`, `intent_state`, `reflection`.
+Event kinds: `death`, `task_completed`, `task_failed`, `interaction`, `skill`, `player_presence`, `intent_state`, `reflection`,
+`safety` (anti-cheat warning halt, severity 3), `body` (body lifecycle/connection changes).
+
+Intent steps use body-neutral verbs: `{"tool":"body:move","args":{"x":1,"y":64,"z":2}}`, `body:chat`, `body:attack` … or a
+body-specific operation `body:native:<name>` (e.g. `body:native:lua` on Numen, `body:native:skill:fish` on Mineflayer,
+`body:native:tasks` on a maid). Legacy `mc_do`-style steps still work on the Mineflayer body. A step the attached body does not
+support is refused with `bad_request` (read `get_body` first); see `docs/agent-harness-body-adapter.md`.
 Severity: 1 info · 2 notable · 3 important (interrupt-worthy). `intent_state` events carry
 `data: { from, state, needsHost }`; `needsHost: true` means the harness needs concrete steps from the agent
 (no free-text planner yet).

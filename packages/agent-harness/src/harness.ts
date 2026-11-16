@@ -9,6 +9,8 @@ import { buildSummary } from './summary.ts';
 import { TERMINAL_STATES, type HarnessApi, type HarnessEvent, type Intent, type IntentInput, type IntentPatch,
   type IntentState, type Summary, type SummaryOptions } from './types.ts';
 import { AsyncWorkers } from './workers.ts';
+import { bodyAdapterPort, toMcEvent } from './body/harness-port.ts';
+import type { BodyAdapter } from './body/types.ts';
 
 export interface HarnessRuntimeOptions {
   /** The body's Minecraft username (to tell own chat from players'). */
@@ -47,13 +49,38 @@ export class HarnessRuntime implements HarnessApi {
     this.workers = new AsyncWorkers({ concurrency: 1, log: options.log });
     this.reflector = options.reflector ?? NO_REFLECTION;
     this.executor = new IntentExecutor(this.intents, options.planner ?? new ExplicitStepsPlanner(),
-      { summary: async () => (await this.getSummary({ maxTokens: 200 })).text }, { log: options.log, ...options.executor });
+      { summary: async () => (await this.getSummary({ maxTokens: 200 })).text, capabilities: () => this.bodyAdapter?.capabilities() ?? null },
+      { log: options.log, ...options.executor });
     this.intents.onChange((intent, from) => this.onIntentChange(intent, from));
     this.observer = (event, facts) => this.observe(event, facts);
   }
 
   // ---- body side ----
+  private bodyAdapter: BodyAdapter | null = null;
+  private offBody: (() => void) | null = null;
+  /** Low-level: bind a raw BodyPort (tests / legacy). Prefer `attachBody`. */
   bindBody(body: BodyPort | null): void { this.executor.bindBody(body); }
+
+  /**
+   * Attach a unified body (Mineflayer / Numen / maid). Its events feed memory, key events and task receipts; with `execute`
+   * the executor drives it through `bodyAdapterPort`. Planner and gateway read its capabilities.
+   */
+  attachBody(body: BodyAdapter | null, options: { execute?: boolean } = {}): void {
+    this.offBody?.(); this.offBody = null;
+    this.bodyAdapter = body;
+    if (!body) { this.executor.bindBody(null); return; }
+    this.offBody = body.subscribe(e => {
+      if (e.kind === 'safety' || (e.kind === 'lifecycle' && e.severity >= 2) || e.kind === 'connection') {
+        this.events.emit({ kind: e.kind === 'safety' ? 'safety' : 'body', severity: e.kind === 'safety' ? 3 : 2, at: e.at, text: e.text.slice(0, 200),
+          data: { bodyKind: e.bodyKind, bodyEvent: e.kind, ...(e.kind === 'safety' ? { halted: e.data.halted ?? true } : {}) } });
+        if (e.kind === 'safety') void this.executor.interrupt('paused', `safety halt: ${e.text.slice(0, 120)}`);
+      }
+      const { event, facts } = toMcEvent(e, body);
+      this.observe(event, facts);
+    });
+    if (options.execute !== false) this.executor.bindBody(bodyAdapterPort(body));
+  }
+  body(): BodyAdapter | null { return this.bodyAdapter; }
 
   private observe(event: McEventLike, facts: ObservedFacts | null | (() => ObservedFacts | null)): void {
     try { this.options.memory?.observer(event, facts); } catch { /* memory observer is already isolated */ }
@@ -75,7 +102,7 @@ export class HarnessRuntime implements HarnessApi {
       return;
     }
     if (from === intent.state) return; // progress within active: visible in summary, not pushed
-    const needsHost = intent.state === 'paused' && !!intent.reason && /^No planner|not allowed|Too many/.test(intent.reason);
+    const needsHost = intent.state === 'paused' && !!intent.reason && /^No planner|not allowed|Too many|Step not supported|safety halt/.test(intent.reason);
     const severity: 1 | 2 | 3 = intent.state === 'failed' || needsHost ? 3 : intent.state === 'done' ? 2 : 1;
     const label = { queued: '排队', active: '开始执行', paused: '暂停', done: '完成', cancelled: '取消', failed: '失败' }[intent.state];
     this.events.emit({ kind: 'intent_state', severity, intentId: intent.id,
@@ -115,6 +142,7 @@ export class HarnessRuntime implements HarnessApi {
       active: shownActive, queued: this.intents.list({ states: ['queued'], limit: 3, ...mine }),
       paused: this.intents.list({ states: ['paused'], limit: 2, ...mine }),
       events: this.events.recent(50, 2).filter(visible).slice(-5), facts: await this.memoryLines(topic),
+      body: this.bodyLine(),
     });
   }
 
@@ -164,6 +192,12 @@ export class HarnessRuntime implements HarnessApi {
     if (intent.state === 'active') await this.executor.interrupt('cancelled', reason, intentId);
     else this.intents.transition(intentId, 'cancelled', { reason });
     return this.intents.get(intentId)!;
+  }
+
+  private bodyLine(): string | null {
+    const b = this.bodyAdapter; if (!b) return null;
+    const h = b.health(), id = b.identity();
+    return `身体：${b.kind}${id?.name ? `「${id.name}」` : ''}｜${h.lifecycle}${h.safety?.halted ? '｜安全停止中' : ''}`;
   }
 
   getIntent(intentId: string): Intent | null { return this.intents.get(intentId); }

@@ -63,7 +63,7 @@ export async function startHarnessServer(options: HarnessServerOptions): Promise
   integration.attachClient(client);
   let gateway: GatewayServer | null = null;
   try {
-    await client.connect();
+    await integration.body.spawn();
     gateway = await startGateway({
       harness: integration.harness, agents, env, log,
       host: options.host ?? env.AGENT_HARNESS_GATEWAY_HOST ?? '127.0.0.1',

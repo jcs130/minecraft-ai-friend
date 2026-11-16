@@ -216,3 +216,9 @@ offered anyway), (4) translate actions to intents. During transition an in-proce
   progress events for long tasks; FalkorDB as Graphiti backend.
 * **Phase 3** — skill/lesson library learned from reflections, multi-intent scheduling (interruptible background goals),
   self-evaluation metrics, out-of-process harness (MCP server) so several hosts can share one body safely.
+
+## Body adapter layer (Phase 1c)
+
+`BodyPort`, the planner's step validation and the gateway's body discovery now go through one `BodyAdapter` interface with
+three implementations (Mineflayer, Numen hosted/mcbot, Touhou Little Maid) and a `guardBody` safety decorator (anti-cheat
+warning stop, pace limits). See `docs/agent-harness-body-adapter.md`.

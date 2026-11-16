@@ -62,7 +62,7 @@ export interface IntentPatch { goal?: string; priority?: PriorityInput; constrai
 
 export type HarnessEventKind =
   | 'death' | 'task_completed' | 'task_failed' | 'interaction' | 'skill' | 'player_presence'
-  | 'intent_state' | 'reflection';
+  | 'intent_state' | 'reflection' | 'safety' | 'body';
 
 /** Key event pushed to the host. Text is short and human-readable; `data` is structured. */
 export interface HarnessEvent {

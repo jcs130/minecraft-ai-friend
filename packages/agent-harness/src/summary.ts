@@ -16,6 +16,8 @@ export interface SummaryInput {
   events: HarnessEvent[];
   /** Compact memory lines (current facts), most relevant first. */
   facts: string[];
+  /** One-line body status (kind, lifecycle, safety halt). */
+  body?: string | null;
 }
 
 const pri = (p: number) => (p >= 90 ? '紧急' : p >= 70 ? '高' : p >= 40 ? '中' : '低');
@@ -48,6 +50,7 @@ export function buildSummary(input: SummaryInput): Summary {
 
   add(`【游戏状态摘要】${input.now.toISOString().slice(0, 16)}Z｜执行器：${{ running: '执行中', idle: '空闲', paused: '已暂停', 'no-body': '未连接身体' }[input.executor]}${input.topic ? `｜话题：${input.topic}` : ''}`, true);
   add(input.active ? `当前意图：${intentLine(input.active)}` : '当前意图：无', true);
+  if (input.body) add(input.body);
   section('最近关键事件：', input.events.slice().reverse().map(e => `${e.at.slice(11, 16)} ${e.text}`));
   section(input.topic ? '相关记忆：' : '记忆要点：', input.facts);
   section('待办：', [...input.paused.map(i => `[暂停] ${intentLine(i)}`), ...input.queued.map(intentLine)]);

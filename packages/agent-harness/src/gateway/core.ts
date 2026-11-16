@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { HarnessRuntime } from '../harness.ts';
 import { normalizePriority } from '../intents.ts';
 import { BODY_TOOL_ALLOWLIST } from '../planner.ts';
+import { stepSupport } from '../body/harness-port.ts';
 import { TERMINAL_STATES, type HarnessEvent, type HarnessEventKind, type Intent, type IntentState } from '../types.ts';
 import type { AgentRegistry, GatewayAgent } from './auth.ts';
 import { RateLimiter, type GatewayLimits } from './limits.ts';
@@ -158,6 +159,7 @@ export class GatewayCore {
       limits: { maxMessageBytes: this.limits.maxMessageBytes, ratePerMinute: agent.ratePerMinute, burst: agent.burst,
         maxPriority: agent.maxPriority, maxOpenIntents: agent.maxOpenIntents, maxSubscriptions: this.limits.maxSubscriptionsPerSession },
       server: { name: 'agent-mc-harness', execute: this.info.execute, exclusiveBody: this.info.exclusive },
+      body: this.bodyBrief(),
     }, req.id) };
   }
 
@@ -203,6 +205,18 @@ export class GatewayCore {
         const summary = await this.harness.getSummary({ topic: p.topic, maxTokens: p.maxTokens, ...(agent.admin ? {} : { viewer: agent.id }) });
         return ok({ summary });
       }
+      case 'get_body': {
+        const p = req.payload as Payloads['get_body'];
+        const body = this.harness.body();
+        if (!body) return ok({ body: null });
+        const include = new Set(p.include ?? ['capabilities', 'health']);
+        const id = body.identity();
+        return ok({ body: { kind: body.kind, lifecycle: body.lifecycle(),
+          identity: id ? { kind: id.kind, bodyId: id.bodyId, name: id.name, world: id.world, generation: id.generation, ...(agent.admin ? { ownerId: id.ownerId, scope: id.scope } : {}) } : null,
+          ...(include.has('capabilities') ? { capabilities: body.capabilities() } : {}),
+          ...(include.has('health') ? { health: body.health() } : {}),
+          ...(include.has('snapshot') ? { snapshot: await body.snapshot(AbortSignal.timeout(10_000)).then(({ raw: _raw, ...rest }) => rest) } : {}) } });
+      }
       case 'pull_events': {
         const p = req.payload as Payloads['pull_events'];
         return ok(this.pull(agent, p));
@@ -231,13 +245,22 @@ export class GatewayCore {
     if (!agent.admin && intent.owner !== agent.id) throw new GatewayError('forbidden', 'intent belongs to another agent');
     return intent;
   }
+  private bodyBrief() {
+    const b = this.harness.body(); if (!b) return null;
+    const c = b.capabilities();
+    return { kind: b.kind, transport: c.transport, lifecycle: b.lifecycle(), verbs: Object.keys(c.actions), nativeActions: c.nativeActions.length, events: c.events };
+  }
   private checkPriority(agent: GatewayAgent, p: Payloads['submit_intent']['priority']): void {
     if (p === undefined) return;
     if (normalizePriority(p) > agent.maxPriority) throw new GatewayError('forbidden', `priority above this agent's maximum (${agent.maxPriority})`);
   }
   private checkSteps(c: ConstraintsPayload | undefined): void {
     for (const step of c?.steps ?? [])
+    {
       if (!BODY_TOOL_ALLOWLIST.test(step.tool)) throw new GatewayError('bad_request', `body tool ${step.tool} is not allowed in intent steps`);
+      const unsupported = stepSupport(step.tool, this.harness.body()?.capabilities() ?? null);
+      if (unsupported) throw new GatewayError('bad_request', `${unsupported}; send get_body to read what this body supports`);
+    }
   }
 
   private pull(agent: GatewayAgent, p: Payloads['pull_events']) {

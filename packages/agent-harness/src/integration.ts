@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 import { AgentMemory, createMinecraftMemory, type MinecraftMemoryIntegration } from 'agent-mc-memory';
 import { HarnessRuntime, type HarnessRuntimeOptions } from './harness.ts';
-import { clientBodyPort, type BodyClientLike } from './planner.ts';
+import { MineflayerBodyAdapter, type MineflayerClientLike } from './body/mineflayer.ts';
+import { guardBody, type GuardedBody, type SafetyOptions } from './body/safety.ts';
 import { createHarnessTools, type HarnessToolDef } from './tools.ts';
 
 export interface AgentHarnessConfig {
@@ -51,8 +52,10 @@ export interface AgentHarnessIntegration {
   harness: HarnessRuntime;
   memory: MinecraftMemoryIntegration | null;
   tools: HarnessToolDef[];
-  /** Call after constructing MinecraftAgentClient. No-op unless config.execute. */
-  attachClient(client: BodyClientLike): void;
+  /** Call after constructing MinecraftAgentClient: binds it to the unified Mineflayer body adapter (drives it only with config.execute). */
+  attachClient(client: MineflayerClientLike): void;
+  /** The unified (safety-guarded) body the harness uses. */
+  body: GuardedBody;
   /** True when direct body tools are hidden from hosts (bodyGate installed). */
   exclusive: boolean;
   close(): Promise<void>;
@@ -63,7 +66,7 @@ export interface AgentHarnessIntegration {
  * Disabled → returns the very same options object and null; nothing is created, nothing changes.
  */
 export function withAgentHarness<T extends HarnessClientOptionsLike>(clientOptions: T, config: AgentHarnessConfig = harnessConfigFromEnv(),
-  extra: Partial<Omit<HarnessRuntimeOptions, 'self' | 'memory'>> & { memoryDataDir?: string } = {}):
+  extra: Partial<Omit<HarnessRuntimeOptions, 'self' | 'memory'>> & { memoryDataDir?: string; safety?: SafetyOptions; serverId?: string } = {}):
   { options: T; integration: AgentHarnessIntegration | null } {
   if (!config.enabled) return { options: clientOptions, integration: null };
   if (config.exclusive && !config.execute) throw new Error('AGENT_HARNESS_EXCLUSIVE requires AGENT_HARNESS_EXECUTE=1 (otherwise nothing could drive the body)');
@@ -77,13 +80,17 @@ export function withAgentHarness<T extends HarnessClientOptionsLike>(clientOptio
   const hostTools = [...tools, ...(config.exposeMemoryTools && memory ? memory.tools : [])];
   const exposed = new Set(hostTools.map(t => t.name));
   const bodyKey = config.exclusive ? Object.freeze({ owner: 'agent-mc-harness' }) : undefined;
-  const options = { ...clientOptions, eventObservers: [...(clientOptions.eventObservers ?? []), harness.observer],
+  // Unified body: the client's events reach the harness through the adapter (single path), actions through bodyAdapterPort.
+  const adapter = new MineflayerBodyAdapter({ username: self, bodyKey, serverId: extra.serverId });
+  const body = guardBody(adapter, extra.safety);
+  harness.attachBody(body, { execute: false });
+  const options = { ...clientOptions, eventObservers: [...(clientOptions.eventObservers ?? []), adapter.observer],
     extraTools: [...(clientOptions.extraTools ?? []), ...hostTools],
     ...(bodyKey ? { bodyGate: { key: bodyKey, expose: (name: string) => exposed.has(name) } } : {}) };
   return {
     options,
-    integration: { harness, memory, tools, exclusive: !!bodyKey,
-      attachClient(client) { if (config.execute) harness.bindBody(clientBodyPort(client, bodyKey)); },
+    integration: { harness, memory, tools, exclusive: !!bodyKey, body,
+      attachClient(client) { adapter.attach(client); if (config.execute) harness.attachBody(body, { execute: true }); },
       close: () => harness.close() },
   };
 }

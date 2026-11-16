@@ -166,6 +166,10 @@ export class HarnessGatewayClient {
   resume(intentId?: string) { return this.request<{ intent?: Intent }>('control', { action: 'resume', ...(intentId ? { intentId } : {}) }); }
   cancel(intentId: string, reason?: string) { return this.request<{ intent: Intent }>('control', { action: 'cancel', intentId, ...(reason ? { reason } : {}) }).then(r => r.intent); }
   getSummary(options: { topic?: string; maxTokens?: number } = {}) { return this.request<{ summary: Summary }>('get_summary', options).then(r => r.summary); }
+  /** Body kind, lifecycle, identity and (by default) capabilities + health; add 'snapshot' for a fresh observation. */
+  getBody(include?: Array<'capabilities' | 'health' | 'snapshot'>) {
+    return this.request<{ body: Record<string, unknown> | null }>('get_body', include ? { include } : {}).then(r => r.body);
+  }
   pullEvents(options: Payloads['pull_events'] = {}) { return this.request<PullResult>('pull_events', options); }
   ping() { return this.request<{ nonce: string | null; latest: number }>('ping', {}); }
 
