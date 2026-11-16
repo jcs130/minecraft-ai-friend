@@ -1,0 +1,372 @@
+"""Touhou Little Maid (qiandengji-maids/v1) adapter.
+
+The maid has no game connection of its own: it is driven through its OWNER's authenticated connection. From Python
+that connection is an agent-mc-world runtime whose host registered touhou-maids ``MAID_TOOL`` (``mc_maids``,
+agent/maid-port.mjs) as an extra tool; we reach it with an agent-mc-autonomy ``MinecraftBridge`` (or the numen-hosting
+core RPC). Everything protocol-specific stays in maid-port: command building/validation (``maidCommand``), transport
+negotiation (plugin message vs. rate-limited ``/qdmaid``), reply matching, pacing and the 8-pending limit. This adapter
+only maps unified verbs to ``mc_maids`` actions, keeps requestIds, reconciles with ``receipt`` and turns
+``inbox``/``context``/lifecycle envelopes into body events. The action list and schema are read from the live tool,
+not copied.
+"""
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import re
+from collections import OrderedDict
+from typing import Any
+
+from ..bridges import EventCursor, ToolBridge, json_text, text_content
+from ..models import (
+    ActionReceipt,
+    ActionStatus,
+    ActionSupport,
+    BodyAction,
+    BodyIdentity,
+    BodySnapshot,
+    Capabilities,
+    LifecycleCaps,
+    NativeAction,
+    SafetyCaps,
+    Scope,
+    WorldRef,
+)
+from .base import ArgumentError, BaseBody, new_request_id, obj
+from .numen import classify_envelope
+
+UUID = re.compile(r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
+READS = {"nearby", "brain", "list", "context", "receipt", "inbox", "tasks", "inventory", "workshop", "skins", "voices", "resources"}
+# unified verb -> (mc_maids action, argument names passed through, async?)
+VERBS: dict[str, tuple[str, tuple[str, ...], bool]] = {
+    "follow": ("follow", (), False), "stay": ("stay", (), False), "sit": ("sit", (), False), "recall": ("recall", (), True),
+    "chat": ("speak", ("text",), False), "equip": ("equip", ("slot", "hand"), False),
+    "transfer": ("transfer", ("direction", "slot", "count", "playerSlot"), False),
+    "craft": ("make", ("workshopId", "recipeId", "quantity", "inventory"), True), "cast": ("cast", ("spellId",), True),
+    "pickup": ("pickup", ("enabled",), False), "observe": ("context", (), False), "inventory": ("inventory", (), False),
+    "stop": ("stay", (), False),
+}
+PENDING = {"pending", "reserved", "accepted", "queued", "running", "dispatched", "sent"}
+FAILED = {"rejected", "failed", "refused", "blocked", "cancelled", "expired"}
+
+
+def reply_status(reply: Any, is_error: bool) -> ActionStatus:
+    """Map a maid-port reply ({ok, status, reason, data}) to a unified status."""
+    if not isinstance(reply, dict):
+        return "unknown" if is_error else "completed"
+    status = str(reply.get("status") or (reply.get("data") or {}).get("status") or "")
+    if status == "not_dispatched":
+        return "rejected"
+    if status == "unknown":
+        return "unknown"
+    if reply.get("ok") is False or is_error:
+        return "failed" if status in FAILED or status in ("unavailable", "") else "failed"
+    if status in PENDING:
+        return "accepted"
+    if status in FAILED:
+        return "failed"
+    return "completed"
+
+
+class MaidBody(BaseBody):
+    kind = "maid"
+
+    def __init__(self, bridge: ToolBridge, *, scope: Scope, owner_id: str, maid_id: str | None = None, server_id: str | None = None,
+                 world_key: str | None = None, open_bridge: bool = True, poll_seconds: float = 3.0, result_poll_seconds: float = 3.0,
+                 context_poll_seconds: float = 10.0) -> None:
+        super().__init__()
+        if not UUID.match(owner_id):
+            raise ValueError("owner_id must be the owner's UUID")
+        self.bridge, self.scope, self.owner_id = bridge, scope, owner_id.lower()
+        self.maid_id = maid_id.lower() if maid_id else None
+        self.server_id, self.world_key, self.open_bridge = server_id, world_key, open_bridge
+        self.poll_seconds, self.result_poll_seconds, self.context_poll_seconds = poll_seconds, result_poll_seconds, context_poll_seconds
+        self.cursor = EventCursor(bridge)
+        self._identity: BodyIdentity | None = None
+        self._schema: dict[str, Any] = {}
+        self._actions: list[str] = []
+        self._tasks: list[asyncio.Task[None]] = []
+        self._seen: OrderedDict[str, None] = OrderedDict()
+        self._life = "unknown"
+        self._context: dict[str, Any] = {}
+        self._generation = 0
+        self.workshop = False
+
+    # ---- discovery --------------------------------------------------------------------------------
+    def identity(self) -> BodyIdentity | None:
+        return self._identity
+
+    def capabilities(self) -> Capabilities:
+        actions = set(self._actions)
+        acts: dict[str, ActionSupport] = {}
+        for verb, (native, args, is_async) in VERBS.items():
+            if native in actions and (native != "make" or self.workshop):
+                acts[verb] = ActionSupport(native=f"mc_maids {native}", args=list(args), async_=is_async,
+                                           notes="mode setting, not arrival/completion" if verb in ("follow", "stay", "sit") else None)
+        props = self._schema.get("properties", {})
+        native_actions = [NativeAction(name=a, read_only=a in READS, input_schema={"type": "object", "properties": props}) for a in self._actions]
+        return Capabilities(
+            kind="maid", transport="mc_maids (maid-port via owner connection)", actions=acts, native_actions=native_actions,
+            events=["dialogue", "death", "respawn", "lifecycle", "dimension", "position", "action_result", "system_message", "chat", "safety", "other"],
+            snapshot=["life_state", "dimension", "position", "inventory", "text"],
+            lifecycle=LifecycleCaps(spawn="bind-existing", reconnect=True, destroy="detach"), perception="poll",
+            safety=SafetyCaps(native_guards=["maid-port pacing (80 ms plugin / 1.1 s chat) and max 8 pending", "TLM ownership",
+                                             "no automatic retry or recreate", "owner-only shared inference"]),
+            limits=["no free motion (move/look/attack/mine): the maid acts through its native task AI",
+                    "stop = stay", "craft only via workshop make (after the workshop handshake)",
+                    "health/hunger not pushed; life state from context / lifecycle envelopes"],
+        )
+
+    # ---- tool calls -------------------------------------------------------------------------------
+    async def _maids(self, args: dict[str, Any], request_id: str | None = None) -> tuple[Any, dict[str, Any]]:
+        result = await self.bridge.call("mc_maids", args, request_id=request_id)
+        reply = json_text(result)
+        if reply is None:
+            reply = {"ok": not result.get("isError"), "text": text_content(result)}
+        return reply, result
+
+    # ---- lifecycle --------------------------------------------------------------------------------
+    async def spawn(self) -> None:
+        if self._state in ("ready", "spawning"):
+            return
+        self._set_state("spawning")
+        try:
+            if self.open_bridge and not self.bridge.tools:
+                await self.bridge.open()
+            tool = next((t for t in self.bridge.tools if t.get("name") == "mc_maids"), None)
+            if tool is None:
+                raise RuntimeError("owner connection does not expose mc_maids (register touhou-maids MAID_TOOL in the host)")
+            self._schema = tool.get("inputSchema") or tool.get("parameters") or {}
+            self._actions = list(self._schema.get("properties", {}).get("action", {}).get("enum", []))
+            listed, _ = await self._maids({"action": "list"})
+            maids = [m for m in ((listed.get("data") or {}).get("maids") or []) if isinstance(m, dict)] if isinstance(listed, dict) else []
+            ids = [str(m.get("maidId") or m.get("id") or "").lower() for m in maids]
+            if self.maid_id is None:
+                if len(ids) != 1:
+                    raise RuntimeError(f"bind needs exactly one owned maid or an explicit maid_id (found {len(ids)}); never creating one")
+                self.maid_id = ids[0]
+            elif ids and self.maid_id not in ids:
+                raise RuntimeError("configured maid is not owned by this connection")
+            entry = next((m for m in maids if str(m.get("maidId") or m.get("id") or "").lower() == self.maid_id), {})
+            await self._read_context(emit=False)
+            with contextlib.suppress(Exception):
+                shop, _ = await self._maids({"action": "workshop", "maidId": self.maid_id})
+                self.workshop = isinstance(shop, dict) and shop.get("ok") is True
+        except Exception as error:
+            self.last_error = type(error).__name__
+            self._set_state("error", f"bind failed: {error}"[:300])
+            raise
+        self._generation += 1
+        self._identity = BodyIdentity(kind="maid", body_id=self.maid_id, name=entry.get("name"), owner_id=self.owner_id,
+                                      world=WorldRef(server_id=self.server_id, world_key=self.world_key, dimension=self._context.get("dimension")),
+                                      scope=self.scope, generation=f"bind-{self._generation}")
+        self._set_state("dead" if self._life == "dead" else "ready", "maid bound (existing entity)")
+        self._tasks = [asyncio.create_task(self._loop(self.poll_seconds, self.poll_once), name="maid-events")]
+        if self.result_poll_seconds > 0:
+            self._tasks.append(asyncio.create_task(self._loop(self.result_poll_seconds, self.reconcile), name="maid-results"))
+        if self.context_poll_seconds > 0:
+            self._tasks.append(asyncio.create_task(self._loop(self.context_poll_seconds, self._read_context), name="maid-context"))
+
+    async def reconnect(self) -> None:
+        await self._halt_tasks()
+        self._state = "detached"
+        await self.spawn()
+
+    async def destroy(self) -> None:
+        await self._halt_tasks()
+        if self.open_bridge:
+            with contextlib.suppress(Exception):
+                await self.bridge.close()
+        self._set_state("destroyed", "detached; the maid keeps its native AI and data")
+
+    async def _halt_tasks(self) -> None:
+        tasks, self._tasks = self._tasks, []
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _loop(self, seconds: float, fn: Any) -> None:
+        while True:
+            await asyncio.sleep(seconds)
+            try:
+                await fn()
+            except asyncio.CancelledError:
+                raise
+            except Exception as error:
+                self.last_error = type(error).__name__
+
+    # ---- actions ----------------------------------------------------------------------------------
+    async def _do_act(self, action: BodyAction, request_id: str) -> ActionReceipt:
+        if action.verb == "native":
+            name = str(action.name)
+            args = {**action.args, "action": name}
+            if self.maid_id and name not in ("list", "nearby", "resources", "resource-pack") and "maidId" not in args:
+                args["maidId"] = self.maid_id
+        else:
+            native, names, _ = VERBS[action.verb]
+            args = {"action": native, "maidId": self.maid_id}
+            for key in names:
+                if key in action.args:
+                    args[key] = action.args[key]
+            if action.verb == "chat":
+                text = obj(action.args, "text", str)
+                if not 1 <= len(text) <= 140:
+                    raise ArgumentError("text must be 1..140 characters (maid speak limit)")
+            if action.verb == "cast":
+                obj(action.args, "spellId", str)
+            if action.verb == "craft":
+                obj(action.args, "workshopId", str)
+                obj(action.args, "recipeId", str)
+            if action.verb in ("equip",):
+                obj(action.args, "slot", int)
+                obj(action.args, "hand", str)
+            if action.verb == "transfer":
+                obj(action.args, "direction", str)
+                obj(action.args, "slot", int)
+        write = args["action"] not in READS
+        if write:
+            args["requestId"] = request_id
+        reply, result = await self._maids(args, request_id if write else None)
+        status = reply_status(reply, bool(result.get("isError")))
+        if not write and status == "accepted":
+            status = "completed"
+        text = str((reply or {}).get("reason") or (reply or {}).get("error") or (reply or {}).get("text") or f"{args['action']} {status}")
+        if args["action"] == "context" and isinstance(reply, dict) and reply.get("ok"):
+            self._apply_context(reply.get("data") or {}, emit=True)
+        operation = (reply or {}).get("operationId") if isinstance(reply, dict) else None
+        receipt = self.receipt(request_id, action.verb, status, text[:2000], execution_id=operation or (request_id if write else None),
+                               data={"maidAction": args["action"], "reply": reply})
+        if receipt.terminal and write:
+            self.emit("action_result", text[:300], request_id=request_id, status=status, data={"verb": action.verb, "maidAction": args["action"]})
+        return receipt
+
+    async def stop(self, reason: str | None = None) -> ActionReceipt:
+        if "stop" not in self.capabilities().actions:
+            return self.receipt("stop_unsupported", "stop", "unsupported", "mc_maids has no stay action")
+        return await self.act(BodyAction(verb="stop", request_id=new_request_id("stop")))
+
+    async def _do_result(self, request_id: str, previous: ActionReceipt) -> ActionReceipt:
+        maid_action = (previous.data or {}).get("maidAction") if isinstance(previous.data, dict) else None
+        args: dict[str, Any] = {"action": "receipt", "maidId": self.maid_id, "operationId": previous.execution_id or request_id}
+        if maid_action and maid_action not in READS:
+            args["operationAction"] = maid_action
+        reply, result = await self._maids(args)
+        status = reply_status((reply or {}).get("data") if isinstance(reply, dict) and isinstance(reply.get("data"), dict) and reply.get("ok") else reply,
+                              bool(result.get("isError")))
+        if status in ("accepted",) or (status == "unknown" and previous.status == "unknown"):
+            return previous
+        return self.settle(request_id, status, f"receipt: {status}", reply) or previous
+
+    async def reconcile(self) -> None:
+        for rid, receipt in list(self._receipts.items()):
+            if receipt.status == "accepted":
+                with contextlib.suppress(Exception):
+                    await self._do_result(rid, receipt)
+
+    # ---- perception -------------------------------------------------------------------------------
+    async def _read_context(self, emit: bool = True) -> None:
+        if not self.maid_id:
+            return
+        reply, _ = await self._maids({"action": "context", "maidId": self.maid_id})
+        if isinstance(reply, dict) and reply.get("ok"):
+            self._apply_context(reply.get("data") or {}, emit=emit)
+
+    def _apply_context(self, data: dict[str, Any], emit: bool) -> None:
+        previous = dict(self._context)
+        life = data.get("lifeState")
+        seen = data.get("lastSeenAlive") or {}
+        self._context = {"lifeState": life, "dimension": data.get("dimension") or seen.get("dimension"),
+                         "position": data.get("position") or seen.get("position"), "raw": data}
+        if life == "dead":
+            new_life = "dead"
+        elif life == "alive":
+            new_life = "alive"
+        else:
+            new_life = "unloaded" if life == "unloaded_or_unavailable" else "unknown"
+        if emit and new_life != self._life:
+            if new_life == "dead":
+                self.emit("death", "maid died", data={"death": data.get("death")})
+            elif self._life == "dead" and new_life == "alive":
+                self.emit("respawn", "maid alive again", data={"recovery": data.get("recovery")})
+        if emit and previous.get("dimension") and previous.get("dimension") != self._context["dimension"]:
+            self.emit("dimension", f"dimension {self._context['dimension']}", data={"dimension": self._context["dimension"]})
+        self._life = new_life
+        if new_life == "dead" and self._state == "ready":
+            self._state = "dead"
+        elif new_life != "dead" and self._state == "dead":
+            self._state = "ready"
+
+    async def snapshot(self) -> BodySnapshot:
+        await self._read_context(emit=True)
+        inv, _ = await self._maids({"action": "inventory", "maidId": self.maid_id})
+        pos = self._context.get("position")
+        position = {k: float(pos[k]) for k in "xyz"} if isinstance(pos, dict) and all(isinstance(pos.get(k), int | float) for k in "xyz") else None
+        return BodySnapshot(life_state=self._life, position=position, dimension=self._context.get("dimension"),
+                            inventory=(inv or {}).get("data") if isinstance(inv, dict) else None,
+                            text=f"maid {self.maid_id} lifeState={self._context.get('lifeState')}", raw=self._context.get("raw"))
+
+    def _fresh(self, key: str) -> bool:
+        if key in self._seen:
+            return False
+        self._seen[key] = None
+        while len(self._seen) > 2048:
+            self._seen.popitem(last=False)
+        return True
+
+    async def poll_once(self) -> int:
+        """Inbox (attributed, untrusted human dialogue) + owner-connection events (system text for anti-cheat)."""
+        count = 0
+        if "inbox" in self._actions:
+            reply, _ = await self._maids({"action": "inbox", "maidId": self.maid_id})
+            data = (reply.get("data") or {}) if isinstance(reply, dict) else {}
+            # The inbox row list is not documented in-repo (DialogueInbox.snapshot ships compiled): accept the plausible keys.
+            rows: list[Any] = next((data[k] for k in ("events", "items", "pending", "messages") if isinstance(data.get(k), list)), [])
+            for row in rows:
+                if isinstance(row, dict) and row.get("eventId") and self._fresh("inbox:" + str(row["eventId"])):
+                    self.emit("dialogue", str(row.get("text") or "")[:1000], severity=2,
+                              data={**{k: row.get(k) for k in ("eventId", "memoryNamespace", "speaker", "speakerId")},
+                                    "sessionKey": row.get("sessionKey") or data.get("sessionKey")})
+                    count += 1
+        for e in await self.cursor.read():
+            kind = classify_envelope(str(e.get("type") or ""))
+            if kind in ("system_message", "server_status", "chat", "whisper"):
+                self.emit(kind, str(e.get("text") or "")[:2000], data={"type": e.get("type")}, raw=e)
+                count += 1
+        return count
+
+    async def ack(self, event_id: str) -> ActionReceipt:
+        """Acknowledge an inbox event after the host has handled it (maid-port contract: speak, then ack)."""
+        return await self.act(BodyAction(verb="native", name="ack", args={"eventId": event_id}, request_id=new_request_id("ack")))
+
+    def feed_envelope(self, envelope: dict[str, Any]) -> bool:
+        """For hosts that receive qiandengji-maids/v1 envelopes directly (maid-port onDialogue/onLifecycle/onChatResult)."""
+        if not isinstance(envelope, dict) or envelope.get("protocol") != "qiandengji-maids/v1" or envelope.get("schema") != 1 or not envelope.get("ok"):
+            return False
+        if str(envelope.get("recipientUuid", "")).lower() != self.owner_id:
+            return False
+        data = envelope.get("data") or {}
+        if self.maid_id and str(data.get("maidId", self.maid_id)).lower() != self.maid_id:
+            return False
+        action, key = envelope.get("action"), str(data.get("eventId") or envelope.get("requestId"))
+        if not self._fresh(f"{action}:{key}"):
+            return False
+        if action == "dialogue":
+            self.emit("dialogue", str(data.get("text") or "")[:1000], severity=2, data={k: data.get(k) for k in ("eventId", "sessionKey", "speaker")}, raw=envelope)
+        elif action == "lifecycle":
+            dead = bool(data.get("death")) and not data.get("recovery")
+            self.emit("death" if dead else "respawn", "maid death" if dead else "maid recovered", data={"eventId": data.get("eventId")}, raw=envelope)
+            self._life = "dead" if dead else "alive"
+            self._state = "dead" if dead and self._state == "ready" else ("ready" if not dead and self._state == "dead" else self._state)
+        elif action == "chat-result":
+            rid = str(data.get("requestId") or envelope.get("requestId"))
+            status: ActionStatus = "completed" if data.get("status") in ("replied", "completed", None) else reply_status(data, False)
+            if self.settle(rid, status, str(data.get("text") or "chat result")[:500], data) is None:
+                self.emit("other", "chat-result", data=data, raw=envelope)
+        else:
+            return False
+        return True
+
+    def health(self):
+        h = super().health()
+        h.extra = {"maidId": self.maid_id, "lifeState": self._life, "workshop": self.workshop}
+        return h

@@ -1,224 +1,299 @@
-# Agent Harness Runtime — design (Phase 1)
+# Agent Harness Runtime — design (active direction: Python)
 
-Status: Phase 1 + 1b (server-hosted runtime with message gateway) implemented on branch `feat/agent-harness-phase1`
-(local). Nothing changes unless the harness is explicitly enabled (`AGENT_HARNESS_ENABLED=1`) or the server is
-explicitly launched (`pnpm serve`). Wire protocol: [agent-harness-protocol.md](agent-harness-protocol.md).
+Status: **Phase 1 implemented** in `packages/agent-harness-py` (package `agent-mc-harness-py`, import `agent_mc_harness`)
+on branch `feat/agent-harness-phase1`, local commits only. The earlier TypeScript harness (gateway + body adapters,
+`packages/agent-harness`) stays in the tree and passing; its design is kept in
+[agent-harness-design-ts.md](agent-harness-design-ts.md) and its wire protocol in
+[agent-harness-protocol.md](agent-harness-protocol.md) (the Python gateway speaks a subset of it). New work goes to
+Python. **Every feature flag defaults off**: importing the package or leaving the env unset changes nothing.
 
-## Three layers
-
-```
-┌───────────────────────────────────────────────────────────────────────────┐
-│ Host  (N.E.K.O / Cortico Persona / DSH)                                    │
-│  decides WHAT to do · persona · conversation · long-term host memory       │
-└──────────────┬───────────────────────────────────────────▲─────────────────┘
-               │ harness_submit_intent / harness_control   │ harness_get_summary (≤N tokens)
-               │ (submitIntent, pause, resume, update,     │ harness_events (pull) / subscribe (push)
-               ▼  cancel)                                  │ [optional] HostMemoryWriter (reflection notes)
-┌───────────────────────────────────────────────────────────────────────────┐
-│ Harness Runtime  (packages/agent-harness · agent-mc-harness)               │
-│  IntentManager (priority queue, state machine, JSON persistence)           │
-│  IntentExecutor (single lane, Planner → body steps, receipt tracking)      │
-│  EventHub (key-event classification, ring buffer, push + pull)             │
-│  Summary builder (Hot, token budget)                                       │
-│  Memory: agent-mc-memory  Hot=summary · Warm=SQLite facts · Cold=episodes  │
-│          + Graphiti (optional sidecar, async)                              │
-│  AsyncWorkers (reflection) · Reflector / HostMemoryWriter (interfaces)     │
-└──────────────┬───────────────────────────────────────────▲─────────────────┘
-               │ BodyPort.call(mc_do / mc_stop / …)        │ eventObservers(EventEnvelope, facts)
-               ▼                                           │
-┌───────────────────────────────────────────────────────────────────────────┐
-│ Body / Adapter  (packages/agent-mc-world)                                  │
-│  perception · actions · world identity · MCP · event reporting             │
-│  no long-term memory, no persona, no complex decisions                     │
-└───────────────────────────────────────────────────────────────────────────┘
-```
-
-Package boundaries:
-
-| Package | Owns | Depends on |
-| --- | --- | --- |
-| `agent-mc-world` | body; exposes two passive hooks `eventObservers`, `extraTools` (commit `10190e52`) | — |
-| `agent-mc-memory` | episodes, bi-temporal facts, cold store, Graphiti client/sidecar, memory tools | nothing at runtime (structural types only) |
-| `agent-mc-harness` | intents, executor, events, summary, workers, host tools, **integration glue** | `agent-mc-memory` (link) ; structural types of `agent-mc-world` |
-
-`agent-mc-world` imports neither package. The only body change is the two optional client options; with neither set it
-behaves exactly as before.
-
-## Data flow
-
-1. Body event → `host.pushEvent` → journal → `eventObservers` → `HarnessRuntime.observer(event, facts)`.
-2. The observer fans out (each isolated, never throws into the body):
-   - `memory.observer` → Episode (cold JSONL + SQLite) → extracted facts (Warm) → Graphiti episode (async, hybrid only);
-   - `executor.observeExecution` → resolves terminal task receipts for the running intent step;
-   - `classifyBodyEvent` → `HarnessEvent` → ring buffer + subscribers; death / task_failed → reflection worker.
-3. Host reads `harness_get_summary` (Hot) built from: active intent, recent key events (severity ≥2),
-   topic-relevant memory facts (local + Graphiti when a topic is given), paused/queued intents.
-
-## Host-facing interface (TypeScript)
-
-```ts
-type IntentState = 'queued' | 'active' | 'paused' | 'done' | 'cancelled' | 'failed';
-type PriorityInput = number | 'low' | 'normal' | 'high' | 'urgent';   // 20 / 50 / 75 / 95; ≥90 may preempt
-interface BodyStep { tool: string; args: Record<string, unknown>; note?: string }
-interface IntentConstraints { steps?: BodyStep[]; deadlineMs?: number; rules?: string[]; [key: string]: unknown }
-interface IntentInput { goal: string; priority?: PriorityInput; constraints?: IntentConstraints; hostRef?: string }
-interface Intent { id; goal; priority: number; constraints; hostRef: string|null; state: IntentState; reason: string|null;
-  createdAt; updatedAt; startedAt: string|null; endedAt: string|null; plan: BodyStep[]|null; stepIndex; attempts; result: string|null }
-interface IntentPatch { goal?: string; priority?: PriorityInput; constraints?: IntentConstraints }
-type HarnessEventKind = 'death'|'task_completed'|'task_failed'|'interaction'|'skill'|'player_presence'|'intent_state'|'reflection';
-interface HarnessEvent { seq: number; at: string; kind: HarnessEventKind; severity: 1|2|3; text: string; intentId?: string; data?: Record<string, unknown> }
-interface SummaryOptions { topic?: string; maxTokens?: number }               // budget default 300, clamped 80..800
-interface Summary { text: string; tokens: number; budget: number; truncated: boolean; generatedAt: string }
-
-interface HarnessApi {
-  submitIntent(input: IntentInput): Promise<{ intentId: string; state: IntentState }>;
-  getSummary(options?: SummaryOptions): Promise<Summary>;
-  subscribe(listener: (event: HarnessEvent) => void, filter?: { minSeverity?: 1|2|3 }): () => void;
-  pullEvents(options?: { after?: number; limit?: number; minSeverity?: 1|2|3 }): { events: HarnessEvent[]; latest: number; dropped: boolean };
-  pause(intentId?: string, reason?: string): Promise<Intent | null>;   // no id → pause whole executor
-  resume(intentId?: string): Promise<Intent | null>;
-  updateIntent(intentId: string, patch: IntentPatch): Promise<Intent>;
-  cancel(intentId: string, reason?: string): Promise<Intent>;
-  getIntent(intentId: string): Intent | null;
-  listIntents(options?: { states?: IntentState[]; limit?: number }): Intent[];
-}
-```
-
-Host tools (registered via `extraTools`, compact JSON results):
-
-| Tool | Args |
-| --- | --- |
-| `harness_submit_intent` | `goal`, `priority?`, `constraints?` (`steps`, `deadlineMs`, `rules`), `hostRef?` |
-| `harness_get_summary` | `topic?`, `max_tokens?` (80–800) |
-| `harness_events` | `after?`, `limit?`, `min_severity?` |
-| `harness_control` | `action` = pause \| resume \| cancel \| update \| get \| list, `intent_id?`, `reason?`, `goal?`, `priority?`, `constraints?`, `states?` (list) |
-
-Extension points (harness side):
-
-```ts
-interface BodyPort { call(tool: string, args: Record<string, unknown>, signal: AbortSignal): Promise<BodyOutcome> }
-interface Planner { plan(intent: Intent, context: { summary(): Promise<string> }): Promise<{ steps: BodyStep[] } | { needsHost: string }> }
-interface Reflector { reflect(trigger: ReflectionTrigger, signal: AbortSignal): Promise<ReflectionNote | null> }
-interface HostMemoryWriter { write(note: ReflectionNote, trigger: ReflectionTrigger): Promise<void> }
-```
-
-## Intent state machine
+## 1. Three layers
 
 ```
-queued ──► active ──► done | failed | cancelled
-  ▲  │       │  └──► queued   (preempted by urgent / executor paused / restart)
-  │  │       └─────► paused   (host pause, planner needs host)
-  │  └──► paused ──► queued (resume) | cancelled
-  └──────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│ HOST AGENT  (persona, dialogue, decides WHAT; N.E.K.O / Cortico persona / DSH)         │
+│   lightweight messages: hello · submit_intent · update_intent · control · get_summary   │
+│   · pull_events · get_body · ping   (protocol.handle; never calls mc_* tools directly)   │
+└───────────────────────────────┬──────────────────────────────────▲─────────────────────┘
+                                ▼                                  │ summary / events
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│ HARNESS RUNTIME (runtime.py, scheduler.py, fastslow.py, learning/*, memory/*)          │
+│   goals: Intent queue (priority, pause/resume/cancel, needs_host)                      │
+│   scheduling: S0 reflex/rules → S1 fast typed choice (+JitRL) → S2 LLM planner          │
+│   single BODY LEASE · worker pool (reflection / review / research / Harness²)          │
+│   memory: Hot (ring) · Warm (Graphiti bi-temporal) · Cold (local SQLite archive)        │
+│   learning: reflection (resident) · self-iteration store · JitRL · Harness²            │
+└───────────────────────────────┬──────────────────────────────────▲─────────────────────┘
+                                ▼ BodyAction                       │ BodyEvent / ActionReceipt
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│ BODY ADAPTER (body/base.py BodyAdapter, body/safety.py GuardedBody)                    │
+│   perception events · actions + receipts · lifecycle · capabilities · identity scope    │
+│   NumenBody (native MCP via numen_controller / hosted via mc_numen) · MaidBody (mc_maids)│
+│   Mineflayer adapter: deferred (exists in the TS harness)                              │
+└──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-* One active intent at a time (single body). Next = highest priority, then oldest.
-* `urgent` (≥90) preempts a lower-priority active intent (abort + `mc_stop`, back to queued; it resumes from `stepIndex`).
-* An active intent cannot change goal/constraints — pause first. Changing constraints drops the cached plan.
-* Steps: body call → `failed` outcome fails the intent; a non-terminal receipt (`accepted`/`running`) waits for the
-  terminal task event with the same id (`stepTimeoutMs` 10 min default, `constraints.deadlineMs`); phase must be `completed`.
-* Persistence: `<dir>/intents.json` (atomic rename). An intent active at shutdown becomes queued on reload.
+The harness is the server-hosted runtime: while it executes, it **exclusively** drives the body (one lease). Third-party
+agents talk to it only through messages.
 
-## Feature flags
+## 2. Interfaces (Pydantic / Protocol)
 
-| Variable | Default | Effect |
-| --- | --- | --- |
-| `AGENT_HARNESS_ENABLED` | off | master switch; off → `withAgentHarness` returns the same options object and `null` |
-| `AGENT_HARNESS_EXECUTE` | off | let the harness drive the body; off → intents are tracked only (host keeps control) |
-| `AGENT_HARNESS_EXCLUSIVE` | = `AGENT_HARNESS_EXECUTE` | install `bodyGate`: hosts see only `harness_*` tools; requires EXECUTE |
-| `AGENT_HARNESS_DIR` | `<dataDir>/agent-harness` | intents + memory directory |
-| `AGENT_HARNESS_MEMORY` | on (when enabled) | wire agent-mc-memory |
-| `AGENT_HARNESS_MEMORY_TOOLS` | off | also expose `memory_*` tools to the host |
-| `AGENT_MEMORY_BACKEND` / `AGENT_MEMORY_GRAPHITI_URL` / `AGENT_MEMORY_GRAPHITI_TOKEN_ENV` | local / 127.0.0.1:8765 / — | see agent-memory README (token env holds a variable **name**) |
+Body (`models.py`, `body/base.py`) — mirrors the TS `agent-mc-body/v1` contract field for field:
 
-## Phase 1b — server-hosted runtime and message gateway
+```python
+class BodyAdapter(abc.ABC):
+    kind: BodyKind                                   # "numen" | "maid" | "mineflayer"
+    def identity(self) -> BodyIdentity | None        # kind, body_id, name, owner_id, world: WorldRef, scope: Scope, generation
+    def capabilities(self) -> Capabilities           # actions{verb: ActionSupport}, native_actions, events, snapshot, lifecycle, perception, safety, limits
+    def lifecycle(self) -> LifecycleState            # detached|spawning|ready|dead|reconnecting|error|destroyed
+    async def spawn(self) -> None                    # attach/bind an EXISTING companion; never creates/deletes one
+    async def reconnect(self) -> None
+    async def destroy(self) -> None                  # release control; the companion is kept
+    async def act(self, action: BodyAction) -> ActionReceipt     # BodyAction{verb, args, name?, request_id?}
+    async def result(self, request_id: str) -> ActionReceipt     # reconcile accepted/unknown; never replays
+    async def stop(self, reason: str | None = None) -> ActionReceipt
+    async def snapshot(self) -> BodySnapshot         # life_state, position, dimension, health, food, inventory, entities, text
+    def subscribe(self, listener: Callable[[BodyEvent], None]) -> Callable[[], None]
+    def health(self) -> BodyHealth
 
-Decision (2026-11-16): the harness is the **server-hosted agent runtime**. Third-party agents connect through a
-lightweight message interface and never call `mc_*` tools; when the harness executes it is the body's only driver.
-
-```
- third-party agents (N.E.K.O · Cortico · DSH · Python · …)
-        │  JSON messages v1: hello · submit_intent · update_intent · control · get_summary
-        │                    subscribe/unsubscribe · pull_events · ping        ▲ event pushes
-        ▼  WebSocket /v1/ws  ·  HTTP POST /v1/messages  ·  SSE /v1/events/stream │
-┌──────────────────────────────── one server process (`pnpm serve`) ─────────────────────────┐
-│ Gateway  auth (per-agent tokens, constant-time) · ownership · rate limits · size limits     │
-│          loopback bind by default · origin check · resume by (stream, seq)                  │
-│ Harness  intents · executor · events · summary · memory (agent-mc-memory)                    │
-│ Body     MinecraftAgentClient (agent-mc-world) with bodyGate: mc_* callable only with the    │
-│          harness's bodyKey; hosts/MCP/context see only harness_* tools                       │
-└─────────────────────────────────────────────────────────────────────────────────────────────┘
+ActionStatus = "completed"|"accepted"|"failed"|"rejected"|"unsupported"|"blocked_by_safety"|"unknown"
+ActionReceipt(request_id, verb, status, terminal, text, execution_id?, data?, retry_allowed=False, retry_after_ms?)
+BodyIdentity.group_id() -> "<kind>_<server>_<sha256(kind,server,world,body,realm,account,agent)[:20]>"  # memory partition
 ```
 
-Files: `src/gateway/{protocol,auth,limits,core,server,index}.ts`, `src/sdk/client.ts`, `src/server/{serve,cli}.ts`,
-`src/testing/fake-world.ts`, `examples/{third-party-agent.ts,python_agent.py}`.
+Runtime (`runtime.py`): `Intent(id, agent, goal, priority, steps, candidates, state, decision, verified, strategy_refs…)`,
+`PlanContext(capabilities, memories, hot, lessons, decision, snapshot, recent)`,
+`Planner = Callable[[Intent, PlanContext], Awaitable[list[Step] | None]]`,
+`Verifier = Callable[[Intent, BodySnapshot], Awaitable[bool | None]]` (environment evidence for goal success).
+`HarnessRuntime(body, planner, memory, execute, fastslow, verifier, strategies, reflection, review_interval, max_workers…)`.
 
-### Exclusive body control
+Scheduler (`fastslow.py`, `scheduler.py`, `typed_choice.py`): `Candidate(id, description, step, prior)`,
+`Decision(tier, route, focus, profile, system1, requested_tier, effective_tier, defer)`,
+`SystemOneClient.request(state, questions) -> {answers: {key: TypedChoice}}`, `BodyLease.hold/preempt/valid`,
+`WorkerPool.submit(kind, job)`, `BrainMetrics.view()`.
 
-`agent-mc-world` gained one more optional client option (default absent → unchanged behaviour):
+Memory (`memory/*`): `MemoryEpisode(id, kind, name, body, source_description, reference_time, actors, provenance)`,
+`Fact(fact, source, valid_at, invalid_at, score, data, provenance)`, `MemoryStore` protocol (`add/search/close`),
+`MemoryRouter(local, graph).add/search/hot/observe`.
 
-```ts
-interface MinecraftBodyGate { key: object; expose: (toolName: string) => boolean }
-MinecraftClientOptions.bodyGate?: MinecraftBodyGate
-CallOptions.bodyKey?: object
+Learning (`learning/*`): `ReflectionLoop.reflect(ReflectionInput) -> Reflection | None`, `Reflector` protocol,
+`StrategyStore.propose/active/record/rollback/start_trial`, `JitRL.rank/record_step/credit/stats`, `GoalWeights`,
+`Harness2Optimizer.optimize(...)`, `Proposer` protocol.
+
+Gateway (`protocol.py`): `await handle(runtime, {"v":1,"id","type","payload"}, agent=…, admin=…) -> reply` for
+`hello · ping · submit_intent{goal, priority, constraints{steps?, candidates?}} · update_intent · control{pause|resume|cancel|get|list}
+· get_summary{topic?, maxChars} · pull_events{after, limit, minSeverity, kinds} · get_body{include}`. Transport-agnostic
+(the TS gateway's WebSocket/stdio framing can carry it); ownership: an agent controls only its own intents unless admin.
+
+## 3. Scheduling tiers
+
+| Tier | What | Where | Rules |
+|---|---|---|---|
+| **System 0** — body-native reflexes | low HP / hunger, collision, emergencies, native work running; anti-cheat stop | the body itself (Numen/maid native AI) + `GuardedBody` + `FastPolicy.rule_focus` | ms-level, **not preemptible**: when focus is `survival`/`wait` the harness defers (`defer_seconds`, capped by `max_defers` → pause for host); safety events `preempt()` the lease so late results of the holder are discarded |
+| **System 1** — fast decisions | typed choice over 2–8 exact candidates; adaptive_router L0–L1; JitRL posterior | `FastSlow.system1` → survivor `PolicyWorker`+`SystemOne` (gateway tools) or `SystemOneClient` (/systemone, any body) | one request, no retries, deadline (default 5 s), `choice_probability ≥ 0.75`, **fresh snapshot re-check** (`same_body`/premise) → else escalate to S2. Bypasses the worker queue |
+| **System 2** — slow thinking | LLM planner, reflection, memory updates, Harness² | `Planner` hook + `WorkerPool` | per-request **thinking tier** (`no_think/normal/complex`): typed judge `answers.reasoning` (immediate/routine/deliberate) when confident, else router level / `DecisionSettings` profile; danger/complex never lowered; output budget from `decision_profiles` |
+
+Routing levels come from `world/survival/adaptive_router.route` (L0 SKIP · L1 FAST · L2 THINK · L3 PLAN). Metrics
+(`BrainMetrics`, after cormy brain-metrics): decisions per tier, requested vs effective thinking tier, System-1
+ok/escalation codes and median latency, goals `completed_verified` vs `completed_unverified`, deferrals to native.
+
+## 4. Memory: Hot / Warm / Cold
+
+The **Episode** (`MemoryEpisode`) is the only input unit; every episode carries `provenance`.
+
+* **Hot** — per-`group_id` in-process ring (32), newest first; given to the planner as `PlanContext.hot`. No I/O.
+* **Warm** — Graphiti, bi-temporal (valid/invalid + created/expired), **in-process via the existing sidecar class**
+  `agent_memory_sidecar.service.GraphitiService` (Kuzu driver, Minecraft entity types, point-in-time search). Provenance
+  travels in `source_description` (EpisodeIn has no extra fields). Needs an extraction LLM; without one `add` is skipped.
+* **Cold** — local SQLite (`LocalMemory`): always written, keeps provenance JSON, lexical recall (word + CJK bigram).
+  It is the fallback whenever Graphiti is off, unconfigured or failing (`MemoryRouter` dual-writes; errors counted).
+* Isolation: `group_id` per body kind + server + world + body + realm/account/agent (dimension is *not* a boundary).
+
+## 5. Learning & reflection (RSI without weight changes)
+
+```mermaid
+flowchart LR
+  B[Body receipts + events] --> J[JitRL\nshort-term: per-step shaped return\nmid-term: discounted credit]
+  J -->|posterior priors| S1[System 1 choice]
+  B --> R[Reflection loop\nfailure · milestone · periodic]
+  R -->|reflection episode + provenance| M[(Graphiti warm / local cold)]
+  R -->|lesson trial version| ST[(StrategyStore\nversioned lessons · methods · routing)]
+  ST -->|active lessons| P[System 2 planner]
+  R -->|repeated failures of a method| Q[Harness² queue]
+  Q --> H[Harness² Propose-Probe-Compose\nisolated practice · held-out gate]
+  H -->|eligible candidate STAGED| ST
+  H -->|harness2 reflection fact| M
+  P --> B
+  S1 --> B
+  ST -.verified outcomes adopt / roll back.-> ST
 ```
 
-Tools with `expose(name) === false` disappear from `client.tools()` (therefore from the MCP tool list, model context and
-fast-action paths) and `client.call()` refuses them unless `options.bodyKey` is the very same object. Only the harness
-holds the key (created inside `withAgentHarness`, never serialised). `AGENT_HARNESS_EXCLUSIVE` defaults to
-`AGENT_HARNESS_EXECUTE`; exclusive without execute is a configuration error. `pnpm serve` always executes and is
-exclusive unless `AGENT_HARNESS_EXCLUSIVE=0`.
+| | Reflection (resident) | Harness² (deep self-iteration) | JitRL (action preference) |
+|---|---|---|---|
+| Trigger | failure (intent failed, death/safety pause), milestone (completed), periodic (30 min) | reflection queues a method after `optimize_after` (3) failure reflections; explicit job | every System-1 decision with candidates; every verified step |
+| Changes | lesson text → `StrategyStore` trial; episode in memory | `run.js` / `params.json` / `SKILL.md` of one method → staged candidate version | posterior over the current candidates only (advisory) |
+| Evidence | receipts + events of that intent; JitRL stats | independent observation in an isolated practice body; original vs candidate on held-out fixtures | measured metric deltas of receipt-verified steps |
+| Adoption | trial → adopted after `min_trials` verified outcomes not worse than parent; else rolled back | never automatic (`adopted=false`); staged as `candidate`, needs explicit `start_trial` then the same gate | none (no state outside its sample book) |
+| Cost | 0 (deterministic) or 1 LLM call | ~8–24 LLM calls + 12 practice trials per job | 0 model calls |
+| Runs | worker pool, never touches the body | worker pool + subprocesses, never touches the live body | inline in System 1 (μs) |
 
-### Switching hosts to gateway mode
+Rules shared by all three: no model weights change; unsettled (`unknown`/`accepted`) actions are never replayed and never
+count as evidence; only environment-verified outcomes gate adoption; old versions and negatives are kept; rollback = the
+previous version becomes active again.
 
-| Host | Today | Gateway mode |
-| --- | --- | --- |
-| DSH (run35 style) | launches the body (`minecraft-agent-mcp <config>` / in-process client) and calls `mc_*` | run `pnpm serve <same client config>` instead; DSH connects to `ws://127.0.0.1:8787/v1/ws` with its token, submits intents with `constraints.steps` built from what it used to send as `mc_do`, subscribes to events, reads `get_summary` instead of raw observations. DSH's own model loop keeps planning *what*; the harness does the *doing*. |
-| N.E.K.O | — | plugin/adapter using the TS SDK (`agent-mc-harness/sdk`) or raw WS JSON; maps persona decisions to `submit_intent`, shows `severity ≥ 2` events in chat, uses `get_summary(topic)` as game context. |
-| Cortico Persona | — | same as N.E.K.O; non-TS stacks can use HTTP + `pull_events` (see `examples/python_agent.py`). |
+### 5.1 Reflection loop (`learning/reflection.py`) — required, on whenever the harness is enabled
+`ReflectionLoop.reflect` → dedupe by signature (trigger + normalised goal + failing verb/status + normalised error) with
+cooldown (600 s) → reflector = `LLMReflector` (OpenAI-compatible, key read from the env var *named* by
+`AGENT_HARNESS_PY_REFLECTOR_KEY_ENV`) with `DeterministicReflector` fallback (no key / error / tests) → one `reflection`
+episode with provenance `{trigger, intentId, requestIds, signature, reflector}` written through `MemoryRouter` (Graphiti +
+local, local only when Graphiti is down) → lesson proposed as a trial version → failure counts per method feed the
+Harness² queue. The runtime records verified outcomes for the lesson versions it handed to the planner
+(`Intent.strategy_refs`) — that is the evidence gate.
 
-Migration steps: (1) issue a token per host (`openssl rand -hex 24` into an env var; reference it by `tokenEnv`),
-(2) start `pnpm serve` on the body machine, (3) remove direct `mc_*` access from the host (with `bodyGate` they are not
-offered anyway), (4) translate actions to intents. During transition an in-process host can keep running with
-`AGENT_HARNESS_ENABLED=1` and no EXECUTE (tracking only) — but never let a host and the harness drive the body at once.
+### 5.2 Self-iteration store (`learning/strategies.py`)
+Keys `"<group_id>:lesson:<method>"`, `"<group_id>:method:<id>"`, `"<group_id>:routing:<name>"`. Status machine
+`candidate → trial → adopted | rolled_back`, `retired` when superseded. Gate: `≥ min_trials` verified outcomes and success
+rate ≥ parent's (≥ 0.5 when no parent). `rollback()` restores the parent. Method versions from Harness² are never
+auto-trialled.
 
-### Server flags (`pnpm serve`)
+### 5.3 Harness² (`learning/harness2.py`) — required core mechanism
+```
+Python ReflectionLoop → Harness2Optimizer (model port: LLMProposer | DeterministicProposer; staging; memory)
+   └─ node learning/node/h2_driver.mjs  → EXISTING agent-mc-world Harness2Runner (journal, budgets, held-out gate)
+                                         + EXISTING createPhysicsMethodPractice (MethodRunner sandbox, prismarine physics)
+        └─ python bridges/harness2/worker.py (EXISTING) → google-research/harness2 @1cfe254e (pinned, verified)
+```
+Boundaries (agent-mc-world `docs/harness2.md`): practice binding `{instanceId: harness-py-practice, realm:
+practice-fixtures, isolated: true}` must differ from the live instance **and** realm (enforced by the runner); one job
+per runner, trials serial; success only by independent observation (`assessPracticeTrial`); held-out fixtures re-run
+for baseline and candidate; only the three method files mutable; worker gets no credentials (env filtered); `adopted`
+is always false → candidate staged + reflection fact linking `harness2JobHash` and `strategy key@version`.
+Proposer: `LLMProposer` (DeepSeek by default, `api_key_env="DEEPSEEK_API_KEY"` — the name only) with the
+deterministic proposer as fallback; across jobs the measured outcome of the previous job is passed back as a bounded
+`lessons` entry (self-iteration between jobs).
 
-| Variable / flag | Default | Meaning |
-| --- | --- | --- |
-| `<client-config.json>` | — | agent-mc-world private client config (same as `minecraft-agent-mcp`) |
-| `--fake-body [--data-dir DIR]` | — | offline fake body for demos/tests (no Minecraft connection) |
-| `--hash-token` | — | read a token on stdin, print its SHA-256 (for `tokenSha256`) |
-| `AGENT_HARNESS_GATEWAY_HOST` / `_PORT` | `127.0.0.1` / `8787` | bind address; non-loopback requires agents |
-| `AGENT_HARNESS_GATEWAY_AGENTS_FILE` / `AGENT_HARNESS_GATEWAY_AGENTS` | — | agents JSON (ids, `tokenEnv`/`tokenSha256`, admin, limits) |
-| `AGENT_HARNESS_GATEWAY_MAX_MESSAGE_BYTES` | 65536 | inbound size limit |
-| `AGENT_HARNESS_GATEWAY_ORIGINS` | — | comma list of allowed browser origins |
-| `AGENT_HARNESS_EXCLUSIVE` | `1` in serve | `0` keeps `mc_*` visible (not recommended) |
-| `AGENT_HARNESS_FAKE_TASK_MS`, `AGENT_HARNESS_FAKE_USERNAME` | 300, HarnessBot | fake body tuning |
-| `AGENT_HARNESS_DIR`, `AGENT_HARNESS_MEMORY`, `AGENT_MEMORY_*` | see above | harness/memory storage |
+### 5.4 JitRL with goal-conditioned reward shaping (`learning/jitrl.py`, flag `AGENT_HARNESS_PY_JITRL`, default off)
+* **Port** of `core/jitrl.ts reweightJitRl`: `V` = mean retrieved return, `Q(a)` per action (unobserved = neutral 0),
+  `A = Q − V`, `posterior = softmax(log prior + β·A/max|A|)`, β = 0.5; zero priors / not-ready excluded; no optimistic
+  exploration. Cross-checked numerically against the TS build (`tests/test_jitrl.py`, 6 cases, rel. tol 1e-12).
+  Retrieval as in TS: same scope (`group_id` ⊇ realm/account/agent + body/world), dimension, taskKey, phase, condition
+  hash; |Δpos| ≤ 16, |Δhealth| ≤ 4, |Δfood| ≤ 4; nearest 10.
+* **Short-term**: keep single-step measurable metrics (food, health, item counts, distance progress); **weights vary
+  with the goal** — `GoalWeights` table (JSON/YAML, Pydantic-validated): rules `{name, match: [tags/keywords], weights:
+  MetricWeights{food, health, inventory{item|*suffix|*}, distance, targets, harm_penalty}}` + `default`. Shaped return =
+  clip(Σ w·Δ/target / Σw) − harm_penalty·(health loss / health), death = −1, cross-dimension = no sample. The goal rule
+  name is the `taskKey`; `goal_version = table.version:rule` binds samples to the criteria they were measured with.
+  A single-metric table reproduces the TS one-criterion return exactly.
+* **Mid-term**: `credit(goal, milestone|failure)` adds NEW samples for the last `window` (5) receipt-verified steps of
+  that goal, value `γ^k · (±1)` (γ = 0.8), `credit_source = milestone|failure`; originals are never rewritten, each
+  trajectory is credited once, samples keep their goal/stage version.
+* **Long-term** (interface only): `StepEvaluator` — an optional LLM scores steps of key trajectories, stored as
+  `credit_source = evaluator`, never replacing measured samples.
+* Wiring: System 1 reorders candidates by posterior and passes the rank to the typed choice; when no typed service
+  answers, a JitRL suggestion with ≥ 2 samples and posterior ≥ 0.7 may decide (same premise re-check). Reflection
+  receives `jitrl.stats()` (lowest-return actions). Harness² is unaffected.
+* Boundaries: JitRL never edits methods or lessons (that is reflection / Harness²), makes no model calls and never
+  dispatches the body; reflection never reweights actions; Harness² never sees live samples.
 
-## What is stubbed / honest limits (Phase 1)
+## 6. Safety rules
+1. **Anti-cheat stop**: `GuardedBody` trips on the server warning text (port of `isMiningWarningText`), emits `safety`,
+   calls `stop()`, blocks motion verbs and native writes until cleared; chat stays allowed; runtime pauses the intent
+   and preempts the lease. Hosts whose body cannot see server chat feed the owner connection's text (`feed_server_text`).
+2. **No replay of unsettled actions**: every write carries a `request_id`; same id → original receipt; transport loss →
+   `unknown` with `retry_allowed=False`; the runtime pauses (`do not replay`) and reconciles via `result()`; unsettled
+   outcomes are never learning evidence.
+3. **Single body lease**: one execution holder; S0 reflexes and safety bypass and preempt; S1 bypasses the worker queue;
+   background workers never get the lease. Practice (Harness²) uses a separate isolated body/realm.
+4. Pace limits (token buckets per verb class), `before_action` veto hook, native body guards stay in force.
+5. Secrets: only env-var *names* in config; keys read at request time, never logged or persisted; Harness² worker env
+   filtered; model ports receive game data only.
 
-* **Planner**: only `ExplicitStepsPlanner` (host-provided `constraints.steps`, ≤20, allow-listed body tools). A free-text
-  goal is accepted but parked as `paused` with reason "No planner for a free-text goal yet" and a severity-3 event.
-* **Reflection**: interfaces + async worker only; no default reflector, no host-memory writer implementation.
-* **Hot summary**: deterministic template + heuristic token estimate (CJK 1 token/char, others 1/3.5 chars), not a tokenizer.
-* **Execution** is opt-in for in-process use; the hosted server (`pnpm serve`) always executes with exclusive body control.
-* Gateway: no TLS (terminate it in a reverse proxy), no token rotation/revocation API (edit config + restart), event
-  buffer is in-memory (500) so replay does not survive restarts (`streamReset`), single process / single body.
-* `pnpm serve` runs TypeScript through `tsx` (no build step yet).
-* Key-event classification is rule-based (death, task terminal, level-up text, whisper/mention, join/leave).
+## 7. Capability matrix
 
-## Roadmap
+| Verb / feature | Numen native (numen_controller MCP) | Numen hosted (mc_numen /core) | Touhou maid (mc_maids) |
+|---|---|---|---|
+| chat | `say` | `call say` | `speak` |
+| move | `lua numen.move.to` | `call lua` | — (follow/stay modes) |
+| follow / stay / sit | — | — | `follow` / `stay` / `sit` (mode, not arrival) |
+| attack | `lua numen.fight.attack(scan)` | `call lua` | — |
+| drop / transfer | `lua numen.inv.drop` | `call lua` | `transfer` |
+| equip | — | — | `equip` |
+| craft | — | — | `make` (workshop, async) |
+| cast / recall | — | — | `cast`, `recall` (async, receipt) |
+| command / inventory | `/mycli …` via `numen.mc.run` | `call` | `inventory` |
+| observe / snapshot | `/mycli status --json` | `observe` | `context` |
+| stop | `numen.move.walk(0,0,0)` halt | `call lua` halt | `stay` |
+| native escape hatch | all MCP tools (lua, skill, todo, memory…) | catalog tools | all `mc_maids` actions |
+| events | `get_events` XML (talk, death, hurt, dimension…) | `mc_events` envelopes | `inbox` dialogue + `mc_events` |
+| lifecycle | attach / reconnect / release | attach via core / release | bind existing maid / detach |
+| anti-cheat | own server text | owner connection text → `feed_server_text` | owner connection text |
 
-* **Phase 2** — DSH adapter to gateway mode; LLM planner (goal → `mc_do` steps, budgeted, using summary + Warm facts); reflection worker writing
-  lessons into Warm memory + `HostMemoryWriter`; DSH host adapter (one host owns the body when `EXECUTE=1`);
-  progress events for long tasks; FalkorDB as Graphiti backend.
-* **Phase 3** — skill/lesson library learned from reflections, multi-intent scheduling (interruptible background goals),
-  self-evaluation metrics, out-of-process harness (MCP server) so several hosts can share one body safely.
+## 8. Reuse map
 
-## Body adapter layer (Phase 1c)
+| File | How it is reused |
+|---|---|
+| `paper/integrations/numen-paper/qwenpaw/numen_controller.py` | imported (`_reuse.numen_controller`); `Controller` drives the native Numen MCP (token file path only, journal, process lease) |
+| `paper/integrations/numen-hosting/hosted_harness.py`, `src/core-rpc.mjs` | hosted flow & checks mirrored; `core_rpc_bridge()` speaks the `/core` RPC; `mc_numen` ops catalog/observe/call/result |
+| `packages/agent-mc-world/src/client/numen-client.ts`, `src/mcp/server.ts` | `mc_numen` / `mc_events` tool schemas the adapters call |
+| `paper/integrations/touhou-maids/agent/maid-port.mjs`, `CONTRACT.md`, `harness/gateway.py` | `mc_maids` action set & reply shapes; tests validate every command with the real `maidCommand` (node oracle) |
+| `packages/agent-mc-autonomy/src/agent_mc_autonomy/bridge.py` | `MinecraftBridge` (stdio MCP to agent-mc-world) and `outcome()` receipt parsing |
+| `packages/agent-mc-autonomy/.../fast.py` | `focus_state`, `rule_focus`, `FastPolicy` = System 0/attention |
+| `packages/agent-mc-autonomy/.../decision_profiles.py` | `DecisionSettings.select` = System 2 budget profile |
+| `world/survival/adaptive_router.py` | `route()` L0–L3 per decision |
+| `world/survival/system_one.py`, `policy_worker.py` | System 1 typed choice for gateway tools; `PolicyWorker`, `same_body` stale-scene check |
+| `world/survival/numen_gateway.py` | `TOOLS` names the System-1 candidates map to |
+| `packages/agent-memory/graphiti-sidecar/agent_memory_sidecar/{service,config}.py` | `GraphitiService` in-process, `EpisodeIn`, `load_settings` |
+| `packages/agent-mc-world/core/jitrl.ts`, `docs/jitrl.md` | formula ported 1:1, retrieval rules, cross-checked against `dist/runtime/core/jitrl.js` |
+| `packages/agent-mc-world/bridges/harness2/worker.py` + `requirements.txt` | spawned unchanged (pinned upstream 1cfe254e) |
+| `packages/agent-mc-world/src/decisions/harness2.ts`, `src/learning/{practice,physics-practice}.ts`, `docs/harness2.md` | run via `dist` from `h2_driver.mjs`: journal, budgets, held-out gate, physics practice body |
+| `packages/agent-harness/src/body/*` (TS) | contract, safety guard and adapter semantics ported to Python |
+| cormy `runtime/typed-decision.ts`, `runtime/providers/system-one/{index,native}.ts` | `typed_choice.parse_typed_choice` + `SystemOneClient` (/systemone; no retries; caller owns deadline & stale checks) |
+| cormy `bots/cortiv/persona/ATTENTION.md`, `attention-adviser.ts`, `foreground-adviser.ts`, `focused-cognition.ts` | channel split (world fast obs / fast attention / per-turn thinking tier) → S0/S1/S2 + `FastSlow.thinking_tier` |
+| cormy `task-worker.ts`, `docs/task-workers.md`, `supervisor-context.ts` | single action lease per world, worker pool with max concurrency, reflexes & System 1 bypass the queue → `BodyLease`, `WorkerPool` |
+| cormy `brain-metrics.ts/.md` | requested vs effective reasoning, goal verification by environment evidence → `BrainMetrics`, `Verifier` |
+| cormy `failure-reflection.ts`, `sleep-review.ts`, `dream-task-queue.ts` | failure trigger, periodic review, queued optimisation targets → `ReflectionLoop` + Harness² queue |
 
-`BodyPort`, the planner's step validation and the gateway's body discovery now go through one `BodyAdapter` interface with
-three implementations (Mineflayer, Numen hosted/mcbot, Touhou Little Maid) and a `guardBody` safety decorator (anti-cheat
-warning stop, pace limits). See `docs/agent-harness-body-adapter.md`.
+## 9. Feature flags (all default off; reflection is on only *inside* an enabled harness)
+
+| Env | Default | Effect |
+|---|---|---|
+| `AGENT_HARNESS_PY_ENABLED` | off | `create_harness()` returns `None` |
+| `AGENT_HARNESS_PY_EXECUTE` | off | off = observe/memory only, never `body.act` |
+| `AGENT_HARNESS_PY_MEMORY` (`_PATH`) | off | `local` or `graphiti` (+local fallback) |
+| `AGENT_HARNESS_PY_FASTSLOW` | off | S0/S1/S2 routing; `AGENT_HARNESS_PY_SYSTEMONE_URL/_MODEL/_KEY_ENV` for /systemone |
+| `AGENT_HARNESS_PY_REFLECTION` | on | resident reflection (`off` disables); `_REFLECTOR_URL/_MODEL/_KEY_ENV`; `AGENT_HARNESS_PY_STRATEGIES_PATH` |
+| `AGENT_HARNESS_PY_JITRL` | off | action-selection hook; `_JITRL_WEIGHTS` (JSON/YAML), `_JITRL_PATH` (JSONL book) |
+
+## 10. Phased plan
+
+**Phase 1 (done in this branch)** — lightweight runtime skeleton · unified Body Adapter · full Numen (native + hosted) and
+maid adapters · safety guard · message gateway · Graphiti access point + local fallback + hot tier · S0/S1/S2 framework
+(router, typed choice, thinking tier, lease, worker pool, metrics) · resident reflection (failure/milestone/periodic,
+provenance, dedupe, LLM + deterministic) · versioned self-iteration store with gate/rollback · Harness² end-to-end
+(queue → propose/probe/compose → held-out gate → staging → memory) · JitRL port with goal-conditioned shaping and
+mid-term credit · 57 tests.
+
+**Phase 2** — hierarchical retrieval and hot-context token budget; reflection triggers from body events (death clusters,
+stuck detection) and failure taxonomy; method versions executed by bodies (Numen `skill`/`lua` method runner for staged
+Harness² candidates, natural-task trials → adopt); routing strategies (System-1 thresholds) adopted through the store;
+Graphiti extraction LLM configured + bi-temporal "known at" queries; WebSocket transport for the Python gateway;
+Harness² practice ports for Numen/maid (dedicated practice instance) instead of the physics fixture.
+
+**Phase 3+** — Mineflayer adapter in Python; JitRL long-term evaluator on key trajectories; multi-body leases and
+cross-body skill transfer; self-evolution of planner prompts/tool guidance under the same gate; dream-queue style
+offline batches; dashboards from `BrainMetrics`.
+
+## 11. Graphiti status
+`graphiti-core[kuzu]` is installed in the dev venv; `GraphitiMemory` constructs the sidecar's `GraphitiService` with the
+sidecar's own settings (`AGENT_MEMORY_*`). Extraction requires an LLM (`AGENT_MEMORY_LLM_*`, key by env-var name); without
+it `extraction_ready` is false and the router writes local only. Tests cover the down/unconfigured path; a live Graphiti
+round-trip with an extraction LLM was **not** run in this phase (no live config on this box).
+
+## 12. Measured results (this box, offline)
+* Test suite: `pytest` 57 passed; `ruff` clean; `mypy` (strict-ish, pydantic plugin) clean on 25 source files.
+* Harness² deterministic proposer (real upstream + real physics): baseline 11.0 blocks from target on train and both
+  held-out fixtures → candidate 0.15; gate `eligible` (`isolated-comparison-passed`), candidate staged as
+  `…:method:move-method@v1` (status `candidate`), reflection fact linked. Artifacts: `/workspace/.data/harness2-run-deterministic/`.
+* Harness² with DeepSeek (`deepseek-chat`) proposer, 3 chained jobs: best candidate reached 1.66 blocks (radius 0.8) —
+  better than baseline but the held-out gate correctly **rejected** it (`regression-or-holdout-failure`; one job ended
+  `incomplete-evidence`); nothing staged. Artifacts: `/workspace/.data/harness2-run/`.
