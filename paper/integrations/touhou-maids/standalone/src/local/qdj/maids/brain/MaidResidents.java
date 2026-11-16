@@ -31,6 +31,7 @@ final class MaidResidents {
     private final ResidentConfig config;
     private final ResidentReceipts receipts;
     private final ResidentState state;
+    final ResidentSettings settings;
     private final Map<UUID,ResidentConfig.Resident> roles=new LinkedHashMap<>();
     private final Map<UUID,Job> jobs=new java.util.HashMap<>();
     private final Map<UUID,Thinking> thinking=new java.util.HashMap<>();
@@ -41,7 +42,7 @@ final class MaidResidents {
     private static final String INSTALLED="tlm_resident_home_installed";
     private static final net.minecraft.server.level.TicketType<UUID> TICKET=net.minecraft.server.level.TicketType.create(
         "tlm_resident",java.util.Comparator.comparing(UUID::toString),60);
-    MaidResidents(MinecraftServer server,MaidAgentsServer agents,Path dir) throws java.io.IOException {
+    MaidResidents(MinecraftServer server,MaidAgentsServer agents,Path dir) throws Exception {
         this.server=server;this.agents=agents;config=ResidentConfig.read(dir.resolve("tlm-residents.json"),agents);
         receipts=new ResidentReceipts(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-resident-actions"));
         state=new ResidentState(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-resident-state"));
@@ -51,6 +52,7 @@ final class MaidResidents {
                 if(terminal!=null&&List.of("completed","blocked","rejected","partial","cancelled","timeout").contains(terminal.get("status")))state.finish(r.maidId(),last.pending());}
         }
         config.residents().forEach(r->{roles.put(r.maidId(),r);nextPlan.put(r.maidId(),System.currentTimeMillis()+30_000+roles.size()*10_000L);});
+        settings=new ResidentSettings(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-resident-settings"),dir,this,agents);
     }
     ResidentConfig.Resident role(UUID id) { return roles.get(id); }
     List<UUID> ids() { return List.copyOf(roles.keySet()); }
@@ -59,7 +61,7 @@ final class MaidResidents {
     private boolean leased(UUID id) { return agents.companions()!=null&&agents.companions().reserved(id); }
     Map<String,Object> observe(UUID id) {
         var r=require(id);var maid=body(id);var row=new LinkedHashMap<String,Object>();
-        row.put("maidId",id.toString());row.put("name",r.name());row.put("profession",r.profession());row.put("home",r.home());
+        row.put("maidId",id.toString());row.put("name",settings.name(id));row.put("profession",r.profession());row.put("home",r.home());
         row.put("loaded",maid!=null);row.put("observedAt",java.time.Instant.now().toString());row.put("usesPlayerSlot",false);
         if(maid!=null) {
             row.put("position",ResidentActions.point(maid.blockPosition()));row.put("dimension",maid.level().dimension().location().toString());
@@ -77,10 +79,17 @@ final class MaidResidents {
     }
     Map<String,Object> publicView(UUID id) {
         var r=require(id);var maid=body(id);var row=new LinkedHashMap<String,Object>();
-        row.put("maidId",id.toString());row.put("name",r.name());row.put("profession",r.profession());
+        row.put("maidId",id.toString());row.put("name",settings.name(id));row.put("profession",r.profession());
         row.put("available",maid!=null&&!leased(id));row.put("usesPlayerSlot",false);
         row.put("homeDoor",r.home().door());row.put("homeDimension",r.home().dimension());
         return row;
+    }
+    Map<String,Object> mapPositions() {
+        var out=new ArrayList<Map<String,Object>>();
+        for(var id:ids()) {var maid=body(id);if(maid==null||!maid.isAlive()||maid.isInvisible()||!settings.flag(id,"mapVisible"))continue;
+            out.add(Map.of("uuid",id.toString(),"name",maid.getName().getString(),"kind","npc","profession",role(id).profession(),
+                "dimension",maid.level().dimension().location().toString(),"x",maid.getX(),"y",maid.getY(),"z",maid.getZ(),"yaw",maid.getYRot(),"pitch",maid.getXRot()));}
+        return Map.of("schemaVersion",1,"observedAt",java.time.Instant.now().toString(),"npcs",out);
     }
     private ResidentConfig.Resident require(UUID id) {var r=roles.get(id);if(r==null)throw new IllegalArgumentException("unknown_resident");return r;}
     Map<String,Object> appearance(UUID id) throws Exception {
@@ -111,6 +120,14 @@ final class MaidResidents {
     }
     Map<String,Object> receipt(UUID id,UUID request) throws Exception {
         require(id);var row=receipts.read(id,request);
+        if(row!=null&&"cli".equals(row.get("action"))&&!jobs.containsKey(id)&&List.of("accepted","unknown").contains(row.get("status"))){
+            var service=ResidentServices.query(id,request);
+            if(List.of("completed","blocked","rejected").contains(service.get("status"))){
+                row.putAll(service);row.put("observedAt",java.time.Instant.now().toString());receipts.write(id,request,row);
+                var current=state.load(id);if(current!=null&&request.equals(current.pending())){state.finish(id,request);var maid=body(id);if(maid!=null)maid.getPersistentData().remove(ACTIVE);}
+                latest.put(id,row);
+            }
+        }
         if(row==null){
             var plan=thinking.get(id);
             if(plan!=null&&plan.id().equals(request))return Map.of("status","accepted","reason","planning_no_action_dispatched","requestId",request.toString(),"completed",false);
@@ -141,25 +158,29 @@ final class MaidResidents {
         return result;
     }
     Map<String,Object> submit(UUID id,UUID request,JsonObject input) throws Exception {
-        var r=require(id);var old=receipts.read(id,request);if(old!=null)return receipt(id,request);
+        var r=require(id);var old=receipts.read(id,request);if(old!=null){
+            if(old.containsKey("input")&&!JsonParser.parseString(new Gson().toJson(old.get("input"))).equals(input))throw new IllegalArgumentException("request_id_conflict");
+            return receipt(id,request);
+        }
         var maid=body(id);String action="";
         var row=base(id,request,action);
+        row.put("input",input);
         try {
             action=ResidentContract.validate(input);row.put("action",action);
             if(maid==null||maid.isNoAi()||maid.guiOpening)throw new IllegalArgumentException("body_unavailable");
-            if(leased(id)||jobs.containsKey(id)||thinking.containsKey(id))throw new IllegalArgumentException("body_busy_or_recruited");
+            if(leased(id)&&!action.equals("cli")||jobs.containsKey(id)||thinking.containsKey(id))throw new IllegalArgumentException("body_busy_or_recruited");
             if(!maid.getPersistentData().getString(ACTIVE).isBlank())throw new IllegalArgumentException("unknown_previous_action_read_original_request");
             if(state.load(id)!=null&&state.load(id).pending()!=null)throw new IllegalArgumentException("unknown_previous_action_read_original_request:"+state.load(id).pending());
-            if(!List.of("walk","home","task","equip","break","place","cast","say","rest").contains(action))throw new IllegalArgumentException("unsupported_resident_action");
+            if(!List.of("walk","home","task","equip","break","place","cast","say","rest","cli").contains(action))throw new IllegalArgumentException("unsupported_resident_action");
             BlockPos target=action.equals("home")?r.home().door().pos():action.equals("walk")||action.equals("break")||action.equals("place")?ResidentActions.position(input,"at"):maid.blockPosition();
             if(!maid.level().hasChunkAt(target)||maid.blockPosition().distSqr(target)>96*96)throw new IllegalArgumentException("target_unloaded_or_more_than_96_blocks");
-            if(!maid.level().dimension().location().toString().equals(r.home().dimension()))throw new IllegalArgumentException("wrong_dimension");
+            if(!action.equals("cli")&&!maid.level().dimension().location().toString().equals(r.home().dimension()))throw new IllegalArgumentException("wrong_dimension");
             if(action.equals("break")||action.equals("place"))ResidentActions.check(maid,r,target);
             long now=System.currentTimeMillis();long duration=action.equals("break")?ResidentActions.miningMillis(maid,target):0;
             var item=ResidentActions.stack(maid,input).copy();var block=maid.level().getBlockState(target);
             row.put("status","accepted");row.put("input",input);row.put("before",ResidentActions.point(maid.blockPosition()));
             receipts.write(id,request,row);state.locate(id,maid.level().dimension().location().toString(),maid.chunkPosition().x,maid.chunkPosition().z);state.begin(id,request);maid.getPersistentData().putString(ACTIVE,request.toString());
-            jobs.put(id,new Job(request,input.deepCopy(),target,now+90_000,now+duration,maid.level().dimension().location().toString(),agents.agent(id).revision(),maid.isMaidInSittingPose(),item,block));
+            jobs.put(id,new Job(request,input.deepCopy(),target,now+(action.equals("cli")?240_000:90_000),now+duration,maid.level().dimension().location().toString(),agents.agent(id).revision(),maid.isMaidInSittingPose(),item,block));
             if(action.equals("break")||action.equals("place")){maid.setInSittingPose(true);maid.getNavigation().stop();maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);}
             if(action.equals("walk")||action.equals("home")){maid.setInSittingPose(false);BehaviorUtils.setWalkAndLookTargetMemories(maid,target,.7f,1);}
         }catch(IllegalArgumentException invalid){row.put("status","rejected");row.put("reason",invalid.getMessage());receipts.write(id,request,row);}
@@ -198,6 +219,7 @@ final class MaidResidents {
                 if(last.pending()!=null&&!jobs.containsKey(id))maid.getPersistentData().putString(ACTIVE,last.pending().toString());
                 else if(last.pending()==null&&!jobs.containsKey(id))maid.getPersistentData().remove(ACTIVE);
             }catch(Exception error){latest.put(id,Map.of("status","unknown","reason","resident_checkpoint_unavailable"));continue;}
+            settings.install(id);
             ResidentRpg.tick(maid);
             var job=jobs.get(id);
             if(job!=null){step(r,maid,job,now);continue;}
@@ -206,7 +228,7 @@ final class MaidResidents {
             if(leased(id)||busy(id)||!maid.getPersistentData().getString(ACTIVE).isBlank()||!maid.getPersistentData().getBoolean(INSTALLED))continue;
             // TLM handles reaching the configured sleep point and using its real bed.
             if(!maid.level().isDay()){if(!maid.isHomeModeEnable())ResidentHomes.bind(maid,r);continue;}
-            if(r.autonomous()&&now>=nextPlan.getOrDefault(id,0L)&&!maid.isSleeping()&&!maid.guiOpening&&
+            if(settings.flag(id,"autonomous")&&now>=nextPlan.getOrDefault(id,0L)&&!maid.isSleeping()&&!maid.guiOpening&&
                 (agents.companions()==null||!agents.companions().thinking(id))) plan(id);
         }
     }
@@ -216,9 +238,9 @@ final class MaidResidents {
             if(List.of("break","place","equip").contains(action)&&!net.minecraft.world.item.ItemStack.matches(job.item(),ResidentActions.stack(maid,job.input())))
                 throw new IllegalArgumentException("item_components_changed_read_again");
             if(List.of("break","place").contains(action)&&!job.block().equals(maid.level().getBlockState(job.target())))throw new IllegalArgumentException("block_state_changed_read_again");
-            if(leased(r.maidId())||agents.agent(r.maidId()).revision()!=job.revision()||!maid.level().dimension().location().toString().equals(job.dimension()))
+            if(!action.equals("cli")&&(leased(r.maidId())||agents.agent(r.maidId()).revision()!=job.revision()||!maid.level().dimension().location().toString().equals(job.dimension())))
                 result=Map.of("status","cancelled","reason","body_control_or_dimension_changed","completed",false);
-            else if(now>job.deadline())result=Map.of("status","timeout","reason","goal_not_reached","completed",false);
+            else if(now>job.deadline())result=Map.of("status",action.equals("cli")?"unknown":"timeout","reason",action.equals("cli")?"service_pending_query_original_request_no_replay":"goal_not_reached","completed",false);
             else if(action.equals("walk")||action.equals("home")) {
                 if(maid.position().distanceToSqr(Vec3.atBottomCenterOf(job.target()))<=4) {
                     if(action.equals("home"))ResidentHomes.bind(maid,r);
@@ -229,6 +251,7 @@ final class MaidResidents {
                 if(!ResidentActions.visible(maid,job.target()))throw new IllegalArgumentException("mining_line_of_sight_lost");
                 return;
             } else result=switch(action) {
+                case "cli"->ResidentServices.execute(maid,job.id(),job.input().get("command").getAsString());
                 case "break"->ResidentActions.mine(maid,r,job.input());
                 case "place"->ResidentActions.place(maid,r,job.input());
                 case "equip"->{MaidAgent.equip(maid,job.input().get("equipmentSlot").getAsString(),job.input().get("slot").getAsBigDecimal().intValueExact(),ResourceLocation.parse(job.input().get("expectedItem").getAsString()));yield Map.of("status","completed","completed",true,"reason","equipment_exchanged");}
@@ -244,7 +267,7 @@ final class MaidResidents {
                 default->throw new IllegalArgumentException("unsupported_action");
             };
         } catch(Exception invalid){result=Map.of("status",invalid instanceof IllegalArgumentException?"blocked":"unknown","reason",invalid instanceof IllegalArgumentException?String.valueOf(invalid.getMessage()):"native_operation_failed_inspect_state_do_not_replay","completed",false);}
-        if(result==null)return;
+        if(result==null||"accepted".equals(result.get("status")))return;
         var row=base(r.maidId(),job.id(),action);row.putAll(result);row.put("input",job.input());row.put("actualPosition",ResidentActions.point(maid.blockPosition()));
         row.put("observedAt",java.time.Instant.now().toString());row.put("inventoryAfter",agents.agent(r.maidId()).observation(maid));
         try {receipts.write(r.maidId(),job.id(),row);if(!"unknown".equals(row.get("status"))){state.finish(r.maidId(),job.id());maid.getPersistentData().remove(ACTIVE);}}
@@ -266,6 +289,7 @@ final class MaidResidents {
         UUID turn=UUID.randomUUID();thinking.put(id,new Thinking(turn,now+60_000,agents.agent(id).revision()));nextPlan.put(id,now+config.planningSeconds()*1000L);
         var observation=new LinkedHashMap<>(observe(id));observation.remove("home");observation.put("homeDoor",r.home().door());observation.put("workPoint",r.home().work());
         if(agents.companions()!=null)try{observation.put("character",agents.companions().residentContext(id));}catch(Exception error){thinking.remove(id);return Map.of("status","unavailable","reason","resident_memory_unavailable");}
+        observation.put("cli",ResidentServices.catalogue());
         observation.put("availableTasks",MaidAgent.tasks(maid));observation.put("nearbyBlocks",survey(maid,r));
         observation.put("nearbyEntities",((ServerLevel)maid.level()).getEntitiesOfClass(LivingEntity.class,maid.getBoundingBox().inflate(12),
             e->e!=maid&&e.isAlive()&&maid.distanceToSqr(e)<=144&&maid.hasLineOfSight(e)).stream()
@@ -278,6 +302,7 @@ final class MaidResidents {
             "equip(equipmentSlot:mainhand/offhand/head/chest/legs/feet,slot:背包编号,expectedItem:实际ID)、"+
             "break(at,expectedBlock:已观察ID)、place(at,face:up/down/north/south/east/west,slot,expectedItem)、"+
             "cast(skill:本人技能ID)、say(text:140字内,channel:nearby或public)。不要猜未观察物品或方块；材料必须实际拥有。"+
+            "cli(command:不带/mycli的子命令)可按需查询书籍目录、写书和真实拍照，先用archive status或photo status，字段见cli目录。异步动作只查原回执。"+
             "移动一次96格内，挖建5格内且通过普通领地权限，未知或拒绝时换目标，不反复重试。不要公开私聊内容。"+
             "真实现场："+new Gson().toJson(observation);
         prompt+="工具契约："+new Gson().toJson(ResidentContract.describe());

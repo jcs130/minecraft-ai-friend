@@ -15,6 +15,17 @@ final class ResidentCommands {
     interface Query {Object get(MaidResidents runtime)throws Exception;}
     static void register(CommandDispatcher<CommandSourceStack> dispatcher,Supplier<MaidResidents> runtime) {
         var root=Commands.literal("maidagent");
+        root.then(Commands.literal("resident-map").requires(s->s.hasPermission(2)).executes(c->reply(c.getSource(),runtime.get(),MaidResidents::mapPositions)));
+        root.then(Commands.literal("resident-admin").requires(s->s.hasPermission(2))
+            .then(Commands.literal("list").executes(c->reply(c.getSource(),runtime.get(),r->r.settings.catalogue())))
+            .then(Commands.literal("receipt").then(Commands.argument("maidId",UuidArgument.uuid()).then(Commands.argument("requestId",UuidArgument.uuid())
+                .executes(c->reply(c.getSource(),runtime.get(),r->r.settings.receipt(UuidArgument.getUuid(c,"maidId"),UuidArgument.getUuid(c,"requestId")))))))
+            .then(Commands.literal("apply").then(Commands.argument("maidId",UuidArgument.uuid())
+                .then(Commands.argument("requestId",UuidArgument.uuid()).then(Commands.argument("revision",com.mojang.brigadier.arguments.LongArgumentType.longArg(0))
+                    .then(Commands.argument("profile",StringArgumentType.greedyString()).executes(c->reply(c.getSource(),runtime.get(),r->{
+                        String raw=StringArgumentType.getString(c,"profile");if(raw.length()>4096)throw new IllegalArgumentException("profile_too_large");
+                        return r.settings.applyChecked(UuidArgument.getUuid(c,"maidId"),UuidArgument.getUuid(c,"requestId"),com.mojang.brigadier.arguments.LongArgumentType.getLong(c,"revision"),JsonParser.parseString(raw).getAsJsonObject());
+                    }))))))));
         root.then(Commands.literal("resident-actions").executes(c->reply(c.getSource(),runtime.get(),r->ResidentContract.describe())));
         root.then(Commands.literal("residents").executes(c->reply(c.getSource(),runtime.get(),r->r.ids().stream().map(r::publicView).toList())));
         var body=Commands.argument("residentId",UuidArgument.uuid());

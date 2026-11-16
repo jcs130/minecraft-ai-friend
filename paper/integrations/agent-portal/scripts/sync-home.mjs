@@ -35,6 +35,7 @@ const store = new Store(config.dataDir), game = new GameData(config, store.salt)
 const photoReader = new PhotoReader(config), uploaded = new Set(),scenesUploaded=new Set(),assetsUploaded=new Set();
 const archiveReader=new ArchiveReader(config,store);
 let appearanceTimer, appearanceBusy, lastAppearanceReport;
+let npcTimer,npcBusy,lastNpcReport;
 let sequence = 0, stopping = false, lastReport;
 try { sequence = JSON.parse(await fs.readFile(stateFile, 'utf8')).sequence; } catch { }
 const report = text => { if (lastReport !== text) { console.log(text); lastReport = text; } };
@@ -56,6 +57,14 @@ try {
       appearanceBusy = worker.poll().then(() => '外观同步已连接。', () => '外观同步暂不可用，保留原请求，稍后查询。').then(text => { if (text !== lastAppearanceReport) { console.log(text); lastAppearanceReport = text; } }).finally(() => { appearanceBusy = null; });
     };
     tick(); appearanceTimer = setInterval(tick, 5000);
+  }
+  if(settings.npcWorkerConfig && !process.argv.includes('--dry-run')) {
+    if(!path.isAbsolute(settings.npcWorkerConfig))throw Error('NPC_ABSOLUTE_CONFIG_REQUIRED');
+    const cfg=JSON.parse(await fs.readFile(settings.npcWorkerConfig,'utf8'));
+    if(new URL(cfg.endpoint).origin!==endpoint.origin)throw Error('NPC_SAME_ORIGIN_REQUIRED');
+    const {NpcWorker}=await import('./npc-worker.mjs');const worker=await new NpcWorker(cfg).initialize();
+    const tick=()=>{if(npcBusy||stopping)return;npcBusy=worker.poll().then(()=> '居民配置同步已连接。',()=> '居民配置同步暂不可用，保留原请求供核对。').then(text=>{if(text!==lastNpcReport){console.log(text);lastNpcReport=text;}}).finally(()=>{npcBusy=null;});};
+    tick();npcTimer=setInterval(tick,5000);
   }
   do {
     try {
@@ -127,4 +136,4 @@ try {
     const until = Date.now() + Math.max(10000, Number(settings.intervalMs) || 15000);
     while (!stopping && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 500));
   } while (!stopping);
-} finally { clearInterval(appearanceTimer); if (appearanceBusy) await appearanceBusy; store.close(); await lock.close(); await fs.unlink(lockFile); }
+} finally { clearInterval(npcTimer); if(npcBusy)await npcBusy; clearInterval(appearanceTimer); if (appearanceBusy) await appearanceBusy; store.close(); await lock.close(); await fs.unlink(lockFile); }

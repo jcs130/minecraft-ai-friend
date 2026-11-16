@@ -170,16 +170,16 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
     private void tick() {
         long now = System.currentTimeMillis();
         queue.removeIf(j -> {
-            if (now - j.queued <= 180_000 && Bukkit.getPlayer(j.owner) != null) return false;
+            if (now - j.queued <= 180_000 && ResidentCli.find(j.owner) != null) return false;
             record(j,"stopped",null);
-            Player p = Bukkit.getPlayer(j.owner); if (p != null) notice(p, "expired", "排队已过期，未扣魔力；请在相机可用后重新拍摄。"); return true;
+            Player p = ResidentCli.find(j.owner); if (p != null) notice(p, "expired", "排队已过期，未扣魔力；请在相机可用后重新拍摄。"); return true;
         });
         if (active == null) {
             if (queue.isEmpty() || !ready() || !workerIdle) return;
             Player camera = plugin.goddessLandAdministrator();
             if (camera.getSpectatorTarget() != null) return; // Existing manual observer session owns the camera.
             Player renderer=nativeRenderer();if(renderer!=null&&renderer.getSpectatorTarget()!=null)return;
-            Job next = queue.remove(); Player owner = Bukkit.getPlayer(next.owner);
+            Job next = queue.remove(); Player owner = ResidentCli.find(next.owner);
             if (owner == null || !owner.isOnline() || !owner.getWorld().getUID().equals(next.world) || !materials(owner, next.tiles)) { record(next,"stopped",null); return; }
             active = next; phase = "preparing"; started = System.currentTimeMillis(); uploadSent = false;
             nativeUpload=null;importStarted=false;
@@ -187,8 +187,8 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
             nativeRendererOrigin=renderer==null?null:renderer.getLocation().clone();
             last.put(owner.getUniqueId(), started);
             if (!camera.teleport(owner.getLocation())) { finish(false, "无法同步观察镜头，请稍后再拍。"); return; }
-            camera.setSpectatorTarget(owner);
-            if(renderer!=null){if(!renderer.teleport(owner.getLocation())){finish(false,"原生相机镜头未能到达，请稍后再拍；本次未扣魔力。");return;}renderer.setSpectatorTarget(owner);}
+            camera.setSpectatorTarget(ResidentCli.actual(owner));
+            if(renderer!=null){if(!renderer.teleport(owner.getLocation())){finish(false,"原生相机镜头未能到达，请稍后再拍；本次未扣魔力。");return;}renderer.setSpectatorTarget(ResidentCli.actual(owner));}
             notice(owner, phase, "拍摄中，请保持静止；成片自动存入个人奖励箱。");
             messages.begin(owner.getUniqueId(), next.name, text -> {
                 try { Object upload=pending(next.owner,next.name);return upload!=null && text.contains(upload.getClass().getMethod("getId").invoke(upload).toString()); }
@@ -201,7 +201,7 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
             }catch(Exception failed){finish(false,"相册创建入口不可用，请联系管理员检查 ImageFrame；本次未消耗魔力。");}
         } else {
             try {
-                Player owner = Bukkit.getPlayer(active.owner);
+                Player owner = ResidentCli.find(active.owner);
                 if (phase.equals("preparing")) {
                     Object upload = pending(active.owner, active.name);
                     if (upload != null) capture(active, upload.getClass().getMethod("getId").invoke(upload).toString());
@@ -218,8 +218,8 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
                 }
                 Player camera = plugin.goddessLandAdministrator();
                 if (owner == null || !owner.isOnline() || owner.isDead() || !owner.getWorld().getUID().equals(active.world)
-                    || camera == null || camera.getSpectatorTarget() != owner) { finish(false, "角色或镜头状态已改变，停止拍照；请稳定后重新拍摄。"); return; }
-                if(nativeRendererId!=null&&(!nativeReady()||nativeRenderer().getSpectatorTarget()!=owner)){finish(false,"原生相机连接或观察目标改变，停止拍照；请先查相册，勿重复创建。");return;}
+                    || camera == null || camera.getSpectatorTarget() != ResidentCli.actual(owner)) { finish(false, "角色或镜头状态已改变，停止拍照；请稳定后重新拍摄。"); return; }
+                if(nativeRendererId!=null&&(!nativeReady()||nativeRenderer().getSpectatorTarget()!=ResidentCli.actual(owner))){finish(false,"原生相机连接或观察目标改变，停止拍照；请先查相册，勿重复创建。");return;}
                 if (System.currentTimeMillis() - started > timeout * 1000L) finish(false, "拍照等待超时。先查看 photo album 和个人奖励箱确认结果；已上传的照片仍可能完成入箱，勿连续重拍。");
             } catch (Exception e) { finish(false, "相册确认失败，请先查看 /imageframe list，勿重复创建同一照片。"); }
         }
@@ -255,9 +255,9 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
 
     private void capture(Job expected, String uploadId) {
         if (active != expected || !phase.equals("preparing")) return;
-        Player owner = Bukkit.getPlayer(expected.owner), camera = plugin.goddessLandAdministrator();
-        if (owner == null || camera == null || camera.getSpectatorTarget() != owner) return;
-        if(nativeRendererId!=null&&(!nativeReady()||nativeRenderer().getSpectatorTarget()!=owner))return;
+        Player owner = ResidentCli.find(expected.owner), camera = plugin.goddessLandAdministrator();
+        if (owner == null || camera == null || camera.getSpectatorTarget() != ResidentCli.actual(owner)) return;
+        if(nativeRendererId!=null&&(!nativeReady()||nativeRenderer().getSpectatorTarget()!=ResidentCli.actual(owner)))return;
         try {
             JsonObject out = envelope(expected, "capture");
             out.addProperty("owner", expected.owner.toString()); out.addProperty("entityId", owner.getEntityId());
@@ -367,7 +367,7 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
         if(!file.isDone())return;
         java.io.File uploaded=(java.io.File)file.get();if(uploaded==null||!uploaded.isFile())throw new IllegalStateException("missing uploaded photo");
         uploadSent=true;
-        Job expected=active;Player owner=Bukkit.getPlayer(expected.owner);if(owner==null)return;
+        Job expected=active;Player owner=ResidentCli.find(expected.owner);if(owner==null)return;
         Location shotAt=capturedAt==null?null:capturedAt.clone();long shotTime=capturedTime;
         JsonObject shotContext=capturedContext==null?null:capturedContext.deepCopy(),shotScene=capturedScene==null?null:capturedScene.deepCopy(),shotImage=capturedImage==null?null:capturedImage.deepCopy();
         importStarted=true;phase="confirming";
@@ -409,7 +409,7 @@ final class PhotoCameraManager implements Listener, PluginMessageListener {
     }
     private void finish(boolean success, String message) {
         Job previous = active; if (previous == null) return;
-        Player camera = plugin.goddessLandAdministrator(), owner = Bukkit.getPlayer(previous.owner);
+        Player camera = plugin.goddessLandAdministrator(), owner = ResidentCli.find(previous.owner);
         // Photo delivery is authoritative even if a separate journal write fails. Never resend maps.
         if(success&&owner!=null&&capturedAt!=null)try {
             journal.delivered(owner,previous.id,previous.name,previous.mode,capturedTime,capturedAt,capturedContext,capturedScene,capturedImage,map(previous.owner,previous.name),previous.story);

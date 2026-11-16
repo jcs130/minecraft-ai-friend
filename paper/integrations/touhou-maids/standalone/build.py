@@ -74,9 +74,16 @@ def main():
             new_metadata = '\n'.join(entries['META-INF/neoforge.mods.toml'].decode('utf-8').splitlines())
             new_metadata = new_metadata.split('[[dependencies.tlm_maid_agents]]\nmodId="qiandengji_maid_brain"')[0]
             new_metadata = new_metadata.replace('[1.5.3-neoforge+mc1.21.1]', '[1.5.3,1.6)')
-            new_metadata += '\n' + metadata[metadata.index('[[mods]]'):]
+            # A deployed combined JAR already contains our mod. Keep only the original
+            # hybrid extension's tail; never append a second tlm_maid_agents declaration.
+            tail = metadata[metadata.rindex('[[mods]]'):]
+            import tomllib
+            if [row['modId'] for row in tomllib.loads(tail)['mods']] != ['qiandengji_maid_brain']:
+                raise ValueError('Expected the original hybrid extension as the final mod declaration')
+            new_metadata += '\n' + tail
             import tomllib
             checked = tomllib.loads(new_metadata)
+            assert len(checked['mods']) == 2
             assert {row['modId'] for row in checked['mods']} == {'tlm_maid_agents', 'qiandengji_maid_brain'}
             assert not any(row['modId']=='qiandengji_maid_brain' for row in checked['dependencies']['tlm_maid_agents'])
             retained.update(entries)

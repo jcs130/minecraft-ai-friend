@@ -39,7 +39,7 @@ final class PublicArchives implements Listener {
     private record Source(String author,String name,String request,String id,String kind,String title,String body,String metadata,boolean published,long at) { }
     private record Print(ArchiveStore.Entry entry,String copy,boolean first) { }
     private interface Work<T>{T run()throws Exception;}
-    private static boolean inSession(Player p){return p.isOnline()&&Bukkit.getPlayer(p.getUniqueId())==p;}
+    private static boolean inSession(Player p){return p.isOnline()&&ResidentCli.find(p.getUniqueId())==p;}
 
     PublicArchives(AgentFriendPlugin plugin){
         this.plugin=plugin;entryKey=new NamespacedKey(plugin,"archive_entry");

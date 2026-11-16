@@ -16,9 +16,10 @@ public final class MaidAgentsMod {
     /** Read-only host integration. Only explicitly configured resident UUIDs may receive land membership. */
     public static java.util.Map<java.util.UUID,String> residentIdentities(){
         var current=running;var out=new java.util.LinkedHashMap<java.util.UUID,String>();
-        if(current!=null&&current.residents()!=null)for(var id:current.residents().ids())out.put(id,current.residents().role(id).name());
+        if(current!=null&&current.residents()!=null)for(var id:current.residents().ids())out.put(id,current.residents().settings.name(id));
         return java.util.Map.copyOf(out);
     }
+    static MaidResidents residents(){return running==null?null:running.residents();}
     static boolean managed(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid) {
         return running!=null&&running.agent(maid.getUUID())!=null&&running.agent(maid.getUUID()).matches(maid);
     }
@@ -99,7 +100,7 @@ public final class MaidAgentsMod {
         if(event.isCanceled()||running==null||running.residents()==null||running.companions()==null)return;
         String raw=event.getRawText();
         for(var id:running.residents().ids()) {
-            String prefix="@"+running.residents().role(id).name()+" ";
+            String prefix="@"+running.residents().settings.name(id)+" ";
             if(raw.startsWith(prefix)) {
                 var result=running.companions().ask(event.getPlayer(),id,raw.substring(prefix.length()),0,"public");
                 if(!"accepted".equals(result.get("status")))event.getPlayer().sendSystemMessage(net.minecraft.network.chat.Component.literal("暂时无法交谈："+result.get("reason")));

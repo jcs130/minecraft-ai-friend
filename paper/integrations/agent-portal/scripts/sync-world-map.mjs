@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { mapFileKey, MAP_FILE_LIMIT } from '../src/world-map.mjs';
+import { residentReply } from './npc-worker.mjs';
 import { parseMapObservation, readCommands, fileDigest } from './world-map-source.mjs';
 
 const configPath = process.argv[process.argv.indexOf('--config') + 1];
@@ -45,7 +46,13 @@ async function publishState() {
   const usercache = JSON.parse(await fs.readFile(settings.usercache, 'utf8'));
   const players = parseMapObservation(results, usercache, { excludeNames: settings.excludeNames || [] });
   ledger.sequence = Math.max(ledger.sequence + 1, Date.now()); await persist();
-  const state = { schemaVersion: 1, sequence: ledger.sequence, observedAt: new Date().toISOString(), players, maps: settings.maps };
+  let npcs=[];
+  if(settings.residentNpcs===true) {
+    try {const v=residentReply(await command('maidagent resident-map',8000));
+      if(v.schemaVersion===1&&Array.isArray(v.npcs)&&Math.abs(Date.now()-Date.parse(v.observedAt))<10000)npcs=v.npcs;
+    }catch{/* Missing NPC observations are unknown, never old positions. Players still update. */}
+  }
+  const state = { schemaVersion: 1, sequence: ledger.sequence, observedAt: new Date().toISOString(), players, npcs, maps: settings.maps };
   await send('/api/v1/internal/world-map/state', JSON.stringify(state), 'application/json');
   return players.length;
 }

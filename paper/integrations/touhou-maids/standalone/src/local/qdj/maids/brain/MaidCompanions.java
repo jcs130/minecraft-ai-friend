@@ -332,14 +332,21 @@ final class MaidCompanions {
         if (speaker.getUUID().equals(id)) return depth == 0 ? List.of("talk", "decline", "invite", "talk_to") : List.of("talk", "decline");
         var entry = ledger.get(id);
         if (entry != null && speaker.getUUID().equals(entry.leader()))
-            return List.of("talk", "decline", "follow", "stay", "work", "dismiss");
+            return residentDecisions(id,"talk", "decline", "follow", "stay", "work", "dismiss");
         if ((entry == null || entry.mode().equals("available")) && ledger.party(id).isEmpty())
-            return List.of("talk", "decline", "join");
+            return residentDecisions(id,"talk", "decline", "join");
         return List.of("talk", "decline");
     }
+    private List<String> residentDecisions(UUID id,String... actions){
+        var choices=new java.util.ArrayList<>(List.of(actions));
+        if(agents.residents()!=null&&agents.residents().role(id)!=null)choices.add("cli");
+        return List.copyOf(choices);
+    }
+    private String spokenLanguage(UUID id){var voice=agents.agent(id).voiceConfig();return voice==null?(offers.get(id).spokenLanguage()==null?"zh-CN":offers.get(id).spokenLanguage()):java.util.Locale.forLanguageTag(voice.language().replace('_','-')).toLanguageTag();}
+    String persona(UUID id){var offer=offers.get(id);return offer==null?"Minecraft居民":offer.persona();}
     Map<String,Object> residentContext(UUID id)throws IOException{
         var offer=offers.get(id);if(offer==null)return Map.of();
-        return Map.of("persona",offer.persona(),"likes",offer.likes(),"dislikes",offer.dislikes(),"ownRecentActions",journal.recall(id,id,false));
+        return Map.of("persona",agents.agent(id).persona(offer.persona()),"likes",offer.likes(),"dislikes",offer.dislikes(),"ownRecentActions",journal.recall(id,id,false));
     }
     void rememberAction(UUID id,UUID request,Map<String,Object> receipt)throws IOException{
         var summary=new LinkedHashMap<String,Object>();
@@ -369,11 +376,12 @@ final class MaidCompanions {
             var maid = agent == null ? null : agents.loaded(agent);
             if (offer == null || maid == null) throw new IllegalArgumentException("body_unavailable");
             if (!List.of("private","nearby","public").contains(channel)) throw new IllegalArgumentException("invalid_chat_channel");
-            boolean remotePrivate = channel.equals("private") && speaker instanceof ServerPlayer;
+            boolean remotePrivate = List.of("private","public").contains(channel) && speaker instanceof ServerPlayer;
             if (!remotePrivate && !inReach(speaker, maid)) throw new IllegalArgumentException("approach_within_8_blocks");
             if (message == null || message.isBlank() || message.codePointCount(0, message.length()) > 400 ||
                     message.codePoints().anyMatch(Character::isISOControl)) throw new IllegalArgumentException("say_one_line_up_to_400_characters");
             if (pending.containsKey(id)) throw new IllegalArgumentException("npc_is_thinking");
+            if(agents.residents()!=null&&agents.residents().busy(id))throw new IllegalArgumentException("npc_is_finishing_action");
             var site = maid.getAiChatManager().getLLMSite();
             if (site == null || !site.enabled() || !agent.binding().choices().containsKey(agent.brain(maid)))
                 throw new IllegalArgumentException("npc_brain_unavailable");
@@ -383,7 +391,7 @@ final class MaidCompanions {
                     .map(other -> Map.of("id", other.getUUID().toString(), "name", other.getName().getString(),
                             "role", offers.get(other.getUUID()).role(), "interests", offers.get(other.getUUID()).likes())).toList();
             var facts = new LinkedHashMap<String, Object>();
-            facts.put("name", maid.getName().getString()); facts.put("persona", offer.persona());
+            facts.put("name", maid.getName().getString()); facts.put("persona", agent.persona(offer.persona()));
             facts.put("likes", offer.likes()); facts.put("dislikes", offer.dislikes());
             facts.put("appearance", maid.getYsmModelId()); facts.put("specialty", offer.workTask());
             var current = view(speaker, id, now);
@@ -392,6 +400,7 @@ final class MaidCompanions {
                 if (current.containsKey(key)) state.put(key, current.get(key));
             facts.put("current", state); facts.put("nearbyNpcs", peers);
             facts.put("allowedActions", decisions(speaker,id,depth));
+            facts.put("cli",ResidentServices.catalogue());
             facts.put("relationshipNow", speaker == maid ? "自己的空闲思考" : Boolean.TRUE.equals(current.get("mine")) ?
                     "你当前已与对方同行，可以响应等候或跟随等安排" : "你目前没有与对方同行；若答应新的邀请必须选join，而非follow。若婉拒就选decline。");
             facts.put("speaker", Map.of("id", speaker.getUUID().toString(), "name", speaker.getName().getString(),
@@ -409,11 +418,14 @@ final class MaidCompanions {
                 "follow（继续跟随对方）、stay（原地坐下等待）、work（在当前位置按专长工作）、dismiss（结束结伴并返回驻地）。" +
                 "如果你答应了等候、跟随或工作，必须选择对应动作，不能只在talk中口头承诺。" +
                 "只有你已与对方组队时才选 follow/stay/work/dismiss；join 需对方确实邀请。" +
+                "cli 表示用自己的身份、背包和魔力提交现场 cli.available 中的一条命令，另填 command 字段（不带 /mycli）。可以写旅行书或拍照；提交前只能说打算做，不能声称已经完成。其它动作不填 command。" +
                 "work 表示在这里按专长工作，不代表任务已完成。" +
+                "远程私聊或公屏明确邀请你过去时，join代表同意组队并传送到邀请者身边；已组队选follow也可应邀传送。消耗5魔力，冷却60秒。" +
+                "必须有对方本轮明确的邀请才可同意远程传送；仅聊天选talk。邀请者正在挑战副本时也可以应邀传送进入战斗房间，仍需实际安全落点。" +
                 (speaker == maid && depth == 0 ? "此轮是你自己的空闲思考。你也可以选择 invite 或 talk_to，reply 是对她说的话。" +
                     "这两个动作的targetNpc必须完整复制nearbyNpcs某一项id的UUID字符串，不填名字或序号；talk/decline的targetNpc必须为null。" :
                     "本轮不要转发邀请给第三人，targetNpc 必须为null。") +
-                ("ja-JP".equals(offers.get(id).spokenLanguage())?
+                ("ja-JP".equals(spokenLanguage(id))?
                     "另外提供spokenReply字段：将reply同一句话自然译为日语，至多200字，不增加信息。中文reply仍用于全部聊天和气泡，日语仅供语音合成；不得模拟音频已播放。":"")+
                 "角色和现场证据：" + new Gson().toJson(facts);
             journal.append(id, conversationId, "request", Map.of("schemaVersion", 1, "id", conversationId.toString(),
@@ -449,7 +461,7 @@ final class MaidCompanions {
         result.put("channel",turn.channel());
         var speaker = actor(turn.speaker());
         var maid = agents.loaded(agents.agent(id));
-        if (failure == null && (speaker == null || maid == null || !turn.channel().equals("private") && !inReach(speaker, maid))) failure = "conversation_partner_unavailable";
+        if (failure == null && (speaker == null || maid == null || !List.of("private","public").contains(turn.channel()) && !inReach(speaker, maid))) failure = "conversation_partner_unavailable";
         if (failure == null && (!java.util.Objects.equals(turn.expected(), contract(id)) ||
                 turn.revision() != (ledger.get(id) == null ? -1 : ledger.get(id).revision()) ||
                 turn.brainRevision() != agents.agent(id).revision())) failure = "conversation_state_changed";
@@ -459,18 +471,28 @@ final class MaidCompanions {
             if (!decisions(speaker,id,turn.depth()).contains(decision.action()))
                 throw new IllegalArgumentException("decision_not_available_in_current_relationship");
             result.put("reply", decision.reply()); result.put("decision", decision.action());
-            if(decision.spokenReply()!=null){result.put("spokenReply",decision.spokenReply());result.put("spokenLanguage",offers.get(id).spokenLanguage()==null?"zh-CN":offers.get(id).spokenLanguage());}
+            if(decision.spokenReply()!=null){result.put("spokenReply",decision.spokenReply());result.put("spokenLanguage",spokenLanguage(id));}
             if (List.of("invite", "talk_to").contains(decision.action())) {
                 UUID other = UUID.fromString(decision.targetNpc());
                 if (other.equals(id)) throw new IllegalArgumentException("invalid_social_target");
                 result.put("receipt", ask(maid, other, decision.reply(), 1));
+            } else if (decision.action().equals("cli")) {
+                var input=new com.google.gson.JsonObject();input.addProperty("action","cli");input.addProperty("command",decision.command());
+                result.put("receipt",agents.residents().submit(id,conversationId,input));
             } else if (!List.of("talk", "decline").contains(decision.action())) {
                 if (speaker == maid) throw new IllegalArgumentException("self_invitation_not_allowed");
+                if(!inReach(speaker,maid)&&List.of("join","follow").contains(decision.action())) {
+                    if(!(speaker instanceof ServerPlayer))throw new IllegalArgumentException("remote_partner_not_player");
+                    if(agents.residents()!=null&&agents.residents().busy(id))throw new IllegalArgumentException("body_busy");
+                    if(decision.action().equals("join")&&(ledger.party(speaker.getUUID()).size()>=config.maxCompanions()||!maid.isHomeModeEnable()))throw new IllegalArgumentException("recruitment_precondition_changed");
+                    result.put("travel",ResidentTravel.visit(maid,speaker));maid=agents.loaded(agents.agent(id));
+                    if(maid==null)throw new IllegalStateException("arrived_body_unavailable_query_state");
+                }
                 result.put("receipt", execute(speaker, id, decision.action().equals("join") ? "recruit" : decision.action(), turn.expected(), true));
             }
             result.put("status", "answered");
             // Preparing Japanese text does not imply a voice pack or an audible delivery exists.
-            result.put("voiceStatus",turn.channel().equals("private")?"private_text_only":agents.agent(id).binding().voice()==null?"not_configured":"native_tts_not_dispatched");
+            result.put("voiceStatus",turn.channel().equals("private")?"private_text_only":agents.agent(id).voiceConfig()==null?"not_configured":"native_tts_not_dispatched");
             journal.append(id, conversationId, "result", result);
             if (speaker instanceof EntityMaid partner && partner != maid) {
                 var heard = new LinkedHashMap<>(result);
@@ -480,8 +502,8 @@ final class MaidCompanions {
             if (!turn.channel().equals("private")) {
                 boolean speaking=false;
                 try {
-                    var voice=agents.agent(id).binding().voice();
-                    String language=offers.get(id).spokenLanguage()==null?"zh-CN":offers.get(id).spokenLanguage();
+                    var voice=agents.agent(id).voiceConfig();
+                    String language=spokenLanguage(id);
                     String spoken="ja-JP".equals(language)?decision.spokenReply():decision.reply();
                     if(voice!=null&&language.equals(java.util.Locale.forLanguageTag(voice.language().replace('_','-')).toLanguageTag())&&spoken!=null){
                         agents.agent(id).voice(maid);var manager=maid.getAiChatManager();
@@ -502,7 +524,9 @@ final class MaidCompanions {
                     player.sendSystemMessage(Component.literal("本次动作未执行：" + receipt.get("reason")));
             }
         } catch (Exception bad) {
-            result.put("status", "failed"); result.put("reason", bad instanceof IllegalArgumentException ? bad.getMessage() : "memory_unavailable");
+            boolean arrived=result.get("travel") instanceof Map<?,?> travel&&Boolean.TRUE.equals(travel.get("completed"));
+            result.put("status", arrived?"partial":"failed"); result.put("reason", bad instanceof IllegalArgumentException ? bad.getMessage() : "operation_unconfirmed_query_original_conversation");
+            if(speaker instanceof ServerPlayer player)player.sendSystemMessage(Component.literal(maid.getName().getString()+"："+(arrived?"已经传送到场，但后续动作尚未确认。":"这次行动没有完成。")+"原因："+result.get("reason")));
             try { journal.append(id, conversationId, "result", result); } catch (IOException ignored) {}
         }
         latest.put(id, result);

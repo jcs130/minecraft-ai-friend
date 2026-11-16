@@ -15,7 +15,8 @@ async function selectWorld(id) {
   $('world-select').value = id;
 }
 async function follow(row) {
-  following = row.name; $('follow-label').textContent = `正在跟随 ${row.name}`; $('follow-bar').hidden = false;
+  following = row.uuid; $('follow-label').textContent = `正在跟随 ${row.name}`; $('follow-bar').hidden = false;
+  $('follow-live').hidden=row.kind==='npc';
   $('follow-live').href = '/#live?player=' + encodeURIComponent(row.name);
   const id = dimensionIds[row.dimension], app = engine();
   if (!app?.mapViewer) return;
@@ -34,34 +35,35 @@ function render() {
   for (const row of rows) {
     const card = document.createElement('div'); card.className = 'atlas-player-card';
     const button = document.createElement('button'); button.type = 'button'; button.className = 'atlas-player';
-    if (row.name === following) button.classList.add('is-following');
+    if (row.uuid === following) button.classList.add('is-following');
     button.setAttribute('aria-label', `跟随 ${row.name}，${worldNames[dimensionIds[row.dimension]]}，${positionText(row)}`);
     const avatar = document.createElement('img'); avatar.className = 'atlas-avatar'; avatar.alt = ''; avatar.width = 40; avatar.height = 40;
-    avatar.src = `/api/v1/avatars/${encodeURIComponent(row.name)}`;
+    avatar.src = row.kind==='npc'?'/npc-avatar.svg':`/api/v1/avatars/${encodeURIComponent(row.name)}`;
     const details = document.createElement('span'); details.className = 'atlas-player-info';
-    const name = document.createElement('strong'); name.textContent = row.name;
+    const name = document.createElement('strong'); name.textContent = row.name + (row.kind === 'npc' ? ' · 智能 NPC' : '');
     const place = document.createElement('small'); place.textContent = `${worldNames[dimensionIds[row.dimension]]} · ${positionText(row)}`;
     const hint = document.createElement('small'); hint.className = 'atlas-player-hint'; hint.textContent = covered(row, state.maps) ? '在线 · 点击头像定位' : '在线 · 此处尚未制图';
     details.append(name, place, hint); button.append(avatar, details);
     const live = document.createElement('a'); live.className = 'atlas-live'; live.textContent = '观看直播 ↗'; live.href = '/#live?player=' + encodeURIComponent(row.name);
     live.setAttribute('aria-label', `观看 ${row.name} 的直播`);
     const actions = document.createElement('div'); actions.className = 'atlas-player-actions';
-    const locate = document.createElement('button'); locate.type = 'button'; locate.className = 'atlas-locate'; locate.textContent = row.name === following ? '正在跟随' : '定位玩家';
+    const locate = document.createElement('button'); locate.type = 'button'; locate.className = 'atlas-locate'; locate.textContent = row.uuid === following ? '正在跟随' : '定位';
     const onLocate = () => { void follow(row).then(render).catch(showMapError); };
     button.addEventListener('click', onLocate); locate.addEventListener('click', onLocate);
-    actions.append(locate, live); card.append(button, actions); list.append(card);
+    actions.append(locate);if(row.kind!=='npc')actions.append(live); card.append(button, actions); list.append(card);
   }
   $('map-empty').hidden = rows.length > 0;
   $('map-empty').textContent = !state?.available ? '实时位置暂不可用，等待游戏服同步。' : all.length ? '没有匹配的在线居民。' : '此刻没有可显示的在线居民。';
   $('map-status').textContent = state?.available ? '● 实时位置已连接' : '○ 实时位置暂不可用';
   $('map-status').classList.toggle('is-live', !!state?.available);
   $('map-updated').textContent = state?.observedAt ? `位置观测：${new Date(state.observedAt).toLocaleTimeString('zh-CN')}` : '';
-  const row = all.find(item => item.name === following);
+  const row = all.find(item => item.uuid === following);
   const doc=frame.contentDocument;
   for(const marker of doc?.querySelectorAll('.bm-marker-player')||[]){
     const name=marker.querySelector('.bm-player-name')?.textContent;
     const img=marker.querySelector('img');
-    if(img&&all.some(item=>item.name===name)){const src='/api/v1/avatars/'+encodeURIComponent(name);if(img.getAttribute('src')!==src)img.setAttribute('src',src);}
+    const resident=all.find(item=>item.name===name);
+    if(img&&resident){const src=resident.kind==='npc'?'/npc-avatar.svg':'/api/v1/avatars/'+encodeURIComponent(name);if(img.getAttribute('src')!==src)img.setAttribute('src',src);}
   }
   if (following && !row) stopFollowing();
   if (row) void follow(row).catch(showMapError);
@@ -91,7 +93,7 @@ function themeMap() {
     if (row) void follow(row).then(render).catch(showMapError);
   }, true);
 }
-frame.addEventListener('load', () => { themeMap(); const row = visiblePlayers(state).find(item => item.name === following); if (row) void follow(row).catch(showMapError); });
+frame.addEventListener('load', () => { themeMap(); const row = visiblePlayers(state).find(item => item.uuid === following); if (row) void follow(row).catch(showMapError); });
 themeMap();
 window.addEventListener('pagehide', () => { stopped = true; clearTimeout(timer); });
 window.addEventListener('pageshow', event => { if (event.persisted) { stopped = false; void poll(); } });
