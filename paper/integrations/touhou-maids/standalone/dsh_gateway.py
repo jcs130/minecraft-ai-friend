@@ -9,7 +9,7 @@ import re
 import threading
 import uuid
 
-from gateway import (Gateway, QWEN_CODE, Refused, decode_plan, finite_json,
+from gateway import (Gateway, QWEN_CODE, Refused, decode_plan, decode_content, finite_json,
                      native_plan_payload, server_for, validate_config)
 
 PROTOCOL = '2026-09-28'
@@ -20,7 +20,9 @@ INSTRUCTIONS = (
     '"content" (text or null) and "tool_calls" (an array). Each tool call has a unique id, type "function", '
     'and function with name and JSON arguments. Use a short natural reply with an empty tool_calls array '
     'when no action is needed. Do not run tools yourself, use shell commands, access files or retry a '
-    'previous turn. Use the native tool receipts to confirm what happened.'
+    'previous turn. Use the native tool receipts to confirm what happened. '
+    'If the native conversation requests a JSON reply, encode that entire object as the content STRING '
+    'with an empty tool_calls array. Its fields never replace the outer content/tool_calls envelope.'
 )
 
 
@@ -46,10 +48,11 @@ class DshPlanner:
             return finite_json(raw)
 
     async def __call__(self, choice, messages, tools):
+        from qwen_code import CONTENT_INSTRUCTIONS
         fields = {'role', 'content', 'tool_calls', 'tool_call_id'}
         portable = [{key: value for key, value in row.items() if key in fields} for row in messages]
         body = {'input': json.dumps({'messages': portable, 'tools': tools}, ensure_ascii=False, allow_nan=False),
-                'instructions': INSTRUCTIONS, 'metadata': {'harness_id': choice['harness_id']},
+                'instructions': INSTRUCTIONS if tools else CONTENT_INSTRUCTIONS, 'metadata': {'harness_id': choice['harness_id']},
                 'model': choice['model'], 'stream': False, 'background': True, 'max_step': 3,
                 'max_output_tokens': 1024, 'timeout_seconds': self.timeout}
         original = None
@@ -69,7 +72,7 @@ class DshPlanner:
                             raise ValueError('harness_response_identity_mismatch')
                     if response.get('status') != 'completed' or response.get('model', choice['model']) != choice['model']:
                         raise ValueError('expected_completed_response_from_selected_model')
-                    return self.decode(response)
+                    return self.decode(response, native_content=not tools)
             except Exception:
                 if original is not None:
                     try:
@@ -80,7 +83,14 @@ class DshPlanner:
                 raise Refused('HARNESS_RESULT_UNKNOWN_NO_REPLAY', 502) from None
 
     @staticmethod
-    def decode(response):
+    def decode(response, *, native_content=False):
+        if native_content:
+            frames = [item for item in response.get('output', [])
+                      if item.get('type') == 'message' and item.get('role', 'assistant') == 'assistant']
+            if len(frames) != 1:
+                raise ValueError('one_native_dialogue_reply_required')
+            return decode_content(''.join(part['text'] for part in frames[0].get('content', [])
+                                          if part.get('type') == 'output_text'), response.get('usage') or {})
         response = native_plan_payload(response)
         text = ''.join(part['text'] for item in response.get('output', [])
                        if item.get('type') == 'message' and item.get('role', 'assistant') == 'assistant'

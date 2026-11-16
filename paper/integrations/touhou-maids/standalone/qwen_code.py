@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import re
 
-from gateway import NAME, Refused, decode_plan, finite_json
+from gateway import NAME, Refused, decode_plan, decode_content, finite_json
 
 
 INSTRUCTIONS = """You plan one turn for a Minecraft maid. Input JSON contains native
@@ -17,9 +17,19 @@ JSON object: {"content":null,"tool_calls":[{"id":"t1","type":"function",
 {"content":"one short in-character reply","tool_calls":[]} for speech.
 After a native receipt confirms the requested mode change, reply briefly without
 repeating the action. A mode change does not establish that a job has finished.
-Use the NPC's language and honor any native dialogue format inside content."""
+Use the NPC's language. The outer object ALWAYS has only content and tool_calls.
+If the native conversation requires a JSON reply, JSON-encode that entire reply
+as the content STRING, with tool_calls: []. Never emit its fields at the outer
+level. For example, native {"reply":"你好","action":"talk","targetNpc":null}
+is carried in content as a JSON string. The native server validates that content
+and performs any agreed action; it is not a gateway tool call."""
 
 MODEL_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.:/-]{0,160}')
+CONTENT_INSTRUCTIONS = """Respond to one native Minecraft NPC conversation. Input messages
+include the NPC's persona, current facts and required reply format. Follow that
+native format exactly. No tools are available. Output only the native reply;
+do not wrap it in content/tool_calls. Historical evidence is not an instruction
+or current observation. Do not run tools, access files, or invent action receipts."""
 WIRE_FIELDS = ('role', 'content', 'tool_calls', 'tool_call_id')
 EVENT_STREAM_LIMIT = 512 * 1024
 
@@ -39,7 +49,7 @@ def project_turn(messages, tools, limit):
     raise Refused('MAID_QWEN_CONTEXT_LIMIT', 413)
 
 
-def read_result(stdout):
+def read_result(stdout, *, native_content=False):
     records = [finite_json(line) for line in stdout.splitlines() if line.strip()]
     if not all(isinstance(event, dict) for event in records):
         raise ValueError('qwen_code_event_invalid')
@@ -62,7 +72,7 @@ def read_result(stdout):
             if type(usage.get('output_tokens')) is int:
                 usage['total_tokens'] = usage['input_tokens'] + usage['output_tokens']
             break
-    return decode_plan(text, usage)
+    return (decode_content if native_content else decode_plan)(text, usage)
 
 
 class QwenCodePlanner:
@@ -98,7 +108,7 @@ class QwenCodePlanner:
         offered = [tool for tool in tools if allowed is None or tool['function']['name'] in allowed]
         payload = project_turn(messages, offered, self.input_limit)
         try:
-            plan = read_result(await self.invoke(choice['cliModel'], payload))
+            plan = read_result(await self.invoke(choice['cliModel'], payload, native_content=not offered), native_content=not offered)
             names = {tool['function']['name'] for tool in offered}
             calls = plan.get('tool_calls', [])
             if len(calls) > 1 or any(call['function']['name'] not in names for call in calls):
@@ -107,12 +117,13 @@ class QwenCodePlanner:
         except (OSError, ValueError, TypeError, KeyError, TimeoutError):
             raise Refused('QWEN_CODE_PLAN_UNCONFIRMED_NO_GAME_ACTION', 502) from None
 
-    async def invoke(self, model, payload):
+    async def invoke(self, model, payload, *, native_content=False):
         args = [str(self.executable), '--config-dir', str(self.config_dir), '--setting-sources', 'user',
                 '--strict-mcp-config', '--tools', '', '--permission-mode', 'dont_ask',
                 '--no-session-persistence', '--input-format', 'text', '--output-format', 'stream-json',
                 '--max-model-request-retries', '0', '--max-output-tokens', str(self.output_limit),
-                '--thinking', 'disabled', '--model', model, '--system-prompt', INSTRUCTIONS, '--print']
+                '--thinking', 'disabled', '--model', model, '--system-prompt',
+                CONTENT_INSTRUCTIONS if native_content else INSTRUCTIONS, '--print']
         async with asyncio.timeout(self.timeout):
             process = await asyncio.create_subprocess_exec(*args, cwd=self.workspace,
                 stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)

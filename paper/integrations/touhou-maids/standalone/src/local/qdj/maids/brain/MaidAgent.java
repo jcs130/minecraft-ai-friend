@@ -24,6 +24,7 @@ final class MaidAgent {
     MaidAgent(MaidAgentsConfig.Binding binding) { this.binding = binding; }
     MaidAgentsConfig.Binding binding() { return binding; }
     long revision() { return revision; }
+    void invalidateActions() { revision++; }
 
     boolean matches(EntityMaid maid) {
         return maid.isAlive() && !maid.isRemoved() && !maid.level().isClientSide()

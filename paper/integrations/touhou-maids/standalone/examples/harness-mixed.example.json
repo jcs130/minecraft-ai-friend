@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "host": "127.0.0.1",
+  "port": 19105,
+  "timeoutSeconds": 60,
+  "maxConcurrent": 3,
+  "hub": { "base_url": "http://127.0.0.1:29150/api/harness", "keyFile": "/private/npc-hub-key.json" },
+  "qwenCode": { "executable": "/opt/qwen/qwen", "configDir": "/private/npc-qwen", "maxOutputTokens": 600 },
+  "maids": [
+    {
+      "maidId": "10000000-0000-0000-0000-000000000011",
+      "ownerId": "20000000-0000-0000-0000-000000000021",
+      "token": "REPLACE_WITH_A_UNIQUE_RANDOM_SECRET_FOR_HESUI",
+      "choices": { "qwen": { "harness_id": "qwen-code", "model": "npc-fast", "cliModel": "litellm/npc-fast" } }
+    },
+    {
+      "maidId": "10000000-0000-0000-0000-000000000012",
+      "ownerId": "20000000-0000-0000-0000-000000000022",
+      "token": "REPLACE_WITH_A_UNIQUE_RANDOM_SECRET_FOR_RONGLING",
+      "choices": { "dsh": { "harness_id": "dsh", "model": "npc-fast" } }
+    },
+    {
+      "maidId": "10000000-0000-0000-0000-000000000013",
+      "ownerId": "20000000-0000-0000-0000-000000000023",
+      "token": "REPLACE_WITH_A_UNIQUE_RANDOM_SECRET_FOR_DENGSHOU",
+      "choices": { "codex": { "harness_id": "codex", "model": "npc-coding" } }
+    }
+  ]
+}

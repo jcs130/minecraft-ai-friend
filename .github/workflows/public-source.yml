@@ -64,6 +64,8 @@ jobs:
           node --check paper/integrations/touhou-maids/tests/follow-radius-stage.mjs
           node --check paper/integrations/touhou-maids/tests/portal-travel-stage.mjs
           python -m unittest discover -s paper/integrations/touhou-maids/tests -p test_harness_gateway.py -v
+          python -m unittest discover -s paper/integrations/touhou-maids/standalone/tests -p 'test_*.py' -v
+          python paper/integrations/touhou-maids/standalone/tests/run_companion_ledger.py --jdk "$JAVA_HOME" --gson "$RUNNER_TEMP/maid-life-gson.jar"
           node --check paper/integrations/touhou-maids/tests/brain-harness-stage.mjs
           node --check paper/integrations/touhou-maids/tests/social-stage.mjs
           python paper/integrations/touhou-maids/tests/run-conversation-rules.py
@@ -284,6 +286,8 @@ jobs:
           java-version: '21'
       - run: corepack pnpm install --frozen-lockfile --ignore-scripts
       - run: corepack pnpm build:engine
+      - name: Check NPC memory isolation, duplicate sync and remote outage
+        run: node --experimental-transform-types --test ../../paper/integrations/touhou-maids/standalone/tests/companion-memory.test.mjs
       - name: Check minimal crypt geometry patch and guarded rollback
         run: node --test ../../paper/ops/crypt-connector-region.test.mjs
       - name: Install the shared portal utilities for isolated hosting checks

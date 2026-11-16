@@ -79,6 +79,7 @@ final class MaidAgentCommands {
         if (agent == null || !authorized(source, agent)) return fail(source, "This maid is unavailable to you.");
         EntityMaid maid = runtime.loaded(agent);
         if (maid == null) return fail(source, "The registered live maid is currently unavailable.");
+        if (physical && runtime.reserved(id)) return fail(source, "This NPC has an active public party. Finish that contract first.");
         if (physical && source.getEntity() instanceof ServerPlayer player &&
                 (player.level() != maid.level() || player.distanceToSqr(maid) > 64)) {
             return fail(source, "Stand within 8 blocks of the maid in the same dimension.");
@@ -126,6 +127,11 @@ final class MaidAgentCommands {
         }
         MaidAgent agent = runtime.agent(UuidArgument.getUuid(context, MAID));
         EntityMaid maid = agent == null ? null : runtime.loaded(agent);
+        if (maid != null && runtime.companions() != null && runtime.companions().offered(maid.getUUID())) {
+            var result = runtime.companions().ask(player, maid.getUUID(), StringArgumentType.getString(context, "text"), 0);
+            MaidCompanions.reply(source, result, false);
+            return "accepted".equals(result.get("status")) ? 1 : 0;
+        }
         if (maid == null || agent.binding().visitorPersona() == null) return fail(source, "This maid is unavailable.");
         try {
             runtime.visit(agent, maid, player, StringArgumentType.getString(context, "text"));
