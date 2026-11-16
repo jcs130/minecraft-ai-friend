@@ -17,13 +17,16 @@ public final class FieldGuideScreen extends Screen {
         int columnWidth = (totalWidth - 10) / 2;
         int left = (width - totalWidth) / 2;
         int top = Math.max(74, height / 2 - 42);
-        button("wheel", left, top, columnWidth, () -> QiandengControls.send("skillchest self", false));
+        boolean legacy = QiandengControls.legacyWorld();
+        button("wheel", left, top, columnWidth, QiandengControls::openWheel);
         button("panel", left + columnWidth + 10, top, columnWidth, () -> {
-            if (minecraft.player != null) QiandengControls.send("skillchest panel " + minecraft.player.getGameProfile().getName() + " 0", false);
+            if (minecraft.player != null) QiandengControls.send(
+                    legacy ? "skillchest panel " + minecraft.player.getGameProfile().getName() + " 0" : "mycli menu", false);
         });
         button("status", left, top + 29, columnWidth, () -> QiandengControls.send("mycli status", true));
-        button("help", left + columnWidth + 10, top + 29, columnWidth, () -> QiandengControls.send("myhelp", true));
-        button("iron", left, top + 58, totalWidth, () -> QiandengControls.send("qdspell self menu", false));
+        button("help", left + columnWidth + 10, top + 29, columnWidth, () -> QiandengControls.send(legacy ? "myhelp" : "mycli help", true));
+        button(legacy ? "iron" : "career", left, top + 58, totalWidth,
+                () -> QiandengControls.send(legacy ? "qdspell self menu" : "mycli skills menu", false));
         addRenderableWidget(Button.builder(Component.translatable("gui.back"), button -> onClose())
                 .bounds(left, top + 87, totalWidth, 20).build());
     }

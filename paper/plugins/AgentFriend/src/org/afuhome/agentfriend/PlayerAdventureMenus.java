@@ -16,6 +16,7 @@ import static org.afuhome.agentfriend.AdventureMenuModel.*;
 /** A view over existing RPG authorities. Browsing never starts, trades, casts or selects a class. */
 final class PlayerAdventureMenus implements Listener {
     private record Session(Ticket ticket,View view,Inventory inventory) { }
+    private record WheelSkill(Action action, String id, String icon, String name, List<String> lore) { }
     private final AgentFriendPlugin owner;
     private final BedrockMenuForms forms;
     private final Map<UUID,Session> sessions=new HashMap<>();
@@ -41,7 +42,10 @@ final class PlayerAdventureMenus implements Listener {
             if(forms.show(p.getUniqueId(),view,index->onForm(p.getUniqueId(),s,index),()->onFormClosed(p.getUniqueId(),s)))return;
             forget(p.getUniqueId()); // a late response cannot activate the chest fallback
         }
-        Inventory inv=Bukkit.createInventory(null,SIZE,"§3"+view.title());
+        var title=page==Page.WHEEL
+                ? net.kyori.adventure.text.Component.translatable().key("screen.qiandeng_controls.spell_wheel").fallback(view.title()).build()
+                : net.kyori.adventure.text.Component.text(view.title(),net.kyori.adventure.text.format.NamedTextColor.DARK_AQUA);
+        Inventory inv=Bukkit.createInventory(null,SIZE,title);
         ItemStack frame=item(button(0,Action.NONE,"GRAY_STAINED_GLASS_PANE"," "));
         for(int slot=0;slot<SIZE;slot++)inv.setItem(slot,frame);
         for(Button b:view.buttons())inv.setItem(b.slot(),item(b));
@@ -57,16 +61,19 @@ final class PlayerAdventureMenus implements Listener {
             case HOME->"千灯纪 · 冒险大厅";case TRAVEL->"传送与集合";case GROWTH->"角色与技能";case ADVENTURE->"冒险与任务";
             case STORAGE->"背包与仓库";case TRADE->"商城与交易";case SOCIAL->"队伍与伙伴";
             case MEMORIES->"留影与生活";case COMMON->"通用生存技能";case COMMON_DETAIL->"技能说明";
+            case WHEEL->"施法轮盘";
             case CHARACTER->"我的角色";case TIDY_BAG,TIDY_STASH->"确认无损合并";case PARTY->"组队大厅";case PARTY_CONFIRM->"确认组队操作";case HELP->"聊天与入门";case ERROR->"入口暂不可用";
         };
         buttons.addAll(category(page));
         if(page==Page.HOME){
-            content="你好，"+p.getName()+"。\n右键罗盘打开大厅；潜行右键打开快捷栏。\n选择分区，再查看具体内容。";
+            content="你好，"+p.getName()+"。\n使用罗盘打开大厅；潜行时使用罗盘直接施法。";
             buttons.add(button(4,Action.NONE,"COMPASS","欢迎，"+p.getName(),"点击图标浏览；物品只是按钮","按 Esc 关闭；CLI仍可使用"));
             buttons.add(button(28,Action.TRAVEL,"ENDER_PEARL","传送与集合","公共地标、个人传送点、归乡、战斗增援"));
             buttons.add(button(30,Action.STASH,"ENDER_CHEST","个人仓库 · 10页540格","直接选择页码；与大背包、公共箱分开"));
             buttons.add(button(29,Action.ONBOARDING,"OAK_SIGN","我的下一步","查看职业、通用技能、公会委托和任务交付建议"));
-        }else buttons.add(button(4,Action.NONE,"PAPER",title,"先查看内容与条件，再自行决定","下方箭头返回；罗盘回到大厅"));
+            buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","直接点选通用技能或已学职业技"));
+        }else if(page!=Page.WHEEL)buttons.add(button(4,Action.NONE,"PAPER",title,"先查看内容与条件，再自行决定","下方箭头返回；罗盘回到大厅"));
+        if(page==Page.GROWTH)buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","直接点选通用技能或已学职业技"));
         if(page==Page.COMMON){
             content=NativeRpg.COMMON_IDS.size()+"项通用技能无需选职；公用同一个魔力池。选择页码，再点技能看条件和消耗。";
             int pageNumber=detail.equals("2")?1:0,start=pageNumber*CONTENT.length;
@@ -85,6 +92,8 @@ final class PlayerAdventureMenus implements Listener {
             buttons.add(button(14,Action.NONE,"OAK_SIGN","使用提示",e.tip(),"失败："+e.failure()));
             String use=Set.of("travel","team","give","prospect").contains(detail)?"选择目标或配方":"使用一次";
             buttons.add(new Button(22,Action.COMMON_USE,detail,"LIME_DYE",use,List.of(e.costLine(),e.command(),"关闭本页后按当前状态检查；失败不自动重试")));
+        }else if(page==Page.WHEEL){
+            content=wheel(p,detail,buttons);
         }else if(page==Page.CHARACTER){
             JsonObject state=owner.nativeRpg().state(p);boolean available=state.has("available")&&state.get("available").getAsBoolean();
             double max=p.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue();
@@ -147,6 +156,52 @@ final class PlayerAdventureMenus implements Listener {
         buttons.add(button(35,Action.CLOSE,"BARRIER","关闭"));
         return new View(page,detail,title,content,buttons);
     }
+    private String wheel(Player player, String detail, List<Button> buttons) {
+        boolean profession = detail.startsWith("profession:");
+        String group = profession ? "profession:" : "common:";
+        int requested = detail.startsWith(group) ? Integer.parseInt(detail.substring(group.length())) : 0;
+        List<WheelSkill> skills = new ArrayList<>();
+        String message = "瞄准后打开轮盘。选技能施放，传送、探矿或造物会先让你选目标。";
+        if (profession) {
+            var state = owner.nativeRpg().state(player);
+            if (state.has("abilities") && state.get("abilities").isJsonArray()) {
+                for (var spell : owner.nativeRpg().classSpells(state)) {
+                    skills.add(new WheelSkill(Action.WHEEL_CAST, spell.id(), "ENCHANTED_BOOK", spell.name(),
+                            List.of("魔力 " + spell.mana() + " · " + cooldown(spell.cooldownRemainingMs()))));
+                }
+                if (skills.isEmpty()) message = "职业技能已学会后会出现在这里。";
+            } else message = "职业技能资料正在加载。稍后重新打开轮盘。";
+        } else {
+            for (String id : NativeRpg.COMMON_IDS) {
+                var spell = guide(id);
+                boolean selectTarget = Set.of("travel", "team", "give", "prospect").contains(id);
+                skills.add(new WheelSkill(Action.COMMON_USE, id, spell.icon().name(), spell.name(),
+                        List.of(spell.costLine(), cooldown(owner.readBasicCooldown(player, id)),
+                                selectTarget ? "点击选择目标" : "点击施放")));
+            }
+        }
+        int pages = Math.max(1, (skills.size() + WHEEL_CELLS.length - 1) / WHEEL_CELLS.length);
+        int page = Math.max(0, Math.min(requested, pages - 1)), start = page * WHEEL_CELLS.length;
+        buttons.add(button(4, Action.NONE, "END_CRYSTAL", (profession ? "已学职业技" : "通用技能") + " · " + (page + 1) + "/" + pages, message));
+        for (int index = start; index < Math.min(start + WHEEL_CELLS.length, skills.size()); index++) {
+            var spell = skills.get(index);
+            buttons.add(new Button(WHEEL_CELLS[index - start], spell.action(), spell.id(), spell.icon(), spell.name(), spell.lore()));
+        }
+        if (page > 0) buttons.add(wheelPage(28, group + (page - 1), "ARROW", "上一页"));
+        if (page + 1 < pages) buttons.add(wheelPage(30, group + (page + 1), "ARROW", "下一页"));
+        if (owner.nativeRpg().selected()) {
+            buttons.add(wheelPage(33, profession ? "common:0" : "profession:0", "BOOK", profession ? "通用技能" : "已学职业技"));
+            if (profession && skills.isEmpty())
+                buttons.add(button(13, Action.SKILL_MENU, "BOOK", "打开职业技能书", "查看学习条件与已学技能"));
+        }
+        return message;
+    }
+    private static Button wheelPage(int slot, String next, String icon, String title) {
+        return new Button(slot, Action.WHEEL_PAGE, next, icon, title, List.of());
+    }
+    private static String cooldown(Long millis) {
+        return millis == null ? "冷却按技能或目标计算" : millis <= 0 ? "冷却已就绪" : "冷却还有 " + ((millis + 999) / 1000) + " 秒";
+    }
     private SpellGuide.Entry guide(String id){return owner.nativeRpg().selected()?NativeRpg.commonGuide(id):SpellGuide.find(id);}
     private static String value(JsonObject object,String key,String fallback){
         return object.has(key)&&object.get(key).isJsonPrimitive()?object.get(key).getAsString():fallback;
@@ -179,6 +234,7 @@ final class PlayerAdventureMenus implements Listener {
         if(target!=null){open(p,target,"");return;}
         if(b.action()==Action.BACK){open(p,parent(view.page()),"");return;}
         if(b.action()==Action.COMMON_PAGE){open(p,Page.COMMON,b.payload());return;}
+        if(b.action()==Action.WHEEL_PAGE){open(p,Page.WHEEL,b.payload());return;}
         if(b.action()==Action.COMMON_DETAIL){open(p,Page.COMMON_DETAIL,b.payload());return;}
         if(b.action()==Action.PARTY_CONFIRM){open(p,Page.PARTY_CONFIRM,b.payload());return;}
         if(b.action()==Action.CLOSE)return;

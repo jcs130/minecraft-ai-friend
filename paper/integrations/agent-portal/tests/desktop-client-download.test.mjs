@@ -11,6 +11,7 @@ const alias = '/downloads/java-client';
 const release = packageAt(alias);
 
 test('desktop pack is public when enabled and keeps the old optional maid downloads separate', async t => {
+  assert.equal(release.version, '1.1.1');
   const disabled = await siteFixture(t);
   assert.equal((await fetch(disabled.origin + alias, { redirect: 'manual' })).status, 503);
   const enabled = await siteFixture(t, { downloads: { baseUrl, enabledPackages: [release.id, 'maids-client-pack'] } });
@@ -22,6 +23,9 @@ test('desktop pack is public when enabled and keeps the old optional maid downlo
       assert.equal(response.headers.get('x-checksum-sha256'), release.sha256);
     }
   }
+  const olderDesktop = await fetch(enabled.origin + '/downloads/qiandengji-java-1.21.1-neoforge-1.1.0.mrpack', { redirect: 'manual' });
+  assert.equal(olderDesktop.status, 307);
+  assert.equal(olderDesktop.headers.get('x-checksum-sha256'), '1ba659e68a2f980fd9a2ac5151405af2ffc78b449d1ed0639e8cacc5eabd70d3');
   const previous = await fetch(enabled.origin + '/downloads/maid-client', { redirect: 'manual' });
   assert.equal(previous.headers.get('x-checksum-sha256'), '100bed28de217904debeebbea8103233ff0228f2a10f696ac403b607b868e1d2');
 });
@@ -42,6 +46,7 @@ test('download page distinguishes desktop, FCL and existing launcher controller 
   while (!document.querySelector('#desktop-client-downloads .download-card') && Date.now() < deadline) await delay(20);
   assert.equal(document.querySelector('#desktop-client-downloads .download-card a[download]').getAttribute('download'), release.filename);
   assert.match(document.querySelector('#desktop-client-downloads').textContent, /Controlify 3\.0\.1 LTS/);
+  assert.match(document.querySelector('#desktop-client-downloads').textContent, /F6.*施法轮盘/);
   assert.match(document.querySelector('#android-client-downloads .download-card').textContent, /FCL/);
   assert.equal(document.querySelector('#game-client-downloads').textContent.includes('原生女仆'), false);
   const guide = await (await fetch(site.origin + '/android.html')).text();

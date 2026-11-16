@@ -1797,7 +1797,7 @@ final class DungeonManager implements Listener {
                     if (plugin.getConfig().getInt(RARE_MISSES + id, 0) != 0)
                         plugin.getConfig().set(RARE_MISSES + id, 0);
                 }
-                if (bonus != null) storeBonus(p, bonus, receipts);
+                if (bonus != null) storeBonus(p, plugin.engraveTrialReward(p, bonus, floor), receipts);
             } else {
                 receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor
                         + " category=bonus_skipped reason=below_recommended_difficulty"));
@@ -1895,7 +1895,8 @@ final class DungeonManager implements Listener {
         receipts.add(new LootReceipt(player, "MC_DUNGEON_LOOT floor=" + floor + " category="
                 + (bonus.rare() ? "rare" : "extra") + " tier=" + bonus.tier()
                 + " item=minecraft:" + bonus.item().getType().name().toLowerCase(Locale.ROOT)
-                + " count=" + bonus.item().getAmount() + DungeonLoot.enchantmentFields(bonus.item())));
+                + " count=" + bonus.item().getAmount() + DungeonLoot.enchantmentFields(bonus.item())
+                + plugin.weaponRewardFields(bonus.item())));
     }
 
     private void storeBossCache(Player player, DungeonLoot.Bonus cache, String category, List<LootReceipt> receipts) {
