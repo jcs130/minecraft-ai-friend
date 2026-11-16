@@ -5,7 +5,7 @@ function Ensure-AincradResidentServices {
     $result=[ordered]@{}
     foreach($role in @('gateway','memory')) {
         $script=Join-Path $runtime ('start-'+$role+'.ps1')
-        $expected=if($role -eq 'gateway'){'164c635993d5c3e66150b5460beac6d8655776e82b5d720047941c460ed35b40'}else{'56be2ab19409c5e1b90e0861b6a109d0c564e3249df59df15f73ddea04494683'}
+        $expected=if($role -eq 'gateway'){'dcd1fb962f30f464d9012b4ef1ff45fe2381bc2863df8cd7f40194b6230133f1'}else{'199af8c412217fd0aa96166c322366422bd4475a85ac7d6de31347faecf25abb'}
         if((Get-FileHash -LiteralPath $script).Hash.ToLowerInvariant() -cne $expected){throw 'Resident startup source changed'}
         $needle=if($role -eq 'gateway'){'E:/MC/runtime/aincrad-residents-0.3.0-20261116/gateway/dsh_gateway.py'}else{'E:/MC/runtime/aincrad-residents-0.3.0-20261116/companion-memory.mjs'}
         $image=if($role -eq 'gateway'){'python.exe'}else{'node.exe'}
@@ -15,7 +15,8 @@ function Ensure-AincradResidentServices {
             if($role -eq 'gateway' -and (Get-NetTCPConnection -State Listen -LocalPort 19105 -ErrorAction SilentlyContinue)){throw 'Resident gateway port is owned by another process'}
             if($role -eq 'memory' -and (Test-Path -LiteralPath (Join-Path $privateRoot 'memory/companion-sync.lock'))){throw 'Resident memory writer lock needs original-request reconciliation'}
             $argsForResident=@('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$script)
-            $p=Start-IndependentProcess -FilePath $shell -ArgumentList $argsForResident -WorkingDirectory $runtime -WindowStyle Hidden -RedirectStandardOutput (Join-Path $privateRoot ($role+'.launcher.out.log')) -RedirectStandardError (Join-Path $privateRoot ($role+'.launcher.err.log')) -PassThru
+            $launchId=[Guid]::NewGuid().ToString('N')
+            $p=Start-IndependentProcess -FilePath $shell -ArgumentList $argsForResident -WorkingDirectory $runtime -WindowStyle Hidden -RedirectStandardOutput (Join-Path $privateRoot ($role+'.launcher.'+$launchId+'.out.log')) -RedirectStandardError (Join-Path $privateRoot ($role+'.launcher.'+$launchId+'.err.log')) -PassThru
             $until=(Get-Date).AddSeconds(15)
             do {
                 Start-Sleep -Milliseconds 300
