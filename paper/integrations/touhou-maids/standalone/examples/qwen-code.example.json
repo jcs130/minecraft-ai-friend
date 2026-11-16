@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "host": "127.0.0.1",
+  "port": 19105,
+  "maxConcurrent": 3,
+  "timeoutSeconds": 35,
+  "qwenCode": {
+    "executable": "/absolute/path/to/qwen",
+    "configDir": "/absolute/path/to/private/qwen-config",
+    "maxInputBytes": 24576,
+    "maxOutputTokens": 320
+  },
+  "maids": [
+    {
+      "maidId": "10000000-0000-0000-0000-000000000011",
+      "ownerId": "20000000-0000-0000-0000-000000000021",
+      "token": "replace-with-distinct-random-token-nursery",
+      "choices": {
+        "qwen": {
+          "harness_id": "qwen-code",
+          "model": "qwen3.8-flash",
+          "cliModel": "litellm/qwen3.8-flash",
+          "allowedTools": ["switch_work_task"]
+        }
+      }
+    },
+    {
+      "maidId": "10000000-0000-0000-0000-000000000012",
+      "ownerId": "20000000-0000-0000-0000-000000000022",
+      "token": "replace-with-distinct-random-token-shepherd",
+      "choices": {
+        "qwen": {
+          "harness_id": "qwen-code",
+          "model": "qwen3.8-flash",
+          "cliModel": "litellm/qwen3.8-flash",
+          "allowedTools": ["switch_work_task"]
+        }
+      }
+    },
+    {
+      "maidId": "10000000-0000-0000-0000-000000000013",
+      "ownerId": "20000000-0000-0000-0000-000000000023",
+      "token": "replace-with-distinct-random-token-guard",
+      "choices": {
+        "qwen": {
+          "harness_id": "qwen-code",
+          "model": "qwen3.8-flash",
+          "cliModel": "litellm/qwen3.8-flash",
+          "allowedTools": ["switch_work_task"]
+        }
+      }
+    }
+  ]
+}

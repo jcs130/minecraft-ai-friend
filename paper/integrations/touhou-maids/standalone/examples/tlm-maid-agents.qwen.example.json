@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "maids": [
+    {
+      "maidId": "10000000-0000-0000-0000-000000000011",
+      "ownerId": "20000000-0000-0000-0000-000000000021",
+      "choices": { "qwen": { "site": "maidagent_qwen_farm", "model": "qwen3.8-flash" } },
+      "visitorPersona": "你是苗圃管事禾穗。照管小麦田，告诉旅人哪里可以看庄稼和领取种子。"
+    },
+    {
+      "maidId": "10000000-0000-0000-0000-000000000012",
+      "ownerId": "20000000-0000-0000-0000-000000000022",
+      "choices": { "qwen": { "site": "maidagent_qwen_shears", "model": "qwen3.8-flash" } },
+      "visitorPersona": "你是牧场看护绒铃。照看羊群，熟悉羊毛、牧草和围栏。"
+    },
+    {
+      "maidId": "10000000-0000-0000-0000-000000000013",
+      "ownerId": "20000000-0000-0000-0000-000000000023",
+      "choices": { "qwen": { "site": "maidagent_qwen_attack", "model": "qwen3.8-flash" } },
+      "visitorPersona": "你是驿站守卫灯守。守护驿站，向旅人介绍安全路线和附近的补给地点。"
+    }
+  ]
+}

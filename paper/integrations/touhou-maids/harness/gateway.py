@@ -22,6 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 UUID = re.compile(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}')
 NAME = re.compile(r'[a-z0-9][a-z0-9_.:-]{0,127}')
 MODE_TOOLS = {'switch_follow_state', 'switch_work_task', 'switch_schedule', 'switch_sit'}
+QWEN_CODE = 'qwen-code'
 
 
 class Refused(Exception):
@@ -79,6 +80,22 @@ def native_plan_payload(payload):
                                   if row is frames[0] or not any(row is frame for frame in frames)]}
 
 
+def decode_plan(text, usage):
+    """Decode a complete model plan without executing any game action."""
+    fenced = re.fullmatch(r'```(?:json)?[ \t]*\r?\n(.*)\r?\n```', text.strip(), re.S | re.I)
+    value = finite_json(fenced[1] if fenced else text)
+    if not isinstance(value, dict) or set(value) - {'content', 'tool_calls'}:
+        raise ValueError('harness_plan_shape_invalid')
+    for call in value.get('tool_calls', []):
+        arguments = call['function']['arguments']
+        if isinstance(arguments, dict):
+            call['function']['arguments'] = json.dumps(arguments, ensure_ascii=False, allow_nan=False)
+    value['model_status'] = {'usage': {target: usage[source] for source, target in (
+        ('input_tokens', 'prompt_tokens'), ('output_tokens', 'completion_tokens'), ('total_tokens', 'total_tokens')
+    ) if source in usage}}
+    return value
+
+
 def native_continuation(messages):
     """Attribute original execution receipts; never manufacture a tool result."""
     start = max((i for i, row in enumerate(messages) if row['role'] == 'user'), default=-1)
@@ -118,9 +135,6 @@ def validate_config(config):
         raise ValueError('port_required')
     if not isinstance(config.get('token'), str) or len(config['token']) < 32:
         raise ValueError('private_transport_token_required')
-    root = urlsplit(config['hub']['base_url'])
-    if root.scheme != 'http' or root.hostname != '127.0.0.1' or root.username or root.password or root.query or root.fragment:
-        raise ValueError('existing_loopback_hub_required')
     if not UUID.fullmatch(config.get('maidId', '')) or not UUID.fullmatch(config.get('ownerId', '')):
         raise ValueError('exact_original_maid_and_owner_required')
     if not config.get('choices') or len(config['choices']) > 8:
@@ -128,6 +142,13 @@ def validate_config(config):
     for name, choice in config['choices'].items():
         if not NAME.fullmatch(name) or not NAME.fullmatch(choice.get('harness_id', '')) or not NAME.fullmatch(choice.get('model', '')):
             raise ValueError('reviewed_harness_and_model_required')
+    backends = {choice['harness_id'] for choice in config['choices'].values()}
+    if QWEN_CODE in backends and not isinstance(config.get('qwenCode'), dict):
+        raise ValueError('qwen_code_configuration_required')
+    if backends - {QWEN_CODE} or 'hub' in config:
+        root = urlsplit(config['hub']['base_url'])
+        if root.scheme != 'http' or root.hostname != '127.0.0.1' or root.username or root.password or root.query or root.fragment:
+            raise ValueError('existing_loopback_hub_required')
     if not 5 <= config.get('timeoutSeconds', 40) <= 90:
         raise ValueError('bounded_timeout_required')
     return config
@@ -345,6 +366,8 @@ def server_for(config, gateway=None, *, gateways=None):
 
 def main():
     config = validate_config(finite_json(Path(sys.argv[1]).read_text(encoding='utf-8-sig')))
+    if any(choice['harness_id'] == QWEN_CODE for choice in config['choices'].values()):
+        raise ValueError('Qwen Code routes use the standalone multi-maid entry point')
     gateway = Gateway(config, ExistingPlanner(config))
     server = server_for(config, gateway)
     print(json.dumps({'ready': True, 'port': server.server_port, 'choices': list(config['choices']), 'gameConnected': False}), flush=True)

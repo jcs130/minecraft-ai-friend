@@ -95,7 +95,13 @@ final class MaidAgent {
         switch (mode) {
             case "follow" -> { maid.setHomeModeEnable(false); maid.setInSittingPose(false); }
             case "stay" -> maid.setInSittingPose(true);
-            case "home" -> { maid.setInSittingPose(false); maid.setHomeModeEnable(true); }
+            case "home" -> {
+                maid.setInSittingPose(false);
+                if (!maid.isHomeModeEnable()) {
+                    maid.setHomeModeEnable(true);
+                    maid.getSchedulePos().setHomeModeEnable(maid, maid.blockPosition());
+                }
+            }
             default -> throw new IllegalArgumentException("Use follow, stay or home");
         }
     }
