@@ -6,5 +6,7 @@ export * from './client/decision-context.ts';
 export * from './client/fact-updates.ts';
 export * from './client/execution-reading.ts';
 export * from './client/schema-reading.ts';
+export * from './client/task-scene-query.ts';
+export * from './client/receipt-text-view.ts';
 export { preserveToolInputSignatures } from './client/tool-help.ts';
 export { withFactState, type FactState } from '../core/fact-state.ts';
