@@ -111,3 +111,5 @@ packages/agent-mc-world/tests/runtime-event-observers.test.ts
 - vitest：agent-memory 19 项；agent-mc-world 新增 3 项钩子测试，原有全量测试与 typecheck 见提交说明。
 - pytest：sidecar 4 项（配置不接受明文密钥、hash 嵌入、HTTP 契约与校验、Bearer 鉴权）。
 - 真实冒烟：本机 Graphiti + Kuzu + DeepSeek，5 个合成 Episode（进服、私聊偏好、设家、搬家、离线），未连接任何 MC 服务器。
+
+> Phase 1b: the integration glue is owned by the Harness Runtime — see [agent-harness-design.md](agent-harness-design.md).

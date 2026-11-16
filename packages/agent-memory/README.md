@@ -35,6 +35,10 @@ Relation policies (`src/relations.ts`) decide what contradicts what: `LOCATED_AT
 
 ## Use
 
+> Integration into a running agent now goes through **`agent-mc-harness`** (`packages/agent-harness`,
+> `withAgentHarness`), which owns the glue and exposes memory to the host via `harness_get_summary`.
+> `withAgentMemory` below remains as a lower-level, memory-only option.
+
 ```ts
 import { MinecraftAgentClient } from 'agent-mc-world';          // in-repo: packages/agent-mc-world/src/client
 import { withAgentMemory, memoryConfigFromEnv } from 'agent-mc-memory';
