@@ -32,6 +32,7 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityRegainHealthEvent;
+import org.bukkit.plugin.java.JavaPlugin;
 
 /** Server-side staff casting during the existing companion guard tick. */
 final class NativeMaidMagicSupport {
@@ -40,19 +41,23 @@ final class NativeMaidMagicSupport {
     private static final String STARTER_ISSUED = "qiandengji_mage_starter_issued";
     private static final double GUARD_RANGE = 8;
     private static final long STAFF_INTERVAL = 650;
+    // NativeMaidAgentSupport samples the guard every 20 game ticks.
+    private static final long GUARD_SAMPLE_MILLIS = 1000;
     private final VortexCorePlugin vortex;
+    private final MaidSpellPolicy policy;
     private final Map<UUID, Mana> manaByMaid = new HashMap<>();
 
-    private NativeMaidMagicSupport(VortexCorePlugin vortex) {
+    private NativeMaidMagicSupport(VortexCorePlugin vortex, MaidSpellPolicy policy) {
         this.vortex = vortex;
+        this.policy = policy;
     }
 
-    static NativeMaidMagicSupport create() {
+    static NativeMaidMagicSupport create(JavaPlugin host) {
         var plugin = Bukkit.getPluginManager().getPlugin("VortexRPG");
         if (plugin == null || !plugin.isEnabled()) return null;
         try {
             plugin.getClass().getMethod("spellbookService").getReturnType().getMethod("qiandengjiNpcSpell", String.class);
-            return plugin instanceof VortexCorePlugin vortex ? new NativeMaidMagicSupport(vortex) : null;
+            return plugin instanceof VortexCorePlugin vortex ? new NativeMaidMagicSupport(vortex, MaidSpellPolicy.fromConfig(host)) : null;
         } catch (ReflectiveOperationException | LinkageError unavailable) {
             return null;
         }
@@ -115,13 +120,24 @@ final class NativeMaidMagicSupport {
         return out;
     }
 
-    record Opportunity(String state, Attempt attempt) {}
+    record Opportunity(String state, Attempt attempt, MaidSpellPolicy.Selection selection) {
+        Opportunity(String state, Attempt attempt) { this(state, attempt, null); }
+    }
 
     Opportunity prepare(EntityMaid maid, Player owner, CustomItemDefinition staff, List<Mob> threats) {
         return prepare(maid, owner, staff, threats, null);
     }
 
     Opportunity prepare(EntityMaid maid, Player owner, CustomItemDefinition staff, List<Mob> threats, String requested) {
+        return prepare(maid, owner, staff, threats, requested, false);
+    }
+
+    void forecast(EntityMaid maid, Player owner, CustomItemDefinition staff, List<Mob> threats) {
+        if (policy != null && !threats.isEmpty()) prepare(maid, owner, staff, threats, null, true);
+    }
+
+    private Opportunity prepare(EntityMaid maid, Player owner, CustomItemDefinition staff, List<Mob> threats,
+                                String requested, boolean forecasting) {
         if (threats.isEmpty() && requested == null) return new Opportunity("following_ready", null);
         if (!PlayerStateGate.allowed(owner) || !owner.canSee(maid.getBukkitEntity()))
             return new Opportunity("paused_by_owner_or_world", null);
@@ -149,11 +165,14 @@ final class NativeMaidMagicSupport {
         long now = System.nanoTime() / 1_000_000L;
         var mana = manaByMaid.computeIfAbsent(maid.getUUID(), ignored -> new Mana());
         mana.regenerate(now, Math.max(0, 20 + (wisdom + intelligence) * 4), Math.max(0, .5 + wisdom * .075));
-        if (now < mana.nextStaffCast) return new Opportunity("rpg_spell_cooldown", null);
+        boolean automaticPolicy = requested == null && policy != null && !targets.isEmpty();
+        if (!forecasting && now < mana.nextStaffCast) return new Opportunity("rpg_spell_cooldown", null);
+        long readyAt = forecasting ? Math.max(now + GUARD_SAMPLE_MILLIS, mana.nextStaffCast) : now;
 
         String blocked = "rpg_no_clear_target";
         int level = ownerLevel(owner);
         Attempt best = null;
+        var choices = new ArrayList<Attempt>();
         for (var spell : spells) {
             if (spell.minLevel() > level) {
                 if (requested != null) return new Opportunity("rpg_spell_level_required", null);
@@ -166,7 +185,7 @@ final class NativeMaidMagicSupport {
             if (enemies.isEmpty() && (requested == null || friends.isEmpty())) continue;
             int priority = preference(spell, enemies, friends, requested != null);
             if (priority < 0) continue;
-            if (mana.cooldowns.getOrDefault(spell.id(), Long.MIN_VALUE) > now) {
+            if (mana.cooldowns.getOrDefault(spell.id(), Long.MIN_VALUE) > readyAt) {
                 if (!blocked.equals("rpg_mana_low")) blocked = "rpg_spell_cooldown";
                 continue;
             }
@@ -176,10 +195,15 @@ final class NativeMaidMagicSupport {
                 blocked = "rpg_mana_low";
                 continue;
             }
-            if (best == null || priority > best.priority) {
-                best = new Attempt(spell, enemies, friends, owner, stats, mana, cost, now, priority);
-            }
+            var candidate = new Attempt(spell, enemies, friends, owner, stats, mana, cost, now, priority);
+            if (automaticPolicy) choices.add(candidate);
+            if (best == null || priority > best.priority) best = candidate;
         }
+        if (automaticPolicy && best != null) {
+            var selection = policy.choose(maid, owner, targets, choices, best, forecasting, now);
+            if (selection != null) return new Opportunity("rpg_ready", selection.attempt(), selection);
+        }
+        if (forecasting) return new Opportunity("rpg_spell_cooldown", null);
         if (best != null) return new Opportunity("rpg_ready", best);
         if (!threats.isEmpty() && targets.isEmpty() && blocked.equals("rpg_no_clear_target")) blocked = "rpg_protected_area";
         return new Opportunity(blocked, null);
@@ -248,16 +272,18 @@ final class NativeMaidMagicSupport {
         }
     }
 
-    Result cast(EntityMaid maid, Attempt attempt, Predicate<Mob> hostile) {
+    Result cast(EntityMaid maid, Attempt attempt, Predicate<Mob> hostile, MaidSpellPolicy.Selection selection) {
         var caster = (LivingEntity) maid.getBukkitEntity();
         var spell = attempt.spell;
-        var context = new SpellContext(UUID.randomUUID(), attempt.stats, caster.getLocation(), vortex.nexusBus(), caster);
+        UUID operation = UUID.randomUUID();
+        var context = new SpellContext(operation, attempt.stats, caster.getLocation(), vortex.nexusBus(), caster);
         var mana = attempt.mana;
         mana.cooldowns.put(spell.id(), attempt.now + spell.cooldown());
         mana.nextStaffCast = attempt.now + STAFF_INTERVAL;
         mana.current -= attempt.cost;
         var hits = new ArrayList<UUID>();
         var healed = new ArrayList<UUID>();
+        double observedDamage = 0, observedHealing = 0;
         SpellTarget impact = null;
         for (Mob enemy : attempt.enemies) {
             if (!hostile.test(enemy) || maid.distanceToSqr(enemy) > spell.range() * spell.range()) continue;
@@ -270,7 +296,9 @@ final class NativeMaidMagicSupport {
             if (!Double.isFinite(damage) || damage <= 0) continue;
             double before = target.getHealth() + target.getAbsorptionAmount();
             target.damage(damage, caster);
-            if (!target.isDead() && target.getHealth() + target.getAbsorptionAmount() >= before) continue;
+            double actual = before - (target.isDead() ? 0 : target.getHealth() + target.getAbsorptionAmount());
+            if (actual <= 0) continue;
+            observedDamage += actual;
             hits.add(target.getUniqueId());
             if (impact == null) impact = hit;
             if (spell.bleed() != null && !target.isDead() && hostile.test(enemy)) spell.bleed().apply(context, hit);
@@ -280,12 +308,16 @@ final class NativeMaidMagicSupport {
             if (!eligibleFriends.contains(ally)) continue;
             if (!canHeal(attempt.owner, caster, ally, spell.allyRange())) continue;
             var healTarget = target(ally);
-            if (!spell.permits(context, healTarget) || !heal(context, spell, attempt.owner, caster, ally)) continue;
+            if (!spell.permits(context, healTarget)) continue;
+            double actual = heal(context, spell, attempt.owner, caster, ally);
+            if (actual <= 0) continue;
+            observedHealing += actual;
             healed.add(ally.getUniqueId());
             if (impact == null) impact = healTarget;
         }
         if (impact == null) {
             mana.current += attempt.cost;
+            if (selection != null) policy.observe(selection, maid, operation, 0, 0, 0);
             return new Result("rpg_hit_blocked", spell.id(), List.of(), List.of(), mana.current);
         }
         var now = Instant.now();
@@ -297,22 +329,31 @@ final class NativeMaidMagicSupport {
         String state = hits.isEmpty() ? "rpg_cast_healed" : "rpg_cast_hit";
         mana.lastCast = new Result(state, spell.id(), List.copyOf(hits), List.copyOf(healed), mana.current);
         mana.lastCastAt = now;
+        if (selection != null) {
+            policy.observe(selection, maid, operation, observedDamage, observedHealing, attempt.cost);
+            var evidence = new JsonObject();
+            evidence.addProperty("source", selection.source());
+            evidence.addProperty("operationId", operation.toString());
+            evidence.addProperty("spellId", spell.id());
+            if (selection.decisionId() != null) evidence.addProperty("decisionId", selection.decisionId());
+            mana.lastPolicyCast = evidence;
+        } else mana.lastPolicyCast = null;
         if (attempt.enemy() != null) maid.getLookControl().setLookAt(attempt.enemy());
         maid.swing(InteractionHand.MAIN_HAND);
         spell.play(context, impact, caster);
         return mana.lastCast;
     }
 
-    private boolean heal(SpellContext context, MaidVortexSpell spell, Player owner, LivingEntity caster, Player ally) {
+    private double heal(SpellContext context, MaidVortexSpell spell, Player owner, LivingEntity caster, Player ally) {
         double amount = spell.heal().amount(context);
-        if (!Double.isFinite(amount) || amount <= 0) return false;
+        if (!Double.isFinite(amount) || amount <= 0) return 0;
         var event = new EntityRegainHealthEvent(ally, amount, EntityRegainHealthEvent.RegainReason.MAGIC);
         Bukkit.getPluginManager().callEvent(event);
         if (event.isCancelled() || !Double.isFinite(event.getAmount()) || event.getAmount() <= 0
-                || !canHeal(owner, caster, ally, spell.allyRange())) return false;
+                || !canHeal(owner, caster, ally, spell.allyRange())) return 0;
         double before = ally.getHealth();
         ally.setHealth(Math.min(ally.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue(), before + event.getAmount()));
-        return ally.getHealth() > before;
+        return Math.max(0, ally.getHealth() - before);
     }
 
     private static SpellTarget target(LivingEntity target) {
@@ -347,6 +388,7 @@ final class NativeMaidMagicSupport {
         var choices = new JsonArray();
         var staff = availableStaff(maid);
         data.addProperty("staffAvailable", staff != null);
+        data.addProperty("coreSpellPolicyConfigured", policy != null);
         var mana = manaByMaid.get(maid.getUUID());
         long time = System.nanoTime() / 1_000_000L;
         var mage = vortex.classSkillService().classProfile(MAGE).orElse(null);
@@ -375,6 +417,7 @@ final class NativeMaidMagicSupport {
             if (mana.lastCastAt != null) {
                 data.addProperty("lastCastAt", mana.lastCastAt.toString());
                 data.add("lastCast", mana.lastCast.describe());
+                if (mana.lastPolicyCast != null) data.add("lastPolicyCast", mana.lastPolicyCast);
             }
             if (mana.lastHitAt != null) {
                 data.addProperty("lastHitSpellId", mana.lastHitSpell);
@@ -388,6 +431,7 @@ final class NativeMaidMagicSupport {
     record Attempt(MaidVortexSpell spell, List<Mob> enemies, List<Player> friends, Player owner,
                    UnifiedPlayer stats, Mana mana, double cost, long now, int priority) {
         Mob enemy() { return enemies.isEmpty() ? null : enemies.getFirst(); }
+        double availableMana() { return mana.current; }
     }
 
     private static final class Mana {
@@ -400,6 +444,7 @@ final class NativeMaidMagicSupport {
         Instant lastHitAt;
         Result lastCast;
         Instant lastCastAt;
+        JsonObject lastPolicyCast;
 
         void regenerate(long now, double maximum, double perSecond) {
             current = observedAt == null ? maximum : Math.min(maximum, current + (now - observedAt) / 1000.0 * perSecond);

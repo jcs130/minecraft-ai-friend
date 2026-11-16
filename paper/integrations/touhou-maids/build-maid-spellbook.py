@@ -9,10 +9,10 @@ import zipfile
 
 
 BASE_SHA = 'ba4fc844c77a035d4779e56314f9766b770bd288c8eb352137543dea6cda1391'
-VERSION = '0.1.38-spellbook'
+VERSION = '0.1.39-spell-policy'
 PACKAGE = 'local/tlmcompat/hybrid/'
 CLASSES = ('HybridMaidPlugin', 'NativeMaidTransport', 'NativeMaidCompanionSupport',
-           'NativeMaidMagicSupport', 'MaidVortexSpell', 'NativeMaidSocialSupport')
+           'NativeMaidMagicSupport', 'MaidVortexSpell', 'NativeMaidSocialSupport', 'MaidSpellPolicy')
 
 
 def main():

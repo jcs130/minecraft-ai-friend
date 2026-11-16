@@ -86,12 +86,14 @@ public final class MaidVortexQa extends JavaPlugin implements Listener {
                 sender.sendMessage("frozen");
             }
             case "target" -> {
+                int health = Files.isRegularFile(Path.of(".maid-spellbook-qa")) && args.length == 3
+                    ? Integer.parseInt(args[2]) : 80;
                 for (var entity : maid.getWorld().getEntities()) {
                     if (entity instanceof LivingEntity target && target.getScoreboardTags().contains("MaidMagicTargetQA")) {
-                        target.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(80);
+                        target.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(health);
                         target.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).setBaseValue(0);
                         target.getAttribute(Attribute.GENERIC_KNOCKBACK_RESISTANCE).setBaseValue(1);
-                        target.setHealth(80);
+                        target.setHealth(health);
                     }
                 }
                 sender.sendMessage("configured");

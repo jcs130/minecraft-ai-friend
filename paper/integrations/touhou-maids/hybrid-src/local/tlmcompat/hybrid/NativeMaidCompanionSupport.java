@@ -73,7 +73,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
 
     NativeMaidCompanionSupport(HybridMaidPlugin plugin) {
         this.plugin = plugin;
-        magic = NativeMaidMagicSupport.create();
+        magic = NativeMaidMagicSupport.create(plugin);
         dungeonCombat = dungeonAccess("mayGuardDungeonTarget", Player.class, org.bukkit.entity.Entity.class, org.bukkit.entity.Entity.class);
         dungeonPosition = dungeonAccess("companionCombatPosition", Player.class, Location.class);
         rescueTarget = dungeonAccess("companionRescueTarget", Player.class, org.bukkit.entity.LivingEntity.class);
@@ -332,7 +332,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
             if (weapon.staff() != null) {
                 var opportunity = magic.prepare(maid, owner, weapon.staff(), threats);
                 if (opportunity.attempt() != null)
-                    choices.put(Mode.MAGIC, new Candidate(weapon, opportunity.attempt().enemy(), opportunity.attempt()));
+                    choices.put(Mode.MAGIC, new Candidate(weapon, opportunity.attempt().enemy(), opportunity.attempt(), opportunity.selection()));
                 else blocked = opportunity.state();
                 continue;
             }
@@ -377,7 +377,8 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         guard.target = candidate.target.getUUID();
         if (candidate.attempt != null) {
             stopNative(maid);
-            guard.state = magic.cast(maid, candidate.attempt, enemy -> hostile(maid, owner, enemy)).state();
+            guard.state = magic.cast(maid, candidate.attempt, enemy -> hostile(maid, owner, enemy), candidate.selection).state();
+            if (candidate.selection != null) magic.forecast(maid, owner, candidate.weapon.staff(), threats(maid, owner));
         } else {
             activateNative(maid, candidate);
             guard.state = "native_defence";
@@ -414,7 +415,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         guard.mode = Mode.MAGIC;
         guard.selectedAt = System.nanoTime();
         guard.target = attempt.enemy() == null ? null : attempt.enemy().getUUID();
-        var result = magic.cast(maid, attempt, enemy -> hostile(maid, owner, enemy));
+        var result = magic.cast(maid, attempt, enemy -> hostile(maid, owner, enemy), null);
         guard.state = result.state();
         var observation = result.describe();
         if (!result.applied()) annotateRefusal(maid, observation, result.state());
@@ -611,7 +612,9 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         return out;
     }
 
-    private record Candidate(Weapon weapon, Mob target, NativeMaidMagicSupport.Attempt attempt) {}
+    private record Candidate(Weapon weapon, Mob target, NativeMaidMagicSupport.Attempt attempt, MaidSpellPolicy.Selection selection) {
+        Candidate(Weapon weapon, Mob target, NativeMaidMagicSupport.Attempt attempt) { this(weapon, target, attempt, null); }
+    }
     private record Scene(Player owner, String dimension, long revision, UUID target, boolean attackingPartner, int band, Set<Mode> modes) {}
     private record Option(UUID target, ItemStack weapon) {
         boolean matches(Candidate candidate) {

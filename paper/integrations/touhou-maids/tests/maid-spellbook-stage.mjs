@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {once} from 'node:events';
-import {readFile, writeFile} from 'node:fs/promises';
+import {readdir, readFile, writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {resolve} from 'node:path';
@@ -21,7 +21,7 @@ const {createBot} = createRequire(process.env.MAID_VORTEX_JAVA)('mineflayer');
 const baseline = process.argv.includes('--baseline');
 const report = {synthetic: true, baseline, checks: []};
 const bots = [], ports = [];
-let model;
+let model, fast;
 const runId = randomUUID().slice(0, 8);
 const rc = async cmd => (await command(cmd, 12000, {port: 26483, properties})).trim();
 const minecraft = cmd => rc('minecraft:' + cmd);
@@ -231,8 +231,66 @@ try {
         check('the model tool routes into the same cast journal and actually heals the player',
             modelAction?.action === 'cast' && modelAction.status === 'applied'
             && modelAction.observation?.healedTargetIds.includes(ownerId) && await playerHealth(owner) > 5, modelAction);
+
+        if (process.argv.includes('--policy')) {
+            const fastCalls = [];
+            fast = createServer(async (req,response) => {
+                try {
+                    let raw = '';
+                    for await (const chunk of req) raw += chunk;
+                    const {questions} = JSON.parse(raw);
+                    const ids = Object.keys(questions.effect.criteria);
+                    const selected = ids.includes('mage_staff_bolt') ? 'mage_staff_bolt' : ids[0];
+                    fastCalls.push({ids,selected});
+                    const probabilities = Object.fromEntries(ids.map(id => [id,id === selected ? 0.8 : 0.2/(ids.length-1)]));
+                    response.writeHead(200,{'content-type':'application/json'});
+                    response.end(JSON.stringify({model:'isolated-system-one',
+                        answers:{effect:{type:'choice',choice:selected,confidence:0.8,probabilities}}}));
+                } catch {
+                    response.writeHead(400).end();
+                }
+            });
+            fast.listen(26485,'127.0.0.1');
+            await once(fast,'listening');
+            check('native body advertises the enabled MC core policy', (await context()).companion.rpg.coreSpellPolicyConfigured === true);
+            await mode('sit','fast-target-ready');
+            assert.equal(await control('level', owner + ' 1'), 'level=1');
+            await minecraft(`tp ${maidId} 300.5 90 301.5`);
+            await summon('fast_spellbook',305.5,301.5);
+            await control('target','280');
+            check('native target prepared for multiple physical casts', await mobHealth('fast_spellbook') === 280);
+            await mode('follow','fast-select');
+            const picked = await until(async () => {
+                const cast = (await context()).companion.rpg.lastPolicyCast;
+                return cast?.source === 'system1' && cast;
+            }, 16000);
+            report.fastPolicy = {picked,fastCalls};
+            check('fast policy chooses an exact ready spell and the native body physically applies it',
+                picked?.spellId === 'mage_staff_bolt' && !!picked.decisionId && await mobHealth('fast_spellbook') < 280);
+            await mode('sit','read-fast-evidence');
+            const memory = resolve(process.env.QD_TEST_SPELL_POLICY_DATA_DIR,'minecraft-memory','operations');
+            const receipt = await until(async () => {
+                for (const scope of await readdir(memory).catch(() => [])) {
+                    const dir = resolve(memory,scope);
+                    for (const name of (await readdir(dir)).filter(name => /^[a-f0-9]{64}\.json$/.test(name))) {
+                        const row = JSON.parse(await readFile(resolve(dir,name),'utf8'));
+                        if (row.execution?.id === picked.operationId) return row;
+                    }
+                }
+                return null;
+            }, 4000);
+            check('core evidence binds the fast model choice to the exact physical operation',
+                receipt?.attribution.decisionId === picked.decisionId && receipt.combatEffect.damage > 0
+                && receipt.combatEffect.resourceSpent >= 0 && receipt.execution.phase === 'completed'
+                && receipt.goalVerified === false, receipt);
+            await minecraft(`kill @e[tag=${targetTag}]`);
+        }
     }
 } finally {
+    if (fast) {
+        fast.closeAllConnections();
+        fast.close();
+    }
     if (model) {
         model.closeAllConnections();
         model.close();
