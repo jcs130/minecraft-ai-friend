@@ -37,6 +37,10 @@ final class CompanionJournal {
     }
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> recall(UUID maid, UUID speaker) throws IOException {
+        return recall(maid,speaker,true);
+    }
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> recall(UUID maid, UUID speaker, boolean includePrivate) throws IOException {
         Path dir = root.resolve(maid.toString());
         if (!Files.isDirectory(dir)) return List.of();
         // Keep disk reads bounded; the original files are never evicted or rewritten.
@@ -49,12 +53,13 @@ final class CompanionJournal {
                             return (Map<String,Object>)JSON.fromJson(Files.readString(p, StandardCharsets.UTF_8), Map.class);
                         } catch (IOException ex) { throw new java.io.UncheckedIOException(ex); }
                     }).filter(row -> maid.toString().equals(row.get("maidId")) && speaker.toString().equals(row.get("speakerId")))
+                    .filter(row -> includePrivate || !"private".equals(row.get("channel")))
                     .limit(6).map(CompanionJournal::context).toList();
         }
     }
     private static Map<String,Object> context(Map<String,Object> row) {
         var shortRow = new java.util.LinkedHashMap<String,Object>();
-        for (String key : List.of("id", "at", "speakerId", "message", "reply", "decision", "status", "reason"))
+        for (String key : List.of("id", "at", "speakerId", "message", "reply", "decision", "status", "reason", "channel"))
             if (row.containsKey(key)) shortRow.put(key, row.get(key));
         if (row.get("receipt") instanceof Map<?,?> receipt) {
             var action = new java.util.LinkedHashMap<String,Object>();

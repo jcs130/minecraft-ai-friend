@@ -1,0 +1,99 @@
+# 艾因格朗特居民 0.3.0
+
+本版是服务端候选，尚未安装到正式服。它在 0.2.0 对话招募、多人同行、NPC 互聊及独立记忆上增加住房、原生生活行动、领地检查和角色外观选择。身体仍是车万女仆实体，寻路、工作、战斗和睡眠使用原生 AI，不加入服务器玩家列表。
+
+## 角色与语言
+
+[角色目录](examples/aincrad-cast.json)把桐人设为黑衣剑士、敏捷近战的游侠，偏爱探索与研究战斗机制。有自己的日程和物资，能够拒绝或协商邀请；角色背景与本世界实际经历分开保存。人设不授予物品、二刀流或管理员能力。
+
+选用 2026-11-16 下载的 `qd_hub_kirito.ysm`，作者 PoshGiraffe0，2,553,555 字节，SHA256 `8d9273b591363bbb45e8df7be5b8c3b94849752e976f5118eb7de14ff7a60a9b`，贴图名 `skin`。模型文件不进入源码仓库，其声明许可为 CC BY-NC-SA 4.0，不属于本项目 MIT 代码。[原始来源](https://ysmhub.top/models/import-8d9273b59136-b3b5c71e)
+
+桐人的聊天与气泡使用中文，`spokenLanguage: "ja-JP"` 请求模型在同一次响应中提供 `spokenReply` 日语文本。只有配置可用的对应语言 TTS 站点后才请求播放；未配置时明确记录 `voiceStatus: not_configured`。实际模型联调已经返回中日双语，但这不等于已经播放出日语原声。现有肥鱼声线保持。
+
+原生 TLM 音色参数使用 `ja_JP`；入口接受 BCP-47 写法并正确转换，避免 `ja-JP` 被原生解析为英语。动态日语 TTS、固定角色录音和 SVC 发送是不同环节。没有经过核验的桐人语音源时不冒充原声，也不替换成其他人物声线。亚丝娜、诗乃、西莉卡已有匹配的人设草案，缺模型的条目 `spawnEnabled:false`，不会套用无关外观生成居民。
+
+## 构建与安装形态
+
+普通 NeoForge 使用独立 `tlm-maid-agents-0.3.0.jar`。千灯纪已有 `qiandengji_maid_brain` 时必须使用合并构建：
+
+```sh
+python build.py --server /path/to/isolated-neoforge --maid /path/to/original-tlm.jar --javac /path/to/jdk21/bin/javac --hybrid-brain /path/to/current-qiandengji-maid-brain.jar --output /path/to/candidate.jar --bundle /path/to/candidate.zip
+```
+
+合并包包含两个 mod ID，保留旧脑扩展、语音 Mixin 和配置能力。它替换原脑扩展 JAR，不能与原 JAR 或独立版叠装。共享序列化器初始化和工具包装已去重，未登记的私人女仆继续走原链路。
+
+Youer 还需要 AgentFriend 的 `residentProtection` 和居民身份适配。用 `build-hybrid-protection.py --help` 按指定现役 AgentFriend JAR 构建三类最小替换，其他 JAR 条目原样保留。必须同时记录原始与候选 SHA256；此构建不靠修改插件版本号识别，也不会自动安装。
+
+新增扩展本身只装服务端；目标模组服原来的 TLM/YSM 客户端要求保持。原版、Mineflayer、基岩仍经过既有兼容网关。原版容器、中文聊天和原生实体通道继续复用，不能以服务端回执代替手机实际模型、气泡、菜单和耳听验收。
+
+## 登记住房和原身体
+
+1. 先登记真实女仆 UUID、原主人 UUID 与每体独立模型站点。不得用新假玩家替换已有实体。
+2. `tlm-companions.json` 登记公开人物的人设与喜恶。桐人条目取自角色目录，声线可以暂不配置。
+3. 将 [住房示例](examples/tlm-residents.example.json)改成实测的世界与绝对坐标，保存为 `config/tlm-residents.json`。示例是隔离测试坐标，不是正式服投放命令。
+4. 管理员执行 `home-check`，全计划空位、实心地板与已加载区块都满足后，才用唯一 UUID 执行 `furnish`。安装真实女仆床、普通家具、双面门牌并回读；不替换任何已有方块。
+5. 正式住处还需按相同 UUID 登记个人领地及公共访问规则。门牌不自动创建领地，家具安装也不是无条件保护证明。
+
+`home.bed` 指床头，床尾在 `facing` 的反方向；两格都必须在 `interior` 内。床使用 TLM 原生床，普通床不能冒充女仆可睡的床。TLM `DAY` 日程在 16000 后进入睡眠，不能把 13000 时未睡视为失败。
+
+配置只加载登记，不自动生成 NPC、安装家具、赠送装备或修改世界。最多 24 位居民；`planningSeconds` 30–3600，示例 180。住处、最后已知身体位置使用短期区块票保持原生工作，并保存定位，以便重启加载同一个身体。不能把这个上限当作 24 个在线 LLM 的性能验收。
+
+艾因格朗特第一处已走通的候选住处见 [房屋方案](examples/aincrad-housing-plan.json)。原生 NPC 已在复制地形中穿门、睡眠并保持重启状态；正式安装前仍须复核房屋当前占用与领地，不能从旧测试世界回灌实体或家具。新桐人使用独立实体与记忆，不继承示例灯守、肥鱼或可米的个人经历。
+
+## 玩家交流
+
+普通玩家使用 `/maidagent companions` 原版容器菜单、附近点名聊天，或 `/maidagent companion <UUID> say <话>`。招募与菜单选择仍会询问角色模型；每位领队可以同时带多位同伴，但同一身体只接受一位领队。`whisper <话>` 是私聊，不产生公开气泡或附近声音；公共聊天与附近气泡只携带公开对白。离线、撤约、超时及跨维度边界沿用 [伙伴规则](COMPANIONS.md)。
+
+`/maidagent residents` 和普通权限 `resident <UUID> status` 只显示公开身份、住处与是否可邀请，不泄露背包、私聊或同行队伍位置。
+
+## 动作接口与回执
+
+管理员或服务端运行时可用下表；操作不授予公众控制他人身体的权限。原自主运行时调用同一执行器。
+
+| 入口 | 作用 |
+| --- | --- |
+| `/maidagent resident-actions` | 读取与校验共享定义的字段、坐标系和预算 |
+| `/maidagent resident <UUID> status` | 管理员读取原身体、物品、位置、职业及最近动作 |
+| `... plan` | 让已选择的模型决定一个动作，返回请求 UUID |
+| `... act <REQUEST_UUID> <JSON>` | 串行提交一个动作，原 UUID 查询结果 |
+| `... receipt <REQUEST_UUID>` | 查询受理、执行或未知结果，不重放 |
+| `... protect {"action":"container","at":{"x":127,"y":81,"z":102}}` | 按该 NPC 自己的身份查询领地；未知不能当作允许 |
+| `... home-check` / `... furnish <REQUEST_UUID>` | 查看住房计划／明确安装并绑定原生日程 |
+| `... appearance` | 核验本地模型 SHA256，选择模型并回读 ID/贴图；不下载、不换身体 |
+| `... acknowledge-unknown <REQUEST_UUID> <核对说明>` | 管理员检查实际世界后解除未知动作阻塞，另记核对记录，原回执仍为未知 |
+
+动作 JSON 包括 `rest`、`home`、`walk`、`task`、`equip`、`break`、`place`、`cast`、`say`。例如：
+
+```json
+{"action":"equip","equipmentSlot":"head","slot":2,"expectedItem":"minecraft:iron_helmet"}
+```
+
+坐标必须是同维度绝对整数 `at:{x,y,z}`，不猜缺项或将 `to` 改成 `at`。移动单次最多 96 格，挖建触达 5 格，输入 4096 字符，动作截止 90 秒。挖掘与放置分别需要已观察的 `expectedBlock`、`expectedItem`；物品完整组件、方块状态、控制修订号和权限在实际执行时重查。挖掘使用真实工具、耗时、耐久、掉落与原生事件；放置消耗材料，不能用管理命令伪造成功。复杂机器、多格结构和载具不是这个基础放置接口的已验范围。
+
+回执通过 `MC_RESIDENT` 私有命令回复。`accepted` 只是受理；`completed` 只表示这一步的实测终态，选择工作不等于完成收获。`partial` 报实际变化；`unknown` 保留执行阻塞和原请求，不自动重复消耗。已接收的模型规划可查询 `planning_no_action_dispatched`；重启时没有持久动作记录的规划返回未知，不能凭空宣称已执行。
+
+动作日志、定位与待核对标记分开写盘；文件写失败不清除未确认动作。卸载、死亡、区块不可用超过截止时记录未知，禁止重生一个副本继续同一动作。正常重启后按 UUID 查原回执。只允许管理员在查明现场后明确解除阻塞。
+
+## 领地与权限
+
+NPC 使用自己的实体 UUID 作为领地身份，原主人和同行领队的权限不会被冒用。辅助 FakePlayer 仅用于原生生存事件，不进 PlayerList、不给 OP。普通地主可以用现有信任菜单或 `mycli land trust <领地ID> <NPC_UUID>` 授权已登记居民；未登记 UUID 仍拒绝。撤权即时生效。
+
+原生 TLM `canDestroyBlock/canPlaceBlock` 和无线存取饰品执行前接入相同检查。箱子的实际绑定坐标也重查，防止远程绕过。Youer 中 AgentFriend 缺失、接口不可读或查询未知时拒绝操作；普通 NeoForge 继续尊重原生事件。这里并未为所有第三方附属的任意 `Level.setBlock` 调用建立沙盒。
+
+研究过 LittleMaidSomeInstructions、Promaid 和 MaidStorageManager：已有寻路、建造、物流或管理界面，但还涉及客户端依赖、额外模型循环或直接世界写入。当前优先复用已装 TLM 的原生任务并补检查，没有把这些未验附属直接加到正式服。
+
+## 职业与成长范围
+
+基础职业为守护剑士、游侠、寒霜术士、行医者、工匠、草药师；对应守护、加速、寒霜、脱战治疗和采掘加速。魔力有限、带冷却，拒绝动作不扣费；只对实际完成的施法／挖建累积经验。NPC 根据真背包装备武器防具，基础攻击仍交给原生任务。
+
+回执显式标为 `progressionSystem: resident_classes_v1`。这是可独立运行的初版职业状态，尚未与正式 Vortex／玩家职业经验统一，也不能声称已经支持全部 `/mycli` 法术和复杂模组装备效果。后续按同一身份接入正式能力与经济系统，不复制玩家数据或用 OP 绕过学习规则。
+
+## 记忆、成本与运维
+
+规划只携带本人概要、相关经历、至多 32 格附近可见方块、16 个可见实体及按需动作契约，不传整张地图。原生行走、劳动和睡觉不逐 tick 调模型。无事可 `rest`，下一轮按配置间隔执行；社交亦有独立间隔，不能递归互相唤醒。
+
+实际动作的简短结果进入同一 NPC 的不可覆写经历，原始完整回执仍独立保存。私聊不进入公共社交的检索上下文；PowerContext 尚未按通道隔离的远端缓存只用于对应私人对话。本地与远端记忆的部署方法见 COMPANIONS；换模型不换身体 UUID、realm 或 Scope。
+
+必须一起保留世界实体、`data/tlm-companion-memory`、`data/tlm-resident-actions`、`data/tlm-resident-state`、`data/tlm-resident-reconciliations`、契约和记忆同步账本。发布遵守现役维护窗口、F 盘当次备份及正常停服流程。回退代码不回灌旧世界、背包、认证或动作账本。
+
+最终联机结果、构建摘要和未验项目见 [RESIDENTS_VALIDATION.md](RESIDENTS_VALIDATION.md)。

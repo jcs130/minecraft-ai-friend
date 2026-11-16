@@ -4,10 +4,13 @@ license="MIT"
 
 [[mods]]
 modId="tlm_maid_agents"
-version="0.2.0"
+version="0.3.0"
 displayName="TLM Maid Agents"
 displayTest="IGNORE_ALL_VERSION"
 description="Role-scoped model routing, persistent conversations and native companion parties for Touhou Little Maid."
+
+[[mixins]]
+config="tlm-residents.mixins.json"
 
 [[dependencies.tlm_maid_agents]]
 modId="minecraft"

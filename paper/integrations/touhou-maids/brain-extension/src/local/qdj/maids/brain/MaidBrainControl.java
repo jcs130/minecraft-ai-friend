@@ -23,6 +23,7 @@ public final class MaidBrainControl {
     private static final Map<String,SiteHandler> sites=new ConcurrentHashMap<>();
     private static final Handler CLOSED=new Handler(new UUID(0,0),false,callback->false,(before,after)->{});
     private static volatile String managedSitePrefix;
+    private static boolean serializersRegistered;
     private MaidBrainControl(){}
 
     /** Standalone servers reserve a prefix for shared sites even when their binding is offline. */
@@ -57,7 +58,8 @@ public final class MaidBrainControl {
         return new Registration(maid,lease,Set.copyOf(siteIds));
     }
     public static boolean isRoutedSite(String id,UUID maid){SiteHandler hook=sites.get(id);return hook!=null&&hook.maid.equals(maid);}
-    static void registerSites(SerializerRegister register){
+    static synchronized void registerSites(SerializerRegister register){
+        if(serializersRegistered)return;
         SerializableSite<LLMSite> original=SerializerRegister.getLLMSerializer("openai");
         register.register(ServiceType.LLM,"openai",new SerializableSite<LLMSite>(){
             @Override public Codec<LLMSite> codec(){return original.codec().xmap(site->site instanceof LLMOpenAISite openai?new HookedSite(openai):site,site->site instanceof HookedSite hooked?hooked.original:site);}
@@ -68,6 +70,7 @@ public final class MaidBrainControl {
                 else original.writeToNetwork(site,buffer);
             }
         });
+        serializersRegistered=true;
     }
     private static final class HookedSite extends LLMOpenAISite {
         final LLMOpenAISite original;
@@ -79,7 +82,7 @@ public final class MaidBrainControl {
         }
     }
     static void register(ToolRegister register){
-        for(ITool<?> tool:new ArrayList<>(ToolRegister.getAllTools().values()))register.register(wrap(tool));
+        for(ITool<?> tool:new ArrayList<>(ToolRegister.getAllTools().values()))if(!(tool instanceof Guarded<?>))register.register(wrap(tool));
     }
     private static <T> ITool<T> wrap(ITool<T> original){return new Guarded<>(original);}
     private static final class Guarded<T> implements ITool<T> {

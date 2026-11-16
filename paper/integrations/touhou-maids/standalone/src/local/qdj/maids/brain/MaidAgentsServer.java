@@ -31,6 +31,7 @@ final class MaidAgentsServer implements AutoCloseable {
             .followRedirects(HttpClient.Redirect.NEVER).build();
     private volatile boolean closed;
     private MaidCompanions companions;
+    private MaidResidents residents;
 
     MaidAgentsServer(MinecraftServer server, MaidAgentsConfig config) {
         this.server = server;
@@ -61,6 +62,8 @@ final class MaidAgentsServer implements AutoCloseable {
     List<MaidAgent> agents() { return List.copyOf(agents.values()); }
     MaidCompanions companions() { return companions; }
     void companions(MaidCompanions value) { companions = value; }
+    MaidResidents residents() { return residents; }
+    void residents(MaidResidents value) { residents = value; }
     boolean reserved(UUID id) { return companions != null && companions.reserved(id); }
 
     EntityMaid loaded(MaidAgent agent) {

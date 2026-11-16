@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "planningSeconds": 180,
+  "residents": [
+    {
+      "maidId": "10000000-0000-0000-0000-000000000013",
+      "name": "桐人",
+      "profession": "ranger",
+      "nativeTask": "touhou_little_maid:attack",
+      "autonomous": false,
+      "appearance": {
+        "modelId": "qd_hub_kirito.ysm",
+        "texture": "skin",
+        "sha256": "8d9273b591363bbb45e8df7be5b8c3b94849752e976f5118eb7de14ff7a60a9b"
+      },
+      "home": {
+        "dimension": "minecraft:overworld",
+        "door": {"x":148,"y":81,"z":100},
+        "bed": {"x":146,"y":81,"z":100},
+        "facing": "north",
+        "sign": {"x":145,"y":81,"z":103},
+        "signFacing": "south",
+        "work": {"x":148,"y":81,"z":100},
+        "interior": {"min":{"x":145,"y":81,"z":98},"max":{"x":147,"y":83,"z":103}},
+        "furniture": [{"at":{"x":146,"y":81,"z":102},"block":"minecraft:crafting_table"}]
+      },
+      "workArea": {"min":{"x":148,"y":80,"z":96},"max":{"x":157,"y":84,"z":109}},
+      "mineBlocks": ["minecraft:iron_ore"],
+      "buildBlocks": ["minecraft:oak_planks"]
+    }
+  ]
+}

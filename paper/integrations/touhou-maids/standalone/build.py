@@ -44,6 +44,7 @@ def main():
     parser.add_argument('--maid', type=Path, required=True)
     parser.add_argument('--javac', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--hybrid-brain', type=Path, help='Merge with the installed Qiandengji brain JAR; replaces that JAR, never co-install both.')
     parser.add_argument('--bundle', type=Path, help='Also package the JAR, setup examples and optional harness gateway.')
     args = parser.parse_args()
     output = args.output.resolve()
@@ -62,7 +63,25 @@ def main():
                      work / 'compiler.args')
         entries = {file.relative_to(classes).as_posix(): file.read_bytes() for file in classes.rglob('*.class')}
         entries['META-INF/neoforge.mods.toml'] = (ROOT / 'neoforge.mods.toml').read_bytes()
+        entries['tlm-residents.mixins.json'] = (ROOT / 'tlm-residents.mixins.json').read_bytes()
         entries['META-INF/LICENSE.txt'] = LICENSE.read_bytes()
+        if args.hybrid_brain:
+            with zipfile.ZipFile(args.hybrid_brain) as original:
+                metadata = '\n'.join(original.read('META-INF/neoforge.mods.toml').decode('utf-8').splitlines())
+                if 'modId="qiandengji_maid_brain"' not in metadata:
+                    parser.error('--hybrid-brain must be the existing Qiandengji brain adapter')
+                retained = {name: original.read(name) for name in original.namelist() if not name.endswith('/')}
+            new_metadata = '\n'.join(entries['META-INF/neoforge.mods.toml'].decode('utf-8').splitlines())
+            new_metadata = new_metadata.split('[[dependencies.tlm_maid_agents]]\nmodId="qiandengji_maid_brain"')[0]
+            new_metadata = new_metadata.replace('[1.5.3-neoforge+mc1.21.1]', '[1.5.3,1.6)')
+            new_metadata += '\n' + metadata[metadata.index('[[mods]]'):]
+            import tomllib
+            checked = tomllib.loads(new_metadata)
+            assert {row['modId'] for row in checked['mods']} == {'tlm_maid_agents', 'qiandengji_maid_brain'}
+            assert not any(row['modId']=='qiandengji_maid_brain' for row in checked['dependencies']['tlm_maid_agents'])
+            retained.update(entries)
+            entries = retained
+            entries['META-INF/neoforge.mods.toml'] = new_metadata.encode('utf-8')
         write_zip(work / 'addon.jar', entries)
         (work / 'addon.jar').replace(output)
     print(f'{hashlib.sha256(output.read_bytes()).hexdigest()}  {output.name}')
@@ -70,7 +89,7 @@ def main():
         bundle.parent.mkdir(parents=True, exist_ok=True)
         package = {output.name: output.read_bytes(), 'README.md': (ROOT / 'README.md').read_bytes(),
                    'LICENSE': LICENSE.read_bytes(), 'gateway/gateway.py': (ROOT.parent / 'harness/gateway.py').read_bytes()}
-        for name in ('COMPANIONS.md', 'VALIDATION_COMPANIONS.md', 'companion-memory.mjs'):
+        for name in ('COMPANIONS.md', 'VALIDATION_COMPANIONS.md', 'RESIDENTS.md', 'RESIDENTS_VALIDATION.md', 'companion-memory.mjs'):
             package[name] = (ROOT / name).read_bytes()
         for name in ('dsh_gateway.py', 'qwen_code.py', 'requirements.txt'):
             package[f'gateway/{name}'] = (ROOT / name).read_bytes()

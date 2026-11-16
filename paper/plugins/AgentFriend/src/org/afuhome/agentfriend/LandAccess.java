@@ -30,7 +30,7 @@ final class LandAccess implements Listener {
     boolean protectsBoard(org.bukkit.block.Block b) { return boards.protects(b); }
     void auditBoards(org.bukkit.command.CommandSender sender) { boards.audit(sender); }
     void refreshBoards() { try { boards.refresh(); } catch (RuntimeException e) { plugin.getLogger().warning("Land boards deferred: "+e); } }
-    private String name(UUID id) { String n=Bukkit.getOfflinePlayer(id).getName(); return n==null?id.toString():n; }
+    private String name(UUID id) { String npc=NativeResidentIdentities.all().get(id);if(npc!=null)return npc+"（居民）";String n=Bukkit.getOfflinePlayer(id).getName(); return n==null?id.toString():n; }
     private boolean manager(Player p, LandManager.Land land) {
         return land!=null&&(plugin.isLandAdministrator(p)||!plugin.isObserver(p)&&land.owner().equals(p.getUniqueId()));
     }
@@ -58,7 +58,7 @@ final class LandAccess implements Listener {
             UUID id=UUID.fromString(raw);
             if(!id.toString().equalsIgnoreCase(raw)||id.equals(new UUID(0,0)))return null;
             OfflinePlayer p=Bukkit.getOfflinePlayer(id);
-            return !adding&&land.members().contains(id)||p.isOnline()||p.hasPlayedBefore()?p:null;
+            return !adding&&land.members().contains(id)||p.isOnline()||p.hasPlayedBefore()||NativeResidentIdentities.all().containsKey(id)?p:null;
         } catch(IllegalArgumentException ignored) { }
         if(raw.length()>32||raw.chars().anyMatch(c->c<=32||c==167))return null;
         Player online=Bukkit.getPlayerExact(raw);if(online!=null)return online;
@@ -148,7 +148,9 @@ final class LandAccess implements Listener {
     private void open(Player p,String id,String mode,int requested,UUID target) {
         LandManager.Land land=lands.definition(id);if(land==null)return;
         boolean own=manager(p,land);if(!mode.equals("members")&&!own){result(p,mode,id,null,"not_land_owner");return;}
-        List<UUID> targets=mode.equals("trust")?Bukkit.getOnlinePlayers().stream().filter(x->!plugin.isObserver(x)&&!x.getUniqueId().equals(land.owner())&&!land.members().contains(x.getUniqueId())).map(Player::getUniqueId).sorted(Comparator.comparing(this::name)).toList():sorted(land);
+        List<UUID> targets=mode.equals("trust")?java.util.stream.Stream.concat(
+            Bukkit.getOnlinePlayers().stream().filter(x->!plugin.isObserver(x)).map(Player::getUniqueId),
+            NativeResidentIdentities.all().keySet().stream()).distinct().filter(x->!x.equals(land.owner())&&!land.members().contains(x)).sorted(Comparator.comparing(this::name)).toList():sorted(land);
         int pages=Math.max(1,(targets.size()+8)/9),page=Math.max(1,Math.min(pages,requested));Inventory inv=Bukkit.createInventory(null,27,"领地公告 · "+(mode.startsWith("confirm")?"确认操作":"第 "+page+" 页"));
         inv.setItem(4,icon(Material.OAK_SIGN,"§6"+land.title(),"§7主人："+name(land.owner()),"§7协作者："+land.members().size()+" 人", "§7范围含边界："+land.min()+" 至 "+land.max()));
         if(mode.startsWith("confirm")) {
@@ -157,7 +159,7 @@ final class LandAccess implements Listener {
         } else {
             targets=targets.subList((page-1)*9,Math.min(page*9,targets.size()));
             for(int i=0;i<targets.size();i++)inv.setItem(9+i,icon(Material.PAPER,"§f"+name(targets.get(i)),"§7"+targets.get(i),mode.equals("trust")?"§a点击查看授权范围并确认":own?"§e点击确认撤权":"§7协作者；主人或超管可修改"));
-            if(targets.isEmpty())inv.setItem(13,icon(Material.PAPER,mode.equals("trust")?"暂无可授权的在线玩家":"暂无协作者","§7离线授权可用已登录过的完整账号名/UUID"));
+            if(targets.isEmpty())inv.setItem(13,icon(Material.PAPER,mode.equals("trust")?"暂无可授权的玩家或居民":"暂无协作者","§7也可用已登记居民UUID或已登录账号授权"));
             if(page>1)inv.setItem(18,icon(Material.ARROW,"上一页"));if(page<pages)inv.setItem(25,icon(Material.ARROW,"下一页"));
             if(own)inv.setItem(20,icon(Material.LIME_DYE,"§a授权玩家","§7选择在线旅人；下一页确认范围"));
             if(mode.equals("trust"))inv.setItem(22,icon(Material.ARROW,"返回协作者名单"));

@@ -586,6 +586,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     GuildSharedStorage guildShared() { return guildShared; }
     GuildStorageOwnership guildStorage() { return guildStorage; }
     ProtectionAdvisor protectionAdvisor() { return protectionAdvisor; }
+    /** Read-only native NPC bridge: identical land/structure rules, no OP or owner impersonation. */
+    public String residentProtection(org.bukkit.entity.Player principal, String action, int x, int y, int z) {
+        if (!org.bukkit.Bukkit.isPrimaryThread() || principal == null || principal.isOp()
+                || !java.util.Set.of("break", "place", "container", "use").contains(action))
+            throw new IllegalArgumentException("Invalid resident protection query");
+        return protectionAdvisor.observe(principal, action, x, y, z).toString();
+    }
     boolean bypassBlockProtection(Player player, Location at) {
         return blockAccess != null && blockAccess.allows(player, at);
     }
