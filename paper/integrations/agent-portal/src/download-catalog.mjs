@@ -52,11 +52,17 @@ const legacyNekoBase = Object.freeze({id:'neko-base', filename:'qiandengji-neko-
 const legacyNeko109 = Object.freeze({"id":"neko-base","filename":"NEKO-MC-0.6.109-Windows.zip","sha256":"624ef18e011ef6681cfa1c2e963745e815582130a77b812e0fc525e2fcd4e5d4","bytes":1107341175});
 const legacyFclNative = Object.freeze({id:'android-native-client-pack', filename:'qiandengji-android-1.21.1-neoforge-1.0.0-preview.3.mrpack',
   bytes:55283, sha256:'76e8f1f05fa11b28100711be2c23d4bd28b0794a6d6ea48006a7bfaee9c9e1ba'});
+const previousFclNative = Object.freeze({id:'android-native-client-pack', filename:'qiandengji-android-1.21.1-neoforge-1.0.0-preview.4.mrpack',
+  bytes:88314, sha256:'ccf0f717a2385c9731222fd78553c8a0ea758117ba288f224e2ebf021dc6599c'});
+const previousFclTouch = Object.freeze({id:'android-client-pack', filename:'qiandengji-android-1.21.1-neoforge-1.0.0-preview.1.mrpack',
+  bytes:52587, sha256:'0da4f0207be0a9ebdb5935da64493e0c14df5798697474087eab102412b70220'});
 const legacyDesktopPack = Object.freeze({id:'desktop-client-pack', filename:'qiandengji-java-1.21.1-neoforge-1.1.0.mrpack',
   bytes:8825, sha256:'1ba659e68a2f980fd9a2ac5151405af2ffc78b449d1ed0639e8cacc5eabd70d3'});
 export const packageAt = pathname => packageReleases.find(row => pathname === '/downloads/' + row.filename || aliases[pathname]===row.id)
   || (pathname === '/downloads/' + legacyDesktopPack.filename ? legacyDesktopPack : undefined)
   || (pathname === '/downloads/' + legacyFclNative.filename ? legacyFclNative : undefined)
+  || (pathname === '/downloads/' + previousFclNative.filename ? previousFclNative : undefined)
+  || (pathname === '/downloads/' + previousFclTouch.filename ? previousFclTouch : undefined)
   || (pathname === '/downloads/' + legacyNekoBase.filename ? legacyNekoBase : undefined)
   || (pathname === '/downloads/' + legacyNeko109.filename ? legacyNeko109 : undefined)
   || (pathname === '/downloads/jcs130-dsh-minecraft-agent-0.3.0-rc.12.tgz' ? {id:'dsh-adapter',filename:'jcs130-dsh-minecraft-agent-0.3.0-rc.12.tgz',bytes:77648,sha256:'2beb51ba045226cd6802620063964b03fcaecfb405ff781a998803a4ab497184'} : undefined)

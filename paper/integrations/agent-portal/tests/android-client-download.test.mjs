@@ -24,7 +24,10 @@ test('Android download keeps the existing explicit activation and fixed-byte red
     assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
     assert.equal((await response.arrayBuffer()).byteLength, 0);
   }
-  assert.equal(regular.sha256, '0da4f0207be0a9ebdb5935da64493e0c14df5798697474087eab102412b70220');
+  assert.equal(regular.version, '1.0.0-preview.5-touch');
+  const previous = await fetch(available.origin + '/downloads/qiandengji-android-1.21.1-neoforge-1.0.0-preview.1.mrpack', { redirect: 'manual' });
+  assert.equal(previous.status, 307);
+  assert.equal(previous.headers.get('x-checksum-sha256'), '0da4f0207be0a9ebdb5935da64493e0c14df5798697474087eab102412b70220');
   assert.equal(packageAt('/downloads/' + regular.filename), regular);
   assert.equal((await available.client().request('/session')).data.owner, null);
 });
@@ -41,7 +44,10 @@ test('native gamepad preview has an independent activation, direct link and down
       assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
     }
   }
-  assert.equal(native.version, '1.0.0-preview.4');
+  assert.equal(native.version, '1.0.0-preview.5');
+  const previous = await fetch(f.origin + '/downloads/qiandengji-android-1.21.1-neoforge-1.0.0-preview.4.mrpack', { redirect: 'manual' });
+  assert.equal(previous.status, 307);
+  assert.equal(previous.headers.get('x-checksum-sha256'), 'ccf0f717a2385c9731222fd78553c8a0ea758117ba288f224e2ebf021dc6599c');
   const legacy = await fetch(f.origin + oldNative, { redirect: 'manual' });
   assert.equal(legacy.status, 307);
   assert.equal(legacy.headers.get('x-checksum-sha256'), '76e8f1f05fa11b28100711be2c23d4bd28b0794a6d6ea48006a7bfaee9c9e1ba');
@@ -88,6 +94,7 @@ test('phone download and setup pages link to the latest native pack', async t =>
   assert.match(text, /href="\/downloads\/android-native-client"/);
   assert.match(text, /SDL 直通/);
   assert.match(text, /连续模拟移动/);
+  assert.match(text, /潜行.*打开圆形施法轮盘/);
   assert.match(text, /Xbox <strong>B<\/strong>/);
   assert.match(text, /音量触发.*解除麦克风静音/);
   assert.doesNotMatch(text, /检查映射|手机已实测/);

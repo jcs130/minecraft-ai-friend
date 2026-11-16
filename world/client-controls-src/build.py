@@ -15,7 +15,7 @@ import zipfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-MOD_VERSION = "0.1.1"
+MOD_VERSION = "0.1.2"
 
 
 def classpath(minecraft: Path, profile: str, neoforge: str, cache: Path) -> list[Path]:
