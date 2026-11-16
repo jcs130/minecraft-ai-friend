@@ -70,6 +70,8 @@ def main():
         bundle.parent.mkdir(parents=True, exist_ok=True)
         package = {output.name: output.read_bytes(), 'README.md': (ROOT / 'README.md').read_bytes(),
                    'LICENSE': LICENSE.read_bytes(), 'gateway/gateway.py': (ROOT.parent / 'harness/gateway.py').read_bytes()}
+        for name in ('COMPANIONS.md', 'VALIDATION_COMPANIONS.md', 'companion-memory.mjs'):
+            package[name] = (ROOT / name).read_bytes()
         for name in ('dsh_gateway.py', 'qwen_code.py', 'requirements.txt'):
             package[f'gateway/{name}'] = (ROOT / name).read_bytes()
         for row in sorted((ROOT / 'examples').glob('*.json')):

@@ -1,3 +1,7 @@
+## 2026-11-16 独立女仆居民伙伴 0.2.0，隔离验收完成，未部署
+
+`paper/integrations/touhou-maids/standalone` 增加对话招募、多同伴、NPC 互聊、按角色选择 harness，以及原始本地经历与 MC 核心 PowerContext 记忆同步。42 项 Java、31 项网关、3 项记忆回归和 34 项原生联机检查通过；同体 Qwen Code→原生调用切换、断线与冷重启保留经历。已有本机 PowerContext 1.4.1 已用三个隔离 NPC Scope 验证，不写入正式人物 Scope。此扩展与正式 `qiandengji_maid_brain` 互斥，不能直接叠装；正式服务器及现有角色未改。NPC 领队的实际多人行走、真基岩菜单/语音和跨维度随行另验。见[玩法与配置](paper/integrations/touhou-maids/standalone/COMPANIONS.md)及[验收边界](paper/integrations/touhou-maids/standalone/VALIDATION_COMPANIONS.md)。
+
 ## 2026-11-15 玩家易用性与伙伴救援候选，未部署
 
 76项联合游戏检查、12项伙伴恢复／重启及14组规则检查通过；公开打包复现三份相同SHA。候选AF.80／女仆.37／RPG.30包含试炼场传送、十页个人箱／汇总、共享箱、任务交付、通用技能和原身份救援／自动恢复。现役仍.78／.36／.22；正式魂符领取、共享箱安装与真人UI另验。仅F盘备份，不回灌世界、角色、物品、认证和生命／动作账本。详见[联合说明](paper/docs/RPG_USABILITY_20261115.md)及[候选清单](paper/manifests/rpg-usability-candidate-20261115.json)。

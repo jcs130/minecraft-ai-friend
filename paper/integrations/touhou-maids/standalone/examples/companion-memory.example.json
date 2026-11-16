@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "coreRoot": "/opt/agent-mc-world",
+  "source": false,
+  "journalRoot": "/srv/minecraft/world/data/tlm-companion-memory",
+  "dataDir": "/srv/npc-memory",
+  "realm": "my-agent-world",
+  "npcs": [
+    {
+      "maidId": "10000000-0000-0000-0000-000000000011",
+      "memory": {
+        "mode": "remote",
+        "provider": "powercontext",
+        "endpoint": "http://127.0.0.1:8100",
+        "apiKeyEnv": "MAID_POWERCONTEXT_KEY",
+        "scopeId": "REPLACE_WITH_THIS_NPCS_OWN_EXISTING_SCOPE",
+        "timeoutMs": 5000,
+        "searchMode": "text",
+        "readPreference": "balanced"
+      }
+    },
+    {
+      "maidId": "10000000-0000-0000-0000-000000000012",
+      "memory": { "mode": "local" }
+    },
+    {
+      "maidId": "10000000-0000-0000-0000-000000000013",
+      "memory": { "mode": "local" }
+    }
+  ]
+}

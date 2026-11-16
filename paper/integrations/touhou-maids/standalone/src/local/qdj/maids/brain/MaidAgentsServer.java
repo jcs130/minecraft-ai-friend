@@ -30,6 +30,7 @@ final class MaidAgentsServer implements AutoCloseable {
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5))
             .followRedirects(HttpClient.Redirect.NEVER).build();
     private volatile boolean closed;
+    private MaidCompanions companions;
 
     MaidAgentsServer(MinecraftServer server, MaidAgentsConfig config) {
         this.server = server;
@@ -38,7 +39,8 @@ final class MaidAgentsServer implements AutoCloseable {
                 var agent = new MaidAgent(binding);
                 for (var choice : binding.choices().values()) {
                     if (!(AvailableSites.getLLMSite(choice.site()) instanceof LLMOpenAISite site)
-                            || !site.enabled()) throw new IllegalArgumentException("Missing enabled OpenAI-compatible site");
+                            || !site.enabled() || !choice.site().equals(site.id()))
+                        throw new IllegalArgumentException("Missing enabled OpenAI-compatible site with the matching ID");
                 }
                 agents.put(binding.maidId(), agent);
             }
@@ -57,6 +59,9 @@ final class MaidAgentsServer implements AutoCloseable {
     int size() { return agents.size(); }
     MaidAgent agent(UUID id) { return agents.get(id); }
     List<MaidAgent> agents() { return List.copyOf(agents.values()); }
+    MaidCompanions companions() { return companions; }
+    void companions(MaidCompanions value) { companions = value; }
+    boolean reserved(UUID id) { return companions != null && companions.reserved(id); }
 
     EntityMaid loaded(MaidAgent agent) {
         for (var level : server.getAllLevels()) {
@@ -67,12 +72,17 @@ final class MaidAgentsServer implements AutoCloseable {
 
     private boolean current(LLMCallback callback) {
         Turn turn = turns.get(callback);
-        return !closed && !(callback instanceof MaidVisitorDialogue) && selectionIsCurrent(callback, turn);
+        return !closed && !publicConversation(callback) && selectionIsCurrent(callback, turn);
     }
 
-    private static boolean selectionIsCurrent(LLMCallback callback, Turn turn) {
+    private boolean selectionIsCurrent(LLMCallback callback, Turn turn) {
         return turn != null && turn.agent.matches(callback.getMaid())
+                && (publicConversation(callback) || !reserved(turn.agent.binding().maidId()))
                 && turn.revision == turn.agent.revision() && selected(callback.getMaid(), turn.site, turn.model);
+    }
+
+    private static boolean publicConversation(LLMCallback callback) {
+        return callback instanceof MaidVisitorDialogue || callback instanceof CompanionConversation;
     }
 
     void visit(MaidAgent agent, EntityMaid maid, ServerPlayer player, String text) {
@@ -122,7 +132,7 @@ final class MaidAgentsServer implements AutoCloseable {
                 return;
             }
             buildingRequest = maid;
-            includePhysicalState = !(callback instanceof MaidVisitorDialogue);
+            includePhysicalState = !publicConversation(callback);
             try {
                 super.chat(callback);
             } finally {

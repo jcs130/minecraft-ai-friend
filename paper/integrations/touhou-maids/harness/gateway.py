@@ -96,6 +96,16 @@ def decode_plan(text, usage):
     return value
 
 
+def decode_content(text, usage):
+    """A tool-free native dialogue has one literal content string, not a second JSON envelope."""
+    if not isinstance(text, str) or not text.strip() or len(text) > 16000:
+        raise ValueError('native_dialogue_content_invalid')
+    return {'content': text, 'tool_calls': [], 'model_status': {'usage': {
+        target: usage[source] for source, target in (
+            ('input_tokens', 'prompt_tokens'), ('output_tokens', 'completion_tokens'), ('total_tokens', 'total_tokens')
+        ) if source in usage}}}
+
+
 def native_continuation(messages):
     """Attribute original execution receipts; never manufacture a tool result."""
     start = max((i for i, row in enumerate(messages) if row['role'] == 'user'), default=-1)

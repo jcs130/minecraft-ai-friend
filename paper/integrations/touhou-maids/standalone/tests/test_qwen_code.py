@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 BASE = Path(__file__).resolve().parent.parent
 sys.path[:0] = [str(BASE), str(BASE.parent / 'harness')]
 
-from dsh_gateway import bindings
+from dsh_gateway import bindings, DshPlanner
 from gateway import Refused
 from qwen_code import QwenCodePlanner, project_turn, read_result
 
@@ -23,6 +23,26 @@ def stream(text, *, turns=1, usage=True):
 
 
 class QwenCodeProtocolTest(unittest.TestCase):
+    def test_native_structured_dialogue_is_preserved_inside_content(self):
+        content = json.dumps({'reply':'一起去找种子吧。','action':'join','targetNpc':None}, ensure_ascii=False)
+        value = read_result(stream(json.dumps({'content':content,'tool_calls':[]})))
+        self.assertEqual(value['content'], content)
+        self.assertEqual(value['tool_calls'], [])
+        with self.assertRaisesRegex(ValueError, 'harness_plan_shape_invalid'):
+            read_result(stream(content))  # An invalid envelope is never guessed into a game action.
+
+    def test_tool_free_mode_transports_literal_native_content_without_guessing(self):
+        content = '{"reply":"一起去找种子吧。","action":"join","targetNpc":null}'
+        value = read_result(stream(content), native_content=True)
+        self.assertEqual(value['content'], content)
+        self.assertEqual(value['tool_calls'], [])
+        # The Java dialogue validator decides what native content means. No arbitrary tool can run here.
+        self.assertEqual(read_result(stream('{"tool_calls":[{}]}'),native_content=True)['tool_calls'],[])
+        frame={'type':'message','role':'assistant','content':[{'type':'output_text','text':content}]}
+        self.assertEqual(DshPlanner.decode({'output':[frame]},native_content=True)['content'],content)
+        with self.assertRaisesRegex(ValueError,'one_native_dialogue_reply_required'):
+            DshPlanner.decode({'output':[frame,frame]},native_content=True)
+
     def test_preview_zero_result_counters_use_the_assistant_usage(self):
         value = read_result(stream('{"content":"好。","tool_calls":[]}'))
         self.assertEqual(value['model_status']['usage'],
