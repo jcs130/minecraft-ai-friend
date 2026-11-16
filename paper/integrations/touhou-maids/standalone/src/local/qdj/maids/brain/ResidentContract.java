@@ -9,10 +9,10 @@ final class ResidentContract {
     static final Map<String,Set<String>> FIELDS=Map.of(
         "rest",Set.of(),"home",Set.of(),"walk",Set.of("at"),"task",Set.of("task"),
         "equip",Set.of("equipmentSlot","slot","expectedItem"),"break",Set.of("at","expectedBlock"),
-        "place",Set.of("at","face","slot","expectedItem"),"cast",Set.of("skill"),"say",Set.of("text","channel"));
+        "place",Set.of("at","face","slot","expectedItem"),"cast",Set.of("skill"),"say",Set.of("text","channel"),"cli",Set.of("command"));
     static Map<String,Object> describe(){return Map.of("actions",FIELDS,"coordinateSystem","absolute_block_xyz",
         "coordinates","all of x,y,z required; integers; same dimension as this resident",
-        "moveLimitBlocks",96,"reachBlocks",5,"deadlineMs",90_000,"maximumInputCharacters",4096,
+        "moveLimitBlocks",96,"reachBlocks",5,"deadlineMs",Map.of("default",90_000,"cli",240_000),"maximumInputCharacters",4096,
         "requestId","UUID; query receipt after an uncertain result; never automatically replay",
         "result","accepted is queued; completed verifies this one action, not a wider quest; unknown requires reconciliation");}
     static String string(JsonObject o,String key){
@@ -42,6 +42,7 @@ final class ResidentContract {
         if(o.has("skill")&&!string(o,"skill").matches("[a-z0-9_.:-]{1,64}"))throw new IllegalArgumentException("skill: lowercase ID required");
         if(o.has("text")&&string(o,"text").codePointCount(0,string(o,"text").length())>140)throw new IllegalArgumentException("text: at most 140 characters");
         if(o.has("channel")&&!Set.of("nearby","public").contains(string(o,"channel")))throw new IllegalArgumentException("channel: nearby/public required; private dialogue uses whisper");
+        if(action.equals("cli")&&string(o,"command").length()>3500)throw new IllegalArgumentException("command: at most 3500 characters");
         return action;
     }
 }

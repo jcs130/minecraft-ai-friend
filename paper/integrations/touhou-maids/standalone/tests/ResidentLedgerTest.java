@@ -55,6 +55,9 @@ public final class ResidentLedgerTest {
         var bilingual=CompanionDecision.parse("{\"reply\":\"一起走吧。\",\"spokenReply\":\"一緒に行こう。\",\"action\":\"talk\"}",false);
         check(bilingual.reply().equals("一起走吧。")&&bilingual.spokenReply().equals("一緒に行こう。"));
         check(CompanionDecision.parse("{\"reply\":\"好。\",\"action\":\"talk\"}",false).spokenReply()==null);
+        check(CompanionDecision.parse("{\"reply\":\"我来写一本旅行书。\",\"action\":\"cli\",\"command\":\"archive create 旅记|今天看到了湖泊。\"}",false).command().startsWith("archive create"));
+        reject("invalid_npc_decision",()->CompanionDecision.parse("{\"reply\":\"好。\",\"action\":\"cli\"}",false));
+        reject("invalid_npc_decision",()->CompanionDecision.parse("{\"reply\":\"好。\",\"action\":\"talk\",\"command\":\"photo take test\"}",false));
         reject("invalid_npc_decision",()->CompanionDecision.parse("{\"reply\":\"好。\",\"spokenReply\":5,\"action\":\"talk\"}",false));
         System.out.println("Resident contract, durability, privacy and bilingual checks passed: "+checks);
     }

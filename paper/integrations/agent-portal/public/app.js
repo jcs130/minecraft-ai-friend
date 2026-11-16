@@ -115,7 +115,7 @@ function setView(view) { location.hash = titles[view] ? view : 'home'; }
 function siteHeader() {
   const link = (view, label = titles[view]) => `<a href="#${view}" ${state.view === view ? 'aria-current="page"' : ''}>${e(label)}</a>`;
   const currentOwner = owner();
-  const account = currentOwner ? `<details class="site-nav-group site-account-menu"><summary>${icons.users}<span>${e(currentOwner.username)}</span>${icons.down}</summary><div class="site-nav-popover">${link('account', '我的账号')}${link('agents', '角色管理')}${link('inventory', '背包与进度')}${link('connections', '接入与授权')}</div></details>` : button(state.session?.canSetup ? 'setup' : 'login', '登录 / 注册', 'users', 'home-login');
+  const account = currentOwner ? `<details class="site-nav-group site-account-menu"><summary>${icons.users}<span>${e(currentOwner.username)}</span>${icons.down}</summary><div class="site-nav-popover">${link('account', '我的账号')}${link('agents', '角色管理')}${link('inventory', '背包与进度')}${link('connections', '接入与授权')}${isAdmin()?'<a href="/npc-admin.html">智能居民管理</a>':''}</div></details>` : button(state.session?.canSetup ? 'setup' : 'login', '登录 / 注册', 'users', 'home-login');
   return window.QdSite.header({ view: state.view, account, local: true });
 }
 function render() {

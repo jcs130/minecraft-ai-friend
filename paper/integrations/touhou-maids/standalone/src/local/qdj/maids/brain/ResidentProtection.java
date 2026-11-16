@@ -15,7 +15,8 @@ public final class ResidentProtection {
         if(!MaidAgentsMod.managed(maid)&&!maid.getPersistentData().getBoolean("tlm_resident_home_installed"))return true;
         return "allow_likely".equals(query(maid,action,pos).get("status"));
     }
-    static Map<String,Object> query(EntityMaid maid,String action,BlockPos pos) {
+    static Map<String,Object> query(EntityMaid maid,String action,BlockPos pos) {return query(maid,(ServerLevel)maid.level(),action,pos);}
+    static Map<String,Object> query(EntityMaid maid,ServerLevel level,String action,BlockPos pos) {
         if(!java.util.Set.of("break","place","container","use").contains(action))throw new IllegalArgumentException("invalid_protection_action");
         Class<?> bukkit;
         try {bukkit=Class.forName("org.bukkit.Bukkit");}
@@ -25,8 +26,8 @@ public final class ResidentProtection {
             var managerType=Class.forName("org.bukkit.plugin.PluginManager");
             Object plugin=managerType.getMethod("getPlugin",String.class).invoke(manager,"AgentFriend");
             if(plugin==null)return Map.of("status","unknown","reason","hybrid_protection_adapter_missing");
-            var actor=FakePlayerFactory.get((ServerLevel)maid.level(),new GameProfile(maid.getUUID(),"npc_"+maid.getStringUUID().substring(0,8)));
-            actor.setPos(maid.position());actor.gameMode.changeGameModeForPlayer(GameType.SURVIVAL);
+            var actor=FakePlayerFactory.get(level,new GameProfile(maid.getUUID(),"npc_"+maid.getStringUUID().substring(0,8)));
+            actor.setPos(net.minecraft.world.phys.Vec3.atBottomCenterOf(pos));actor.gameMode.changeGameModeForPlayer(GameType.SURVIVAL);
             Object player=actor.getClass().getMethod("getBukkitEntity").invoke(actor);
             var method=plugin.getClass().getMethod("residentProtection",Class.forName("org.bukkit.entity.Player"),String.class,int.class,int.class,int.class);
             String response=(String)method.invoke(plugin,player,action,pos.getX(),pos.getY(),pos.getZ());

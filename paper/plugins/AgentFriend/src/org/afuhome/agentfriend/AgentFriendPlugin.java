@@ -730,7 +730,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return id != null && (id.equals("prospect") || id.startsWith("prospect "));
     }
 
+    void residentPhoto(Player p,String[] args){photoCamera.command(p,args);}
     boolean hasMana(Player p, double amount) {
+        if(ResidentCli.isResident(p.getUniqueId()))return ResidentCli.mana(p,amount,false);
         if(nativeRpg.selected())return nativeRpg.hasMana(p,amount);
         SkillsUser user = skillsUser(p);
         if (user == null) { p.sendMessage(ChatColor.RED + "魔力数据还没加载；等几秒后 /mycli status 确认已加载再施法，持续异常请联系服主。"); return false; }
@@ -743,6 +745,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     boolean spendMana(Player p, double amount) {
+        if(ResidentCli.isResident(p.getUniqueId()))return ResidentCli.mana(p,amount,true);
         if(nativeRpg.selected())return nativeRpg.spend(p,amount);
         if (!hasMana(p, amount)) return false;
         SkillsUser user = skillsUser(p);

@@ -18,6 +18,13 @@ final class MaidAgent {
     };
     private final MaidAgentsConfig.Binding binding;
     private long revision;
+    private String personaOverride;
+    private MaidAgentsConfig.Voice voiceOverride;
+    private boolean voiceConfigured;
+    String persona(String fallback){return personaOverride==null?fallback:personaOverride;}
+    void configurePersona(String value){personaOverride=value;}
+    MaidAgentsConfig.Voice voiceConfig(){return voiceConfigured?voiceOverride:binding.voice();}
+    void configureVoice(MaidAgentsConfig.Voice value){voiceOverride=value;voiceConfigured=true;}
     private long lastPublicChatNanos;
     private MaidVisitorDialogue visitor;
 
@@ -56,7 +63,7 @@ final class MaidAgent {
     }
 
     void voice(EntityMaid maid) {
-        var voice = binding.voice();
+        var voice = voiceConfig();
         if (voice == null || AvailableSites.getTTSSite(voice.site()) == null
                 || !AvailableSites.getTTSSite(voice.site()).enabled()) {
             throw new IllegalArgumentException("Configure an enabled native TTS site for this maid");
@@ -69,7 +76,7 @@ final class MaidAgent {
     }
 
     void visit(EntityMaid maid, ServerPlayer player, String text) {
-        String persona = binding.visitorPersona();
+        String persona = persona(binding.visitorPersona());
         if (persona == null) throw new IllegalArgumentException("This maid does not receive visitors.");
         if (text.isBlank() || text.codePointCount(0, text.length()) > 140 ||
                 text.codePoints().anyMatch(Character::isISOControl)) {

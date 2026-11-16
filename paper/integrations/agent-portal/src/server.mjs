@@ -1,5 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
+import { NpcAdmin } from './npc-admin.mjs';
 import path from 'node:path';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { Store, digest, newSecret, hashPassword, verifyPassword } from './store.mjs';
@@ -116,6 +117,7 @@ export function createPortal(config, options = {}) {
   const nekoAuth = new NekoAuth(config,store,{fetcher:options.nekoFetch});
   const nekoLinks = new NekoPluginLinks(config,store,accounts,nekoAuth);
   const appearance = new Appearance(config, store, game);
+  const npcAdmin = new NpcAdmin(store);
   const memories = new Memories(store);
   const loginThrottle = new LoginThrottle(store, options.now);
   async function checkPassword(req, owner, password, suppliedName = '') {
@@ -303,6 +305,7 @@ export function createPortal(config, options = {}) {
       let trustedSync = false;
       if (!req.headers.origin && !req.headers.cookie) {
         const authority = req.method === 'POST' && pathname === '/api/v1/internal/accounts/poll' ? accountCloud
+          : req.method === 'POST' && pathname === '/api/v1/internal/npcs/poll' ? cloud
           : req.method === 'POST' && pathname === '/api/v1/internal/appearance/poll' ? appearance
           : req.method === 'PUT' && (['/api/v1/internal/snapshot', '/api/v1/internal/challenges', '/api/v1/internal/archives'].includes(pathname)
             || /^\/api\/v1\/internal\/photos\/[a-f0-9-]{36}$/.test(pathname)) ? cloud : null;
@@ -310,6 +313,12 @@ export function createPortal(config, options = {}) {
       }
       if (pathname.startsWith('/api/') && !trustedSync) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
       if (req.method === 'GET' && pathname === '/api/v1/downloads') return respond(res, 200, { skill: agentSkill, packages: publicDownloads(config) });
+      if(req.method==='POST' && pathname==='/api/v1/internal/npcs/poll') {
+        if(!cloud)throw fail(404,'NOT_FOUND','未开放此接口');
+        if(req.headers.origin||req.headers.cookie)throw fail(403,'NPC_WORKER_REQUIRED','仅供家庭端同步');
+        cloud.authorize(req);rate('npc-worker',24,60000);
+        return respond(res,200,npcAdmin.poll(await jsonBody(req,131072)));
+      }
       if (req.method === 'POST' && pathname === '/api/v1/internal/appearance/poll') {
         if (req.headers.origin || req.headers.cookie) throw fail(403, 'APPEARANCE_WORKER_REQUIRED', '请从家庭端外观同步器调用');
         appearance.authorize(req); rate('appearance-worker', 24, 60000);
@@ -870,6 +879,14 @@ export function createPortal(config, options = {}) {
         const { owner } = browserAuth(req);
         store.db.prepare('UPDATE credentials SET revoked_at=? WHERE id=? AND owner_id=?').run(Date.now(), revokeCredential[1], owner.id);
         store.audit(owner.id, 'credential.revoke', revokeCredential[1]); return respond(res, 200, { ok: true });
+      }
+      if(req.method==='GET' && pathname==='/api/v1/admin/npcs') {
+        browserAuth(req,true);return respond(res,200,npcAdmin.state());
+      }
+      const npcProfileRoute=/^\/api\/v1\/admin\/npcs\/([a-f0-9-]{36})$/.exec(pathname);
+      if(req.method==='PUT' && npcProfileRoute) {
+        const {owner}=browserAuth(req,true,true);
+        return respond(res,202,npcAdmin.enqueue(owner,npcProfileRoute[1],await jsonBody(req,8192)));
       }
       if (req.method === 'GET' && pathname === '/api/v1/admin/owners') {
         browserAuth(req, true);

@@ -109,15 +109,28 @@ def rcon(port, password, command):
     def send(connection, request, kind, value):
         payload = struct.pack('<ii', request, kind) + value.encode() + b'\0\0'
         connection.sendall(struct.pack('<i', len(payload)) + payload)
+    def receive(connection):
         length = struct.unpack('<i', read_bytes(connection, 4))[0]
+        if not 10 <= length <= 1048576:raise AssertionError('RCON invalid frame')
         response = read_bytes(connection, length)
-        if struct.unpack_from('<i', response)[0] != request:
-            raise AssertionError('RCON response ID mismatch')
-        return response[8:-2].decode()
+        return struct.unpack_from('<ii', response),response[8:-2]
 
     with socket.create_connection(('127.0.0.1', port), timeout=5) as connection:
         send(connection, 1, 3, password)
-        return send(connection, 2, 2, command)
+        header,_=receive(connection)
+        if header!=(1,2):raise AssertionError('RCON authentication failed')
+        send(connection,2,2,command)
+        header,first=receive(connection)
+        if header!=(2,0):raise AssertionError('RCON response ID mismatch')
+        # Wait for the first response before the marker: this native implementation
+        # does not accept coalesced requests. A read-only marker is never a replay.
+        send(connection,3,2,'list')
+        parts=[first]
+        while True:
+            (request,kind),body=receive(connection)
+            if request==3:return b''.join(parts).decode('utf-8')
+            if (request,kind)!=(2,0):raise AssertionError('RCON response ID mismatch')
+            parts.append(body)
 
 
 def until(predicate, timeout):

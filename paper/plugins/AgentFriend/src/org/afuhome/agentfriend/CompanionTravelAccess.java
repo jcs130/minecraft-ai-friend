@@ -14,6 +14,13 @@ public final class CompanionTravelAccess {
         return plugin.trialRescue().companionTarget(partner,companion);
     }
 
+    /** NPC accepted the authenticated participant's invitation. Active rooms are allowed. */
+    public static boolean mayInviteResident(Player partner, Location landing) {
+        return Bukkit.isPrimaryThread() && partner.isOnline() && !partner.isDead() && landing.getWorld()!=null
+            && Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin
+            && plugin.isEnabled() && plugin.nativeRpgMayAct(partner);
+    }
+
     public static boolean mayRejoin(Player partner, Location landing) {
         return Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin
             && plugin.isEnabled() && plugin.nativeRpgMayAct(partner) && !plugin.namedTravelBlocked(partner)

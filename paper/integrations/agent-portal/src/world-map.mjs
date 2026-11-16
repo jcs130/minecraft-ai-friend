@@ -56,6 +56,16 @@ export function validateMapState(value, now = Date.now()) {
     seen.add(row.name.toLowerCase());
     return Object.fromEntries(['name', 'uuid', 'dimension', 'x', 'y', 'z', 'yaw', 'pitch'].map(key => [key, row[key]]));
   });
+  const npcRows=value.npcs??[];
+  if(!Array.isArray(npcRows)||npcRows.length>64)throw fail(400,'MAP_NPC_FORMAT');
+  const npcIds=new Set(players.map(r=>r.uuid.toLowerCase()));
+  const npcs=npcRows.map(r=>{
+    if(r?.kind!=='npc'||typeof r.name!=='string'||!r.name.trim()||[...r.name].length>24||/[\x00-\x1f\x7f]/.test(r.name)
+       ||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(r.uuid)||npcIds.has(r.uuid)
+       ||!['guardian','ranger','mage','healer','artisan','farmer'].includes(r.profession)||!Object.values(dimensions).includes(r.dimension)
+       ||!['x','y','z','yaw','pitch'].every(k=>Number.isFinite(r[k]))||Math.abs(r.x)>30000000||Math.abs(r.z)>30000000||Math.abs(r.y)>100000)throw fail(400,'MAP_NPC_FORMAT');
+    npcIds.add(r.uuid);return Object.fromEntries(['uuid','name','kind','profession','dimension','x','y','z','yaw','pitch'].map(k=>[k,r[k]]));
+  });
   const ids = new Set();
   const maps = value.maps.map(row => {
     if (!mapIds.has(row?.id) || ids.has(row.id) || row.dimension !== dimensions[row.id]
@@ -65,7 +75,7 @@ export function validateMapState(value, now = Date.now()) {
     ids.add(row.id);
     return { id: row.id, label: row.label, dimension: row.dimension, bounds: Object.fromEntries(['minX', 'maxX', 'minZ', 'maxZ'].map(key => [key, row.bounds[key]])) };
   });
-  return { schemaVersion: 1, sequence: value.sequence, observedAt: new Date(at).toISOString(), source: 'minecraft.rcon-readonly', players, maps };
+  return { schemaVersion: 1, sequence: value.sequence, observedAt: new Date(at).toISOString(), source: 'minecraft.rcon-readonly', players, npcs, maps };
 }
 
 async function readBody(req, limit) {
@@ -114,7 +124,7 @@ export class WorldMap {
     const state = this.stateCache;
     const stale = !state || this.now() - Date.parse(state.observedAt) > MAP_FRESH_MS;
     return { schemaVersion: 1, available: !!state && !stale, stale, observedAt: state?.observedAt || null, source: 'minecraft.rcon-readonly',
-      freshForMs: MAP_FRESH_MS, players: stale ? [] : state.players, maps: state?.maps || [], readOnly: true };
+      freshForMs: MAP_FRESH_MS, players: stale ? [] : state.players, npcs: stale ? [] : (state.npcs||[]), maps: state?.maps || [], readOnly: true };
   }
   async acceptState(value) {
     const checked = validateMapState(value, this.now());
@@ -162,8 +172,8 @@ export class WorldMap {
     const live = /^\/world-map\/maps\/(overworld|nether|end|aincrad)\/live\/(players|markers)\.json$/.exec(pathname);
     if (live) {
       const state = await this.state();
-      respond(res, 200, live[2] === 'players' ? { players: state.players.filter(row => row.dimension === dimensions[live[1]]).map(row => ({
-        uuid: row.uuid, name: row.name, foreign: false, position: { x: row.x, y: row.y, z: row.z }, rotation: { pitch: row.pitch, yaw: row.yaw, roll: 0 }
+      respond(res, 200, live[2] === 'players' ? { players: [...state.players,...state.npcs].filter(row => row.dimension === dimensions[live[1]]).map(row => ({
+        uuid: row.uuid, name: row.name, foreign: row.kind === 'npc', position: { x: row.x, y: row.y, z: row.z }, rotation: { pitch: row.pitch, yaw: row.yaw, roll: 0 }
       })) } : {}); return true;
     }
     const key = mapFileKey(pathname === '/world-map/' ? 'index.html' : pathname.slice('/world-map/'.length));

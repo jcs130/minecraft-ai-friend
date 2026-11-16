@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "state": "candidate_not_deployed",
+  "versions": {
+    "residentBrain": "0.3.1",
+    "agentFriend": "0.4.47.83-resident-admin",
+    "portal": "0.8.42"
+  },
+  "sourceBase": "980937debdc486d567f022a2204b9a567c1e2d4c",
+  "validation": {
+    "portal": {
+      "passed": 518,
+      "skipped": 3,
+      "failed": 0
+    },
+    "javaRules": 77,
+    "nativeAdmin": [
+      "Original residents appear without player slots",
+      "Native profile applied",
+      "Selected actual YSM model on original body",
+      "Duplicate request does not increment revision",
+      "Hidden resident removed from public map",
+      "Stale revision rejected",
+      "Own original receipt can be reconciled",
+      "Visibility can be restored",
+      "Accepted own-body CLI 0",
+      "Real CLI receipt 0",
+      "Accepted own-body CLI 1",
+      "Real CLI receipt 1",
+      "Accepted own-body CLI 2",
+      "Real CLI receipt 2",
+      "Profile revision and identity survive restart"
+    ],
+    "nativeTravel": [
+      "Physical book write accepted",
+      "Written book service completed",
+      "Real written book exists in own inventory",
+      "Changed payload cannot reuse a prior request",
+      "Duplicate does not create another book",
+      "Remote conversation accepted",
+      "Consent triggers verified native arrival",
+      "Original body is now at invitation",
+      "Recruitment owns follow mode",
+      "Travel preserves owned book",
+      "Remote conversation accepted",
+      "Recruited NPC accepts own CLI action",
+      "Dialogue CLI has actual archive receipt",
+      "Native NPC still consumes no extra player slot"
+    ],
+    "activeTrial": {
+      "reason": "fight_remaining",
+      "participant": true,
+      "active": true,
+      "floor": 1,
+      "remainingMobs": 3
+    },
+    "model": "deterministic isolated dialogue fixture",
+    "photo": "status/denial adapter checked; real camera output not yet verified"
+  },
+  "artifacts": {
+    "AgentFriend-npc-candidate.jar": "7eb4dc5dbe86735714354371aa017fc5b1fa52dcf996d3cfd2945c71d15abbb7",
+    "residents-candidate.jar": "3446cd9679c9a9a459e163c0d93f265b3d06a30a5a6ea8737232728effba0855"
+  },
+  "preservation": [
+    "original NPC UUID",
+    "owner",
+    "inventory",
+    "memory",
+    "accounts",
+    "worlds"
+  ],
+  "publicNetworkPortsAdded": false
+}

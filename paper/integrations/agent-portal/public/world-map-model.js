@@ -4,7 +4,7 @@ export function positionText(row) { return `X ${Math.floor(row.x)} · Y ${Math.f
 export function visiblePlayers(state, search = '', now = Date.now()) {
   const observed = Date.parse(state?.observedAt || '');
   if (state?.available !== true || !Number.isFinite(observed) || observed > now + 5000 || now - observed > 20000) return [];
-  return (state.players || []).filter(row => dimensionIds[row.dimension] && row.name.toLowerCase().includes(search.trim().toLowerCase()))
+  return [...(state.players || []),...(state.npcs || [])].filter(row => dimensionIds[row.dimension] && row.name.toLowerCase().includes(search.trim().toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
 }
 export function covered(row, maps) {

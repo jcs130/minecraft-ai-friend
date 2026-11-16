@@ -30,6 +30,18 @@ public final class RecruitmentProbe {
                 var source = ctx.getSource();
                 var server = source.getServer();
                 ServerPlayer player = server.getPlayerList().getPlayerByName("NpcModelQA");
+                if(a[0].equals("arena-start")||a[0].equals("arena-info")){
+                    if(player==null)throw new IllegalArgumentException("QA player not connected");
+                    try{
+                        var bukkit=Class.forName("org.bukkit.Bukkit");Object manager=bukkit.getMethod("getPluginManager").invoke(null);
+                        Object plugin=Class.forName("org.bukkit.plugin.PluginManager").getMethod("getPlugin",String.class).invoke(manager,"AgentFriend");
+                        Object actor=player.getClass().getMethod("getBukkitEntity").invoke(player);
+                        if(a[0].equals("arena-start"))bukkit.getMethod("dispatchCommand",Class.forName("org.bukkit.command.CommandSender"),String.class).invoke(null,actor,"mycli arena start");
+                        var get=plugin.getClass().getDeclaredMethod("dungeon");get.setAccessible(true);Object dungeon=get.invoke(plugin);
+                        var guide=dungeon.getClass().getDeclaredMethod("guidance",Class.forName("org.bukkit.entity.Player"));guide.setAccessible(true);
+                        return tell(source,guide.invoke(dungeon,actor));
+                    }catch(ReflectiveOperationException bad){throw new IllegalArgumentException(bad);}
+                }
                 if(a[0].equals("player-count"))return tell(source,Map.of("onlinePlayers",server.getPlayerList().getPlayerCount()));
                 if(a[0].equals("trust")||a[0].equals("untrust")){
                     var owner=(EntityMaid)source.getLevel().getEntity(UUID.fromString(a[1]));
@@ -127,6 +139,16 @@ public final class RecruitmentProbe {
                     maid.getMaidInv().setStackInSlot(2,new ItemStack(net.minecraft.world.item.Items.IRON_HELMET));
                     level.setBlock(new net.minecraft.core.BlockPos(x+3,81,100),net.minecraft.world.level.block.Blocks.IRON_ORE.defaultBlockState(),3);
                     return tell(source,Map.of("fixture",true,"x",x));
+                }
+                if(a[0].equals("book-fixture")){
+                    var maid=(EntityMaid)source.getLevel().getEntity(UUID.fromString(a[1]));
+                    maid.getMaidInv().setStackInSlot(0,new ItemStack(net.minecraft.world.item.Items.WRITABLE_BOOK));
+                    return tell(source,Map.of("blankBook",true));
+                }
+                if(a[0].equals("inventory")){
+                    var maid=(EntityMaid)source.getLevel().getEntity(UUID.fromString(a[1]));var items=new java.util.ArrayList<Object>();
+                    for(int i=0;i<maid.getMaidInv().getSlots();i++){var stack=maid.getMaidInv().getStackInSlot(i);if(!stack.isEmpty())items.add(Map.of("slot",i,"id",net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),"count",stack.getCount(),"name",stack.getHoverName().getString()));}
+                    return tell(source,Map.of("items",items));
                 }
                 if (a[0].equals("meet")) {
                     // Arrange a nearby encounter only in the marked synthetic fixture.
