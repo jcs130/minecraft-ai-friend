@@ -9,7 +9,6 @@ import com.sk89q.worldguard.protection.flags.Flags;
 import com.sk89q.worldguard.protection.RegionResultSet;
 import com.sk89q.worldguard.protection.flags.StateFlag;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
-import io.netty.buffer.Unpooled;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -17,13 +16,9 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.UUID;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.network.protocol.common.custom.DiscardedPayload;
-import net.minecraft.resources.ResourceLocation;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
-import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -196,16 +191,7 @@ final class ProtectionAdvisor implements Listener {
 
     void send(Player player, JsonObject result, String channel) {
         byte[] bytes = result.toString().getBytes(StandardCharsets.UTF_8);
-        if (player.getListeningPluginChannels().contains(channel)) {
-            player.sendPluginMessage(plugin, channel, bytes);
-        } else {
-            // CraftPlayer.sendPluginMessage silently skips clients that did not
-            // register the channel. CortiLan's current Mineflayer connection is
-            // one of them. Send the same vanilla custom payload directly.
-            CraftPlayer craft = (CraftPlayer) player;
-            craft.getHandle().connection.send(new ClientboundCustomPayloadPacket(
-                    new DiscardedPayload(ResourceLocation.tryParse(channel), Unpooled.wrappedBuffer(bytes))));
-        }
+        plugin.communication().privatePayload(player, channel, bytes);
     }
 
     static String actionLabel(String action) {
@@ -279,7 +265,9 @@ final class ProtectionAdvisor implements Listener {
         }
         else if (tagged) next = "这件物品仍归原主人；移出保护区也不会解除归属，请取得主人授权。";
         else if (reason.equals("site_dungeon")) {
-            next="副本建筑永久受保护，包括未开场和结束后；不能凿墙、垫块、倒液体或用爆炸改路。沿门、楼梯和原通道前进；箱子与机关可正常交互。";
+            next = plugin.siteDungeons().campRescueLatch(at.getBlock())
+                    ? "黑旗林营的牢笼可救援。先用入口路牌开始清剿；清掉守卫后，面对牢笼围栏按「使用」打开牢门。"
+                    : "副本建筑永久受保护，包括未开场和结束后；不能凿墙、垫块、倒液体或用爆炸改路。沿门、楼梯和原通道前进；箱子与机关可正常交互。";
             commands.add(ProtectionQuery.DUNGEON_DISCOVERY_COMMAND);
             commands.add("/mycli dungeon info <ID> --verbose");
         }

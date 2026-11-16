@@ -260,8 +260,14 @@ final class TaskRoutes implements Listener {
         }
         p.openInventory(inv); menus.put(p.getUniqueId(), new Menu(inv, kind, route, page, List.copyOf(ids)));
     }
-    private void detailMenu(Player p, String id, String route, int page) {
-        var task = market.find(p, id); if (task == null || !task.enabled()) return;
+    void openCurrent(Player p, String route, int page) {
+        var task = market.frozen(p);
+        if (task == null) plugin.openGuildMenu(p);
+        else detailMenu(p, task.id(), route, page);
+    }
+
+    void detailMenu(Player p, String id, String route, int page) {
+        var task = market.find(p, id); if (task == null) return;
         Inventory inv = Bukkit.createInventory(null, 27, "委托详情 · " + task.title());
         List<String> lines = new ArrayList<>(); lines.add(task.description());
         for (var step : task.steps()) {
@@ -272,7 +278,7 @@ final class TaskRoutes implements Listener {
             }
         }
         inv.setItem(13, item(task.icon().name(), "§e" + task.title(), lines.toArray(String[]::new)));
-        inv.setItem(11, item("EMERALD", "§a接取这张委托", "主动接单才占公会任务槽", "当前有任务时保留原任务，不会覆盖"));
+        inv.setItem(11, plugin.guild().taskButton(p, id));
         inv.setItem(15, item("ARROW", "§b返回任务列表", "仅浏览不接单"));
         if (market.pausedState(p).has("id")) inv.setItem(22, item("BOOK", "§e恢复暂存远征", "仅空任务槽可恢复，保留原规则和进度", "/mycli tasks resume"));
         else if (market.frozen(p) != null) inv.setItem(22, item("BOOK", "§e暂存当前远征", "仅一次性纯探索个人委托可用", "先结束本人考试；不放弃、不清进度", "/mycli tasks pause"));
@@ -282,11 +288,12 @@ final class TaskRoutes implements Listener {
         if (!(event.getWhoClicked() instanceof Player p)) return; Menu m = menus.get(p.getUniqueId());
         if (m == null || event.getView().getTopInventory() != m.inventory) return;
         event.setCancelled(true); int slot = event.getRawSlot();
+        if (!event.isLeftClick() && !event.isRightClick()) return;
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (!p.isOnline() || p.getOpenInventory().getTopInventory() != m.inventory) return;
             if (m.kind.equals("routes")) {
                 if (slot >= 10 && slot < 10 + m.ids.size()) open(p, m.ids.get(slot - 10), 1);
-                else if (slot == 22) command(p, new String[]{"tasks", "status"});
+                else if (slot == 22) openCurrent(p, "", 1);
                 else if (slot == 23) plugin.guildHall().storageInfo(p);
                 else if (slot == 24) plugin.openGuildMenu(p);
             } else if (m.kind.equals("tasks")) {
@@ -294,12 +301,18 @@ final class TaskRoutes implements Listener {
                 else if (slot == 36) open(p, "", 1);
                 else if (slot == 37 && m.inventory.getItem(slot) != null) open(p, m.route, m.page - 1);
                 else if (slot == 38 && m.inventory.getItem(slot) != null) open(p, m.route, m.page + 1);
-                else if (slot == 40) command(p, new String[]{"tasks", "status"});
+                else if (slot == 40) openCurrent(p, m.route, m.page);
                 else if (slot == 41) plugin.guildHall().storageInfo(p);
                 else if (slot == 42 && m.route.equals("life")) plugin.openLifeGuildMenu(p);
             } else if (m.kind.equals("detail")) {
-                if (slot == 11) { p.closeInventory(); plugin.guild().command(p, new String[]{"guild", "accept", m.ids.getFirst()}); }
-                else if (slot == 15) open(p, m.route, m.page);
+                if (slot == 11) plugin.guild().clickTaskButton(p, m.inventory.getItem(slot), () -> {
+                    if (p.isOnline() && p.getOpenInventory().getTopInventory() == m.inventory)
+                        detailMenu(p, m.ids.getFirst(), m.route, m.page);
+                });
+                else if (slot == 15) {
+                    if (m.route.equals("market")) market.openMenu(p, m.page);
+                    else open(p, m.route, m.page);
+                }
                 else if (slot == 22 && m.inventory.getItem(slot) != null) { p.closeInventory(); command(p, new String[]{"tasks", market.pausedState(p).has("id") ? "resume" : "pause"}); }
             }
         });

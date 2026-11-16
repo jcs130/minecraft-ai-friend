@@ -3,7 +3,6 @@ package org.afuhome.agentfriend;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.papermc.paper.event.player.PlayerTradeEvent;
-import io.netty.buffer.Unpooled;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -34,10 +33,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BookMeta;
 import org.bukkit.inventory.meta.ItemMeta;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.network.protocol.common.custom.DiscardedPayload;
-import net.minecraft.resources.ResourceLocation;
-import org.bukkit.craftbukkit.entity.CraftPlayer;
 
 /** Small daily life contracts using only vanilla actions and items on every client. */
 final class LifeGuildManager implements Listener {
@@ -518,15 +513,6 @@ final class LifeGuildManager implements Listener {
     void send(Player player, JsonObject json) {
         byte[] data = json.toString().getBytes(StandardCharsets.UTF_8);
         if (data.length > 16_384) return;
-        if (player.getListeningPluginChannels().contains(CHANNEL)) {
-            player.sendPluginMessage(plugin, CHANNEL, data);
-        } else {
-            // Mineflayer does not register channels by default. Paper's messenger
-            // silently drops those messages, so send the same bytes to this
-            // connection via the normal clientbound custom-payload packet.
-            CraftPlayer craft = (CraftPlayer) player;
-            craft.getHandle().connection.send(new ClientboundCustomPayloadPacket(
-                    new DiscardedPayload(ResourceLocation.tryParse(CHANNEL), Unpooled.wrappedBuffer(data))));
-        }
+        plugin.communication().privatePayload(player, CHANNEL, data);
     }
 }

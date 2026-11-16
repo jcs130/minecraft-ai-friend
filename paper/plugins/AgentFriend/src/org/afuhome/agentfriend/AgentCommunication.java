@@ -5,6 +5,8 @@ import dev.aurelium.auraskills.api.AuraSkillsApi;
 import java.nio.file.*;
 import org.bukkit.configuration.file.YamlConfiguration;
 import java.util.*;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
+import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 
 /** Small, private observations for Agents. Queries never dispatch gameplay actions.
@@ -20,6 +22,7 @@ final class AgentCommunication {
     private record Snapshot(String id, long at, String kind, String query, int total, List<AgentReplyPages.Page> pages) { }
     private final AgentFriendPlugin plugin;
     private final AgentMessageTransport transport;
+    private final SkillPayload privatePayload;
     private final Map<UUID, Session> sessions = new HashMap<>();
     private final Path authFile;
     private JsonObject authHeartbeat;private long authReadAt;
@@ -30,6 +33,27 @@ final class AgentCommunication {
         try{if(!path.isBlank())configured=Path.of(path);}catch(InvalidPathException invalid){plugin.getLogger().warning("Invalid auth observation file path; authentication observations remain unknown.");}
         authFile=configured;
         transport=new AgentMessageTransport(plugin);
+        SkillPayload codec = null;
+        try {
+            codec = new SkillPayload();
+        } catch (RuntimeException | LinkageError unavailable) {
+            plugin.getLogger().warning("Private play-channel fallback unavailable: " + unavailable.getClass().getSimpleName());
+        }
+        privatePayload = codec;
+    }
+
+    void privatePayload(Player player, String channel, byte[] bytes) {
+        if (player.getListeningPluginChannels().contains(channel)) {
+            player.sendPluginMessage(plugin, channel, bytes);
+        } else if (privatePayload != null) {
+            try {
+                ((CraftPlayer) player).getHandle().connection.send(
+                        new ClientboundCustomPayloadPacket(privatePayload.create(channel, bytes)));
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError unavailable) {
+                if (privatePayload.firstFailure())
+                    plugin.getLogger().warning("Could not send " + channel + ": " + unavailable.getClass().getSimpleName());
+            }
+        }
     }
     // Local, operator-configured file: no client chat or plugin-message claim is trusted.
     // One bounded read per second across all players. The proxy replaces it atomically.

@@ -2,7 +2,6 @@ package org.afuhome.agentfriend;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import io.netty.buffer.Unpooled;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -18,9 +17,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.network.protocol.common.custom.DiscardedPayload;
-import net.minecraft.resources.ResourceLocation;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
@@ -29,7 +25,6 @@ import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -394,11 +389,7 @@ final class DailyBoardManager implements Listener {
         }
         full.add("cards", array);
         byte[] bytes = full.toString().getBytes(StandardCharsets.UTF_8);
-        if (bytes.length <= 16_384) {
-            if (player.getListeningPluginChannels().contains(CHANNEL)) player.sendPluginMessage(plugin, CHANNEL, bytes);
-            else ((CraftPlayer) player).getHandle().connection.send(new ClientboundCustomPayloadPacket(
-                    new DiscardedPayload(ResourceLocation.tryParse(CHANNEL), Unpooled.wrappedBuffer(bytes))));
-        }
+        if (bytes.length <= 16_384) plugin.communication().privatePayload(player, CHANNEL, bytes);
         JsonObject shortJson = new JsonObject();
         shortJson.addProperty("type", "MC_BOARD_TODAY");
         shortJson.addProperty("schemaVersion", 1);

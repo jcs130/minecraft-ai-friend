@@ -22,6 +22,7 @@ import org.bukkit.event.block.*;
 import org.bukkit.event.entity.*;
 import org.bukkit.event.inventory.*;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -693,7 +694,14 @@ final class SiteDungeonManager implements Listener {
                 if(protectedApproachLanding(s,at)&&AgentFriendPlugin.safeLanding(w.getBlockAt(px,y,pz))&&w.getNearbyEntities(at,.7,1,.7).isEmpty()){landing=at;break;}
             }
             if(landing==null){result(p,"travel",s.id,"entry_blocked");return;}
-            if(plugin.travelMagic().teleport(p,landing,"dungeon:"+s.id,"遗迹入口传送术",TravelMagic.DISTANT_MANA)){result(p,"travel",s.id,"success");p.sendMessage("§6已到"+label(s)+"入口；空闲场地由一人 start，遗迹内达标者自动同队，通关后生成个人奖励。");}
+            if(plugin.travelMagic().teleport(p,landing,"dungeon:"+s.id,"遗迹入口传送术",TravelMagic.DISTANT_MANA)){
+                result(p,"travel",s.id,"success");
+                if (s.id.equals(BlackBannerCamp.SITE) && surveyedCamp() != null) {
+                    p.sendMessage("§6已到黑旗林营外哨。用「使用」打开入口路牌，选择开始清剿，守卫在集结倒计时后出现。");
+                } else {
+                    p.sendMessage("§6已到"+label(s)+"入口；空闲场地由一人 start，遗迹内达标者自动同队，通关后生成个人奖励。");
+                }
+            }
             else result(p,"travel",s.id,"travel_denied");
         })));
     }
@@ -1126,6 +1134,47 @@ final class SiteDungeonManager implements Listener {
         if (plugin.trustedBlockEditor(e.getPlayer())) return;if(activityArea(e.getBlock().getLocation())){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"place",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnNatural(SpawnerSpawnEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnWild(CreatureSpawnEvent e){if(e.getSpawnReason()==CreatureSpawnEvent.SpawnReason.NATURAL&&runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
+    private Site surveyedCamp() {
+        Site camp = sites.get(BlackBannerCamp.SITE);
+        if (camp == null || !camp.outdoor || !camp.world.equals("world") || camp.rooms.size() != 2) return null;
+        Room first = camp.rooms.getFirst(), second = camp.rooms.getLast();
+        return first.x == -1077 && first.y == 67 && first.z == -1117
+                && second.x == -1069 && second.y == 67 && second.z == -1116 ? camp : null;
+    }
+
+    boolean openCampMarker(Player player, String target) {
+        Site camp = surveyedCamp();
+        if (camp == null || !BlackBannerCamp.MARKER.equals(target) || !camp.contains(player.getLocation())) return false;
+        open(player, camp.id);
+        return true;
+    }
+
+    boolean campRescueLatch(Block block) {
+        Site camp = surveyedCamp();
+        return camp != null && camp.contains(block.getLocation()) && BlackBannerCamp.isLatch(block);
+    }
+
+    boolean handleCampRescue(PlayerInteractEvent event) {
+        Block clicked = event.getClickedBlock();
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK || clicked == null || !campRescueLatch(clicked)) return false;
+        event.setCancelled(true);
+        Player player = event.getPlayer();
+        if (playing(player) && !plugin.isDowned(player)
+                && player.getLocation().distanceSquared(clicked.getLocation().add(.5, .5, .5)) <= 25) {
+            BlackBannerCamp.interact(plugin, player, clicked, room -> campGuardCleared(player, room));
+        }
+        return true;
+    }
+
+    private boolean campGuardCleared(Player player, int room) {
+        UUID id = player.getUniqueId();
+        Run current = runs.get(BlackBannerCamp.SITE);
+        if (current != null) return current.roomAttendance.getOrDefault(room, Set.of()).contains(id);
+        Map<String,Object> last = lastOutcome(id, BlackBannerCamp.SITE);
+        return "completed".equals(last.get("reason")) && last.get("attendance") instanceof Number cleared
+                && cleared.intValue() >= 2;
+    }
+
     private ItemStack icon(Material material,String name,String... lore){ItemStack item=new ItemStack(material);var meta=item.getItemMeta();meta.setDisplayName(name);meta.setLore(List.of(lore));item.setItemMeta(meta);return item;}
     private void open(Player p,String id){
         Inventory inv=Bukkit.createInventory(null,54,id.isEmpty()?"遗迹地下城":"地下城 · "+site(id).name);menus.put(inv,new Menu(id,receipt(p.getUniqueId(),id)!=null));
@@ -1141,12 +1190,17 @@ final class SiteDungeonManager implements Listener {
             for(int slot:new int[]{12,13,14,16})inv.setItem(slot,icon(Material.GRAY_DYE,"§e先领取上次奖励","上次已完成，奖励保留中","请点下方「领取上次奖励」箱子","不会自动领取或替你开启新挑战"));
             inv.setItem(30,icon(Material.ENDER_CHEST,"§a领取上次奖励",saved.getString("day","日期未记录")+"完成的挑战","点击领取到个人奖励箱，随后重新开场","满队列时保留凭据；无需重打旧场次"));
         }
+        if (!id.isEmpty() && id.equals(BlackBannerCamp.SITE) && surveyedCamp() != null) {
+            inv.setItem(24, icon(Material.DARK_OAK_FENCE, "§e救援牢笼",
+                    "在外哨用这张菜单开始清剿，倒数结束后刷第一批守卫。",
+                    BlackBannerCamp.RESCUE_HINT, "打完后回来使用入口路牌，可领取本场奖励。"));
+        }
         p.openInventory(inv);
     }
     @EventHandler public void click(InventoryClickEvent e){
         Menu menu=menus.get(e.getView().getTopInventory());if(menu==null)return;e.setCancelled(true);if(!(e.getWhoClicked() instanceof Player p))return;int slot=e.getRawSlot();if(slot<0||slot>=54)return;
         Bukkit.getScheduler().runTask(plugin,()->{
-            if(!p.isOnline())return;
+            if(!p.isOnline() || p.getOpenInventory().getTopInventory() != e.getView().getTopInventory())return;
             if(menu.site.isEmpty()){List<Site> list=new ArrayList<>(sites.values());if(slot>=10&&slot<10+list.size())open(p,list.get(slot-10).id);return;}
             String action=switch(slot){case 10->"travel";case 12,13,14->"start";case 16->"join";case 22->"leave";case 30->"claim";case 31->"info";default->"";};
             if(slot==49){open(p,"");return;}if(action.isEmpty())return;

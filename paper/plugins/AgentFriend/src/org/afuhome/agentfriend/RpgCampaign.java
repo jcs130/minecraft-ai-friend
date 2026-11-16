@@ -158,10 +158,45 @@ final class RpgCampaign implements Listener {
         inv.setItem(49,item(Material.BOOK,"§b回旅途手记"));actions.put(49,"journal");open(p,inv,npcs.nearby(p,id)?id:"",actions);
     }
     private void chapterMenu(Player p,String id){var c=content.chapter(id);if(c==null)throw new IllegalArgumentException("章节不存在");var inv=Bukkit.createInventory(null,27,c.title());var actions=new HashMap<Integer,String>();inv.setItem(4,item(Material.BOOK,"§e"+c.title(),c.introduction()));inv.setItem(11,item(Material.PAPER,"§f查看分步条件","只读，保留在途任务。"));actions.put(11,"chapter-info:"+id);inv.setItem(13,item(Material.LIME_DYE,"§a开始本章","自愿报名剧情；公会委托、职业和技能另行选择。"));actions.put(13,"start:"+id);inv.setItem(15,item(Material.BOOK,"§b返回手记"));actions.put(15,"journal");open(p,inv,"",actions);}
-    private void offerMenu(Player p,String id){var task=plugin.taskMarket().find(p,id);if(task==null)throw new IllegalArgumentException("该委托暂不可接，先查询任务目录。");var inv=Bukkit.createInventory(null,27,"委托 · "+task.title());var actions=new HashMap<Integer,String>();inv.setItem(4,item(task.icon(),"§e"+task.title(),task.description(),"每阶段实际达标后 guild claim；最终奖励进入个人箱。"));inv.setItem(11,item(Material.PAPER,"§f完整条件与奖励","免费查询，不接单。"));actions.put(11,"offer-info:"+id);inv.setItem(13,item(Material.LIME_DYE,"§a接取这张委托","与原公会共用任务槽，有在途委托时服务器会拒绝。"));actions.put(13,"accept:"+id);inv.setItem(15,item(Material.BOOK,"§b返回手记"));actions.put(15,"journal");open(p,inv,"",actions);}
+    private void offerMenu(Player p, String id) {
+        var task = plugin.taskMarket().find(p, id);
+        if (task == null) throw new IllegalArgumentException("该委托暂不可接，先查询任务目录。");
+        var inv = Bukkit.createInventory(null, 27, "委托 · " + task.title());
+        inv.setItem(4, item(task.icon(), "§e" + task.title(), task.description(), "完成后回到这张委托交付。"));
+        inv.setItem(11, item(Material.PAPER, "§f完整条件与奖励", "查看任务步骤"));
+        inv.setItem(13, plugin.guild().taskButton(p, id));
+        inv.setItem(15, item(Material.BOOK, "§b返回手记"));
+        open(p, inv, "", Map.of(11, "offer-info:" + id, 13, "task-button:" + id, 15, "journal"));
+    }
     private void sideMenu(Player p){var inv=Bukkit.createInventory(null,54,"千灯纪 · 居民支线");var actions=new HashMap<Integer,String>();int slot=0;for(var side:content.sides){if(slot>=36)break;inv.setItem(slot,item(sideDone(p,side)?Material.ENCHANTED_BOOK:Material.BOOK,(sideDone(p,side)?"§a已完成 · ":sideAvailable(p,side)?"§e":"§7后续 · ")+side.title(),side.introduction(),"委托人："+content.npc(side.npc()).name()));actions.put(slot++,"side:"+side.id());}inv.setItem(49,item(Material.BOOK,"§b回旅途手记"));actions.put(49,"journal");open(p,inv,"",actions);}
     private void routeMenu(Player p){var inv=Bukkit.createInventory(null,27,"千灯纪 · 选择旅途偏好");var actions=new HashMap<Integer,String>();String chosen=ledger.getString(base(p)+".route","");String[] ids={"combat","crafting","exploration","supply","engineering","life"},names={"讨伐与战斗","装备与制造","探索与旅行","后勤与供货","工程与建造","生活与记录"};Material[] icons={Material.IRON_SWORD,Material.ANVIL,Material.COMPASS,Material.CHEST,Material.BRICKS,Material.WRITABLE_BOOK};for(int i=0;i<ids.length;i++){inv.setItem(10+i,item(icons[i],(chosen.equals(ids[i])?"§a当前 · ":"§e")+names[i],"点击只选择旅途偏好，不自动接单，不改变职业。","之后可随时改选；原委托继续保留。"));actions.put(10+i,"choose:"+ids[i]);}inv.setItem(22,item(Material.BOOK,"§b回旅途手记"));actions.put(22,"journal");open(p,inv,"",actions);}
-    @EventHandler public void click(InventoryClickEvent event){if(!(event.getWhoClicked() instanceof Player p))return;var menu=menus.get(p.getUniqueId());if(menu==null||menu.inventory!=event.getView().getTopInventory())return;event.setCancelled(true);if(!menu.owner.equals(p.getUniqueId()))return;String action=menu.actions.get(event.getRawSlot());if(action==null)return;p.closeInventory();Bukkit.getScheduler().runTask(plugin,()->{if(p.isOnline())dispatch(p,action);});}
+    @EventHandler public void click(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player p)) return;
+        var menu = menus.get(p.getUniqueId());
+        if (menu == null || menu.inventory != event.getView().getTopInventory()) return;
+        event.setCancelled(true);
+        if (!menu.owner.equals(p.getUniqueId()) || (!event.isLeftClick() && !event.isRightClick())) return;
+        int slot = event.getRawSlot();
+        String action = menu.actions.get(slot);
+        if (action == null) return;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!p.isOnline() || p.getOpenInventory().getTopInventory() != menu.inventory) return;
+            if (action.startsWith("task-button:")) {
+                try {
+                    writeAllowed(p);
+                    plugin.guild().clickTaskButton(p, menu.inventory.getItem(slot), () -> {
+                        if (p.isOnline() && p.getOpenInventory().getTopInventory() == menu.inventory)
+                            offerMenu(p, action.substring("task-button:".length()));
+                    });
+                } catch (RuntimeException invalid) {
+                    plugin.communication().error(p, "STORY_ACTION_DENIED", invalid.getMessage(), false, "/mycli world story status");
+                }
+                return;
+            }
+            p.closeInventory();
+            dispatch(p, action);
+        });
+    }
     private void dispatch(Player p,String action){
         try{String[] a=action.split(":",3);switch(a[0]){case "close"->{}case "journal"->journalMenu(p);case "status"->command(p,new String[]{"world","story","status"});case "sides"->sideMenu(p);case "routes"->routeMenu(p);case "choose"->{choose(p,a[1],false);journalMenu(p);}case "storage"->{p.sendMessage("§e公共补给 /mycli guild shared；大背包 /minepacks:backpack open；个人奖励箱 /mycli arena stash pages。三个入口分别使用。");}case "commission"->plugin.taskMarket().routes().command(p,new String[]{"tasks","status"});case "npc"->npcMenu(p,a[1]);case "chapter"->chapterMenu(p,a[1]);case "chapter-info","side"->info(p,a[1],false);case "start"->start(p,a[1],false);case "talk"->{talk(p,a[1],a[2],false);npcMenu(p,a[1]);}case "offer"->offerMenu(p,a[1]);case "offer-info"->plugin.taskMarket().routes().command(p,new String[]{"tasks","info",a[1]});case "accept"->{writeAllowed(p);plugin.guild().command(p,new String[]{"guild","accept",a[1]});}default->throw new IllegalArgumentException("菜单动作已失效，重新打开手记。");}}
         catch(RuntimeException invalid){plugin.communication().error(p,"STORY_ACTION_DENIED",invalid.getMessage(),false,"/mycli world story status");}}

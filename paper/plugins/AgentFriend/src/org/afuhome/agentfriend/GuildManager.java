@@ -9,6 +9,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -20,6 +21,7 @@ import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 
 /** Per-player adventurer guild contracts backed by the same save as dungeon rewards. */
 final class GuildManager implements Listener {
@@ -142,11 +144,12 @@ final class GuildManager implements Listener {
     }
 
     private String base(UUID id) { return "guild-players." + id; }
+    String activeId(Player p) { return plugin.getConfig().getString(base(p.getUniqueId()) + ".active.id", ""); }
     private String today() { return LocalDate.now(GUILD_ZONE).toString(); }
     private boolean member(Player p) { return plugin.getConfig().contains(base(p.getUniqueId()) + ".joined"); }
     boolean hasJoined(Player p) { return member(p); }
     boolean hasActiveContract(Player p) {
-        return !plugin.getConfig().getString(base(p.getUniqueId()) + ".active.id", "").isEmpty();
+        return !activeId(p).isEmpty();
     }
     com.google.gson.JsonObject onboardingState(Player p) {
         com.google.gson.JsonObject out = new com.google.gson.JsonObject();
@@ -943,12 +946,20 @@ final class GuildManager implements Listener {
     }
 
     private void claim(Player player) {
+        claim(player, () -> {});
+    }
+
+    private void claim(Player player, Runnable refresh) {
         Contract quest = active(player);
         if (quest != null && plugin.taskMarket().isMarket(quest.id())) {
-            plugin.taskMarket().verify(player, quest, ready -> { if (ready) claimVerified(player); });
+            plugin.taskMarket().verify(player, quest, ready -> {
+                if (ready) claimVerified(player);
+                refresh.run();
+            });
             return;
         }
         claimVerified(player);
+        refresh.run();
     }
 
     private void claimVerified(Player player) {
@@ -1090,6 +1101,80 @@ final class GuildManager implements Listener {
         return free;
     }
 
+    private static final NamespacedKey TASK_BUTTON = new NamespacedKey("agentfriend", "task_button");
+
+    ItemStack taskButton(Player p, String id) {
+        String activeId = activeId(p);
+        if (id.isEmpty()) return icon(Material.GRAY_DYE, "§7没有在途委托", "选择看板上的委托接取");
+        if (!id.equals(activeId)) {
+            if (!activeId.isEmpty()) return icon(Material.GRAY_DYE, "§7已有在途委托", "打开看板的当前委托继续");
+            Contract offer = contract(id);
+            if (offer == null) return icon(Material.GRAY_DYE, "§7这张委托暂不可接");
+            var task = plugin.taskMarket().find(p, id);
+            if (task != null) {
+                String state = plugin.taskMarket().offerState(task, p);
+                if (!state.equals("available"))
+                    return icon(Material.GRAY_DYE, "§7当前不可接取", TaskRouteCatalog.stateText(state));
+            } else if (doneToday(p, offer) || !availableToday(p, offer)) {
+                return icon(Material.GRAY_DYE, "§7本轮不可接取", doneToday(p, offer) ? "本轮已经交付" : "等待看板轮换");
+            }
+            return markTaskButton(icon(Material.LIME_DYE, "§a接取委托", offer.title()), "accept|" + id);
+        }
+
+        var state = progressState(p);
+        if (!state.has("target")) return icon(Material.GRAY_DYE, "§e在途委托待核对", "保留了原任务记录，请联系服主");
+        var market = state.has("market") ? state.getAsJsonObject("market") : null;
+        int progress = state.get("progress").getAsInt();
+        int target = state.get("target").getAsInt();
+        boolean ready = market != null ? market.get("ready").getAsBoolean() : progress >= target;
+        boolean needsCheck = state.get("requiresVerification").getAsBoolean();
+        int stage = market == null ? 1 : market.get("stage").getAsInt();
+        int stages = market == null ? 1 : market.get("stages").getAsInt();
+        String title = needsCheck ? "§e验收并交付" : ready
+                ? (stage == stages ? "§a交付并领奖" : "§a交付本阶段") : "§7委托进行中 · 刷新";
+        String summary = (market == null ? state.get("title").getAsString() : market.get("stageTitle").getAsString())
+                + " " + progress + "/" + target;
+        String condition = state.get("condition").getAsString();
+        String reward = ready ? (stage == stages ? "奖励存入个人奖励箱" : "继续下一阶段")
+                : state.has("advice") ? state.get("advice").getAsString() : "达成后回到这里交付";
+        String stepToken = plugin.taskMarket().stepToken(p);
+        if (market == null) stepToken = plugin.getConfig().getString(base(p.getUniqueId()) + ".active.accepted", "");
+        ItemStack button = icon(ready || needsCheck ? Material.EMERALD : Material.BOOK, title,
+                SpellGuide.menuLines("第 " + stage + "/" + stages + " 阶段 · " + summary, condition, reward));
+        return markTaskButton(button, (ready || needsCheck ? "claim" : "refresh") + "|" + id + "|" + stepToken);
+    }
+
+    private ItemStack markTaskButton(ItemStack item, String token) {
+        var meta = item.getItemMeta();
+        meta.getPersistentDataContainer().set(TASK_BUTTON, PersistentDataType.STRING, token);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private String taskButtonToken(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return null;
+        return item.getItemMeta().getPersistentDataContainer().get(TASK_BUTTON, PersistentDataType.STRING);
+    }
+
+    boolean isTaskButton(ItemStack item) { return taskButtonToken(item) != null; }
+
+    boolean clickTaskButton(Player p, ItemStack shown, Runnable refresh) {
+        String token = taskButtonToken(shown);
+        if (token == null) return false;
+        String[] action = token.split("\\|", -1);
+        if (action.length < 2) return true;
+        if (!token.equals(taskButtonToken(taskButton(p, action[1])))) {
+            refresh.run();
+            return true;
+        }
+        switch (action[0]) {
+            case "claim" -> claim(p, refresh);
+            case "accept" -> { accept(p, action[1]); refresh.run(); }
+            default -> refresh.run();
+        }
+        return true;
+    }
+
     void fillBoard(Player player, Inventory inventory) {
         int rank = effectiveRank(player);
         inventory.setItem(0, icon(Material.BOOK, "§6冒险者档案", "等级：" + RANKS[rank],
@@ -1101,7 +1186,7 @@ final class GuildManager implements Listener {
         List<DailyBoardManager.Card> dynamic = plugin.dailyBoard().cards();
         for (int i = 0; i < Math.min(5, dynamic.size()); i++) {
             Contract quest = dynamic.get(i).contract();
-            inventory.setItem(1 + i, icon(quest.icon(), "§6今日 §e" + quest.title() + " §7(" + quest.id() + ")",
+            inventory.setItem(1 + i, quest.id().equals(activeId(player)) ? taskButton(player, quest.id()) : icon(quest.icon(), "§6今日 §e" + quest.title() + " §7(" + quest.id() + ")",
                     TaskGuidance.step(quest.goal(),quest.description()), "声望 +" + quest.fame() + " / 绿宝石 ×" + quest.emeralds(),
                     doneToday(player, quest) ? "今天已完成" : "点击接单"));
         }
@@ -1111,15 +1196,14 @@ final class GuildManager implements Listener {
             String state = !availableToday(player, quest) ? "今日未开放（轮换）"
                     : doneToday(player, quest) ? "今天已完成"
                     : quest.minRank() > rank ? "需要" + RANKS[quest.minRank()] : "点击接单";
-            inventory.setItem(10 + i, icon(quest.icon(), "§e" + quest.title() + " §7(" + quest.id() + ")",
+            inventory.setItem(10 + i, quest.id().equals(activeId(player)) ? taskButton(player, quest.id()) : icon(quest.icon(), "§e" + quest.title() + " §7(" + quest.id() + ")",
                 new String[]{"§7维度：" + DIMS[quest.dim()], TaskGuidance.step(quest.goal(),quest.description()),
                     "声望 +" + quest.fame() + " / 绿宝石 ×" + quest.emeralds(), state}));
         }
         Contract quest = active(player);
         inventory.setItem(48, icon(Material.BARRIER, "§c放弃当前委托", quest == null ? "没有在办的任务"
                 : "放弃「" + quest.title() + "」；进度清零"));
-        inventory.setItem(49, icon(Material.EMERALD, "§a交付已完成委托", quest == null ? "没有在办的任务"
-                : quest.title() + " " + progress(player) + "/" + quest.target(), "点击领取声望与箱中物资"));
+        inventory.setItem(49, taskButton(player, activeId(player)));
         inventory.setItem(50, icon(Material.CHEST, "§6个人奖励箱", "左键第1页；右键选择10页540格；远程2魔力"));
         inventory.setItem(51, icon(Material.IRON_SWORD, "§c前往地下城", "前往试炼塔入口"));
         inventory.setItem(52, icon(Material.ARROW, "§7返回技能", "返回技能罗盘"));
@@ -1145,7 +1229,6 @@ final class GuildManager implements Listener {
             accept(player, plugin.dailyBoard().cards().get(slot - 1).id());
         else if (slot >= 10 && slot < 10 + CONTRACTS.size()) accept(player, CONTRACTS.get(slot - 10).id());
         else if (slot == 48) abandon(player);
-        else if (slot == 49) claim(player);
         else if (slot == 50) dungeon.command(player, new String[]{"arena", "rewards"});
     }
 
