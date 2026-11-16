@@ -8,7 +8,12 @@ import unittest
 from unittest.mock import AsyncMock
 
 from mcp import types
-from numen_controller import Controller, ACTION_TIMEOUT_SECONDS, action_key, lua_tokens
+from numen_controller import Controller, ACTION_TIMEOUT_SECONDS, action_key, lua_tokens, is_error, structured_of
+
+
+def seconds_of(value):
+    """mcp 1.x passes a timedelta read timeout, mcp 2.x plain seconds."""
+    return value.total_seconds() if hasattr(value, "total_seconds") else float(value)
 
 
 def text_result(text="done", error=False, **kwargs):
@@ -49,12 +54,12 @@ class ActionReceipts(unittest.IsolatedAsyncioTestCase):
             return text_result("REFUSED: " + answer.content["note"], error=True)
         self.c.session.call_tool.side_effect = native
         first = await asyncio.wait_for(self.c.call("lua", {"code": "numen.inv.drop('bamboo')"}), 1)
-        self.assertTrue(first.isError)
+        self.assertTrue(is_error(first))
         self.assertIn("REFUSED", first.content[0].text)
         self.assertNotIn("结果未知", first.content[0].text)
         again = await self.c.call("lua", {"code": "numen.inv.drop('bamboo')"})
-        self.assertFalse(again.structuredContent["thisCallDispatched"])
-        self.assertEqual(again.structuredContent["reason"], "approval_required")
+        self.assertFalse(structured_of(again)["thisCallDispatched"])
+        self.assertEqual(structured_of(again)["reason"], "approval_required")
         self.assertEqual(self.c.session.call_tool.await_count, 1)
 
     async def test_unknown_transfer_is_not_replayed_after_a_status_read_or_reconnect(self):
@@ -69,12 +74,12 @@ class ActionReceipts(unittest.IsolatedAsyncioTestCase):
         self.c.session.call_tool.side_effect = None
         await self.c.call("command", {"line": "/mycli inventory status"})
         again = await self.c.call("lua", {"code": "transfer_twenty()"})
-        self.assertEqual(again.structuredContent["reason"], "unknown")
+        self.assertEqual(structured_of(again)["reason"], "unknown")
         self.assertIn("print(numen.task.status())", again.content[0].text)
         restarted = Controller(self.cfg)
         restarted.session = NS(call_tool=AsyncMock(return_value=text_result()))
         after_restart = await restarted.call("lua", {"code": "transfer_twenty()"})
-        self.assertFalse(after_restart.structuredContent["thisCallDispatched"])
+        self.assertFalse(structured_of(after_restart)["thisCallDispatched"])
         self.assertEqual(restarted.session.call_tool.await_count, 0)
         self.assertEqual(stock[0], 20)
 
@@ -92,7 +97,7 @@ class ActionReceipts(unittest.IsolatedAsyncioTestCase):
         restarted = Controller(self.cfg)
         restarted.session = NS(call_tool=AsyncMock())
         result = await restarted.call("say", {"text": "hello"})
-        self.assertEqual(result.structuredContent["reason"], "pending")
+        self.assertEqual(structured_of(result)["reason"], "pending")
         self.assertEqual(restarted.session.call_tool.await_count, 0)
 
     async def test_heartbeat_read_can_recover_from_a_transient_disconnect(self):
@@ -100,13 +105,13 @@ class ActionReceipts(unittest.IsolatedAsyncioTestCase):
         await self.c.call("command", {"line": "/mycli status"})
         self.c.session.call_tool.side_effect = None
         result = await self.c.call("command", {"line": "/mycli status"})
-        self.assertFalse(result.isError)
+        self.assertFalse(is_error(result))
         self.assertEqual(self.c.session.call_tool.await_count, 2)
 
     async def test_confirmed_success_does_not_block_legitimate_later_actions(self):
         for _ in range(2):
             result = await self.c.call("lua", {"code": "walk_one_step()"})
-            self.assertFalse(result.isError)
+            self.assertFalse(is_error(result))
         self.assertEqual(self.c.session.call_tool.await_count, 2)
         self.assertEqual(Controller(self.cfg).action_receipts, {})
 
@@ -114,14 +119,14 @@ class ActionReceipts(unittest.IsolatedAsyncioTestCase):
         self.c.session.call_tool.return_value = text_result("failed(REFUSED): refused by the owner", error=True)
         await self.c.call("lua", {"code": "drop()"})
         again = await self.c.call("lua", {"code": "drop()"})
-        self.assertEqual(again.structuredContent["reason"], "approval_required")
+        self.assertEqual(structured_of(again)["reason"], "approval_required")
         self.assertEqual(self.c.session.call_tool.await_count, 1)
 
     async def test_incomplete_consumptive_command_receipt_stays_unknown(self):
         self.c.session.call_tool.return_value = text_result("[stdout cut at 6000 characters]")
         await self.c.call("command", {"line": "/mycli tasks claim"})
         again = await self.c.call("command", {"line": "/mycli tasks claim"})
-        self.assertEqual(again.structuredContent["reason"], "unknown")
+        self.assertEqual(structured_of(again)["reason"], "unknown")
         self.assertEqual(self.c.session.call_tool.await_count, 1)
 
     async def test_a_different_permitted_action_can_continue_after_refusal(self):
@@ -129,14 +134,14 @@ class ActionReceipts(unittest.IsolatedAsyncioTestCase):
         await self.c.call("lua", {"code": "drop()"})
         self.c.session.call_tool.return_value = text_result("stored")
         result = await self.c.call("lua", {"code": "store()"})
-        self.assertFalse(result.isError)
+        self.assertFalse(is_error(result))
         self.assertEqual(self.c.session.call_tool.await_count, 2)
 
     async def test_transport_waits_long_enough_for_native_permission_result(self):
         await self.c.call("lua", {"code": "return 1"})
         duration = self.c.session.call_tool.call_args.kwargs["read_timeout_seconds"]
-        self.assertEqual(duration.total_seconds(), ACTION_TIMEOUT_SECONDS)
-        self.assertGreater(duration.total_seconds(), 120)
+        self.assertEqual(seconds_of(duration), ACTION_TIMEOUT_SECONDS)
+        self.assertGreater(seconds_of(duration), 120)
 
     async def test_replay_state_is_bound_to_the_original_body(self):
         self.c.session.call_tool.side_effect = TimeoutError()
@@ -148,21 +153,21 @@ class ActionReceipts(unittest.IsolatedAsyncioTestCase):
         for i in range(128):
             self.c.action_receipts[f"{i:064x}"] = {"outcome": "unknown", "at": 1}
         result = await self.c.call("lua", {"code": "another_transfer()"})
-        self.assertFalse(result.structuredContent["thisCallDispatched"])
+        self.assertFalse(structured_of(result)["thisCallDispatched"])
         self.assertEqual(self.c.session.call_tool.await_count, 0)
 
     async def test_changing_comments_and_spacing_does_not_replay_a_timed_out_move(self):
         self.c.session.call_tool.side_effect = TimeoutError()
         await self.c.call("lua", {"code": '-- nearby\nlocal target={x=-473,y=67,z=-495}\nnumen.move.to(target)'})
         again = await self.c.call("lua", {"code": '-- at the chest\nlocal target = { x = -473, y = 67, z = -495 }\nnumen.move.to ( target )'})
-        self.assertFalse(again.structuredContent["thisCallDispatched"])
+        self.assertFalse(structured_of(again)["thisCallDispatched"])
         self.assertEqual(self.c.session.call_tool.await_count, 1)
 
     async def test_block_comments_do_not_hide_a_repeat(self):
         self.c.session.call_tool.side_effect = TimeoutError()
         await self.c.call("lua", {"code": 'drop(20)'})
         again = await self.c.call("lua", {"code": '--[=[ explain\n-- quoted ]=]\ndrop ( 20 )'})
-        self.assertEqual(again.structuredContent["reason"], "unknown")
+        self.assertEqual(structured_of(again)["reason"], "unknown")
         self.assertEqual(self.c.session.call_tool.await_count, 1)
 
     async def test_legacy_pending_receipt_is_migrated_using_its_actual_arguments(self):
@@ -172,7 +177,7 @@ class ActionReceipts(unittest.IsolatedAsyncioTestCase):
             'actions':{action_key('lua',args,legacy=True):{'outcome':'pending','at':1}}}),encoding='utf8')
         restarted=Controller(self.cfg);restarted.session=NS(call_tool=AsyncMock())
         again=await restarted.call('lua',{'code':'-- changed\nmove ( 20 )'})
-        self.assertEqual(again.structuredContent['reason'],'pending')
+        self.assertEqual(structured_of(again)['reason'],'pending')
         self.assertEqual(restarted.session.call_tool.await_count,0)
 
     async def test_different_target_does_not_inherit_another_moves_block(self):
@@ -180,7 +185,7 @@ class ActionReceipts(unittest.IsolatedAsyncioTestCase):
         await self.c.call('lua',{'code':'move({x=20})'})
         self.c.session.call_tool.side_effect=None
         reply=await self.c.call('lua',{'code':'move({x=21})'})
-        self.assertFalse(reply.isError)
+        self.assertFalse(is_error(reply))
         self.assertEqual(self.c.session.call_tool.await_count,2)
 
     def test_string_contents_and_token_boundaries_are_not_rewritten(self):

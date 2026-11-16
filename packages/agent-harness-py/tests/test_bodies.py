@@ -15,7 +15,7 @@ from agent_mc_harness.body.numen import HostedNumenPort, NumenBody, parse_status
 
 def test_native_numen_maps_verbs_to_documented_lua_and_reads_events(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, run: Any) -> None:
     async def go() -> None:
-        async with make("numen-native", tmp_path, monkeypatch) as (body, world):
+        async with make("numen-native", tmp_path, monkeypatch, lua_dialect="numen-paper") as (body, world):
             await body.spawn()
             r = await body.act(BodyAction(verb="move", args={"x": 3, "y": 64, "z": 7}, request_id="req-move-00001"))
             assert r.status == "completed" and world.pos == {"x": 3.0, "y": 64.0, "z": 7.0}
@@ -30,6 +30,54 @@ def test_native_numen_maps_verbs_to_documented_lua_and_reads_events(tmp_path: Pa
             world.events.append('<event kind="death">slain by zombie</event>')
             await asyncio.sleep(0.3)
             assert "death" in seen and body.lifecycle() == "dead"
+            await body.destroy()
+    run(go())
+
+
+def test_native_numen_015_dialect_uses_upstream_lua_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, run: Any) -> None:
+    """Numen 0.1.5 (verified live): walk(pos) not move.to, task.stop for halts, status.self for snapshots."""
+    async def go() -> None:
+        async with make("numen-native", tmp_path, monkeypatch) as (body, world):
+            await body.spawn()
+            caps = body.capabilities().actions
+            assert caps["move"].native == "lua numen.move.walk" and caps["stop"].native == "lua numen.task.stop"
+            r = await body.act(BodyAction(verb="move", args={"x": 3, "y": 64, "z": 7.5}, request_id="req-move-01501"))
+            assert r.status == "completed" and world.pos == {"x": 3.0, "y": 64.0, "z": 7.5}
+            lua = [a["code"] for n, a in world.calls if n == "lua"]
+            assert "numen.move.walk({x=3,y=64,z=7.5})" in lua and not any("numen.move.to" in c or "walk(0,0,0)" in c for c in lua)
+            for _ in range(2):  # a read-only status program carries no action receipt, so it may repeat
+                snap = await body.snapshot()
+                assert snap.health == 20.0 and snap.max_health == 20.0 and snap.position == {"x": 3.0, "y": 64.0, "z": 7.5}
+            assert not any("numen.status.self()" in a.get("code", "") for _, a in world.writes())
+            inv = await body.act(BodyAction(verb="inventory", request_id="req-inv-01501"))
+            assert inv.status == "completed" and "stone" in inv.text
+            world.task_running = True
+            stop = await body.stop("test")
+            assert stop.status == "completed" and "stopped" in stop.text
+            idle = await body.stop("idle")
+            assert idle.status == "completed" and "idle" in idle.text, "an idle body is a successful stop"
+            await body.destroy()
+    run(go())
+
+
+def test_native_numen_015_busy_is_not_dispatched_and_cut_off_is_unknown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, run: Any) -> None:
+    async def go() -> None:
+        async with make("numen-native", tmp_path, monkeypatch) as (body, world):
+            await body.spawn()
+            world.busy = True
+            busy = await body.act(BodyAction(verb="move", args={"x": 1, "y": 64, "z": 1}, request_id="req-busy-00001"))
+            assert busy.status == "rejected", "one program per companion: refused before it ran"
+            assert (await body.stop("busy")).status == "rejected"
+            world.busy = False
+            again = await body.act(BodyAction(verb="move", args={"x": 1, "y": 64, "z": 1}, request_id="req-busy-00002"))
+            assert again.status == "completed", "a refused (never dispatched) action is not held by the receipt ledger"
+            world.cut_off_next = True
+            cut = await body.act(BodyAction(verb="move", args={"x": 2, "y": 64, "z": 2}, request_id="req-cut-000001"))
+            assert cut.status == "unknown" and cut.retry_allowed is False, "a seat-flip cut-off may still have run"
+            sent = len([c for c in world.calls if c[0] == "lua" and "walk({x=2," in c[1]["code"]])
+            repeat = await body.act(BodyAction(verb="move", args={"x": 2, "y": 64, "z": 2}, request_id="req-cut-000002"))
+            assert repeat.status == "rejected" and "thisCallDispatched" in str(repeat.data)
+            assert len([c for c in world.calls if c[0] == "lua" and "walk({x=2," in c[1]["code"]]) == sent, "never replayed"
             await body.destroy()
     run(go())
 

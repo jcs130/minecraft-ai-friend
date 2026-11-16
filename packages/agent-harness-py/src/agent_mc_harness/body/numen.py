@@ -6,13 +6,22 @@ Two ports, one adapter:
   ``numen-paper/qwenpaw/numen_controller.py``: its ``Controller`` keeps the brain lease, the upstream reconnect loop,
   ``get_events`` polling + dedupe journal, unattended-consent denial, the persistent action-receipt ledger
   (``thisCallDispatched=false`` for repeats of unknown actions) and ``command`` -> ``numen.mc.run``. We only wrap it.
+  Works on python ``mcp`` 1.x and 2.x (the controller carries the compat shim).
 * ``HostedNumenPort`` - numen-hosting: the ``mc_numen`` tool of the agent-mc-world core, reached through
   numen-hosting's loopback ``/core`` RPC (``bridges.core_rpc_bridge``) or any agent-mc-autonomy ``MinecraftBridge``.
 
-Unified verbs that Numen has no dedicated tool for are expressed in Numen Lua, using only calls documented in this
-repository (numen_controller ``command_script``; ``numen.move.to``/``numen.scan.entities``/``numen.fight.attack``/
-``numen.inv.drop`` @Examples in numen-paper/patches/ordinary-entity-vision.patch and test fixtures;
-``numen.move.walk(0,0,0)`` is the halt numen-hosting's upstream.patch sends on handoff).
+Unified verbs that Numen has no dedicated tool for are expressed in Numen Lua. Two dialects (``LUA_DIALECTS``):
+
+* ``numen-0.1.5`` (default for the native port) - upstream Numen 0.1.5, verified live against
+  ``numen-neoforge-1.21.1-0.1.5.jar``: ``numen.move.walk(pos)``, ``numen.task.stop()``, ``numen.status.self()``,
+  ``numen.inv.items()``, ``numen.scan.entities``/``numen.fight.attack``/``numen.inv.drop``. 0.1.5 has no
+  ``numen.move.to`` and rejects extra arguments, so ``numen.move.walk(0,0,0)`` is a bad_argument error there.
+* ``numen-paper`` (the hosted port, and the native port with ``lua_dialect="numen-paper"``) - the numen-paper fork
+  calls documented in this repository (``numen.move.to`` @Examples in numen-paper/patches/ordinary-entity-vision.patch,
+  ``/mycli`` status/inventory through ``numen.mc.run``, ``numen.move.walk(0,0,0)`` as numen-hosting's handoff halt).
+
+Numen 0.1.5 runs ONE program per companion: a second ``lua`` call while one runs is refused ("a call is already
+running"), and cancelling the MCP request does not stop the body job, so ``stop`` can only land between programs.
 """
 from __future__ import annotations
 
@@ -42,11 +51,31 @@ from ..models import (
 )
 from .base import ArgumentError, BaseBody, obj, xyz
 
-STOP_LUA = "numen.move.walk(0,0,0)"
 STATUS_LINE = "/mycli status --json"
 INVENTORY_LINE = "/mycli inventory status"
+# numen.task.stop fails with not_found when the body is idle; that is a successful stop for us.
+STOP_LUA = ("local ok,e=pcall(numen.task.stop) if ok then print('stopped') "
+            "else print('idle: '..tostring(type(e)=='table' and e.kind or e)) end")
+STATUS_LUA = ("local me=numen.status.self() "
+              "print('NUMEN_SELF {\"health\":'..me.hp..',\"maxHealth\":'..me.max_hp..',\"food\":'..me.hunger.."
+              "',\"position\":{\"x\":'..me.pos.x..',\"y\":'..me.pos.y..',\"z\":'..me.pos.z..'},\"dimension\":\"'..me.dimension.."
+              "'\",\"gameMode\":\"'..me.game_mode..'\"}')")
+INVENTORY_LUA = "return numen.inv.items()"
+LUA_DIALECTS: dict[str, dict[str, str]] = {
+    "numen-0.1.5": {"move": "numen.move.walk({{x={x},y={y},z={z}}})", "stop": STOP_LUA, "observe": STATUS_LUA, "inventory": INVENTORY_LUA},
+    "numen-paper": {"move": "numen.move.to({{x={x},y={y},z={z}}})", "stop": "numen.move.walk(0,0,0)", "observe": STATUS_LINE,
+                    "inventory": INVENTORY_LINE},
+}
+# Numen 0.1.5 replies: the program was refused before it ran / was cut while the driving seat flipped (it may still run).
+BUSY = re.compile(r"a call is already running for this companion|another program is already running", re.I)
+CUT_OFF = re.compile(r"this turn was cut off", re.I)
 ITEM = re.compile(r"^[a-z0-9_.-]+(?::[a-z0-9_./-]+)?$")
 SCAN_KINDS = ("hostile", "passive", "player", "all", "item")
+
+
+def _field(model: Any, camel: str, snake: str) -> Any:
+    """mcp 1.x exposes camelCase result/tool fields, mcp 2.x snake_case (isError -> is_error ...)."""
+    return getattr(model, camel) if hasattr(model, camel) else getattr(model, snake, None)
 
 
 @dataclass
@@ -67,6 +96,7 @@ class RawEvent:
 
 class NumenPort(Protocol):
     transport: str
+    dialect: str
 
     async def open(self) -> dict[str, Any]: ...
     async def close(self) -> None: ...
@@ -87,6 +117,12 @@ class NativeNumenPort:
     transport = "numen-mcp"
 
     def __init__(self, config: dict[str, Any], *, controller: Any = None) -> None:
+        self.dialect = str(config.get("lua_dialect", "numen-0.1.5"))
+        if self.dialect not in LUA_DIALECTS:
+            raise ValueError(f"lua_dialect must be one of {sorted(LUA_DIALECTS)}")
+        self.lua = LUA_DIALECTS[self.dialect]
+        # Read-only Lua the controller may repeat without an action receipt (status / inventory reads).
+        config = {**config, "read_only_lua": sorted({*config.get("read_only_lua", []), STATUS_LUA, INVENTORY_LUA})}
         # Controller(cfg) needs: upstream_url (loopback), token_file (path only - never the token), companion_uuid,
         # journal_dir. The QwenPaw console delivery is not used: event_transport=channel, auto_wake=False.
         self.cfg = {"qwenpaw_url": "http://127.0.0.1:9", "agent_id": "agent-mc-harness", **config,
@@ -101,7 +137,14 @@ class NativeNumenPort:
             self.controller = self.nc.Controller(self.cfg)
         self._stack = contextlib.AsyncExitStack()
         await self._stack.enter_async_context(self.controller.connected())
-        return {"uuid": self.controller.companion, "server": None, "name": self.cfg.get("name")}
+        # connected() is ready as soon as a cached tool list exists, before the upstream session; give the real
+        # session a moment so the first action is not refused as "body connection unavailable" (it is still safe if not).
+        deadline = asyncio.get_running_loop().time() + float(self.cfg.get("connect_wait_seconds", 10))
+        # The reused Controller exposes no event for "session set", only the attribute, hence the short poll.
+        while getattr(self.controller, "session", None) is None and asyncio.get_running_loop().time() < deadline:  # noqa: ASYNC110
+            await asyncio.sleep(0.05)
+        return {"uuid": self.controller.companion, "server": None, "name": self.cfg.get("name"),
+                "session": getattr(self.controller, "session", None) is not None}
 
     async def close(self) -> None:
         stack, self._stack = self._stack, None
@@ -117,19 +160,21 @@ class NativeNumenPort:
             if tool.name == "events":
                 continue
             out.append(NativeAction(name=tool.name, description=(tool.description or "")[:300], read_only=tool.name == "list_companions",
-                                    input_schema=tool.inputSchema))
+                                    input_schema=_field(tool, "inputSchema", "input_schema")))
         return out
 
     def _map(self, result: Any) -> PortResult:
         text = self.nc.result_text(result)
-        structured = result.structuredContent or {}
+        structured = _field(result, "structuredContent", "structured_content") or {}
         if structured.get("status") == "blocked" or structured.get("thisCallDispatched") is False:
             return PortResult("rejected", text, structured)
         if text.startswith("身体连接暂不可用"):
             return PortResult("rejected", text)
-        if structured.get("status") == "unknown" or "结果未知" in text:
+        if BUSY.search(text):  # refused before running: nothing happened, the caller may try again later
+            return PortResult("rejected", text, {"reason": "body_busy", "thisCallDispatched": False})
+        if structured.get("status") == "unknown" or "结果未知" in text or CUT_OFF.search(text):
             return PortResult("unknown", text, structured)
-        if result.isError:
+        if _field(result, "isError", "is_error"):
             return PortResult("failed", text, structured)
         return PortResult("completed", text, structured or None)
 
@@ -141,7 +186,14 @@ class NativeNumenPort:
         return await self.call("command", {"line": line}, request_id)
 
     async def observe(self) -> PortResult:
-        return await self.command(STATUS_LINE, "observe")
+        source = self.lua["observe"]
+        if source.startswith("/"):
+            return await self.command(source, "observe")
+        lock = getattr(self.controller, "action_lock", None)
+        if lock is not None and lock.locked():  # one program per companion: do not queue a read behind a long job
+            return PortResult("rejected", "body busy: a program is running; snapshot unavailable until it ends",
+                              {"reason": "body_busy", "thisCallDispatched": False})
+        return await self.call("lua", {"code": source}, "observe")
 
     async def events(self) -> list[RawEvent]:
         result = await self.controller.call("events", {})
@@ -167,7 +219,7 @@ class NativeNumenPort:
         session = getattr(self.controller, "session", None)
         if session is None:
             return PortResult("rejected", "body connection unavailable")
-        args = self.nc.bound_arguments({"code": STOP_LUA}, self.controller.companion)
+        args = self.nc.bound_arguments({"code": self.lua["stop"]}, self.controller.companion)
         self.controller.journal.write("tool_started", tool="lua", arguments=args, origin="agent-mc-harness stop")
         result = await session.call_tool("lua", args)
         mapped = self._map(result)
@@ -185,6 +237,7 @@ class HostedNumenPort:
     """numen-hosting body through the agent-mc-world ``mc_numen`` tool (catalog / observe / call / result)."""
 
     transport = "numen-hosted"
+    dialect = "numen-paper"
 
     def __init__(self, bridge: ToolBridge, *, epoch: str | None = None, open_bridge: bool = True) -> None:
         from ..bridges import EventCursor
@@ -255,7 +308,7 @@ class HostedNumenPort:
         return self._map(await self.bridge.call("mc_numen", {"op": "result", "requestId": request_id}))
 
     async def halt(self, request_id: str) -> PortResult:
-        return await self.call("lua", {"code": STOP_LUA}, request_id)
+        return await self.call("lua", {"code": LUA_DIALECTS[self.dialect]["stop"]}, request_id)
 
 
 # ------------------------------------------------------------------------------------------------ events
@@ -293,7 +346,8 @@ def classify_envelope(kind_hint: str) -> str:
 def parse_status(text: str) -> dict[str, Any]:
     """Best-effort read of `/mycli status --json` / mc_numen observe text (MC_STATUS / MC_RPG prefixes are tolerated)."""
     out: dict[str, Any] = {}
-    start = text.find("{")
+    marker = text.find("NUMEN_SELF {")  # numen-0.1.5 STATUS_LUA output; the receipt may hold other Lua tables
+    start = marker + len("NUMEN_SELF ") if marker >= 0 else text.find("{")
     if start >= 0:
         with contextlib.suppress(ValueError):
             value, _ = json.JSONDecoder().raw_decode(text[start:])
@@ -349,18 +403,24 @@ class NumenBody(BaseBody):
     def capabilities(self) -> Capabilities:
         tools = self._tools()
         lua, native = "lua" in tools, self.port.transport == "numen-mcp"
-        acts: dict[str, ActionSupport] = {"observe": ActionSupport(native="mc_numen observe" if not native else f"command {STATUS_LINE}")}
+        dialect = LUA_DIALECTS[getattr(self.port, "dialect", "numen-paper")]
+
+        def via(source: str) -> str:
+            return f"command {source}" if source.startswith("/") else f"lua {source[:60]}"
+        acts: dict[str, ActionSupport] = {"observe": ActionSupport(native="mc_numen observe" if not native else via(dialect["observe"]))}
         if "say" in tools:
             acts["chat"] = ActionSupport(native="say", args=["text"])
         if lua:
-            acts["move"] = ActionSupport(native="lua numen.move.to", args=["x", "y", "z"], async_=not native)
-            acts["stop"] = ActionSupport(native=f"lua {STOP_LUA}", notes="halt used by numen-hosting on handoff")
+            acts["move"] = ActionSupport(native="lua " + dialect["move"].split("(")[0], args=["x", "y", "z"], async_=not native)
+            acts["stop"] = ActionSupport(native="lua " + ("numen.task.stop" if dialect["stop"] == STOP_LUA else dialect["stop"]),
+                                         notes="lands between programs: Numen runs one program per companion" if native else
+                                         "halt used by numen-hosting on handoff")
             acts["attack"] = ActionSupport(native="lua numen.scan.entities + numen.fight.attack", args=["target", "radius"], async_=not native,
                                            notes="target: hostile|passive|player|all; first visible match")
             acts["drop"] = ActionSupport(native="lua numen.inv.drop", args=["item", "count"], async_=not native)
             acts["command"] = ActionSupport(native="command (numen.mc.run)" if native else "lua numen.mc.run", args=["line"],
                                             notes="the body's own /mycli commands; normal player permissions")
-            acts["inventory"] = ActionSupport(native=f"command {INVENTORY_LINE}")
+            acts["inventory"] = ActionSupport(native=via(dialect["inventory"]))
         return Capabilities(
             kind="numen", transport=self.port.transport, actions=acts,
             native_actions=self.port.catalog(),
@@ -433,7 +493,8 @@ class NumenBody(BaseBody):
             mapped = await self.port.call("say", {"text": text}, request_id)
         elif verb == "move":
             x, y, z = xyz(args)
-            mapped = await self.port.call("lua", {"code": f"numen.move.to({{x={lua_num(x)},y={lua_num(y)},z={lua_num(z)}}})"}, request_id)
+            code = LUA_DIALECTS[getattr(self.port, "dialect", "numen-paper")]["move"].format(x=lua_num(x), y=lua_num(y), z=lua_num(z))
+            mapped = await self.port.call("lua", {"code": code}, request_id)
         elif verb == "attack":
             target = obj(args, "target", str, required=False, default="hostile")
             radius = obj(args, "radius", int, required=False, default=16)
@@ -451,7 +512,9 @@ class NumenBody(BaseBody):
         elif verb == "command":
             mapped = await self.port.command(obj(args, "line", str), request_id)
         elif verb == "inventory":
-            mapped = await self.port.command(INVENTORY_LINE, request_id)
+            source = LUA_DIALECTS[getattr(self.port, "dialect", "numen-paper")]["inventory"]
+            mapped = await (self.port.command(source, request_id) if source.startswith("/") else
+                            self.port.call("lua", {"code": source}, request_id))
         elif verb == "observe":
             mapped = await self.port.observe()
         elif verb == "stop":

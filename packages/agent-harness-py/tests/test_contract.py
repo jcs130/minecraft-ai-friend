@@ -21,13 +21,13 @@ KINDS = ["numen-native", "numen-hosted", "maid"]
 
 
 @contextlib.asynccontextmanager
-async def make(kind: str, tmp: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[tuple[BodyAdapter, Any]]:
+async def make(kind: str, tmp: Path, monkeypatch: pytest.MonkeyPatch, *, lua_dialect: str = "numen-0.1.5") -> AsyncIterator[tuple[BodyAdapter, Any]]:
     if kind == "numen-native":
         world = FakeNumenWorld()
         patch_native(monkeypatch, world)
         (tmp / "token").write_text("t0k3n-not-real", encoding="utf-8")
         port = NativeNumenPort({"upstream_url": "http://127.0.0.1:9/mcp", "token_file": str(tmp / "token"), "companion_uuid": COMPANION,
-                                "journal_dir": str(tmp / "journal")})
+                                "journal_dir": str(tmp / "journal"), "lua_dialect": lua_dialect})
         body: BodyAdapter = NumenBody(port, scope=SCOPE, server_id="qiandengji", poll_seconds=0.05, result_poll_seconds=0)
         yield body, world
     elif kind == "numen-hosted":

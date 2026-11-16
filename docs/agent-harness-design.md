@@ -213,20 +213,26 @@ deterministic proposer as fallback; across jobs the measured outcome of the prev
 | Verb / feature | Numen native (numen_controller MCP) | Numen hosted (mc_numen /core) | Touhou maid (mc_maids) |
 |---|---|---|---|
 | chat | `say` | `call say` | `speak` |
-| move | `lua numen.move.to` | `call lua` | — (follow/stay modes) |
+| move | `lua numen.move.walk(pos)` (0.1.5; `numen.move.to` in the numen-paper dialect) | `call lua` | — (follow/stay modes) |
 | follow / stay / sit | — | — | `follow` / `stay` / `sit` (mode, not arrival) |
 | attack | `lua numen.fight.attack(scan)` | `call lua` | — |
 | drop / transfer | `lua numen.inv.drop` | `call lua` | `transfer` |
 | equip | — | — | `equip` |
 | craft | — | — | `make` (workshop, async) |
 | cast / recall | — | — | `cast`, `recall` (async, receipt) |
-| command / inventory | `/mycli …` via `numen.mc.run` | `call` | `inventory` |
-| observe / snapshot | `/mycli status --json` | `observe` | `context` |
-| stop | `numen.move.walk(0,0,0)` halt | `call lua` halt | `stay` |
+| command / inventory | `/mycli …` via `numen.mc.run`; inventory `numen.inv.items()` (0.1.5) | `call` | `inventory` |
+| observe / snapshot | `numen.status.self()` (0.1.5) or `/mycli status --json` (numen-paper) | `observe` | `context` |
+| stop | `numen.task.stop()` (0.1.5; lands between programs — one program per companion) / `numen.move.walk(0,0,0)` (numen-paper) | `call lua` halt | `stay` |
 | native escape hatch | all MCP tools (lua, skill, todo, memory…) | catalog tools | all `mc_maids` actions |
 | events | `get_events` XML (talk, death, hurt, dimension…) | `mc_events` envelopes | `inbox` dialogue + `mc_events` |
 | lifecycle | attach / reconnect / release | attach via core / release | bind existing maid / detach |
 | anti-cheat | own server text | owner connection text → `feed_server_text` | owner connection text |
+
+Numen 0.1.5 notes (verified live on a local NeoForge 21.1.248 server, see `/workspace/numen-0.1.5-upgrade-notes.md`):
+the dedicated-server MCP endpoint is off until `config/numen/server/mcp_server.json` sets `"enabled": true`; tokens come
+from `/numen token create brain …` (shown once, click-to-copy); the first program in a new session can be cut by the
+driving-seat flip (`this turn was cut off: EXTERNAL`) and is treated as `unknown`; a second `lua` call while one runs is
+refused (`a call is already running`) and mapped to `rejected` (not dispatched).
 
 ## 8. Reuse map
 

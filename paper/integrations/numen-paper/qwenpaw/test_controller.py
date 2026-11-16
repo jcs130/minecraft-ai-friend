@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 from mcp import types
+from numen_controller import is_error, structured_of
 from numen_controller import Controller, Journal, ProcessLease, bound_arguments, has_events, local_url, should_wake, command_script, command_result
 
 
@@ -109,7 +110,7 @@ class ControllerTests(unittest.TestCase):
             c.session = AsyncMock()
             c.session.call_tool.side_effect = TimeoutError()
             result = asyncio.run(c.call("lua", {"code": "move()"}))
-            self.assertTrue(result.isError)
+            self.assertTrue(is_error(result))
             self.assertIn("结果未知", result.content[0].text)
             self.assertEqual(c.session.call_tool.await_count, 1)
 
@@ -119,17 +120,17 @@ class ControllerTests(unittest.TestCase):
         value=types.CallToolResult(content=[types.TextContent(type='text',text='[stdout cut at 6000 characters]'),
             types.TextContent(type='text',text='<event kind="timer">ready</event>')],structuredContent={'commandReceipt':raw})
         actual=command_result(value)
-        self.assertFalse(actual.isError)
+        self.assertFalse(is_error(actual))
         self.assertEqual(json.loads(actual.content[0].text.partition(' ')[2])['description'],'技能'*16000)
         self.assertIn('timer',actual.content[1].text)
-        self.assertTrue(actual.structuredContent['complete'])
-        self.assertEqual(actual.structuredContent['outputLines'],1)
-        self.assertNotIn('output',actual.structuredContent)
+        self.assertTrue(structured_of(actual)['complete'])
+        self.assertEqual(structured_of(actual)['outputLines'],1)
+        self.assertNotIn('output',structured_of(actual))
 
     def test_cut_legacy_receipt_is_unknown_and_never_claimed_complete(self):
         value=types.CallToolResult(content=[types.TextContent(type='text',text='MC_SKILL {"id":"x\n[stdout cut at 6000 characters; 12000 more were not shown]')])
         actual=command_result(value)
-        self.assertTrue(actual.isError)
+        self.assertTrue(is_error(actual))
         self.assertIn('不要重放',actual.content[0].text)
 
 

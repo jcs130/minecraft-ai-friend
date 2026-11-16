@@ -39,10 +39,15 @@ class FakeNumenWorld:
         self.fail_next: Exception | None = None
         self.block = asyncio.Event()
         self.block.set()
+        # Numen 0.1.5 replies: "one program per companion" refusal / seat-flip cut-off (the program may still have run).
+        self.busy = False
+        self.cut_off_next = False
+        self.task_running = False
 
     def writes(self) -> list[tuple[str, dict[str, Any]]]:
+        reads = ("/mycli status", "inventory status", "numen.status.self()", "numen.inv.items()")
         return [c for c in self.calls if c[0] not in ("get_events", "list_companions")
-                and not (c[0] == "lua" and "/mycli status" in c[1].get("code", "") or c[0] == "lua" and "inventory status" in c[1].get("code", ""))]
+                and not (c[0] == "lua" and any(r in c[1].get("code", "") for r in reads))]
 
     async def call(self, name: str, args: dict[str, Any]) -> Any:
         from mcp import types
@@ -66,6 +71,23 @@ class FakeNumenWorld:
             return result("said")
         if name == "lua":
             code = args["code"]
+            if self.busy:
+                return result("a call is already running for this companion, or its built-in brain is acting; wait for it to end", error=True)
+            if self.cut_off_next:
+                self.cut_off_next = False
+                return result("this turn was cut off: EXTERNAL; nothing else ran", error=True)
+            if "numen.status.self()" in code:  # numen-0.1.5 STATUS_LUA
+                status = {"health": self.hp, "maxHealth": 20, "food": self.food, "position": self.pos, "dimension": self.dimension,
+                          "gameMode": "survival"}
+                return result("ok · 1 call · 0 s\nstdout:\nNUMEN_SELF " + json.dumps(status))
+            if "numen.inv.items()" in code:
+                return result("ok · 1 call · 0 s\nreturned: {stone = 3}")
+            if "numen.task.stop" in code:
+                stopped, self.task_running = self.task_running, False
+                return result("ok · 1 call · 0 s\nstdout:\n" + ("stopped" if stopped else "idle: not_found"))
+            if m := re.search(r"numen\.move\.walk\(\{x=(-?[\d.]+),y=(-?[\d.]+),z=(-?[\d.]+)\}\)", code):
+                self.pos = {"x": float(m[1]), "y": float(m[2]), "z": float(m[3])}
+                return result("ok · 1 call · 1 s\nstderr:\nline 1 numen.move.walk: reached")
             if "numen.mc.run(" in code:
                 line = json.loads(re.search(r"numen\.mc\.run\((\".*?\")\)", code)[1])
                 if line.startswith("/mycli status"):
@@ -117,6 +139,7 @@ def patch_native(monkeypatch: Any, world: FakeNumenWorld) -> None:
         yield (None, None, None)
 
     monkeypatch.setattr(nc, "streamablehttp_client", fake_client)
+    monkeypatch.setattr(nc, "SEAT_SETTLE_SECONDS", 0, raising=False)
     monkeypatch.setattr(nc, "ClientSession", lambda read, write, **kw: FakeSession(world))
 
 

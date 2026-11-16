@@ -32,7 +32,7 @@ def _load(name: str, directory: Path) -> ModuleType:
 
 
 def numen_controller() -> ModuleType:
-    """Requires the QwenPaw driver's own dependencies: mcp>=1.28,<2 and httpx."""
+    """Requires the QwenPaw driver's own dependencies: mcp (1.x or 2.x; the driver carries the compat shim) and httpx."""
     return _load("numen_controller", repo_root() / "paper" / "integrations" / "numen-paper" / "qwenpaw")
 
 

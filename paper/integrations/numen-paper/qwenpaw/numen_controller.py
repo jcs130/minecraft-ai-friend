@@ -21,12 +21,58 @@ from urllib.parse import urlparse
 
 import httpx
 from mcp import ClientSession, types
-from mcp.client.streamable_http import streamablehttp_client
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 
+try:  # mcp 1.x (QwenPaw pin mcp>=1.28,<2)
+    from mcp.client.streamable_http import streamablehttp_client
+    MCP_MAJOR = 1
+except ImportError:  # mcp 2.x: renamed transport, headers/timeouts move onto an httpx2 client
+    import httpx2
+    from mcp.client.streamable_http import streamable_http_client
+    MCP_MAJOR = 2
+
+    @asynccontextmanager
+    async def streamablehttp_client(url: str, headers: dict | None = None, timeout: float = 30):
+        """mcp 1.x call shape on mcp 2.x: yields (read, write, get_session_id)."""
+        # read stays long: get_events long-polls and actions wait up to ACTION_TIMEOUT_SECONDS.
+        async with httpx2.AsyncClient(headers=headers or {}, timeout=httpx2.Timeout(timeout, read=300),
+                                      follow_redirects=True) as http:
+            async with streamable_http_client(url, http_client=http) as streams:
+                yield streams[0], streams[1], (lambda: None)
+
+
+# mcp 2.x renamed result/tool fields to snake_case (isError -> is_error ...). Read both; construct with the
+# camelCase aliases, which both majors accept; dump by alias so journals and the tool cache keep one format.
+def is_error(result) -> bool:
+    return bool(getattr(result, "isError", None) if hasattr(result, "isError") else getattr(result, "is_error", False))
+
+
+def structured_of(result) -> dict:
+    value = getattr(result, "structuredContent", None) if hasattr(result, "structuredContent") else getattr(result, "structured_content", None)
+    return value if isinstance(value, dict) else {}
+
+
+def input_schema_of(tool) -> dict:
+    return (getattr(tool, "inputSchema", None) if hasattr(tool, "inputSchema") else getattr(tool, "input_schema", None)) or {}
+
+
+def read_timeout(seconds: float):
+    """mcp 1.x takes a timedelta for call_tool(read_timeout_seconds=...), mcp 2.x plain seconds."""
+    return timedelta(seconds=seconds) if MCP_MAJOR == 1 else float(seconds)
+
+
+def dump(model) -> dict:
+    return model.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+
 ALLOWED = {"list_companions", "lua", "skill", "todo", "memory", "say", "command"}
 ACTION_TIMEOUT_SECONDS = 150  # Numen's interactive permission window lasts 120 seconds.
+# Numen >= 0.1.5 hands the companion's driving seat to an external brain on the first server tick after its session
+# opens and cuts whatever program is in flight at that tick ("this turn was cut off: EXTERNAL"), even one of ours.
+SEAT_SETTLE_SECONDS = 0.5
+# That cut-off reply does not prove the program did not run (it may finish and report later as an event).
+CUT_OFF = re.compile(r"this turn was cut off", re.I)
 READ_ONLY_COMMANDS = {"/mycli status", "/mycli status --json", "/mycli status full", "/mycli tasks status", "/mycli inventory status"}
 DESCRIPTIONS = {
     "list_companions": "只读：查询当前身体是否在线。本接口仅控制你自己的角色。",
@@ -109,12 +155,12 @@ def command_script(line: str) -> str:
 
 def command_result(result: types.CallToolResult) -> types.CallToolResult:
     """Prefer the original single execution result over Lua's 6000-character stdout."""
-    structured = result.structuredContent or {}
+    structured = structured_of(result)
     raw = structured.get("commandReceipt")
     if isinstance(raw, dict) and isinstance(raw.get("output"), list) and all(isinstance(x, str) for x in raw["output"]):
         # The first content block is the Lua display; later blocks are real inbox
         # events appended by Numen. Preserve them without duplicating the display.
-        return types.CallToolResult(isError=bool(result.isError), structuredContent={
+        return types.CallToolResult(isError=is_error(result), structuredContent={
             "command": raw.get("command"), "commandResult": raw.get("result"), "complete": True, "outputLines": len(raw["output"])},
             content=[types.TextContent(type="text", text="\n".join(raw["output"])), *result.content[1:]])
     if structured.get("commandReceiptError") or re.search(r"\[(?:stdout|returned value) cut at \d+", result_text(result)):
@@ -276,6 +322,8 @@ class Controller:
                 self.action_receipts = migrated
                 self.persist_receipts()
         self.consent_denials = 0
+        # Exact Lua programs the host declares read-only (status reads); like READ_ONLY_COMMANDS they get no receipt.
+        self.read_only_lua = frozenset(code for code in cfg.get("read_only_lua", []) if isinstance(code, str))
         try:
             cached = json.loads(self.tool_cache.read_text(encoding="utf-8"))
             tools = [types.Tool.model_validate(row) for row in cached["tools"]]
@@ -311,7 +359,7 @@ class Controller:
         # connection has no human approval UI and can only deny, never grant.
         self.consent_denials += 1
         self.journal.write("consent_refused", message=str(getattr(params, "message", ""))[:500])
-        schema = getattr(params, "requestedSchema", {})
+        schema = getattr(params, "requestedSchema", None) or getattr(params, "requested_schema", None) or {}
         decision = schema.get("properties", {}).get("decision", {}) if isinstance(schema, dict) else {}
         if "deny" not in decision.get("enum", []):
             return types.ElicitResult(action="decline")
@@ -341,7 +389,8 @@ class Controller:
             # A fresh heartbeat or controller reconnect does not prove that an
             # interrupted action failed. Keep its receipt until host review.
             guarded = name in {"lua", "say", "command"} and not (
-                name == "command" and args.get("line", "").strip() in READ_ONLY_COMMANDS)
+                name == "command" and args.get("line", "").strip() in READ_ONLY_COMMANDS) and not (
+                name == "lua" and args.get("code") in self.read_only_lua)
             key = action_key(name, args) if guarded else None
             previous = (self.action_receipts.get(key) or self.action_receipts.get(action_key(name, args, legacy=True))) if key else None
             if previous is not None or (key and len(self.action_receipts) >= 128):
@@ -364,7 +413,7 @@ class Controller:
             try:
                 # One request only. An interrupted action is unknown, never retried.
                 result = await self.session.call_tool(upstream_name, upstream_args,
-                                                      read_timeout_seconds=timedelta(seconds=ACTION_TIMEOUT_SECONDS))
+                                                      read_timeout_seconds=read_timeout(ACTION_TIMEOUT_SECONDS))
             except Exception as exc:
                 if key:
                     self.save_action(key, "unknown")
@@ -373,20 +422,21 @@ class Controller:
             if name == "command":
                 result = command_result(result)
             if key:
-                refused = self.consent_denials > denials_before or (result.isError and re.search(
+                refused = self.consent_denials > denials_before or (is_error(result) and re.search(
                     r"\bREFUSED\b|refused by the owner", result_text(result)))
-                outcome = "approval_required" if refused else "unknown" if (result.structuredContent or {}).get("status") == "unknown" else None
+                outcome = ("approval_required" if refused else "unknown"
+                           if structured_of(result).get("status") == "unknown" or CUT_OFF.search(result_text(result)) else None)
                 self.save_action(key, outcome)
-            self.journal.write("tool_result", tool=name, result=result.model_dump(mode="json"))
+            self.journal.write("tool_result", tool=name, result=dump(result))
             return result
 
     async def poll_events(self):
         while self.session:
             try:
                 result = await self.session.call_tool("get_events", {"companion": self.companion, "wait_seconds": 10},
-                                                      read_timeout_seconds=timedelta(seconds=60))
+                                                      read_timeout_seconds=read_timeout(60))
                 text = result_text(result)
-                if result.isError:
+                if is_error(result):
                     self.body_available = False
                     self.status("waiting_for_body")
                     await asyncio.sleep(10)
@@ -462,14 +512,16 @@ class Controller:
                         for tool in upstream.tools:
                             if tool.name not in ALLOWED:
                                 continue
-                            schema = json.loads(json.dumps(tool.inputSchema))
+                            schema = json.loads(json.dumps(input_schema_of(tool)))
                             schema.get("properties", {}).pop("companion", None)
                             schema["required"] = [p for p in schema.get("required", []) if p != "companion"]
                             tools.append(types.Tool(name=tool.name, description=DESCRIPTIONS[tool.name] + "\n" + (tool.description or ""), inputSchema=schema))
                         tools.append(types.Tool(name="events", description="只读：查看尚未处理的现场事件；不主动等待，不修改游戏任务。", inputSchema={"type": "object", "properties": {}}))
                         tools.append(types.Tool(name="command", description="执行本角色自己的游戏命令，完整返回长文本和 JSON。查询入口：/mycli help、/mycli status、/mycli tasks status。操作仍受游戏权限、消耗与冷却限制；超时先核对结果，不重放。", inputSchema={"type": "object", "properties": {"line": {"type": "string", "minLength": 1, "maxLength": 512}}, "required": ["line"], "additionalProperties": False}))
                         self.tools = tools
-                        self.tool_cache.write_text(json.dumps({"v": 1, "tools": [t.model_dump(mode="json") for t in tools]}, ensure_ascii=False), encoding="utf-8")
+                        self.tool_cache.write_text(json.dumps({"v": 1, "tools": [dump(t) for t in tools]}, ensure_ascii=False), encoding="utf-8")
+                        # Let Numen flip the driving seat to us before any program is sent (see SEAT_SETTLE_SECONDS).
+                        await asyncio.sleep(SEAT_SETTLE_SECONDS)
                         self.session = session
                         backoff = 1
                         self.ready.set()
@@ -515,16 +567,26 @@ async def main(config_path: str):
         async with controller.connected():
             yield controller
 
-    server = Server("kirito-numen", version="0.1.0", lifespan=lifespan,
-                    instructions="你控制的是绑定的旧桐人账号。只使用正常玩家权限；先查状态、按需学习，再执行并核实。")
+    instructions = "你控制的是绑定的旧桐人账号。只使用正常玩家权限；先查状态、按需学习，再执行并核实。"
+    if MCP_MAJOR == 1:
+        server = Server("kirito-numen", version="0.1.0", lifespan=lifespan, instructions=instructions)
 
-    @server.list_tools()
-    async def list_tools():
-        return controller.tools
+        @server.list_tools()
+        async def list_tools():
+            return controller.tools
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict):
-        return await controller.call(name, arguments)
+        @server.call_tool()
+        async def call_tool(name: str, arguments: dict):
+            return await controller.call(name, arguments)
+    else:  # mcp 2.x lowlevel Server takes handlers instead of decorators
+        async def on_list_tools(_ctx, _params):
+            return types.ListToolsResult(tools=controller.tools)
+
+        async def on_call_tool(_ctx, params):
+            return await controller.call(params.name, params.arguments or {})
+
+        server = Server("kirito-numen", version="0.1.0", lifespan=lifespan, instructions=instructions,
+                        on_list_tools=on_list_tools, on_call_tool=on_call_tool)
 
     async with stdio_server() as (read, write):
         await server.run(read, write, server.create_initialization_options())

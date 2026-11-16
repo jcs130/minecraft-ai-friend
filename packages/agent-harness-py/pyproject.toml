@@ -11,8 +11,9 @@ license = "MIT"
 dependencies = ["pydantic>=2.7,<3"]
 
 [project.optional-dependencies]
-# Native Numen MCP driver = numen-paper/qwenpaw/numen_controller.py (QwenPaw pins mcp>=1.28,<2).
-numen = ["mcp>=1.28,<2", "httpx>=0.27,<1"]
+# Native Numen MCP driver = numen-paper/qwenpaw/numen_controller.py. It runs on mcp 1.x (QwenPaw's pin) and 2.x
+# (agent-mc-autonomy pins mcp==2.1.1), so one venv can hold the harness, the bridge and the driver.
+numen = ["mcp>=1.28,<3", "httpx>=0.27,<1"]
 # Maid / hosted Numen over the agent-mc-world tool bridge of agent-mc-autonomy (DSH).
 bridge = ["agent-mc-autonomy", "httpx>=0.27,<1"]
 # In-process Graphiti through the existing agent-memory graphiti-sidecar service class.
