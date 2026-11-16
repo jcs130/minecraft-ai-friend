@@ -71,20 +71,24 @@ No game action, teammate authorization or body-task cancellation is started here
 const stringField = (maxLength: number) => ({ type: 'string', minLength: 1, maxLength });
 export const GAME_MEMORY_TOOL: Omit<ToolDef, 'handler'> = {
   name: 'mc_memory', tags: ['read', 'write'],
+  sceneKnowledge: { protocol: 'agent-mc-scenes/v1' },
   readOnlyCall: args => ['help', 'search', 'get', 'replication'].includes(String(args.action ?? 'help'))
-    || args.action === 'experience' && ['help', 'list', 'get', 'stats', 'policy_help', 'policy_status'].includes(String(args.operation ?? 'help')),
-  learningCall: args => args.action === 'experience' && ['reflect', 'rank', 'feedback'].includes(String(args.operation)),
+    || args.action === 'experience' && ['help', 'list', 'get', 'stats', 'policy_help', 'policy_status'].includes(String(args.operation ?? 'help'))
+    || args.action === 'scene' && ['help','list','recall','get'].includes(String(args.operation??'help')),
+  learningCall: args => args.action === 'experience' && ['reflect', 'rank', 'feedback'].includes(String(args.operation))
+    || args.action === 'scene' && ['upsert','archive'].includes(String(args.operation)),
   description: 'Persistent game-only notebook, isolated by server/account/agent. Search summaries, then get details. '
     + 'Historical observations and attributed notes never establish current facts, permissions or goal success. '
     + 'remember needs top-level kind/summary/content/source (your conclusion: source.kind=agent_note). '
     + 'capture only samples current runtime facts. Use action:help,topic:remember for exact arguments. '
+    + 'scene/help exposes model-organized, source-attributed scene guides. Save classifications in background; recall only relevant guidance for this task. No fixed skill taxonomy or automatic success claims. '
     + 'experience/list returns paginated evidence summaries; experience/get with input:{id} expands one record. Use action:experience,operation:help for filters and evidence-linked reflection. experience/policy_help explains local JitRL candidate ranking and receipt-based feedback (no model calls). Optional service learning uses action:service; local lessons need no remote service. No body actions; requires dataDir.',
   parameters: { type: 'object', additionalProperties: false, properties: {
-    action: { type: 'string', enum: ['help', 'search', 'get', 'remember', 'capture', 'revise', 'archive', 'sync', 'replication', 'service', 'experience'] },
+    action: { type: 'string', enum: ['help', 'search', 'get', 'remember', 'capture', 'revise', 'archive', 'sync', 'replication', 'service', 'experience', 'scene'] },
     preference: { type: 'string', enum: ['local-first', 'balanced', 'remote-first'], description: 'Only search: choose retrieval emphasis for this task. Does not disable local persistence or enable an unconfigured service.' },
     topic: { type: 'string', enum: ['search', 'remember', 'capture', 'revise'], description: 'Only for action:help; returns one action schema and example.' },
-    operation: { type: 'string', enum: [...new Set([...LEARNING_OPERATIONS, 'list', 'get', 'stats', 'reflect', 'policy_help', 'policy_status', 'rank', 'feedback'])], description: 'Only for action:service or experience, not local capture or remember.' },
-    input: { type: 'object', maxProperties: 12, description: 'Only service/experience-operation arguments. Local note fields stay at the top level.' }, requestId: stringField(128),
+    operation: { type: 'string', enum: [...new Set([...LEARNING_OPERATIONS, 'list', 'get', 'stats', 'reflect', 'policy_help', 'policy_status', 'rank', 'feedback', 'recall', 'upsert', 'archive'])], description: 'Only for action:service, experience or scene, not local capture or remember.' },
+    input: { type: 'object', maxProperties: 12, description: 'Service/experience/scene-operation arguments. Local note fields stay at the top level.' }, requestId: stringField(128),
     id: stringField(48), expectedRevision: { type: 'integer', minimum: 1 }, revision: { type: 'integer', minimum: 1 },
     kind: { type: 'string', enum: [...KINDS] }, summary: stringField(180), content: stringField(6000),
     source: { type: 'object', additionalProperties: false, required: ['kind'], properties: {

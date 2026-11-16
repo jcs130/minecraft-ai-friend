@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { GameMemoryLearning } from './game-memory-learning.ts';
 import { OperationExperienceBook } from './operation-experience.ts';
 import { JitRlBook } from './jitrl.ts';
+import { SceneKnowledgeLibrary } from './scene-knowledge.ts';
 import { artifactRef } from './game-memory-learning-contract.ts';
 import { memoryRequest, validateMemoryTransport } from './game-memory-http.ts';
 import { CPU_MEMORY_VECTOR_VERSION, cpuMemoryVector, cpuMemorySimilarity } from './memory-cpu-vector.ts';
@@ -160,6 +161,8 @@ export class GameMemoryService {
   async execute(args: Record<string, unknown>, ctx: GameMemoryContext, config: Partial<GameMemoryConfig> = {}, signal?: AbortSignal): Promise<Record<string, unknown>> {
     signal?.throwIfAborted();
     const cfg = { ...GAME_MEMORY_DEFAULTS, ...config };
+    // Local model-organized guidance must not wait for a remote memory service.
+    if (args.action === 'scene') return new SceneKnowledgeLibrary(this.book).execute(args, ctx);
     if (args.action === 'experience') {
       if (!this.directory) throw new Error('Persistent dataDir is required for operation experience');
       const book = new OperationExperienceBook(this.directory);
