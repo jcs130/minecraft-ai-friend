@@ -10,13 +10,16 @@ import dev.isxander.controlify.bindings.input.ButtonInput;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ChatScreen;
+import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
@@ -39,6 +42,7 @@ public final class QiandengControls {
     public QiandengControls(IEventBus modBus) {
         modBus.addListener(this::registerKeys);
         NeoForge.EVENT_BUS.addListener(this::tick);
+        NeoForge.EVENT_BUS.addListener(this::openWheelScreen);
         wheelPad = bind("wheel", WHEEL, "dpad_up");
         guidePad = bind("guide", GUIDE, "dpad_right");
         LOG.info("[qiandeng-controls] registered F6 wheel, F7 guide and editable Controlify bindings");
@@ -75,10 +79,31 @@ public final class QiandengControls {
         while (WHEEL.consumeClick()) { }
         while (GUIDE.consumeClick()) { }
         if (mc.player != null && mc.screen == null) {
-            if (wheel) send("skillchest self", false);
+            if (wheel) openWheel();
             else if (guide) mc.setScreen(new FieldGuideScreen());
         }
         qa.tick(mc);
+    }
+
+    static void openWheel() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getConnection() == null) return;
+        var commands = mc.getConnection().getCommands().getRoot();
+        if (commands.getChild("skillchest") != null) send("skillchest self", false);
+        else if (commands.getChild("mycli") != null) send("mycli menu wheel", false);
+    }
+
+    static boolean legacyWorld() {
+        var connection = Minecraft.getInstance().getConnection();
+        return connection != null && connection.getCommands().getRoot().getChild("skillchest") != null;
+    }
+
+    private void openWheelScreen(ScreenEvent.Opening event) {
+        if (event.getNewScreen() instanceof ContainerScreen container
+                && container.getMenu().getRowCount() == 4
+                && container.getTitle().getContents() instanceof TranslatableContents title
+                && SpellWheelScreen.TITLE_KEY.equals(title.getKey()))
+            event.setNewScreen(new SpellWheelScreen(container.getMenu(), container.getTitle()));
     }
 
     /** Uses the signed-in player's normal command connection; no RCON/OP/network bypass. */

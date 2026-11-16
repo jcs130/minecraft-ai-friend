@@ -100,6 +100,30 @@ final class NativeRpg {
     JsonArray abilities(Player p){
         return abilities(p,state(p));
     }
+    record ActiveSpell(String id, String name, String mana, Long cooldownRemainingMs) { }
+    /** Currently usable native abilities, as reported by the original loaded RPG profile. */
+    List<ActiveSpell> classSpells(JsonObject state) {
+        if (!state.has("abilities") || !state.get("abilities").isJsonArray()) return List.of();
+        List<ActiveSpell> spells = new ArrayList<>();
+        for (var value : state.getAsJsonArray("abilities")) {
+            if (!value.isJsonObject()) continue;
+            var row = value.getAsJsonObject();
+            if (!row.has("id") || !row.get("id").isJsonPrimitive()) continue;
+            String key = row.get("id").getAsString();
+            if (!key.matches("mycli:[a-z0-9_]{1,48}")) continue;
+            String id = key.substring("mycli:".length());
+            if (COMMON.contains(id)) continue;
+            var remaining = row.get("cooldownRemainingMs");
+            spells.add(new ActiveSpell(id, text(row, "name", id), text(row, "manaCost", "待查询"),
+                    remaining != null && remaining.isJsonPrimitive() && remaining.getAsJsonPrimitive().isNumber()
+                            ? remaining.getAsLong() : null));
+        }
+        return List.copyOf(spells);
+    }
+    private static String text(JsonObject row, String field, String fallback) {
+        var value = row.get(field);
+        return value != null && value.isJsonPrimitive() ? value.getAsString() : fallback;
+    }
     JsonArray abilities(Player p,JsonObject s){
         JsonArray out=s.has("abilities")?s.getAsJsonArray("abilities"):new JsonArray();
         if(!s.has("mana"))return out;
@@ -228,6 +252,7 @@ final class NativeRpg {
             catch(RuntimeException e){p.sendMessage("§e[service_unavailable] 组队服务暂不可用；先查 /mycli guild party status，不重复创建或接受邀请。");}return true;
         }
         if(Set.of("status","profession","职业","skills","spells","技能","tasks","任务路线").contains(group)) {
+            if(Set.of("skills","spells","技能").contains(group)&&args.length>1&&args[1].equalsIgnoreCase("wheel"))return false;
             if(Set.of("skills","spells","技能").contains(group)&&args.length>=3&&args[1].equalsIgnoreCase("list")&&args[2].equalsIgnoreCase("passive")){
                 for(int i=3;i<args.length;i++)if(!args[i].equals("--json")){p.sendMessage("§e[invalid_argument] passive 仅接受可选--json；未执行。下一步：/mycli skills list passive");return true;}
                 FoundationGrowth.describe(p,Arrays.asList(args).contains("--json"));return true;

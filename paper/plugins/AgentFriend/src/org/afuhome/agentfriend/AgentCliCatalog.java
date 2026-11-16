@@ -131,6 +131,8 @@ final class AgentCliCatalog {
         add(specs,"cast","magic","cast","/mycli cast <技能ID> [参数]","施放生活、战斗或探索法术","本人非旁观者；魔力/学习/冷却由技能检查","技能结果；部分返回 MC_* 坐标");
         add(specs,"focus","magic","item","/mycli focus give|list|menu|bind <技能ID>","领取、查看、配置灵纹法杖","在线玩家；bind 需持有法杖","法杖菜单或绑定回执");
         add(specs,"imprint","magic","item","/mycli imprint [list|技能ID]","给手持工具刻印可用法术","附魔台 4 格内；非创造需 3 级经验和 1 青金石","菜单、可刻印列表或结果");
+        add(specs,"imprint.weapon","magic","item","/mycli imprint weapon [list|random|guard|skirmish]","查看或镌刻普通剑和战斧的技能，可随机组合","附魔台 4 格内手持武器，非创造需 9 级经验和 3 青金石","组合说明或刻印结果");
+        add(specs,"skills.wheel","magic","gui","/mycli skills wheel","打开通用与已学职业技能施法轮盘","Java 罗盘与基岩菜单可达；使用时遵守原技能条件","施法轮盘");
         add(specs,"compass","item","item","/mycli compass","补领技能罗盘","背包有空位；已有时不重复发放","领取结果");
         add(specs,"book","item","item","/mycli book","补领命格书","背包有空位；已有时不重复发放","领取结果");
         add(specs,"kit","item","item","/mycli kit","补领罗盘和命格书","背包有空位","领取结果");

@@ -7,10 +7,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class AdventureMenuModel {
     static final int SIZE=36;
     static final int[] CONTENT={10,11,12,13,14,15,16,19,20,21,22,23,24,25};
-    enum Page { HOME,TRAVEL,GROWTH,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,COMMON_DETAIL,CHARACTER,TIDY_BAG,TIDY_STASH,PARTY,PARTY_CONFIRM,HELP,ERROR }
+    // The optional Controls mod draws these positions around a wheel and sends ordinary menu clicks.
+    static final int[] WHEEL_CELLS={10,11,12,13,14,15,16,19};
+    enum Page { HOME,TRAVEL,GROWTH,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,COMMON_DETAIL,WHEEL,CHARACTER,TIDY_BAG,TIDY_STASH,PARTY,PARTY_CONFIRM,HELP,ERROR }
     enum Action {
         NONE,CLOSE,BACK,HOME,TRAVEL,GROWTH,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,CHARACTER,HELP,
-        CLASS_MENU,SKILL_MENU,TALENT_MENU,QUEST_MENU,COMMON_DETAIL,COMMON_PAGE,COMMON_USE,
+        CLASS_MENU,SKILL_MENU,TALENT_MENU,QUEST_MENU,COMMON_DETAIL,COMMON_PAGE,COMMON_USE,WHEEL,WHEEL_PAGE,WHEEL_CAST,
         TRAINING_MENU,CONQUEST_MENU,DUNGEON_MENU,GUILD_MENU,CONTRACT_MENU,PLACES_MENU,
         BACKPACK,STASH,TIDY_BAG,TIDY_STASH,TIDY_BAG_CONFIRM,TIDY_STASH_CONFIRM,
         SHOP_MENU,RECYCLE_MENU,AUCTION_MENU,PARTY,PARTY_CONFIRM,PARTY_APPLY,PARTY_MENU,PLAYERS_MENU,WAYPOINTS_MENU,
@@ -35,11 +37,11 @@ final class AdventureMenuModel {
     static Page destination(Action action){return switch(action){
         case HOME->Page.HOME;case TRAVEL->Page.TRAVEL;case GROWTH->Page.GROWTH;case ADVENTURE->Page.ADVENTURE;case STORAGE->Page.STORAGE;
         case TRADE->Page.TRADE;case SOCIAL->Page.SOCIAL;case MEMORIES->Page.MEMORIES;case COMMON->Page.COMMON;
-        case CHARACTER->Page.CHARACTER;case TIDY_BAG->Page.TIDY_BAG;case TIDY_STASH->Page.TIDY_STASH;case PARTY->Page.PARTY;case HELP->Page.HELP;
+        case WHEEL->Page.WHEEL;case CHARACTER->Page.CHARACTER;case TIDY_BAG->Page.TIDY_BAG;case TIDY_STASH->Page.TIDY_STASH;case PARTY->Page.PARTY;case HELP->Page.HELP;
         default->null;
     };}
     static Page parent(Page page){return switch(page){
-        case COMMON,CHARACTER->Page.GROWTH;case COMMON_DETAIL->Page.COMMON;case TIDY_BAG,TIDY_STASH->Page.STORAGE;case PARTY_CONFIRM->Page.PARTY;case PARTY,HELP->Page.SOCIAL;default->Page.HOME;
+        case COMMON,CHARACTER,WHEEL->Page.GROWTH;case COMMON_DETAIL->Page.COMMON;case TIDY_BAG,TIDY_STASH->Page.STORAGE;case PARTY_CONFIRM->Page.PARTY;case PARTY,HELP->Page.SOCIAL;default->Page.HOME;
     };}
     /** Revalidate an explicit choice against the current native invitation, never a cached roster. */
     static String partyAction(String token,boolean available,boolean inParty,String inviter){
@@ -67,7 +69,7 @@ final class AdventureMenuModel {
             button(14,Action.SKILL_MENU,"ENCHANTED_BOOK","职业技能","查看、学习与装备职业技能","学习的点数和条件以详情为准"),
             button(16,Action.TALENT_MENU,"NETHER_STAR","天赋树","打开自己的天赋界面","先看条件，再确认分配"),
             button(20,Action.COMMON,"BLAZE_ROD","通用生存技能","归乡、治疗、闪现、跃空及留影特效","先看说明，再点击使用"),
-            button(24,Action.LEGACY_SHORTCUTS,"COMPASS","常用快捷栏","熟悉技能后使用快捷罗盘","潜行右键罗盘也能直接打开"));
+            button(24,Action.LEGACY_SHORTCUTS,"COMPASS","常用快捷栏","常用地点与玩法入口"));
         case ADVENTURE->List.of(
             button(10,Action.TRAINING_MENU,"WOODEN_SWORD","村庄练习塔","练技能、协作与生存","每次新开从第一层开始"),
             button(12,Action.CONQUEST_MENU,"IRON_SWORD","艾恩葛朗特攻略","查看正式楼层、准备条件与入口","与村庄练习塔分别结算"),

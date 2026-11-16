@@ -63,6 +63,7 @@ import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -218,6 +219,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private NamespacedKey focusKey;
     private NamespacedKey focusSpellKey;
     private NamespacedKey imprintSpellKey;
+    private WeaponEngravings weaponEngravings;
     private NamespacedKey statusBookKey;
     private NamespacedKey guideSeenKey;
     private NamespacedKey mobKey;
@@ -325,6 +327,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case SKIN_MENU -> playerMenuCommand(p,"skins");
             case LEGACY_SHORTCUTS -> openMenu(p,"skills");
             case ONBOARDING -> {communication.chatPolicy(p,false);agentCoach.guide(p,true);}
+            case WHEEL_CAST -> {
+                if (!payload.matches("[a-z0-9_]{1,48}")) throw new IllegalArgumentException("invalid_menu_skill");
+                cast(p, payload);
+            }
             case COMMON_USE -> {
                 if(!NativeRpg.COMMON.contains(payload))throw new IllegalArgumentException("unknown_common_menu_skill");
                 switch(payload){
@@ -426,6 +432,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         getServer().getPluginManager().registerEvents(travelMagic, this);
         getCommand("mycli").setExecutor(this);
         getCommand("mycli").setTabCompleter(this);
+        weaponEngravings = new WeaponEngravings(this, imprintSpellKey);
         dungeon = new DungeonManager(this);
         trialSharedSupplies = new TrialSharedSupplies(this);
         trialButtons = new TrialEntranceControls(this);
@@ -962,7 +969,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (!player.getPersistentDataContainer().has(guideSeenKey, PersistentDataType.BYTE)) {
                 player.getPersistentDataContainer().set(guideSeenKey, PersistentDataType.BYTE, (byte) 1);
                 if (!communication.compact(player)) {
-                    player.sendMessage(ChatColor.GOLD + "欢迎来到千灯纪！右键罗盘打开冒险大厅，选择角色、任务、仓库或交易；潜行右键是技能快捷栏。大厅左下可看本人下一步。");
+                    player.sendMessage(ChatColor.GOLD + "欢迎来到千灯纪！使用罗盘打开冒险大厅，潜行时使用罗盘直接打开施法轮盘。大厅左下可看本人下一步。");
                     player.sendMessage(ChatColor.AQUA + "Agent：/mycli intro 查看入门，/mycli rules 规则，/mycli progress 本人进度；coach lessons 只读查看，coach enroll 自愿报名。黄色大背包54格，/minepacks:backpack open 普通存取，区别于任务袋和奖励箱。");
                 }
             }
@@ -1467,7 +1474,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 if(args.length==1)playerAdventureMenus.open(player);
                 else if(args.length==2&&args[1].equalsIgnoreCase("quick"))openMenu(player,"skills");
                 else if(args.length==2&&args[1].equalsIgnoreCase("places"))openPlacesMenu(player);
-                else player.sendMessage("§e打开冒险大厅：/mycli menu；熟练玩家快捷栏：/mycli menu quick。");
+                else if(args.length==2&&args[1].equalsIgnoreCase("wheel"))openSpellWheel(player);
+                else player.sendMessage("§e打开冒险大厅：/mycli menu；快捷栏：/mycli menu quick；施法轮盘：/mycli menu wheel。");
             }
             case "compass", "指南针" -> giveCompass(player);
             case "focus", "法杖" -> focusCommand(player, args);
@@ -1476,7 +1484,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "book", "命格书" -> giveStatusBook(player);
             case "kit", "入门" -> { giveCompass(player); giveStatusBook(player); }
             case "spells", "skills", "技能" -> {
-                if (args.length > 1 && args[1].equalsIgnoreCase("status")) communication.skills(player,args);
+                if (args.length > 1 && args[1].equalsIgnoreCase("wheel")) {
+                    if (args.length == 2) openSpellWheel(player);
+                    else player.sendMessage("§e用法：/mycli skills wheel");
+                } else if (args.length > 1 && args[1].equalsIgnoreCase("status")) communication.skills(player,args);
                 else if (args.length > 1 && Set.of("mine", "prepare", "unprepare", "menu", "learnmenu", "points", "learn", "upgrade", "info", "respec").contains(args[1].toLowerCase(Locale.ROOT)))
                     professions.command(player, args);
                 else SpellGuide.command(player, args);
@@ -1545,6 +1556,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         p.sendMessage("/mycli profession status|menu|choose <ID>|leave <ID>；skills mine|prepare|unprepare <ID>  职业与传承");
         p.sendMessage("/mycli skillbook list|use [槽位]  查看并研习试炼掉落的实体技能书；手柄可手持使用");
         p.sendMessage("/mycli imprint [list|技能ID]  在附魔台附近给手持工具刻印；潜行使用工具施法");
+        p.sendMessage("/mycli imprint weapon list  查看武器刻印组合；/mycli skills wheel  打开施法轮盘");
         p.sendMessage("/mycli cast leap|flight|golem|sense  跃空、限时飞行、守护傀儡、探测怪物");
         p.sendMessage("/mycli goto <地点ID>|arena|personal:<名字>|shared:<分享码>；传送 6 魔力");
         p.sendMessage("/mycli waypoint add|update|remove|share|unshare <名字>；rename <旧名> <新名>；list|shared [页码]；menu");
@@ -1626,7 +1638,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         guild.command(p, new String[]{"guild", "status"});
         p.sendMessage(ChatColor.GRAY + "生活法术由 MagicSpells 管冷却，战斗、探矿与探索法术由 AgentFriend 管冷却。");
     }
-    private void cast(Player p, String raw) {
+    void cast(Player p, String raw) {
         if(nativeRpg.selected()){String[] tokens=raw.split("\\s+",2);raw=NativeRpg.skillId(tokens[0])+(tokens.length>1?" "+tokens[1]:"");}
         if (isDowned(p)) { p.sendMessage("§e倒地中，请等待队友靠近救援或清场复活。"); return; }
         if (p.getGameMode() == GameMode.SPECTATOR) { p.sendMessage(ChatColor.RED + "旁观者不能施法；请使用对应的生存角色行动，/mycli status 查看当前状态。"); return; }
@@ -2347,9 +2359,25 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return false;
     }
     private void imprintCommand(Player player, String[] args) {
+        if (args.length >= 2 && args[1].equalsIgnoreCase("weapon")) {
+            if (args.length == 2) openImprintMenu(player);
+            else if (args.length == 3 && args[2].equalsIgnoreCase("list")) {
+                for (var preset : WeaponEngravings.Preset.values()) {
+                    player.sendMessage("§d" + preset.title + "刻印 · /mycli imprint weapon " + preset.id);
+                    preset.hints().forEach(player::sendMessage);
+                }
+                player.sendMessage("§7附魔台 4 格内手持普通剑或战斧，费用 " + WeaponEngravings.COST + "。");
+            } else if (args.length == 3) {
+                var preset = WeaponEngravings.Preset.find(args[2].toLowerCase(Locale.ROOT));
+                if (preset != null) imprintWeapon(player, preset);
+                else player.sendMessage("§e查看可选组合：/mycli imprint weapon list。");
+            } else player.sendMessage("§e用法：/mycli imprint weapon [list|random|guard|skirmish]。");
+            return;
+        }
         if (args.length >= 2 && args[1].equalsIgnoreCase("list")) {
             listFocus(player);
             player.sendMessage(ChatColor.GRAY + "在附魔台 4 格内手持工具，用 /mycli imprint <技能ID> 刻印。每次需 3 经验等级和 1 青金石。");
+            player.sendMessage("§7查看武器刻印组合：/mycli imprint weapon list。");
             return;
         }
         if (args.length >= 2) imprint(player, tail(args, 1).toLowerCase(Locale.ROOT));
@@ -2372,6 +2400,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         ItemStack stack = player.getInventory().getItemInMainHand();
         if (!imprintable(stack)) { player.sendMessage(ChatColor.RED + "这件物品不能刻印；请手持镐、剑、工具或望远镜。"); return; }
         if (!nearEnchantingTable(player)) { player.sendMessage(ChatColor.RED + "要在附魔台 4 格内刻印法术。"); return; }
+        if (weaponEngravings.binding(stack) != null) {
+            player.sendMessage("§e这把剑已有武器刻印；用 /mycli imprint weapon list 查看重刻选项。"); return;
+        }
         if (id.equals(imprintedSpell(stack))) { player.sendMessage(ChatColor.YELLOW + "这件物品已经刻印了 " + ChatColor.stripColor(spell.title()) + "。"); return; }
         boolean creative = player.getGameMode() == GameMode.CREATIVE;
         if (!creative && (player.getLevel() < 3 || !player.getInventory().contains(Material.LAPIS_LAZULI, 1))) {
@@ -2395,6 +2426,49 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         player.spawnParticle(Particle.ENCHANT, player.getLocation().add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0.3);
         player.sendMessage(ChatColor.LIGHT_PURPLE + "✦ 已给手持物品刻印 " + ChatColor.stripColor(spell.title())
                 + "。潜行使用即可施放；仍消耗原法术的魔力并遵守冷却。");
+    }
+    private void imprintWeapon(Player player, WeaponEngravings.Preset preset) {
+        boolean creative = player.getGameMode() == GameMode.CREATIVE;
+        if (!creative && !nativeRpgMayAct(player)) {
+            player.sendMessage("§e当前无法刻印，请以生存或冒险角色在可行动时操作。"); return;
+        }
+        ItemStack sword = player.getInventory().getItemInMainHand();
+        if (!weaponEngravings.canEngrave(sword)) {
+            player.sendMessage("§e请主手持普通剑或战斧。已有工具刻印或职业武器技能的物品请保留原用法。"); return;
+        }
+        if (!nearEnchantingTable(player)) {
+            player.sendMessage("§e请走到附魔台 4 格内再刻印。"); return;
+        }
+        if (preset.binding != null && weaponEngravings.preset(sword) == preset) {
+            player.sendMessage("§e此剑已带有" + preset.title + "刻印，本次免费。"); return;
+        }
+        ItemStack lapis = new ItemStack(Material.LAPIS_LAZULI, WeaponEngravings.LAPIS);
+        if (!creative && (player.getLevel() < WeaponEngravings.LEVELS
+                || !player.getInventory().containsAtLeast(lapis, WeaponEngravings.LAPIS))) {
+            player.sendMessage("§e武器刻印需要 " + WeaponEngravings.COST + "。"); return;
+        }
+        ItemStack engraved = weaponEngravings.engraved(player, sword, preset);
+        if (!creative) {
+            player.getInventory().removeItem(lapis);
+            player.setLevel(player.getLevel() - WeaponEngravings.LEVELS);
+        }
+        player.getInventory().setItemInMainHand(engraved);
+        player.playSound(player.getLocation(), Sound.BLOCK_ENCHANTMENT_TABLE_USE, 0.8f, 1.2f);
+        player.sendMessage("§d已镌刻" + preset.title + "。将鼠标移到物品上查看操作。");
+    }
+
+    DungeonLoot.Bonus engraveTrialReward(Player player, DungeonLoot.Bonus bonus, int floor) {
+        return weaponEngravings.reward(player, bonus, floor);
+    }
+
+    String weaponRewardFields(ItemStack item) { return weaponEngravings.receipt(item); }
+
+    boolean claimItemCast(Player player, long intervalMs) {
+        long now = System.currentTimeMillis();
+        UUID id = player.getUniqueId();
+        if (now - focusUseAt.getOrDefault(id, 0L) < intervalMs) return false;
+        focusUseAt.put(id, now);
+        return true;
     }
     private boolean hasFocus(Player p) {
         for (ItemStack stack : p.getInventory().getContents()) if (isFocus(stack)) return true;
@@ -2585,6 +2659,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     private void fillCompass(Player p, Inventory inv) {
         EconomyPresentation.decorateCompass(inv);
+        inv.setItem(32, item(Material.END_CRYSTAL, "§d施法轮盘", "打开后点选通用或已学职业技能"));
         for (CompassButton button : COMPASS_BUTTONS)
             inv.setItem(button.slot(), item(button.icon(), (button.slot() < 9 ? "§d" : button.slot() < 18 ? "§a" : "§b")
                     + button.title(), button.hint(), button.action().equals("arena") ? "点击传送；成功消耗6魔力"
@@ -2596,9 +2671,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 inv.setItem(36+i,id==null?item(Material.GRAY_STAINED_GLASS_PANE,"§7职业技能在技能书中查看"):item(SpellGuide.find(id).icon(),"§e"+SpellGuide.find(id).name(),SpellGuide.find(id).costLine(),"通用技能；无需职业，点击施放"));
             }return;
         }
-        for (int slot = 27; slot < 36; slot++)
+        for (int slot = 27; slot < 36; slot++) {
+            if (slot == 32) continue;
             inv.setItem(slot, item(Material.GRAY_STAINED_GLASS_PANE, "§7↓ 底排常用技能 · 点击施法",
                     "未学技能先打开学习页，不会自动扣技能点", "技能的魔力、冷却、范围与安全规则保持"));
+        }
         for (int i = 0; i < COMPASS_QUICK.size(); i++) {
             String id = COMPASS_QUICK.get(i); SpellGuide.Entry entry = SpellGuide.find(id);
             boolean known = compassKnown(p, id);
@@ -2608,6 +2685,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
     }
     private void compassClick(Player p, int slot, boolean rightClick) {
+        if (slot == 32) { openSpellWheel(p); return; }
         if(EconomyPresentation.compassClick(p,slot))return;
         if(nativeRpg.selected()&&slot>=36&&slot<45){
             var common=List.of("home","travel","prospect","night","feather");
@@ -2640,6 +2718,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             default -> { }
         }
     }
+    private void openSpellWheel(Player p) { playerAdventureMenus.open(p, AdventureMenuModel.Page.WHEEL, ""); }
     private boolean isSpellGuidePage(String page) { return page.equals("spell_guide") || page.startsWith("spell_guide:"); }
     private int spellGuidePage(String page) {
         int requested = page.equals("spell_guide") ? 0 : Integer.parseInt(page.substring("spell_guide:".length()));
@@ -2781,6 +2860,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             inv.setItem(45, item(Material.ENCHANTING_TABLE, "§5刻印说明",
                     "手持工具潜行使用附魔台打开此页", "刻印后潜行使用工具施法；普通附魔保留"));
+            ItemStack held = p.getInventory().getItemInMainHand();
+            if (weaponEngravings.canEngrave(held)) {
+                var current = weaponEngravings.preset(held);
+                for (var preset : WeaponEngravings.Preset.values()) {
+                    var lore = new ArrayList<>(preset.hints());
+                    lore.add(preset == current && preset.binding != null ? "已镌刻此组合"
+                            : (current == null ? "点击刻印 · " : "点击更换组合 · ") + WeaponEngravings.COST);
+                    inv.setItem(preset.slot, item(preset.icon, "§d" + preset.title + "刻印", lore.toArray(String[]::new)));
+                }
+            }
         } else if (page.equals("places")) {
             for (PublicPlace place : PUBLIC_PLACES) {
                 inv.setItem(place.slot(), item(place.icon(), place.title(), place.hint(), publicWarp(place.id()) == null ? "地点未就绪" : LocationOutput.worldLabel(publicWarp(place.id()).getWorld()) + " " + LocationOutput.shortForm(publicWarp(place.id())), "落点重新检查；成功后6魔力"));
@@ -2918,24 +3007,19 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         String imprinted = imprintedSpell(event.getItem());
         if (player.isSneaking() && imprinted != null) {
             event.setCancelled(true);
-            long now = System.currentTimeMillis();
-            if (now - focusUseAt.getOrDefault(player.getUniqueId(), 0L) < 300L) return;
-            focusUseAt.put(player.getUniqueId(), now);
-            cast(player, imprinted);
+            if (claimItemCast(player, 300L)) cast(player, imprinted);
             return;
         }
         if (isFocus(event.getItem())) {
             event.setCancelled(true);
             if (player.isSneaking()) { openMenu(player, "focus"); return; }
-            long now = System.currentTimeMillis();
-            if (now - focusUseAt.getOrDefault(player.getUniqueId(), 0L) < 300L) return;
-            focusUseAt.put(player.getUniqueId(), now);
+            if (!claimItemCast(player, 300L)) return;
             FocusSpell spell = focusSpell(event.getItem());
             if (spell == null) player.sendMessage(ChatColor.RED + "法杖绑定已失效；潜行使用重新选择技能。");
             else cast(player, spell.id());
         } else if (isCompass(event.getItem())) {
             event.setCancelled(true);
-            if(player.isSneaking())openMenu(player,"skills");
+            if(player.isSneaking())openSpellWheel(player);
             else playerAdventureMenus.open(player);
         } else if (isStatusBook(event.getItem())) {
             event.setCancelled(true);
@@ -2953,8 +3037,18 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (!(event.getWhoClicked() instanceof Player p)) return;
         int slot = event.getRawSlot();
         if (slot < 0 || slot >= top.getSize() || event.getClick().isShiftClick()) return;
-        if (page.equals("skills") && slot >= 27 && slot < 35 && slot != 30) return;
+        if (page.equals("skills") && slot >= 27 && slot < 35 && slot != 30 && slot != 32) return;
         if (isSpellGuidePage(page) && slot < 9) return;
+        var weaponPreset = page.equals("imprint") ? WeaponEngravings.Preset.at(slot) : null;
+        ItemStack previewedSword = null;
+        if (weaponPreset != null) {
+            ItemStack cursor = event.getCursor(), held = p.getInventory().getItemInMainHand();
+            if (event.getClick() != ClickType.LEFT && event.getClick() != ClickType.RIGHT
+                    || cursor != null && !cursor.getType().isAir()
+                    || !weaponEngravings.canEngrave(held) || top.getItem(slot) == null) return;
+            previewedSword = held.clone();
+        }
+        ItemStack swordAtClick = previewedSword;
         menus.remove(top); // A second click packet cannot cast from this menu.
         p.closeInventory();
         Bukkit.getScheduler().runTask(this, () -> {
@@ -3034,6 +3128,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         .ifPresent(spell -> bindFocus(p, spell.id()));
             } else if (page.equals("imprint")) {
                 if (slot >= 0 && slot < FOCUS_SPELLS.size()) imprint(p, FOCUS_SPELLS.get(slot).id());
+                else if (weaponPreset != null) {
+                    if (swordAtClick.equals(p.getInventory().getItemInMainHand())) imprintWeapon(p, weaponPreset);
+                    else p.sendMessage("§e主手武器已变化，未刻印。重新打开附魔台菜单。");
+                }
             } else if (page.equals("places")) {
                 switch (slot) {
                     case 13 -> gotoPlace(p, "arena");
@@ -3398,7 +3496,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 3 && args[0].equalsIgnoreCase("profession") && Set.of("choose", "leave").contains(args[1]))
             return professions.roleIds();
         if (args.length == 2 && args[0].equalsIgnoreCase("status")) return List.of("full");
-        if (args.length == 2 && args[0].equalsIgnoreCase("skills")) return List.of("status", "list", "explain", "mine", "menu", "learnmenu", "points", "learn", "upgrade", "prepare", "unprepare", "respec", "info");
+        if (args.length == 2 && args[0].equalsIgnoreCase("skills")) return List.of("status", "list", "explain", "mine", "menu", "wheel", "learnmenu", "points", "learn", "upgrade", "prepare", "unprepare", "respec", "info");
+        if (args.length == 2 && args[0].equalsIgnoreCase("menu")) return List.of("quick", "places", "wheel");
         if (args.length == 3 && args[0].equalsIgnoreCase("skills") && args[1].equalsIgnoreCase("status")) {
             List<String> choices=new ArrayList<>(List.of("mine","all"));choices.addAll(SpellGuide.entries().stream().map(SpellGuide.Entry::id).toList());return choices;
         }
@@ -3427,11 +3526,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (args.length == 2 && args[0].equalsIgnoreCase("guide"))
             return List.of("start", "next", "onboarding", "explore", "magic", "gear", "guild", "dungeon", "team", "menu");
         if (args.length == 2 && args[0].equalsIgnoreCase("imprint")) {
-            List<String> choices = new ArrayList<>(List.of("list"));
+            List<String> choices = new ArrayList<>(List.of("list", "weapon"));
             choices.addAll(FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> !id.contains(" ")).toList());
             choices.addAll(professions.ids());
             return choices;
         }
+        if (args.length == 3 && args[0].equalsIgnoreCase("imprint") && args[1].equalsIgnoreCase("weapon"))
+            return List.of("list", "random", "guard", "skirmish");
         if (args.length == 3 && args[0].equalsIgnoreCase("imprint") && args[1].equalsIgnoreCase("prospect"))
             return FOCUS_SPELLS.stream().map(FocusSpell::id).filter(id -> id.startsWith("prospect "))
                     .map(id -> id.substring("prospect ".length())).toList();

@@ -5,6 +5,8 @@
   "binding.qiandeng_controls.wheel.description": "Press once to open the existing wheel. Navigate, confirm with A, return with B.",
   "binding.qiandeng_controls.guide.description": "Skills, waypoints and help. Hold D-pad Left to speak by default; remap in controller settings.",
   "screen.qiandeng_controls.title": "Qiandeng Field Guide",
+  "screen.qiandeng_controls.spell_wheel": "Spell Wheel",
+  "screen.qiandeng_controls.career": "Class Skills",
   "screen.qiandeng_controls.navigation": "Stick / D-pad: select  -  A: confirm  -  B: back",
   "screen.qiandeng_controls.vitals": "Health %s/%s  -  Food %s/20  -  Level %s",
   "screen.qiandeng_controls.wheel": "Skill Wheel",

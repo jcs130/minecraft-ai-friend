@@ -233,11 +233,18 @@ jobs:
       - name: Verify the explicit browser before running real UI checks
         run: test -x "$PORTAL_BROWSER_EXECUTABLE" && "$PORTAL_BROWSER_EXECUTABLE" --version
       - name: Reproduce the desktop controller import pack
-        run: >-
-          python paper/integrations/desktop-client/build.py
-          --cache "$RUNNER_TEMP/desktop-client-inputs"
-          --output "$RUNNER_TEMP/desktop-client-release"
-          --catalog paper/integrations/agent-portal/src/desktop-client-downloads.json
+        run: |
+          controls_sha=c08dc41413a18b3344fcbc008962edc4fb10b778d57c6ce3d07448d5a78fd44d
+          controls="$RUNNER_TEMP/qiandeng-controls-0.1.1.jar"
+          curl --proto '=https' --tlsv1.2 --retry 3 --max-time 45 -fsSL \
+            "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/$controls_sha/qiandeng-controls-0.1.1.jar" \
+            --output "$controls"
+          printf '%s  %s\n' "$controls_sha" "$controls" | sha256sum --check
+          python paper/integrations/desktop-client/build.py \
+            --cache "$RUNNER_TEMP/desktop-client-inputs" \
+            --output "$RUNNER_TEMP/desktop-client-release" \
+            --catalog paper/integrations/agent-portal/src/desktop-client-downloads.json \
+            --controls-mod "$controls"
       - name: Check current portal and Skill download contracts
         run: node scripts/prepare-downloads.mjs --base-url https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/
         working-directory: paper/integrations/agent-portal

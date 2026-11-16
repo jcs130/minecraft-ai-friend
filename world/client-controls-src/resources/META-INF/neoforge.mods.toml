@@ -4,9 +4,9 @@ license="All Rights Reserved"
 
 [[mods]]
 modId="qiandeng_controls"
-version="0.1.0"
+version="0.1.1"
 displayName="千灯手札 · 按键与手柄"
-description="Client controls for the existing skill wheel, field guide and status commands."
+description="Client spell wheel, field guide and controller bindings."
 
 [[dependencies.qiandeng_controls]]
 modId="minecraft"

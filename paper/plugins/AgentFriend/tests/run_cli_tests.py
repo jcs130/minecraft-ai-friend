@@ -23,7 +23,9 @@ def main():
         *sorted((inputs / "libraries").rglob("*.jar")), *sorted((inputs / "plugins").glob("*.jar"))]))
     root = Path(__file__).resolve().parent
     tests = ["AgentCliContractTest", "AgentCliTextTest", "JourneyCatalogTest", "NativeCliCatalogTest",
-             "AgentCliRecoveryTest", "GuildAdventureGuideTest", "AdventureChoiceTest", "AtomicConfigFileTest", "DurableConfigFilesTest", "EconomyPresentationTest", "StashGuidanceCatalogTest", "DungeonEnchantmentsTest"]
+             "AgentCliRecoveryTest", "GuildAdventureGuideTest", "AdventureChoiceTest", "AtomicConfigFileTest",
+             "DurableConfigFilesTest", "EconomyPresentationTest", "StashGuidanceCatalogTest", "DungeonEnchantmentsTest",
+             "WeaponSkillRollsTest"]
     suffix = ".exe" if os.name == "nt" else ""
     tool = lambda name: str(args.jdk / "bin" / (name + suffix)) if args.jdk else name
     version = subprocess.run([tool("javac"), "-version"], capture_output=True, text=True, check=True)
