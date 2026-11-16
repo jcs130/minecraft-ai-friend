@@ -6,7 +6,7 @@
 
 新增多位同行、通过角色对话招募、NPC 互聊与结伴，以及独立于模型和框架的本地记忆与 PowerContext 接入。配置与玩法见 [COMPANIONS.md](COMPANIONS.md)。原有私人女仆能力继续保留；没有配置公开居民时不开放招募。
 
-0.3.0 增加住房、原生自主生活、按 NPC 自己身份检查领地、持久动作回执，以及桐人新模型／中文气泡与日语语音文本。配置、合并安装和当前边界见 [RESIDENTS.md](RESIDENTS.md)。这是经过隔离测试的候选，源码合并不表示已部署正式服。
+0.3.0 增加住房、原生自主生活、按 NPC 自己身份检查领地、持久动作回执，以及桐人新模型／中文气泡与日语语音文本。千灯纪已于 2026-11-16 部署合并版本及第一位居民桐人，见[正式记录](../../../docs/AINCRAD_RESIDENTS_DEPLOYED_20261116.md)。配置、安装方式及尚未验收的范围见 [RESIDENTS.md](RESIDENTS.md)。
 
 ## 安装
 
@@ -48,7 +48,9 @@ python dsh_gateway.py /path/to/private/dsh.json
 
 ## 启用 Qwen Code
 
-使用已验证的 [Qwen Code 1.0.0-preview.1](https://github.com/QwenLM/qwen-code/releases/tag/v1.0.0-preview.1)。准备独立的用户配置目录，在 `settings.json` 中配置自己的模型。使用兼容网关时，可以在 `providers` 下登记提供方，填入 `type: "openai-compatible"`、`protocol: "openai"`、`baseUrl`、`apiKey` 和 `models: [{"model":"qwen3.8-flash"}]`。先用 `qwen --config-dir <配置目录> --list-models` 核对完整模型名。密钥保存在私有配置中。
+使用已验证的 [Qwen Code 1.0.0-preview.1](https://github.com/QwenLM/qwen-code/releases/tag/v1.0.0-preview.1)。准备独立的用户配置目录，在 `settings.json` 中配置自己的模型，参考 [完整配置示例](examples/qwen-settings.example.json)。先用 `qwen --config-dir <配置目录> --list-models` 核对完整模型名。密钥保存在私有配置中。
+
+本预览版实测：仅给 CLI 传 `--thinking disabled --max-output-tokens`，自定义模型的实际 HTTP 请求仍可能缺少 `enable_thinking` 和 `max_tokens`。对于支持开关思考的千问模型，须声明 `providers.<id>.models[].capabilities.thinking.modes:["enabled"]`；并在 `model.preferences[完整模型名]` 设置 `reasoning.thinking.type:"disabled"` 和 `maxTokens`。后者要与网关的 `qwenCode.maxOutputTokens` 一致。不要把这些能力套给不支持的其他模型，也不要修改共享 LiteLLM 路由。真实请求测试为 `tests/qwen-code-wire-stage.py --qwen <可执行文件> --output <新目录>`，使用本地模拟 SSE，无游戏动作和线上模型调用。正式配置选择 900 输出上限，示例选择 320；都是预算上限，不代表实际用量。
 
 1. 复制 `examples/qwen-code.example.json` 和 `examples/tlm-maid-agents.qwen.example.json`，填入原实体和主人 UUID、每位女仆独立的随机传输 token、Qwen Code 可执行文件和配置目录的绝对路径。Windows 选解压后的 `qwen.exe`。`cliModel` 选 Qwen Code 的完整模型名，`model` 用于匹配女仆站点。
 2. 给每位 NPC 配独立的站点。站点名用角色配置里的 `site`，`api_type` 设为 `openai`，`enabled` 设为 `true`，`url` 为 `http://127.0.0.1:19105/v1/<maidId>/qwen/chat/completions`，`secret_key` 与该角色的传输 token 一致。`models` 只需包含角色的 `model`。

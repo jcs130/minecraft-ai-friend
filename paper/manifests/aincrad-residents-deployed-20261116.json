@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "deployed": true,
+  "date": "2026-11-16",
+  "source": {
+    "residentsPr": 270,
+    "residentsCommit": "b40b08e8ef13a59b671438b66ee4e291cad6774d",
+    "gatewayAndModelsPr": 271,
+    "gatewayAndModelsCommit": "d3c15fcab7cd950743c8c9c793bf1c965354c60f",
+    "ciJobsPassedPerPr": 6
+  },
+  "versions": {
+    "minecraft": "1.21.1",
+    "loader": "Youer",
+    "ysm": "2.6.5",
+    "touhouLittleMaid": "1.5.3",
+    "residentBrain": "0.3.0 merged",
+    "agentFriend": "0.4.47.82"
+  },
+  "production": {
+    "observedAt": "2026-11-16T12:31:35.198213+00:00",
+    "maidId": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+    "model": {
+      "texture": "skin",
+      "modelId": "qd_hub_kirito.ysm",
+      "ysm": true
+    },
+    "loaded": true,
+    "usesPlayerSlot": false,
+    "homeInstalled": true,
+    "homeDoor": {
+      "x": -672,
+      "y": 67,
+      "z": 825
+    },
+    "homeWorld": "minecraft:aincrad",
+    "profession": "ranger",
+    "gatewayReady": true,
+    "receipts": [
+      {
+        "requestId": "9a5807ad-015c-4f13-9870-a9d3a5f8be8d",
+        "action": "rest",
+        "status": "completed",
+        "completed": true,
+        "reason": "native_schedule_resumed",
+        "actualPosition": {
+          "y": 67.0,
+          "x": -670.0,
+          "z": 822.0
+        },
+        "observedAt": "2026-11-16T12:24:58.922641900Z"
+      },
+      {
+        "requestId": "75842505-616e-47f5-80e8-3211b55d5bf6",
+        "action": "home",
+        "status": "completed",
+        "completed": true,
+        "reason": "arrived",
+        "actualPosition": {
+          "y": 67.0,
+          "x": -671.0,
+          "z": 826.0
+        },
+        "observedAt": "2026-11-16T12:28:27.915316800Z"
+      },
+      {
+        "requestId": "fb9e6256-3afa-43c4-9180-373b99d75dc7",
+        "action": "rest",
+        "status": "completed",
+        "completed": true,
+        "reason": "native_schedule_resumed",
+        "actualPosition": {
+          "y": 67.0,
+          "x": -678.0,
+          "z": 827.0
+        },
+        "observedAt": "2026-11-16T12:29:29.922141500Z"
+      }
+    ],
+    "memory": {
+      "localEntries": 3,
+      "remoteStoredEntries": 3,
+      "dedicatedScope": true,
+      "remoteSearchVerified": false
+    },
+    "voiceConfigured": false,
+    "fullAutonomySoakVerified": false
+  },
+  "gatewayFix": {
+    "success": true,
+    "gameRestarted": false,
+    "completedAt": "2026-11-16T20:18:14.9885229+08:00"
+  },
+  "qwenWire": {
+    "success": true,
+    "maxOutputTokens": 900,
+    "thinkingDisabledOnWire": true,
+    "gameRestarted": false,
+    "credentialsChanged": false,
+    "settingsSha256": "7b4bb94a036596b38bd0aee88625fb8bf5c0e5333d879a12fe13e0da3ec5d7af",
+    "completedAt": "2026-11-16T12:28:11.532317+00:00"
+  },
+  "models": {
+    "newlyAdded": 25,
+    "batchIncludingKirito": 26,
+    "existingFilesPreserved": 119,
+    "javaNativeVerified": true,
+    "bedrockWebEquivalent": false
+  },
+  "backupDrive": "F",
+  "worldRollbackPerformed": false,
+  "priorFailedMaintenanceRetained": true,
+  "gamePidAfterRecovery": 5196
+}

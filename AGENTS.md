@@ -1,3 +1,7 @@
+## 2026-11-16 艾因格朗特桐人居民与模型库已部署
+
+正式合并居民脑 0.3.0／AF .82 已加载，第一位桐人住在艾因格朗特 (-672,67,825)，原 UUID 与独立本地/PowerContext 记忆保持。Qwen Code 经线上 LiteLLM 完成实际休息与回家回执，三笔真实经历已落地；不占玩家槽。新增25款模型，加先行桐人本批26款，26款原生Java验证、原119文件保持。PR270/271与各6CI通过；r4正常恢复后网关热修复，不回灌世界或角色。Qwen预览版须配置模型思考能力与 preferences 输出预算，已验原始请求；日语声音、基岩/Web同款外观、长期自主与完整RPG仍另验。见[正式记录](paper/docs/AINCRAD_RESIDENTS_DEPLOYED_20261116.md)、[玩家模型](paper/docs/YSM_PLAYER_LIBRARY_20261116.md)。下方候选为历史，不重放旧维护/生成入口。
+
 ## 2026-11-16 艾因格朗特居民 0.3.0 候选，未部署
 
 住房、原生挖建／装备／睡眠、有限职业技能、私聊与中文气泡／日语文本、按 NPC 自己 UUID 的领地及无线存取检查已加入；桐人选今日 `qd_hub_kirito.ysm`。支持合并旧脑为单 JAR，不能叠装两份。74 Java／8 Python／3 Node、29 原生与16混合服检查通过，线上Qwen Code两次实跑并记住真实挖矿结果。复制艾因格朗特地形的7项检查确认穿门、睡眠、重启，候选入口(-672,67,825)；未投放正式服。实际日语音源与正式部署未完成，不替换原肥鱼或假称听感、基岩画面已验。详见[候选维护说明](paper/integrations/touhou-maids/standalone/RESIDENTS.md)与[验收边界](paper/integrations/touhou-maids/standalone/RESIDENTS_VALIDATION.md)。以下为历史。
