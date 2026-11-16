@@ -45,6 +45,7 @@ export { classifyWake, WAKE_DEFAULT, WAKE_ACTIVE_GOAL, compactEvents, clockTime,
 export { EventCondenser, DEFAULT_CONDENSE_RULES, type CondenseRule, type CondenseAction, type EventCondenserOptions, type CondenserStats } from './event-condenser.ts';
 export { GameMemoryBook, GAME_MEMORY_TOOL, type GameMemoryScope, type GameMemorySource, type GameMemoryContext } from '../../core/game-memory.ts';
 export { GameMemoryService, GAME_MEMORY_DEFAULTS, type GameMemoryConfig } from '../../core/game-memory-service.ts';
+export { SceneKnowledgeLibrary, SCENE_KNOWLEDGE_PROTOCOL, validateSceneCard, type SceneKnowledgeCard } from '../../core/scene-knowledge.ts';
 export { CPU_MEMORY_VECTOR_VERSION, cpuMemoryVector, cpuMemorySimilarity } from '../../core/memory-cpu-vector.ts';
 export { configuredPlayerSkin, type LocalPlayerSkin } from '../../core/viewer-local-skin.ts';
 export { setStoredSkin, storedSkinInfo } from '../../core/client-skins.ts';

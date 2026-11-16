@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.87
+
+- Expose model-organized, versioned scene guidance through the shared game-memory contract. Preserve source attribution, applicability and counterexamples; retrieve bounded task-local guidance without fixed spell routing, body actions or claims of verified learning.
+
 ## 0.5.7-rc.160-preview.86
 
 - Deliver comparable operation evidence in direct World tool text as well as SDK/MCP replies; preserve native receipt identity and do not replay the body.
