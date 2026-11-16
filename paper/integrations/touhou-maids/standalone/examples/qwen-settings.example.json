@@ -1,0 +1,27 @@
+{
+  "providers": {
+    "litellm": {
+      "type": "openai-compatible",
+      "protocol": "openai",
+      "baseUrl": "http://127.0.0.1:4000/v1",
+      "apiKey": "${LITELLM_API_KEY}",
+      "models": [
+        {
+          "model": "tokenplan/qwen3.8-flash",
+          "capabilities": {
+            "thinking": {"modes": ["enabled"], "supportsEffort": false}
+          }
+        }
+      ]
+    }
+  },
+  "model": {
+    "preferences": {
+      "litellm/tokenplan/qwen3.8-flash": {
+        "maxTokens": 320,
+        "reasoning": {"thinking": {"type": "disabled"}}
+      }
+    }
+  },
+  "telemetry": {"enabled": false}
+}
