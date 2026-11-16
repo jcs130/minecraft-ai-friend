@@ -319,14 +319,22 @@ def server_for(config, gateway=None, *, gateways=None):
 
         def send_json(self, status, value):
             content = json.dumps(value, ensure_ascii=False, allow_nan=False).encode()
-            self.send_response(status)
-            self.send_header('Content-Type', 'application/json; charset=utf-8')
-            self.send_header('Content-Length', str(len(content)))
-            self.send_header('Cache-Control', 'no-store')
-            self.send_header('Connection', 'close')
-            self.end_headers()
-            self.wfile.write(content)
-            self.close_connection = True
+            try:
+                self.send_response(status)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header('Content-Length', str(len(content)))
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('Connection', 'close')
+                self.end_headers()
+                self.wfile.write(content)
+                return True
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError):
+                # A native client can cancel/expire while the provider finishes.
+                # Do not attempt a second response, rerun inference or propagate
+                # a thread traceback into the Windows service launcher.
+                return False
+            finally:
+                self.close_connection = True
 
         def handle_request(self):
             try:

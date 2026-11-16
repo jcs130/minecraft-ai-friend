@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import threading
 import unittest
+from unittest.mock import patch
+from http.client import RemoteDisconnected
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -157,6 +159,25 @@ class HttpIsolationTest(unittest.TestCase):
         async def failing(*args):raise RuntimeError('private-token-never-publish')
         self.app.planner=failing;status,body=self.request(f'/v1/{MAID}/dsh/chat/completions',BODY)
         self.assertEqual(status,502);self.assertNotIn('private-token',json.dumps(body))
+
+    def test_disconnected_native_client_does_not_trigger_second_reply_or_kill_server(self):
+        handler=self.server.RequestHandlerClass
+        original=handler.end_headers
+        failures=[];attempts=[]
+        self.server.handle_error=lambda *args:failures.append('unhandled_client_failure')
+        for failure in (BrokenPipeError,ConnectionResetError):
+            def disconnected(instance):
+                if instance.path.endswith('/chat/completions'):
+                    attempts.append(failure.__name__)
+                    raise failure('synthetic client disconnected')
+                return original(instance)
+            with patch.object(handler,'end_headers',disconnected):
+                with self.assertRaises(RemoteDisconnected):
+                    self.request(f'/v1/{MAID}/dsh/chat/completions',BODY)
+                self.assertEqual(self.request('/health')[0],200)
+        self.assertEqual(self.count,2)
+        self.assertEqual(attempts,['BrokenPipeError','ConnectionResetError'])
+        self.assertEqual(failures,[])
 
 
 if __name__=='__main__':unittest.main()
