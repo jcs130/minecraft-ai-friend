@@ -12,6 +12,24 @@ const id = z.string().regex(/^[a-f0-9]{64}$/);
 const key = z.string().min(1).max(128).regex(/^[\w.:/@-]+$/);
 const text = (max:number) => z.string().trim().min(1).max(max);
 const revision = z.number().int().min(0);
+// The advertised input and the executable validator must share one contract.
+// Opaque `input: object` tools otherwise leave constrained decoders no fields
+// to generate, even after prose help has described the correct arguments.
+const evaluationSchemas = {
+  trajectory_get: z.strictObject({episodeId:id,offset:z.number().int().min(0).default(0),limit:z.number().int().min(1).max(16).default(8)}),
+  trajectory_score: z.strictObject({episodeId:id,expectedScoreRevision:revision,evaluator:z.strictObject({id:key,model:text(160).nullable(),version:key}),critique:text(1800),
+    rewards:z.array(z.strictObject({experienceId:id,value:z.number().min(-1).max(1).nullable(),reason:text(800)})).max(128),
+    offset:z.number().int().min(0).max(128).default(0),finalize:z.boolean().default(true)}),
+  trajectory_review: z.strictObject({episodeId:id,expectedScoreRevision:revision,select:revision.nullable(),reason:text(1000)}),
+};
+export type TrajectoryEvaluationOperation = keyof typeof evaluationSchemas;
+/** Public, fresh JSON Schema for on-demand or task-scoped SDK/MCP tools. */
+export function trajectoryEvaluationInputSchema(operation:TrajectoryEvaluationOperation):Record<string,unknown> {
+  const schema=evaluationSchemas[operation];
+  if(!schema)throw Error('Unknown trajectory evaluation operation');
+  const {$schema,...input}=schema.toJSONSchema({io:'input'});
+  return input;
+}
 const metric = z.discriminatedUnion('kind', [
   z.strictObject({kind:z.literal('inventory'),item:key,target:z.number().positive().max(10000)}),
   z.strictObject({kind:z.enum(['food','health']),target:z.number().positive().max(10000)}),
@@ -109,7 +127,7 @@ export class JitRlTrajectoryBook {
     trajectory_use:'input:{decisionId,experienceId}. Bind a real operation to an unexpired ranked action. Original terminal and measured change are recorded; this does not award another score or prove improvement. Retry the same IDs after native completion, never replay the action.',
     trajectory_list:'input:{limit?:8,offset?:0}. Bounded recent episode index.'},
     semantics:'G[t]=r[t]+gamma*G[t+1]. Store raw G and geometric-normalized G for bounded policy updates. Native net change and reflective reward stay separate. Null/cancellation cannot become success. Scoring again is not another physical sample. No inference/body calls in core.',
-    schemas:{begin:beginSchema.toJSONSchema()},goalVerified:false};}
+    schemas:{begin:beginSchema.toJSONSchema(),...Object.fromEntries(Object.keys(evaluationSchemas).map(op=>[op,trajectoryEvaluationInputSchema(op as TrajectoryEvaluationOperation)]))},goalVerified:false};}
   execute(args:Record<string,unknown>,ctx:GameMemoryContext):Record<string,unknown>{
     const input=(args.input??{}) as Record<string,unknown>,op=String(args.operation);
     if(op==='trajectory_help')return this.help();
@@ -134,7 +152,7 @@ export class JitRlTrajectoryBook {
     if(op==='trajectory_use')return this.use(input,ctx);
     const episodeId=id.parse(input.episodeId),e=this.read(ctx.scope,episodeId);
     if(op==='trajectory_get'){
-      const q=z.strictObject({episodeId:id,offset:z.number().int().min(0).default(0),limit:z.number().int().min(1).max(16).default(8)}).parse(input);
+      const q=evaluationSchemas.trajectory_get.parse(input);
       const rows=e.steps.slice(q.offset,q.offset+q.limit).map((s,i)=>({index:q.offset+i,experienceId:s.experienceId,
         evidence:s.snapshot??this.getExperience(ctx.scope,s.experienceId)}));
       const latest=e.scores.at(-1);
@@ -173,9 +191,7 @@ export class JitRlTrajectoryBook {
       this.save(ctx.scope,e);return this.brief(e);
     }
     if(op==='trajectory_score'){
-      const q=z.strictObject({episodeId:id,expectedScoreRevision:revision,evaluator:z.strictObject({id:key,model:text(160).nullable(),version:key}),critique:text(1800),
-        rewards:z.array(z.strictObject({experienceId:id,value:z.number().min(-1).max(1).nullable(),reason:text(800)})).max(128),
-        offset:z.number().int().min(0).max(128).default(0),finalize:z.boolean().default(true)}).parse(input);
+      const q=evaluationSchemas.trajectory_score.parse(input);
       if(e.state!=='closed')throw Error('Evaluate only a closed trajectory');
       if(e.steps.length<2)throw Error('Scoring needs a complete multi-step trajectory');
       let rewards=q.rewards;
@@ -210,7 +226,7 @@ export class JitRlTrajectoryBook {
         initialReturn:score.returns[0],nativeOutcome:score.nativeOutcome},adopted:false,benefitVerified:false};
     }
     if(op==='trajectory_review'){
-      const q=z.strictObject({episodeId:id,expectedScoreRevision:revision,select:revision.nullable(),reason:text(1000)}).parse(input);
+      const q=evaluationSchemas.trajectory_review.parse(input);
       if(q.expectedScoreRevision!==e.scores.length)throw Error('Score revision conflict');
       const selected=q.select===null?null:e.scores[q.select-1];if(q.select!==null&&!selected)throw Error('Unknown score revision');
       if(selected&&selected.returns.some(r=>r.return===null))throw Error('Incomplete returns cannot be adopted');
