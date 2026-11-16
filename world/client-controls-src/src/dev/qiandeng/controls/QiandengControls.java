@@ -1,21 +1,15 @@
 package dev.qiandeng.controls;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import dev.isxander.controlify.api.ControlifyApi;
-import dev.isxander.controlify.api.bind.ControlifyBindApi;
-import dev.isxander.controlify.api.bind.InputBinding;
-import dev.isxander.controlify.api.bind.InputBindingSupplier;
-import dev.isxander.controlify.bindings.BindContext;
-import dev.isxander.controlify.bindings.input.ButtonInput;
+import java.util.function.BooleanSupplier;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
-import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
@@ -35,28 +29,18 @@ public final class QiandengControls {
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_F7, "key.categories.qiandeng_controls");
     private final PressEdge wheelEdge = new PressEdge();
     private final PressEdge guideEdge = new PressEdge();
-    private final InputBindingSupplier wheelPad;
-    private final InputBindingSupplier guidePad;
+    private final BooleanSupplier wheelPad;
+    private final BooleanSupplier guidePad;
     private final ClientQaBridge qa = new ClientQaBridge();
 
     public QiandengControls(IEventBus modBus) {
         modBus.addListener(this::registerKeys);
         NeoForge.EVENT_BUS.addListener(this::tick);
         NeoForge.EVENT_BUS.addListener(this::openWheelScreen);
-        wheelPad = bind("wheel", WHEEL, "dpad_up");
-        guidePad = bind("guide", GUIDE, "dpad_right");
-        LOG.info("[qiandeng-controls] registered F6 wheel, F7 guide and editable Controlify bindings");
-    }
-
-    private static InputBindingSupplier bind(String name, KeyMapping key, String button) {
-        return ControlifyBindApi.get().registerBinding(builder -> builder
-                .id(ID, name)
-                .name(Component.translatable(key.getName()))
-                .description(Component.translatable("binding.qiandeng_controls." + name + ".description"))
-                .category(Component.translatable("key.categories.qiandeng_controls"))
-                .defaultInput(new ButtonInput(ResourceLocation.fromNamespaceAndPath("controlify", "button/" + button)))
-                // No key emulation: this mod consumes the digital edge exactly once.
-                .addKeyCorrelation(key).allowedContexts(BindContext.IN_GAME));
+        boolean controlify = ModList.get().isLoaded("controlify");
+        wheelPad = controlify ? ControlifyBindings.bind("wheel", WHEEL, "dpad_up") : () -> false;
+        guidePad = controlify ? ControlifyBindings.bind("guide", GUIDE, "dpad_right") : () -> false;
+        LOG.info("[qiandeng-controls] registered F6 wheel and F7 guide; Controlify bindings={}", controlify);
     }
 
     private void registerKeys(RegisterKeyMappingsEvent event) {
@@ -64,18 +48,11 @@ public final class QiandengControls {
         event.register(GUIDE);
     }
 
-    private static boolean padDown(InputBindingSupplier binding) {
-        return ControlifyApi.get().getCurrentController().map(controller -> {
-            InputBinding input = binding.onOrNull(controller);
-            return input != null && input.digitalNow();
-        }).orElse(false);
-    }
-
     private void tick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         // Always update latches, even inside a menu; holding a button must not reopen it.
-        boolean wheel = wheelEdge.update(WHEEL.isDown() || padDown(wheelPad));
-        boolean guide = guideEdge.update(GUIDE.isDown() || padDown(guidePad));
+        boolean wheel = wheelEdge.update(WHEEL.isDown() || wheelPad.getAsBoolean());
+        boolean guide = guideEdge.update(GUIDE.isDown() || guidePad.getAsBoolean());
         while (WHEEL.consumeClick()) { }
         while (GUIDE.consumeClick()) { }
         if (mc.player != null && mc.screen == null) {

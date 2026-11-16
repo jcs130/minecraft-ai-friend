@@ -4,12 +4,14 @@ on:
     paths:
       - 'paper/integrations/android-client/**'
       - 'paper/integrations/agent-portal/src/android-client-downloads.json'
+      - 'world/client-controls-src/**'
       - '.github/workflows/android-client.yml'
   push:
     branches: [main]
     paths:
       - 'paper/integrations/android-client/**'
       - 'paper/integrations/agent-portal/src/android-client-downloads.json'
+      - 'world/client-controls-src/**'
       - '.github/workflows/android-client.yml'
   workflow_dispatch:
 permissions:
@@ -39,7 +41,17 @@ jobs:
           python paper/integrations/android-client/verify.py
           --pack "$RUNNER_TEMP/android-release/qiandengji-android-1.21.1-neoforge-1.0.0-preview.4.mrpack"
           --cache "$RUNNER_TEMP/android-inputs"
-          --catalog paper/integrations/agent-portal/src/android-client-downloads.json
+      - name: Reproduce both spell wheel import packs
+        run: |
+          base=https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases
+          curl --proto '=https' --tlsv1.2 --retry 3 --max-time 45 -fsSL "$base/0da4f0207be0a9ebdb5935da64493e0c14df5798697474087eab102412b70220/qiandengji-android-1.21.1-neoforge-1.0.0-preview.1.mrpack" -o "$RUNNER_TEMP/android-touch-base.mrpack"
+          curl --proto '=https' --tlsv1.2 --retry 3 --max-time 45 -fsSL "$base/13d33c6fe65974a5b7b52db977c044711cb18737f84abbc34704c1ec9fdc1420/qiandeng-controls-0.1.2.jar" -o "$RUNNER_TEMP/qiandeng-controls-0.1.2.jar"
+          python paper/integrations/android-client/add-spell-wheel.py \
+            --native-base "$RUNNER_TEMP/android-release/qiandengji-android-1.21.1-neoforge-1.0.0-preview.4.mrpack" \
+            --touch-base "$RUNNER_TEMP/android-touch-base.mrpack" \
+            --wheel "$RUNNER_TEMP/qiandeng-controls-0.1.2.jar" \
+            --output "$RUNNER_TEMP/android-release/with-wheel" \
+            --catalog paper/integrations/agent-portal/src/android-client-downloads.json --verify-catalog
       - name: Install Chinese fonts for browser review
         run: |
           sudo apt-get update -qq
