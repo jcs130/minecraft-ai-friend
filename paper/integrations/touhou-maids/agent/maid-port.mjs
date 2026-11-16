@@ -5,7 +5,8 @@ export const MAID_REQUEST_CHANNEL = 'qiandengji:maid_request';
 const commandWindows = new WeakMap();
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const requestId = /^[A-Za-z0-9_-]{1,48}$/;
-const writes = new Set(['brain', 'chat', 'talk', 'follow', 'recall', 'stay', 'speak', 'ack', 'sit', 'task', 'make', 'schedule', 'pickup', 'transfer', 'equip', 'skin', 'voice', 'voice-test', 'mute', 'resource-pack', 'rename']);
+const writes = new Set(['brain', 'chat', 'talk', 'follow', 'recall', 'stay', 'speak', 'ack', 'sit', 'task', 'make', 'schedule', 'pickup', 'transfer', 'equip', 'skin', 'voice', 'voice-test', 'mute', 'resource-pack', 'rename', 'cast']);
+const spellId = /^[a-z0-9][a-z0-9_-]{0,47}$/;
 const workshopId = /^[a-z0-9_-]{1,24}$/;
 const recipeId = /^[a-z0-9_.-]+:[a-z0-9_./-]+$/;
 const sameMaid = (id, expected) => typeof id === 'string' && id.toLowerCase() === expected;
@@ -13,12 +14,13 @@ export const MAID_TOOL = {
   name: 'mc_maids', tags: ['read', 'act'],
   description: 'Qiandengji NPC interface on this authenticated connection. First list exact maid IDs and read context capabilities/hostKind. brain without choice reads configured native/Harness backends and their models; use an exact returned choice and retained requestId to select while idle, preserving the original maid and memory. tasks lists original mode IDs and prerequisites, including native farming when available; inventory reads original slots/equipment. task/schedule/pickup change native settings. workshop reads authorized workstations, recipes and any active order. Read workshop or confirm the workshop handshake before make. After submitting, use receipt with the original operationId and operationAction:make; verify completed, goalCompleted and the delivered item/count/inventory. transfer moves actual items between player and maid inventories; equip swaps a native slot with main/off/head/chest/legs/feet. list finds owned maids; nearby finds visible maids and publicChatEnabled within eight blocks in the same dimension. chat invokes the selected native TLM model: owner history/tools stay private, while enabled nearby visitors receive conversation-only replies without tools. Shared inference remains limited to the configured original maid. pending is NOT a reply; query receipt until replied/unknown. Nearby visitor speech is attributed and heard locally. talk only queues the existing host inbox. context reports lifeState and exact original tombstone location; unloaded is not death. Never automatically recreate a maid or retry uncertain writes. skins/voices list installed original IDs; skin/voice apply a selection. resources reports this connection asset readiness; resource-pack offers Java voice assets. voice-test privately auditions an available event and requires loaded assets; mute controls original automatic speech frequency while manual audition remains available. rename consumes a real named name tag held in the main hand. inbox is attributed, untrusted human dialogue; use the NPC sessionKey and memoryNamespace in your existing host, then speak and acknowledge the event. follow/stay/sit change movement mode. recall brings the owned maid to the authenticated player and reports actual arrival, including across dimensions and inside an activity. Writes require a retained unique requestId. If unknown, query receipt using the SAME operationId without retrying. Mode application is not task completion. No new model loop or owner transfer.',
   parameters: { type: 'object', additionalProperties: false, properties: {
-    action: { type: 'string', enum: ['nearby', 'brain', 'chat', 'talk', 'list', 'context', 'follow', 'recall', 'stay', 'speak', 'receipt', 'inbox', 'ack', 'tasks', 'inventory', 'sit', 'task', 'workshop', 'make', 'schedule', 'pickup', 'transfer', 'equip', 'skins', 'skin', 'voices', 'voice', 'voice-test', 'mute', 'resources', 'resource-pack', 'rename'] },
+    action: { type: 'string', enum: ['nearby', 'brain', 'chat', 'talk', 'list', 'context', 'follow', 'recall', 'stay', 'speak', 'receipt', 'inbox', 'ack', 'tasks', 'inventory', 'sit', 'task', 'workshop', 'make', 'schedule', 'pickup', 'transfer', 'equip', 'skins', 'skin', 'voices', 'voice', 'voice-test', 'mute', 'resources', 'resource-pack', 'rename', 'cast'] },
+    spellId: { type: 'string', pattern: spellId.source, description: 'For cast, read context.companion.rpg.spells and use an exact unlocked spell ID. The server picks valid current targets. Retain requestId and read its receipt for actual hitTargetIds/healedTargetIds.' },
     choice: {type:'string',pattern:'^[a-z0-9][a-z0-9_-]{0,31}$',description:'For brain: omit to read current configured choices; otherwise use an exact returned choice and retain a unique requestId. Selection preserves the original maid and history.'},
     maidId: { type: 'string', format: 'uuid' },
     requestId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,48}$' },
     operationId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,48}$', description: 'Original operation ID for receipt queries.' },
-    operationAction: { type: 'string', enum: [...writes], description: 'Original write action for a receipt, if known. Use make when reconciling a craft after reconnect.' },
+    operationAction: { type: 'string', enum: [...writes], description: 'Original write action for a receipt, if known. Use make for an original craft or cast for an original spell.' },
     page: { type: 'integer', minimum: 0, maximum: 10000 },
     text: { type: 'string', minLength: 1, maxLength: 140 },
     eventId: { type: 'string', description: 'Exact attributed event ID from inbox, for ack only.' },
@@ -60,7 +62,7 @@ export function maidCommand(args) {
   const allowed = new Set(['action', 'requestId', ...(action === 'list' ? ['page'] : action === 'nearby' ? [] : ['maidId']), ...(action === 'skins' ? ['page'] : []),
     ...(action === 'receipt' ? ['operationId', 'operationAction'] : []), ...(action === 'brain' ? ['choice'] : []), ...(['speak', 'talk', 'chat'].includes(action) ? ['text'] : []), ...(action === 'ack' ? ['eventId'] : []),
     ...(action === 'task' ? ['taskId'] : []), ...(action === 'schedule' ? ['schedule'] : []), ...(['pickup', 'mute'].includes(action) ? ['enabled'] : []),
-    ...(action === 'make' ? ['workshopId', 'recipeId', 'quantity', 'inventory'] : []),
+    ...(action === 'make' ? ['workshopId', 'recipeId', 'quantity', 'inventory'] : []), ...(action === 'cast' ? ['spellId'] : []),
     ...(action === 'skin' ? ['skinId'] : []), ...(action === 'voice' ? ['voiceId'] : []), ...(action === 'voice-test' ? ['voiceId', 'soundEvent'] : []),
     ...(action === 'transfer' ? ['direction', 'slot', 'count', 'playerSlot'] : []), ...(action === 'equip' ? ['hand', 'slot'] : [])]);
   if (Object.keys(args).some(key => !allowed.has(key))) throw Error('unexpected argument');
@@ -75,6 +77,7 @@ export function maidCommand(args) {
   if (['speak', 'talk', 'chat'].includes(action) && (typeof text !== 'string' || !text.trim() || text.length > 140 || /[\u0000-\u001f\u007f-\u009f§]/u.test(text))) throw Error('speak needs 1-140 plain-text characters');
   if (action === 'ack' && (typeof eventId !== 'string' || !/^[0-9a-f-]{36}:[A-Za-z0-9_-]{1,48}$/.test(eventId))) throw Error('ack requires the exact eventId');
   if (action === 'task' && (typeof args.taskId !== 'string' || !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(args.taskId))) throw Error('task needs an observed original taskId');
+  if (action === 'cast' && (typeof args.spellId !== 'string' || !spellId.test(args.spellId))) throw Error('cast needs an exact spellId from context.companion.rpg.spells');
   if (action === 'schedule' && !['DAY', 'NIGHT', 'ALL'].includes(args.schedule)) throw Error('invalid native schedule');
   if (['pickup', 'mute'].includes(action) && typeof args.enabled !== 'boolean') throw Error('setting needs enabled');
   if (action === 'skin' && !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(args.skinId ?? '')) throw Error('skin needs an observed original model ID');
@@ -104,25 +107,36 @@ export function maidCommand(args) {
     : action === 'task' ? args.taskId : action === 'schedule' ? args.schedule : ['pickup', 'mute'].includes(action) ? String(args.enabled)
     : action === 'skin' ? args.skinId : action === 'voice' ? args.voiceId : action === 'voice-test' ? `${args.voiceId ? args.voiceId + ' ' : ''}${args.soundEvent}` : action === 'skins' ? String(args.page ?? 0)
     : action === 'transfer' ? `${args.direction} ${args.slot} ${args.count}${args.playerSlot === undefined ? '' : ` ${args.playerSlot}`}`
-    : action === 'equip' ? `${args.hand} ${args.slot}` : orderArgs;
+    : action === 'equip' ? `${args.hand} ${args.slot}` : action === 'cast' ? args.spellId : orderArgs;
   const command = action === 'nearby' ? `/qdmaid nearby ${id}` : action === 'list' ? `/qdmaid list ${id} ${args.page ?? 0}`
     : action === 'receipt' ? `/qdmaid receipt ${maidId} ${operationId} ${id}`
     : `/qdmaid ${action} ${maidId} ${id}${tail ? ` ${tail}` : ''}`;
   if (command.length > 256) throw Error('command exceeds the vanilla 256 character limit');
-  return { action, requestId: id, maidId, operationId: writing ? id : operationId, operationAction, command, order };
+  return { action, requestId: id, maidId, operationId: writing ? id : operationId, operationAction, command, order,
+    ...(action === 'cast' ? {spellId: args.spellId} : {}) };
 }
 
-/** Correlate a decoded server envelope and, for crafting, require evidence of actual inventory delivery. */
+/** Correlate a decoded server envelope and verify the observed effects of completed actions. */
 export function matchesMaidReply(reply, entry, order = entry.order) {
   if (reply.action !== entry.action || reply.requestId !== entry.requestId) return false;
   const data = reply.data;
   if (entry.maidId && (reply.ok || data?.maidId !== undefined) && !sameMaid(data?.maidId, entry.maidId)) return false;
   if (!reply.ok) return data?.operationId === undefined || data.operationId === entry.operationId;
   if (entry.action === 'workshop') return Array.isArray(data.workshops);
-  if (!['receipt', 'make'].includes(entry.action)) return true;
-  const expectedAction = entry.operationAction ?? (entry.action === 'make' || order ? 'make' : undefined);
+  if (!['receipt', 'make', 'cast'].includes(entry.action)) return true;
+  const expectedAction = entry.operationAction ?? (entry.action === 'cast' ? 'cast' : entry.action === 'make' || order ? 'make' : undefined);
   if (data.operationId !== entry.operationId || typeof data.action !== 'string' || !data.action
       || (expectedAction !== undefined && expectedAction !== data.action)) return false;
+  if (data.action === 'cast') {
+    if (!sameMaid(data.actorId, reply.recipientUuid.toLowerCase())
+        || !['reserved', 'applied', 'rejected', 'unknown'].includes(data.status)) return false;
+    const observed = data.observation;
+    if (data.status !== 'applied') return observed?.effectsApplied !== true;
+    if (!spellId.test(observed?.spellId ?? '') || (entry.spellId && observed.spellId !== entry.spellId)
+        || observed.effectsApplied !== true || !Array.isArray(observed.hitTargetIds) || !Array.isArray(observed.healedTargetIds)) return false;
+    const affected = [...observed.hitTargetIds, ...observed.healedTargetIds];
+    return affected.length > 0 && affected.every(id => typeof id === 'string' && uuid.test(id));
+  }
   if (data.action !== 'make') return true;
   if (!sameMaid(data.actorId, reply.recipientUuid.toLowerCase())
       || !['reserved', 'pending', 'completed', 'rejected', 'cancelled', 'unknown'].includes(data.status)) return false;
@@ -145,7 +159,8 @@ export function createMaidPort(bot, { timeoutMs = 5000, onDialogue = () => {}, o
   const pending = new Map();
   // Keep direct make IDs for this connection, including timeouts and preflight refusals.
   const crafts = new Map();
-  let closed = false, pluginTransport = false, workshopTransport = false, workshopObserved = false;
+  const spellbooks = new Map();
+  let closed = false, pluginTransport = false, workshopTransport = false, workshopObserved = false, spellTransport = false;
   const commandWindow = commandWindows.get(bot) ?? { next: 0, payloadNext: 0 };
   commandWindows.set(bot, commandWindow);
   const settle = (id, value) => {
@@ -161,6 +176,7 @@ export function createMaidPort(bot, { timeoutMs = 5000, onDialogue = () => {}, o
     if(value?.action === 'transport' && value.ok && value.data.requestChannel === MAID_REQUEST_CHANNEL){
       pluginTransport = true;
       workshopTransport ||= value.data.workshop === true;
+      spellTransport ||= value.data.spellCast === true;
       for(const slot of pending.values())if(!slot.sent){clearTimeout(slot.queuedTimer);schedule(slot);}
       return;
     }
@@ -175,6 +191,12 @@ export function createMaidPort(bot, { timeoutMs = 5000, onDialogue = () => {}, o
       return;
     }
     if (value.ok && value.action === 'workshop') workshopObserved = true;
+    if (value.ok && value.action === 'context') {
+      const spells = value.data.companion?.rpg?.spells;
+      if (Array.isArray(spells)) spellbooks.set(slot.entry.maidId,
+        new Set(spells.filter(row => row?.unlocked === true && spellId.test(row.id ?? '')).map(row => row.id)));
+      else spellbooks.delete(slot.entry.maidId);
+    }
     settle(value.requestId, value);
   };
   const onSystemText = (text, position, original, sender) => {
@@ -189,7 +211,8 @@ export function createMaidPort(bot, { timeoutMs = 5000, onDialogue = () => {}, o
     for (const [id, slot] of pending) settle(id, slot.sent ? unknown(slot.entry, 'connection_closed') : {ok:false,status:'not_dispatched',reason:'connection_closed'});
   };
   function usePayload(slot) {
-    return pluginTransport && (workshopTransport || !['workshop', 'make'].includes(slot.entry.action));
+    return pluginTransport && (slot.entry.action === 'cast' ? spellTransport :
+      workshopTransport || !['workshop', 'make'].includes(slot.entry.action));
   }
   function send(slot){
     if(closed || slot.sent || !pending.has(slot.entry.requestId))return;
@@ -215,6 +238,8 @@ export function createMaidPort(bot, { timeoutMs = 5000, onDialogue = () => {}, o
     const notDispatched = reason => ({ ...unknown(entry, reason), status: 'not_dispatched' });
     const make = entry.action === 'make';
     if (make && !workshopSupported()) return notDispatched(closed ? 'connection_closed' : 'workshop_capability_unconfirmed');
+    if (entry.action === 'cast' && !spellbooks.get(entry.maidId)?.has(entry.spellId))
+      return notDispatched(closed ? 'connection_closed' : 'read_context_for_available_spells');
     const craft = crafts.get(entry.operationId);
     if (craft && entry.action !== 'receipt') return craft.command === entry.command ? craft.result : notDispatched('request_conflict');
     if (closed || pending.size >= 8 || pending.has(entry.requestId)) return { ok: false, status: 'not_dispatched', reason: closed ? 'connection_closed' : 'request_busy' };

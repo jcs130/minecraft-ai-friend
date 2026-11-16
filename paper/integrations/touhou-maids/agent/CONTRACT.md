@@ -1,3 +1,13 @@
+## 法师伙伴技能 0.1.38 候选
+
+先用 `mc_maids` 的 `list` 获取原女仆 ID，再用 `context` 读取 `companion.rpg.spells`。原版客户端也可用 `/qdmaid list` 和 `/qdmaid context <maidId>` 查询。技能 ID、名称、等级要求、魔力和冷却随服端 Vortex 配置。候选支持奥术飞弹、可对单个强敌附加流血的余烬长枪，以及可打击至多三个敌人并治疗附近队友的星界汇聚。法杖普攻也在列表中。伙伴学习资格按绑定玩家的 Vortex 等级计算，施法使用伙伴自己的魔力和冷却。
+
+随行护卫按实际战况挑选技能。绑定玩家可从 `unlocked:true` 的条目中指定技能，用 `mc_maids {action:"cast",maidId,requestId,spellId}` 或 `/qdmaid cast <maidId> <requestId> <spellId>`。在附近明确请肥鱼施法时，当前对话模型也可以从同一组 ID 调用 `cast_vortex_spell`。中文名用于理解效果，施法参数使用原 ID。
+
+女仆需要可用的真实学徒法杖并处于随行状态。目标必须通过 8 格范围、视线、区域保护以及同队、同副本判定。治疗只选合资格的受伤伙伴或队友。
+
+`applied` 要有实际命中或回血，对照 `observation.hitTargetIds` 和 `healedTargetIds`。自动施法记录在 `companion.rpg.lastCast`。收到 `rejected` 时按 `observation.state` 和 `nextStep` 纠正条件。`unknown` 用 `receipt`、原 `operationId` 和 `operationAction:"cast"`，或 `/qdmaid receipt <maidId> <原requestId>` 查询，保留原 ID。
+
 ## 跨维度召回与副本护卫 0.1.33
 
 用 `/qdmaid recall <maidId> [requestId]` 将本人女仆传送到身边并恢复随行。只有一位女仆时可输入 `/qdmaid recall`。副本内、不同维度和远距离均可召回。女仆未加载时会从最后确认的位置查找原实体，附近找不到安全落点时会返回下一步。带请求 ID 的结果可以用 `/qdmaid receipt <maidId> <requestId>` 查询。`observation.arrived=true` 表示这次已经到达。

@@ -308,8 +308,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
             return;
         }
         long now = System.nanoTime();
-        var threats = new ArrayList<>(maid.level().getEntitiesOfClass(Mob.class, maid.getBoundingBox().inflate(8), mob -> hostile(maid, owner, mob)));
-        threats.sort(Comparator.comparing((Mob mob) -> !attacksPartner(maid, mob)).thenComparingDouble(maid::distanceToSqr));
+        var threats = threats(maid, owner);
         if (threats.isEmpty()) {
             if (guard.lastThreat == 0 || now - guard.lastThreat >= QUIET) {
                 stopNative(maid);
@@ -378,12 +377,73 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         guard.target = candidate.target.getUUID();
         if (candidate.attempt != null) {
             stopNative(maid);
-            guard.state = magic.cast(maid, candidate.attempt);
+            guard.state = magic.cast(maid, candidate.attempt, enemy -> hostile(maid, owner, enemy)).state();
         } else {
             activateNative(maid, candidate);
             guard.state = "native_defence";
         }
         requestDecision(scene, choices, maid, nearest, now);
+    }
+
+    private List<Mob> threats(EntityMaid maid, Player owner) {
+        var targets = new ArrayList<>(maid.level().getEntitiesOfClass(Mob.class,
+                maid.getBoundingBox().inflate(8), mob -> hostile(maid, owner, mob)));
+        targets.sort(Comparator.comparing((Mob mob) -> !attacksPartner(maid, mob)).thenComparingDouble(maid::distanceToSqr));
+        return targets;
+    }
+
+    JsonObject castSpell(EntityMaid maid, Player owner, String spell) {
+        if (magic == null || !plugin.sharedDialogueEnabled(maid)) return refusedSpell(maid, spell, "rpg_unavailable");
+        if (!rescueEligible(maid, owner) || rescueTarget(maid, owner) != null) {
+            return refusedSpell(maid, spell, "rpg_guard_unavailable");
+        }
+        var kit = MaidGuardLoadout.weapons(maid, magic).stream().filter(weapon -> weapon.staff() != null).findFirst().orElse(null);
+        if (kit == null) return refusedSpell(maid, spell, "rpg_staff_required");
+        var plan = magic.prepare(maid, owner, kit.staff(), threats(maid, owner), spell);
+        if (plan.attempt() == null) return refusedSpell(maid, spell, plan.state());
+        var attempt = plan.attempt();
+        if (guard.maid != maid) {
+            guard = new Guard();
+            guard.maid = maid;
+        }
+        if (!use(maid, new Candidate(kit, attempt.enemy(), attempt))) return refusedSpell(maid, spell, "rpg_equipment_changed");
+        stopNative(maid);
+        guard.plan = null;
+        guard.requested = null;
+        guard.pending = null;
+        guard.mode = Mode.MAGIC;
+        guard.selectedAt = System.nanoTime();
+        guard.target = attempt.enemy() == null ? null : attempt.enemy().getUUID();
+        var result = magic.cast(maid, attempt, enemy -> hostile(maid, owner, enemy));
+        guard.state = result.state();
+        var observation = result.describe();
+        if (!result.applied()) annotateRefusal(maid, observation, result.state());
+        return observation;
+    }
+
+    private static JsonObject refusedSpell(EntityMaid maid, String spell, String state) {
+        var result = new JsonObject();
+        result.addProperty("spellId", spell);
+        result.addProperty("state", state);
+        result.addProperty("effectsApplied", false);
+        annotateRefusal(maid, result, state);
+        return result;
+    }
+
+    private static void annotateRefusal(EntityMaid maid, JsonObject result, String state) {
+        result.addProperty("error", state);
+        result.addProperty("message", switch (state) {
+            case "rpg_staff_required" -> "先把真正的 Vortex 学徒法杖放进女仆可用背包槽或主手。";
+            case "rpg_spell_level_required" -> "伙伴的 Vortex 等级尚未达到这个法术要求。";
+            case "rpg_spell_cooldown" -> "法杖或该法术仍在冷却。";
+            case "rpg_mana_low" -> "女仆的魔力不足，等她恢复。";
+            case "rpg_no_clear_target" -> "附近没有合适的敌怪或可治疗队友，检查视线与距离。";
+            case "rpg_hit_blocked" -> "法术没有造成可确认的伤害或治疗。";
+            case "rpg_protected_area" -> "当前位置或目标受区域保护。";
+            case "rpg_guard_unavailable", "paused_by_owner_or_world" -> "先结束驻守或手动工作，让女仆在同维度随行。倒地、救援与休整时暂停施法。";
+            default -> "当前不能使用这个法术；从法杖技能表读取服务器提供的准确 ID。";
+        });
+        result.addProperty("nextStep", "/qdmaid context " + maid.getUUID() + " 查看 companion.rpg 后再决定。");
     }
 
     private static boolean attacksPartner(EntityMaid maid, Mob mob) {
@@ -544,7 +604,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         if (current && guard.target != null && guard.mode != null) out.addProperty("targetId", guard.target.toString());
         if (current && guard.decisionAt != null) out.addProperty("lastSystemOneSelectionAt", guard.decisionAt.toString());
         if (current && guard.equippedAt != null) out.addProperty("lastEquipmentSwapAt", guard.equippedAt.toString());
-        if (magic != null && (magic.staff(maid) != null || magic.hasHistory(maid))) out.add("rpg", magic.describe(maid));
+        if (magic != null && plugin.sharedDialogueEnabled(maid)) out.add("rpg", magic.describe(maid));
         out.addProperty("nextStep", guardWeaponReady(maid)
             ? "随行时自动护卫，可从自己的背包换武器，攻击8格内可见敌怪和伙伴当前参战房间的怪物。请核对实际命中。"
             : "请把可用近战武器、带弹药的弓弩或 Vortex 学徒法杖放入女仆已解锁的背包槽。先查 inventory；武器可由护卫自动换上。");
