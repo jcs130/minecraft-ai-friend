@@ -44,7 +44,7 @@ def main():
     parser.add_argument('--maid', type=Path, required=True)
     parser.add_argument('--javac', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--bundle', type=Path, help='Also package the JAR, setup examples and optional DSH gateway.')
+    parser.add_argument('--bundle', type=Path, help='Also package the JAR, setup examples and optional harness gateway.')
     args = parser.parse_args()
     output = args.output.resolve()
     if not args.maid.is_file() or output == args.maid.resolve():
@@ -70,7 +70,7 @@ def main():
         bundle.parent.mkdir(parents=True, exist_ok=True)
         package = {output.name: output.read_bytes(), 'README.md': (ROOT / 'README.md').read_bytes(),
                    'LICENSE': LICENSE.read_bytes(), 'gateway/gateway.py': (ROOT.parent / 'harness/gateway.py').read_bytes()}
-        for name in ('dsh_gateway.py', 'requirements.txt'):
+        for name in ('dsh_gateway.py', 'qwen_code.py', 'requirements.txt'):
             package[f'gateway/{name}'] = (ROOT / name).read_bytes()
         for row in sorted((ROOT / 'examples').glob('*.json')):
             package[f'examples/{row.name}'] = row.read_bytes()

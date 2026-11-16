@@ -49,12 +49,12 @@ def ports():
             entry.close()
 
 
-def make_probe(phase, stage, java, maid):
+def make_probe(phase, stage, java, maid, source=None):
     classes = phase / 'probe-classes'
     cp = os.pathsep.join(str(path) for path in classpath(stage, maid))
     compile_java(java.with_name('javac' + java.suffix),
                  ['--release', '21', '-encoding', 'UTF-8', '-proc:none', '-classpath', cp,
-                  '-d', classes, Path(__file__).with_name('MaidAgentsProbe.java')], phase / 'probe.args')
+                  '-d', classes, source or Path(__file__).with_name('MaidAgentsProbe.java')], phase / 'probe.args')
     entries = {path.relative_to(classes).as_posix(): path.read_bytes() for path in classes.rglob('*.class')}
     entries['META-INF/neoforge.mods.toml'] = b'''modLoader="javafml"
 loaderVersion="[4,)"

@@ -1,4 +1,4 @@
-"""Serve separately authorized TLM maids through one existing HarnessRouter planner."""
+"""Serve separately authorized TLM maids through HarnessRouter or Qwen Code."""
 from __future__ import annotations
 
 import argparse
@@ -9,7 +9,8 @@ import re
 import threading
 import uuid
 
-from gateway import Gateway, Refused, finite_json, native_plan_payload, server_for, validate_config
+from gateway import (Gateway, QWEN_CODE, Refused, decode_plan, finite_json,
+                     native_plan_payload, server_for, validate_config)
 
 PROTOCOL = '2026-09-28'
 RESPONSE_ID = re.compile(r'resp_[A-Za-z0-9_-]{1,128}')
@@ -84,18 +85,7 @@ class DshPlanner:
         text = ''.join(part['text'] for item in response.get('output', [])
                        if item.get('type') == 'message' and item.get('role', 'assistant') == 'assistant'
                        for part in item.get('content', []) if part.get('type') == 'output_text')
-        value = finite_json(text)
-        if not isinstance(value, dict) or set(value) - {'content', 'tool_calls'}:
-            raise ValueError('harness_plan_shape_invalid')
-        for call in value.get('tool_calls', []):
-            arguments = call['function']['arguments']
-            if isinstance(arguments, dict):
-                call['function']['arguments'] = json.dumps(arguments, ensure_ascii=False, allow_nan=False)
-        usage = response.get('usage') or {}
-        value['model_status'] = {'usage': {target: usage[source] for source, target in (
-            ('input_tokens', 'prompt_tokens'), ('output_tokens', 'completion_tokens'), ('total_tokens', 'total_tokens')
-        ) if source in usage}}
-        return value
+        return decode_plan(text, response.get('usage') or {})
 
 
 def bindings(config):
@@ -103,7 +93,8 @@ def bindings(config):
     limit = config.get('maxConcurrent', 4)
     if not isinstance(maids, list) or not 1 <= len(maids) <= 64 or type(limit) is not int or not 1 <= limit <= 16:
         raise ValueError('one_to_64_maids_and_bounded_concurrency_required')
-    common = {key: config[key] for key in ('schema', 'host', 'port', 'hub')}
+    common = {key: config[key] for key in ('schema', 'host', 'port')}
+    common.update({key: config[key] for key in ('hub', 'qwenCode') if key in config})
     common['timeoutSeconds'] = config.get('timeoutSeconds', 40)
     rows = [validate_config({**common, **{key: maid[key] for key in ('maidId', 'ownerId', 'token', 'choices')}})
             for maid in maids]
@@ -114,13 +105,22 @@ def bindings(config):
 
 def create_server(config):
     common, rows, limit = bindings(config)
-    planner = DshPlanner(common)
+    choices = [choice for row in rows for choice in row['choices'].values()]
+    dsh = DshPlanner(common) if any(choice['harness_id'] != QWEN_CODE for choice in choices) else None
+    qwen = None
+    if any(choice['harness_id'] == QWEN_CODE for choice in choices):
+        from qwen_code import QwenCodePlanner
+        qwen = QwenCodePlanner(common['qwenCode'], common['timeoutSeconds'])
+        for choice in choices:
+            if choice['harness_id'] == QWEN_CODE:
+                qwen.validate_choice(choice)
     capacity = threading.BoundedSemaphore(limit)
 
     async def limited_planner(choice, messages, tools):
         if not capacity.acquire(blocking=False):
             raise Refused('MAID_HUB_BUSY_TRY_A_LATER_NEW_TURN', 429)
         try:
+            planner = qwen if choice['harness_id'] == QWEN_CODE else dsh
             return await planner(choice, messages, tools)
         finally:
             capacity.release()
