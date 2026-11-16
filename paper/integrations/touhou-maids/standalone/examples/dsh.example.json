@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "host": "127.0.0.1",
+  "port": 19105,
+  "hub": {
+    "base_url": "http://127.0.0.1:29150/api/harness",
+    "keyFile": "private/harnessrouter-key.json"
+  },
+  "maxConcurrent": 4,
+  "timeoutSeconds": 40,
+  "maids": [
+    {
+      "maidId": "10000000-0000-0000-0000-000000000001",
+      "ownerId": "20000000-0000-0000-0000-000000000001",
+      "token": "replace-with-distinct-random-token-guild",
+      "choices": {
+        "dsh": {
+          "harness_id": "dsh",
+          "model": "qwen3.7-plus"
+        }
+      }
+    },
+    {
+      "maidId": "10000000-0000-0000-0000-000000000002",
+      "ownerId": "20000000-0000-0000-0000-000000000002",
+      "token": "replace-with-distinct-random-token-smith",
+      "choices": {
+        "dsh": {
+          "harness_id": "dsh",
+          "model": "qwen3.7-plus"
+        }
+      }
+    }
+  ]
+}

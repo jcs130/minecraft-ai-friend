@@ -1,0 +1,26 @@
+{
+  "maidagent_guild_dsh": {
+    "api_type": "openai",
+    "id": "maidagent_guild_dsh",
+    "icon": "touhou_little_maid:textures/gui/ai_chat/openai.png",
+    "url": "http://127.0.0.1:19105/v1/10000000-0000-0000-0000-000000000001/dsh/chat/completions",
+    "enabled": true,
+    "secret_key": "replace-with-distinct-random-token-guild",
+    "models": [
+      "qwen3.7-plus"
+    ],
+    "headers": {}
+  },
+  "maidagent_smith_dsh": {
+    "api_type": "openai",
+    "id": "maidagent_smith_dsh",
+    "icon": "touhou_little_maid:textures/gui/ai_chat/openai.png",
+    "url": "http://127.0.0.1:19105/v1/10000000-0000-0000-0000-000000000002/dsh/chat/completions",
+    "enabled": true,
+    "secret_key": "replace-with-distinct-random-token-smith",
+    "models": [
+      "qwen3.7-plus"
+    ],
+    "headers": {}
+  }
+}

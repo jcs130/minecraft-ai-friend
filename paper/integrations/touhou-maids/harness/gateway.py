@@ -48,7 +48,7 @@ def tool_signature(call):
 
 
 def native_plan_payload(payload):
-    """Codex may emit the same complete plan in commentary and final frames.
+    """Normalize exactly one fenced JSON plan or repeated identical complete frames.
 
     Never select between conflicting plans or turn arbitrary prose into a call.
     The existing strict decoder still validates the one retained original frame.
@@ -57,15 +57,26 @@ def native_plan_payload(payload):
         return payload
     frames = [row for row in payload.get('output', [])
               if row.get('type') == 'message' and row.get('role', 'assistant') == 'assistant']
-    if len(frames) < 2:
+    if not frames:
         return payload
     try:
-        values = [finite_json(''.join(part['text'] for part in row['content'] if part.get('type') == 'output_text')) for row in frames]
+        texts = [''.join(part['text'] for part in row['content'] if part.get('type') == 'output_text') for row in frames]
+        fenced = [re.fullmatch(r'```(?:json)?[ \t]*\r?\n(.*)\r?\n```', text.strip(), re.S | re.I)
+                  for text in texts]
+        values = [finite_json(match[1] if match else text) for match, text in zip(fenced, texts)]
         if not all(isinstance(value, dict) and set(value) <= {'content', 'tool_calls'} and value == values[0] for value in values):
             return payload
     except (ValueError, TypeError, KeyError):
         return payload
-    return {**payload, 'output': [row for row in payload['output'] if row not in frames or row is frames[0]]}
+    if len(frames) == 1 and not fenced[0]:
+        return payload
+    original = frames[0]
+    if fenced[0]:
+        original = {**original, 'content': [
+            {'type': 'output_text', 'text': json.dumps(values[0], ensure_ascii=False, allow_nan=False)}
+        ]}
+    return {**payload, 'output': [original if row is frames[0] else row for row in payload['output']
+                                  if row is frames[0] or not any(row is frame for frame in frames)]}
 
 
 def native_continuation(messages):
@@ -265,7 +276,10 @@ class Gateway:
             self.active.release()
 
 
-def server_for(config, gateway):
+def server_for(config, gateway=None, *, gateways=None):
+    if (gateway is None) == (gateways is None):
+        raise ValueError('one_gateway_mode_required')
+
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
 
@@ -292,19 +306,27 @@ def server_for(config, gateway):
                 if self.command == 'GET' and self.path == '/health':
                     self.send_json(200, {'ready': True, 'kind': 'maid-harness-gateway', 'gameConnected': False})
                     return
-                gateway.authenticate(self.headers.get('Authorization'))
-                if self.command == 'GET' and self.path == '/v1/catalogue':
-                    self.send_json(200, gateway.catalogue())
+                authorization = self.headers.get('Authorization')
+                selected = gateway
+                if selected is not None:
+                    selected.authenticate(authorization)
+                if selected is not None and self.command == 'GET' and self.path == '/v1/catalogue':
+                    self.send_json(200, selected.catalogue())
                     return
                 match = re.fullmatch(r'/v1/([0-9a-f-]{36})/([a-z0-9_.:-]{1,128})/chat/completions', self.path)
                 if self.command != 'POST' or not match:
                     raise Refused('NATIVE_ROUTE_NOT_FOUND', 404)
+                if selected is None:
+                    selected = gateways.get(match.group(1))
+                    if selected is None:
+                        raise Refused('MAID_TRANSPORT_UNAUTHORIZED', 401)
+                    selected.authenticate(authorization)
                 length = int(self.headers.get('Content-Length', '-1'))
                 if not 1 <= length <= 2 * 1024 * 1024:
                     raise Refused('NATIVE_REQUEST_SIZE_INVALID', 413)
                 self.connection.settimeout(5)
                 body = finite_json(self.rfile.read(length).decode('utf-8'))
-                result = asyncio.run(gateway.completion(*match.groups(), body))
+                result = asyncio.run(selected.completion(*match.groups(), body))
                 self.send_json(200, result)
             except Refused as error:
                 self.send_json(error.status, {'error': {'code': error.code, 'message': error.code}})
