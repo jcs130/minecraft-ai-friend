@@ -1,3 +1,23 @@
+## 法师伙伴技能 0.1.38 候选
+
+0.1.39 增加 MC 核心决策。候选动作来自法杖和现场，系统一在冷却间隙准备下一次选择。伙伴紧急需要治疗时，只有能实际治疗的选项进入快选。施法前验证当前技能、目标和现场，使用已就绪的本地选择处理服务超时。核心以同一身体、维度、场景与技能版本下的实测伤害、治疗、耗魔和受阻回执调整下一次的选择。
+
+`context.companion.rpg.coreSpellPolicyConfigured` 表示本地对接已配置。`lastPolicyCast` 提供最后一次自动施法的 `operationId`、技能、选择来源，以及存在时的 `decisionId`。核心的游戏记忆可用同一身份范围查询原回执。
+
+先用 `mc_maids` 的 `list` 获取原女仆 ID，再用 `context` 读取 `companion.rpg.spells`。原版客户端也可用 `/qdmaid list` 和 `/qdmaid context <maidId>` 查询。技能 ID、名称、等级要求、魔力和冷却随服端 Vortex 配置。候选支持奥术飞弹、可对单个强敌附加流血的余烬长枪，以及可打击至多三个敌人并治疗附近队友的星界汇聚。法杖普攻也在列表中。伙伴学习资格按绑定玩家的 Vortex 等级计算，施法使用伙伴自己的魔力和冷却。
+
+随行护卫按实际战况挑选技能。绑定玩家可从 `unlocked:true` 的条目中指定技能，用 `mc_maids {action:"cast",maidId,requestId,spellId}` 或 `/qdmaid cast <maidId> <requestId> <spellId>`。在附近明确请肥鱼施法时，当前对话模型也可以从同一组 ID 调用 `cast_vortex_spell`。中文名用于理解效果，施法参数使用原 ID。
+
+女仆需要可用的真实学徒法杖并处于随行状态。目标必须通过 8 格范围、视线、区域保护以及同队、同副本判定。治疗只选合资格的受伤伙伴或队友。
+
+`applied` 要有实际命中或回血，对照 `observation.hitTargetIds` 和 `healedTargetIds`。自动施法记录在 `companion.rpg.lastCast`。收到 `rejected` 时按 `observation.state` 和 `nextStep` 纠正条件。`unknown` 用 `receipt`、原 `operationId` 和 `operationAction:"cast"`，或 `/qdmaid receipt <maidId> <原requestId>` 查询，保留原 ID。
+
+### 本机接入
+
+启动独立打包验收过的 MC 核心消费端，再运行 `spell-policy-server.mjs`。为适配器配置监听端口 `QD_SPELL_POLICY_PORT`、消费端的绝对 `package.json` 路径 `QD_SPELL_POLICY_CORE_ANCHOR`、游戏记忆目录 `QD_SPELL_POLICY_DATA_DIR` 和共享令牌文件 `QD_SPELL_POLICY_TOKEN_FILE`。复用既有系统一时，`QD_SPELL_POLICY_SYSTEM_ONE` 使用本机 `http://127.0.0.1:8090/v1/systemone`。监听限环回地址。令牌文件使用 32 个随机字节的小写十六进制编码，由本机 Java 与核心服务读取。
+
+在女仆桥配置 `companion.spell-policy.port` 与 `companion.spell-policy.token-file`。端口设为 0 时走原有随行护卫，战斗回执和现有角色数据照常保存。
+
 ## 跨维度召回与副本护卫 0.1.33
 
 用 `/qdmaid recall <maidId> [requestId]` 将本人女仆传送到身边并恢复随行。只有一位女仆时可输入 `/qdmaid recall`。副本内、不同维度和远距离均可召回。女仆未加载时会从最后确认的位置查找原实体，附近找不到安全落点时会返回下一步。带请求 ID 的结果可以用 `/qdmaid receipt <maidId> <requestId>` 查询。`observation.arrived=true` 表示这次已经到达。

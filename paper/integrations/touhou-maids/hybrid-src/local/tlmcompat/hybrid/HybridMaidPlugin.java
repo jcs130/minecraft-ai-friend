@@ -278,7 +278,11 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             if(maid.getOwner()!=null&&maid.getOwner().level()==maid.level())data.addProperty("ownerDistance",maid.distanceTo(maid.getOwner()));else data.add("ownerDistance",JsonNull.INSTANCE);
         }
         agentSupport.enrich(actor,id,data);
-        if(maid!=null&&companion!=null)data.add("companion",companion.describe(maid));
+        if (maid != null && companion != null) {
+            var companionContext = companion.describe(maid);
+            data.add("companion", companionContext);
+            if (companionContext.has("rpg")) capabilities.add("cast");
+        }
         if(residence!=null)residence.describe(id,data);
         if(maid!=null&&respawns!=null)respawns.describe(maid,data);
         data.addProperty("sampledAt",java.time.Instant.now().toString());return data;
@@ -338,6 +342,18 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             requireNearby(actor,maid,32);
             receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));
             return workshops.start(actor,maid,operation,value);
+        }
+        if (action.equals("cast")) {
+            EntityMaid maid = ownedLoaded(actor, id);
+            requireNearby(actor, maid, 32);
+            if (value == null || !value.matches("[a-z0-9][a-z0-9_-]{0,47}")) {
+                throw new CompatibilityException("bad_arguments", "/qdmaid cast <女仆ID> <请求ID> <技能ID>；用 context 看 companion.rpg.spells。");
+            }
+            if (companion == null) throw new CompatibilityException("rpg_unavailable", "原生女仆护卫尚未就绪。");
+            var prior = receipts.reserve(id, actor.getUniqueId(), operation, action, value);
+            if (prior != null) return prior;
+            var result = companion.castSpell(maid, actor, value);
+            return receipts.finish(id, operation, result.get("effectsApplied").getAsBoolean() ? "applied" : "rejected", result);
         }
         if (action.equals("recall")) {
             if (value != null && !value.isBlank()) {
@@ -649,6 +665,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             "装备：/qdmaid inventory <UUID> 看 usableSlotIndexes（可用）与 freeSlotIndexes（空槽）；默认只有0–5可用，底层36槽不代表已解锁。transfer <UUID> <requestId> put <女仆槽> <数量> <本人槽0-35>；再 equip <UUID> <新requestId> main|off|head|chest|legs|feet <女仆槽>。空槽用于卸装；rejected回执表示此次未转移物品。",
             "工位：/qdmaid workshop <UUID> 查工位及配方；make <UUID> <requestId> <工位ID> <配方ID> [成品数量|once] [chest|backpack]。pending 表示已接单，按 receipt 查成品数量。",
             "行为：/qdmaid tasks <UUID> 查原生工作与条件；/qdmaid task <UUID> <requestId> <任务ID>。follow/stay/sit 同样用 <UUID> <requestId>。应用模式不等于完成任务。",
+            "施法：/qdmaid context <UUID> 看 companion.rpg.spells 的法杖技能、等级和冷却；护卫会自动选招。/qdmaid cast <UUID> <requestId> <技能ID> 按当前有效目标施放。用原请求 ID 查命中或治疗回执。",
             "随行：肥鱼闲置跟随时，有合适主手武器会保护受敌人攻击的主人，脱战后恢复陪伴；主人传送时，附近的肥鱼尝试跟到安全落点。停留、睡眠及手选工作优先，查 context 的位置与 ownerDistance 确认真正到达。",
             "真人：/qdmaid menu <UUID> 或右键本人女仆，管理原背包及装备。talk 仅为外部宿主留言箱，不是原生模型对话。死亡后先查看 context，不自动补发/复活。"
         ))actor.sendMessage(Component.text(line,NamedTextColor.AQUA));

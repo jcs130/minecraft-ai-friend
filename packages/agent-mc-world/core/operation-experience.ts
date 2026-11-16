@@ -32,6 +32,11 @@ export type OperationDecision = {
   controller?: OperationAttribution['controller'];
   policy?: import('./policy-evidence.ts').PolicyEvidence;
 };
+/** Deltas measured by the authoritative combat executor during a single effect. */
+export type CombatEffectObservation = {
+  contextKey: string; revision: string; observedAt: string;
+  damage: number; healing: number; resourceSpent: number;
+};
 export type OperationExperience = {
   schema: 'agent-mc-experience/v1'; id: string; scopeKey: string; run: string; requestId: string;
   at: string; updatedAt: string; kind: 'decision' | 'operation'; tool: string; operations: string[];
@@ -40,6 +45,7 @@ export type OperationExperience = {
   execution: Pick<ExecutionReceipt, 'kind' | 'id' | 'phase' | 'terminal'> | null;
   dispatch: 'pending' | 'returned' | 'rejected' | 'unknown'; elapsedMs: number | null;
   goalVerified: false;
+  combatEffect?: CombatEffectObservation;
   stepEffects?: Array<{ step: number; skill: string; status: string; at: number[] | null;
     changed: { target: boolean | null; inventory: boolean | null; position: boolean | null; window: boolean | null };
     coverage: 'client-visible-only'; goalVerified: false }>;
@@ -249,14 +255,17 @@ export class OperationExperienceBook {
     if (row.decision) {if(experienceHash(row.decision)!==experienceHash(decision)) throw new Error('Decision ID conflict');return row;}
     return this.save(scope,{...row,kind:'decision',decision,before:null,after:row.before,dispatch:'returned',elapsedMs:decision.elapsedMs??null,updatedAt:new Date().toISOString()});
   }
-  finish(scope: GameMemoryScope, id: string, outcome: ToolOutcome | null, after: OperationObservation | null, elapsedMs: number) {
+  finish(scope: GameMemoryScope, id: string, outcome: ToolOutcome | null, after: OperationObservation | null, elapsedMs: number,
+    combatEffect?: CombatEffectObservation) {
     const row=this.get(scope,id);
     if (row.dispatch !== 'pending') return row;
     const raw=outcome?.execution;
     const execution = raw ? {kind:raw.kind,id:raw.id,phase:raw.phase,terminal:raw.terminal} : null;
     const admission=(outcome?.meta?.receipt as {accepted?:boolean}|undefined)?.accepted;
     const stepEffects = operationStepEffects(outcome?.execution);
-    return this.save(scope,{...row,...(!row.execution?.terminal && stepEffects.length ? {stepEffects} : {}),dispatch:!outcome?'unknown':outcome.failed||admission===false?'rejected':'returned',execution:row.execution?.terminal?row.execution:execution,
+    return this.save(scope,{...row,...(!row.execution?.terminal && stepEffects.length ? {stepEffects} : {}),
+      ...(raw?.terminal && !row.execution?.terminal && combatEffect ? {combatEffect:{...combatEffect}} : {}),
+      dispatch:!outcome?'unknown':outcome.failed||admission===false?'rejected':'returned',execution:row.execution?.terminal?row.execution:execution,
       after:row.execution?.terminal?row.after:operationObservation(after),elapsedMs:count(elapsedMs),updatedAt:new Date().toISOString()});
   }
   terminal(scope: GameMemoryScope, id: string, receipt: ExecutionReceipt, after: OperationObservation | null) {

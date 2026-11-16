@@ -94,3 +94,24 @@ to the current goal/stage version and evaluate that goal's net result; never
 infer a long-horizon reward from a completed storage task or rewrite a past
 criterion after seeing its result. This one-step module does not yet perform
 that delayed multi-action credit assignment.
+
+## Combat effects from native bodies
+
+`agent-mc-world/decisions` exports `createCombatEffectPolicy`. A host supplies
+an explicit `DecisionPort`, a game-memory directory and a fresh menu of actions
+the body can perform. The body owns target validation and execution. It may ask
+during an existing cooldown and adopt a choice only within the original scene,
+action revisions, target binding and deadline. The ready local action is the
+fallback for slow, unavailable or invalid answers. A single available action
+requires no fast model request.
+
+The authoritative body sends the original physical operation ID and measured
+damage, healing and resource use. The core stores the decision and effect in
+the shared operation notebook. Matching historical returns can adjust the
+System1 distribution through the same JitRL ranker. Changed capability
+revisions, dimensions or game identities do not share samples. Learning uses a
+bounded window, repeated evidence, and a small choice margin. Missing effects,
+uncertain execution and stale decisions supply no numeric return. An observed
+blocked cast has an explicit low return. Positive returns describe a local
+combat effect with a resource penalty. The notebook records the evidence
+references and keeps `goalVerified:false`.

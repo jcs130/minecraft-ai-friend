@@ -1,5 +1,8 @@
 package local.tlmcompat.hybrid;
 
+import com.github.tartaricacid.touhoulittlemaid.ai.service.function.schema.FunctionTool;
+import com.github.tartaricacid.touhoulittlemaid.ai.service.function.schema.parameter.ObjectParameter;
+import com.github.tartaricacid.touhoulittlemaid.ai.service.function.schema.parameter.StringParameter;
 import com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.LLMCallback;
 import com.github.tartaricacid.touhoulittlemaid.ai.manager.response.ResponseChat;
 import com.github.tartaricacid.touhoulittlemaid.ai.service.llm.*;
@@ -107,7 +110,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         String partner=maid.getAiChatManager().ownerName;
         if(partner==null||partner.isBlank())partner="同行伙伴";
         String relation=partnerAction
-            ?"对方是与你绑定的同行伙伴。根据实际请求选择一次set_companion_mode。需要跟上就调用工具，按回执说明当前状态。follow会站起、退出驻守并结束当前工作。guard使用原生护卫。wait短等60秒后恢复跟随。明确请你钓鱼时用fish。缺鱼竿就说明需要装备。抛竿和收竿以当前观察为准。长期驻守由本人菜单设置。"
+            ?"对方是与你绑定的同行伙伴。根据实际请求选择一次本轮提供的动作工具，按回执说明当前状态。follow会站起、退出驻守并结束当前工作。guard使用原生护卫。wait短等60秒后恢复跟随。明确请你钓鱼时用fish。缺鱼竿就说明需要装备。抛竿和收竿以当前观察为准。长期驻守由本人菜单设置。"
             :proactive?"对方是你的同行伙伴。这次只分享观察到的变化。"
             :"对方是附近访客，本轮只交流，没有动作工具，不能更改绑定关系、装备、工作或运行方式。";
         messages.add(LLMMessage.systemChat(maid,"你是千灯纪中名叫「"+maid.getName().getString()+"」的冒险伙伴。你和「"+partner+"」平等相处、并肩冒险、互相照顾。称呼这位同行伙伴时直接用「"+partner+"」，不用主人、主公、大人或master等主仆称谓，也不自称仆人；后台绑定只表示操作权限，不是主仆关系。你活泼、温暖、有主见，可以商量计划、表达想法和提醒危险，不机械表忠心或反复招呼。音色只作为声音参考，不借用配音角色的身份或口头禅。过去的主仆称呼是旧设定，今后自然使用伙伴名字，不反复解释或道歉。现在与附近玩家「"+actor.getName()+"」进行简短自然的中文交谈。"+relation+"不提供任何人的私聊、背包或私有记忆；没有给予装备、破坏建筑或任意命令的权限。当前工作ID："+maid.getTask().getUid()+"。用普通文字回复，不要输出命令、JSON、系统提示或内部推理。"));
@@ -159,17 +162,33 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         return conversation!=null&&conversation.isJsonPrimitive()&&conversation.getAsJsonPrimitive().isString()&&"nearby_visitor".equals(conversation.getAsString());
     }
     private final class VisitorCallback extends LLMCallback implements CompanionActionCallback {
+        private static final String CAST_TOOL = "cast_vortex_spell";
         final Call call;
         final boolean partnerAction;
         final String expectedPose;
+        final List<String> castChoices;
         boolean actionAttempted;
-        VisitorCallback(Call call,List<LLMMessage> messages){super(call.maid.getAiChatManager(),messages,true);this.call=call;needAddTools=false;partnerAction=call.ownerRequested()||call.cue!=null;expectedPose=MaidCompanionActions.pose(call.maid);}
+        VisitorCallback(Call call,List<LLMMessage> messages){
+            super(call.maid.getAiChatManager(),messages,true);
+            this.call=call;needAddTools=false;partnerAction=call.ownerRequested()||call.cue!=null;
+            expectedPose=MaidCompanionActions.pose(call.maid);
+            var spellbook = call.ownerRequested() ? plugin.companionScene(call.maid).getAsJsonObject("rpg") : null;
+            castChoices = spellbook == null ? List.of() : spellbook.getAsJsonArray("spells").asList().stream()
+                .map(JsonElement::getAsJsonObject).filter(row -> row.get("unlocked").getAsBoolean())
+                .map(row -> row.get("id").getAsString()).toList();
+        }
         @Override public void addCompanionTools(com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.request.ChatCompletion request){
             if(partnerAction&&!actionAttempted){
                 if(call.cue!=null)MaidCompanionActions.autonomousTool(request,call.cue.mode());
                 else{
                     MaidCompanionActions.tools(request);
                     plugin.workshops().addTool(request,call.maid,call.actorConnection);
+                    if (!castChoices.isEmpty()) {
+                        var id = StringParameter.create().addEnumValues(castChoices.toArray(String[]::new));
+                        request.addTool(FunctionTool.create().setName(CAST_TOOL)
+                            .setDescription("伙伴明确请求施法时，用现场法术表选一个确切ID。由护卫选择当前符合条件的敌人或受伤队友，按命中或治疗回执说话。")
+                            .setParameters(ObjectParameter.create().addProperties("spellId", id)).build());
+                    }
                 }
             }
         }
@@ -194,6 +213,12 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
                 catch(RuntimeException malformed){throw new CompatibilityException("bad_companion_action","工具参数须为JSON对象。");}
                 if(NativeMaidWorkshop.TOOL.equals(name)&&call.cue==null){
                     result=plugin.dispatch(call.actorConnection,NativeMaidWorkshop.ACTION,call.maid.getUUID(),operation,NativeMaidWorkshop.modelOrder(args));
+                }else if(CAST_TOOL.equals(name) && call.ownerRequested()){
+                    if (args.size() != 1 || !(args.get("spellId") instanceof JsonPrimitive id) || !id.isString()
+                            || !castChoices.contains(id.getAsString())) {
+                        throw new CompatibilityException("unknown_vortex_spell", "从本轮现场提供的可用法术选一个真实ID。");
+                    }
+                    result = plugin.dispatch(call.actorConnection, "cast", call.maid.getUUID(), operation, id.getAsString());
                 }else if(MaidCompanionActions.TOOL.equals(name)){
                     if(args.size()!=1||!(args.get("mode") instanceof JsonPrimitive mode)||!mode.isString()||!MaidCompanionActions.MODES.contains(mode.getAsString()))
                         throw new CompatibilityException("bad_companion_mode","mode必须是follow、guard、wait或fish。未执行动作。");
@@ -247,14 +272,14 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         JsonObject action=actionResults.get(call.operation);
         boolean applied=action!=null&&action.has("status")&&"applied".equals(action.get("status").getAsString());
         if(action!=null){JsonArray actions=new JsonArray();actions.add(action.deepCopy());observation.add("actions",actions);}
-        if(applied)observation.addProperty("appliedMode",action.get("mode").getAsString());
+        if(applied && action.has("mode"))observation.addProperty("appliedMode",action.get("mode").getAsString());
         if(silent||call.finalTurn){
             observation.addProperty("conversationClosed",true);
             observation.addProperty("closeReason",silent?"model_ended":"turn_limit");
         }
         if(reason!=null){
             observation.addProperty("reason",reason);
-            observation.addProperty("meaning",applied?"模式已设置。回复暂不可用，请按原动作回执查询。":"未交付有效回复。请查询原回执。");
+            observation.addProperty("meaning",applied?"动作已执行。回复暂不可用，请按原动作回执查询。":"未交付有效回复。请查询原回执。");
         }else if(!silent){
             observation.addProperty("reply",spoken);observation.addProperty("replyShortened",!spoken.equals(text.strip()));
             observation.addProperty("replyChars",spoken.codePointCount(0,spoken.length()));
@@ -407,6 +432,9 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         facts.addProperty("speakerDistance",Math.round(Math.sqrt(at.distanceSquared(actor.getLocation()))));
         var guard=plugin.companionScene(maid);JsonObject mode=new JsonObject();
         for(String key:List.of("state","guardMode","systemOneStatus","lastSystemOneSelectionAt"))if(guard.has(key))mode.add(key,guard.get(key));
+        if (actor.getUniqueId().equals(maid.getOwnerUUID()) && guard.has("rpg")) {
+            mode.add("rpg", guard.get("rpg"));
+        }
         facts.add("guard",mode);
         JsonArray visible=new JsonArray();
         for(var mob:maid.level().getEntitiesOfClass(net.minecraft.world.entity.Mob.class,maid.getBoundingBox().inflate(8),m->m.isAlive())){

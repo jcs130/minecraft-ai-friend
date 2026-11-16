@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {EventEmitter} from 'node:events';
+import {EventEmitter, once} from 'node:events';
 import {createMaidPort,maidCommand,MAID_CHANNEL,MAID_REQUEST_CHANNEL} from '../agent/maid-port.mjs';
 const maid='e3228ffc-eb42-441d-a08c-3e5948a307e8', recipient='fce37da4-0183-4f20-a160-3fe49d871878';
 const envelope=(action,id,data)=>({schema:1,protocol:'qiandengji-maids/v1',recipientUuid:recipient,action,requestId:id,ok:true,sampledAt:new Date().toISOString(),data});
@@ -115,6 +115,37 @@ test('command fallback resolves only authentic server system messages',async()=>
   const line='QD_MAID '+JSON.stringify(envelope('context','ctx',{maidId:maid,lifeState:'alive'}));
   bot.emit('messagestr',line,'chat',{},recipient);await new Promise(r=>setTimeout(r,10));assert.equal(done,false);
   bot.emit('messagestr',line,'system',{},null);assert.equal((await result).data.lifeState,'alive');port.close();assert.equal(bot.listenerCount('messagestr'),0);
+});
+for (const spellCast of [false, true]) test(`cast learns unlocked IDs, negotiates transport and checks effects (${spellCast})`, async () => {
+  const bot = client();
+  bot.chat = command => bot.emit('sent', 'command', command);
+  bot._client.write = (_kind, packet) => {
+    if (packet.channel === MAID_REQUEST_CHANNEL) bot.emit('sent', 'payload', JSON.parse(packet.data).command);
+  };
+  const deliver = value => bot._client.emit('custom_payload', {channel:MAID_CHANNEL,data:Buffer.from(JSON.stringify(value))});
+  const port = createMaidPort(bot);
+  const args = {action:'cast',maidId:maid,requestId:'cast-1',spellId:'astral_convergence'};
+  try {
+    assert.equal((await port.request(args)).status, 'not_dispatched');
+    deliver(envelope('transport','transport',{requestChannel:MAID_REQUEST_CHANNEL,spellCast}));
+    const context = port.request({action:'context',maidId:maid,requestId:'spellbook'});
+    deliver(envelope('context','spellbook',{maidId:maid,companion:{rpg:{spells:[
+      {id:'astral_convergence',unlocked:true}, {id:'ember_lance',unlocked:false},
+    ]}}}));
+    assert((await context).ok);
+    assert.equal((await port.request({...args,spellId:'ember_lance'})).status, 'not_dispatched');
+    const sent = once(bot, 'sent');
+    const result = port.request(args);
+    assert.deepEqual(await sent, [spellCast ? 'payload' : 'command', maidCommand(args).command]);
+    const observed = {spellId:args.spellId,effectsApplied:true,hitTargetIds:[],healedTargetIds:[recipient]};
+    const receipt = {maidId:maid,actorId:recipient,action:'cast',operationId:args.requestId,status:'applied',observation:observed};
+    deliver(envelope('cast',args.requestId,{...receipt,operationId:'wrong-cast'}));
+    deliver(envelope('cast',args.requestId,{...receipt,status:'sparkles'}));
+    deliver(envelope('cast',args.requestId,{...receipt,observation:{...observed,spellId:'ember_lance'}}));
+    deliver(envelope('cast',args.requestId,{...receipt,observation:{...observed,healedTargetIds:[]}}));
+    deliver(envelope('cast',args.requestId,receipt));
+    assert.deepEqual((await result).data,receipt);
+  } finally { port.close(); }
 });
 test('owner death and native chat result are independent events, not request completion',async()=>{
   const bot=client(),life=[],chat=[];const port=createMaidPort(bot,{onLifecycle:x=>life.push(x),onChatResult:x=>chat.push(x)});
