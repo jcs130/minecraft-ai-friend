@@ -243,7 +243,7 @@ final class ArenaEconomy implements Listener {
         Inventory stash = dungeon.liveStash(player.getUniqueId());
         for (int slot = 0; slot < dungeon.stashCapacity(); slot++)
             if (eligible(dungeon.stashItem(player.getUniqueId(),slot))) candidates.add(new Candidate(true, slot,hex(digest(dungeon.stashItem(player.getUniqueId(),slot).serializeAsBytes()))));
-        for (int slot = 0; slot < 36; slot++)
+        for (int slot = 0; slot < ResidentCli.storageSize(player); slot++)
             if (eligibleSource(player, false, slot, player.getInventory().getItem(slot)))
                 candidates.add(new Candidate(false, slot,hex(digest(player.getInventory().getItem(slot).serializeAsBytes()))));
         int selectedPage = Math.max(0, Math.min(page, Math.max(0, (candidates.size() - 1) / 45)));
@@ -438,7 +438,7 @@ final class ArenaEconomy implements Listener {
         Inventory stash = dungeon.liveStash(owner);
         List<Integer> remove = new ArrayList<>();
         int total = 0;
-        for (int slot = 9; slot < 36; slot++) {
+        for (int slot = 9; slot < ResidentCli.storageSize(player); slot++) {
             ItemStack item = player.getInventory().getItem(slot);
             if (item == null || item.getAmount() != 1 || !eligible(item)
                     || !item.hasItemMeta() || !item.getItemMeta().hasDisplayName()
@@ -465,7 +465,7 @@ final class ArenaEconomy implements Listener {
                     + " price=" + price);
         }
         int used = 0;
-        for (int slot = 0; slot < 36; slot++) {
+        for (int slot = 0; slot < ResidentCli.storageSize(player); slot++) {
             ItemStack item = player.getInventory().getItem(slot);
             if (item != null && !item.getType().isAir()) used++;
         }
@@ -530,18 +530,25 @@ final class ArenaEconomy implements Listener {
         if(args.length<3){reply(player,"shop",false,"usage_shop_list_buy_wallet",null,0,0,false,null);return;}
         String action = args[2].toLowerCase(Locale.ROOT);
         if(action.equals("menu")&&args.length==3){openShopMenu(player);return;}
-        if (action.equals("list") && (args.length == 3 || args.length == 4
-                && (args[3].equalsIgnoreCase("daily") || args[3].equalsIgnoreCase("supplies")))) {
+        if (action.equals("list") && args.length>=3 && args.length<=5) {
             String requestId = UUID.randomUUID().toString();
-            String section = args.length == 4 ? args[3].toLowerCase(Locale.ROOT) : "all";
+            String section=args.length>=4?args[3].toLowerCase(Locale.ROOT):"all";
+            int page=args.length==5?parsePositive(args[4]):1;
+            if(!Set.of("all","daily","supplies","food").contains(section)||page<1||page>1000){
+                reply(player,"shop_list",false,"usage_shop_list_section_page",null,0,0,false,null);return;
+            }
+            boolean resident=ResidentCli.isResident(player.getUniqueId()),bounded=resident||args.length==5;
             ShopStock stock = section.equals("supplies") ? null : stock();
             List<Offer> offers = new ArrayList<>();
             if (!section.equals("daily")) offers.addAll(OFFERS);
             if (stock != null) offers.addAll(stock.featured());
+            if(section.equals("food"))offers.removeIf(offer->!offer.material().isEdible());
+            int size=bounded?8:Math.max(1,offers.size()),start=(page-1)*size,end=Math.min(start+size,offers.size());
             if (nativeRpg.selected()) recyclingReads.put(player.getUniqueId(), nativeRpg.recyclingState(player));
             int legacyBalance = nativeRpg.selected() ? 0 : balance(player.getUniqueId());
             try {
-                for (Offer offer : offers) {
+                for (int i=start;i<end;i++) {
+                    Offer offer=offers.get(i);
                     JsonObject details = new JsonObject();
                     details.addProperty("offerId", offer.id());
                     details.addProperty("unitPrice", offer.price());
@@ -550,11 +557,17 @@ final class ArenaEconomy implements Listener {
                         details.addProperty("stock", 1);
                         details.addProperty("refreshAt", stock.shelf().refreshAt());
                     }
-                    details.addProperty("buyCommand", "/mycli trade shop buy " + offer.id());
+                    details.addProperty("buyCommand", (resident?"arena shop buy ":"/mycli trade shop buy ") + offer.id());
                     reply(player, "shop_list", true, "ok", item(offer.stack(1)), 0, legacyBalance, false, details, requestId);
                 }
                 JsonObject summary = new JsonObject();
                 summary.addProperty("section", section);
+                summary.addProperty("page",page);summary.addProperty("pageSize",size);summary.addProperty("total",offers.size());
+                summary.addProperty("returnedCount",Math.max(0,end-start));summary.addProperty("complete",start==0&&end==offers.size());
+                summary.addProperty("remaining",Math.max(0,offers.size()-end));summary.addProperty("autoContinue",false);
+                summary.addProperty("observedAt",System.currentTimeMillis());
+                summary.add("availableSections",new com.google.gson.Gson().toJsonTree(List.of("all","supplies","daily","food")));
+                if(end<offers.size())summary.addProperty("nextCommand",(resident?"arena shop list ":"/mycli trade shop list ")+section+" "+(page+1));
                 if (stock != null && stock.shelf() != null) {
                     summary.addProperty("stockDate", stock.shelf().day().toString());
                     summary.addProperty("dailyInStock", offers.stream().filter(Offer::daily).count());
@@ -591,7 +604,7 @@ final class ArenaEconomy implements Listener {
             ItemStack stack = dungeon.stashItem(owner,slot);
             if (eligible(stack)) candidates.add(new Candidate(true, slot));
         }
-        for (int slot = 0; slot < 36; slot++) {
+        for (int slot = 0; slot < ResidentCli.storageSize(player); slot++) {
             ItemStack stack = player.getInventory().getItem(slot);
             if (eligibleSource(player, false, slot, stack)) candidates.add(new Candidate(false, slot));
         }
@@ -625,7 +638,7 @@ final class ArenaEconomy implements Listener {
             return;
         }
         int slot = parseNonnegative(args[4]) - (stash ? 1 : 0);
-        if (slot < 0 || slot >= (stash ? dungeon.stashCapacity() : 36)) {
+        if (slot < 0 || slot >= (stash ? dungeon.stashCapacity() : ResidentCli.storageSize(player))) {
             reply(player, "quote", false, "invalid_slot", null, 0, balance(owner), false, null);
             return;
         }
@@ -651,8 +664,9 @@ final class ArenaEconomy implements Listener {
         details.addProperty("price", price);
         details.addProperty("expiresAt", expiresAt);
         details.addProperty("validForSeconds", QUOTE_LIFETIME_MS / 1000);
-        details.addProperty("confirmCommand", "/mycli trade recycle sell " + quoteId);
-        details.addProperty("refreshCommand", "/mycli trade recycle quote " + (stash ? "chest" : "bag") + " " + (stash ? slot + 1 : slot) + " " + quantity);
+        String prefix=ResidentCli.isResident(player.getUniqueId())?"arena":"/mycli trade";
+        details.addProperty("confirmCommand", prefix+" recycle sell " + quoteId);
+        details.addProperty("refreshCommand", prefix+" recycle quote " + (stash ? "chest" : "bag") + " " + (stash ? slot + 1 : slot) + " " + quantity);
         details.addProperty("maxOutstandingQuotes", 32);
         reply(player, "quote", true, "ok", item(stack), quantity, balance(owner), false, details);
     }
@@ -674,7 +688,7 @@ final class ArenaEconomy implements Listener {
         consumeQuote(owner, quote.id()); // Consume this exact quote first; retries never sell twice.
         if (System.currentTimeMillis() > quote.expiresAt()) {
             JsonObject expired = new JsonObject();
-            expired.addProperty("nextCommand", "/mycli trade recycle quote " + (quote.stash() ? "chest" : "bag") + " " + (quote.stash() ? quote.slot() + 1 : quote.slot()) + " " + quote.quantity());
+            expired.addProperty("nextCommand", (ResidentCli.isResident(player.getUniqueId())?"arena":"/mycli trade")+" recycle quote " + (quote.stash() ? "chest" : "bag") + " " + (quote.stash() ? quote.slot() + 1 : quote.slot()) + " " + quote.quantity());
             expired.addProperty("nextAction", "本次未出售；重新查询此槽报价，核对物品后再确认，不自动重卖");
             reply(player, "sell", false, "quote_expired", null, 0, balance(owner), false, expired);
             return;
@@ -848,8 +862,10 @@ final class ArenaEconomy implements Listener {
             result.addProperty("requestedSpend",price);result.addProperty("pendingCount",dungeon.queuedItems(owner));
             if(result.get("pending").getAsBoolean()){result.add("spent",JsonNull.INSTANCE);result.add("quantity",JsonNull.INSTANCE);}
             else result.addProperty("spent",ok?price:0);
+            result.addProperty("paymentPending",result.get("pending").getAsBoolean());
+            if(ok) queuedDelivery(result);
             reply(player,"buy",ok,ok?"queued_for_personal_chest":result.get("reason").getAsString(),item(purchased),ok?purchased.getAmount():0,0,ok||result.get("pending").getAsBoolean(),result);
-            if(ok&&!textReply)player.sendMessage("§a【商店】已扣 "+price+" 金币；商品在个人奖励箱。取物：/mycli arena stash page 1");
+            if(ok&&!textReply)player.sendMessage("§a【商店】已扣 "+price+" 金币；商品在待领取队列。先 /mycli arena stash collect 入箱，再取到随身背包。");
             return;
         }
         int oldBalance = balance(owner);
@@ -869,8 +885,16 @@ final class ArenaEconomy implements Listener {
         details.addProperty("offerId", offer.id());
         details.addProperty("spent", price);
         details.addProperty("pendingCount", dungeon.queuedItems(owner));
+        details.addProperty("paymentPending",false);queuedDelivery(details);
         reply(player, "buy", true, "queued_for_personal_chest", item(purchased), purchased.getAmount(),
                 oldBalance - price, true, details);
+    }
+
+    private static void queuedDelivery(JsonObject result){
+        result.addProperty("reason","queued_for_personal_chest");result.addProperty("pending",true);
+        result.addProperty("deliveryStatus","queued");result.addProperty("destination","pending_rewards");
+        result.addProperty("transferredToInventory",false);result.addProperty("nextAction","arena stash collect");
+        result.addProperty("nextSafeRead","arena stash summary");
     }
 
     private int balance(UUID owner) {
@@ -1044,7 +1068,7 @@ final class ArenaEconomy implements Listener {
             JsonObject state=recyclingReads.containsKey(player.getUniqueId())?recyclingReads.get(player.getUniqueId()):nativeRpg.recyclingState(player);
             response.add("balance",state.has("balance")?state.get("balance"):JsonNull.INSTANCE);
             response.addProperty("balanceAvailable",state.has("available")&&state.get("available").getAsBoolean());
-            response.addProperty("balanceCommand","/mycli trade wallet");
+            response.addProperty("balanceCommand",ResidentCli.isResident(player.getUniqueId())?"arena wallet":"/mycli trade wallet");
             response.addProperty("walletAlias","/mycli arena wallet");
         }
         if (details != null) for (Map.Entry<String, com.google.gson.JsonElement> field : details.entrySet())

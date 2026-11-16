@@ -31,7 +31,8 @@ final class ResidentRpg {
         return data;
     }
     static long now(EntityMaid maid){return maid.getServer().overworld().getGameTime();}
-    static int level(EntityMaid maid) { return Math.min(20,1+data(maid).getInt("xp")/100); }
+    static long experience(EntityMaid maid){return data(maid).getInt("xp")+data(maid).getLong("combatXp");}
+    static int level(EntityMaid maid) { return (int)Math.min(20,1+experience(maid)/100); }
     static void xp(EntityMaid maid,int amount) { var d=data(maid);d.putInt("xp",Math.min(1_000_000,d.getInt("xp")+amount)); }
     static void tick(EntityMaid maid) {
         var d=data(maid); long time=now(maid);
@@ -51,7 +52,7 @@ final class ResidentRpg {
                 default->"本人急迫 I，5秒";})).toList();
     }
     static Map<String,Object> observe(EntityMaid maid,String profession) {
-        return Map.of("progressionSystem","resident_classes_v1","profession",profession,"title",title(profession),"level",level(maid),"xp",data(maid).getInt("xp"),
+        return Map.of("progressionSystem","resident_classes_v1","profession",profession,"title",title(profession),"level",level(maid),"xp",experience(maid),"workXp",data(maid).getInt("xp"),"combatXp",data(maid).getLong("combatXp"),
             "mana",Map.of("current",data(maid).getDouble("mana"),"max",max(maid)),"skills",skills(profession),"abilities",abilities(maid,profession));
     }
     static Map<String,Object> cast(EntityMaid maid,String profession,String id,List<LivingEntity> allies) {

@@ -67,6 +67,7 @@ final class NativeRpg {
         catch(Exception error){throw new IllegalStateException("RPG资料暂不可用；稍后查询 /mycli status，不要重复执行。");}
     }
     JsonObject state(Player p) {
+        if(ResidentCli.isResident(p.getUniqueId()))try{var result=JsonParser.parseString((String)ResidentCli.nativeCall("rpg",new Class[]{UUID.class},p.getUniqueId())).getAsJsonObject();result.addProperty("available",true);result.addProperty("combat",result.get("profession").getAsString());return result;}catch(Exception e){var out=new JsonObject();out.addProperty("available",false);return out;}
         try{return JsonParser.parseString((String)call("selfState",new Class<?>[]{Player.class},p)).getAsJsonObject();}
         catch(RuntimeException unavailable){var out=new JsonObject();out.addProperty("available",false);out.addProperty("backend","vortex");return out;}
     }
@@ -140,6 +141,7 @@ final class NativeRpg {
         catch(RuntimeException unavailable){return false;}
     }
     boolean refillDungeonMana(Player p) {
+        if(ResidentCli.isResident(p.getUniqueId()))try{return Boolean.TRUE.equals(ResidentCli.nativeCall("refillMana",new Class[]{UUID.class},p.getUniqueId()));}catch(Exception e){return false;}
         try { return Boolean.TRUE.equals(call("refillDungeonMana", new Class<?>[]{Player.class}, p)); }
         catch (RuntimeException unavailable) { return false; }
     }
@@ -153,6 +155,7 @@ final class NativeRpg {
         return enough;
     }
     boolean spend(Player p,double amount){
+        if(ResidentCli.isResident(p.getUniqueId()))return ResidentCli.mana(p,amount,true);
         if(!Double.isFinite(amount)||amount<0)return false;
         try{return (Boolean)call("consumeCommonMana",new Class<?>[]{Player.class,double.class},p,amount);}
         catch(RuntimeException e){p.sendMessage("§eRPG魔力服务未就绪，本次未执行；查询：/mycli status");return false;}

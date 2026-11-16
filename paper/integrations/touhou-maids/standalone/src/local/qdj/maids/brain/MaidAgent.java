@@ -136,7 +136,7 @@ final class MaidAgent {
         for (EquipmentSlot allowed : GEAR) if (allowed.getName().equals(name)) slot = allowed;
         if (slot == null) throw new IllegalArgumentException("Use mainhand, offhand, head, chest, legs or feet");
         var bag = maid.getMaidInv();
-        if (sourceSlot < 0 || sourceSlot >= bag.getSlots()) throw new IllegalArgumentException("Backpack slot is out of range");
+        if (sourceSlot < 0 || sourceSlot >= Math.min(bag.getSlots(),maid.getMaidBackpackType().getAvailableMaxContainerIndex())) throw new IllegalArgumentException("Backpack slot is out of range");
         ItemStack item = bag.getStackInSlot(sourceSlot).copy();
         if (item.isEmpty() || item.getCount() != 1) {
             throw new IllegalArgumentException("The source slot needs one item");
@@ -148,9 +148,9 @@ final class MaidAgent {
             throw new IllegalArgumentException("The item does not fit this equipment slot");
         }
         ItemStack previous = maid.getItemBySlot(slot).copy();
-        if (expectedItem != null && !previous.isEmpty() && ItemStack.isSameItem(previous, item)) {
-            throw new IllegalArgumentException("This item type is already equipped. Use the native menu to swap variants.");
-        }
+        // Same material may have different damage, enchantments or custom components.
+        // An exactly identical equipped stack already satisfies the requested loadout.
+        if (!previous.isEmpty() && ItemStack.matches(previous,item)) return;
         if (!previous.isEmpty() && previous.has(net.minecraft.core.component.DataComponents.ENCHANTMENTS)
                 && net.minecraft.world.item.enchantment.EnchantmentHelper.has(previous,
                         net.minecraft.world.item.enchantment.EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE)) {
@@ -175,7 +175,7 @@ final class MaidAgent {
         for (EquipmentSlot slot : GEAR) gear.add(slot.getName() + "=" + item(maid.getItemBySlot(slot)));
         var bag = new StringJoiner(", ", "[", "]");
         var inventory = maid.getMaidInv();
-        for (int i = 0; i < inventory.getSlots(); i++) {
+        for (int i = 0; i < Math.min(inventory.getSlots(),maid.getMaidBackpackType().getAvailableMaxContainerIndex()); i++) {
             ItemStack stack = inventory.getStackInSlot(i);
             if (!stack.isEmpty()) bag.add(i + "=" + item(stack));
         }

@@ -116,8 +116,8 @@ final class CompanionLedger {
                 e.home.work == null || e.home.idle == null || e.home.sleep == null ||
                 e.home.task == null || e.home.schedule == null || e.history == null || e.history.size() > 32 ||
                 e.joinedAt < 0 || e.expiresAt < e.joinedAt || e.disconnectedAt < 0 || e.revision < 0 || e.trips < 0 ||
-                !List.of("follow", "stay", "work", "returning", "available", "dead").contains(e.mode) ||
-                (List.of("follow", "stay", "work").contains(e.mode) != (e.leader != null)))
+                !List.of("follow", "stay", "work", "returning", "available", "dead", "paused").contains(e.mode) ||
+                (!e.mode.equals("paused")&&(List.of("follow", "stay", "work").contains(e.mode) != (e.leader != null))))
             throw new IllegalArgumentException("invalid_companion_entry");
         for (Point p : List.of(e.work, e.home.work, e.home.idle, e.home.sleep)) {
             if (p.dimension == null || !p.dimension.matches("[a-z0-9_.-]+:[a-z0-9/._-]+") ||

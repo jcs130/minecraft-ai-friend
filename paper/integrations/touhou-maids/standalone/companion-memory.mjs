@@ -21,7 +21,8 @@ async function atomic(path, data) {
 }
 
 function compactEvidence(row) {
-  const result=Object.fromEntries(['id','at','speakerId','message','reply','decision','status','reason','channel','kind','sourceRequestId']
+  const result=Object.fromEntries(['id','at','speakerId','message','reply','decision','status','reason','channel','kind','sourceRequestId',
+    'payloadTruncated','sourceJournal','payloadSha256','originalBytes','instruction']
     .filter(key=>Object.hasOwn(row,key)).map(key=>[key,row[key]]));
   if(row.receipt) result.receipt=Object.fromEntries(['action','status','reason','completed']
     .filter(key=>Object.hasOwn(row.receipt,key)).map(key=>[key,row.receipt[key]]));
@@ -64,12 +65,22 @@ async function synchronize(config) {
     let count = 0;
     for (const name of files.filter(f => /^[0-9a-f-]{36}-result\.json$/.test(f)).sort()) {
       if (imported[name] || count >= 20) continue;
-      const record = await json(join(root, name), 32768);
+      const record = await json(join(root, name), 262144);
       if (record.maidId !== npc.maidId || !UUID.test(record.speakerId) || !UUID.test(record.id))
         throw Error('conversation_identity_mismatch');
-      const content = JSON.stringify(record);
-      if (Buffer.byteLength(content) > 6000) throw Error('conversation_exceeds_core_note_budget');
-      const digest = createHash('sha256').update(content).digest('hex');
+      const original = JSON.stringify(record);
+      const digest = createHash('sha256').update(original).digest('hex');
+      let content=original;
+      if(Buffer.byteLength(content)>6000) {
+        // Preserve the full durable journal; a large CLI catalogue must not stop all later memories.
+        const preview={schemaVersion:1,id:record.id,maidId:record.maidId,speakerId:record.speakerId,
+          kind:record.kind,sourceRequestId:record.sourceRequestId,status:record.status,
+          payloadTruncated:true,sourceJournal:name,payloadSha256:digest,originalBytes:Buffer.byteLength(original),
+          instruction:'Preview only. Read the original scoped journal or action receipt for complete evidence.',
+          reply:Array.from(String(record.reply??'')).slice(0,1200).join('')};
+        content=JSON.stringify(preview);
+        while(Buffer.byteLength(content)>5800){preview.reply=Array.from(preview.reply).slice(0,-100).join('');content=JSON.stringify(preview);}
+      }
       const result = await service.execute({action:'remember',kind:'relationship',
         summary:`NPC conversation ${record.id}`,content,
         tags:[`peer:${record.speakerId}`],source:{kind:'agent_note',

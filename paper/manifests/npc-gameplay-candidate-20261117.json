@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-gameplay-candidate",
+  "date": "2026-11-17",
+  "sourceBase": "72f9be4fbd952a604ff12d3277b71448e2cf47c0",
+  "releaseReady": false,
+  "productionChanged": false,
+  "candidateVersions": {
+    "residents": "0.3.3",
+    "agentFriend": "0.4.47.85-npc-gameplay",
+    "nativePermissions": "0.1.40-resident-permissions",
+    "nativeCamera": "0.2.1"
+  },
+  "artifacts": {
+    "residents": {
+      "sha256": "c97cb23af678da2dc7e822db3e6b18a33d2adcb00b7ff623f31b1c4dc25f9ab2",
+      "privateBuildRecord": "npc-gameplay-final-results-20261117/residents-hybrid-candidate.jar",
+      "distributedInGit": false
+    },
+    "agentFriend": {
+      "sha256": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2",
+      "privateBuildRecord": "npc-gameplay-final-results-20261117/AgentFriend-residents-candidate.jar",
+      "distributedInGit": false
+    },
+    "nativePermissions": {
+      "sha256": "9b54f37df062da7d6b3c7256cd1de9a96d27251e371316aa0a244bbea3810c13",
+      "privateBuildRecord": "npc-gameplay-final-results-20261117/maid-bridge-resident-permissions.jar",
+      "distributedInGit": false
+    },
+    "nativeCamera": {
+      "sha256": "948796f99dfb5e04d374f4d548f298323e654cc92d1c1f348e9b6977a585521a",
+      "privateBuildRecord": "npc-gameplay-photo-results-20261117/camera-build/qiandeng-native-camera-0.2.1-neoforge.jar",
+      "distributedInGit": false
+    }
+  },
+  "isolatedRuntimeChecks": [
+    {
+      "name": "gameplay",
+      "result": "passed",
+      "checks": 46,
+      "record": "npc-gameplay-full-regression-r2-results-20261117/gameplay-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "c97cb23af678da2dc7e822db3e6b18a33d2adcb00b7ff623f31b1c4dc25f9ab2",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      }
+    },
+    {
+      "name": "restart",
+      "result": "passed",
+      "checks": 2,
+      "record": "npc-gameplay-full-regression-r2-results-20261117/restart-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "c97cb23af678da2dc7e822db3e6b18a33d2adcb00b7ff623f31b1c4dc25f9ab2",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      }
+    },
+    {
+      "name": "farm_permissions_growth",
+      "result": "passed",
+      "checks": 21,
+      "record": "npc-gameplay-native-farm-r11-results-20261117/native-farm.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "c97cb23af678da2dc7e822db3e6b18a33d2adcb00b7ff623f31b1c4dc25f9ab2",
+        "AgentFriend-npc-candidate.jar": "635330454d6a49dc959ac766c3a85aa6d79ce734a546a9cfefcd461976f17617"
+      }
+    },
+    {
+      "name": "native_photo",
+      "result": "passed",
+      "checks": 13,
+      "record": "npc-gameplay-photo-r4-results-20261117/photo-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "378c4037f0a06fd53eca795faa3e1c1fdb92e9b5026c81cb6537cea8f5327723",
+        "AgentFriend-npc-candidate.jar": "635330454d6a49dc959ac766c3a85aa6d79ce734a546a9cfefcd461976f17617"
+      }
+    },
+    {
+      "name": "sites_earlier_candidate",
+      "result": "passed",
+      "checks": 31,
+      "record": "npc-gameplay-sites-results-20261117/site-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "1f467329991c894a14d2412d931079e1d3ecf39163effd649e721a61a3b56c7a",
+        "AgentFriend-npc-candidate.jar": "e8730a9d38d7bbd9ba9e222b9069f94c6dde916514f9298fb0ea2085e3a3a8dd"
+      }
+    },
+    {
+      "name": "trial_earlier_candidate",
+      "result": "passed",
+      "checks": 23,
+      "record": "npc-gameplay-combat-results-20261117/combat-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "1f467329991c894a14d2412d931079e1d3ecf39163effd649e721a61a3b56c7a",
+        "AgentFriend-npc-candidate.jar": "e8730a9d38d7bbd9ba9e222b9069f94c6dde916514f9298fb0ea2085e3a3a8dd"
+      }
+    }
+  ],
+  "unitChecks": {
+    "javaContractsAndLedger": 108,
+    "javaGpuPolicy": 10,
+    "nodeMemoryAndCamera": 26,
+    "pythonGatewayAndBenchmark": 12
+  },
+  "onlineSamples": [
+    {
+      "record": "npc-gameplay-online-r9-results-20261117/online-results.json",
+      "model": "tokenplan/qwen3.8-max",
+      "thinking": false,
+      "outputTokenLimit": 320,
+      "scheduledAutonomy": false,
+      "goalVerified": true,
+      "metrics": {
+        "turns": 10,
+        "elapsedSeconds": 40.859,
+        "completedActions": 10,
+        "refusedOrFailedActions": 0,
+        "goalVerified": true,
+        "successRateSampleSize": 1
+      },
+      "fullNativeDependencies": false,
+      "artifactSha256": {
+        "residents-candidate.jar": "263c98309e5a0ffb4054c7c41b78208d363b13efc5b3acda1b671b7ea852b6f7",
+        "AgentFriend-npc-candidate.jar": "574f8522006109ba683ad8cbb2e434c11acab1d74de6a1f1214ac31232d5e6f2"
+      },
+      "providerCalls": 10,
+      "usage": {
+        "prompt_tokens": 60848,
+        "completion_tokens": 370,
+        "total_tokens": 61218
+      }
+    },
+    {
+      "record": "npc-gameplay-online-r10-results-20261117/online-results.json",
+      "model": "tokenplan/qwen3.8-max",
+      "thinking": false,
+      "outputTokenLimit": 320,
+      "scheduledAutonomy": false,
+      "goalVerified": false,
+      "metrics": {
+        "turns": 14,
+        "elapsedSeconds": 57.844,
+        "completedActions": 14,
+        "refusedOrFailedActions": 0,
+        "goalVerified": false,
+        "successRateSampleSize": 1
+      },
+      "fullNativeDependencies": true,
+      "artifactSha256": {
+        "residents-candidate.jar": "a02b14074befa5ddea3eb1c803e4f2825fa574864a5a776a58ff902ea1fb250f",
+        "AgentFriend-npc-candidate.jar": "635330454d6a49dc959ac766c3a85aa6d79ce734a546a9cfefcd461976f17617"
+      },
+      "providerCalls": 14,
+      "usage": {
+        "prompt_tokens": 92062,
+        "completion_tokens": 644,
+        "total_tokens": 92706
+      }
+    },
+    {
+      "record": "npc-gameplay-online-thinking-r2-results-20261117/online-results.json",
+      "stopRecord": "npc-gameplay-online-thinking-r2-results-20261117/intentional-stop.json",
+      "model": "tokenplan/qwen3.8-max",
+      "thinking": true,
+      "outputTokenLimit": 1024,
+      "scheduledAutonomy": false,
+      "goalVerified": false,
+      "metrics": {
+        "turns": 9,
+        "elapsedSeconds": 364.578,
+        "completedActions": 1,
+        "refusedOrFailedActions": 8,
+        "goalVerified": false,
+        "successRateSampleSize": 1
+      },
+      "stoppedReason": "repeated_provider_deadline_no_more_inference",
+      "completedTurnsBeforeStop": 9,
+      "fullNativeDependencies": true,
+      "artifactSha256": {
+        "residents-candidate.jar": "c97cb23af678da2dc7e822db3e6b18a33d2adcb00b7ff623f31b1c4dc25f9ab2",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      },
+      "providerCalls": 10,
+      "usage": {
+        "prompt_tokens": 21337,
+        "completion_tokens": 15732,
+        "total_tokens": 37069
+      }
+    }
+  ],
+  "releaseBlockers": [
+    "Sustained autonomous objectives: a 10-turn success was followed by a 14-turn drift failure; scheduled multi-body operation is not yet accepted.",
+    "Complete player CLI, profession growth and native crafting/fishing/trade events are not all adapted.",
+    "Real Bedrock and web appearance/animation/bubble/menu acceptance is incomplete; encrypted YSM is not claimed converted.",
+    "All new residents need production housing/identity/model/persona/scope provisioning and checks.",
+    "Combat progression and downed recovery need additional cold-restart coverage."
+  ],
+  "optionalInitialFeatures": [
+    "Japanese character voice can remain unconfigured; no listening acceptance claimed."
+  ],
+  "recordsPolicy": "Private local evidence only. No credentials, runtime memories, world saves, original models or captured images are committed."
+}

@@ -50,7 +50,7 @@ final class TrialRescueManager implements Listener {
         if (!companionEligible(owner, body, team)) { companions.remove(body.getUniqueId()); return null; }
         companions.put(body.getUniqueId(), new Companion(owner.getUniqueId(), System.currentTimeMillis()));
         if (team.paused) return null;
-        return downs.values().stream().filter(d -> same(team,d) && Bukkit.getPlayer(d.player)!=null
+        return downs.values().stream().filter(d -> same(team,d) && ResidentCli.find(d.player)!=null
                 && body.getWorld()==d.anchor.getWorld() && body.getLocation().distanceSquared(d.anchor)<=32*32
                 && (d.rescuer==null || d.rescuer.equals(body.getUniqueId())))
             .sorted(Comparator.comparing((Down d)->!d.player.equals(owner.getUniqueId()))
@@ -71,7 +71,7 @@ final class TrialRescueManager implements Listener {
         var result=new ArrayList<LivingEntity>();long now=System.currentTimeMillis();
         companions.entrySet().removeIf(e->now-e.getValue().observed>1500);
         for(var row:companions.entrySet()) {
-            Player owner=Bukkit.getPlayer(row.getValue().owner);
+            Player owner=ResidentCli.find(row.getValue().owner);
             Entity body=Bukkit.getEntity(row.getKey());
             if(owner!=null && body instanceof LivingEntity living && companionEligible(owner,living,team))result.add(living);
         }
@@ -80,9 +80,9 @@ final class TrialRescueManager implements Listener {
     private LivingEntity rescuer(Team team, Down d) {
         Entity entity=d.rescuer==null?null:Bukkit.getEntity(d.rescuer);
         if(!(entity instanceof LivingEntity living)||!near(living.getLocation(),d.anchor)||!team.contains.test(living.getLocation()))return null;
-        Player target=Bukkit.getPlayer(d.player);
-        if(target==null||!living.hasLineOfSight(target))return null;
-        if(living instanceof Player player)return standing(player)&&team.members.contains(player.getUniqueId())?player:null;
+        Player target=ResidentCli.find(d.player);
+        if(target==null||!living.hasLineOfSight(ResidentCli.actual(target)))return null;
+        Player player=ResidentCli.fromEntity(living);if(player!=null)return standing(player)&&team.members.contains(player.getUniqueId())?living:null;
         return companions(team).contains(living)?living:null;
     }
     private String rescuerName(Down d) {
@@ -110,7 +110,7 @@ final class TrialRescueManager implements Listener {
     }
     private boolean same(Team team, Down d) { return team != null && team.id.equals(d.team); }
     private boolean covers(Team team, Player p) {
-        return team != null && (team.members.size() >= 2 || team.id.startsWith("site:") || !companions(team).isEmpty())
+        return team != null && (team.members.size() >= 2 || ResidentCli.isResident(p.getUniqueId()) || team.id.startsWith("site:") || !companions(team).isEmpty())
                 && team.contains.test(p.getLocation());
     }
     boolean rescueActive(Player p) {
@@ -134,9 +134,9 @@ final class TrialRescueManager implements Listener {
         if (e instanceof EntityDamageByEntityEvent hit) {
             Entity source = hit.getDamager();
             if (source instanceof Projectile shot && shot.getShooter() instanceof Entity actor) source = actor;
-            if (source instanceof Player attacker && downed(attacker)) { e.setCancelled(true); return; }
+            if (downed(ResidentCli.fromEntity(source))) { e.setCancelled(true); return; }
         }
-        if (!(e.getEntity() instanceof Player p)) return;
+        Player p=ResidentCli.fromEntity(e.getEntity());if(p==null)return;
         if (downed(p)) { e.setCancelled(true); return; }
         if (e.getFinalDamage() < p.getHealth() || !standing(p)) return;
         Team team = team(p.getUniqueId());
@@ -147,14 +147,14 @@ final class TrialRescueManager implements Listener {
         e.setCancelled(true);
         Down d = new Down(p.getUniqueId(), team.id, p.getLocation(), team.exit);
         downs.put(p.getUniqueId(), d);
-        p.closeInventory(); p.setHealth(1); p.setFireTicks(0); p.setVelocity(new Vector());
+        nativeHold(p,true);p.closeInventory(); p.setHealth(1); p.setFireTicks(0); p.setVelocity(new Vector());
         p.setFallDistance(0);
         persist();
         audit(d, "downed", "lethal_damage");
         boolean alone=team.members.size()==1&&companions(team).isEmpty();
         tell(team, alone?"§c本次遭到致命伤害，正在返回遗迹存档点；背包装备保留，整场第三次战败才结束。":"§c" + p.getName() + " 已倒地！队友或随行伙伴靠近4格并停留10秒可自动救起；清完本层/本室也会自动复活。");
         for (UUID id : team.members) {
-            Player member = Bukkit.getPlayer(id);
+            Player member = ResidentCli.find(id);
             if (member != null) member.sendMessage("MC_TRIAL_RESCUE status=downed player=" + p.getUniqueId()
                     + " " + LocationOutput.fields(d.anchor) + " radius=4 seconds=10");
             if (member != null && !member.getUniqueId().equals(p.getUniqueId()))
@@ -168,15 +168,15 @@ final class TrialRescueManager implements Listener {
     public void attack(EntityDamageByEntityEvent e) {
         Entity source = e.getDamager();
         if (source instanceof Projectile projectile && projectile.getShooter() instanceof Entity entity) source = entity;
-        if (source instanceof Player p && downed(p)) { e.setCancelled(true); notice(p); }
+        Player p=ResidentCli.fromEntity(source);if(downed(p)) { e.setCancelled(true); notice(p); }
     }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void target(EntityTargetLivingEntityEvent e) {
-        if (e.getTarget() instanceof Player p && downed(p)) e.setCancelled(true);
+        if (downed(ResidentCli.fromEntity(e.getTarget()))) e.setCancelled(true);
     }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void heal(EntityRegainHealthEvent e) {
-        if (e.getEntity() instanceof Player p && downed(p)) e.setCancelled(true);
+        if (downed(ResidentCli.fromEntity(e.getEntity()))) e.setCancelled(true);
     }
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void move(PlayerMoveEvent e) {
@@ -238,11 +238,11 @@ final class TrialRescueManager implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void drop(PlayerDropItemEvent e) { if (downed(e.getPlayer())) e.setCancelled(true); }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void pickup(EntityPickupItemEvent e) { if (e.getEntity() instanceof Player p && downed(p)) e.setCancelled(true); }
+    public void pickup(EntityPickupItemEvent e) { if (downed(ResidentCli.fromEntity(e.getEntity()))) e.setCancelled(true); }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void consume(PlayerItemConsumeEvent e) { if (downed(e.getPlayer())) e.setCancelled(true); }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void launch(ProjectileLaunchEvent e) { if (e.getEntity().getShooter() instanceof Player p && downed(p)) e.setCancelled(true); }
+    public void launch(ProjectileLaunchEvent e) { if (e.getEntity().getShooter() instanceof Entity actor && downed(ResidentCli.fromEntity(actor))) e.setCancelled(true); }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void breakBlock(BlockBreakEvent e) { if (downed(e.getPlayer())) e.setCancelled(true); }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -273,7 +273,7 @@ final class TrialRescueManager implements Listener {
         if (d.rescuer != null) {
             audit(d, "interrupted", reason);
             for (UUID id : Set.of(d.player, d.rescuer)) {
-                Player p = Bukkit.getPlayer(id);
+                Player p = ResidentCli.find(id);
                 if (p != null && p.isOnline()) {
                     p.sendMessage("§e[队友救援] 救援已中断、进度归零。恢复后请同一位队友在4格内连续停留10秒；清场仍可自动复活。");
                     p.sendMessage("MC_TRIAL_RESCUE status=interrupted target=" + d.player + " reason=" + reason + " progressMs=0 radius=4 seconds=10");
@@ -292,7 +292,7 @@ final class TrialRescueManager implements Listener {
     private void tick() {
         ticks++;
         if (ticks % 4 == 0) for (UUID id : new ArrayList<>(recoveries.keySet())) {
-            Player p = Bukkit.getPlayer(id); if (p != null) recover(p);
+            Player p = ResidentCli.find(id); if (p != null) recover(p);
         }
         if (downs.isEmpty()) return;
         long now = System.currentTimeMillis(); Set<String> handled = new HashSet<>();
@@ -301,14 +301,14 @@ final class TrialRescueManager implements Listener {
             if (!same(team, d)) { recoveries.put(id, new Recovery(d.exit, d.team, true)); remove(id); persist(); continue; }
             if (handled.add(team.id)) {
                 if (team.roomCleared.getAsBoolean()) { reviveTeam(team.id, "room_cleared"); continue; }
-                boolean survivor = team.members.stream().anyMatch(uuid -> standing(Bukkit.getPlayer(uuid))
-                        || Bukkit.getPlayer(uuid) == null && !downs.containsKey(uuid)) || !companions(team).isEmpty();
+                boolean survivor = team.members.stream().anyMatch(uuid -> standing(ResidentCli.find(uuid))
+                        || ResidentCli.find(uuid) == null && !downs.containsKey(uuid)) || !companions(team).isEmpty();
                 if (!survivor) { team.wipe.run(); continue; }
             }
             if (!downs.containsKey(id)) continue;
-            Player p = Bukkit.getPlayer(id);
+            Player p = ResidentCli.find(id);
             if (p == null || !p.isOnline() || p.isDead()) { reset(d, "target_unavailable"); continue; }
-            p.setVelocity(new Vector()); p.setFallDistance(0); p.setFireTicks(0);
+            nativeHold(p,true);p.setVelocity(new Vector()); p.setFallDistance(0); p.setFireTicks(0);
             if (p.getWorld() != d.anchor.getWorld() || p.getLocation().distanceSquared(d.anchor) > .01) teleport(p, d.anchor);
             if (team.paused) reset(d, "paused");
             else {
@@ -316,31 +316,31 @@ final class TrialRescueManager implements Listener {
                 if (now - d.lastTick > 1000 || rescuer==null) reset(d, "rescuer_unavailable");
                 if (d.rescuer == null) {
                     var candidates=new ArrayList<LivingEntity>();
-                    team.members.stream().map(Bukkit::getPlayer).filter(this::standing).forEach(candidates::add);
+                    team.members.stream().map(ResidentCli::find).filter(this::standing).map(ResidentCli::living).forEach(candidates::add);
                     candidates.addAll(companions(team));
                     rescuer = candidates.stream()
-                            .filter(member -> team.contains.test(member.getLocation()) && near(member.getLocation(), d.anchor) && member.hasLineOfSight(p))
+                            .filter(member -> team.contains.test(member.getLocation()) && near(member.getLocation(), d.anchor) && member.hasLineOfSight(ResidentCli.actual(p)))
                             .min(Comparator.comparing((LivingEntity member)->!(member instanceof Player))
                                 .thenComparing(member -> member.getUniqueId().toString())).orElse(null);
                     if (rescuer != null) {
                         d.rescuer = rescuer.getUniqueId(); d.since = now;
                         audit(d, "rescuing", "nearby_teammate");
-                        if(rescuer instanceof Player helper) {
+                        Player helper=ResidentCli.fromEntity(rescuer);if(helper!=null) {
                             helper.sendMessage("§e[系统·队友救援] 正在救援 " + p.getName() + "，保持4格内10秒即可复活队友。");
                             helper.sendMessage("MC_TRIAL_RESCUE status=rescuing target=" + id + " radius=4 seconds=10");
                         }
                         p.sendMessage("§a[队友救援] " + rescuer.getName() + " 正在救你，请看上方绿色救援进度条。");
                     }
                 }
-                if (d.rescuer != null && now - d.since >= RESCUE_MS) { revive(id, Bukkit.getPlayer(d.rescuer)!=null?"nearby_teammate":"native_companion"); continue; }
+                if (d.rescuer != null && now - d.since >= RESCUE_MS) { revive(id, ResidentCli.find(d.rescuer)!=null?"nearby_teammate":"native_companion"); continue; }
             }
             d.lastTick = now;
             display(p, d, team, now);
         }
         if(ticks%80==0)for(Down d:downs.values()) {
             Team team=team(d.player);if(team==null||team.paused||d.rescuer!=null)continue;
-            Player target=Bukkit.getPlayer(d.player);if(target==null)continue;
-            for(UUID id:team.members){Player helper=Bukkit.getPlayer(id);if(!standing(helper))continue;
+            Player target=ResidentCli.find(d.player);if(target==null)continue;
+            for(UUID id:team.members){Player helper=ResidentCli.find(id);if(!standing(helper))continue;
                 helper.sendMessage("§e[救援优先] "+target.getName()+" 仍在倒地；"+LocationOutput.fields(d.anchor)+"。靠近4格并保持视线10秒自动扶起；无需施法。查询 /mycli arena status --json 或 /mycli dungeon status --json。");
             }
         }
@@ -362,8 +362,8 @@ final class TrialRescueManager implements Listener {
         if (d.bar.getProgress() != progress) d.bar.setProgress(progress);
         Set<Player> viewers = new HashSet<>();
         for (UUID id : team.members) {
-            Player viewer = Bukkit.getPlayer(id);
-            if (viewer != null && viewer.isOnline() && viewer.getWorld() == p.getWorld() && viewer.canSee(p)) viewers.add(viewer);
+            Player viewer = ResidentCli.find(id);
+            if (viewer != null && !ResidentCli.isResident(viewer.getUniqueId()) && viewer.isOnline() && viewer.getWorld() == p.getWorld() && viewer.canSee(ResidentCli.actual(p))) viewers.add(viewer);
         }
         // Keep the native bar and audience; REMOVE+ADD used to recreate the UI every second.
         Set<Player> current = new HashSet<>(d.bar.getPlayers());
@@ -374,7 +374,7 @@ final class TrialRescueManager implements Listener {
     private void remove(UUID id) { Down d = downs.remove(id); if (d != null && d.bar != null) d.bar.removeAll(); }
     private void revive(UUID id, String reason) {
         Down d = downs.get(id); if (d == null) return;
-        Player p = Bukkit.getPlayer(id);
+        Player p = ResidentCli.find(id);
         if (p == null || !p.isOnline() || p.isDead()) {
             // Clear reward/team checkpoint can advance while the player is disconnected.
             recoveries.put(id, new Recovery(d.exit, d.team, false)); remove(id); persist(); return;
@@ -383,9 +383,9 @@ final class TrialRescueManager implements Listener {
         audit(d, "revived", reason);
         if(reason.equals("nearby_teammate")&&d.rescuer!=null&&plugin.lifeChallenges()!=null)plugin.lifeChallenges().rescued(d.rescuer,id);
         if(reason.equals("nearby_teammate")&&d.rescuer!=null&&plugin.siteDungeons()!=null)
-            plugin.siteDungeons().support(Bukkit.getPlayer(d.rescuer),p);
+            plugin.siteDungeons().support(ResidentCli.find(d.rescuer),p);
         if(reason.equals("nearby_teammate")&&d.rescuer!=null&&plugin.skillAssessments()!=null) {
-            Player rescuer=Bukkit.getPlayer(d.rescuer);if(rescuer!=null)plugin.skillAssessments().proof(rescuer,"rescue","revived:"+id+":"+System.currentTimeMillis());
+            Player rescuer=ResidentCli.find(d.rescuer);if(rescuer!=null)plugin.skillAssessments().proof(rescuer,"rescue","revived:"+id+":"+System.currentTimeMillis());
         }
         p.sendTitle("§a已复活", reason.equals("room_cleared") ? "§e队友已清场" : "§e队友救援完成", 5, 45, 10);
         p.sendMessage("MC_TRIAL_RESCUE status=revived reason=" + reason + " health=" + p.getHealth());
@@ -403,10 +403,14 @@ final class TrialRescueManager implements Listener {
             recoveries.put(entry.getKey(), new Recovery(exit.clone(), team, true)); remove(entry.getKey());
         }
         persist();
-        for (UUID id : new ArrayList<>(recoveries.keySet())) { Player p = Bukkit.getPlayer(id); if (p != null) recover(p); }
+        for (UUID id : new ArrayList<>(recoveries.keySet())) { Player p = ResidentCli.find(id); if (p != null) recover(p); }
     }
     private void restoreHealth(Player p) {
+        nativeHold(p,false);
         p.setHealth(Math.min(10, p.getMaxHealth())); p.setFireTicks(0); p.setFallDistance(0); p.setNoDamageTicks(40);
+    }
+    private void nativeHold(Player p,boolean hold) {
+        if(ResidentCli.isResident(p.getUniqueId()))try{ResidentCli.nativeCall("downed",new Class[]{UUID.class,boolean.class},p.getUniqueId(),hold);}catch(ReflectiveOperationException failure){throw new IllegalStateException("resident_rescue_unavailable",failure);}
     }
     private boolean teleport(Player p, Location target) {
         internalTeleports.add(p.getUniqueId());
@@ -423,7 +427,7 @@ final class TrialRescueManager implements Listener {
         p.sendMessage("MC_TRIAL_RESCUE status=recovered health=" + p.getHealth());
     }
     private void tell(Team team, String message) {
-        for (UUID id : team.members) { Player p = Bukkit.getPlayer(id); if (p != null) p.sendMessage(message); }
+        for (UUID id : team.members) { Player p = ResidentCli.find(id); if (p != null) p.sendMessage(message); }
     }
     JsonObject state(Player p) {
         JsonObject state = new JsonObject(); state.addProperty("schema", 1); state.addProperty("downed", downed(p));
@@ -434,10 +438,12 @@ final class TrialRescueManager implements Listener {
         int count=team==null?0:team.members.size();
         state.addProperty("active",team!=null);state.addProperty("team",team==null?"":team.id);
         state.addProperty("rescueActive",rescueHere);
-        state.addProperty("participants",count);state.addProperty("rescueEnabled",count>=2||team!=null&&!companions(team).isEmpty());
+        boolean rescueEnabled=team!=null&&(count>=2||ResidentCli.isResident(p.getUniqueId())||team.id.startsWith("site:")||!companions(team).isEmpty());
+        state.addProperty("participants",count);state.addProperty("rescueEnabled",rescueEnabled);
         state.addProperty("lifeState",downed(p)?"downed":p.isDead()?"dead":"alive");
         state.addProperty("keepInventory",Boolean.TRUE.equals(p.getWorld().getGameRuleValue(GameRule.KEEP_INVENTORY)));
         if(count<2&&(team==null||companions(team).isEmpty()))state.addProperty("instruction",count==1?"当前本场仅登记1人，不启用队友救援；死亡是否掉物以实际死亡回执为准。想组队：先原生邀请并接受，全员到首室由队长开场。":"尚未参加试炼/遗迹场次。原生组队后全员到首室，由队长开场；本场登记2人以上才启用倒地救援。");
+        if(count==1&&rescueEnabled&&ResidentCli.isResident(p.getUniqueId()))state.addProperty("instruction","当前只有你参加本场；致命伤害先进入倒地保护，随后按本场全队战败规则撤离或返回存档点。没有其他队员时不会等待不存在的队友救援；身体身份与装备保留。");
         Map<String,Object> checkpoint=plugin.siteDungeons().checkpointState(p.getUniqueId());
         if(!checkpoint.isEmpty()){
             state.add("checkpoint",new Gson().toJsonTree(checkpoint));
@@ -449,7 +455,7 @@ final class TrialRescueManager implements Listener {
         if (team != null) for (UUID id : team.members) {
             Down d = downs.get(id); if (d == null) continue;
             JsonObject target = new JsonObject(); target.addProperty("uuid", id.toString());
-            Player member = Bukkit.getPlayer(id); target.addProperty("name", member == null ? "offline" : member.getName());
+            Player member = ResidentCli.find(id); target.addProperty("name", member == null ? "offline" : member.getName());
             target.addProperty("x", d.anchor.getX()); target.addProperty("y", d.anchor.getY()); target.addProperty("z", d.anchor.getZ());
             target.addProperty("world", d.anchor.getWorld().getName());
             long progress = team.paused ? 0 : elapsed(d, System.currentTimeMillis());
@@ -459,7 +465,7 @@ final class TrialRescueManager implements Listener {
             target.addProperty("phase", team.paused ? "paused" : d.rescuer == null ? "waiting" : "rescuing");
             target.addProperty("rescuerUuid", d.rescuer == null ? "" : d.rescuer.toString());
             target.addProperty("rescuerName", rescuerName(d));
-            target.addProperty("rescuerKind",d.rescuer==null?"none":Bukkit.getPlayer(d.rescuer)==null?"native_companion":"player");
+            target.addProperty("rescuerKind",d.rescuer==null?"none":ResidentCli.find(d.rescuer)==null?"native_companion":"player");
             target.addProperty("nextAction",d.rescuer==null?"前往上述同世界坐标，距离不超过4格、保持视线并连续停留10秒；不用重复施法。":"同一救援者保持距离与视线，等待剩余时间结束。");
             teammates.add(target);
         }

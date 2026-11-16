@@ -419,37 +419,72 @@ final class GuildManager implements Listener {
         return plugin.skillAssessments()!=null && plugin.skillAssessments().busy(player)
                 && !plugin.skillAssessments().canAttachContract(player,id);
     }
+
+    /** Shared discovery/preflight gate. It neither accepts a task nor spends inventory. */
+    private String acceptanceReason(Player player,String id) {
+        if(RetiredActivities.retired(id))return "retired";
+        if(examBlocks(player,id))return "exam_contract_incompatible";
+        Contract quest=contract(id);if(quest==null)return "task_not_found";
+        if(player.getGameMode()==GameMode.SPECTATOR)return "requires_survival";
+        boolean market=plugin.taskMarket().isMarket(id);
+        if(!dungeon.isBuilt()&&!market)return "dungeon_not_built";
+        if(active(player)!=null)return "another_contract_active";
+        if(plugin.taskMarket().isMarket(plugin.getConfig().getString(base(player.getUniqueId())+".active.id","")))return "active_snapshot_invalid";
+        if(market){var task=plugin.taskMarket().find(player,id);if(task==null)return "task_not_found";
+            String state=plugin.taskMarket().offerState(task,player);if(!state.equals("available"))return state;}
+        if(doneToday(player,quest))return "done_today";
+        if(!availableToday(player,quest))return "not_offered_today";
+        if(effectiveRank(player)<quest.minRank())return "rank_required";
+        if(quest.goal()==Goal.ERUDITE){var dims=new java.util.HashSet<Integer>();for(Contract done:everDoneList(player))dims.add(done.dim());if(dims.size()<quest.target())return "prior_task_categories_required";}
+        return "available";
+    }
+
+    /** A bounded machine catalogue includes daily IDs without legacy colour prefixes. */
+    private com.google.gson.JsonObject residentBoard(Player player,int page) {
+        var all=new java.util.LinkedHashMap<String,Contract>();
+        for(var task:plugin.taskMarket().offers()){var q=plugin.taskMarket().offered(task.id());if(q!=null)all.put(q.id(),q);}
+        for(var card:plugin.dailyBoard().cards())all.putIfAbsent(card.id(),card.contract());
+        for(var q:CONTRACTS)if(availableToday(player,q))all.putIfAbsent(q.id(),q);
+        int size=12,offset=(page-1)*size;var rows=new com.google.gson.JsonArray();int index=0;
+        for(var q:all.values()){
+            if(index++<offset)continue;if(rows.size()==size)break;
+            var item=new com.google.gson.JsonObject();String state=acceptanceReason(player,q.id());
+            item.addProperty("id",q.id());item.addProperty("title",q.title());item.addProperty("condition",TaskGuidance.step(q.goal(),q.description()));
+            item.addProperty("goal",q.goal().name().toLowerCase(Locale.ROOT));item.addProperty("target",q.target());
+            item.addProperty("fame",q.fame());item.addProperty("emeralds",q.emeralds());item.addProperty("minRank",q.minRank());
+            item.addProperty("state",state);item.addProperty("canAccept",state.equals("available"));
+            item.addProperty("acceptCommand","guild accept "+q.id());rows.add(item);
+        }
+        var out=new com.google.gson.JsonObject();out.addProperty("schemaVersion",1);out.addProperty("type","MC_GUILD_BOARD");
+        out.addProperty("success",true);out.addProperty("queryOnly",true);out.addProperty("reason","guild_catalogue_observed");
+        out.addProperty("actorId",player.getUniqueId().toString());out.addProperty("observedAt",java.time.Instant.now().toString());
+        out.addProperty("dailyBoardDate",plugin.dailyBoard().boardDate());out.addProperty("dailyRevision",plugin.dailyBoard().revision());
+        out.addProperty("page",page);out.addProperty("pageSize",size);out.addProperty("total",all.size());out.addProperty("returnedCount",rows.size());
+        out.addProperty("complete",offset==0&&rows.size()==all.size());out.add("items",rows);out.add("self",progressState(player));
+        out.addProperty("remaining",Math.max(0,all.size()-offset-rows.size()));
+        if(offset+rows.size()<all.size())out.addProperty("nextCommand","guild board "+(page+1));
+        out.addProperty("autoContinue",false);return out;
+    }
     private void accept(Player player, String id) {
-        if (RetiredActivities.retired(id)) { player.sendMessage(ChatColor.YELLOW + RetiredActivities.HINT); return; }
-        if(examBlocks(player,id)){plugin.skillAssessments().contractRejected(player,id);return;}
-        Contract quest = contract(id);
-        if (quest == null) { player.sendMessage(ChatColor.RED + "没有这个任务 ID；/mycli guild board 查看精确名称。"); return; }
-        if (player.getGameMode() == GameMode.SPECTATOR) { player.sendMessage(ChatColor.RED + "旁观者不能接单；请使用生存角色，/mycli guild board 查看委托。"); return; }
-        boolean market = plugin.taskMarket().isMarket(id);
-        if (!dungeon.isBuilt() && !market) { player.sendMessage(ChatColor.RED + "地下城暂未建成；/mycli guild board 选择其他开放任务，或联系服主检查场地。"); return; }
-        if (active(player) != null) { player.sendMessage(ChatColor.YELLOW + "已有在途任务；先 /mycli guild status 查进度，完成后 guild claim。一次性纯探索远征可 tasks pause 保留进度后换单；其他单如主动 guild abandon 会清零，不会自动替换。"); return; }
-        if (plugin.taskMarket().isMarket(plugin.getConfig().getString(base(player.getUniqueId()) + ".active.id", ""))) {
-            player.sendMessage(ChatColor.RED + "在途任务快照异常，已保留记录；请联系服主修复，不能覆盖任务。"); return;
+        String state=acceptanceReason(player,id);
+        if(!state.equals("available")) {
+            String advice=switch(state){
+                case "task_not_found" -> "没有这个任务 ID；/mycli guild board 查看精确名称。";
+                case "retired" -> RetiredActivities.HINT;
+                case "requires_survival" -> "旁观者不能接单；请使用生存角色。";
+                case "dungeon_not_built" -> "地下城暂未建成；/mycli guild board 选择其他开放任务，或联系服主检查场地。";
+                case "another_contract_active" -> "已有在途任务；先 /mycli guild status 查进度，完成后 guild claim。不会自动替换或放弃。";
+                case "active_snapshot_invalid" -> "在途任务快照异常，已保留记录；请联系服主修复，不能覆盖任务。";
+                case "done_today" -> "这张委托今日已经完成，明天再来。";
+                case "not_offered_today" -> "今日看板未开放这张委托；/mycli guild board 看今日开放清单。";
+                case "rank_required" -> "此委托需要更高的冒险者认证；/mycli guild status 查看当前等级。";
+                case "prior_task_categories_required" -> "先完成所需的不同类型委托；此单暂不占用任务槽。";
+                default -> "暂不能接取此委托："+state+"；/mycli guild board 核对开放条件。";
+            };
+            player.sendMessage(ChatColor.YELLOW+advice);return;
         }
-        if (market && !plugin.taskMarket().canAccept(player, quest)) return;
-        if (doneToday(player, quest)) { player.sendMessage(ChatColor.YELLOW + "这张委托今日已经完成，明天再来。"); return; }
-        if (!availableToday(player, quest)) {
-            player.sendMessage(ChatColor.YELLOW + "「" + quest.title() + "」今日看板未开放（每日维度轮换）；/mycli guild board 看今日开放清单。");
-            return;
-        }
-        if (effectiveRank(player) < quest.minRank()) {
-            player.sendMessage(ChatColor.RED + "需要" + RANKS[quest.minRank()] + "级认证（声望 "
-                    + THRESHOLDS[quest.minRank()] + "）；当前是" + RANKS[effectiveRank(player)] + "。"); return;
-        }
-        if (quest.goal() == Goal.ERUDITE) {
-            java.util.Set<Integer> doneDims = new java.util.HashSet<>();
-            for (Contract done : everDoneList(player)) doneDims.add(done.dim());
-            if (doneDims.size() < quest.target()) {
-                player.sendMessage(ChatColor.YELLOW + "先完成 3 个不同维度的委托；当前已完成 "
-                        + doneDims.size() + " 个维度。此单暂不占用任务槽。");
-                return;
-            }
-        }
+        Contract quest=contract(id);boolean market=plugin.taskMarket().isMarket(id);
+        if(market&&!plugin.taskMarket().canAccept(player,quest))return;
         if (!member(player)) join(player);
         String path = base(player.getUniqueId()) + ".active";
         plugin.getConfig().set(path + ".id", quest.id());
@@ -942,13 +977,49 @@ final class GuildManager implements Listener {
         plugin.getLogger().info("Guild abandoned: player=" + player.getUniqueId() + ", contract=" + quest.id());
     }
 
-    private void claim(Player player) {
+    private void claim(Player player) { claim(player,()->{}); }
+    private void claim(Player player,Runnable finished) {
         Contract quest = active(player);
         if (quest != null && plugin.taskMarket().isMarket(quest.id())) {
-            plugin.taskMarket().verify(player, quest, ready -> { if (ready) claimVerified(player); });
+            plugin.taskMarket().verify(player, quest, ready -> { try{if (ready) claimVerified(player);}finally{finished.run();} });
             return;
         }
-        claimVerified(player);
+        try{claimVerified(player);}finally{finished.run();}
+    }
+
+    /** Native bodies use the same contract/progress/reward records, never their owner's profile. */
+    void residentCommand(Player player,String[] args,java.util.function.Consumer<com.google.gson.JsonObject> finish) {
+        String action=args.length>1?args[1]:"status";
+        if(action.equals("board")){finish.accept(residentBoard(player,args.length>2?Integer.parseInt(args[2]):1));return;}
+        String preflight=action.equals("accept")&&args.length==3?acceptanceReason(player,args[2]):"guild_conditions_not_met";
+        var before=progressState(player);int fameBefore=reputation(player);
+        boolean[] verified={false};
+        Runnable done=()->{
+            var after=progressState(player);var result=new com.google.gson.JsonObject();
+            boolean success=switch(action){
+                case "join" -> after.get("joined").getAsBoolean();
+                case "accept" -> args.length==3&&after.get("activeId").getAsString().equals(args[2]);
+                case "abandon" -> !before.get("activeId").getAsString().isEmpty()&&after.get("activeId").getAsString().isEmpty();
+                case "verify" -> verified[0];
+                case "claim" -> after.get("completed").getAsInt()>before.get("completed").getAsInt()
+                    || !after.get("activeId").equals(before.get("activeId"))
+                    || before.has("market")&&after.has("market")&&before.getAsJsonObject("market").has("stage")&&after.getAsJsonObject("market").has("stage")&&after.getAsJsonObject("market").get("stage").getAsInt()>before.getAsJsonObject("market").get("stage").getAsInt();
+                default -> true;
+            };
+            result.addProperty("schemaVersion",1);result.addProperty("action",action);result.addProperty("success",success);
+            result.addProperty("reason",success?"guild_state_verified":preflight.equals("available")?"guild_conditions_changed":preflight);
+            if(!success){result.addProperty("retryable",false);result.addProperty("nextSafeRead",action.equals("accept")?"guild board":"guild status");}
+            result.addProperty("actorId",player.getUniqueId().toString());result.add("before",before);result.add("after",after);
+            result.addProperty("fameBefore",fameBefore);result.addProperty("fame",reputation(player));
+            result.addProperty("goalCompleted",action.equals("claim")&&after.get("completed").getAsInt()>before.get("completed").getAsInt());
+            finish.accept(result);
+        };
+        if(action.equals("claim")){claim(player,done);return;}
+        if(action.equals("verify")){
+            Contract quest=active(player);
+            if(quest!=null&&plugin.taskMarket().isMarket(quest.id())){plugin.taskMarket().verify(player,quest,ready->{verified[0]=ready;done.run();});return;}
+        }
+        command(player,args);done.run();
     }
 
     private void claimVerified(Player player) {

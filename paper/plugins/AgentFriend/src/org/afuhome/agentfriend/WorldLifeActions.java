@@ -69,7 +69,7 @@ final class WorldLifeActions implements Listener {
         long created = ((Number) get(map, "getCreationTime")).longValue();
         String evidence = "image:" + get(map, "getImageIndex");
         Bukkit.getScheduler().runTask(plugin, () -> {
-            Player player = Bukkit.getPlayer(creator);
+            Player player = ResidentCli.find(creator);
             if (player == null) return;
             try {
                 if ((Boolean) get(map, "isValid")) plugin.taskMarket().worldAction(player,
@@ -99,7 +99,7 @@ final class WorldLifeActions implements Listener {
             if (eligible(player) && token.equals(plugin.taskMarket().stepToken(player)) && block.getType() == crop
                     && block.getBlockData() instanceof Ageable data && data.getAge() == 0) {
                 if (plugin.taskMarket().harvested(player, crop.name(), location))
-                    plugin.taskMarket().worldAction(player, GuildManager.Goal.REPLANT, crop.name(), location, System.currentTimeMillis());
+                    plugin.taskMarket().replanted(player, crop.name(), location);
                 else plugin.taskMarket().worldRejected(player, GuildManager.Goal.REPLANT, crop.name(), "REPLANT_SITE_NOT_HARVESTED");
             }
         });

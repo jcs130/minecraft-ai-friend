@@ -12,9 +12,10 @@ export async function replaceNativePhotoFile(temporary,target,renameFile=rename)
   }
 }
 export function validateNativeCamera(state,now=Date.now(),shadersEnabled=true,expectedGpu='intel'){
-  if(typeof shadersEnabled!=='boolean'||!['intel','rtx3080ti'].includes(expectedGpu))throw Error('PHOTO_NATIVE_CONFIGURATION_INVALID');
+  if(typeof shadersEnabled!=='boolean'||!['intel','rtx3080ti','rtxpro5000'].includes(expectedGpu))throw Error('PHOTO_NATIVE_CONFIGURATION_INVALID');
   const renderer=String(state?.renderer??'').toLowerCase();
-  const gpuMatches=expectedGpu==='intel'?renderer.includes('intel'):state?.vendor==='NVIDIA Corporation'&&/^nvidia geforce rtx 3080 ti(?:\/.*)?$/.test(renderer)&&state.expectedGpu===expectedGpu;
+  const pattern=expectedGpu==='rtxpro5000'?/^nvidia rtx pro 5000 72gb blackwell(?:\/.*)?$/:/^nvidia geforce rtx 3080 ti(?:\/.*)?$/;
+  const gpuMatches=expectedGpu==='intel'?renderer.includes('intel'):state?.vendor==='NVIDIA Corporation'&&pattern.test(renderer)&&state.expectedGpu===expectedGpu;
   const at=Date.parse(state?.at??'');
   if(state?.schema!=='qiandeng-native-camera/v1'||!UUID.test(state.instanceId??'')||!UUID.test(state.playerUuid??'')||!state.connected||!Number.isFinite(at)||now-at>2000||at>now+1000
     ||!gpuMatches||state.shadersEnabled!==shadersEnabled||state.cleanHud!==true||state.cleanToasts!==true||!(state.modelCatalogueSize>0)||typeof state.server!=='string'||!state.server||state.screenOpen===true
@@ -31,7 +32,7 @@ export function nativeCameraPose(job,state,now=Date.now()){
   return pose;
 }
 export function createNativePhotoRenderer({gameDir,PNG,shadersEnabled=true,expectedGpu='intel',fetchImpl=fetch,sceneDirectory=null,sceneRadius=3,sceneAppearances}){
-  if(!path.isAbsolute(gameDir)||!PNG?.sync?.read||typeof shadersEnabled!=='boolean'||!['intel','rtx3080ti'].includes(expectedGpu))throw Error('PHOTO_NATIVE_CONFIGURATION_INVALID');
+  if(!path.isAbsolute(gameDir)||!PNG?.sync?.read||typeof shadersEnabled!=='boolean'||!['intel','rtx3080ti','rtxpro5000'].includes(expectedGpu))throw Error('PHOTO_NATIVE_CONFIGURATION_INVALID');
   if(sceneDirectory!==null&&(!path.isAbsolute(sceneDirectory)||!Number.isInteger(sceneRadius)||sceneRadius<0||sceneRadius>4))throw Error('PHOTO_NATIVE_CONFIGURATION_INVALID');
   const diagnostics=path.join(gameDir,'diagnostics/qiandeng-native-camera.json'),poseFile=path.join(gameDir,'agent-mc-bridge/camera-pose.json');
   const probe=async()=>validateNativeCamera(await json(diagnostics,64*1024),Date.now(),shadersEnabled,expectedGpu);
@@ -50,7 +51,7 @@ export function createNativePhotoRenderer({gameDir,PNG,shadersEnabled=true,expec
         if(now-started>20000)throw Error('PHOTO_NATIVE_RENDER_TIMEOUT');
         if(now>=nextRenew){await writePose(nativeCameraPose(job,original,now));installed=true;nextRenew=now+750;}
         const state=await probe();if(state.instanceId!==original.instanceId)throw Error('PHOTO_NATIVE_INSTANCE_CHANGED');
-        const owner=state.players?.find(row=>row.uuid?.toLowerCase()===job.owner.toLowerCase());
+        const owner=nativePhotoOwner(state,job);
         if(state.job===job.job&&state.nonce===job.nonce&&state.poseOwner===job.owner&&state.renderedJob===job.job&&state.renderedFrames>=2&&Date.parse(state.at)>started
           &&owner&&(!owner.model||owner.modelLoaded)&&Array.isArray(state.cameraPosition)&&Math.hypot(state.cameraPosition[0]-job.x,state.cameraPosition[1]-(job.y+1.62),state.cameraPosition[2]-job.z)<0.02)ready=state;
         if(!ready)await sleep(100,undefined,{signal});
@@ -93,4 +94,12 @@ export function createNativePhotoRenderer({gameDir,PNG,shadersEnabled=true,expec
       }if(diagnostics)diagnostics.poseLeaseReleased=released;}
     }
   }};
+}
+
+export function nativePhotoOwner(state,job){
+  const player=state.players?.find(row=>row.uuid?.toLowerCase()===job.owner.toLowerCase());
+  if(player)return player;
+  return state.maids?.find(row=>row.uuid?.toLowerCase()===job.owner.toLowerCase()
+    &&row.entityId===job.entityId&&row.type==='touhou_little_maid:maid'&&row.modelLoaded===true
+    &&['ysm','native_maid'].includes(row.renderKind));
 }

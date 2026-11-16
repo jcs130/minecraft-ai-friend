@@ -13,6 +13,6 @@ public abstract class MaidResidentMotionMixin {
     @Inject(method="canBrainMoving",at=@At("HEAD"),cancellable=true,remap=false)
     private void residentPhotoPose(CallbackInfoReturnable<Boolean> result) {
         var maid=(EntityMaid)(Object)this;
-        if(!maid.level().isClientSide&&MaidAgentsMod.residentHoldsPosition(maid.getUUID()))result.setReturnValue(false);
+        if(!maid.level().isClientSide&&(MaidAgentsMod.residentHoldsPosition(maid.getUUID())||maid.getPersistentData().getBoolean(local.qdj.maids.brain.ResidentBodyAccess.DOWNED)))result.setReturnValue(false);
     }
 }

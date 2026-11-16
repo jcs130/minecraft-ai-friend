@@ -85,3 +85,20 @@ test('unavailable PowerContext keeps durable local evidence and performs no unco
   assert.equal(recall.retrieval.degraded,true);
   assert.equal((await runOnce(cfg))[0].imported,0);
 });
+
+test('large service results and private notices preserve scoped originals without blocking later recall',async t=>{
+  const {cfg}=await fixture(t);const dir=join(cfg.journalRoot,npc);await mkdir(dir,{recursive:true});
+  const action='30000000-0000-0000-0000-000000000051',notice='30000000-0000-0000-0000-000000000052';
+  const original={schemaVersion:1,id:action,maidId:npc,speakerId:npc,kind:'resident_action',
+    sourceRequestId:'30000000-0000-0000-0000-000000000050',status:'recorded',reply:'真实库存与交易记录。'.repeat(2400)};
+  const raw=JSON.stringify(original);await writeFile(join(dir,action+'-result.json'),raw);
+  await writeFile(join(dir,notice+'-result.json'),JSON.stringify({schemaVersion:1,id:notice,maidId:npc,speakerId:npc,kind:'game_notice',channel:'private',reply:'本人的试炼奖励已入箱'}));
+  assert.equal((await runOnce(cfg))[0].imported,2);
+  assert.equal(await readFile(join(dir,action+'-result.json'),'utf8'),raw);
+  const own=JSON.parse(await readFile(join(dir,`recall-${npc}.json`),'utf8'));
+  const large=own.items.find(x=>x.evidence.id===action).evidence;
+  assert.equal(large.payloadTruncated,true);assert.equal(large.sourceJournal,action+'-result.json');
+  assert.equal(large.sourceRequestId,original.sourceRequestId);assert.match(large.payloadSha256,/^[0-9a-f]{64}$/);
+  assert.equal(own.items.find(x=>x.evidence.id===notice).evidence.reply,'本人的试炼奖励已入箱');
+  assert.equal((await runOnce(cfg))[0].imported,0);
+});

@@ -84,6 +84,25 @@ public final class CompanionLedgerTest {
         journal.append(npc, interrupted, "request", java.util.Map.of("id", interrupted.toString(), "maidId", npc.toString(), "speakerId", visitor.toString()));
         check(journal.latest(npc, visitor).get("status").equals("unknown"));
         check(journal.latest(other, visitor) == null);
+        var json=new com.google.gson.Gson();
+        UUID delivered=UUID.randomUUID();
+        var facts=ResidentActionMemory.summarize(java.util.Map.of("requestId",delivered.toString(),"action","cli","command","guild claim","status","completed","completed",true,
+            "serviceReceipt",java.util.Map.of("goalCompleted",true,"fame",6,"before",java.util.Map.of("activeId","tm_flowers","completed",0),"after",java.util.Map.of("activeId","","completed",1))));
+        String proof=json.toJson(facts);
+        check(proof.contains("tm_flowers")&&proof.contains("\"goalCompleted\":true")&&Boolean.FALSE.equals(facts.get("queryOnly")));
+        journal.action(npc,delivered,facts);
+        for(int i=0;i<10;i++){
+            Thread.sleep(2);
+            journal.action(npc,UUID.randomUUID(),ResidentActionMemory.summarize(java.util.Map.of("action","cli","command","guild board","status","completed","completed",true)));
+        }
+        var memory=new CompanionJournal(dir.resolve("journal")).actionRecall(npc);
+        check(memory.size()<=8&&memory.stream().anyMatch(row->delivered.toString().equals(row.get("sourceRequestId"))&&row.get("reply").toString().contains("tm_flowers")));
+        check(new CompanionJournal(dir.resolve("journal")).actionRecall(other).isEmpty());
+        var unknown=ResidentActionMemory.summarize(java.util.Map.of("action","cli","command","arena recycle sell quoted-id","status","unknown","completed",false));
+        check("unknown".equals(unknown.get("status"))&&Boolean.FALSE.equals(unknown.get("completed")));
+        var quoted=ResidentActionMemory.summarize(java.util.Map.of("action","cli","command","arena recycle quote bag 1 1","status","completed","completed",true,
+            "serviceReceipt",java.util.Map.of("quoteId","actual-quote","expiresAt",1000,"price",4,"item",java.util.Map.of("baseId","minecraft:iron_sword","count",1))));
+        check(Boolean.TRUE.equals(quoted.get("queryOnly"))&&json.toJson(quoted).contains("actual-quote")&&json.toJson(quoted).contains("minecraft:iron_sword"));
         System.out.println("Companion ledger checks passed: " + checks);
     }
 }

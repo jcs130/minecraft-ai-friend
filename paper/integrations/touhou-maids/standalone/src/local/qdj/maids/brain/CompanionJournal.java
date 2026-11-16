@@ -79,6 +79,31 @@ final class CompanionJournal {
         }
         return shortRow;
     }
+    /** Read-only chatter must not immediately evict the NPC's verified work from planning context. */
+    @SuppressWarnings("unchecked")
+    List<Map<String,Object>> actionRecall(UUID maid)throws IOException {
+        Path dir=root.resolve(maid.toString());if(!Files.isDirectory(dir))return List.of();
+        var recent=new java.util.ArrayList<Map<String,Object>>();var effects=new java.util.ArrayList<Map<String,Object>>();
+        try(var files=Files.list(dir)){
+            for(Path file:files.filter(p->p.getFileName().toString().endsWith("-result.json"))
+                    .sorted(Comparator.comparingLong(CompanionJournal::modified).reversed()).limit(64).toList()){
+                if(Files.size(file)>32768)throw new IOException("oversized_memory");
+                var row=(Map<String,Object>)JSON.fromJson(Files.readString(file,StandardCharsets.UTF_8),Map.class);
+                if(!maid.toString().equals(row.get("maidId"))||!maid.toString().equals(row.get("speakerId"))
+                    ||!"resident_action".equals(row.get("kind"))||"private".equals(row.get("channel")))continue;
+                Map<String,Object> fact=context(row);
+                if(recent.size()<4)recent.add(fact);
+                try{var outcome=JSON.fromJson(String.valueOf(row.get("reply")),com.google.gson.JsonObject.class);
+                    if(outcome.has("queryOnly")&&!outcome.get("queryOnly").getAsBoolean()
+                        &&outcome.has("completed")&&outcome.get("completed").getAsBoolean()&&effects.size()<4)effects.add(fact);
+                }catch(RuntimeException oldFormat){/* Old raw journals are retained, not upgraded by guessing. */}
+                if(recent.size()==4&&effects.size()==4)break;
+            }
+        }
+        var result=new java.util.LinkedHashMap<Object,Map<String,Object>>();
+        for(var row:recent)result.put(row.get("id"),row);for(var row:effects)result.putIfAbsent(row.get("id"),row);
+        return List.copyOf(result.values());
+    }
     private static long modified(Path p) {
         try { return Files.getLastModifiedTime(p).toMillis(); }
         catch (IOException ex) { throw new java.io.UncheckedIOException(ex); }

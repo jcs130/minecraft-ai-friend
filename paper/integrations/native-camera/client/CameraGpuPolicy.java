@@ -10,6 +10,8 @@ final class CameraGpuPolicy {
             case "intel" -> actual.contains("intel");
             case "rtx3080ti" -> "NVIDIA Corporation".equals(vendor)
                 && actual.matches("nvidia geforce rtx 3080 ti(?:/.*)?");
+            case "rtxpro5000" -> "NVIDIA Corporation".equals(vendor)
+                && actual.matches("nvidia rtx pro 5000 72gb blackwell(?:/.*)?");
             default -> throw new IllegalArgumentException("CAMERA_GPU_PROFILE_UNKNOWN: "+expected);
         };
         if(!matches)throw new IllegalStateException("CAMERA_GPU_MISMATCH: expected="+expected+", actual="+renderer);

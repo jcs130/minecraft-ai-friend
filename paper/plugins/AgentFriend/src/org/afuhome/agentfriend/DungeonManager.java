@@ -587,7 +587,7 @@ final class DungeonManager implements Listener {
     // The entire walkable lobby is the opt-in gathering area. Do not pull in bridge
     // passersby, players on other floors/worlds, or non-playing camera/NPC accounts.
     private List<Admission> platformAssembly() {
-        return Bukkit.getOnlinePlayers().stream().filter(this::onLobbyPlatform)
+        return ResidentCli.online().stream().filter(this::onLobbyPlatform)
             .filter(p -> !plugin.isObserver(p) && !p.hasMetadata("NPC") && p.getGameMode() != GameMode.SPECTATOR)
             .sorted(java.util.Comparator.comparing(Player::getName)).map(this::admission).toList();
     }
@@ -638,7 +638,7 @@ final class DungeonManager implements Listener {
                 : row.get("detail").getAsString() + "。下一步：" + row.get("nextCommand").getAsString();
             String message = (status.equals("entered") ? "§a" : "§e") + "[试炼集结] " + row.get("name").getAsString() + "：" + result;
             starter.sendMessage(message);
-            Player p = Bukkit.getPlayer(UUID.fromString(row.get("uuid").getAsString()));
+            Player p = ResidentCli.find(UUID.fromString(row.get("uuid").getAsString()));
             if (p != null && !p.equals(starter) && (status.equals("rejected") || status.equals("transfer_failed"))) p.sendMessage(message);
         }
         starter.sendMessage("MC_TRIAL_ASSEMBLY " + receipt);
@@ -647,7 +647,7 @@ final class DungeonManager implements Listener {
     private void enrollPlayersOnCurrentFloor() {
         if (!active) return;
         List<Player> joined = new ArrayList<>();
-        for (Player player : Bukkit.getOnlinePlayers()) {
+        for (Player player : ResidentCli.online()) {
             if (player.isDead() || (player.getGameMode() != GameMode.SURVIVAL
                     && player.getGameMode() != GameMode.ADVENTURE)
                     || plugin.isObserver(player) || !inFloor(player.getLocation(), floor)
@@ -950,7 +950,7 @@ final class DungeonManager implements Listener {
         persistRun();
         reportAssembly(starter, assembly, true, 1, true);
         for (UUID id : participants) {
-            Player player = Bukkit.getPlayer(id);
+            Player player = ResidentCli.find(id);
             if (player == null || !player.isOnline()) continue;
             player.sendTitle(ChatColor.GOLD + difficulty.label + "试炼",
                     ChatColor.YELLOW + "由 " + starter.getName() + " 发起 · " + participants.size() + " 人同队",
@@ -993,7 +993,7 @@ final class DungeonManager implements Listener {
         persistRun();
         reportAssembly(starter, assembly, true, REST_FLOOR, true);
         for (UUID id : participants) {
-            Player player = Bukkit.getPlayer(id);
+            Player player = ResidentCli.find(id);
             if (player != null && player.isOnline()) sendStart(player, starter);
         }
         announce(ChatColor.GOLD + "已从检查点直达第七层驿站〔" + difficulty.label + "〕；队伍可补给，再继续深入。");
@@ -1010,7 +1010,7 @@ final class DungeonManager implements Listener {
         Set<UUID> arrived = new HashSet<>();
         Set<UUID> disconnected = new HashSet<>();
         if (active) for (UUID id : participants)
-            if (Bukkit.getPlayer(id) == null) disconnected.add(id);
+            if (ResidentCli.find(id) == null) disconnected.add(id);
         Location destination = center(number);
         int[][] offsets = {{0,0},{2,0},{-2,0},{0,2},{0,-2},{2,2},{-2,2},{2,-2}};
         int position = 0;
@@ -1035,7 +1035,7 @@ final class DungeonManager implements Listener {
         }
         if (arrived.isEmpty()) return 0;
         for (UUID id : participants) {
-            Player player = Bukkit.getPlayer(id);
+            Player player = ResidentCli.find(id);
             if (!arrived.contains(id) && player != null && player.isOnline() && !player.isDead()
                     && inFloor(player.getLocation(), floor))
                 player.sendMessage(ChatColor.YELLOW + "队友已下楼，但你的传送未成功；请用 /mycli arena status 查看当前层并联系服主。");
@@ -1098,14 +1098,14 @@ final class DungeonManager implements Listener {
             player.sendMessage(ChatColor.RED + "地面入口受阻，返回已取消；停止重复传送，/mycli arena status 记录楼层并联系服主清理落点，不拆保护建筑。"); return;
         }
         if (player.teleport(landing)) {
-            if (bossBar != null) bossBar.removePlayer(player);
+            if (bossBar != null && !ResidentCli.isResident(player.getUniqueId())) bossBar.removePlayer(player);
             if (participants.remove(player.getUniqueId())) persistRun();
             player.sendMessage(ChatColor.GREEN + "已返回地面，未领取的奖励留在个人箱子里。");
         }
     }
 
     private void tick() {
-        for (Player player : Bukkit.getOnlinePlayers()) returnWinner(player);
+        for (Player player : ResidentCli.online()) returnWinner(player);
         if (!active) return;
         // A crash after durable rewards but before finish must not replay the final wave
         // or strand the already successful party behind the reconnect timeout.
@@ -1117,7 +1117,7 @@ final class DungeonManager implements Listener {
         enrollPlayersOnCurrentFloor();
         pruneBossBarAudience();
         if (pausedAt > 0) {
-            if(participants.stream().map(Bukkit::getPlayer).anyMatch(p->p!=null&&p.isOnline()&&!p.isDead()&&!plugin.isDowned(p)&&inFloor(p.getLocation(),floor)))resumeRun(now);
+            if(participants.stream().map(ResidentCli::find).anyMatch(p->p!=null&&p.isOnline()&&!p.isDead()&&!plugin.isDowned(p)&&inFloor(p.getLocation(),floor)))resumeRun(now);
             else{
             if (now - pausedAt > REJOIN_GRACE_MS)
                 finish(false, "reconnect_timeout", "断线重连等待已满 10 分钟；已赢得的奖励保存在个人箱子里。");
@@ -1127,7 +1127,7 @@ final class DungeonManager implements Listener {
         if (waveCleared() && plugin.trialRescue() != null) plugin.trialRescue().reviveTeam(rescueKey(), "room_cleared");
         boolean anyone = false;
         for (UUID id : participants) {
-            Player p = Bukkit.getPlayer(id);
+            Player p = ResidentCli.find(id);
             if (p != null && p.isOnline() && !p.isDead() && !plugin.isDowned(p) && inFloor(p.getLocation(), floor)) {
                 anyone = true;
                 if (floor != LAVA_FLOOR) break;
@@ -1136,15 +1136,15 @@ final class DungeonManager implements Listener {
             }
         }
         if (!anyone) {
-            if (participants.stream().anyMatch(id -> Bukkit.getPlayer(id) == null)) pauseRun(now);
+            if (participants.stream().anyMatch(id -> ResidentCli.find(id) == null)) pauseRun(now);
             else if (participants.stream().anyMatch(id -> {
-                Player player = Bukkit.getPlayer(id);
+                Player player = ResidentCli.find(id);
                 return player != null && player.isOnline() && !player.isDead() && !plugin.isDowned(player);
             })) {
                 if (outsideSince == 0) {
                     outsideSince = now;
                     for (UUID id : participants) {
-                        Player player = Bukkit.getPlayer(id);
+                        Player player = ResidentCli.find(id);
                         if (player != null && player.isOnline()) player.sendMessage(ChatColor.YELLOW
                                 + "已离开本层范围；15 秒内返回，否则试炼结束。可用 /mycli arena status 查看状态。");
                     }
@@ -1161,7 +1161,7 @@ final class DungeonManager implements Listener {
         }
         if (cleared) {
             if (floor < maxFloor() && now >= advanceAt) {
-                List<Player> group = participants.stream().map(Bukkit::getPlayer)
+                List<Player> group = participants.stream().map(ResidentCli::find)
                         .filter(p -> p != null && p.isOnline() && !p.isDead()
                                 && inFloor(p.getLocation(), floor)).toList();
                 if (enterFloor(floor + 1, group) == 0)
@@ -1193,7 +1193,7 @@ final class DungeonManager implements Listener {
             }
             if (living instanceof Mob mob) {
                 Player nearest = nearestParticipant(mob.getLocation());
-                if (nearest != null && !validParticipantTarget(mob.getTarget())) mob.setTarget(nearest);
+                if (nearest != null && !validParticipantTarget(mob.getTarget())) mob.setTarget(ResidentCli.living(nearest));
                 recoverStuckMob(mob, nearest, now);
             }
             return false;
@@ -1203,10 +1203,10 @@ final class DungeonManager implements Listener {
         advanceAt = floor < maxFloor() ? now + NEXT_FLOOR_DELAY_MS : 0;
         if (plugin.trialRescue() != null) plugin.trialRescue().reviveTeam(rescueKey(), "room_cleared");
         int credited = rewardFloor();
-        DungeonRecovery.apply(plugin, participants.stream().map(Bukkit::getPlayer)
+        DungeonRecovery.apply(plugin, participants.stream().map(ResidentCli::find)
             .filter(p -> p != null && inFloor(p.getLocation(), floor)).toList(), "trial_tower", floor);
         if(plugin.lifeChallenges()!=null)plugin.lifeChallenges().roomCleared(rescueKey()+":"+floor,
-                participants.stream().map(Bukkit::getPlayer).filter(p->p!=null&&p.isOnline()&&!p.isDead()&&inFloor(p.getLocation(),floor)).map(Player::getUniqueId).collect(java.util.stream.Collectors.toSet()));
+                participants.stream().map(ResidentCli::find).filter(p->p!=null&&p.isOnline()&&!p.isDead()&&inFloor(p.getLocation(),floor)).map(Player::getUniqueId).collect(java.util.stream.Collectors.toSet()));
         announce(ChatColor.GREEN + "第 " + floor + "/" + maxFloor() + " 层已通关！奖励已放进个人箱子（" + credited + " 人）。");
         if (floor == maxFloor()) finish(true, "cleared", maxFloor() + " 层完成！奖励已存入个人箱子，正在自动返回入口平台。");
         else announce(ChatColor.YELLOW + "10 秒后全队自动进入下一层；奖励留在个人箱子，不必现在领取。");
@@ -1216,7 +1216,7 @@ final class DungeonManager implements Listener {
         Player player = event.getPlayer();
         returnAttemptAt.remove(player.getUniqueId());
         gearWarningAt.remove(player.getUniqueId());
-        if (bossBar != null) bossBar.removePlayer(player);
+        if (bossBar != null && !ResidentCli.isResident(player.getUniqueId())) bossBar.removePlayer(player);
         if (!active || !participants.contains(player.getUniqueId())) return;
         if (player.isDead() || !inFloor(player.getLocation(), floor)) {
             participants.remove(player.getUniqueId());
@@ -1226,7 +1226,7 @@ final class DungeonManager implements Listener {
 
     @EventHandler public void onParticipantDeath(PlayerDeathEvent event) {
         Player player = event.getEntity();
-        if (bossBar != null) bossBar.removePlayer(player);
+        if (bossBar != null && !ResidentCli.isResident(player.getUniqueId())) bossBar.removePlayer(player);
         if (!active || !participants.contains(player.getUniqueId())
                 || !inFloor(player.getLocation(), floor)) return;
         UUID id = player.getUniqueId();
@@ -1242,7 +1242,7 @@ final class DungeonManager implements Listener {
     private void scheduleDeathGuide(UUID id, long delayTicks) {
         if (!plugin.getConfig().getBoolean(DEATH_GUIDE + id, false)) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            Player player = Bukkit.getPlayer(id);
+            Player player = ResidentCli.find(id);
             if (player == null || !player.isOnline() || player.isDead()
                     || !plugin.getConfig().getBoolean(DEATH_GUIDE + id, false)) return;
             sendDeathGuide(player);
@@ -1286,7 +1286,7 @@ final class DungeonManager implements Listener {
         scheduleDeathGuide(id, 30L);
         if (!active || !participants.contains(id)) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            Player player = Bukkit.getPlayer(id);
+            Player player = ResidentCli.find(id);
             if (!active || !participants.contains(id) || player == null || !player.isOnline()
                     || player.isDead()) return;
             if (pausedAt > 0 && System.currentTimeMillis() - pausedAt > REJOIN_GRACE_MS) return;
@@ -1347,7 +1347,7 @@ final class DungeonManager implements Listener {
                         mob.getEquipment().setItemInMainHandDropChance(0);
                     }
                     Player nearest = nearestParticipant(mob.getLocation());
-                    if (nearest != null) mob.setTarget(nearest);
+                    if (nearest != null) mob.setTarget(ResidentCli.living(nearest));
                     if (floor >= 11 && !(mob instanceof Ravager) && i < 2) {
                         double baseHealth = mob.getAttribute(Attribute.GENERIC_MAX_HEALTH) == null ? 20
                                 : mob.getAttribute(Attribute.GENERIC_MAX_HEALTH).getBaseValue();
@@ -1376,7 +1376,7 @@ final class DungeonManager implements Listener {
                 bossBar = Bukkit.createBossBar(ChatColor.DARK_PURPLE + bossName,
                         BarColor.PURPLE, BarStyle.SOLID);
                 for (UUID id : participants) {
-                    Player player = Bukkit.getPlayer(id);
+                    Player player = ResidentCli.find(id);
                     if (isBossBarViewer(player)) bossBar.addPlayer(player);
                 }
             }
@@ -1437,7 +1437,7 @@ final class DungeonManager implements Listener {
                     || feet.getType() == Material.LAVA || feet.getType() == Material.FIRE
                     || !feet.isPassable() || !feet.getRelative(0, 1, 0).isPassable()) continue;
             if (mob.teleport(candidate)) {
-                mob.setTarget(target);
+                mob.setTarget(ResidentCli.living(target));
                 lastMobPosition.put(id, candidate.clone());
                 lastMobMovedAt.put(id, now);
                 plugin.getLogger().warning("Dungeon stationary mob repositioned: floor=" + floor
@@ -1451,7 +1451,8 @@ final class DungeonManager implements Listener {
     }
 
     private boolean validParticipantTarget(LivingEntity target) {
-        return target instanceof Player player && participants.contains(player.getUniqueId())
+        Player player=ResidentCli.fromEntity(target);
+        return player!=null && participants.contains(player.getUniqueId())
                 && player.isOnline() && !player.isDead() && !plugin.isDowned(player) && inFloor(player.getLocation(), floor);
     }
 
@@ -1459,7 +1460,7 @@ final class DungeonManager implements Listener {
         Player nearest = null;
         double distance = Double.MAX_VALUE;
         for (UUID id : participants) {
-            Player player = Bukkit.getPlayer(id);
+            Player player = ResidentCli.find(id);
             if (!validParticipantTarget(player)) continue;
             double candidate = player.getLocation().distanceSquared(at);
             if (candidate < distance) { nearest = player; distance = candidate; }
@@ -1551,8 +1552,8 @@ final class DungeonManager implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTrialAttackAudit(EntityDamageByEntityEvent event) {
         Entity source = attacker(event.getDamager());
-        if (trialMob(source) && event.getEntity() instanceof Player player
-                && validParticipantTarget(player))
+        if (trialMob(source) && event.getEntity() instanceof LivingEntity living
+                && validParticipantTarget(living))
             lastMobAttackAt.put(source.getUniqueId(), System.currentTimeMillis());
     }
 
@@ -1592,7 +1593,7 @@ final class DungeonManager implements Listener {
     }
 
     private boolean isBossBarViewer(Player player) {
-        return player != null && player.isOnline() && !player.isDead()
+        return player != null && !ResidentCli.isResident(player.getUniqueId()) && player.isOnline() && !player.isDead()
                 && player.getGameMode() != GameMode.SPECTATOR && participants.contains(player.getUniqueId())
                 && inFloor(player.getLocation(), floor);
     }
@@ -1618,7 +1619,7 @@ final class DungeonManager implements Listener {
             return;
         }
         for (UUID id : participants) {
-            Player player = Bukkit.getPlayer(id);
+            Player player = ResidentCli.find(id);
             if (isBossBarViewer(player)) bossBar.addPlayer(player);
         }
         bossBar.setProgress(Math.max(0, Math.min(1, ravager.getHealth() / ravager.getMaxHealth())));
@@ -1748,11 +1749,11 @@ final class DungeonManager implements Listener {
         int credited = 0;
         int partySize = 0;
         for (UUID id : participants) {
-            Player player = Bukkit.getPlayer(id);
+            Player player = ResidentCli.find(id);
             if (player != null && !player.isDead() && inFloor(player.getLocation(), floor)) partySize++;
         }
         for (UUID id : participants) {
-            Player p = Bukkit.getPlayer(id);
+            Player p = ResidentCli.find(id);
             if (p == null || p.isDead() || !inFloor(p.getLocation(), floor)) continue;
             // A real clear counts for an accepted contract even when today's
             // loot was already claimed. The clear callback runs once per room.
@@ -1944,7 +1945,7 @@ final class DungeonManager implements Listener {
         participants.clear();
         lastRun = endedAt;
         for (UUID id : endedParticipants) {
-            Player player = Bukkit.getPlayer(id);
+            Player player = ResidentCli.find(id);
             if (player == null || !player.isOnline()) continue;
             player.sendMessage((won ? ChatColor.GREEN : ChatColor.YELLOW) + "【试炼塔·结算】" + message);
             var receipt = ownOutcome(player);
@@ -1954,7 +1955,7 @@ final class DungeonManager implements Listener {
             if (won) plugin.agentCoach().rememberAdventure(player, "本场试炼塔已经通关");
         }
         if (won) for (UUID id : endedParticipants) {
-            Player player = Bukkit.getPlayer(id);
+            Player player = ResidentCli.find(id);
             if (player != null) returnWinner(player);
         }
     }
@@ -2001,7 +2002,7 @@ final class DungeonManager implements Listener {
                 config.set(path + ".returnStatus", status);
             });
             returnAttemptAt.remove(id);
-            if (bossBar != null) bossBar.removePlayer(player);
+            if (bossBar != null && !ResidentCli.isResident(player.getUniqueId())) bossBar.removePlayer(player);
             if (arrived) player.sendMessage(ChatColor.GREEN + "【试炼塔·返程完成】已自动返回入口平台；奖励保存在个人箱子，可用 /mycli arena stash 查看。");
             var receipt = ownOutcome(player);
             receipt.addProperty("schemaVersion", TRIAL_SCHEMA_VERSION);
@@ -2032,7 +2033,7 @@ final class DungeonManager implements Listener {
 
     private void announce(String message) {
         for (UUID id : participants) {
-            Player p = Bukkit.getPlayer(id);
+            Player p = ResidentCli.find(id);
             if (p != null && p.isOnline()) p.sendMessage("§6【试炼塔·第" + floor + "层】§r " + message);
         }
     }
@@ -2248,7 +2249,7 @@ final class DungeonManager implements Listener {
         for(int i=1;free<0&&i<PagedPersonalStash.PAGES;i++){stash=storage().page(player.getUniqueId(),i);free=stash.firstEmpty();}
         if (free < 0) return false;
         int chosen = -1;
-        for (int slot = 0; slot < 36; slot++) {
+        for (int slot = 0; slot < ResidentCli.storageSize(player); slot++) {
             ItemStack item = player.getInventory().getItem(slot);
             if (item != null && item.getType() == Material.ROTTEN_FLESH) { chosen = slot; break; }
         }
@@ -2340,13 +2341,14 @@ final class DungeonManager implements Listener {
         if (args.length == 2) { openStash(player); return; }
         UUID id = player.getUniqueId();
         String action = args[2].toLowerCase(Locale.ROOT);
+        if(action.equals("collect")&&args.length==3){player.sendMessage("MC_STASH_COLLECT "+collectRewards(player));return;}
         if (action.equals("summary")) {
             stashOverview(player, args);
             return;
         }
         Inventory inv = liveStash(id);
         if (action.equals("inventory") && args.length == 3) {
-            for (int slot = 0; slot < 36; slot++) {
+            for (int slot = 0; slot < ResidentCli.storageSize(player); slot++) {
                 ItemStack item = player.getInventory().getItem(slot);
                 if (item != null && !item.getType().isAir())
                     player.sendMessage("MC_INVENTORY slot=" + slot + itemFields(item));
@@ -2378,7 +2380,7 @@ final class DungeonManager implements Listener {
             try { slot = Integer.parseInt(args[3]); }
             catch (NumberFormatException invalid) { slot = -1; }
             wanted = positiveCount(args[4]);
-            if (slot < 0 || slot >= 36 || wanted < 1) {
+            if (slot < 0 || slot >= ResidentCli.storageSize(player) || wanted < 1) {
                 player.sendMessage("用法：/mycli arena stash putslot <背包槽位 0–35> <1–64>"); return;
             }
             ItemStack source = player.getInventory().getItem(slot);
@@ -2419,7 +2421,7 @@ final class DungeonManager implements Listener {
             }
             if (!remoteStashReady(player)) return;
             int moved = 0;boolean capacityBlocked=false;
-            for (int slot = 0; slot < 36 && moved < wanted; slot++) {
+            for (int slot = 0; slot < ResidentCli.storageSize(player) && moved < wanted; slot++) {
                 ItemStack source = player.getInventory().getItem(slot);
                 if (source == null || source.getType() != material || plugin.isSoulbound(source)) continue;
                 ItemStack part = source.clone();
@@ -2479,6 +2481,17 @@ final class DungeonManager implements Listener {
     }
     PersonalStashOverview stashOverview(UUID owner, PagedPersonalStash.Snapshot snapshot) {
         return new PersonalStashOverview(snapshot, queuedRewardEntries(owner));
+    }
+    com.google.gson.JsonObject collectRewards(Player player) {
+        UUID id=player.getUniqueId();var result=new com.google.gson.JsonObject();
+        result.addProperty("schemaVersion",1);result.addProperty("actorId",id.toString());
+        result.addProperty("queuedBefore",queuedRewardEntries(id));
+        if(!remoteStashReady(player)){result.addProperty("success",false);result.addProperty("reason","storage_conditions_not_met");return result;}
+        boolean moved=false;for(int page=0;page<PagedPersonalStash.PAGES;page++)moved|=materializeRewards(storage().page(id,page),id);
+        if(moved){plugin.saveConfig();chargeRemoteStash(player);}
+        result.addProperty("success",true);result.addProperty("changed",moved);result.addProperty("queuedRemaining",queuedRewardEntries(id));
+        result.addProperty("goalCompleted",queuedRewardEntries(id)==0);result.addProperty("reason",queuedRewardEntries(id)==0?"queue_collected":"stash_full_rewards_retained");
+        result.addProperty("nextSafeRead","arena stash summary");return result;
     }
     void stashOverview(Player player, String[] args) {
         boolean json = args.length == 4 && (args[0].equals("--json") || args[3].equals("--json"));
@@ -2666,7 +2679,7 @@ final class DungeonManager implements Listener {
                 + ", lastDamage=" + lastMobDamage.getOrDefault(event.getEntity().getUniqueId(), "none"));
         if (floorAt(event.getEntity().getLocation()) != floor) return;
         for (UUID id : participants) {
-            Player player = Bukkit.getPlayer(id);
+            Player player = ResidentCli.find(id);
             if (player != null && !player.isDead() && inFloor(player.getLocation(), floor))
                 plugin.guildMobDefeated(player, event.getEntity().getType());
         }
@@ -2680,7 +2693,7 @@ final class DungeonManager implements Listener {
         }
         World w = world();
         if (w == null) { sender.sendMessage("主世界尚未加载；请服主检查世界启动日志并恢复加载，再重试，不重新生成原世界。"); return; }
-        for (Player p : Bukkit.getOnlinePlayers()) if (p.getGameMode() != GameMode.SPECTATOR
+        for (Player p : ResidentCli.online()) if (p.getGameMode() != GameMode.SPECTATOR
                 && sameWorld(p.getLocation()) && Math.abs(p.getLocation().getBlockX() - X) <= RADIUS
                 && Math.abs(p.getLocation().getBlockZ() - Z) <= RADIUS
                 && p.getLocation().getY() >= Y[BASE_FLOORS - 1] && p.getLocation().getY() <= LOBBY_Y + 8) {
@@ -2742,7 +2755,7 @@ final class DungeonManager implements Listener {
         if (w == null || Y[BOSS_FLOOR - 1] < w.getMinHeight() + 4) {
             sender.sendMessage("主世界未加载或深度不足；核对世界 min-height 和启动日志，保持旧场地，请服主另选符合高度的方案后再施工。"); return false;
         }
-        for (Player player : Bukkit.getOnlinePlayers()) {
+        for (Player player : ResidentCli.online()) {
             if (player.getGameMode() == GameMode.SPECTATOR || !sameWorld(player.getLocation())) continue;
             Location at = player.getLocation();
             if (Math.abs(at.getBlockX() - WING_X) <= radius(BOSS_FLOOR)
@@ -2809,7 +2822,7 @@ final class DungeonManager implements Listener {
         if (w == null || Y[10] < w.getMinHeight() + 4 || Y[14] + 7 >= w.getMaxHeight()) {
             sender.sendMessage("主世界未加载或高度不足；核对世界 min-height/max-height 和启动日志，请服主另选符合高度的方案，不修改原世界凑条件。"); return false;
         }
-        for (Player player : Bukkit.getOnlinePlayers()) {
+        for (Player player : ResidentCli.online()) {
             if (player.getGameMode() == GameMode.SPECTATOR || !sameWorld(player.getLocation())) continue;
             Location at = player.getLocation();
             if (Math.abs(at.getBlockX() - centerX) <= 25

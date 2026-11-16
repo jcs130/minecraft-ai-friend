@@ -45,7 +45,7 @@ final class ResidentTravel {
                     ||world.getBlockState(p.below()).is(net.minecraft.world.level.block.Blocks.MAGMA_BLOCK)
                     ||world.getBlockState(p).is(net.minecraft.world.level.block.Blocks.FIRE)
                     ||!world.noCollision(maid,maid.getBoundingBox().move(at.subtract(maid.position()))))continue;
-                if(partner!=null&&!hybridAllowed(maid,partner,world,p)||!"allow_likely".equals(ResidentProtection.query(maid,world,"use",p).get("status")))continue;
+                if(partner!=null&&!hybridAllowed(maid,partner,world,p)||!ResidentProtection.travel(maid,world,p)||!"allow_likely".equals(ResidentProtection.query(maid,world,"use",p).get("status")))continue;
                 landing=p;break;
             }
         }
@@ -58,6 +58,7 @@ final class ResidentTravel {
             ||maid.position().distanceToSqr(plan.from())>.25||now-plan.preparedAt()>5000)throw new IllegalArgumentException("travel_plan_changed_read_again");
         var before=maid.position();String dimension=plan.fromDimension();var origin=(ServerLevel)maid.level();var world=plan.world();var landing=plan.landing();
         var at=Vec3.atBottomCenterOf(landing);maid.getNavigation().stop();maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+        if(!ResidentProtection.travel(maid,world,landing))throw new IllegalArgumentException("travel_permission_changed_or_unavailable");
         if(!maid.teleportTo(world,at.x,at.y,at.z,Set.of(),maid.getYRot(),maid.getXRot()))throw new IllegalArgumentException("travel_refused");
         // Cross-dimension teleport can replace the native entity object; reconcile the original UUID, never spawn a new identity.
         var arrived=world.getEntity(maid.getUUID());
