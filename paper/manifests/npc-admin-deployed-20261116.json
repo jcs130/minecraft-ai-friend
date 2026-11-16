@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "state": "deployed_with_documented_limits",
+  "versions": {
+    "residentBrain": "0.3.1",
+    "agentFriend": "0.4.47.83-resident-admin",
+    "portal": "0.8.42"
+  },
+  "sourceBase": "980937debdc486d567f022a2204b9a567c1e2d4c",
+  "validation": {
+    "portal": {
+      "passed": 518,
+      "skipped": 3,
+      "failed": 0
+    },
+    "javaRules": 77,
+    "nativeAdmin": [
+      "Original residents appear without player slots",
+      "Native profile applied",
+      "Selected actual YSM model on original body",
+      "Duplicate request does not increment revision",
+      "Hidden resident removed from public map",
+      "Stale revision rejected",
+      "Own original receipt can be reconciled",
+      "Visibility can be restored",
+      "Accepted own-body CLI 0",
+      "Real CLI receipt 0",
+      "Accepted own-body CLI 1",
+      "Real CLI receipt 1",
+      "Accepted own-body CLI 2",
+      "Real CLI receipt 2",
+      "Profile revision and identity survive restart"
+    ],
+    "nativeTravel": [
+      "Physical book write accepted",
+      "Written book service completed",
+      "Real written book exists in own inventory",
+      "Changed payload cannot reuse a prior request",
+      "Duplicate does not create another book",
+      "Remote conversation accepted",
+      "Consent triggers verified native arrival",
+      "Original body is now at invitation",
+      "Recruitment owns follow mode",
+      "Travel preserves owned book",
+      "Remote conversation accepted",
+      "Recruited NPC accepts own CLI action",
+      "Dialogue CLI has actual archive receipt",
+      "Native NPC still consumes no extra player slot"
+    ],
+    "activeTrial": {
+      "reason": "fight_remaining",
+      "participant": true,
+      "active": true,
+      "floor": 1,
+      "remainingMobs": 3
+    },
+    "model": "deterministic isolated dialogue fixture",
+    "photo": "Actual production native camera accepted original request, then stopped when NPC moved; no finished photo, no replay.",
+    "mapBrowser": {
+      "passed": true,
+      "observedAt": "2026-11-16T15:04:46.274Z",
+      "map": {
+        "overflow": false,
+        "follow": "正在跟随 桐人",
+        "npcLiveDisplay": "none",
+        "npcLiveRects": 0,
+        "npcImage": 150,
+        "mapId": "aincrad",
+        "rows": [
+          "桐人 · 智能 NPC",
+          "ag_CorMy"
+        ]
+      },
+      "aincradTerrainImages": 6,
+      "playerStreamVisible": true,
+      "anonymousAdminDenied": 401,
+      "browserErrors": [],
+      "missingTiles": 79,
+      "otherMissing": []
+    },
+    "mapRelatedLocalTests": {
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0,
+      "oldCssReproducedFailure": true
+    }
+  },
+  "artifacts": {
+    "AgentFriend-npc-candidate.jar": "7eb4dc5dbe86735714354371aa017fc5b1fa52dcf996d3cfd2945c71d15abbb7",
+    "residents-candidate.jar": "3446cd9679c9a9a459e163c0d93f265b3d06a30a5a6ea8737232728effba0855"
+  },
+  "preservation": [
+    "original NPC UUID",
+    "owner",
+    "inventory",
+    "memory",
+    "accounts",
+    "worlds"
+  ],
+  "publicNetworkPortsAdded": false,
+  "deployedAt": "2026-11-16T22:36:27+08:00",
+  "sourceMerge": "355b86a1aea8a899de1d6886d1cff6e1d2c77df7",
+  "sourcePullRequest": 273,
+  "runtime": {
+    "game": {
+      "residentBrain": "0.3.1",
+      "agentFriend": "0.4.47.83-resident-admin",
+      "normalStopAndColdBackup": true,
+      "backupDrive": "F",
+      "coldBackupFiles": 22816,
+      "coldBackupBytes": 4546550126,
+      "unmodifiedOriginalFiles": 22814,
+      "watchdogPaused": false
+    },
+    "portal": {
+      "passed": true,
+      "deployed": true,
+      "version": "0.8.42",
+      "imageId": "sha256:f0bec989bfde235768f1966836e2a204438af34a72d0f167b5804c359dbf561b",
+      "sourceCommit": "6b47b619365b07e255ada7b68508ab8ce9606ddf",
+      "protectedTables": 16,
+      "preservedSessions": 1,
+      "allDownloadsPreserved": true,
+      "configPreserved": true,
+      "mountsPreserved": 5,
+      "linuxTestsPassed": 5,
+      "coldDatabaseSha256": "6c04734ca6430c046953960242191c4177bcaee2c44ccda0ee0dc354fdacfeb5",
+      "rollbackContainer": "qiandengji-portal-before-npc-admin-20261116"
+    },
+    "map": {
+      "passed": true,
+      "imageId": "sha256:08038ec7d0a7cc47937193cfb0182e7c8e63005cfda433f0061fd0ae53196b54",
+      "localBrowserChecks": 3,
+      "unchangedTerrainFiles": 6902,
+      "originalPortraits": 0,
+      "npcs": [
+        {
+          "uuid": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+          "name": "桐人",
+          "kind": "npc",
+          "profession": "ranger",
+          "dimension": "minecraft:aincrad",
+          "x": -671.1454700947502,
+          "y": 67,
+          "z": 829.2208402853541,
+          "yaw": 52.081528,
+          "pitch": 0
+        }
+      ],
+      "rollbackContainer": "qiandengji-world-map-before-follow-fix-20261116"
+    },
+    "finalCloudHealth": {
+      "passed": true,
+      "observedAt": "2026-11-16T15:07:54.072Z",
+      "portalVersion": "0.8.42",
+      "npcCount": 1,
+      "playerCount": 1,
+      "portal": {
+        "running": true,
+        "image": "sha256:f0bec989bfde235768f1966836e2a204438af34a72d0f167b5804c359dbf561b",
+        "restarts": 0
+      },
+      "map": {
+        "running": true,
+        "image": "sha256:08038ec7d0a7cc47937193cfb0182e7c8e63005cfda433f0061fd0ae53196b54",
+        "restarts": 0
+      },
+      "diskAvailableBytes": 2302382080
+    },
+    "workerTasks": [
+      "Qiandengji-Resident-Admin",
+      "Qiandengji-WorldMap-Resident"
+    ],
+    "assembly": "Scoped overlay on actual runtime; retained installed authentication/hosting adapters and existing account sync. Not a wholesale latest-source deployment."
+  },
+  "limits": [
+    "Only archive and photo CLI families adapted; no operator fallback",
+    "Moving NPC stops photography; real artifact still unverified",
+    "No Japanese voice configured",
+    "New encrypted YSM Bedrock/web pixels not verified",
+    "Long-running autonomy and multi-party collaboration remain separate acceptance"
+  ]
+}
