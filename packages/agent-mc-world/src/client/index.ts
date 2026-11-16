@@ -1,6 +1,6 @@
 /// <reference path="../../core/pathfinder-lib.d.ts" />
 export { NutritionNeedObserver, nutritionNeedText, type NutritionNeed } from '../../core/nutrition.ts';
-export { MinecraftAgentClient, type MinecraftClientOptions, type MinecraftPracticeOptions, type ClientEnvironment } from './runtime.ts';
+export { MinecraftAgentClient, type MinecraftClientOptions, type MinecraftPracticeOptions, type ClientEnvironment, type MinecraftEventObserver } from './runtime.ts';
 export { NumenClientWorld, type NumenBodyFacts, type NumenBodyPort } from './numen-client.ts';
 export type { NumenBattlefieldSample } from './numen-battlefield.ts';
 export { JavaClientWorld, validateJavaClientConfiguration, JAVA_CLIENT_ENVIRONMENT } from './java-client.ts';

@@ -12,7 +12,7 @@ import { ClientOperationLearning } from './operation-learning.ts';
 import { operationObservation, type OperationAttribution } from '../../core/operation-experience.ts';
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { EventEnvelope, Logger, ModelFacts, ToolOutcome, World, WorldHost, WorldRequestFacts } from './contracts.ts';
+import type { EventEnvelope, Logger, ModelFacts, ToolDef, ToolOutcome, World, WorldHost, WorldRequestFacts } from './contracts.ts';
 import { MinecraftClientWorld } from './world.ts';
 import { JavaClientWorld, JAVA_CLIENT_ENVIRONMENT } from './java-client.ts';
 import { assertMinecraftReady } from './config.ts';
@@ -52,8 +52,17 @@ export interface MinecraftClientOptions {
   commandRepetitionLimit?: number;
   /** Identical control-only requests require inspection when measured motion repeats or stays still; 0 disables. */
   motionRepetitionLimit?: number;
+  /** Optional passive observers of each stored host event (e.g. agent-mc-memory). Absent by default.
+   * Called after the journal write; `facts` is lazy. Observers cannot alter, block or reorder delivery,
+   * and their exceptions are isolated and logged. */
+  eventObservers?: readonly MinecraftEventObserver[];
+  /** Optional host-supplied body-independent tools appended after the core tools; a name already
+   * provided by the core is skipped, so these can never shadow a game tool. Absent by default. */
+  extraTools?: readonly ToolDef[];
   log: Logger;
 }
+
+export type MinecraftEventObserver = (event: EventEnvelope, facts: () => WorldRequestFacts | null) => void;
 
 export type ClientEnvironment = World & {
   requestFacts?(): unknown;
@@ -115,7 +124,7 @@ export class MinecraftAgentClient {
       pushEvent: async (event, opts) => {
         if (event.execution) this.recordExecution(event.execution);
         const stored=await this.journal.pushEvent(event, opts);
-        this.motionReview.book.recordEvents([stored]);return stored;
+        this.motionReview.book.recordEvents([stored]);this.notifyEventObservers(stored);return stored;
       },
       pushDeferred: (event, opts) => this.journal.pushDeferred(event, opts),
       drainPendingEvents: filter => this.journal.drainPendingEvents(filter),
@@ -196,7 +205,24 @@ export class MinecraftAgentClient {
   }
   protected validateConfig(): void { assertMinecraftReady(this.options.cfg); }
 
+  private notifyEventObservers(event: EventEnvelope): void {
+    const observers = this.options.eventObservers;
+    if (!observers?.length) return;
+    const facts = () => this.phase === 'started' ? (this.world.requestFacts?.() as WorldRequestFacts | null) ?? null : null;
+    for (const observer of observers) {
+      try { observer(event, facts); }
+      catch (error) { this.options.log.warn('event observer failed', { type: event.type, err: String(error).slice(0, 200) }); }
+    }
+  }
+
   tools() {
+    const core = this.coreTools(), extra = this.options.extraTools;
+    if (!extra?.length) return core;
+    const names = new Set(core.map(tool => tool.name));
+    return [...core, ...extra.filter(tool => !names.has(tool.name))];
+  }
+
+  private coreTools() {
     const tools = this.world.tools(), name = `${this.toolPrefix}_choose`;
     const choices=this.options.decisions && !tools.some(tool => tool.name === name || tool.name === 'mc_choose')
       ? [...tools, { ...this.hostChoice, name }] : tools;
