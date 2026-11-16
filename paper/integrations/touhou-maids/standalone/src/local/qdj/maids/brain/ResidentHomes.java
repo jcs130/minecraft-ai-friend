@@ -79,4 +79,15 @@ final class ResidentHomes {
         s.setIdlePos(h.door().pos());s.setSleepPos(h.bed().pos());s.setConfigured(true);s.restrictTo(maid);
         MaidAgent.task(maid,ResourceLocation.parse(r.nativeTask()));
     }
+    /** A local journey has its own temporary native anchor; the durable home is unchanged. */
+    static void explore(EntityMaid maid,BlockPos target) {
+        maid.setHomeModeEnable(true);maid.setInSittingPose(false);maid.setSchedule(MaidSchedule.ALL);
+        var schedule=maid.getSchedulePos();schedule.setDimension(maid.level().dimension().location());
+        schedule.setWorkPos(target);schedule.setIdlePos(target);schedule.setSleepPos(target);schedule.setConfigured(true);schedule.restrictTo(maid);
+    }
+    static boolean bound(EntityMaid maid,ResidentConfig.Resident r) {
+        var s=maid.getSchedulePos();var h=r.home();
+        return maid.isHomeModeEnable()&&s.getDimension().toString().equals(h.dimension())&&s.getWorkPos().equals(h.work().pos())
+            &&s.getIdlePos().equals(h.door().pos())&&s.getSleepPos().equals(h.bed().pos());
+    }
 }

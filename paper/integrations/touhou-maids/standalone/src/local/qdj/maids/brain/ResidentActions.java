@@ -23,6 +23,14 @@ import net.neoforged.neoforge.common.util.FakePlayerFactory;
 
 /** One physical block operation at a time, using survival item rules and the host's native event hooks. */
 final class ResidentActions {
+    static java.util.List<Map<String,Object>> inventory(EntityMaid maid) {
+        var rows=new java.util.ArrayList<Map<String,Object>>();
+        int size=Math.min(maid.getMaidInv().getSlots(),maid.getMaidBackpackType().getAvailableMaxContainerIndex());
+        for(int slot=0;slot<size;slot++) {var item=maid.getMaidInv().getStackInSlot(slot);if(item.isEmpty())continue;
+            rows.add(Map.of("slot",slot,"id",BuiltInRegistries.ITEM.getKey(item.getItem()).toString(),"name",item.getHoverName().getString(),
+                "count",item.getCount(),"damage",item.getDamageValue(),"maxDamage",item.getMaxDamage()));}
+        return rows;
+    }
     static ItemStack stack(EntityMaid maid,JsonObject input){
         String action=input.get("action").getAsString();if(action.equals("break"))return maid.getMainHandItem();
         if(!List.of("place","equip").contains(action))return ItemStack.EMPTY;
@@ -52,8 +60,8 @@ final class ResidentActions {
     static Map<String,Object> point(BlockPos p) { return Map.of("x",p.getX(),"y",p.getY(),"z",p.getZ()); }
     static String block(ServerLevel level,BlockPos p) { return BuiltInRegistries.BLOCK.getKey(level.getBlockState(p).getBlock()).toString(); }
     static void check(EntityMaid maid,ResidentConfig.Resident resident,BlockPos p) {
-        if(!maid.level().dimension().location().toString().equals(resident.home().dimension())) throw new IllegalArgumentException("wrong_dimension");
-        if(resident.workArea()==null||!resident.workArea().contains(p)||resident.home().interior().contains(p))
+        boolean homeDimension=maid.level().dimension().location().toString().equals(resident.home().dimension());
+        if(homeDimension&&resident.home().interior().contains(p)||!resident.roamingWork()&&(!homeDimension||resident.workArea()==null||!resident.workArea().contains(p)))
             throw new IllegalArgumentException("outside_authorized_work_area_or_inside_protected_house");
         var level=(ServerLevel)maid.level();
         if(!level.hasChunkAt(p)||!level.getWorldBorder().isWithinBounds(p)||level.isOutsideBuildHeight(p)) throw new IllegalArgumentException("unloaded_or_outside_world");

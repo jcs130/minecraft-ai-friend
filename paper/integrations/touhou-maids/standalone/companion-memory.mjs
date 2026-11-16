@@ -21,7 +21,7 @@ async function atomic(path, data) {
 }
 
 function compactEvidence(row) {
-  const result=Object.fromEntries(['id','at','speakerId','message','reply','decision','status','reason','channel','kind']
+  const result=Object.fromEntries(['id','at','speakerId','message','reply','decision','status','reason','channel','kind','sourceRequestId']
     .filter(key=>Object.hasOwn(row,key)).map(key=>[key,row[key]]));
   if(row.receipt) result.receipt=Object.fromEntries(['action','status','reason','completed']
     .filter(key=>Object.hasOwn(row.receipt,key)).map(key=>[key,row.receipt[key]]));
@@ -79,14 +79,20 @@ async function synchronize(config) {
       await atomic(donePath, imported);
       count++;
     }
-    // Refresh only known conversation partners; no other NPC/account/scope is queried.
+    // Own executed actions need recall even when no self-conversation was started.
+    // All searches stay in this NPC's scope; include at most 16 known speakers including self.
     const requests = (await Promise.all(files.filter(f => /^[0-9a-f-]{36}-request\.json$/.test(f))
       .map(async f => ({name:f,time:(await stat(join(root,f))).mtimeMs}))))
       .sort((a,b)=>b.time-a.time).slice(0,16);
-    const seen = new Set();
+    const speakers=[{maidId:npc.maidId,speakerId:npc.maidId}];
     for (const request of requests) {
       const record = await json(join(root, request.name), 32768);
       if (record.maidId !== npc.maidId || !UUID.test(record.speakerId)) throw Error('request_identity_mismatch');
+      speakers.push(record);
+    }
+    const seen = new Set();
+    for (const record of speakers) {
+      if(seen.size>=16) break;
       if (seen.has(record.speakerId)) continue;
       seen.add(record.speakerId);
       const results = await service.execute({action:'search',query:record.speakerId,tags:[`peer:${record.speakerId}`],

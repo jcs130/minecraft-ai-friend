@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-17",
+  "state": "verified_candidate_not_deployed",
+  "productionChanged": false,
+  "baseSourceCommit": "12833c01c9d3db05cdea10cf93c6f1f3b12fc798",
+  "artifacts": {
+    "residentMod": {
+      "version": "0.3.2",
+      "sha256": "c4febd46ed1f8b0b6050541232a230d30611c8b231f52427fa2de279a54423fc"
+    },
+    "agentFriend": {
+      "version": "0.4.47.84-resident-worlds",
+      "sha256": "e5c303ce372b467f32ae0bc5e48404f842c2accee86f591e1fabeeee75cbf9e2"
+    },
+    "bundleSha256": "09cde8e7e639727e0d89cfc722aa3f3cd08b4617c59af42b9c0f520dd9c93022"
+  },
+  "unchangedProduction": {
+    "residentModVersion": "0.3.1",
+    "residentModSha256": "3446cd9679c9a9a459e163c0d93f265b3d06a30a5a6ea8737232728effba0855",
+    "agentFriendVersion": "0.4.47.83-resident-admin",
+    "agentFriendSha256": "7eb4dc5dbe86735714354371aa017fc5b1fa52dcf996d3cfd2945c71d15abbb7",
+    "registeredResidentCount": 1,
+    "initialDimension": "minecraft:aincrad"
+  },
+  "tests": [
+    {
+      "name": "Java contracts and durable evidence",
+      "passed": 93
+    },
+    {
+      "name": "Python Qwen Code adapter",
+      "passed": 8
+    },
+    {
+      "name": "MC core memory isolation and own action evidence",
+      "passed": 4
+    },
+    {
+      "name": "Three NPCs with real Java client and cold restart",
+      "passed": 36,
+      "nativeSha256": "446f739c714a17a68fe64907b442d8a0564fd005de639881b079f2fc79fef847",
+      "note": "Movement build before isolated action-memory fix; original evidence retained"
+    },
+    {
+      "name": "Final native NPC-led party and interrupted transfer",
+      "passed": 11,
+      "nativeSha256": "c4febd46ed1f8b0b6050541232a230d30611c8b231f52427fa2de279a54423fc"
+    },
+    {
+      "name": "Native original-slot/skill/receipt checks",
+      "passed": 10,
+      "nativeSha256": "c4febd46ed1f8b0b6050541232a230d30611c8b231f52427fa2de279a54423fc"
+    },
+    {
+      "name": "Actual Aincrad two-home initial furnishing",
+      "passed": 17,
+      "note": "Earlier housing build; full final movement/sleep/restart revalidated below, no re-furnish"
+    },
+    {
+      "name": "Final native home movement night sleep cold restart",
+      "passed": 9,
+      "nativeSha256": "c4febd46ed1f8b0b6050541232a230d30611c8b231f52427fa2de279a54423fc"
+    },
+    {
+      "name": "Real Qwen Code via online LiteLLM to native sprint and independent action memory",
+      "passed": 7,
+      "nativeSha256": "c4febd46ed1f8b0b6050541232a230d30611c8b231f52427fa2de279a54423fc",
+      "audioVerified": false,
+      "japaneseTextProvided": true
+    }
+  ],
+  "notYetComplete": [
+    "all_player_cli",
+    "unified_player_guild_economy_rewards",
+    "full_npc_dungeon_participation_and_personal_settlement",
+    "actual_completed_npc_photo",
+    "bedrock_web_full_encrypted_ysm_visuals_and_real_controller_ui",
+    "kirito_japanese_svc_audio",
+    "all_harness_backends_live_acceptance",
+    "long_running_multi_model_capacity",
+    "operator_travel_reconciliation_command",
+    "new_production_resident_provisioning"
+  ],
+  "compatibility": {
+    "sameNativeBodyUuid": true,
+    "noNewPlayerSlots": true,
+    "oldRoamingWorkDefault": false,
+    "homeIsDimensionWhitelist": false,
+    "noUnknownActionReplay": true,
+    "noWorldOrIdentityRollback": true
+  },
+  "report": "../docs/NPC_ACCEPTANCE_20261117.md"
+}

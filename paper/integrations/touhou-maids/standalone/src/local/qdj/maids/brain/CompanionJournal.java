@@ -19,6 +19,16 @@ final class CompanionJournal {
     private static final Gson JSON = new Gson();
     private final Path root;
     CompanionJournal(Path root) { this.root = root; }
+    /** A dialogue and its native action can share a request ID, but never an immutable evidence file. */
+    void action(UUID maid, UUID request, Map<String,Object> outcome) throws IOException {
+        UUID evidence = UUID.nameUUIDFromBytes(("resident-action:" + maid + ":" + request).getBytes(StandardCharsets.UTF_8));
+        var row = new java.util.LinkedHashMap<String,Object>();
+        row.put("schemaVersion",1); row.put("id",evidence.toString()); row.put("maidId",maid.toString());
+        row.put("speakerId",maid.toString()); row.put("channel","internal"); row.put("at",System.currentTimeMillis());
+        row.put("kind","resident_action"); row.put("sourceRequestId",request.toString());
+        row.put("message","自己刚才实际执行的动作与结果"); row.put("reply",JSON.toJson(outcome)); row.put("status","recorded");
+        append(maid,evidence,"result",row);
+    }
     void append(UUID maid, UUID conversation, String phase, Map<String, Object> row) throws IOException {
         Path dir = root.resolve(maid.toString()); Files.createDirectories(dir);
         byte[] bytes = JSON.toJson(row).getBytes(StandardCharsets.UTF_8);
@@ -59,7 +69,7 @@ final class CompanionJournal {
     }
     private static Map<String,Object> context(Map<String,Object> row) {
         var shortRow = new java.util.LinkedHashMap<String,Object>();
-        for (String key : List.of("id", "at", "speakerId", "message", "reply", "decision", "status", "reason", "channel"))
+        for (String key : List.of("id", "at", "speakerId", "message", "reply", "decision", "status", "reason", "channel", "kind", "sourceRequestId"))
             if (row.containsKey(key)) shortRow.put(key, row.get(key));
         if (row.get("receipt") instanceof Map<?,?> receipt) {
             var action = new java.util.LinkedHashMap<String,Object>();

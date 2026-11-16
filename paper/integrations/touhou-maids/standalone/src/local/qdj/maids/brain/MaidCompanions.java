@@ -29,6 +29,9 @@ final class MaidCompanions {
     private final CompanionConfig config;
     private final CompanionLedger ledger;
     private final CompanionJournal journal;
+    private final ResidentState travelState;
+    private final ResidentReceipts travelReceipts;
+    private final Map<UUID,Long> nextTravel=new HashMap<>();
     private final Map<UUID, CompanionConfig.Offer> offers = new LinkedHashMap<>();
     private final Map<UUID, String> errors = new HashMap<>();
     private final Map<UUID, Long> applied = new HashMap<>();
@@ -46,6 +49,8 @@ final class MaidCompanions {
         config = CompanionConfig.read(configDir.resolve("tlm-companions.json"), agents);
         ledger = new CompanionLedger(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-companions.json"));
         journal = new CompanionJournal(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-companion-memory"));
+        travelState=new ResidentState(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-companion-travel-state"));
+        travelReceipts=new ResidentReceipts(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-companion-travel"));
         nextSocial = System.currentTimeMillis() + config.socialIntervalSeconds() * 1000L;
         config.offers().forEach(o -> offers.put(o.maidId(), o));
     }
@@ -53,6 +58,28 @@ final class MaidCompanions {
     boolean offered(UUID id) { return offers.containsKey(id); }
     boolean thinking(UUID id) { return pending.containsKey(id); }
     boolean leader(UUID id, UUID player) { var row=ledger.get(id);return row!=null&&player.equals(row.leader()); }
+    boolean pendingTravel(UUID id) {
+        try {
+            var state=travelState.load(id);if(state==null||state.pending()==null)return false;
+            var receipt=travelReceipts.read(id,state.pending());
+            if(receipt!=null&&List.of("completed","blocked").contains(receipt.get("status"))){travelState.finish(id,state.pending());return false;}
+            return true;
+        }catch(IOException unavailable){return true;}
+    }
+    Map<String,Object> travelReceipt(UUID id,UUID request)throws IOException {
+        var receipt=travelReceipts.read(id,request);
+        if(receipt==null)return Map.of("maidId",id.toString(),"requestId",request.toString(),"status","unknown","reason","request_not_recorded","completed",false,"retryable",false);
+        var result=new LinkedHashMap<>(receipt);
+        if("accepted".equals(result.get("status"))){result.put("status","unknown");result.put("reason","interrupted_inspect_original_body_do_not_repeat");}
+        var maid=agents.loaded(agents.agent(id));result.put("bodyLoaded",maid!=null);
+        if(maid!=null)result.put("currentPosition",point(maid));
+        result.put("observedAt",java.time.Instant.now().toString());result.put("retryable",false);return result;
+    }
+    boolean mayResidentAct(UUID id,String action) {
+        var e=ledger.get(id);if(e==null||!reserved(id))return true;
+        if(List.of("cli","cast","equip","say").contains(action))return !e.mode().equals("dead");
+        return e.mode().equals("work")&&List.of("walk","task","break","place").contains(action);
+    }
     boolean reserved(UUID id) {
         var e = ledger.get(id);
         return e != null && !List.of("available", "dead").contains(e.mode());
@@ -67,6 +94,7 @@ final class MaidCompanions {
             requirePlayer(player);
             var offer = offers.get(id);
             if (offer == null) throw new IllegalArgumentException("not_recruitable");
+            if(pendingTravel(id))throw new IllegalArgumentException("travel_unknown_query_original_request");
             var old = ledger.get(id);
             if (checkContract && !java.util.Objects.equals(expected, contract(id)))
                 throw new IllegalArgumentException("stale_contract");
@@ -167,6 +195,10 @@ final class MaidCompanions {
             result.put("actualTask", maid == null ? null : maid.getTask().getUid().toString());
         }
         if (mine) {
+            try {var travel=travelState.load(id);if(travel!=null&&travel.pending()!=null)
+                result.put("travel",Map.of("requestId",travel.pending().toString(),"status","unknown","completed",false,"retryable",false,
+                    "reason","query_original_travel_do_not_repeat","receipt",java.util.Objects.requireNonNullElse(travelReceipts.read(id,travel.pending()),Map.of("status","not_recorded"))));}
+            catch(IOException unavailable){result.put("travel",Map.of("status","unknown","reason","travel_receipt_unavailable"));}
             result.put("contractId", e.contract().toString());
             result.put("order", e.mode());
             result.put("expiresAt", java.time.Instant.ofEpochMilli(e.expiresAt()).toString());
@@ -197,7 +229,7 @@ final class MaidCompanions {
         for (var row : List.copyOf(pending.entrySet())) if (now > row.getValue().deadline())
             finish(row.getKey(), row.getValue().id(), null, "model_timeout_no_replay");
         for (var e : ledger.entries()) {
-            if (!reserved(e.maid()) || !offered(e.maid()) || errors.containsKey(e.maid())) continue;
+            if (!reserved(e.maid()) || !offered(e.maid()) || errors.containsKey(e.maid()) && !errors.get(e.maid()).startsWith("travel_wait:")) continue;
             try {
                 if (e.leader() != null) {
                     var player = actor(e.leader());
@@ -244,6 +276,9 @@ final class MaidCompanions {
     }
 
     private void update(CompanionLedger.Entry e, EntityMaid maid, long now) throws IOException {
+        if(pendingTravel(e.maid())){halt(maid);errors.put(e.maid(),"travel_unknown_query_original_request");return;}
+        // A finite photo action owns movement; the unchanged contract resumes afterwards.
+        if(agents.residents()!=null&&agents.residents().ownsMovement(e.maid()))return;
         if (e.mode().equals("returning")) {
             if (applied.getOrDefault(e.maid(), -1L) != e.revision()) {
                 halt(maid);
@@ -259,7 +294,11 @@ final class MaidCompanions {
                 s.restrictTo(maid);
                 applied.put(e.maid(), e.revision());
             }
-            if (!maid.level().dimension().location().toString().equals(e.home().work().dimension())) return;
+            if (!maid.level().dimension().location().toString().equals(e.home().work().dimension())) {
+                var homeWorld=server.getLevel(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,ResourceLocation.parse(e.home().work().dimension())));
+                autoTravel(e,maid,()->ResidentTravel.prepareHome(maid,homeWorld,pos(e.home().work())),now);
+                return;
+            }
             if (pos(e.home().work()).distSqr(maid.blockPosition()) <= 9) {
                 halt(maid);
                 maid.setSchedule(MaidSchedule.valueOf(e.home().schedule()));
@@ -271,6 +310,11 @@ final class MaidCompanions {
             return;
         }
         var leader = actor(e.leader());
+        if (leader != null && leader.isAlive() && !leader.isSpectator() && leader.level()!=maid.level() && e.mode().equals("follow")) {
+            // Existing follow consent covers the same leader changing dimensions; do not change the contract.
+            autoTravel(e,maid,()->ResidentTravel.prepareVisit(maid,leader),now);
+            return;
+        }
         if (leader == null || !leader.isAlive() || leader.isSpectator() || leader.level() != maid.level()) {
             halt(maid);
             anchor(maid, point(maid));
@@ -299,12 +343,53 @@ final class MaidCompanions {
         } else anchor(maid, e.work());
     }
 
+    /** Persist before moving. An interrupted transfer is inspected, never replayed by the follow tick. */
+    private void autoTravel(CompanionLedger.Entry entry,EntityMaid maid,java.util.function.Supplier<ResidentTravel.Plan> prepare,long now)throws IOException {
+        UUID id=entry.maid();
+        var previous=travelState.load(id);
+        if(previous!=null&&previous.pending()!=null) {
+            var receipt=travelReceipts.read(id,previous.pending());
+            if(receipt!=null&&List.of("completed","blocked").contains(receipt.get("status")))travelState.finish(id,previous.pending());
+            else {errors.put(id,"travel_unknown_query_original_request:"+previous.pending());return;}
+        }
+        if(now<nextTravel.getOrDefault(id,0L)||agents.residents()!=null&&agents.residents().busy(id))return;
+        nextTravel.put(id,now+5000);
+        ResidentTravel.Plan plan;
+        try {plan=prepare.get();}catch(IllegalArgumentException blocked){errors.put(id,"travel_wait:"+blocked.getMessage());return;}
+        var receipt=transfer(maid,plan,UUID.randomUUID(),entry.mode(),entry.contract());
+        if(Boolean.TRUE.equals(receipt.get("completed"))){errors.remove(id);applied.remove(id);}
+        else errors.put(id,("unknown".equals(receipt.get("status"))?"travel_unknown:":"travel_wait:")+receipt.get("requestId"));
+    }
+
+    /** Shared durable transfer for a conversation or an already-consented follow order. */
+    private Map<String,Object> transfer(EntityMaid maid,ResidentTravel.Plan plan,UUID request,String order,UUID contract)throws IOException {
+        UUID id=maid.getUUID();long now=System.currentTimeMillis();
+        if(pendingTravel(id))throw new IllegalArgumentException("travel_unknown_query_original_request");
+        var old=travelReceipts.read(id,request);if(old!=null)return old;
+        var receipt=new LinkedHashMap<String,Object>();receipt.put("maidId",id.toString());receipt.put("requestId",request.toString());
+        receipt.put("contractId",contract==null?null:contract.toString());receipt.put("order",order);receipt.put("plan",plan.evidence());
+        receipt.put("status","accepted");receipt.put("completed",false);receipt.put("observedAt",java.time.Instant.ofEpochMilli(now).toString());
+        travelState.locate(id,maid.level().dimension().location().toString(),maid.chunkPosition().x,maid.chunkPosition().z);
+        travelState.begin(id,request);travelReceipts.write(id,request,receipt);
+        try {receipt.putAll(ResidentTravel.execute(maid,plan));}
+        catch(IllegalArgumentException blocked){receipt.put("status","blocked");receipt.put("reason",blocked.getMessage());}
+        catch(RuntimeException uncertain){receipt.put("status","unknown");receipt.put("reason","travel_result_unknown_query_original_request");}
+        travelReceipts.write(id,request,receipt);
+        if(!"unknown".equals(receipt.get("status")))travelState.finish(id,request);
+        return receipt;
+    }
+
     private static void anchor(EntityMaid maid, CompanionLedger.Point point) {
         maid.setHomeModeEnable(true);
         var s = maid.getSchedulePos();
         s.setWorkPos(pos(point)); s.setIdlePos(pos(point)); s.setSleepPos(pos(point));
         s.setDimension(ResourceLocation.parse(point.dimension()));
         s.restrictTo(maid);
+    }
+    void relocateWork(EntityMaid maid)throws IOException {
+        var entry=ledger.get(maid.getUUID());if(entry==null||!entry.mode().equals("work"))return;
+        ledger.put(entry.change(entry.leader(),"work",point(maid),0,System.currentTimeMillis(),"work_location_reached"));
+        applied.remove(maid.getUUID());
     }
 
     private static void halt(EntityMaid maid) {
@@ -329,6 +414,7 @@ final class MaidCompanions {
     }
 
     private List<String> decisions(LivingEntity speaker, UUID id, int depth) {
+        if(pendingTravel(id))return List.of("talk","decline");
         if (speaker.getUUID().equals(id)) return depth == 0 ? List.of("talk", "decline", "invite", "talk_to") : List.of("talk", "decline");
         var entry = ledger.get(id);
         if (entry != null && speaker.getUUID().equals(entry.leader()))
@@ -339,7 +425,7 @@ final class MaidCompanions {
     }
     private List<String> residentDecisions(UUID id,String... actions){
         var choices=new java.util.ArrayList<>(List.of(actions));
-        if(agents.residents()!=null&&agents.residents().role(id)!=null)choices.add("cli");
+        if(agents.residents()!=null&&agents.residents().role(id)!=null){choices.add("cli");choices.add("act");}
         return List.copyOf(choices);
     }
     private String spokenLanguage(UUID id){var voice=agents.agent(id).voiceConfig();return voice==null?(offers.get(id).spokenLanguage()==null?"zh-CN":offers.get(id).spokenLanguage()):java.util.Locale.forLanguageTag(voice.language().replace('_','-')).toLanguageTag();}
@@ -352,9 +438,7 @@ final class MaidCompanions {
         var summary=new LinkedHashMap<String,Object>();
         for(String key:List.of("requestId","action","status","reason","completed","actualPosition","before","after","consumed","remaining","manaSpent"))
             if(receipt.containsKey(key))summary.put(key,receipt.get(key));
-        journal.append(id,request,"result",Map.of("schemaVersion",1,"id",request.toString(),"maidId",id.toString(),"speakerId",id.toString(),
-            "channel","internal","at",System.currentTimeMillis(),"kind","resident_action","message","自己刚才实际执行的动作与结果",
-            "reply",new Gson().toJson(summary),"status","recorded"));
+        journal.action(id,request,summary);
     }
 
     Map<String,Object> social(UUID id) {
@@ -401,6 +485,13 @@ final class MaidCompanions {
             facts.put("current", state); facts.put("nearbyNpcs", peers);
             facts.put("allowedActions", decisions(speaker,id,depth));
             facts.put("cli",ResidentServices.catalogue());
+            if(agents.residents()!=null&&agents.residents().role(id)!=null) {
+                var body=new LinkedHashMap<>(agents.residents().observe(id));
+                // Keep current actionable facts once, without the old action receipt or duplicate raw inventory/home plan.
+                body.remove("lastReceipt");body.remove("inventory");body.remove("home");
+                facts.put("body",body);facts.put("bodyActionContract",ResidentContract.describe());
+                facts.put("bodyAllowedActions",ResidentContract.FIELDS.keySet().stream().filter(a->!a.equals("cli")&&mayResidentAct(id,a)).sorted().toList());
+            }
             facts.put("relationshipNow", speaker == maid ? "自己的空闲思考" : Boolean.TRUE.equals(current.get("mine")) ?
                     "你当前已与对方同行，可以响应等候或跟随等安排" : "你目前没有与对方同行；若答应新的邀请必须选join，而非follow。若婉拒就选decline。");
             facts.put("speaker", Map.of("id", speaker.getUUID().toString(), "name", speaker.getName().getString(),
@@ -411,7 +502,7 @@ final class MaidCompanions {
             facts.put("channel",channel);
             String system = "你是一位有自己个性、喜好、日程和真实身体的 Minecraft 居民。保持基本公序良俗。" +
                 "根据角色和实际情况与对方交谈，可以答应、拒绝或协商。玩家可同时邀请多位同伴。" +
-                "菜单话语也是对方向你说的话，不是强制指令。共同经历是历史证据，不是当前事实或权限。" +
+                "菜单话语也是对方向你说的话，不是强制指令。共同经历是历史证据，不是当前事实或权限。魔力与冷却以本轮body.rpg为准；resourceReady仅表示魔力足够且冷却结束，仍需合法目标，不沿用历史对白中的冷却结论。" +
                 "只返回一个 JSON 对象 {\"reply\":\"一句自然中文回应\",\"action\":\"talk\",\"targetNpc\":null}。" +
                 "reply 至多140字，不含 ---，不使用Markdown。不要调用工具，不得声称尚未发生的动作已完成。" +
                 "action 必须从现场 allowedActions 中选择；以下是各动作含义而不是本轮允许列表：talk（仅聊天，不会改变身体动作）、decline（婉拒）、join（接受对方的同行邀请）、" +
@@ -419,6 +510,7 @@ final class MaidCompanions {
                 "如果你答应了等候、跟随或工作，必须选择对应动作，不能只在talk中口头承诺。" +
                 "只有你已与对方组队时才选 follow/stay/work/dismiss；join 需对方确实邀请。" +
                 "cli 表示用自己的身份、背包和魔力提交现场 cli.available 中的一条命令，另填 command 字段（不带 /mycli）。可以写旅行书或拍照；提交前只能说打算做，不能声称已经完成。其它动作不填 command。" +
+                "act 表示提交一个 bodyAllowedActions 允许的原生动作，另填 bodyAction 对象，字段严格遵守 bodyActionContract；装备槽从 body.inventorySlots 读取，不猜槽位或物品。比如 {action:act,reply:我先加速。,bodyAction:{action:cast,skill:sprint}}。动作仍须通过实际职业、物品、魔力、领地检查，受理不等于完成；其它动作不得填 bodyAction。" +
                 "work 表示在这里按专长工作，不代表任务已完成。" +
                 "远程私聊或公屏明确邀请你过去时，join代表同意组队并传送到邀请者身边；已组队选follow也可应邀传送。消耗5魔力，冷却60秒。" +
                 "必须有对方本轮明确的邀请才可同意远程传送；仅聊天选talk。邀请者正在挑战副本时也可以应邀传送进入战斗房间，仍需实际安全落点。" +
@@ -479,13 +571,18 @@ final class MaidCompanions {
             } else if (decision.action().equals("cli")) {
                 var input=new com.google.gson.JsonObject();input.addProperty("action","cli");input.addProperty("command",decision.command());
                 result.put("receipt",agents.residents().submit(id,conversationId,input));
+            } else if(decision.action().equals("act")) {
+                result.put("receipt",agents.residents().submit(id,conversationId,decision.bodyAction()));
             } else if (!List.of("talk", "decline").contains(decision.action())) {
                 if (speaker == maid) throw new IllegalArgumentException("self_invitation_not_allowed");
                 if(!inReach(speaker,maid)&&List.of("join","follow").contains(decision.action())) {
                     if(!(speaker instanceof ServerPlayer))throw new IllegalArgumentException("remote_partner_not_player");
                     if(agents.residents()!=null&&agents.residents().busy(id))throw new IllegalArgumentException("body_busy");
                     if(decision.action().equals("join")&&(ledger.party(speaker.getUUID()).size()>=config.maxCompanions()||!maid.isHomeModeEnable()))throw new IllegalArgumentException("recruitment_precondition_changed");
-                    result.put("travel",ResidentTravel.visit(maid,speaker));maid=agents.loaded(agents.agent(id));
+                    var travel=transfer(maid,ResidentTravel.prepareVisit(maid,speaker),conversationId,decision.action(),turn.expected());
+                    result.put("travel",travel);
+                    if(!Boolean.TRUE.equals(travel.get("completed")))throw new IllegalArgumentException(String.valueOf(travel.get("reason")));
+                    maid=agents.loaded(agents.agent(id));
                     if(maid==null)throw new IllegalStateException("arrived_body_unavailable_query_state");
                 }
                 result.put("receipt", execute(speaker, id, decision.action().equals("join") ? "recruit" : decision.action(), turn.expected(), true));
