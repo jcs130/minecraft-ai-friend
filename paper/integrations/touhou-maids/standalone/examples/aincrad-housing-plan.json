@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "character": "kirito",
+  "installationState": "candidate_not_deployed",
+  "purpose": "Surveyed house plan only; bind a real independent body UUID and recheck current occupancy before installation",
+  "nativeCopiedTerrainChecksPassed": 7,
+  "sourceTerrainSha256": "52773763107bbc8ac52c7b1b0563a17fb74c99d89b96c5a0aac35217cb2a0d3c",
+  "testDimension": "minecraft:overworld",
+  "home": {
+    "dimension": "minecraft:aincrad",
+    "door": {"x":-672,"y":67,"z":825},
+    "bed": {"x":-670,"y":67,"z":829},
+    "facing": "north",
+    "sign": {"x":-671,"y":67,"z":823},
+    "signFacing": "north",
+    "work": {"x":-672,"y":67,"z":828},
+    "interior": {"min":{"x":-675,"y":67,"z":826},"max":{"x":-668,"y":70,"z":832}},
+    "furniture": [
+      {"at":{"x":-669,"y":67,"z":827},"block":"minecraft:crafting_table"},
+      {"at":{"x":-671,"y":67,"z":827},"block":"minecraft:barrel"},
+      {"at":{"x":-669,"y":67,"z":831},"block":"minecraft:furnace"}
+    ]
+  }
+}

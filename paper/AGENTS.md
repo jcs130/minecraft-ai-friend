@@ -1,6 +1,6 @@
 ## 2026-11-16 艾因格朗特居民 0.3.0 候选，未部署
 
-原生住房／生活动作、职业、今日桐人模型、中日双语文本和 NPC 本人领地身份已补。29 原生、16混合服、74 Java／8 Python／3 Node通过；线上Qwen Code真实挖矿并记录经历。单JAR合并保留旧脑，不能叠装独立扩展；未重启正式服，原肥鱼与存档保持。正式住处路径、日语耳听及手机界面不冒称已验。见[维护与配置](integrations/touhou-maids/standalone/RESIDENTS.md)、[实测结果](integrations/touhou-maids/standalone/RESIDENTS_VALIDATION.md)。以下为历史。
+原生住房／生活动作、职业、今日桐人模型、中日双语文本和 NPC 本人领地身份已补。29 原生、16混合服、74 Java／8 Python／3 Node通过；线上Qwen Code真实挖矿并记录经历。复制地形7项确认入口(-672,67,825)可穿门／睡眠并保持重启，正式仍待投放。单JAR合并保留旧脑，不能叠装独立扩展；未重启正式服，原肥鱼与存档保持。日语耳听及手机界面不冒称已验。见[维护与配置](integrations/touhou-maids/standalone/RESIDENTS.md)、[实测结果](integrations/touhou-maids/standalone/RESIDENTS_VALIDATION.md)。以下为历史。
 
 ## 2026-11-15 试炼平台集结候选，未部署
 

@@ -1,6 +1,6 @@
 ## 2026-11-16 艾因格朗特居民 0.3.0 候选，未部署
 
-住房、原生挖建／装备／睡眠、有限职业技能、私聊与中文气泡／日语文本、按 NPC 自己 UUID 的领地及无线存取检查已加入；桐人选今日 `qd_hub_kirito.ysm`。支持合并旧脑为单 JAR，不能叠装两份。74 Java／8 Python／3 Node、29 原生与16混合服检查通过，线上Qwen Code两次实跑并记住真实挖矿结果。实际日语音源、正式住处全路线与正式部署未完成；不替换原肥鱼或假称听感、基岩画面已验。详见[候选维护说明](paper/integrations/touhou-maids/standalone/RESIDENTS.md)与[验收边界](paper/integrations/touhou-maids/standalone/RESIDENTS_VALIDATION.md)。以下为历史。
+住房、原生挖建／装备／睡眠、有限职业技能、私聊与中文气泡／日语文本、按 NPC 自己 UUID 的领地及无线存取检查已加入；桐人选今日 `qd_hub_kirito.ysm`。支持合并旧脑为单 JAR，不能叠装两份。74 Java／8 Python／3 Node、29 原生与16混合服检查通过，线上Qwen Code两次实跑并记住真实挖矿结果。复制艾因格朗特地形的7项检查确认穿门、睡眠、重启，候选入口(-672,67,825)；未投放正式服。实际日语音源与正式部署未完成，不替换原肥鱼或假称听感、基岩画面已验。详见[候选维护说明](paper/integrations/touhou-maids/standalone/RESIDENTS.md)与[验收边界](paper/integrations/touhou-maids/standalone/RESIDENTS_VALIDATION.md)。以下为历史。
 
 ## 2026-11-16 独立女仆居民伙伴 0.2.0，隔离验收完成，未部署
 
