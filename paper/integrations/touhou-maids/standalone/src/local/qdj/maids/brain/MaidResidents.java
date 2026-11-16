@@ -32,6 +32,7 @@ final class MaidResidents {
     private final ResidentConfig config;
     private final ResidentReceipts receipts;
     private final ResidentState state;
+    private final ResidentPlanningHealth planningHealth;
     final ResidentSettings settings;
     private final Map<UUID,ResidentConfig.Resident> roles=new LinkedHashMap<>();
     private final Map<UUID,Job> jobs=new java.util.HashMap<>();
@@ -49,6 +50,7 @@ final class MaidResidents {
         this.server=server;this.agents=agents;config=ResidentConfig.read(dir.resolve("tlm-residents.json"),agents);
         receipts=new ResidentReceipts(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-resident-actions"));
         state=new ResidentState(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-resident-state"));
+        planningHealth=new ResidentPlanningHealth(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-resident-planning"),config.planningSeconds()*1000L);
         for(var r:config.residents()){
             var last=state.load(r.maidId());
             if(last!=null&&last.pending()!=null){var terminal=receipts.read(r.maidId(),last.pending());
@@ -85,6 +87,8 @@ final class MaidResidents {
             if(!pending.isBlank()&&!jobs.containsKey(id)) row.put("recovery","unknown_no_replay_query_original_request");
         }
         row.put("leased",leased(id));row.put("thinking",thinking.containsKey(id));
+        try{row.put("planning",planningHealth.status(id,System.currentTimeMillis()));}
+        catch(IOException error){row.put("planning",Map.of("status","unavailable","reason","planning_checkpoint_unavailable"));}
         if(latest.containsKey(id)) row.put("lastReceipt",latest.get(id));
         return row;
     }
@@ -214,6 +218,10 @@ final class MaidResidents {
                 if(last!=null){var level=server.getLevel(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,ResourceLocation.parse(last.dimension())));
                     if(level!=null)level.getChunkSource().addRegionTicket(TICKET,new net.minecraft.world.level.ChunkPos(last.chunkX(),last.chunkZ()),2,id);}
             }catch(Exception error){latest.put(id,Map.of("status","unknown","reason","resident_checkpoint_unavailable"));continue;}
+            var pending=thinking.get(id);
+            if(pending!=null&&now>pending.deadline()){
+                thinking.remove(id);planFailure(id,pending.id(),"timeout","model_deadline_no_action",true,null);
+            }
             var maid=body(id);
             if(maid==null){
                 var lost=jobs.get(id);
@@ -244,8 +252,6 @@ final class MaidResidents {
             var job=jobs.get(id);
             if(job!=null){step(r,maid,job,now);continue;}
             if(maid.getPersistentData().getBoolean(ResidentBodyAccess.DOWNED))continue;
-            var pending=thinking.get(id);
-            if(pending!=null&&now>pending.deadline()){thinking.remove(id);latest.put(id,Map.of("status","timeout","reason","model_deadline_no_action","requestId",pending.id().toString(),"completed",false));nextPlan.put(id,now+config.planningSeconds()*1000L);}
             if(leased(id)||busy(id)||!maid.getPersistentData().getString(ACTIVE).isBlank()||!maid.getPersistentData().getBoolean(INSTALLED)
                 ||agents.companions()!=null&&agents.companions().pendingTravel(id))continue;
             // TLM handles reaching the configured sleep point and using its real bed.
@@ -327,7 +333,11 @@ final class MaidResidents {
         var r=require(id);var maid=body(id);long now=System.currentTimeMillis();
         if(maid==null||busy(id)||leased(id)||!maid.getPersistentData().getString(ACTIVE).isBlank())return Map.of("status","blocked","reason","body_unavailable_or_busy");
         if(agents.companions()!=null&&agents.companions().pendingTravel(id))return Map.of("status","blocked","reason","unknown_companion_travel_read_original_receipt");
-        var site=maid.getAiChatManager().getLLMSite();if(site==null)return Map.of("status","unavailable","reason","model_site_unavailable");
+        try{
+            var health=planningHealth.status(id,now);long retry=((Number)health.get("retryAfterMs")).longValue();
+            if(retry>0){nextPlan.put(id,now+retry);return Map.of("status","blocked","reason","model_backoff_no_action","retryAfterMs",retry,"completed",false,"planning",health);}
+        }catch(IOException error){nextPlan.put(id,now+config.planningSeconds()*1000L);return Map.of("status","unavailable","reason","planning_checkpoint_unavailable","completed",false);}
+        var site=maid.getAiChatManager().getLLMSite();if(site==null)return planFailure(id,UUID.randomUUID(),"failed","model_site_unavailable",true,null);
         UUID turn=UUID.randomUUID();thinking.put(id,new Thinking(turn,now+60_000,agents.agent(id).revision()));nextPlan.put(id,now+config.planningSeconds()*1000L);
         var observation=new LinkedHashMap<>(observe(id));observation.remove("home");observation.put("homeDoor",r.home().door());observation.put("homeDimension",r.home().dimension());observation.put("workPoint",r.home().work());
         if(agents.companions()!=null)try{observation.put("character",agents.companions().residentContext(id));}catch(Exception error){thinking.remove(id);return Map.of("status","unavailable","reason","resident_memory_unavailable");}
@@ -351,19 +361,30 @@ final class MaidResidents {
         try {site.client().chat(new CompanionConversation(maid,prompt,"决定下一件要做的事。",(reply,error)->server.execute(()->{
             var pending=thinking.get(id);if(pending==null||!pending.id().equals(turn))return;thinking.remove(id);
             if(error!=null||System.currentTimeMillis()>pending.deadline()||agents.agent(id).revision()!=pending.revision()||leased(id)){
-                latest.put(id,Map.of("status","failed","reason",error==null?"plan_became_stale":error,"requestId",turn.toString(),"completed",false));return;}
+                boolean stale=agents.agent(id).revision()!=pending.revision()||leased(id);
+                planFailure(id,turn,"failed",stale?"plan_became_stale":error!=null?error:"model_deadline_no_action",!stale,null);return;}
             JsonObject input;
             try{input=ResidentContract.modelInput(reply);}
             catch(IllegalArgumentException invalid){
-                var rejected=base(id,turn,"plan");rejected.put("status","rejected");rejected.put("reason","invalid_model_action");
-                rejected.put("validation",ResidentContract.diagnosis(invalid));
-                try{receipts.write(id,turn,rejected);}catch(Exception storage){rejected.put("receiptPersisted",false);}
-                latest.put(id,rejected);return;
+                planFailure(id,turn,"rejected","invalid_model_action",true,ResidentContract.diagnosis(invalid));return;
             }
+            try{planningHealth.healthy(id,turn);}
+            catch(IOException storage){planFailure(id,turn,"failed","planning_checkpoint_unavailable",false,null);return;}
             try{submit(id,turn,input);}
             catch(Exception uncertain){latest.put(id,Map.of("status","unknown","reason","submission_unconfirmed_query_original_request","requestId",turn.toString(),"completed",false));}
-        })));}catch(Exception unavailable){thinking.remove(id);return Map.of("status","unavailable","reason","model_unavailable_no_action","requestId",turn.toString());}
+        })));}catch(Exception unavailable){thinking.remove(id);return planFailure(id,turn,"failed","model_unavailable_no_action",true,null);}
         return Map.of("status","accepted","requestId",turn.toString(),"completed",false);
+    }
+    private Map<String,Object> planFailure(UUID id,UUID turn,String status,String reason,boolean penalize,Map<String,Object> validation){
+        long now=System.currentTimeMillis();var row=base(id,turn,"plan");row.put("status",status);row.put("reason",reason);
+        row.put("actionDispatched",false);if(validation!=null)row.put("validation",validation);
+        nextPlan.put(id,now+config.planningSeconds()*1000L);
+        try{
+            if(penalize){var health=planningHealth.failed(id,turn,reason,now);row.put("planning",health);
+                long retry=((Number)health.get("retryAfterMs")).longValue();row.put("retryAfterMs",retry);nextPlan.put(id,now+retry);}
+            row.put("receiptPersisted",true);receipts.write(id,turn,row);
+        }catch(IOException storage){row.put("receiptPersisted",false);row.put("persistenceReason","planning_checkpoint_unavailable");}
+        latest.put(id,row);return row;
     }
     private static List<Map<String,Object>> survey(EntityMaid maid,ResidentConfig.Resident r) {
         var out=new ArrayList<Map<String,Object>>();var level=(ServerLevel)maid.level();

@@ -6,15 +6,15 @@
   "releaseReady": false,
   "productionChanged": false,
   "candidateVersions": {
-    "residents": "0.3.3",
+    "residents": "0.3.4",
     "agentFriend": "0.4.47.85-npc-gameplay",
     "nativePermissions": "0.1.40-resident-permissions",
     "nativeCamera": "0.2.1"
   },
   "artifacts": {
     "residents": {
-      "sha256": "c97cb23af678da2dc7e822db3e6b18a33d2adcb00b7ff623f31b1c4dc25f9ab2",
-      "privateBuildRecord": "npc-gameplay-final-results-20261117/residents-hybrid-candidate.jar",
+      "sha256": "6498e58a91159a6c131a3b2b7736380e6988f5b03fac8674868e983ce031e61f",
+      "privateBuildRecord": "npc-gameplay-planning-results-20261117/residents-hybrid-candidate.jar",
       "distributedInGit": false
     },
     "agentFriend": {
@@ -93,13 +93,65 @@
         "residents-candidate.jar": "1f467329991c894a14d2412d931079e1d3ecf39163effd649e721a61a3b56c7a",
         "AgentFriend-npc-candidate.jar": "e8730a9d38d7bbd9ba9e222b9069f94c6dde916514f9298fb0ea2085e3a3a8dd"
       }
+    },
+    {
+      "name": "planning_candidate_planning-results",
+      "result": "passed",
+      "checks": 14,
+      "record": "npc-gameplay-planning-results-20261117/planning-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "6498e58a91159a6c131a3b2b7736380e6988f5b03fac8674868e983ce031e61f",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      },
+      "realModel": false,
+      "stage": "maid-resident-hybrid-b0f8936e"
+    },
+    {
+      "name": "planning_candidate_planning-restart-results",
+      "result": "passed",
+      "checks": 7,
+      "record": "npc-gameplay-planning-results-20261117/planning-restart-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "6498e58a91159a6c131a3b2b7736380e6988f5b03fac8674868e983ce031e61f",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      },
+      "realModel": false,
+      "stage": "maid-resident-hybrid-b0f8936e"
+    },
+    {
+      "name": "planning_candidate_gameplay-results",
+      "result": "passed",
+      "checks": 46,
+      "record": "npc-gameplay-planning-results-20261117/gameplay-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "6498e58a91159a6c131a3b2b7736380e6988f5b03fac8674868e983ce031e61f",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      },
+      "realModel": false,
+      "stage": "maid-resident-hybrid-b0f8936e"
+    },
+    {
+      "name": "planning_candidate_restart-results",
+      "result": "passed",
+      "checks": 2,
+      "record": "npc-gameplay-planning-results-20261117/restart-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "6498e58a91159a6c131a3b2b7736380e6988f5b03fac8674868e983ce031e61f",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      },
+      "realModel": false,
+      "stage": "maid-resident-hybrid-b0f8936e"
     }
   ],
   "unitChecks": {
     "javaContractsAndLedger": 108,
     "javaGpuPolicy": 10,
     "nodeMemoryAndCamera": 26,
-    "pythonGatewayAndBenchmark": 12
+    "pythonGatewayAndBenchmark": 12,
+    "javaPlanningHealth": 21,
+    "javaExamCompletion": 33,
+    "javaRecycleQuotes": 21,
+    "javaBedrockVisualRules": 20
   },
   "onlineSamples": [
     {

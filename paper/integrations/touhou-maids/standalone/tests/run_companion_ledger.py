@@ -21,12 +21,14 @@ def main():
             str(ROOT / 'src/local/qdj/maids/brain/CompanionLedger.java'),
             str(ROOT / 'src/local/qdj/maids/brain/CompanionDecision.java'),
             str(ROOT / 'src/local/qdj/maids/brain/CompanionJournal.java'),
-            *[str(ROOT / ('src/local/qdj/maids/brain/' + name + '.java')) for name in ('ResidentState','ResidentReceipts','ResidentContract','ResidentTravelInspection','ResidentActionMemory')],
-            str(ROOT / 'tests/CompanionLedgerTest.java'),str(ROOT / 'tests/ResidentLedgerTest.java')], check=True)
+            *[str(ROOT / ('src/local/qdj/maids/brain/' + name + '.java')) for name in ('ResidentState','ResidentReceipts','ResidentContract','ResidentTravelInspection','ResidentActionMemory','ResidentPlanningHealth')],
+            str(ROOT / 'tests/CompanionLedgerTest.java'),str(ROOT / 'tests/ResidentLedgerTest.java'),str(ROOT / 'tests/ResidentPlanningHealthTest.java')], check=True)
         subprocess.run([str(args.jdk / 'bin' / ('java' + suffix)), '-cp', str(work) + os.pathsep + str(args.gson),
             'local.qdj.maids.brain.CompanionLedgerTest', str(work / 'state')], check=True)
         subprocess.run([str(args.jdk / 'bin' / ('java' + suffix)), '-cp', str(work) + os.pathsep + str(args.gson),
             'local.qdj.maids.brain.ResidentLedgerTest', str(work / 'resident-state')], check=True)
+        subprocess.run([str(args.jdk / 'bin' / ('java' + suffix)), '-cp', str(work) + os.pathsep + str(args.gson),
+            'local.qdj.maids.brain.ResidentPlanningHealthTest', str(work / 'planning-state')], check=True)
 
 
 if __name__ == '__main__':
