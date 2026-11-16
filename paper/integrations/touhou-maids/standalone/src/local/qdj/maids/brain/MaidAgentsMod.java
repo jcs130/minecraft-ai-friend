@@ -13,6 +13,15 @@ import org.slf4j.Logger;
 public final class MaidAgentsMod {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static volatile MaidAgentsServer running;
+    /** Read-only host integration. Only explicitly configured resident UUIDs may receive land membership. */
+    public static java.util.Map<java.util.UUID,String> residentIdentities(){
+        var current=running;var out=new java.util.LinkedHashMap<java.util.UUID,String>();
+        if(current!=null&&current.residents()!=null)for(var id:current.residents().ids())out.put(id,current.residents().role(id).name());
+        return java.util.Map.copyOf(out);
+    }
+    static boolean managed(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid) {
+        return running!=null&&running.agent(maid.getUUID())!=null&&running.agent(maid.getUUID()).matches(maid);
+    }
 
     public MaidAgentsMod() {
         MaidBrainControl.reserveSitePrefix(MaidAgentsConfig.SITE_PREFIX);
@@ -23,6 +32,7 @@ public final class MaidAgentsMod {
         NeoForge.EVENT_BUS.addListener(MaidAgentsMod::interact);
         NeoForge.EVENT_BUS.addListener(MaidAgentsMod::damage);
         NeoForge.EVENT_BUS.addListener(MaidAgentsMod::drops);
+        NeoForge.EVENT_BUS.addListener(MaidAgentsMod::chat);
     }
 
     private static void serverStarted(ServerStartedEvent event) {
@@ -31,6 +41,7 @@ public final class MaidAgentsMod {
             running = new MaidAgentsServer(event.getServer(), config);
             // Optional public recruitment. Existing registrations are unchanged when the file is absent.
             running.companions(new MaidCompanions(event.getServer(), running, FMLPaths.CONFIGDIR.get()));
+            running.residents(new MaidResidents(event.getServer(), running, FMLPaths.CONFIGDIR.get()));
             LOGGER.info("TLM Maid Agents registered {} fixed entity bindings", running.size());
         } catch (Exception failure) {
             if (running != null) { running.close(); running = null; }
@@ -48,9 +59,12 @@ public final class MaidAgentsMod {
     private static void commands(RegisterCommandsEvent event) {
         MaidAgentCommands.register(event.getDispatcher(), () -> running);
         CompanionCommands.register(event.getDispatcher(), () -> running == null ? null : running.companions());
+        ResidentCommands.register(event.getDispatcher(), () -> running == null ? null : running.residents());
     }
 
     private static void tick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {
+        if (event.getServer().getTickCount() % 20 == 0 && running != null && running.residents() != null)
+            running.residents().tick();
         if (event.getServer().getTickCount() % 20 == 0 && running != null && running.companions() != null)
             running.companions().tick();
     }
@@ -80,5 +94,17 @@ public final class MaidAgentsMod {
         if (running != null && running.companions() != null &&
                 event.getEntity() instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)
             running.companions().died(maid.getUUID());
+    }
+    private static void chat(net.neoforged.neoforge.event.ServerChatEvent event) {
+        if(event.isCanceled()||running==null||running.residents()==null||running.companions()==null)return;
+        String raw=event.getRawText();
+        for(var id:running.residents().ids()) {
+            String prefix="@"+running.residents().role(id).name()+" ";
+            if(raw.startsWith(prefix)) {
+                var result=running.companions().ask(event.getPlayer(),id,raw.substring(prefix.length()),0,"public");
+                if(!"accepted".equals(result.get("status")))event.getPlayer().sendSystemMessage(net.minecraft.network.chat.Component.literal("暂时无法交谈："+result.get("reason")));
+                return;
+            }
+        }
     }
 }

@@ -39,6 +39,11 @@ final class CompanionCommands {
             MaidCompanions.reply(c.getSource(), result, true);
             return "accepted".equals(result.get("status")) ? 1 : 0;
         }));
+        target.then(Commands.literal("whisper").then(Commands.argument("message",StringArgumentType.greedyString()).executes(c->{
+            var r=runtime.get();if(r==null||!(c.getSource().getEntity() instanceof ServerPlayer p))return unavailable(c);
+            var result=r.ask(p,UuidArgument.getUuid(c,"companion"),StringArgumentType.getString(c,"message"),0,"private");
+            MaidCompanions.reply(c.getSource(),result,true);return "accepted".equals(result.get("status"))?1:0;
+        })));
         root.then(Commands.literal("companion").then(target));
         root.then(Commands.literal("social").requires(s -> s.hasPermission(2))
                 .then(Commands.argument("npc", UuidArgument.uuid()).executes(c -> {

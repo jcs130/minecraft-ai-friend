@@ -21,7 +21,7 @@ async function atomic(path, data) {
 }
 
 function compactEvidence(row) {
-  const result=Object.fromEntries(['id','at','speakerId','message','reply','decision','status','reason']
+  const result=Object.fromEntries(['id','at','speakerId','message','reply','decision','status','reason','channel','kind']
     .filter(key=>Object.hasOwn(row,key)).map(key=>[key,row[key]]));
   if(row.receipt) result.receipt=Object.fromEntries(['action','status','reason','completed']
     .filter(key=>Object.hasOwn(row.receipt,key)).map(key=>[key,row.receipt[key]]));

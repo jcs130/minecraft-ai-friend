@@ -64,7 +64,8 @@ final class MaidAgent {
         var chat = maid.getAiChatManager();
         chat.ttsSite = voice.site();
         chat.ttsModel = voice.model();
-        chat.ttsLanguage = voice.language();
+        // Native TLM extracts language with split("_"); ja-JP would otherwise silently become English.
+        chat.ttsLanguage = voice.language().replace('-', '_');
     }
 
     void visit(EntityMaid maid, ServerPlayer player, String text) {

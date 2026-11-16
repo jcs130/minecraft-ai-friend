@@ -1,4 +1,4 @@
-# TLM Maid Agents 0.2.0
+# TLM Maid Agents 0.3.0
 
 为车万女仆里的已有女仆配置可切换的模型、音色和访客对白。女仆用自己的身体、背包和工作 AI。凭据、授权和主人对话记忆按实体 UUID 隔离。一台服可登记多位女仆，共用 DSH 或 Qwen Code 网关。
 
@@ -6,11 +6,13 @@
 
 新增多位同行、通过角色对话招募、NPC 互聊与结伴，以及独立于模型和框架的本地记忆与 PowerContext 接入。配置与玩法见 [COMPANIONS.md](COMPANIONS.md)。原有私人女仆能力继续保留；没有配置公开居民时不开放招募。
 
+0.3.0 增加住房、原生自主生活、按 NPC 自己身份检查领地、持久动作回执，以及桐人新模型／中文气泡与日语语音文本。配置、合并安装和当前边界见 [RESIDENTS.md](RESIDENTS.md)。这是经过隔离测试的候选，源码合并不表示已部署正式服。
+
 ## 安装
 
-1. 服务器使用 Minecraft Java 1.21.1、Java 21、NeoForge 21.1 和车万女仆官方 NeoForge 1.5.3。把 `tlm-maid-agents-0.2.0.jar` 放入服务器 `mods`。服务端实测使用 NeoForge 21.1.252。游戏内界面需要对应的车万女仆客户端。 [官方车万女仆 1.5.3](https://modrinth.com/mod/touhou-little-maid/version/tXG1TkGx)
+1. 服务器使用 Minecraft Java 1.21.1、Java 21、NeoForge 21.1 和车万女仆官方 NeoForge 1.5.3。把 `tlm-maid-agents-0.3.0.jar` 放入服务器 `mods`。服务端实测使用 NeoForge 21.1.252。游戏内界面需要对应的车万女仆客户端。 [官方车万女仆 1.5.3](https://modrinth.com/mod/touhou-little-maid/version/tXG1TkGx)
 2. 先在游戏内驯服并命名女仆。以服务器管理员身份读取原实体的 `UUID` 和 `Owner`，填入 `config/tlm-maid-agents.json`。同一主人可登记多位女仆，每个 `maidagent_` 站点别名只分给一个实体。
-3. 在 `config/touhou_little_maid/sites/llm.json` 的现有对象中按别名加入启用的 OpenAI 兼容站点。可连接自己的兼容模型、DSH 或 Qwen Code。`examples` 提供多位角色的配置。扩展与千灯纪 `qiandengji_maid_brain` 互斥。
+3. 在 `config/touhou_little_maid/sites/llm.json` 的现有对象中按别名加入启用的 OpenAI 兼容站点。可连接自己的兼容模型、DSH 或 Qwen Code。`examples` 提供多位角色的配置。独立 JAR 与千灯纪 `qiandengji_maid_brain` 互斥；现有千灯纪须用 RESIDENTS 说明的合并构建，不能直接叠装。
 4. 正常重启游戏服后，让主人或服控制台运行 `/maidagent list` 和 `/maidagent brain <uuid> dsh`。使用 `/maidagent status <uuid>` 回读。女仆未加载时，先到实体所在区块。
 
 ## 人和 Agent 能怎么用
@@ -75,7 +77,7 @@ python dsh_gateway.py /path/to/private/dsh.json
 在官方 NeoForge 21.1 安装器准备的服务端目录和官方车万女仆 JAR 上构建。源码目录下运行以下命令。
 
 ```sh
-python build.py --server /path/to/neoforge-server --maid /path/to/touhou-little-maid.jar --javac /path/to/javac --output tlm-maid-agents-0.2.0.jar
+python build.py --server /path/to/neoforge-server --maid /path/to/touhou-little-maid.jar --javac /path/to/javac --output tlm-maid-agents-0.3.0.jar
 ```
 
 源码的 `dsh_gateway.py` 与父集成目录 `harness/gateway.py` 搭配。安装包已把脚本放在同一目录。 [车万女仆 AI 扩展文档](https://tlmwiki.cfpa.team/wiki/dev/ai/overview/)

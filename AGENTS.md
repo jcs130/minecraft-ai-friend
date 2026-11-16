@@ -1,3 +1,7 @@
+## 2026-11-16 艾因格朗特居民 0.3.0 候选，未部署
+
+住房、原生挖建／装备／睡眠、有限职业技能、私聊与中文气泡／日语文本、按 NPC 自己 UUID 的领地及无线存取检查已加入；桐人选今日 `qd_hub_kirito.ysm`。支持合并旧脑为单 JAR，不能叠装两份。74 Java／8 Python／3 Node、29 原生与16混合服检查通过，线上Qwen Code两次实跑并记住真实挖矿结果。实际日语音源、正式住处全路线与正式部署未完成；不替换原肥鱼或假称听感、基岩画面已验。详见[候选维护说明](paper/integrations/touhou-maids/standalone/RESIDENTS.md)与[验收边界](paper/integrations/touhou-maids/standalone/RESIDENTS_VALIDATION.md)。以下为历史。
+
 ## 2026-11-16 独立女仆居民伙伴 0.2.0，隔离验收完成，未部署
 
 `paper/integrations/touhou-maids/standalone` 增加对话招募、多同伴、NPC 互聊、按角色选择 harness，以及原始本地经历与 MC 核心 PowerContext 记忆同步。42 项 Java、31 项网关、3 项记忆回归和 34 项原生联机检查通过；同体 Qwen Code→原生调用切换、断线与冷重启保留经历。已有本机 PowerContext 1.4.1 已用三个隔离 NPC Scope 验证，不写入正式人物 Scope。此扩展与正式 `qiandengji_maid_brain` 互斥，不能直接叠装；正式服务器及现有角色未改。NPC 领队的实际多人行走、真基岩菜单/语音和跨维度随行另验。见[玩法与配置](paper/integrations/touhou-maids/standalone/COMPANIONS.md)及[验收边界](paper/integrations/touhou-maids/standalone/VALIDATION_COMPANIONS.md)。

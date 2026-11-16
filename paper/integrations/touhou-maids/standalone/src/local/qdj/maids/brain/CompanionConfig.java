@@ -12,7 +12,7 @@ import java.util.UUID;
 record CompanionConfig(int schema, int contractMinutes, int disconnectGraceSeconds, int maxCompanions,
                        int socialIntervalSeconds, List<Offer> offers) {
     record Offer(UUID maidId, String role, String description, String workTask, Map<String, List<String>> bubbles,
-                 String persona, List<String> likes, List<String> dislikes) {
+                 String persona, List<String> likes, List<String> dislikes, String spokenLanguage) {
         String line(String event, int seed, String fallback) {
             List<String> lines = bubbles == null ? null : bubbles.get(event);
             return lines == null || lines.isEmpty() ? fallback : lines.get(Math.floorMod(seed, lines.size()));
@@ -41,6 +41,8 @@ record CompanionConfig(int schema, int contractMinutes, int disconnectGraceSecon
             }
             if (!text(o.persona, 1200) || !preferences(o.likes) || !preferences(o.dislikes))
                 throw new IllegalArgumentException("companion_persona_and_preferences_required");
+            if(o.spokenLanguage!=null&&!List.of("zh-CN","ja-JP").contains(o.spokenLanguage))
+                throw new IllegalArgumentException("companion_spokenLanguage: zh-CN or ja-JP required; caption stays zh-CN");
         }
         return c;
     }
