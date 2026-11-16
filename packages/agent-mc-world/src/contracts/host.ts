@@ -52,6 +52,8 @@ export interface ToolOutcome {
 export interface ToolDef extends ToolSchema {
   /** Explicit scoped, local scene guidance; consumers must still check the read branch. */
   sceneKnowledge?: { protocol: 'agent-mc-scenes/v1' };
+  /** Optional, local completed-trajectory evidence/scoring service. It runs no model or body. */
+  trajectoryLearning?: { protocol: 'agent-mc-trajectory/v1' };
   tags: readonly ToolTag[]; barrierAfter?: boolean; endsTurn?: boolean; interruptible?: boolean;
   /** Resource requirement, not a read-only or authorization claim. Independent
    * tools may have side effects but never acquire/mutate the physical body.

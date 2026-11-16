@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { LEARNING_OPERATIONS } from './game-memory-learning-contract.ts';
+import { TRAJECTORY_OPERATIONS, TRAJECTORY_READ_OPERATIONS } from './jitrl-trajectory.ts';
 import type { ToolDef } from './support/host-contract.ts';
 
 const KINDS = ['place', 'resource', 'relationship', 'task', 'method', 'lesson', 'note'] as const;
@@ -72,10 +73,11 @@ const stringField = (maxLength: number) => ({ type: 'string', minLength: 1, maxL
 export const GAME_MEMORY_TOOL: Omit<ToolDef, 'handler'> = {
   name: 'mc_memory', tags: ['read', 'write'],
   sceneKnowledge: { protocol: 'agent-mc-scenes/v1' },
+  trajectoryLearning: { protocol: 'agent-mc-trajectory/v1' },
   readOnlyCall: args => ['help', 'search', 'get', 'replication'].includes(String(args.action ?? 'help'))
-    || args.action === 'experience' && ['help', 'list', 'get', 'stats', 'policy_help', 'policy_status'].includes(String(args.operation ?? 'help'))
+    || args.action === 'experience' && ['help', 'list', 'get', 'stats', 'policy_help', 'policy_status', ...TRAJECTORY_READ_OPERATIONS].includes(String(args.operation ?? 'help'))
     || args.action === 'scene' && ['help','list','recall','get'].includes(String(args.operation??'help')),
-  learningCall: args => args.action === 'experience' && ['reflect', 'rank', 'feedback'].includes(String(args.operation))
+  learningCall: args => args.action === 'experience' && ['reflect', 'rank', 'feedback', ...TRAJECTORY_OPERATIONS].includes(String(args.operation))
     || args.action === 'scene' && ['upsert','archive'].includes(String(args.operation)),
   description: 'Persistent game-only notebook, isolated by server/account/agent. Search summaries, then get details. '
     + 'Historical observations and attributed notes never establish current facts, permissions or goal success. '
@@ -87,7 +89,7 @@ export const GAME_MEMORY_TOOL: Omit<ToolDef, 'handler'> = {
     action: { type: 'string', enum: ['help', 'search', 'get', 'remember', 'capture', 'revise', 'archive', 'sync', 'replication', 'service', 'experience', 'scene'] },
     preference: { type: 'string', enum: ['local-first', 'balanced', 'remote-first'], description: 'Only search: choose retrieval emphasis for this task. Does not disable local persistence or enable an unconfigured service.' },
     topic: { type: 'string', enum: ['search', 'remember', 'capture', 'revise'], description: 'Only for action:help; returns one action schema and example.' },
-    operation: { type: 'string', enum: [...new Set([...LEARNING_OPERATIONS, 'list', 'get', 'stats', 'reflect', 'policy_help', 'policy_status', 'rank', 'feedback', 'recall', 'upsert', 'archive'])], description: 'Only for action:service, experience or scene, not local capture or remember.' },
+    operation: { type: 'string', enum: [...new Set([...LEARNING_OPERATIONS, ...TRAJECTORY_OPERATIONS, 'list', 'get', 'stats', 'reflect', 'policy_help', 'policy_status', 'rank', 'feedback', 'recall', 'upsert', 'archive'])], description: 'Only for action:service, experience or scene, not local capture or remember.' },
     input: { type: 'object', maxProperties: 12, description: 'Service/experience/scene-operation arguments. Local note fields stay at the top level.' }, requestId: stringField(128),
     id: stringField(48), expectedRevision: { type: 'integer', minimum: 1 }, revision: { type: 'integer', minimum: 1 },
     kind: { type: 'string', enum: [...KINDS] }, summary: stringField(180), content: stringField(6000),

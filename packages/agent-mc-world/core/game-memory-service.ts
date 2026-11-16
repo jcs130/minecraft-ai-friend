@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { GameMemoryLearning } from './game-memory-learning.ts';
 import { OperationExperienceBook } from './operation-experience.ts';
 import { JitRlBook } from './jitrl.ts';
+import { JitRlTrajectoryBook, TRAJECTORY_OPERATIONS } from './jitrl-trajectory.ts';
 import { SceneKnowledgeLibrary } from './scene-knowledge.ts';
 import { artifactRef } from './game-memory-learning-contract.ts';
 import { memoryRequest, validateMemoryTransport } from './game-memory-http.ts';
@@ -166,11 +167,13 @@ export class GameMemoryService {
     if (args.action === 'experience') {
       if (!this.directory) throw new Error('Persistent dataDir is required for operation experience');
       const book = new OperationExperienceBook(this.directory);
+      if ((TRAJECTORY_OPERATIONS as readonly string[]).includes(String(args.operation)))
+        return new JitRlTrajectoryBook(this.directory, (scope, id) => book.get(scope, id)).execute(args, ctx);
       if (['policy_help', 'policy_status', 'rank', 'feedback'].includes(String(args.operation)))
         return new JitRlBook(this.directory, (scope, id) => book.get(scope, id)).execute(args, ctx);
       const result = await book.query(args, ctx, this.book);
       return args.operation === 'help' || !args.operation ? { ...result,
-        policyLearning: 'Use experience/policy_help for JitRL rank/feedback: local candidate probability correction from measured, scope-bound operation receipts.' } : result;
+        policyLearning: 'Use experience/trajectory_help for completed multi-step trajectories, discounted returns, versioned scoring, explicit adoption and retrieval. policy_help retains the older single-step measured rank/feedback API.' } : result;
     }
     if (args.action === 'search' && args.preference !== undefined) cfg.readPreference = args.preference as GameMemoryConfig['readPreference'];
     if (!['local', 'local-vector', 'vector', 'remote'].includes(cfg.mode)) throw new Error('Unknown memory mode');

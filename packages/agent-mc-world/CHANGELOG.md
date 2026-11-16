@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.90
+
+- Add completed multi-step trajectory evaluation, discounted returns, explicit score revisions/review and evidence-linked reuse. Preserve unknown outcomes, cancelled work, original terminals and net-change contradictions; never treat score adoption as verified learning.
+- Export the host-neutral trajectory book and SDK/MCP capability; bound retrieval and page long evaluation output. No model or body loop in core.
+
 ## 0.5.7-rc.160-preview.87
 
 - Expose model-organized, versioned scene guidance through the shared game-memory contract. Preserve source attribution, applicability and counterexamples; retrieve bounded task-local guidance without fixed spell routing, body actions or claims of verified learning.
