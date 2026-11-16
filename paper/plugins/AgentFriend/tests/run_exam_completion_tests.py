@@ -46,6 +46,7 @@ public class ExamCompletionProbe {
  static void check(boolean b){if(!b)throw new AssertionError("unexpected result");}
  static class Player { final UUID id=UUID.randomUUID(); public void sendMessage(String m){} public UUID getUniqueId(){return id;} }
  static class Bukkit { static final Map<UUID,Player> players=new HashMap<>();static Player getPlayer(UUID id){return players.get(id);} }
+ static class ResidentCli { static final Map<UUID,Player> residents=new HashMap<>();static Player find(UUID id){Player player=Bukkit.getPlayer(id);return player!=null?player:residents.get(id);} }
  static record Definition(String primitive,List<String> proofs){}
  static class Exam {
   static class Run {Definition definition;String state="active",reason="";UUID id=UUID.randomUUID();long started=100,expires=Long.MAX_VALUE;Map<UUID,Object> allies=new HashMap<>();}
@@ -92,6 +93,7 @@ public class ExamCompletionProbe {
  static Run run(Player p){Run r=new Run();r.attendance.put(p.id,3);for(int i=0;i<3;i++)r.roomAttendance.put(i,Set.of(p.id));return r;}
  static Manager manager(Player p){Bukkit.players.put(p.id,p);Manager m=new Manager();m.plugin.exams.active=exam("contract_record","native_clear");return m;}
  public static void main(String[] ignored){
+  test("native resident completion uses own identity without a Bukkit player connection",()->{Player p=new Player();Manager m=manager(p);Bukkit.players.remove(p.id);ResidentCli.residents.put(p.id,p);Run r=run(p);m.complete(r);check(m.plugin.exams.count==1&&m.plugin.config.writes==1&&m.applications==1&&Bukkit.getPlayer(p.id)==null);m.complete(r);check(m.plugin.config.writes==1);ResidentCli.residents.remove(p.id);});
   test("daily reward cap does not swallow fresh full-clear evidence",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);m.plugin.config.values.put(Manager.ROOT+".claimed."+p.id+"."+r.site.id,m.day());m.complete(r);check(m.plugin.exams.count==1&&m.plugin.config.writes==0&&m.applications==0&&m.ends==1);});
   test("first clear creates one reward and evidence",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);m.complete(r);check(m.plugin.config.writes==1&&m.applications==1&&m.plugin.exams.count==1);m.complete(r);check(m.plugin.config.writes==1&&m.plugin.exams.count==1);});
   test("pending older reward does not swallow new examination",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);m.plugin.config.receipts.put(Manager.ROOT+".receipts."+p.id+"."+r.site.id,Map.of("run","older"));m.complete(r);check(m.plugin.config.writes==0&&m.plugin.exams.count==1);});
