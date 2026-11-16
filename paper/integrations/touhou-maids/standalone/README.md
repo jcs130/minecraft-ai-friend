@@ -60,6 +60,12 @@ python dsh_gateway.py /path/to/private/dsh.json
 
 三位 NPC 的隔离验收使用 Qwen Code 预览版和线上 `qwen3.8-flash`。三次岗位指令和各自的回执回复共调用模型六次。之后两批成熟小麦、待剪的羊和敌对怪物均有现场结果，期间游戏没有在线玩家，模型调用数为零。复测入口为 `tests/qwen-stock-stage.py --help`，需要一份新鲜的官方 NeoForge 隔离安装、独立端口和可用的本机 LiteLLM 模型权限。
 
+## NPC 外观
+
+试用岗位外观分别为禾穗的奶油桃、绒铃的 Mili、灯守的雷米。NeoForge 服务器和客户端使用配套的 [YSM 2.6.5](https://modrinth.com/mod/yes-steve-model/version/HZWaR0LY)。把模型目录放入服务端 `config/yes_steve_model/custom/`，运行 `/ysm model reload` 后由女仆主人在模型界面选择 YSM 外观。
+
+三款模型均按 CC BY 4.0 署名。来源锁定在 [npc-ysm-models.json](examples/npc-ysm-models.json)。从表中仓库及固定提交下载源 ZIP，以 `archive` 字段命名，并把三份 ZIP 放在同一目录。运行 `python pack-ysm-models.py --archives <目录> --output <新的ZIP路径>` 导出安装包。包中附带原作者的许可、署名和试用贴图名称。 [YSM 模型格式](https://yesstevemodel.github.io/wiki/type/)
+
 ## 构建
 
 在官方 NeoForge 21.1 安装器准备的服务端目录和官方车万女仆 JAR 上构建。源码目录下运行以下命令。

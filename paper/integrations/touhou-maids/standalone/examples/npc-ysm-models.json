@@ -1,0 +1,51 @@
+{
+  "minecraft": "1.21.1",
+  "loader": "neoforge",
+  "tlm": "1.5.3",
+  "ysm": {
+    "version": "2.6.5",
+    "projectVersion": "HZWaR0LY",
+    "sha512": "75a655fe095565d949aeea5e333f3e1501443b796b250aeabe1ac230c47a99cbac6b7470956b4458f5c982c2cf8a17f170b53e0805b4f4079874fc9975b10dce"
+  },
+  "models": [
+    {
+      "id": "qd_naytotime",
+      "archive": "naytotime.zip",
+      "repository": "NaytoTime/NaytoTime-YSM",
+      "revision": "a811450bc0a80180cc327f22e3e3d5b8175ad4b8",
+      "sha256": "0e3eded231b7e4fcdc719d3ceb1d9ad30ad6f64ec8bde479957caa6f46bee3c8",
+      "modelRoot": "source",
+      "name": "奶油桃 NaytoTime",
+      "credits": "奶油桃（模型、贴图及动画）、龙某兄（动画）。其他贡献见原模型清单。",
+      "license": "https://creativecommons.org/licenses/by/4.0/",
+      "npc": "禾穗",
+      "texture": "texture"
+    },
+    {
+      "id": "qd_mili",
+      "archive": "mili.zip",
+      "repository": "linxiting890/YSM-Mili",
+      "revision": "42296586cf8fa77b200e01368d2e2eff50e14ae5",
+      "sha256": "540f77af714edb0434b2c25d61eabd839701a72054d42f3bfc74bd0703fdbf1a",
+      "modelRoot": "",
+      "name": "Mili",
+      "credits": "是Reme（模型、贴图及动画），linxiting890（整理发布）。",
+      "license": "https://creativecommons.org/licenses/by/4.0/",
+      "npc": "绒铃",
+      "texture": "default"
+    },
+    {
+      "id": "qd_reme",
+      "archive": "reme.zip",
+      "repository": "linxiting890/YSM-Reme",
+      "revision": "230b1e62684831cf0a5b81ae8e0b2dbb4d4aebc0",
+      "sha256": "b7bc0858323aa259614d5a790d25d922b9a1ee8e072f3d2a131a3db99312e762",
+      "modelRoot": "",
+      "name": "Reme 雷米",
+      "credits": "是Reme（模型、贴图及动画），木土光军76（指导与参考），linxiting890（整理发布）。",
+      "license": "https://creativecommons.org/licenses/by/4.0/",
+      "npc": "灯守",
+      "texture": "Black"
+    }
+  ]
+}
