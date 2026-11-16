@@ -12,8 +12,10 @@ export interface BodyPort {
 }
 
 /** Adapter for agent-mc-world MinecraftAgentClient (structural, no import). */
-export function clientBodyPort(client: { call(name: string, args: Record<string, unknown>, options?: { signal?: AbortSignal }): Promise<BodyOutcome> }): BodyPort {
-  return { call: (tool, args, signal) => client.call(tool, args, { signal }) };
+export type BodyClientLike = { call(name: string, args: Record<string, unknown>, options?: { signal?: AbortSignal; bodyKey?: object }): Promise<BodyOutcome> };
+/** `bodyKey` is the capability for agent-mc-world `bodyGate` (exclusive body control). */
+export function clientBodyPort(client: BodyClientLike, bodyKey?: object): BodyPort {
+  return { call: (tool, args, signal) => client.call(tool, args, bodyKey ? { signal, bodyKey } : { signal }) };
 }
 
 export interface PlanContext { summary: () => Promise<string> }

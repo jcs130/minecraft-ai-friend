@@ -104,11 +104,17 @@ export class HarnessRuntime implements HarnessApi {
   async getSummary(options: SummaryOptions = {}): Promise<Summary> {
     const active = this.intents.active();
     const topic = options.topic?.trim().slice(0, 100) || undefined;
+    const viewer = options.viewer;
+    const mine = viewer === undefined ? {} : { owner: viewer };
+    const shownActive = active && viewer !== undefined && active.owner !== viewer
+      ? { ...active, goal: '（其他代理的意图）', reason: null, constraints: {}, hostRef: null } : active;
+    const visible = (e: HarnessEvent) => viewer === undefined || !e.intentId || this.intents.get(e.intentId)?.owner === viewer;
     return buildSummary({
       topic, maxTokens: options.maxTokens, now: this.now(),
       executor: this.executor.isPaused() ? 'paused' : !this.executor.hasBody() ? 'no-body' : active ? 'running' : 'idle',
-      active, queued: this.intents.list({ states: ['queued'], limit: 3 }), paused: this.intents.list({ states: ['paused'], limit: 2 }),
-      events: this.events.recent(5, 2), facts: await this.memoryLines(topic),
+      active: shownActive, queued: this.intents.list({ states: ['queued'], limit: 3, ...mine }),
+      paused: this.intents.list({ states: ['paused'], limit: 2, ...mine }),
+      events: this.events.recent(50, 2).filter(visible).slice(-5), facts: await this.memoryLines(topic),
     });
   }
 
@@ -154,13 +160,14 @@ export class HarnessRuntime implements HarnessApi {
 
   async cancel(intentId: string, reason = 'cancelled by host'): Promise<Intent> {
     const intent = this.require(intentId);
+    if (TERMINAL_STATES.includes(intent.state)) throw new Error(`Intent ${intentId} is ${intent.state}`);
     if (intent.state === 'active') await this.executor.interrupt('cancelled', reason, intentId);
     else this.intents.transition(intentId, 'cancelled', { reason });
     return this.intents.get(intentId)!;
   }
 
   getIntent(intentId: string): Intent | null { return this.intents.get(intentId); }
-  listIntents(options: { states?: IntentState[]; limit?: number } = {}): Intent[] { return this.intents.list(options); }
+  listIntents(options: { states?: IntentState[]; limit?: number; owner?: string } = {}): Intent[] { return this.intents.list(options); }
 
   private require(id: string): Intent {
     const i = this.intents.get(id); if (!i) throw new Error(`Unknown intent ${id}`); return i;

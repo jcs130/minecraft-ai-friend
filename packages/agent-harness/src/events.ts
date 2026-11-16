@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { McEventLike } from 'agent-mc-memory';
 import type { HarnessEvent, HarnessEventKind } from './types.ts';
 
@@ -9,6 +10,8 @@ export class EventHub {
   private buffer: HarnessEvent[] = [];
   private seq = 0;
   private readonly subscribers = new Set<Subscriber>();
+  /** Changes on every process start: seq cursors are only meaningful within one stream. */
+  readonly streamId = `stream_${randomUUID()}`;
   constructor(private readonly capacity = 500, private readonly now: () => Date = () => new Date()) {}
 
   emit(draft: Draft): HarnessEvent {
@@ -38,6 +41,10 @@ export class EventHub {
     return this.buffer.filter(e => e.severity >= minSeverity).slice(-limit);
   }
   latest(): number { return this.seq; }
+  /** Oldest seq still buffered (latest+1 when empty). */
+  oldest(): number { return this.buffer[0]?.seq ?? this.seq + 1; }
+  /** All buffered events with seq > after (for filtered replay). */
+  since(after: number): HarnessEvent[] { return this.buffer.filter(e => e.seq > after); }
 }
 
 const short = (s: string, n = 160) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);

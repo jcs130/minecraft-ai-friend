@@ -41,7 +41,7 @@ export class IntentManager {
     if (!goal || goal.length > 500) throw new Error('goal is required (≤500 chars)');
     const at = this.now();
     const intent: Intent = { id: `int_${randomUUID()}`, goal, priority: normalizePriority(input.priority),
-      constraints: structuredClone(input.constraints ?? {}), hostRef: input.hostRef ?? null, state: 'queued', reason: null,
+      constraints: structuredClone(input.constraints ?? {}), hostRef: input.hostRef ?? null, owner: input.owner ?? null, state: 'queued', reason: null,
       createdAt: at, updatedAt: at, startedAt: null, endedAt: null, plan: null, stepIndex: 0, attempts: 0, result: null };
     this.intents.set(intent.id, intent);
     this.changed(intent, null);
@@ -52,8 +52,9 @@ export class IntentManager {
   /** @internal mutable access for the executor. */
   ref(id: string): Intent | undefined { return this.intents.get(id); }
 
-  list(options: { states?: IntentState[]; limit?: number } = {}): Intent[] {
-    return [...this.intents.values()].filter(i => !options.states || options.states.includes(i.state))
+  list(options: { states?: IntentState[]; limit?: number; owner?: string } = {}): Intent[] {
+    return [...this.intents.values()].filter(i => (!options.states || options.states.includes(i.state))
+      && (options.owner === undefined || i.owner === options.owner))
       .sort((a, b) => order(a) - order(b) || b.priority - a.priority || a.createdAt.localeCompare(b.createdAt))
       .slice(0, options.limit ?? 50).map(i => structuredClone(i));
   }
@@ -120,6 +121,7 @@ export class IntentManager {
     const parsed = JSON.parse(raw) as { intents?: Intent[] };
     for (const i of parsed.intents ?? []) {
       if (i.state === 'active') { i.state = 'queued'; i.reason = 'interrupted by restart'; }
+      i.owner ??= null;
       this.intents.set(i.id, i);
     }
   }

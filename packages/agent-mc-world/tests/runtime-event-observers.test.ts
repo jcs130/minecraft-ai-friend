@@ -2,12 +2,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger, type MinecraftEventObserver } from '../src/client/index.ts';
+import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger, type MinecraftEventObserver, type MinecraftBodyGate } from '../src/client/index.ts';
 import type { ToolDef, WorldHost } from '../src/client/contracts.ts';
 
 const directories: string[] = [];
 afterEach(() => { for (const p of directories.splice(0)) rmSync(p, { recursive: true, force: true }); });
-function rig(extra: { eventObservers?: MinecraftEventObserver[]; extraTools?: ToolDef[] } = {}) {
+function rig(extra: { eventObservers?: MinecraftEventObserver[]; extraTools?: ToolDef[]; bodyGate?: MinecraftBodyGate } = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), 'mc-observers-')); directories.push(dataDir);
   let host!: WorldHost;
   const requestFacts = vi.fn(() => ({ text: '', snapshotTypes: [], world: { schema: 'agent-mc-world-identity/v1' as const, key: 'minecraft:overworld',
@@ -52,6 +52,20 @@ describe('optional event observers and extra tools', () => {
     expect(tools.filter(t => t.name === 'mc_look').map(t => t.description)).toEqual(['core']);
     expect(tools.some(t => t.name === 'memory_query')).toBe(true);
     expect((await r.runtime.call('memory_query', {})).text).toContain('remembered');
+    await r.runtime.disconnect();
+  });
+
+  it('bodyGate hides body tools from hosts; only the key holder may call them', async () => {
+    const key = {};
+    const harness: ToolDef = { name: 'harness_get_summary', description: 'h', parameters: { type: 'object' }, tags: ['read'], bodyControl: 'independent',
+      handler: async () => ({ text: 'summary' }) };
+    const r = rig({ extraTools: [harness], bodyGate: { key, expose: name => name.startsWith('harness_') } });
+    await r.runtime.connect();
+    expect(r.runtime.tools().map(t => t.name)).toEqual(['harness_get_summary']);
+    await expect(r.runtime.call('mc_look', {})).rejects.toThrow(/reserved for the body owner/);
+    await expect(r.runtime.call('mc_look', {}, { bodyKey: {} })).rejects.toThrow(/reserved/);
+    expect((await r.runtime.call('mc_look', {}, { bodyKey: key })).text).toContain('core');
+    expect((await r.runtime.call('harness_get_summary', {})).text).toContain('summary');
     await r.runtime.disconnect();
   });
 });

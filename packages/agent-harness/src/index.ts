@@ -11,3 +11,7 @@ export { NO_REFLECTION, type Reflector, type ReflectionNote, type ReflectionTrig
 export { HarnessRuntime, factLine, type HarnessRuntimeOptions } from './harness.ts';
 export { createHarnessTools, type HarnessToolDef } from './tools.ts';
 export { withAgentHarness, harnessConfigFromEnv, type AgentHarnessConfig, type AgentHarnessIntegration, type HarnessClientOptionsLike } from './integration.ts';
+export * from './gateway/index.ts';
+export { HarnessGatewayClient, GatewayRequestError, type GatewayClientOptions, type Welcome, type PullResult, type EventFilter } from './sdk/client.ts';
+export { startHarnessServer, type HarnessServer, type HarnessServerOptions } from './server/serve.ts';
+export { createFakeWorld, type FakeWorldOptions } from './testing/fake-world.ts';

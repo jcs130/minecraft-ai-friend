@@ -11,17 +11,24 @@
   "packageManager": "pnpm@11.5.0",
   "main": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./sdk": "./src/sdk/client.ts",
+    "./gateway": "./src/gateway/index.ts"
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "serve": "tsx src/server/cli.ts",
+    "example:agent": "tsx examples/third-party-agent.ts"
   },
   "dependencies": {
-    "agent-mc-memory": "link:../agent-memory"
+    "agent-mc-memory": "link:../agent-memory",
+    "ws": "8.21.3",
+    "tsx": "4.23.15"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/ws": "8.18.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

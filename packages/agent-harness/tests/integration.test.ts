@@ -42,7 +42,7 @@ describe('withAgentHarness', () => {
   it('end-to-end through MinecraftAgentClient: host tools → intent → body → task receipt → memory + summary', async () => {
     const dataDir = tmp(); const f = fakeWorld();
     const { options, integration } = withAgentHarness(clientOptions(dataDir),
-      harnessConfigFromEnv({ AGENT_HARNESS_ENABLED: '1', AGENT_HARNESS_EXECUTE: '1' }));
+      harnessConfigFromEnv({ AGENT_HARNESS_ENABLED: '1', AGENT_HARNESS_EXECUTE: '1', AGENT_HARNESS_EXCLUSIVE: '0' }));
     const client = new MinecraftAgentClient(options, f.world);
     integration!.attachClient(client);
     await client.connect();
@@ -65,6 +65,27 @@ describe('withAgentHarness', () => {
     expect((summary.data as { tokens: number }).tokens).toBeLessThanOrEqual(200);
     const list = JSON.parse((await client.call('harness_control', { action: 'list' })).text);
     expect(list.intents[0]).toMatchObject({ goal: '去钓鱼', state: 'done' });
+    await client.disconnect();
+    await integration!.close();
+  });
+
+  it('exclusive body control (default with EXECUTE=1): hosts see only harness tools; the harness still drives mc_do', async () => {
+    const f = fakeWorld();
+    const config = harnessConfigFromEnv({ AGENT_HARNESS_ENABLED: '1', AGENT_HARNESS_EXECUTE: '1' });
+    expect(config.exclusive).toBe(true);
+    expect(() => withAgentHarness(clientOptions(tmp()), { ...config, execute: false })).toThrow(/requires AGENT_HARNESS_EXECUTE/);
+    const { options, integration } = withAgentHarness(clientOptions(tmp()), config);
+    const client = new MinecraftAgentClient(options, f.world);
+    integration!.attachClient(client);
+    await client.connect();
+    expect(integration!.exclusive).toBe(true);
+    expect(client.tools().map(t => t.name)).toEqual(['harness_submit_intent', 'harness_get_summary', 'harness_events', 'harness_control']);
+    await expect(client.call('mc_do', { steps: [] })).rejects.toThrow(/reserved for the body owner/);
+    const r = JSON.parse((await client.call('harness_submit_intent', { goal: '挖矿', constraints: { steps: [{ tool: 'mc_do', args: { steps: [{ skill: 'dig' }] } }] } })).text);
+    await until(() => f.calls.length === 1);
+    await f.host().pushEvent({ type: 'minecraft.task', source: 'minecraft', ts: new Date().toISOString(), text: 'ok',
+      execution: { kind: 'task', id: f.last(), phase: 'completed', terminal: true, goalCompleted: false } });
+    await until(() => integration!.harness.getIntent(r.intentId)!.state === 'done');
     await client.disconnect();
     await integration!.close();
   });

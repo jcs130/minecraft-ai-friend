@@ -32,6 +32,8 @@ export interface IntentInput {
   constraints?: IntentConstraints;
   /** Opaque host reference (conversation id, request id ...). */
   hostRef?: string;
+  /** Owning agent (set by the gateway from the authenticated identity; never trusted from the payload). */
+  owner?: string;
 }
 
 export interface Intent {
@@ -40,6 +42,8 @@ export interface Intent {
   priority: number;
   constraints: IntentConstraints;
   hostRef: string | null;
+  /** Owning agent id (gateway), null for in-process hosts. */
+  owner: string | null;
   state: IntentState;
   /** Why it is paused/failed, or the latest progress note. */
   reason: string | null;
@@ -72,7 +76,12 @@ export interface HarnessEvent {
   data?: Record<string, unknown>;
 }
 
-export interface SummaryOptions { topic?: string; maxTokens?: number }
+export interface SummaryOptions {
+  topic?: string;
+  maxTokens?: number;
+  /** Multi-tenant view: other owners' intents are redacted and their intent events omitted. */
+  viewer?: string;
+}
 export interface Summary { text: string; tokens: number; budget: number; truncated: boolean; generatedAt: string }
 
 export type ControlAction = 'pause' | 'resume' | 'cancel' | 'update';
@@ -91,5 +100,5 @@ export interface HarnessApi {
   updateIntent(intentId: string, patch: IntentPatch): Promise<Intent>;
   cancel(intentId: string, reason?: string): Promise<Intent>;
   getIntent(intentId: string): Intent | null;
-  listIntents(options?: { states?: IntentState[]; limit?: number }): Intent[];
+  listIntents(options?: { states?: IntentState[]; limit?: number; owner?: string }): Intent[];
 }
