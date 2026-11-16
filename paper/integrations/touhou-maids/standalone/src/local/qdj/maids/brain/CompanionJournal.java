@@ -31,10 +31,17 @@ final class CompanionJournal {
     }
     void append(UUID maid, UUID conversation, String phase, Map<String, Object> row) throws IOException {
         Path dir = root.resolve(maid.toString()); Files.createDirectories(dir);
-        byte[] bytes = JSON.toJson(row).getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > 32768) throw new IOException("conversation_too_large");
+        if(!List.of("request","result").contains(phase))throw new IOException("conversation_phase_invalid");
         Path target = dir.resolve(conversation + "-" + phase + ".json");
         if (Files.exists(target)) throw new IOException("conversation_already_recorded");
+        if(row.containsKey("maidId")&&!maid.toString().equals(row.get("maidId"))
+            ||row.containsKey("id")&&!conversation.toString().equals(row.get("id")))throw new IOException("conversation_identity_mismatch");
+        try{String speaker=(String)row.get("speakerId");if(!UUID.fromString(speaker).toString().equals(speaker))throw new IllegalArgumentException();}catch(RuntimeException invalid){throw new IOException("conversation_speaker_required",invalid);}
+        var envelope=new java.util.LinkedHashMap<String,Object>(row);
+        envelope.put("schemaVersion",1);envelope.put("id",conversation.toString());envelope.put("maidId",maid.toString());
+        envelope.putIfAbsent("at",System.currentTimeMillis());
+        byte[] bytes = JSON.toJson(envelope).getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > 32768) throw new IOException("conversation_too_large");
         Path temp = Files.createTempFile(dir, "conversation-", ".tmp");
         try {
             try (var channel = FileChannel.open(temp, StandardOpenOption.WRITE)) {
@@ -95,6 +102,7 @@ final class CompanionJournal {
                 if(recent.size()<4)recent.add(fact);
                 try{var outcome=JSON.fromJson(String.valueOf(row.get("reply")),com.google.gson.JsonObject.class);
                     if(outcome.has("queryOnly")&&!outcome.get("queryOnly").getAsBoolean()
+                        &&(!outcome.has("operationEffect")||!"unknown".equals(outcome.get("operationEffect").getAsString()))
                         &&outcome.has("completed")&&outcome.get("completed").getAsBoolean()&&effects.size()<4)effects.add(fact);
                 }catch(RuntimeException oldFormat){/* Old raw journals are retained, not upgraded by guessing. */}
                 if(recent.size()==4&&effects.size()==4)break;
@@ -129,6 +137,30 @@ final class CompanionJournal {
             }
             return null;
         }
+    }
+    Object currentGoals(UUID maid) throws IOException {
+        Path file=root.resolve(maid.toString()).resolve("core-goals.json");
+        if(!Files.exists(file))return Map.of("status","not_configured","goals",List.of());
+        if(Files.size(file)>24576)throw new IOException("resident_goal_context_too_large");
+        try{
+            var data=com.google.gson.JsonParser.parseString(Files.readString(file,StandardCharsets.UTF_8)).getAsJsonObject();
+            var scope=data.getAsJsonObject("scope");
+            if(!data.getAsJsonPrimitive("schemaVersion").isNumber()||data.get("schemaVersion").getAsBigDecimal().intValueExact()!=1||!maid.toString().equals(data.get("maidId").getAsString())
+                ||!maid.toString().equals(scope.get("agent").getAsString())||!("npc:"+maid).equals(scope.get("account").getAsString())
+                ||scope.get("realm").getAsString().isBlank()||!"agent-mc-goals/v1".equals(data.get("source").getAsString())
+                ||!"intentions_not_current_world_evidence".equals(data.get("semantics").getAsString())
+                ||!data.get("goals").isJsonArray()||data.getAsJsonArray("goals").size()>5)
+                throw new IOException("resident_goal_scope_or_schema_mismatch");
+            String status=data.get("status").getAsString();
+            if(!List.of("available","not_configured").contains(status))throw new IOException("resident_goal_context_unavailable");
+            if(status.equals("not_configured")&&!data.getAsJsonArray("goals").isEmpty())throw new IOException("inactive_goal_context_has_intentions");
+            if(!data.getAsJsonPrimitive("observedAt").isNumber())throw new IOException("resident_goal_observation_invalid");
+            long observed=data.get("observedAt").getAsBigDecimal().longValueExact();
+            if(observed<0||observed>System.currentTimeMillis()+60_000)throw new IOException("resident_goal_observation_invalid");
+            data.addProperty("projectionStale",System.currentTimeMillis()-observed>300_000);
+            if(status.equals("available")&&data.get("projectionStale").getAsBoolean())throw new IOException("resident_goal_projection_stale");
+            return JSON.fromJson(data,Map.class);
+        }catch(IOException invalid){throw invalid;}catch(RuntimeException invalid){throw new IOException("resident_goal_context_invalid",invalid);}
     }
     Object longTerm(UUID maid, UUID speaker) throws IOException {
         Path file = root.resolve(maid.toString()).resolve("recall-" + speaker + ".json");

@@ -19,7 +19,9 @@ class Fixture(BaseHTTPRequestHandler):
 
     def do_POST(self):
         request = json.loads(self.rfile.read(int(self.headers.get('Content-Length', '0'))))
-        type(self).calls.append({'mode': self.mode, 'at': time.time()})
+        message_text=json.dumps(request.get('messages',[]),ensure_ascii=False)
+        type(self).calls.append({'mode': self.mode, 'at': time.time(),'coreGoalContextPresent':'agent-mc-goals/v1' in message_text and 'intentions_not_current_world_evidence' in message_text,
+            'unacceptedDiscoveryPresent':any(command in message_text for command in ['photo cancel','photo withdraw','archive mine'])})
         status = 503 if self.mode == 'unavailable' else 200
         content = 'not valid JSON' if self.mode == 'malformed' else json.dumps({'action': 'cli', 'command': 'status'})
         payload = {'error': {'message': 'synthetic inference outage'}} if status == 503 else {
@@ -115,3 +117,35 @@ def after_restart(stage, original, report):
     test.check('healthy_decision_resets_failure_streak', health['status'] == 'ready' and health['consecutiveFailures'] == 0)
     test.evidence.update(passed=True, realModel=False)
     test.save()
+
+
+def goal_context_failures(stage, actor, report):
+    """An unavailable goal projection is an observable failure, never silent idling or a model call."""
+    test=suite(stage,report)
+    path=stage/'world/data/tlm-companion-memory'/actor/'core-goals.json'
+    before=path.read_bytes() if path.exists() else None
+    original_items=test.items(actor);failures=[]
+    base={'schemaVersion':1,'maidId':actor,'scope':{'realm':'synthetic','account':'npc:'+actor,'agent':actor},
+          'source':'agent-mc-goals/v1','semantics':'intentions_not_current_world_evidence','goals':[],'observedAt':int(time.time()*1000)}
+    try:
+        for reason,fields in [('resident_goal_context_unavailable',{'status':'unavailable'}),
+                              ('resident_goal_projection_stale',{'status':'available','observedAt':int(time.time()*1000)-400_000})]:
+            path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps({**base,**fields}),encoding='utf8')
+            count=len(Fixture.calls);result=test.resident('resident '+actor+' plan')
+            test.check(reason+'_has_terminal_receipt',result.get('status')=='failed' and result.get('reason')==reason and result.get('actionDispatched') is False and result.get('completed') is False)
+            saved=test.resident('resident '+actor+' receipt '+result['requestId'])
+            test.check(reason+'_keeps_original_request',saved['requestId']==result['requestId'] and saved['reason']==reason)
+            current=test.resident('resident '+actor+' status')
+            test.check(reason+'_visible_without_model_or_inventory_changes',current['lastReceipt']['requestId']==result['requestId'] and len(Fixture.calls)==count and test.items(actor)==original_items)
+            test.check(reason+'_does_not_charge_model_failure_backoff',current['planning']['consecutiveFailures']==0)
+            failures.append(result)
+        path.write_text(json.dumps({**base,'status':'available','observedAt':int(time.time()*1000)}),encoding='utf8')
+        Fixture.mode='healthy';good=plan(test,actor)
+        test.check('fresh_goal_projection_reaches_model_and_ordinary_executor',good['status']=='completed' and Fixture.calls[-1]['coreGoalContextPresent'])
+        for previous in failures:
+            saved=test.resident('resident '+actor+' receipt '+previous['requestId'])
+            test.check('goal_error_retained_after_recovery',saved['reason']==previous['reason'] and saved['actionDispatched'] is False)
+        test.evidence.update(actor=actor,failures=failures,passed=True,realModel=False);test.save()
+    finally:
+        if before is None:path.unlink(missing_ok=True)
+        else:path.write_bytes(before)

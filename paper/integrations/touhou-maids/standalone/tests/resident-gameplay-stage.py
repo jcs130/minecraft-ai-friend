@@ -83,6 +83,11 @@ class Exercise:
         self.evidence.update(actor=actor, peer=peer)
         row = self.service(actor, 'status')
         self.check('status_is_actual_native_body', row['status'] == 'completed' and row['serviceReceipt']['maidId'] == actor and row['serviceReceipt']['usesPlayerSlot'] is False)
+        before = row['serviceReceipt']['position']
+        entrance = self.service(actor, 'arena entrance')
+        after = self.service(actor, 'status')['serviceReceipt']['position']
+        self.check('entrance_is_read_only_not_arrival', entrance['status'] == 'completed' and entrance['queryOnly'] is True and entrance['operationEffect'] == 'read_only' and entrance['completionScope'] == 'query_snapshot_not_world_action' and before == after)
+        self.check('entrance_receipt_has_safe_followup', entrance['nextSafeRead'] == 'arena status' and 'does not move' in entrance['operationNotice'])
         row = self.service(actor, 'land here')
         self.check('native_land_query_available', row['status'] == 'completed' and bool(row['serviceReceipts']))
         row = self.service(actor, 'land trust no_such_land ' + peer)

@@ -1,14 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp, mkdir, writeFile, readFile, rm} from 'node:fs/promises';
+import {mkdtemp, mkdir, writeFile, readFile, readdir, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {runOnce} from '../companion-memory.mjs';
+import {GoalCheckpointBook} from '../../../../../packages/agent-mc-world/core/goal-checkpoint.ts';
+import {parseGoalPlan} from '../../../../../packages/agent-mc-world/core/goal-plan.ts';
 
 const npc='10000000-0000-0000-0000-000000000011',other='10000000-0000-0000-0000-000000000012';
 const a='20000000-0000-0000-0000-000000000021',b='20000000-0000-0000-0000-000000000022';
 const coreRoot=fileURLToPath(new URL('../../../../../packages/agent-mc-world',import.meta.url));
+const goalScope=(cfg,maid=npc)=>({realm:cfg.realm,account:`npc:${maid}`,agent:maid});
+function intendedGoal(text='交付鲜花，再回收多余铁剑并购买食物'){
+  const plan=parseGoalPlan([{do:'完成鲜花委托',judgment:'本人的真实交付回执'},
+    {do:'取得食物',verify:{source:'inventory',item:'bread',count:'>=1'}}]);
+  assert.ok(!plan.error);
+  return {slot:1,revision:1,text,plan,blueprint:null,day:null,realTime:new Date(1000).toISOString(),at:1000};
+}
 
 async function fixture(t) {
   const root=await mkdtemp(join(tmpdir(),'companion-memory-'));
@@ -101,4 +110,64 @@ test('large service results and private notices preserve scoped originals withou
   assert.equal(large.sourceRequestId,original.sourceRequestId);assert.match(large.payloadSha256,/^[0-9a-f]{64}$/);
   assert.equal(own.items.find(x=>x.evidence.id===notice).evidence.reply,'本人的试炼奖励已入箱');
   assert.equal((await runOnce(cfg))[0].imported,0);
+});
+
+test('core goals survive harness restarts as scoped intentions, never stale physical proof',async t=>{
+  const {root,cfg}=await fixture(t);cfg.goalsDirectory=join(root,'goals');
+  const book=new GoalCheckpointBook(cfg.goalsDirectory),goal=intendedGoal();
+  goal.plan.steps[1].state='verified';goal.plan.steps[1].evidence={observedAt:42,connectionGeneration:1,realm:'old',dimension:'old',verdict:'ok',results:[]};
+  book.save(goalScope(cfg),[goal]);
+  book.save(goalScope({...cfg,realm:'another-realm'}),[intendedGoal('另一个世界的秘密目标')]);
+  await runOnce(cfg);
+  const own=JSON.parse(await readFile(join(cfg.journalRoot,npc,'core-goals.json'),'utf8'));
+  assert.equal(own.status,'available');assert.equal(own.semantics,'intentions_not_current_world_evidence');
+  assert.equal(own.goals[0].text,goal.text);assert.equal(own.goals[0].plan.steps[1].state,'pending');
+  assert.equal(own.goals[0].plan.steps[1].evidence,null);assert.doesNotMatch(JSON.stringify(own),/秘密目标/);
+  const peer=JSON.parse(await readFile(join(cfg.journalRoot,other,'core-goals.json'),'utf8'));
+  assert.deepEqual(peer.goals,[]);
+  new GoalCheckpointBook(cfg.goalsDirectory).save(goalScope(cfg),[]);
+  await runOnce(cfg);
+  assert.deepEqual(JSON.parse(await readFile(join(cfg.journalRoot,npc,'core-goals.json'),'utf8')).goals,[]);
+});
+
+test('invalid or excessive core goals are visible as unavailable, with original checkpoints retained',async t=>{
+  const {root,cfg}=await fixture(t);cfg.goalsDirectory=join(root,'goals');
+  new GoalCheckpointBook(cfg.goalsDirectory).save(goalScope(cfg),[intendedGoal('目'.repeat(9000))]);
+  await runOnce(cfg);
+  let own=JSON.parse(await readFile(join(cfg.journalRoot,npc,'core-goals.json'),'utf8'));
+  assert.equal(own.status,'unavailable');assert.equal(own.reason,'goal_context_budget');assert.deepEqual(own.goals,[]);
+  const file=join(cfg.goalsDirectory,(await readdir(cfg.goalsDirectory))[0]);
+  await writeFile(file,'corrupt-checkpoint');await runOnce(cfg);
+  own=JSON.parse(await readFile(join(cfg.journalRoot,npc,'core-goals.json'),'utf8'));
+  assert.equal(own.reason,'core_goal_checkpoint_unavailable');assert.equal(await readFile(file,'utf8'),'corrupt-checkpoint');
+  assert.equal(JSON.parse(await readFile(join(cfg.journalRoot,other,'core-goals.json'),'utf8')).status,'available');
+  delete cfg.goalsDirectory;await runOnce(cfg);
+  assert.equal(JSON.parse(await readFile(join(cfg.journalRoot,npc,'core-goals.json'),'utf8')).status,'not_configured');
+});
+
+test('goal projection configuration rejects a relative authority path',async t=>{
+  const {cfg}=await fixture(t);
+  await assert.rejects(runOnce({...cfg,goalsDirectory:'relative-goals'}),/absolute_core_goals_directory_required/);
+});
+
+test('legacy private self-notices recover only the immutable filename ID and import without rewriting or duplication',async t=>{
+  const {cfg}=await fixture(t);const dir=join(cfg.journalRoot,npc);await mkdir(dir,{recursive:true});
+  const id='30000000-0000-0000-0000-000000000061',name=id+'-result.json';
+  const raw=JSON.stringify({maidId:npc,speakerId:npc,channel:'private',kind:'game_notice',reply:'购买成功，奖励在个人箱待领取',sentAt:'2026-11-17T00:00:00Z'});
+  await writeFile(join(dir,name),raw);assert.equal((await runOnce(cfg))[0].imported,1);
+  assert.equal(await readFile(join(dir,name),'utf8'),raw);
+  const own=JSON.parse(await readFile(join(dir,`recall-${npc}.json`),'utf8'));
+  assert.equal(own.items[0].evidence.id,id);assert.equal(own.items[0].evidence.legacyEnvelopeRecovered,true);
+  assert.equal(own.items[0].evidence.sourceJournal,name);assert.equal((await runOnce(cfg))[0].imported,0);
+});
+
+test('legacy compatibility never repairs another speaker, malformed notice or a conflicting record ID',async t=>{
+  const {cfg}=await fixture(t);const dir=join(cfg.journalRoot,npc);await mkdir(dir,{recursive:true});
+  const id='30000000-0000-0000-0000-000000000061',file=join(dir,id+'-result.json');
+  const base={maidId:npc,speakerId:npc,channel:'private',kind:'game_notice',reply:'notice',sentAt:'2026-11-17T00:00:00Z'};
+  for(const invalid of [{...base,speakerId:a},{...base,sentAt:'invalid'},{...base,kind:'resident_action'},
+    {...base,id:'30000000-0000-0000-0000-000000000062'}]){
+    const raw=JSON.stringify(invalid);await writeFile(file,raw);
+    await assert.rejects(runOnce(cfg),/conversation_identity_mismatch/);assert.equal(await readFile(file,'utf8'),raw);
+  }
 });

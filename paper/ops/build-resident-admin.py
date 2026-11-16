@@ -17,7 +17,7 @@ def main():
         argfile=work/'compiler.args';argfile.write_text('\n'.join('"'+a.replace('\\','/')+'"'for a in arguments),encoding='utf-8')
         subprocess.run([str(args.javac),'-J-Duser.language=en','@'+str(argfile)],check=True)
         with zipfile.ZipFile(args.base)as archive:entries={n:archive.read(n)for n in archive.namelist()if not n.endswith('/')}
-        descriptor,count=re.subn(r'(?m)^version:.*$',"version: '0.4.47.85-npc-gameplay'",entries['plugin.yml'].decode('utf-8'))
+        descriptor,count=re.subn(r'(?m)^version:.*$',"version: '0.4.47.86-npc-gameplay'",entries['plugin.yml'].decode('utf-8'))
         if count!=1:raise ValueError('plugin version declaration missing')
         entries['plugin.yml']=descriptor.encode('utf-8')
         for file in classes.rglob('*.class'):entries[file.relative_to(classes).as_posix()]=file.read_bytes()

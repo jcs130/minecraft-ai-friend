@@ -40,7 +40,10 @@ def model_relay(token, upstream_key, alias, calls, *, thinking=False, output_tok
                 "Qwen Code must make a single plan without host tools"
             )
             index = [i for i, name in enumerate(ROLES) if name in json.dumps(payload["messages"], ensure_ascii=False)]
-            entry = {"role": ROLES[index[0]] if len(index) == 1 else None,"thinking":thinking,"outputTokenLimit":output_tokens}
+            message_text=json.dumps(payload["messages"],ensure_ascii=False)
+            entry = {"role": ROLES[index[0]] if len(index) == 1 else None,"thinking":thinking,"outputTokenLimit":output_tokens,
+                "coreGoalContextPresent":'agent-mc-goals/v1' in message_text and 'intentions_not_current_world_evidence' in message_text,
+                "messageBytes":len(message_text.encode('utf8'))}
             calls.append(entry)
             payload["model"] = alias
             # Dedicated NPC test route. Shared LiteLLM presets are untouched.

@@ -22,7 +22,7 @@ async function atomic(path, data) {
 
 function compactEvidence(row) {
   const result=Object.fromEntries(['id','at','speakerId','message','reply','decision','status','reason','channel','kind','sourceRequestId',
-    'payloadTruncated','sourceJournal','payloadSha256','originalBytes','instruction']
+    'payloadTruncated','sourceJournal','payloadSha256','originalBytes','instruction','legacyEnvelopeRecovered']
     .filter(key=>Object.hasOwn(row,key)).map(key=>[key,row[key]]));
   if(row.receipt) result.receipt=Object.fromEntries(['action','status','reason','completed']
     .filter(key=>Object.hasOwn(row.receipt,key)).map(key=>[key,row.receipt[key]]));
@@ -33,6 +33,7 @@ export async function runOnce(config) {
   if (config.schema !== 1 || !isAbsolute(config.coreRoot) || !isAbsolute(config.journalRoot) ||
       !isAbsolute(config.dataDir) || typeof config.realm !== 'string' || !config.realm.trim() ||
       !Array.isArray(config.npcs) || config.npcs.length > 64) throw Error('invalid_memory_configuration');
+  if (config.goalsDirectory !== undefined && (typeof config.goalsDirectory!=='string'||!isAbsolute(config.goalsDirectory))) throw Error('absolute_core_goals_directory_required');
   if (new Set(config.npcs.map(n=>n.maidId)).size !== config.npcs.length ||
       new Set(config.npcs.filter(n=>n.memory?.mode==='remote').map(n=>`${n.memory.endpoint}:${n.memory.scopeId}`)).size !==
       config.npcs.filter(n=>n.memory?.mode==='remote').length) throw Error('duplicate_npc_or_shared_memory_scope');
@@ -48,6 +49,7 @@ async function synchronize(config) {
   const prefix = config.source === true ? 'core' : 'dist/runtime/core';
   const {GameMemoryBook} = await import(pathToFileURL(join(core, prefix, `game-memory.${extension}`)).href);
   const {GameMemoryService} = await import(pathToFileURL(join(core, prefix, `game-memory-service.${extension}`)).href);
+  const {GoalCheckpointBook} = await import(pathToFileURL(join(core, prefix, `goal-checkpoint.${extension}`)).href);
   const summary = [];
   for (const npc of config.npcs) {
     if (!UUID.test(npc.maidId) || (npc.memory?.mode === 'remote' &&
@@ -57,6 +59,21 @@ async function synchronize(config) {
     await mkdir(directory, {recursive:true});
     const service = new GameMemoryService(new GameMemoryBook(directory), directory);
     const context = {scope:{realm:config.realm,account:`npc:${npc.maidId}`,agent:npc.maidId},dimension:null};
+    // Project the existing core goal book, never introduce a second goal authority.
+    // These are durable intentions; restored plans are NOT fresh world verification.
+    await mkdir(root,{recursive:true});
+    let goals={schemaVersion:1,maidId:npc.maidId,scope:context.scope,observedAt:Date.now(),
+      source:'agent-mc-goals/v1',semantics:'intentions_not_current_world_evidence',status:'not_configured',goals:[]};
+    if(config.goalsDirectory!==undefined){
+      try {
+        goals.goals=new GoalCheckpointBook(config.goalsDirectory).load(context.scope);
+        goals.status='available';
+        if(Buffer.byteLength(JSON.stringify(goals))>24576)throw Error('goal_context_budget');
+      }catch(error){
+        goals={...goals,status:'unavailable',goals:[],reason:error.message==='goal_context_budget'?'goal_context_budget':'core_goal_checkpoint_unavailable'};
+      }
+    }
+    await atomic(join(root,'core-goals.json'),goals);
     let files;
     try { files = await readdir(root); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
     const donePath = join(directory, 'companion-import.json');
@@ -65,12 +82,20 @@ async function synchronize(config) {
     let count = 0;
     for (const name of files.filter(f => /^[0-9a-f-]{36}-result\.json$/.test(f)).sort()) {
       if (imported[name] || count >= 20) continue;
-      const record = await json(join(root, name), 262144);
-      if (record.maidId !== npc.maidId || !UUID.test(record.speakerId) || !UUID.test(record.id))
+      const stored = await json(join(root, name), 262144), original = JSON.stringify(stored);
+      let record=stored;
+      const fileId=name.slice(0,-'-result.json'.length);
+      // Earlier resident candidates wrote private self-notices without the envelope ID. Their
+      // canonical UUID is already in the immutable filename. No other missing
+      // identity is guessed, and the original file is never rewritten.
+      if(!Object.hasOwn(stored,'id')&&stored.kind==='game_notice'&&stored.channel==='private'
+          &&stored.maidId===npc.maidId&&stored.speakerId===npc.maidId&&UUID.test(fileId)
+          &&typeof stored.sentAt==='string'&&Number.isFinite(Date.parse(stored.sentAt)))
+        record={...stored,schemaVersion:1,id:fileId,at:Date.parse(stored.sentAt),status:'recorded',sourceJournal:name,legacyEnvelopeRecovered:true};
+      if (record.maidId !== npc.maidId || !UUID.test(record.speakerId) || !UUID.test(record.id) || record.id!==fileId)
         throw Error('conversation_identity_mismatch');
-      const original = JSON.stringify(record);
       const digest = createHash('sha256').update(original).digest('hex');
-      let content=original;
+      let content=JSON.stringify(record);
       if(Buffer.byteLength(content)>6000) {
         // Preserve the full durable journal; a large CLI catalogue must not stop all later memories.
         const preview={schemaVersion:1,id:record.id,maidId:record.maidId,speakerId:record.speakerId,

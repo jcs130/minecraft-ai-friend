@@ -6,7 +6,6 @@ import java.util.*;
 /** Compact facts from execution receipts, not a model's claim that its goal was achieved. */
 final class ResidentActionMemory {
     private static final Gson JSON=new Gson();
-    private static final Set<String> READS=Set.of("status","info","list","board","wallet","summary","inventory","read","album","members","here");
     static Map<String,Object> summarize(Map<String,Object> receipt) {
         JsonObject source=JSON.toJsonTree(receipt).getAsJsonObject(),out=new JsonObject();
         copy(source,out,"requestId","action","status","reason","completed","observedAt","consumed","remaining","manaSpent","before","after");
@@ -27,7 +26,7 @@ final class ResidentActionMemory {
         copy(service,evidence,"action","success","reason","errorCode","goalCompleted","actorId","requestId",
             "quoteId","expiresAt","expiresInMs","balance","price","totalPrice","quantity","pending","queued",
             "moved","remaining","queuedRemaining","fame","fameBefore","nextSafeRead","offerId","spent","pendingCount",
-            "destination","transferredToInventory","queueCompleted","deliveryStatus","paymentPending","nextAction");
+            "destination","transferredToInventory","queueCompleted","deliveryStatus","paymentPending","nextAction","id","baseId","name");
         for(String key:List.of("before","after"))if(service.has(key)&&service.get(key).isJsonObject()){
             JsonObject state=new JsonObject();copy(service.getAsJsonObject(key),state,"joined","completed","activeId","title","status","progress","target");
             if(!state.isEmpty())evidence.add(key,state);
@@ -37,10 +36,13 @@ final class ResidentActionMemory {
             if(!item.isEmpty())evidence.add("item",item);
         }
         if(!evidence.isEmpty())out.add("service",evidence);
-        String[] parts=command.split(" +");
-        boolean query=command.equals("status")||parts.length>1&&READS.contains(parts[1])
-            ||parts.length>2&&(READS.contains(parts[2])||parts[1].equals("recycle")&&parts[2].equals("quote"));
-        out.addProperty("queryOnly",query);
+        if(!command.isEmpty()){
+            var contract=JSON.toJsonTree(ResidentCliContract.describe(command)).getAsJsonObject();
+            for(String key:List.of("operation","operationEffect","completionScope","queryOnly","operationNotice","nextSafeRead"))
+                if(contract.has(key))out.add(key,contract.get(key));
+        }else out.addProperty("queryOnly",false);
+        // New receipts carry the executor's contract. Older receipts use the same public definition.
+        copy(source,out,"operation","operationEffect","completionScope","queryOnly","operationNotice","nextSafeRead");
         // Original immutable receipt remains available by requestId, including omitted components.
         @SuppressWarnings("unchecked") Map<String,Object> row=JSON.fromJson(out,Map.class);return row;
     }

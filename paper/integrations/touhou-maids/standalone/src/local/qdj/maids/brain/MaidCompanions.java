@@ -484,7 +484,7 @@ final class MaidCompanions {
     String persona(UUID id){var offer=offers.get(id);return offer==null?"Minecraft居民":offer.persona();}
     Map<String,Object> residentContext(UUID id)throws IOException{
         var offer=offers.get(id);if(offer==null)return Map.of();
-        return Map.of("persona",agents.agent(id).persona(offer.persona()),"likes",offer.likes(),"dislikes",offer.dislikes(),"ownRecentActions",journal.actionRecall(id));
+        return Map.of("persona",agents.agent(id).persona(offer.persona()),"likes",offer.likes(),"dislikes",offer.dislikes(),"ownRecentActions",journal.actionRecall(id),"currentGoals",journal.currentGoals(id));
     }
     void rememberAction(UUID id,UUID request,Map<String,Object> receipt)throws IOException{
         journal.action(id,request,ResidentActionMemory.summarize(receipt));

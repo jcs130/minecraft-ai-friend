@@ -190,6 +190,9 @@ public final class ResidentCli {
         if(command.contains("--request-id"))throw new IllegalArgumentException("request_id_is_supplied_by_body_executor");
         var player=find(id);if(player==null)throw new IllegalArgumentException("resident_body_unavailable");
         var row=new JsonObject();row.addProperty("maidId",id.toString());row.addProperty("requestId",request.toString());row.addProperty("status","accepted");row.addProperty("completed",false);row.addProperty("reason","waiting_service_receipt");row.addProperty("command",command);row.add("messages",new JsonArray());row.addProperty("responseComplete",true);
+        var contract=JsonParser.parseString((String)nativeCall("cliContract",new Class[]{String.class},command)).getAsJsonObject();
+        if(!contract.has("operationEffect")||contract.get("operationEffect").getAsString().equals("unknown"))throw new IllegalArgumentException("cli_effect_contract_unavailable_no_dispatch");
+        for(var field:contract.entrySet())row.add(field.getKey(),field.getValue());
         if(results.size()>=256){var iterator=results.entrySet().iterator();while(results.size()>=256&&iterator.hasNext()){var old=iterator.next();if(!Set.of("accepted","unknown").contains(old.getValue().get("status").getAsString())){commands.remove(old.getKey());iterator.remove();}}}
         results.put(key(id,request),row);requests.put(id,request);commands.put(key(id,request),command);persist(id,request,row);
         if(row.get("status").getAsString().equals("unknown"))return row.toString();

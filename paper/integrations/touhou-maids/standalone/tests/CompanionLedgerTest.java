@@ -103,6 +103,31 @@ public final class CompanionLedgerTest {
         var quoted=ResidentActionMemory.summarize(java.util.Map.of("action","cli","command","arena recycle quote bag 1 1","status","completed","completed",true,
             "serviceReceipt",java.util.Map.of("quoteId","actual-quote","expiresAt",1000,"price",4,"item",java.util.Map.of("baseId","minecraft:iron_sword","count",1))));
         check(Boolean.TRUE.equals(quoted.get("queryOnly"))&&json.toJson(quoted).contains("actual-quote")&&json.toJson(quoted).contains("minecraft:iron_sword"));
+        var entrance=ResidentActionMemory.summarize(java.util.Map.of("action","cli","input",java.util.Map.of("command","arena entrance"),"status","completed","completed",true));
+        check(Boolean.TRUE.equals(entrance.get("queryOnly"))&&"read_only".equals(entrance.get("operationEffect")));
+        check("query_snapshot_not_world_action".equals(entrance.get("completionScope"))&&entrance.containsKey("operationNotice"));
+        for(int i=0;i<10;i++){Thread.sleep(2);journal.action(npc,UUID.randomUUID(),entrance);}
+        check(journal.actionRecall(npc).stream().anyMatch(row->delivered.toString().equals(row.get("sourceRequestId"))));
+        check(Boolean.FALSE.equals(ResidentCliContract.describe("arena start").get("queryOnly")));
+        check(Boolean.FALSE.equals(ResidentCliContract.describe("guild verify").get("queryOnly")));
+        check(Boolean.TRUE.equals(ResidentCliContract.describe("arena recycle quote chest 2 1").get("queryOnly")));
+        check(Boolean.TRUE.equals(ResidentCliContract.describe("archive mine").get("queryOnly")));
+        check("unknown".equals(ResidentCliContract.describe("arena starter").get("operationEffect")));
+        check("unknown".equals(ResidentCliContract.describe("say status").get("operationEffect")));
+        check(ResidentCliContract.available().stream().noneMatch(s->s.startsWith("photo cancel")||s.startsWith("archive mine")));
+        check(!ResidentCliContract.readOnly().contains("arena recycle status"));
+        check(ResidentCliContract.OPERATIONS.stream().map(ResidentCliContract.Operation::key).distinct().count()==ResidentCliContract.OPERATIONS.size());
+        for(var operation:ResidentCliContract.OPERATIONS){
+            var effect=ResidentCliContract.describe(operation.syntax());
+            check(effect.get("queryOnly").equals(operation.queryOnly())&&effect.get("operationEffect").equals(operation.effect()));
+        }
+        UUID notice=UUID.randomUUID();
+        journal.append(npc,notice,"result",java.util.Map.of("maidId",npc.toString(),"speakerId",npc.toString(),"kind","game_notice","channel","private","reply","购买成功，奖励在个人箱待领取","sentAt",java.time.Instant.now().toString()));
+        var storedNotice=com.google.gson.JsonParser.parseString(Files.readString(dir.resolve("journal").resolve(npc.toString()).resolve(notice+"-result.json"))).getAsJsonObject();
+        check(storedNotice.get("id").getAsString().equals(notice.toString())&&storedNotice.get("schemaVersion").getAsInt()==1&&storedNotice.has("at"));
+        try{journal.append(npc,UUID.randomUUID(),"result",java.util.Map.of("maidId",other.toString(),"speakerId",npc.toString()));throw new AssertionError("cross NPC journal write");}catch(java.io.IOException expected){check(expected.getMessage().equals("conversation_identity_mismatch"));}
+        try{journal.append(npc,UUID.randomUUID(),"result",java.util.Map.of("id",notice.toString(),"speakerId",npc.toString()));throw new AssertionError("wrong record UUID");}catch(java.io.IOException expected){check(expected.getMessage().equals("conversation_identity_mismatch"));}
+        try{journal.append(npc,UUID.randomUUID(),"result",java.util.Map.of("reply","missing speaker"));throw new AssertionError("guessed speaker");}catch(java.io.IOException expected){check(expected.getMessage().equals("conversation_speaker_required"));}
         System.out.println("Companion ledger checks passed: " + checks);
     }
 }

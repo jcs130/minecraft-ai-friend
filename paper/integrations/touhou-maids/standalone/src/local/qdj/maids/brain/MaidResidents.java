@@ -340,7 +340,11 @@ final class MaidResidents {
         var site=maid.getAiChatManager().getLLMSite();if(site==null)return planFailure(id,UUID.randomUUID(),"failed","model_site_unavailable",true,null);
         UUID turn=UUID.randomUUID();thinking.put(id,new Thinking(turn,now+60_000,agents.agent(id).revision()));nextPlan.put(id,now+config.planningSeconds()*1000L);
         var observation=new LinkedHashMap<>(observe(id));observation.remove("home");observation.put("homeDoor",r.home().door());observation.put("homeDimension",r.home().dimension());observation.put("workPoint",r.home().work());
-        if(agents.companions()!=null)try{observation.put("character",agents.companions().residentContext(id));}catch(Exception error){thinking.remove(id);return Map.of("status","unavailable","reason","resident_memory_unavailable");}
+        if(agents.companions()!=null)try{observation.put("character",agents.companions().residentContext(id));}catch(Exception error){
+            thinking.remove(id);String detail=String.valueOf(error.getMessage());
+            String reason=java.util.Set.of("resident_goal_projection_stale","resident_goal_context_unavailable","resident_goal_scope_or_schema_mismatch","resident_goal_context_invalid","resident_goal_observation_invalid").contains(detail)?detail:"resident_memory_unavailable";
+            return planFailure(id,turn,"failed",reason,false,null);
+        }
         observation.put("cli",ResidentServices.catalogue());
         observation.put("availableTasks",MaidAgent.tasks(maid));observation.put("nearbyBlocks",survey(maid,r));
         observation.put("nearbyEntities",((ServerLevel)maid.level()).getEntitiesOfClass(LivingEntity.class,maid.getBoundingBox().inflate(12),
@@ -349,6 +353,8 @@ final class MaidResidents {
             .map(e->Map.of("id",e.getStringUUID(),"type",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).toString(),
                 "name",e.getName().getString(),"at",ResidentActions.point(e.blockPosition()),"hostile",e instanceof net.minecraft.world.entity.monster.Enemy)).toList());
         String prompt="你是有自己住处和职业的Minecraft居民。维护自己的生活、装备和同伴关系，尊重他人领地。"+
+            "character.currentGoals是MC核心保存的目标意图；有目标时结合实际回执继续未完成部分，安全恢复优先，不随意改接别的目标。"+
+            "目标中的计划、历史进度和host judgment都不是本次现场已完成的证明；以原动作回执和当前实际状态核对。"+
             "选择一个有意义且现场可行的动作，也可以rest恢复原生作息。原生工作AI会持续工作，不需要反复下同一指令。"+
             "只输出JSON，不调用工具。action可为rest/home、walk(at:{x,y,z}绝对整数坐标)、task(task:完整ID)、"+
             "equip(equipmentSlot:mainhand/offhand/head/chest/legs/feet,slot:背包编号,expectedItem:实际ID)、"+

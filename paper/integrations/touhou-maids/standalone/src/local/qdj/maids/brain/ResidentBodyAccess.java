@@ -72,6 +72,7 @@ public final class ResidentBodyAccess {
         body(id);MaidAgentsMod.residents().notice(id,text);
     }
     public static String rpg(UUID id){var b=body(id);return new com.google.gson.Gson().toJson(ResidentRpg.observe(b,MaidAgentsMod.residents().role(id).profession()));}
+    public static String cliContract(String command){return new com.google.gson.Gson().toJson(ResidentCliContract.describe(command));}
     public static String status(UUID id){
         body(id);var row=new java.util.LinkedHashMap<>(MaidAgentsMod.residents().observe(id));
         // A status action becomes the next receipt: never recursively embed previous full status results.
