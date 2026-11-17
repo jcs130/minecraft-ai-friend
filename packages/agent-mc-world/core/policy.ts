@@ -57,6 +57,8 @@ export interface PolicySettings {
   fight: FightMode;
   /** 可选跨空方式；碰撞、火源接触和落脚检查仍然生效。 */
   jump: JumpMode;
+  /** Health-aware fall planning; safe disallows estimated fall damage. */
+  fall: import('./navigation-fall.ts').FallMode;
   /** 仅控制受击自动还手；不关闭低血撤离、低氧及实际火源接触自救。 */
   retaliate: RetaliateMode;
 }
@@ -72,7 +74,7 @@ export interface PolicyDefaults {
 
 export function defaultPolicy(): PolicySettings {
   return { scaffold: null, light: null, lightWhen: 'dig', travel: 'auto', reserve: [], fight: DEFAULT_FIGHT,
-    jump: 'gap', retaliate: 'default' };
+    jump: 'gap', fall: 'survivable', retaliate: 'default' };
 }
 
 /** 没接 World 时(测试台架)的兜底名单;真 World 一律从 `cfg.scaffoldBlocks` 来 */
@@ -135,7 +137,7 @@ function listField(
 }
 
 function enumField<T extends string>(
-  key: 'lightWhen' | 'travel' | 'fight' | 'jump' | 'retaliate',
+  key: 'lightWhen' | 'travel' | 'fight' | 'jump' | 'fall' | 'retaliate',
   values: readonly T[],
   description: string,
   doc: string,
@@ -197,6 +199,9 @@ const POLICY_FIELDS: readonly PolicyField[] = [
   enumField('retaliate', ['default', 'on', 'off'] as const,
     '受击自动还手：default 沿宿主配置，on 开启，off 关闭。低血撤离和环境自救仍启用；不取消已经开始的显式攻击任务',
     'retaliate "default" | "on" | "off" 受击还手，独立于 fight。关闭不会关闭低血撤离或环境自救。'),
+  enumField('fall', ['survivable', 'safe'] as const,
+    '下落路线：survivable 按当前生命减去 2 点余量评估累计摔伤并加入路径代价；safe 不规划预期摔伤。落点需已加载、支撑和净空可用。原版未减伤估计，服务端伤害规则仍以实际为准',
+    'fall      "survivable" | "safe" 默认 survivable：小幅损伤可换取较短路线，低血或生命未知会收紧；不是固定 2 格落差限制。safe 只规划预期不摔伤的下落。'),
 ];
 
 /** mc_policy 的参数 schema。各项全可选:空调用 = 只回读 */
@@ -370,6 +375,7 @@ export function renderPolicy(
     s.reserve.length === 0 ? '没有收着不用的家伙什' : `${namesText(s.reserve)}收着不主动拿`,
     FIGHT_ZH[s.fight],
     JUMP_ZH[s.jump],
+    s.fall === 'safe' ? '下落只选预期不摔伤的路线' : '下落按当前生命与累计摔伤权衡路线，保留 2 点生命余量',
     RETALIATE_ZH[s.retaliate],
   ];
   if (combatOff) parts.push('战斗总开关在控制台关着,主动动手这一格现在不起作用');
@@ -403,6 +409,7 @@ export function renderPolicyEnv(
   if (s.reserve.length > 0) parts.push(`${namesText(s.reserve)}收着不主动拿`);
   if (s.fight !== DEFAULT_FIGHT) parts.push(FIGHT_ZH[s.fight]);
   if (s.jump !== 'gap') parts.push(JUMP_ZH[s.jump]);
+  if (s.fall === 'safe') parts.push('下落只选预期不摔伤的路线');
   if (s.retaliate !== 'default') parts.push(RETALIATE_ZH[s.retaliate]);
   // 蓝图预留是当下现场状况,不是「与默认不同的规矩」:单独一句,各项全默认时也照说
   // (`PolicyBook` 拿这个函数判「有没有非默认项」,所以它不许把这一句算进去 —— 那一路

@@ -263,7 +263,8 @@ export function renderRouteMenu(
   const lines = probes.map((p) => {
     const c = p.capabilities;
     const jumpText = c?.jumpMode === 'gap' ? '跑酷仅同高一格跨空' : `跑酷${c?.allowParkour ? '开启' : '关闭'}`;
-    const capabilityText = c ? `（规划落差≤${c.maxDropDown}格、${jumpText}、挖掘${c.canDig ? '开启' : '关闭'}、垫脚料${c.scaffoldCount}块）` : '';
+    const fallText = c?.fall ? `原版未减伤估计累计摔伤预算 ${c.fall.damageBudget} 点，生命${c.fall.health ?? '未知'}，保留${c.fall.reserveHealth}点` : '';
+    const capabilityText = c ? `（规划落差≤${c.maxDropDown}格${fallText ? '、' + fallText : ''}、${jumpText}、挖掘${c.canDig ? '开启' : '关闭'}、垫脚料${c.scaffoldCount}块）` : '';
     const label = `${PROBE_LABEL[p.profile]}${capabilityText}:`;
     switch (p.status) {
       case 'complete': {

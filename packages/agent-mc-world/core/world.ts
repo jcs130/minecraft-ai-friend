@@ -4543,6 +4543,7 @@ export class MinecraftWorld implements World {
       managedServer: () => this.managedLocalServer(),
       scaffoldBlocks: () => this.scaffoldBlocksForUse(),
       jumpMode: () => this.policy.get().jump,
+      fallMode: () => this.policy.get().fall,
       movementCosts: () => TRAVEL_COSTS[this.policy.get().travel],
       taskId: () => this.executor?.currentTask?.id ?? null,
       protectionFile: this.dataDir ? join(this.dataDir, 'minecraft-break-permissions.json') : null,

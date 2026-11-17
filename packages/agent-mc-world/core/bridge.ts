@@ -25,6 +25,7 @@ import pathfinderPkg, { pathfinder, Movements } from 'mineflayer-pathfinder';
 // goals 不是 cjs-module-lexer 能静态识别的命名导出,只能从默认导出上取
 const { goals } = pathfinderPkg;
 import { Vec3 } from 'vec3';
+import { installNavigationFallCosts, navigationFallBudget, setNavigationFallMode } from './navigation-fall.ts';
 import type { Logger } from './support/host-contract.ts';
 import type { RouteProbe, TargetDiag } from './executor.ts';
 import type { MinecraftLog } from './log.ts';
@@ -50,7 +51,6 @@ import { diagnoseTargetSpace, probeBlockInfo } from './terrain.ts';
 import { walkOnlyPath } from './travel.ts';
 import { installPartialBlockStartRepair } from './pathfinder-start.ts';
 import { installNavigationBoundaryGuard } from './navigation-boundary.ts';
-import { NAVIGATION_LIMITS } from './navigation-capabilities.ts';
 import { installLevelGapJumps } from './navigation-gap-jump.ts';
 
 import { watchFlightAbilities } from './flight.ts';
@@ -113,6 +113,7 @@ export interface BridgeOptions {
   /** 挖/垫代价系数(mc_policy 的 travel 档位);spawn 与设置热改时求值 */
   movementCosts?: () => { placeCost: number; digCost: number };
   jumpMode?: () => import('./policy.ts').JumpMode;
+  fallMode?: () => import('./navigation-fall.ts').FallMode;
   /** 当前执行器任务号，供异步物理刻异常与决策链关联。 */
   taskId?: () => number | null;
   /** 本服务端拒绝过的方块持久缓存；无目录时只保存在本次连接。 */
@@ -977,8 +978,8 @@ export class Bridge {
   protected applyTuning(bot: mineflayer.Bot, movements: Movements): void {
     const log = this.opts.log;
 
-    /** 寻路单次落差上限 2 格(原版 3 格内摔落不掉血)。 */
-    movements.maxDropDown = NAVIGATION_LIMITS.maxDropDown;
+    setNavigationFallMode(bot, this.opts.fallMode ?? (() => 'survivable'));
+    installNavigationFallCosts(bot, movements);
     // 原生高低差跑酷曾误跳门框；只恢复同高、完整支撑面之间的一格跨空。
     const jump = this.opts.jumpMode?.() ?? 'gap';
     movements.allowParkour = jump !== 'off';
@@ -1183,7 +1184,7 @@ export class Bridge {
       m.allow1by1towers = profile === 'style';
       this.applyTuning(bot, m);
       if (profile !== 'style') m.scafoldingBlocks = [];
-      const capabilities = { maxDropDown: m.maxDropDown, allowParkour: m.allowParkour, jumpMode: this.opts.jumpMode?.() ?? 'gap',
+      const capabilities = { maxDropDown: m.maxDropDown, fall: navigationFallBudget(bot), allowParkour: m.allowParkour, jumpMode: this.opts.jumpMode?.() ?? 'gap',
         canDig: m.canDig, scaffoldCount: m.countScaffoldingItems() };
       let result: ProbePath | null = null;
       try {

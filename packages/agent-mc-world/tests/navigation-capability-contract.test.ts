@@ -32,18 +32,20 @@ describe('configured navigation capability disclosure', () => {
     bridge.attach();
     const live = new Movements(bot);
     bridge.tune(live);
-    expect(live.maxDropDown).toBe(2);
+    expect(live.maxDropDown).toBe(3);
     expect(live.allowParkour).toBe(true);
     const probes = bridge.probeRoutes({ x: 10, y: 59, z: 0 })!;
     expect(probed).toHaveLength(3);
     for (const [index, probe] of probes.entries()) {
       expect(probed[index].maxDropDown).toBe(live.maxDropDown);
       expect(probed[index].allowParkour).toBe(live.allowParkour);
-      expect(probe).toHaveProperty('capabilities', { maxDropDown: 2, allowParkour: true, jumpMode: 'gap',
-        canDig: probe.profile !== 'walk', scaffoldCount: probe.profile === 'style' ? count : 0 });
+      expect(probe.capabilities).toMatchObject({ maxDropDown: 3, allowParkour: true, jumpMode: 'gap',
+        canDig: probe.profile !== 'walk', scaffoldCount: probe.profile === 'style' ? count : 0,
+        fall:{health:null,damageBudget:0} });
     }
     const text = renderRouteMenu(probes, { x: 10, y: 59, z: 0 });
-    expect(text).toContain('规划落差≤2格、跑酷仅同高一格跨空');
+    expect(text).toContain('规划落差≤3格');
+    expect(text).toContain('跑酷仅同高一格跨空');
     expect(text).toContain(`垫脚料${count}块`);
     expect(text).toContain('挖掘关闭');
     expect(text).toContain('仅表示在所列能力下未找到路线');
@@ -51,10 +53,11 @@ describe('configured navigation capability disclosure', () => {
     expect(text).not.toContain('没有任何路');
   });
 
-  it('explains the same fixed limits and evidence boundaries in public goto help', () => {
+  it('explains health-aware fall costs and evidence boundaries in public goto help', () => {
     const help = readSkillHelp({ skill: 'goto' });
     if (!('text' in help)) throw new Error('Missing goto help');
-    expect(help.text).toContain('规划落差最多 2 格');
+    expect(help.text).toContain('累计预期摔伤');
+    expect(help.text).toContain('mc_policy.fall=safe');
     expect(help.text).toContain('mc_policy.jump 默认 gap');
     expect(help.text).toContain('三种路线试算共享');
     expect(help.text).toContain('背包内可用垫脚料');

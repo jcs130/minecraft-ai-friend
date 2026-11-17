@@ -16,6 +16,7 @@ import { skillSwim } from './swim-route.ts';
 import { observeDamage, type DamageEvidence } from './damage-evidence.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
+import { clearNavigationDrop, hasApprovedNavigationDrop } from './navigation-fall.ts';
 import type { Logger } from './support/host-contract.ts';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import type { MinecraftLog } from './log.ts';
@@ -7736,6 +7737,10 @@ export class Reflexes {
       });
     }
     if (this.fall.handled || drop < FALL_TASK_STOP_BLOCKS) return;
+    if (hasApprovedNavigationDrop(bot, this.fall.fromY)) {
+      if (!falling) { this.fall = null; clearNavigationDrop(bot); }
+      return;
+    }
     // A lower destination does not establish water, a ladder or a safe landing.
     // This is already an observed deep fall; never exempt it using goal.y.
     this.fall.handled = true;
