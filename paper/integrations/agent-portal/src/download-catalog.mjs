@@ -58,7 +58,16 @@ const previousFclTouch = Object.freeze({id:'android-client-pack', filename:'qian
   bytes:52587, sha256:'0da4f0207be0a9ebdb5935da64493e0c14df5798697474087eab102412b70220'});
 const legacyDesktopPack = Object.freeze({id:'desktop-client-pack', filename:'qiandengji-java-1.21.1-neoforge-1.1.0.mrpack',
   bytes:8825, sha256:'1ba659e68a2f980fd9a2ac5151405af2ffc78b449d1ed0639e8cacc5eabd70d3'});
+const legacyPreCombatPacks = Object.freeze([
+  Object.freeze({id:'desktop-client-pack', filename:'qiandengji-java-1.21.1-neoforge-1.1.1.mrpack',
+    bytes:29442, sha256:'33042290ac2efac1a4ef10e7692f60c2c50e87fad48b708cf4ec1f737fb1a21a'}),
+  Object.freeze({id:'android-native-client-pack', filename:'qiandengji-android-1.21.1-neoforge-1.0.0-preview.5.mrpack',
+    bytes:110237, sha256:'777b596169f422969558d7e7f83f5a3dbc896690f1a1ebe915e21cdd2e7a8e0c'}),
+  Object.freeze({id:'android-client-pack', filename:'qiandengji-android-1.21.1-neoforge-1.0.0-preview.5-touch.mrpack',
+    bytes:74522, sha256:'8d8d8b143fe800eeb79f13073de5c24fc1f2e08ce5b48d1e1d3c78b05e4c8389'}),
+]);
 export const packageAt = pathname => packageReleases.find(row => pathname === '/downloads/' + row.filename || aliases[pathname]===row.id)
+  || legacyPreCombatPacks.find(row => pathname === '/downloads/' + row.filename)
   || (pathname === '/downloads/' + legacyDesktopPack.filename ? legacyDesktopPack : undefined)
   || (pathname === '/downloads/' + legacyFclNative.filename ? legacyFclNative : undefined)
   || (pathname === '/downloads/' + previousFclNative.filename ? previousFclNative : undefined)

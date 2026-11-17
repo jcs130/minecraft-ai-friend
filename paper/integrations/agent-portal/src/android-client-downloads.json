@@ -1,38 +1,38 @@
 [
   {
     "androidDeviceVerified": false,
-    "bytes": 110237,
+    "bytes": 114016,
     "category": "android-client",
     "channel": "website-bundle",
     "compatibilityNote": "兼容预览。手机上的摇杆、按键和语音仍待实机验证。",
-    "filename": "qiandengji-android-1.21.1-neoforge-1.0.0-preview.5.mrpack",
+    "filename": "qiandengji-android-1.21.1-neoforge-1.0.0-preview.6.mrpack",
     "framework": "minecraft",
     "id": "android-native-client-pack",
-    "includes": "含 Control Flex、女仆、YSM 和附近语音。默认手柄方案按住右侧面键说话。手持技能罗盘，潜行并按「使用／放置」，点轮盘里的技能图标施放。",
+    "includes": "含 Control Flex、女仆、YSM 和附近语音。默认手柄方案按住右侧面键说话。手持技能罗盘，潜行并按「使用／放置」，点轮盘里的技能图标施放。包含 Better Combat 2.4.0、playerAnimator 2.0.4 和 Cloth Config API 15.0.140。",
     "install": "FCL 导入为独立实例，运行时选 Java 21。连接手柄后在游戏侧栏启用「手柄控制」，输入模式选「SDL 直通」。",
     "license": "音频适配 MIT；其余模组由启动器从原作者下载",
     "name": "千灯纪手机版 · 原生手柄预览",
     "platform": "安卓 8+ / arm64 / FCL 1.3.4.6 / Minecraft 1.21.1 / Java 21",
-    "sha256": "777b596169f422969558d7e7f83f5a3dbc896690f1a1ebe915e21cdd2e7a8e0c",
+    "sha256": "e2ae327f1c219b4782119fdf4f3857a842adecb9714fc6161116bbe3be7db84b",
     "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/paper/integrations/android-client",
-    "version": "1.0.0-preview.5"
+    "version": "1.0.0-preview.6"
   },
   {
     "androidDeviceVerified": false,
-    "bytes": 74522,
+    "bytes": 78307,
     "category": "android-client",
     "channel": "website-bundle",
     "compatibilityNote": "附近语音兼容预览；完整手机听说仍待实机验证。",
-    "filename": "qiandengji-android-1.21.1-neoforge-1.0.0-preview.5-touch.mrpack",
+    "filename": "qiandengji-android-1.21.1-neoforge-1.0.0-preview.6-touch.mrpack",
     "framework": "minecraft",
     "id": "android-client-pack",
-    "includes": "主世界地址、女仆1.5.3、YSM2.6.5、SVC2.6.27、安卓音频适配和低负载画面设置。手持技能罗盘，潜行并按「使用／放置」，点轮盘里的技能图标施放。",
+    "includes": "主世界地址、女仆1.5.3、YSM2.6.5、SVC2.6.27、安卓音频适配和低负载画面设置。手持技能罗盘，潜行并按「使用／放置」，点轮盘里的技能图标施放。包含 Better Combat 2.4.0、playerAnimator 2.0.4 和 Cloth Config API 15.0.140。",
     "install": "FCL 导入此 .mrpack，选择 Java 21；首次允许麦克风并完成语音设置向导。",
     "license": "音频适配 MIT；女仆、YSM、SVC 保留原作者许可并从官方 CDN 下载",
     "name": "千灯纪手机版 · FCL 导入包",
     "platform": "安卓 8+ / arm64 / FCL / Minecraft 1.21.1 / Java 21",
-    "sha256": "8d8d8b143fe800eeb79f13073de5c24fc1f2e08ce5b48d1e1d3c78b05e4c8389",
+    "sha256": "7277e6cd67b198253f23ab6b59ea1efb551d38c1c4438018ea9753f2bd016e68",
     "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/paper/integrations/android-client",
-    "version": "1.0.0-preview.5-touch"
+    "version": "1.0.0-preview.6-touch"
   }
 ]
