@@ -15,8 +15,8 @@ generation fences writes even while the owner is offline. This transport does no
 from __future__ import annotations
 
 import asyncio
-import copy
 import contextlib
+import copy
 import json
 import math
 import re
