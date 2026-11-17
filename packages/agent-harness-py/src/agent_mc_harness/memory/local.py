@@ -34,6 +34,8 @@ class LocalMemory:
         if str(path) != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(str(path), check_same_thread=False)
+        self.db.execute("PRAGMA journal_mode=WAL")
+        self.db.execute("PRAGMA synchronous=FULL")
         self.db.execute("""CREATE TABLE IF NOT EXISTS episodes (group_id TEXT NOT NULL, id TEXT NOT NULL, kind TEXT, name TEXT, body TEXT,
                            reference_time TEXT, actors TEXT, PRIMARY KEY (group_id, id))""")
         columns = {row[1] for row in self.db.execute("PRAGMA table_info(episodes)")}
@@ -44,7 +46,10 @@ class LocalMemory:
     async def add(self, group_id: str, episode: MemoryEpisode, hints: list[str] | None = None) -> dict[str, Any]:
         check_group(group_id)
         async with self.lock:
-            self.db.execute("INSERT OR REPLACE INTO episodes (group_id, id, kind, name, body, reference_time, actors, provenance)"
+            previous = self.db.execute("SELECT kind,name,body FROM episodes WHERE group_id=? AND id=?", (group_id, episode.id)).fetchone()
+            if previous and previous != (episode.kind, episode.name, episode.body):
+                raise ValueError("memory_episode_id_conflict")
+            self.db.execute("INSERT OR IGNORE INTO episodes (group_id, id, kind, name, body, reference_time, actors, provenance)"
                             " VALUES (?,?,?,?,?,?,?,?)",
                             (group_id, episode.id, episode.kind, episode.name, episode.body,
                              episode.reference_time.astimezone(UTC).isoformat(), json.dumps(episode.actors, ensure_ascii=False),

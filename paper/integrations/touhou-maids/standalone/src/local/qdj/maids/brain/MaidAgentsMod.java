@@ -20,6 +20,7 @@ public final class MaidAgentsMod {
         return java.util.Map.copyOf(out);
     }
     static MaidResidents residents(){return running==null?null:running.residents();}
+    static MaidAgent runningAgent(java.util.UUID id){return running==null?null:running.agent(id);}
     /** Transient action ownership, never a persisted NoAI/sitting change. */
     public static boolean residentHoldsPosition(java.util.UUID id) {
         var current=running;return current!=null&&current.residents()!=null&&current.residents().holdsPosition(id);

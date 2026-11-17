@@ -280,7 +280,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
     }
 
     void tick(EntityMaid maid) {
-        if(plugin.nativeExclusive(maid.getUUID()))return;
+        if(plugin.nativeExclusive(maid.getUUID())&&!plugin.nativeGuard(maid.getUUID()))return;
         if (!plugin.sharedDialogueEnabled(maid)) return;
         if (guard.maid != maid) {
             guard = new Guard();
@@ -480,6 +480,9 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
     }
 
     private void requestDecision(Scene scene, Map<Mode, Candidate> choices, EntityMaid maid, Mob nearest, long now) {
+        // The unified host owns model decisions. The delegated body uses its
+        // bounded native fallback here, without starting the retired model loop.
+        if(plugin.nativeExclusive(maid.getUUID()))return;
         if (decision == null || choices.size() < 2 || guard.pending != null || scene.equals(guard.requested)
                 || now - guard.requestedAt < MIN_QUERY_INTERVAL) return;
         var state = new JsonObject();

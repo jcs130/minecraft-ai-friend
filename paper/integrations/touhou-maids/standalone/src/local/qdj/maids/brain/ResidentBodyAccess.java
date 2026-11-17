@@ -6,6 +6,32 @@ import net.minecraft.world.item.ItemStack;
 
 /** Narrow in-process bridge. Native inventory remains authoritative; never inserts a player into PlayerList. */
 public final class ResidentBodyAccess {
+    public static boolean external(UUID id){var r=MaidAgentsMod.residents();return r!=null&&r.external(id);}
+    public static void externalReady(UUID id){MaidAgentsMod.residents().externalReady(id);}
+    public static void externalGuard(UUID id,boolean enabled){MaidAgentsMod.residents().externalGuard(id,enabled);}
+    public static String cast(UUID id,String request,String spell){
+        externalReady(id);var r=MaidAgentsMod.residents();var maid=body(id);
+        // Preserve the public body request through the native RPG ledger; no new random retry ID.
+        UUID original=UUID.nameUUIDFromBytes(("unified-cast:"+id+":"+request).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return new com.google.gson.Gson().toJson(ResidentRpg.cast(maid,r.role(id).profession(),spell,r.allies(maid),original));
+    }
+    public static String castReceipt(UUID id,String request)throws Exception{
+        UUID original=UUID.nameUUIDFromBytes(("unified-cast:"+id+":"+request).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return new com.google.gson.Gson().toJson(ResidentServices.query(id,original));
+    }
+    public static void speak(UUID id,String text){
+        var maid=body(id);maid.getChatBubbleManager().addTextChatBubble(text);
+    }
+    static java.util.Map<String,Object> conversation(UUID id,net.minecraft.world.entity.LivingEntity speaker,String text)throws Exception{
+        if(!external(id))throw new IllegalArgumentException("unified_controller_not_selected");
+        Object pm=Class.forName("org.bukkit.Bukkit").getMethod("getPluginManager").invoke(null);
+        Object plugin=Class.forName("org.bukkit.plugin.PluginManager").getMethod("getPlugin",String.class).invoke(pm,"QiandengjiMaidBridge");
+        if(plugin==null)throw new IllegalStateException("native_body_port_unavailable");
+        String event=java.util.UUID.randomUUID().toString();
+        plugin.getClass().getMethod("queueResidentConversation",UUID.class,UUID.class,String.class,String.class,String.class)
+            .invoke(plugin,id,speaker.getUUID(),speaker.getName().getString(),text,event);
+        return java.util.Map.of("status","accepted","action","conversation","eventId",event,"controller","unified","completed",false);
+    }
     public static final String DOWNED="tlm_resident_trial_downed";
     public static void downed(UUID id,boolean hold){
         var maid=body(id);var data=maid.getPersistentData();
@@ -81,7 +107,13 @@ public final class ResidentBodyAccess {
     }
     public static String cliContract(String command){return new com.google.gson.Gson().toJson(ResidentCliContract.describe(command));}
     public static String status(UUID id){
-        body(id);var row=new java.util.LinkedHashMap<>(MaidAgentsMod.residents().observe(id));
+        var maid=body(id);var residents=MaidAgentsMod.residents();var row=new java.util.LinkedHashMap<>(residents.observe(id));
+        var allies=residents.allies(maid);
+        row.put("nearbyEntities",((net.minecraft.server.level.ServerLevel)maid.level()).getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,maid.getBoundingBox().inflate(24),
+            e->e!=maid&&e.isAlive()&&maid.distanceToSqr(e)<=576&&maid.hasLineOfSight(e)).stream()
+            .sorted(java.util.Comparator.comparingDouble(maid::distanceToSqr)).limit(16)
+            .map(e->java.util.Map.of("id",e.getStringUUID(),"name",e.getName().getString(),"position",ResidentActions.point(e.blockPosition()),
+                "health",e.getHealth(),"maxHealth",e.getMaxHealth(),"ally",allies.contains(e),"hostile",ResidentCombat.hostile(maid,e))).toList());
         // A status action becomes the next receipt: never recursively embed previous full status results.
         var last=row.remove("lastReceipt");
         if(last instanceof java.util.Map<?,?> receipt){var summary=new java.util.LinkedHashMap<String,Object>();

@@ -28,6 +28,10 @@ class MemoryRouter:
         self.graph_errors = 0
         self._seq = 0
 
+    def start(self):
+        if self.graph is not None and callable(getattr(self.graph, "start", None)):
+            self.graph.start()
+
     @property
     def status(self) -> dict[str, Any]:
         return {"tiers": {"hot": sum(len(d) for d in self._hot.values()), "warm": "graphiti" if self.graph is not None else "local-fallback",

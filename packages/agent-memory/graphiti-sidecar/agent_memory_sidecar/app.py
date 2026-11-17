@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hmac
 import re
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any
 
@@ -54,7 +55,14 @@ class SearchRequest(_Base):
 
 
 def create_app(service: GraphService, token: str | None = None) -> FastAPI:
-    app = FastAPI(title="agent-mc-memory graphiti sidecar", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(app):
+        try:
+            yield
+        finally:
+            await service.close()
+
+    app = FastAPI(title="agent-mc-memory graphiti sidecar", version="0.1.0", lifespan=lifespan)
 
     @app.middleware("http")
     async def auth(request: Request, call_next):  # type: ignore[no-untyped-def]
@@ -76,12 +84,17 @@ def create_app(service: GraphService, token: str | None = None) -> FastAPI:
     async def episodes(req: EpisodeRequest) -> dict[str, Any]:
         try:
             return await service.add_episode(req.group_id, req.episode, req.hints)
-        except RuntimeError as error:
-            raise HTTPException(status_code=503, detail=str(error)[:300]) from error
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail="episode_id_conflict") from error
+        except Exception as error:
+            raise HTTPException(status_code=503, detail="memory_write_unavailable") from error
 
     @app.post("/search")
     async def search(req: SearchRequest) -> dict[str, Any]:
-        facts = await service.search(req.group_id, req.query, req.limit, req.at, req.known_at, req.history)
-        return {"facts": facts}
+        try:
+            facts = await service.search(req.group_id, req.query, req.limit, req.at, req.known_at, req.history)
+            return {"facts": facts}
+        except Exception as error:
+            raise HTTPException(status_code=503, detail="memory_search_unavailable") from error
 
     return app

@@ -59,13 +59,21 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private CompanionRespawn respawns;
     private NativeMaidBodyPort bodyPort;
     boolean nativeControlled(UUID id){return bodyPort!=null&&bodyPort.active(id);}
-    boolean nativeExclusive(UUID id){return bodyPort!=null&&bodyPort.exclusive(id);}
+    private final Set<UUID> unifiedBodies=new HashSet<>();
+    void registerUnifiedBody(UUID id){unifiedBodies.add(id);}
+    boolean unifiedBody(UUID id){return unifiedBodies.contains(id);}
+    boolean nativeExclusive(UUID id){return unifiedBodies.contains(id)||bodyPort!=null&&bodyPort.exclusive(id);}
+    boolean nativeGuard(UUID id){return bodyPort!=null&&bodyPort.guarding(id);}
     long nativeControlEpoch(UUID id){return bodyPort==null?0:bodyPort.epoch(id);}
     boolean nativeTravelAllowed(UUID id){return bodyPort==null||bodyPort.travelAllowed(id);}
     void nativeTakeover(Player actor,UUID id){if(bodyPort!=null)bodyPort.ownerTakeover(actor.getUniqueId(),id);}
     void nativeReady(UUID owner,UUID id){owned(owner,id);var maid=ownedLoaded(owner,id);agentSupport.validateIdle(maid);
         if(editingMaidInventory(maid)||workshops.busy(id)||social!=null&&social.busy(id))throw new CompatibilityException("maid_busy","Wait for the original operation or menu to finish");}
-    void nativeQuiesce(EntityMaid maid){if(residence!=null)residence.manual(maid);if(companion!=null)companion.manual(maid);MaidCompanionActions.manual(maid);}
+    void nativeQuiesce(EntityMaid maid){if(local.qdj.maids.brain.ResidentBodyAccess.external(maid.getUUID()))local.qdj.maids.brain.ResidentBodyAccess.externalGuard(maid.getUUID(),false);if(residence!=null)residence.manual(maid);if(companion!=null)companion.manual(maid);MaidCompanionActions.manual(maid);}
+    public void queueResidentConversation(UUID id,UUID speaker,String name,String text,String event)throws Exception{
+        if(!Bukkit.isPrimaryThread()||!local.qdj.maids.brain.ResidentBodyAccess.external(id))throw new IllegalStateException("unified_resident_required");
+        inbox.add(id,event,speaker,name,text);
+    }
     JsonObject nativeLegacyReceipt(UUID owner,UUID id,String request)throws Exception{owned(owner,id);return receipts.read(id,request);}
     JsonObject nativeInbox(UUID owner,UUID id)throws Exception{var original=owned(owner,id);var result=inbox.snapshot(id);for(String key:List.of("sessionKey","memoryNamespace"))if(original.has(key))result.add(key,original.get(key).deepCopy());return result;}
     void nativeAck(UUID id,String event)throws Exception{if(!inbox.contains(id,event))throw new CompatibilityException("dialogue_missing","Query inbox first");inbox.acknowledge(id,event);}
@@ -114,6 +122,11 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     JsonObject nativeCast(EntityMaid maid,String spell){
         if(companion==null)throw new CompatibilityException("rpg_unavailable","Original companion guard unavailable");
         return companion.castSpell(maid,Bukkit.getPlayer(maid.getOwnerUUID()),spell);
+    }
+    JsonObject nativeCast(EntityMaid maid,String spell,String request){
+        if(!local.qdj.maids.brain.ResidentBodyAccess.external(maid.getUUID()))return nativeCast(maid,spell);
+        var result=JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.cast(maid.getUUID(),request,spell)).getAsJsonObject();
+        result.addProperty("effectsApplied",result.has("completed")&&result.get("completed").getAsBoolean());return result;
     }
     void companionHit(EntityMaid maid,net.minecraft.world.entity.Mob target,String mode,float damage){
         if(social!=null)social.combatObserved(maid,target,mode,damage);

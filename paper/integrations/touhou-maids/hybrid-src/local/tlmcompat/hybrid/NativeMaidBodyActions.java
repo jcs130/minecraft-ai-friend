@@ -23,9 +23,13 @@ final class NativeMaidBodyActions {
     private final Map<UUID,Walk> walks=new HashMap<>();
     private final Set<UUID> follows=new HashSet<>();
     private final Set<UUID> companions=new HashSet<>();
+    private final Set<UUID> guards=new HashSet<>();
+    private final Map<UUID,String> resumeGuards=new HashMap<>();
+    private int receiptTick;
     NativeMaidBodyActions(HybridMaidPlugin plugin,MaidBodyControl control){this.plugin=plugin;this.control=control;}
     boolean following(UUID id){return follows.contains(id);}
     boolean companion(UUID id){return companions.contains(id);}
+    boolean guarding(UUID id){return guards.contains(id);}
     JsonObject call(UUID owner,UUID id,JsonObject input)throws Exception {
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main_thread_required");
         String action=MaidBodyControl.string(input,"action");MaidBodyControl.validateShape(input);
@@ -64,10 +68,11 @@ final class NativeMaidBodyActions {
         // must wait for that turn, then fence all older callbacks before touching the body.
         boolean physical=!Set.of("ack","speak").contains(action);
         boolean resumeCompanion=companions.contains(id)&&Set.of("cast","equip","schedule","pickup").contains(action);
+        boolean resumeGuard=guards.contains(id)&&Set.of("cast","equip","schedule","pickup").contains(action);
         if(physical&&companions.contains(id)&&!Set.of("stop","stay","sit").contains(action))try{plugin.nativeReady(owner,id);}catch(CompatibilityException busy){return blocked(owner,id,input,busy.code());}
         control.reserve(owner,id,request,input);
         try{
-            if(physical){plugin.nativeQuiesce(maid);companions.remove(id);control.invalidateCallbacks(id);}
+            if(physical){plugin.nativeQuiesce(maid);companions.remove(id);guards.remove(id);resumeGuards.remove(id);control.invalidateCallbacks(id);}
             var observed=new JsonObject();observed.addProperty("effectsApplied",false);
             switch(action){
                 case "walk"->{
@@ -80,8 +85,12 @@ final class NativeMaidBodyActions {
                 }
                 case "stop","stay","sit"->{cancel(id,"stopped");stop(maid);maid.setInSittingPose(true);follows.remove(id);observed.addProperty("meaning","mode setting; native movement stopped");}
                 case "follow"->{restore(maid);MaidCompanionActions.follow(maid);follows.add(id);observed.addProperty("meaning","follow mode set; arrival requires observation; offline owner cannot be followed");}
+                case "guard"->{restore(maid);maid.setInSittingPose(false);guards.add(id);
+                    if(local.qdj.maids.brain.ResidentBodyAccess.external(id))local.qdj.maids.brain.ResidentBodyAccess.externalGuard(id,true);
+                    else{MaidCompanionActions.follow(maid);follows.add(id);}
+                    observed.addProperty("meaning","native defensive execution enabled; dialogue remains with the unified controller; hits require observation");}
                 case "companion"->{restore(maid);MaidCompanionActions.follow(maid);follows.add(id);companions.add(id);observed.addProperty("meaning","Original native follow/guard and selected dialogue brain delegated under this controller; no goal completion or new memory scope");}
-                case "cast"->{observed=plugin.nativeCast(maid,value);observed.add("actualPosition",position(maid));boolean applied=observed.has("effectsApplied")&&observed.get("effectsApplied").getAsBoolean();var result=reply(applied,control.finish(id,request,applied?"applied":"rejected",observed),applied?null:"spell_not_applied");if(resumeCompanion)companions.add(id);return result;}
+                case "cast"->{observed=plugin.nativeCast(maid,value,request);observed.add("actualPosition",position(maid));boolean applied=observed.has("effectsApplied")&&observed.get("effectsApplied").getAsBoolean();String state=observed.has("status")?observed.get("status").getAsString():"unknown";boolean pending=Set.of("accepted","pending","running").contains(state);boolean uncertain=state.equals("unknown");var result=reply(applied||pending,control.finish(id,request,pending?"running":uncertain?"unknown":applied?"applied":"rejected",observed),applied||pending?null:uncertain?"spell_result_unknown_query_original":"spell_not_applied");if(resumeCompanion)companions.add(id);if(resumeGuard){if(pending||uncertain)resumeGuards.put(id,request);else resumeGuard(maid);}return result;}
                 case "task"->{restore(maid);maid.setTask(TaskManager.getTaskMap().get(ResourceLocation.parse(value)));maid.setInSittingPose(false);follows.remove(id);observed.addProperty("meaning","native task selected; work result requires observation");}
                 case "equip"->observed=plugin.nativeEquip(maid,value);
                 case "schedule"->maid.setSchedule(MaidSchedule.valueOf(value));
@@ -89,11 +98,12 @@ final class NativeMaidBodyActions {
                 case "speak"->{
                     Set<UUID> audience=new HashSet<>();for(var player:maid.getBukkitEntity().getLocation().getNearbyPlayers(16))if(player.canSee(maid.getBukkitEntity())){player.sendMessage(net.kyori.adventure.text.Component.text("<"+maid.getName().getString()+"> "+value));audience.add(player.getUniqueId());}
                     plugin.publishPublicSpeech(maid,request,value,audience.size());plugin.speakPublicReply(maid,request,value,audience);
+                    maid.getChatBubbleManager().addTextChatBubble(value);
                     observed.addProperty("deliveredPlayers",audience.size());observed.add("voice",plugin.nativeSpeechState(maid));observed.addProperty("hearingVerified",false);
                 }
                 case "ack"->plugin.nativeAck(id,value);
             }
-            observed.addProperty("effectsApplied",true);observed.add("actualPosition",position(maid));var result=reply(true,control.finish(id,request,"applied",observed),null);if(resumeCompanion)companions.add(id);return result;
+            observed.addProperty("effectsApplied",true);observed.add("actualPosition",position(maid));var result=reply(true,control.finish(id,request,"applied",observed),null);if(resumeCompanion)companions.add(id);if(resumeGuard)resumeGuard(maid);return result;
         }catch(Exception failure){var info=new JsonObject();info.addProperty("reason","execution_uncertain_query_original_request");
             try{return reply(false,control.finish(id,request,"unknown",info),"execution_uncertain_query_original_request");}catch(Exception journal){throw new MaidBodyControl.Fault(503,"RESULT_UNKNOWN");}}
     }
@@ -106,26 +116,40 @@ final class NativeMaidBodyActions {
             case "tasks"->data=plugin.catalog(owner,id);
             case "brain"->{var context=plugin.context(owner,null,id);data=context.has("brain")?context.getAsJsonObject("brain"):new JsonObject();}
             case "inbox"->data=plugin.nativeInbox(owner,id);
-            case "spells"->{var scene=plugin.companionScene(plugin.ownedLoaded(owner,id));data=scene.has("rpg")?scene.getAsJsonObject("rpg").deepCopy():new JsonObject();data.addProperty("stateSource","original_private_companion_magic");data.addProperty("residentRpgAccount",false);}
+            case "spells"->{if(local.qdj.maids.brain.ResidentBodyAccess.external(id)){data=JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.rpg(id)).getAsJsonObject();data.addProperty("stateSource","native_resident_vortex");data.addProperty("residentRpgAccount",true);}
+                else{var scene=plugin.companionScene(plugin.ownedLoaded(owner,id));data=scene.has("rpg")?scene.getAsJsonObject("rpg").deepCopy():new JsonObject();data.addProperty("stateSource","original_private_companion_magic");data.addProperty("residentRpgAccount",false);}}
             case "receipt"->data=receipt(owner,id,MaidBodyControl.request(input,"operationId"));
             default->throw new MaidBodyControl.Fault(400,"UNSUPPORTED_ACTION");
         }
         data.addProperty("maidId",id.toString());data.addProperty("ownerId",owner.toString());data.addProperty("sampledAt",java.time.Instant.now().toString());
+        if(action.equals("context")){data.addProperty("nativeGuardDelegated",guarding(id));
+            if(local.qdj.maids.brain.ResidentBodyAccess.external(id))data.add("resident",JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.status(id)));
+            else data.add("scene",plugin.companionScene(plugin.ownedLoaded(owner,id)));}
         if(action.equals("context")){data.addProperty("physicalController","native_body");data.addProperty("nativeCompanionDelegated",companion(id));var caps=new JsonArray();MaidBodyControl.READS.stream().sorted().forEach(caps::add);MaidBodyControl.WRITES.stream().sorted().forEach(caps::add);data.add("capabilities",caps);if(data.has("brain"))externalBrain(data.getAsJsonObject("brain"),id);}
         if(action.equals("brain"))externalBrain(data,id);
         return reply(true,data,null);
     }
-    private void externalBrain(JsonObject brain,UUID id){brain.addProperty("physicalController","native_body");brain.addProperty("readOnly",true);brain.addProperty("originalDialogueControllerActive",companion(id));brain.addProperty("memoryOwner","original_tlm");brain.addProperty("meaning",companion(id)?"Original selected brain/history and native companion behaviours are delegated by this lease. No shadow dialogue model or new memory scope.":"Original configured brain selection is retained; dialogue queues in inbox while exclusive control is active. Brain choice cannot be changed on this port.");}
+    private void externalBrain(JsonObject brain,UUID id){brain.addProperty("physicalController","native_body");brain.addProperty("readOnly",true);brain.addProperty("originalDialogueControllerActive",!plugin.unifiedBody(id)&&companion(id));brain.addProperty("memoryOwner",plugin.unifiedBody(id)?"unified_character_store":"original_tlm");brain.addProperty("meaning",plugin.unifiedBody(id)?"Unified NPC controller owns decisions and character memory. Original native history is retained read-only for migration; native task execution is separate from a model loop.":companion(id)?"Original selected brain/history and native companion behaviours are delegated by this lease. No shadow dialogue model or new memory scope.":"Original configured brain selection is retained; dialogue queues in inbox while exclusive control is active. Brain choice cannot be changed on this port.");}
     private JsonObject receipt(UUID owner,UUID id,String request)throws Exception {
         var value=control.read(id,request);
         if(value==null){value=plugin.nativeLegacyReceipt(owner,id,request);if(value==null)throw new CompatibilityException("receipt_missing","Query the original namespace; never replay");
             value=value.deepCopy();value.addProperty("namespace","legacy");value.addProperty("operationId",request);return value;}
+        if("cast".equals(value.get("action").getAsString())&&Set.of("accepted","running","unknown").contains(value.get("status").getAsString())&&local.qdj.maids.brain.ResidentBodyAccess.external(id)){
+            var original=JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.castReceipt(id,request)).getAsJsonObject();
+            String state=original.has("status")?original.get("status").getAsString():"unknown";
+            if(state.equals("completed")||Set.of("blocked","rejected","cancelled","failed").contains(state)){
+                original.addProperty("effectsApplied",state.equals("completed"));var result=control.finish(id,request,state.equals("completed")?"applied":"rejected",original);
+                if(request.equals(resumeGuards.get(id))&&control.active(id)){var body=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));if(body!=null)resumeGuard(body);}return result;
+            }
+            if(Set.of("accepted","pending","running").contains(state))return control.finish(id,request,"running",original);
+        }
         if(Set.of("accepted","running").contains(value.get("status").getAsString())&&(!walks.containsKey(id)||!walks.get(id).request.equals(request))){
             var reason=new JsonObject();reason.addProperty("reason","restart_or_execution_interrupted_query_original_request");value=control.finish(id,request,"unknown",reason);
         }
         return value;
     }
     void tick(){
+        if(++receiptTick%10==0)for(var id:new ArrayList<>(resumeGuards.keySet()))try{var body=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));if(body!=null&&control.active(id))receipt(body.getOwnerUUID(),id,resumeGuards.get(id));}catch(Exception ignored){/* Original request remains unresolved; do not resume work. */}
         for(var id:new ArrayList<>(walks.keySet())){
             var walk=walks.get(id);EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));String failure=null;
             if(maid==null||!maid.isAlive()||maid.isRemoved())failure="body_unavailable";
@@ -143,7 +167,8 @@ final class NativeMaidBodyActions {
         // Recover only our temporary navigation anchor after a normal or abnormal server restart.
         for(var id:control.ids())if(!walks.containsKey(id)){var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));if(maid!=null&&maid.getPersistentData().contains(ANCHOR)){stop(maid);restore(maid);}}
     }
-    void cancel(UUID id,String reason)throws Exception {var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));companions.remove(id);if(maid!=null)plugin.nativeQuiesce(maid);if(walks.containsKey(id))finishWalk(id,maid,"cancelled",reason,false);else if(maid!=null){stop(maid);restore(maid);}follows.remove(id);}
+    private void resumeGuard(EntityMaid maid){var id=maid.getUUID();resumeGuards.remove(id);if(!control.active(id)||!maid.isAlive())return;guards.add(id);if(local.qdj.maids.brain.ResidentBodyAccess.external(id))local.qdj.maids.brain.ResidentBodyAccess.externalGuard(id,true);else{MaidCompanionActions.follow(maid);follows.add(id);}}
+    void cancel(UUID id,String reason)throws Exception {var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));companions.remove(id);guards.remove(id);resumeGuards.remove(id);if(maid!=null)plugin.nativeQuiesce(maid);if(walks.containsKey(id))finishWalk(id,maid,"cancelled",reason,false);else if(maid!=null){stop(maid);restore(maid);}follows.remove(id);}
     private void finishWalk(UUID id,EntityMaid maid,String status,String reason,boolean arrived)throws Exception {
         var walk=walks.remove(id);var observed=new JsonObject();observed.addProperty("reason",reason);observed.addProperty("arrived",arrived);
         if(maid!=null){stop(maid);restore(maid);observed.add("actualPosition",position(maid));observed.addProperty("distanceMoved",maid.position().distanceTo(walk.start));observed.addProperty("remainingDistance",maid.position().distanceTo(walk.target));}

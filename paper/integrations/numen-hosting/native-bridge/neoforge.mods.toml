@@ -3,10 +3,10 @@ loaderVersion="[4,)"
 license="LGPL-3.0-only"
 [[mods]]
 modId="qiandengji_hosted_bridge"
-version="0.1.0"
+version="0.1.1"
 displayName="Qiandengji Numen Hosted Bridge"
 displayTest="IGNORE_SERVER_VERSION"
-description="Preserves the independent hosted Numen body across Youer respawns."
+description="Preserves the hosted Numen body across Youer respawns and integrates optional Better Combat attacks without requiring modded clients."
 [[mixins]]
 config="qiandengji-hosted.mixins.json"
 [[dependencies.qiandengji_hosted_bridge]]

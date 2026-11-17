@@ -223,6 +223,7 @@ class BaseBody(BodyAdapter):
         previous = self._receipts.get(request_id)
         if previous is None or previous.terminal:
             return previous
+
         final = previous.model_copy(update={"status": status, "terminal": status in TERMINAL_STATUSES,
                                             "text": text or previous.text, "data": data if data is not None else previous.data})
         self._remember(final)
@@ -230,6 +231,13 @@ class BaseBody(BodyAdapter):
         self.emit("action_result", text or f"{previous.verb} {status}", request_id=request_id, status=status,
                   data={"verb": previous.verb, "executionId": previous.execution_id})
         return final
+
+    def restore_request(self, action: BodyAction) -> None:
+        """Restore an uncertain dispatch from the host's durable ledger, without sending it."""
+        if not action.request_id or not REQUEST_ID.fullmatch(action.request_id):
+            raise ValueError("original_request_id_required")
+        if action.request_id not in self._receipts:
+            self._remember(self.receipt(action.request_id, action.verb, "unknown", "restored_dispatch_query_original_receipt"))
 
     async def result(self, request_id: str) -> ActionReceipt:
         previous = self._receipts.get(request_id)

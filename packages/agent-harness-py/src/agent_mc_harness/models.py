@@ -62,6 +62,7 @@ class Scope(Model):
     realm: str
     account: str
     agent: str
+    character: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class BodyIdentity(Model):
@@ -79,6 +80,13 @@ class BodyIdentity(Model):
         Matches the sidecar's group_id rule (1-64 chars of [A-Za-z0-9_-]). Dimension is NOT part of it:
         the overworld and the nether of one world are the same memory.
         """
+        if self.scope.character is not None:
+            # Only a deployment-owned identity can opt into continuity across a body migration.
+            # Server/account isolation remains; no alias is inferred from a display name.
+            parts = ["character", self.world.server_id or "-", self.world.world_key or "-", self.scope.character,
+                     self.scope.realm, self.scope.account, self.scope.agent]
+            digest = hashlib.sha256("\x1f".join(parts).encode()).hexdigest()[:32]
+            return f"character_{digest}"
         parts = [self.kind, self.world.server_id or "-", self.world.world_key or "-", self.body_id,
                  self.scope.realm, self.scope.account, self.scope.agent]
         digest = hashlib.sha256("\x1f".join(parts).encode()).hexdigest()[:20]

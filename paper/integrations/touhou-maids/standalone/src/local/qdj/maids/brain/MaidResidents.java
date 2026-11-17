@@ -67,14 +67,18 @@ final class MaidResidents {
     Map<String,Object> resumeTravel(UUID id,UUID review)throws Exception{require(id);return agents.companions().resumeAfterInspection(id,review);}
     void notice(UUID id,String text)throws IOException{require(id);agents.companions().notice(id,text);}
     List<UUID> ids() { return List.copyOf(roles.keySet()); }
-    boolean sameParty(UUID a,UUID b){return agents.companions()!=null&&agents.companions().sameParty(a,b);}
+    boolean sameParty(UUID a,UUID b){var left=roles.get(a);var right=roles.get(b);return left!=null&&left.allied(b)||right!=null&&right.allied(a)||agents.companions()!=null&&agents.companions().sameParty(a,b);}
     boolean busy(UUID id) { return jobs.containsKey(id)||thinking.containsKey(id); }
+    boolean external(UUID id){return roles.containsKey(id)&&roles.get(id).external();}
+    private final java.util.Set<UUID> externalGuards=new java.util.HashSet<>();
+    void externalReady(UUID id){try{var b=body(id);var previous=state.load(id);if(!external(id)||b==null||busy(id)||leased(id)||previous!=null&&previous.pending()!=null||!b.getPersistentData().getString(ACTIVE).isBlank())throw new IllegalStateException("resident_external_control_not_ready");}catch(IOException error){throw new IllegalStateException("resident_checkpoint_unavailable",error);}}
+    void externalGuard(UUID id,boolean enabled){externalReady(id);if(enabled)externalGuards.add(id);else{externalGuards.remove(id);combat.tick(body(id),false);}}
     boolean holdsPosition(UUID id) { var job=jobs.get(id);return job!=null&&ResidentContract.holdsPosition(job.input()); }
     boolean ownsMovement(UUID id){var job=jobs.get(id);return job!=null&&(ResidentContract.holdsPosition(job.input())||List.of("walk","home").contains(job.input().get("action").getAsString()));}
     void combatStarted(UUID id){agents.agent(id).invalidateActions();}
     void combatTick(){for(var id:ids()){
         var maid=body(id);if(maid==null||!combatReady.contains(id))continue;
-        boolean allowed=!jobs.containsKey(id)&&maid.getPersistentData().getString(ACTIVE).isBlank()
+        boolean allowed=(!external(id)||externalGuards.contains(id))&&!jobs.containsKey(id)&&maid.getPersistentData().getString(ACTIVE).isBlank()
             &&(agents.companions()==null||agents.companions().combatAllowed(id));
         combat.tick(maid,allowed);
     }}
@@ -193,6 +197,7 @@ final class MaidResidents {
         var row=base(id,request,action);
         row.put("input",input);
         try {
+            if(external(id))throw new IllegalArgumentException("unified_controller_use_original_body_port");
             action=ResidentContract.validate(input);row.put("action",action);
             if(maid==null||maid.isNoAi()||maid.guiOpening)throw new IllegalArgumentException("body_unavailable");
             if(maid.getPersistentData().getBoolean(ResidentBodyAccess.DOWNED))throw new IllegalArgumentException("trial_downed_read_status_wait_for_rescue");
@@ -262,6 +267,7 @@ final class MaidResidents {
             settings.install(id);
             combatReady.add(id);
             ResidentRpg.tick(maid);
+            if(external(id))continue; // Unified host owns planning; native body/RPG and chunk simulation remain.
             var job=jobs.get(id);
             if(job!=null){step(r,maid,job,now);continue;}
             if(maid.getPersistentData().getBoolean(ResidentBodyAccess.DOWNED))continue;
@@ -346,9 +352,10 @@ final class MaidResidents {
     }
     List<LivingEntity> allies(EntityMaid maid){var out=new ArrayList<LivingEntity>();out.add(maid);
         for(var id:roles.keySet()){var other=body(id);if(other!=null&&other!=maid)out.add(other);}
-        if(agents.companions()!=null)for(var p:server.getPlayerList().getPlayers())if(agents.companions().leader(maid.getUUID(),p.getUUID()))out.add(p);
+        for(var p:server.getPlayerList().getPlayers())if(sameParty(maid.getUUID(),p.getUUID()))out.add(p);
         return out;}
     Map<String,Object> plan(UUID id) {
+        if(external(id))return Map.of("status","blocked","reason","unified_controller_selected","completed",false);
         var r=require(id);var maid=body(id);long now=System.currentTimeMillis();
         if(maid==null||combat.active(id)||busy(id)||leased(id)||!maid.getPersistentData().getString(ACTIVE).isBlank())return Map.of("status","blocked","reason","body_unavailable_or_busy");
         if(agents.companions()!=null&&agents.companions().pendingTravel(id))return Map.of("status","blocked","reason","unknown_companion_travel_read_original_receipt");
