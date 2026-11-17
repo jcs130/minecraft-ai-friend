@@ -67,6 +67,7 @@ jobs:
           python -m unittest discover -s paper/ops/tests -p test_maid_controller_migration.py -v
           python -m unittest discover -s paper/integrations/touhou-maids/standalone/tests -p 'test_*.py' -v
           python paper/integrations/touhou-maids/standalone/tests/run_companion_ledger.py --jdk "$JAVA_HOME" --gson "$RUNNER_TEMP/maid-life-gson.jar"
+          python paper/integrations/touhou-maids/tests/run-native-body.py --jdk "$JAVA_HOME" --gson "$RUNNER_TEMP/maid-life-gson.jar"
           node --check paper/integrations/touhou-maids/tests/brain-harness-stage.mjs
           node --check paper/integrations/touhou-maids/tests/social-stage.mjs
           python paper/integrations/touhou-maids/tests/run-conversation-rules.py

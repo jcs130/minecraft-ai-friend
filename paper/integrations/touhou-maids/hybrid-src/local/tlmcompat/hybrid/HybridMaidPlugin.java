@@ -57,6 +57,26 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private NativeMaidResidence residence;
     private NativeMaidOwnerTravel ownerTravel;
     private CompanionRespawn respawns;
+    private NativeMaidBodyPort bodyPort;
+    boolean nativeControlled(UUID id){return bodyPort!=null&&bodyPort.active(id);}
+    long nativeControlEpoch(UUID id){return bodyPort==null?0:bodyPort.epoch(id);}
+    boolean nativeTravelAllowed(UUID id){return bodyPort==null||bodyPort.travelAllowed(id);}
+    void nativeTakeover(Player actor,UUID id){if(bodyPort!=null)bodyPort.ownerTakeover(actor.getUniqueId(),id);}
+    void nativeReady(UUID owner,UUID id){owned(owner,id);var maid=ownedLoaded(owner,id);agentSupport.validateIdle(maid);
+        if(editingMaidInventory(maid)||workshops.busy(id)||social!=null&&social.busy(id))throw new CompatibilityException("maid_busy","Wait for the original operation or menu to finish");}
+    void nativeQuiesce(EntityMaid maid){if(residence!=null)residence.manual(maid);if(companion!=null)companion.manual(maid);MaidCompanionActions.manual(maid);}
+    JsonObject nativeLegacyReceipt(UUID owner,UUID id,String request)throws Exception{owned(owner,id);return receipts.read(id,request);}
+    JsonObject nativeInbox(UUID owner,UUID id)throws Exception{var original=owned(owner,id);var result=inbox.snapshot(id);for(String key:List.of("sessionKey","memoryNamespace"))if(original.has(key))result.add(key,original.get(key).deepCopy());return result;}
+    void nativeAck(UUID id,String event)throws Exception{if(!inbox.contains(id,event))throw new CompatibilityException("dialogue_missing","Query inbox first");inbox.acknowledge(id,event);}
+    void nativeEquipmentValidate(EntityMaid maid,String value){menus.validateEquip(null,maid,value);}
+    JsonObject nativeEquip(EntityMaid maid,String value){var result=menus.equip(null,maid,value);if(companion!=null)companion.equipmentChanged(maid);return result;}
+    JsonObject nativeConversation(Player actor,EntityMaid maid,String operation,String text)throws Exception{
+        if(!nativeControlled(maid.getUUID()))return null;
+        String event=actor.getUniqueId()+":"+operation;inbox.add(maid.getUUID(),event,actor.getUniqueId(),actor.getName(),text);
+        var observation=new JsonObject();observation.addProperty("eventId",event);observation.addProperty("controller","native_body");
+        observation.addProperty("meaning","Dialogue queued for the attached controller; no reply or world action claimed");
+        return receipts.finish(maid.getUUID(),operation,"queued",observation);
+    }
     public void followTrialTransfer(Player partner, Location from, int stage) {
         if (Bukkit.isPrimaryThread() && ownerTravel!=null) ownerTravel.followTrialTransfer(partner,from,stage);
     }
@@ -95,6 +115,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(speech!=null)speech.combat(maid,mode,damage);
     }
     void speakPublicReply(EntityMaid maid,String operation,String text,Set<UUID> audience){if(speech!=null)speech.reply(maid,operation,text,audience);}
+    JsonObject nativeSpeechState(EntityMaid maid){if(speech!=null)return speech.describe(maid);var state=new JsonObject();state.addProperty("enabled",false);state.addProperty("reason","voice_not_configured");return state;}
     private final Map<String,Boolean> publishedDialogue=new LinkedHashMap<>();
     void publishPublicSpeech(EntityMaid maid,String operation,String text,int delivered){
         if(!Bukkit.isPrimaryThread()||maid==null||!maid.isAlive()||maid.isRemoved())return;
@@ -197,6 +218,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             getServer().getPluginManager().registerEvents(menus,this);
             cosmetics=new NativeMaidCosmetics(this);cosmeticsMenu=new NativeCosmeticsMenu(this,cosmetics);
             getServer().getPluginManager().registerEvents(cosmeticsMenu,this);
+            bodyPort=NativeMaidBodyPort.open(this);
             net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(adopted);
             net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(joined);
             for(World world:Bukkit.getWorlds())for(var entity:world.getEntities()){EntityMaid maid=nativeMaid(entity);if(maid!=null){restoreFollowRange(maid);local.tlmcompat.numen.MaidVisualRegistry.capture(maid);if(owner(maid)!=null)bindOnMain(maid);}}
@@ -204,7 +226,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             getLogger().info("Native TLM integration ready: "+TaskManager.getTaskMap().size()+" original tasks; no model loop");
         }catch(Throwable error){getLogger().severe("Native maid integration disabled: "+error);error.printStackTrace();getServer().getPluginManager().disablePlugin(this);}
     }
-    @Override public void onDisable(){if(respawns!=null)respawns.close();if(residence!=null)residence.close();if(workshops!=null)workshops.close();if(companion!=null)companion.close();if(speech!=null)speech.close();if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
+    @Override public void onDisable(){if(bodyPort!=null)bodyPort.close();if(respawns!=null)respawns.close();if(residence!=null)residence.close();if(workshops!=null)workshops.close();if(companion!=null)companion.close();if(speech!=null)speech.close();if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
     private void bindOnMain(EntityMaid maid){
         Bukkit.getScheduler().runTask(this,()->{try{if(maid.isAlive()&&owner(maid)!=null){bind(maid);if(agentSupport!=null)agentSupport.observeLoaded(maid);}}catch(Exception error){getLogger().warning("Native NPC binding preserved: "+error.getMessage());}});
     }
@@ -224,8 +246,11 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         return row;
     }
     public EntityMaid ownedLoaded(Player actor,UUID id){
-        owned(actor.getUniqueId(),id);EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
-        if(maid==null||!maid.isAlive()||!maid.getBukkitEntity().isValid()){JsonObject state=context(actor,id);throw new CompatibilityException(state.has("death")?"maid_dead":"unloaded",state.has("nextStep")?state.get("nextStep").getAsString():"先用 /qdmaid context "+id+" 查看所在维度与状态；靠近后再操作。");}
+        return ownedLoaded(actor.getUniqueId(),id);
+    }
+    EntityMaid ownedLoaded(UUID actor,UUID id){
+        owned(actor,id);EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
+        if(maid==null||!maid.isAlive()||!maid.getBukkitEntity().isValid())throw new CompatibilityException(maid!=null&&!maid.isAlive()?"maid_dead":"unloaded","Query context before acting on the original body");
         return maid;
     }
     public void requireNearby(Player player,EntityMaid maid,double distance){
@@ -243,11 +268,14 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         maid.getBukkitEntity().getPersistentDataContainer().set(BINDING,PersistentDataType.STRING,row.toString());return row;
     }
     public JsonObject context(Player actor,UUID id){
-        JsonObject data=owned(actor.getUniqueId(),id).deepCopy();EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
+        return context(actor.getUniqueId(),actor,id);
+    }
+    JsonObject context(UUID owner,Player actor,UUID id){
+        JsonObject data=owned(owner,id).deepCopy();EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
         data.addProperty("loaded",maid!=null&&maid.isAlive()&&maid.getBukkitEntity().isValid());
         data.addProperty("fullOriginalEntityMaid",true);data.addProperty("hostKind","original_touhou_little_maid");
-        data.addProperty("nativeClient",VanillaMaidProjection.nativeClient(actor));
-        data.addProperty("viewerAppearance",VanillaMaidProjection.nativeClient(actor)?"original_maid_renderer":local.tlmcompat.numen.MaidVisualRegistry.rendered(actor.getUniqueId(),id)?"bedrock_custom_maid":"vanilla_compat_projection");
+        data.addProperty("nativeClient",actor!=null&&VanillaMaidProjection.nativeClient(actor));
+        data.addProperty("viewerAppearance",actor==null?"no_viewer":VanillaMaidProjection.nativeClient(actor)?"original_maid_renderer":local.tlmcompat.numen.MaidVisualRegistry.rendered(actor.getUniqueId(),id)?"bedrock_custom_maid":"vanilla_compat_projection");
         JsonArray capabilities=new JsonArray();for(String item:List.of("chat","lifecycle","context","brain_selection","follow","recall","stay","speak","receipt","dialogue_inbox","dialogue_ack","original_tasks","native_inventory","inventory_transfer","equipment","schedule","pickup","vanilla_menu","original_menu","skins","skin","voices","voice","voice-test","mute","resources","resource-pack","rename"))capabilities.add(item);data.add("capabilities",capabilities);
         if(maid!=null){
             data.addProperty("homeMode",maid.isHomeModeEnable());data.addProperty("sitting",maid.isMaidInSittingPose());data.addProperty("pickup",maid.isPickup());
@@ -255,7 +283,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             data.addProperty("modelId",maid.getModelId());data.addProperty("health",maid.getHealth());data.addProperty("maxHealth",maid.getMaxHealth());
             JsonObject appearance=new JsonObject();appearance.addProperty("type",maid.isYsmModel()?"ysm":"native_maid");appearance.addProperty("modelId",maid.isYsmModel()?maid.getYsmModelId():maid.getModelId());appearance.addProperty("texture",maid.isYsmModel()?maid.getYsmModelTexture():"");appearance.addProperty("fallbackModelId",maid.getModelId());data.add("appearance",appearance);
             data.addProperty("damageProtected",maid.isInvulnerable());
-            data.addProperty("name",maid.getName().getString());data.addProperty("soundPackId",maid.getSoundPackId());data.addProperty("silent",maid.isSilent());data.addProperty("voiceAssetsReady",VanillaMaidProjection.nativeClient(actor)||local.tlmcompat.numen.MaidVoiceTransport.ready(actor.getUniqueId()));
+            data.addProperty("name",maid.getName().getString());data.addProperty("soundPackId",maid.getSoundPackId());data.addProperty("silent",maid.isSilent());data.addProperty("voiceAssetsReady",actor!=null&&(VanillaMaidProjection.nativeClient(actor)||local.tlmcompat.numen.MaidVoiceTransport.ready(actor.getUniqueId())));
             data.addProperty("soundFrequency",maid.getConfigManager().getSoundFreq());
             data.addProperty("workRadius",maid.getRestrictRadius());data.addProperty("canMove",maid.canBrainMoving());
             data.add("brain",brains.describe(maid));
@@ -277,7 +305,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             data.addProperty("dimension",maid.getBukkitEntity().getWorld().getKey().toString());JsonArray position=new JsonArray();position.add(maid.getX());position.add(maid.getY());position.add(maid.getZ());data.add("position",position);
             if(maid.getOwner()!=null&&maid.getOwner().level()==maid.level())data.addProperty("ownerDistance",maid.distanceTo(maid.getOwner()));else data.add("ownerDistance",JsonNull.INSTANCE);
         }
-        agentSupport.enrich(actor,id,data);
+        agentSupport.enrich(owner,id,data);
         if (maid != null && companion != null) {
             var companionContext = companion.describe(maid);
             data.add("companion", companionContext);
@@ -288,12 +316,18 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         data.addProperty("sampledAt",java.time.Instant.now().toString());return data;
     }
     private JsonObject catalog(Player actor,UUID id){
-        EntityMaid maid=ownedLoaded(actor,id);JsonObject result=new JsonObject();result.addProperty("maidId",id.toString());JsonArray tasks=new JsonArray();
+        return catalog(actor.getUniqueId(),id);
+    }
+    JsonObject catalog(UUID owner,UUID id){
+        EntityMaid maid=ownedLoaded(owner,id);JsonObject result=new JsonObject();result.addProperty("maidId",id.toString());JsonArray tasks=new JsonArray();
         TaskManager.getTaskMap().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry->{JsonObject row=new JsonObject();row.addProperty("id",entry.getKey().toString());row.addProperty("enabled",entry.getValue().isEnable(maid));row.addProperty("hidden",entry.getValue().isHidden(maid));row.addProperty("summary",entry.getValue().getMaidActionSummary());JsonArray conditions=new JsonArray();for(var condition:entry.getValue().getEnableConditionDesc(maid)){JsonObject value=new JsonObject();value.addProperty("condition",condition.getFirst());value.addProperty("met",condition.getSecond().test(maid));conditions.add(value);}for(var condition:entry.getValue().getConditionDescription(maid)){JsonObject value=new JsonObject();value.addProperty("condition",condition.getFirst());value.addProperty("met",condition.getSecond().test(maid));conditions.add(value);}row.add("conditions",conditions);tasks.add(row);});
         result.add("tasks",tasks);return result;
     }
     public JsonObject inventory(Player actor,UUID id){
-        EntityMaid maid=ownedLoaded(actor,id);JsonObject data=new JsonObject();data.addProperty("maidId",id.toString());JsonArray slots=new JsonArray();
+        return inventory(actor.getUniqueId(),id);
+    }
+    JsonObject inventory(UUID owner,UUID id){
+        EntityMaid maid=ownedLoaded(owner,id);JsonObject data=new JsonObject();data.addProperty("maidId",id.toString());JsonArray slots=new JsonArray();
         for(int i=0;i<maid.getMaidInv().getSlots();i++){var stack=maid.getMaidInv().getStackInSlot(i);if(!stack.isEmpty()){JsonObject row=item(stack);row.addProperty("slot",i);slots.add(row);}}
         data.add("slots",slots);NativeMaidInventory.layout(maid).entrySet().forEach(e->data.add(e.getKey(),e.getValue()));data.add("mainHand",item(maid.getMainHandItem()));data.add("offHand",item(maid.getOffhandItem()));data.add("equipment",NativeMaidInventory.equipment(maid));data.addProperty("nextStep","只用 usableSlotIndexes 中的槽；freeSlotIndexes 才是空槽，锁定槽不是空位。先 transfer put 把物品放进女仆背包，再 equip main|off|head|chest|legs|feet <maidSlot>；空背包槽可卸下对应装备。");return data;
     }
@@ -335,6 +369,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(action.equals("receipt"))return receipt(actor.getUniqueId(),id,operation);
         if(action.equals("workshop")){owned(actor.getUniqueId(),id);return workshops.describe(id,actor.getUniqueId());}
         if(action.equals("inbox")){JsonObject record=owned(actor.getUniqueId(),id);JsonObject data=inbox.snapshot(id);data.addProperty("sessionKey",record.get("sessionKey").getAsString());return data;}
+        if(nativeControlled(id)&&!Set.of("chat","talk").contains(action))throw new CompatibilityException("control_changed","Body is owned by the native controller; use the original owner UI to take control");
         // A replay must read the original result even if the entity has since died/unloaded.
         if(receipts.read(id,operation)!=null){receipt(actor.getUniqueId(),id,operation);JsonObject old=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));old=reconcile(old);old.addProperty("replayed",true);return old;}
         if(NativeMaidWorkshop.ACTION.equals(action)){
@@ -575,9 +610,11 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             if(action.equals("result")){
                 correlation=request(args,2);humanConversation(actor,correlation);action="receipt";reply(actor,action,correlation,receipt(actor.getUniqueId(),id,correlation),null);return true;
             }
-            if(action.equals("menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);menus.open(actor,maid);return true;}
-            if(action.equals("brain-menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);brains.open(actor,maid);return true;}
-            if(action.equals("native-menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);if(!VanillaMaidProjection.nativeClient(actor))throw new CompatibilityException("native_client_required","Use the common menu on this client");maid.openMaidGui(((CraftPlayer)actor).getHandle());return true;}
+            if(action.equals("menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);nativeTakeover(actor,id);menus.open(actor,maid);return true;}
+            if(action.equals("brain-menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);nativeTakeover(actor,id);brains.open(actor,maid);return true;}
+            if(action.equals("native-menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);if(!VanillaMaidProjection.nativeClient(actor))throw new CompatibilityException("native_client_required","Use the common menu on this client");nativeTakeover(actor,id);maid.openMaidGui(((CraftPlayer)actor).getHandle());return true;}
+            if(action.equals("brain")&&args.length>3)nativeTakeover(actor,id);
+            if(!Set.of("context","brain","list","inventory","tasks","receipt","inbox","chat","talk").contains(action))nativeTakeover(actor,id);
             correlation=request(args,action.equals("receipt")?3:2);String operation=action.equals("receipt")?request(args,2):correlation;
             String value=args.length>3?String.join(" ",Arrays.copyOfRange(args,3,args.length)):null;
             reply(actor,action,correlation,dispatch(actor,action,id,operation,value),null);
@@ -601,6 +638,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(actor.getListeningPluginChannels().contains(CHANNEL))actor.sendPluginMessage(this,CHANNEL,bytes);else actor.sendMessage(Component.text(MaidChatReply.text(result),error==null?NamedTextColor.AQUA:NamedTextColor.RED));
     }
     @EventHandler(ignoreCancelled=true,priority=EventPriority.HIGH)public void interact(PlayerInteractEntityEvent event){
+        if(bodyPort!=null)bodyPort.ownerTakeover(event.getPlayer().getUniqueId(),event.getRightClicked().getUniqueId());
         EntityMaid maid=nativeMaid(event.getRightClicked());if(maid==null||!records().has(maid.getUUID().toString()))return;
         if(!VanillaMaidProjection.nativeClient(event.getPlayer())){event.setCancelled(true);if(event.getHand()!=org.bukkit.inventory.EquipmentSlot.HAND)return;if(event.getPlayer().getUniqueId().equals(owner(maid))){
             var hand=((CraftPlayer)event.getPlayer()).getHandle().getMainHandItem();

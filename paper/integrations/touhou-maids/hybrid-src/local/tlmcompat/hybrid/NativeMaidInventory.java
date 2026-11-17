@@ -85,7 +85,7 @@ public final class NativeMaidInventory implements Listener {
         if(target.getType()==EquipmentSlot.Type.HUMANOID_ARMOR){
             if(!incoming.isEmpty()&&(incoming.getCount()!=1||!((net.neoforged.neoforge.common.extensions.IItemStackExtension)(Object)incoming).canEquip(target,maid)||!incoming.getItem().canFitInsideContainerItems()))
                 throw new CompatibilityException("wrong_armor","该物品不能装备到 "+values[0]+"；请放入一件对应部位的护甲，再查 inventory。");
-            if(!before.isEmpty()&&actor.getGameMode()!=org.bukkit.GameMode.CREATIVE&&net.minecraft.world.item.enchantment.EnchantmentHelper.has(before,net.minecraft.world.item.enchantment.EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE))
+            if(!before.isEmpty()&&(actor==null||actor.getGameMode()!=org.bukkit.GameMode.CREATIVE)&&net.minecraft.world.item.enchantment.EnchantmentHelper.has(before,net.minecraft.world.item.enchantment.EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE))
                 throw new CompatibilityException("binding_curse","当前护甲具有绑定诅咒，原生规则不允许卸下；本次没有转移物品。");
         }
         if(!acceptsEquipmentSwap(maid,slot,before))
