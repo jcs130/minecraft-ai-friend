@@ -42,8 +42,12 @@ final class NativeMaidBodyActions {
         try{maid=plugin.ownedLoaded(owner,id);}catch(CompatibilityException unavailable){return blocked(owner,id,input,unavailable.code());}
         // Validate the whole action before reserving or changing the world.
         Vec3 target=null;String value=null;
-        if(walks.containsKey(id)&&!Set.of("stop","stay").contains(action))return blocked(owner,id,input,"maid_busy");
-        if(!Set.of("stop","stay").contains(action)&&(plugin.editingMaidInventory(maid)||plugin.workshops().busy(id)||maid.isNoAi()||maid.isPassenger()||maid.isVehicle()))return blocked(owner,id,input,"maid_busy");
+        boolean physical=!Set.of("ack","speak").contains(action);
+        if(physical&&walks.containsKey(id)&&!Set.of("stop","stay").contains(action))return blocked(owner,id,input,"maid_busy");
+        if(physical&&!Set.of("stop","stay").contains(action)){
+            if(plugin.editingMaidInventory(maid)||plugin.workshops().busy(id)||maid.isNoAi()||maid.isVehicle())return blocked(owner,id,input,"maid_busy");
+            if(maid.isPassenger()&&!action.equals("dismount"))return blocked(owner,id,input,"dismount_required");
+        }
         switch(action){
             case "companion"->{if(!plugin.sharedDialogueEnabled(maid))return blocked(owner,id,input,"original_brain_not_configured");}
             case "cast"->{value=MaidBodyControl.string(input,"spellId");if(!value.matches("[a-z0-9][a-z0-9_-]{0,47}"))throw new MaidBodyControl.Fault(400,"INVALID_spellId");}
@@ -66,15 +70,20 @@ final class NativeMaidBodyActions {
         }
         // The delegated native brain keeps its original history. External physical writes
         // must wait for that turn, then fence all older callbacks before touching the body.
-        boolean physical=!Set.of("ack","speak").contains(action);
-        boolean resumeCompanion=companions.contains(id)&&Set.of("cast","equip","schedule","pickup").contains(action);
-        boolean resumeGuard=guards.contains(id)&&Set.of("cast","equip","schedule","pickup").contains(action);
+        boolean resumeCompanion=companions.contains(id)&&Set.of("cast","equip","schedule","pickup","dismount").contains(action);
+        boolean resumeGuard=guards.contains(id)&&Set.of("cast","equip","schedule","pickup","dismount").contains(action);
         if(physical&&companions.contains(id)&&!Set.of("stop","stay","sit").contains(action))try{plugin.nativeReady(owner,id);}catch(CompatibilityException busy){return blocked(owner,id,input,busy.code());}
         control.reserve(owner,id,request,input);
         try{
             if(physical){plugin.nativeQuiesce(maid);companions.remove(id);guards.remove(id);resumeGuards.remove(id);control.invalidateCallbacks(id);}
             var observed=new JsonObject();observed.addProperty("effectsApplied",false);
             switch(action){
+                case "dismount"->{
+                    observed.addProperty("passengerBefore",maid.isPassenger());maid.stopRiding();
+                    observed.addProperty("passengerAfter",maid.isPassenger());
+                    if(maid.isPassenger())return reply(false,control.finish(id,request,"rejected",observed),"dismount_not_applied");
+                    observed.addProperty("meaning","original body left its vehicle; no vehicle or inventory was removed");
+                }
                 case "walk"->{
                     restore(maid);var saved=new CompoundTag();maid.getSchedulePos().save(saved);saved.putBoolean("bodyHome",maid.isHomeModeEnable());saved.putBoolean("bodySitting",maid.isMaidInSittingPose());saved.putString("bodySchedule",maid.getSchedule().name());saved.putString("bodyTask",maid.getTask().getUid().toString());
                     maid.getPersistentData().put(ANCHOR,saved);stop(maid);maid.setHomeModeEnable(true);maid.setInSittingPose(false);maid.setSchedule(MaidSchedule.ALL);maid.setTask(TaskManager.getIdleTask());
@@ -123,6 +132,8 @@ final class NativeMaidBodyActions {
         }
         data.addProperty("maidId",id.toString());data.addProperty("ownerId",owner.toString());data.addProperty("sampledAt",java.time.Instant.now().toString());
         if(action.equals("context")){data.addProperty("nativeGuardDelegated",guarding(id));
+            var loaded=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
+            if(loaded!=null){data.addProperty("passenger",loaded.isPassenger());if(loaded.getVehicle()!=null)data.addProperty("vehicleType",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(loaded.getVehicle().getType()).toString());}
             if(local.qdj.maids.brain.ResidentBodyAccess.external(id))data.add("resident",JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.status(id)));
             else data.add("scene",plugin.companionScene(plugin.ownedLoaded(owner,id)));}
         if(action.equals("context")){data.addProperty("physicalController","native_body");data.addProperty("nativeCompanionDelegated",companion(id));var caps=new JsonArray();MaidBodyControl.READS.stream().sorted().forEach(caps::add);MaidBodyControl.WRITES.stream().sorted().forEach(caps::add);data.add("capabilities",caps);if(data.has("brain"))externalBrain(data.getAsJsonObject("brain"),id);}

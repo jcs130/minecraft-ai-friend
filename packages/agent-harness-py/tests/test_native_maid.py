@@ -108,6 +108,27 @@ def make(server: NativeServer, *, controller_id: str = CONTROLLER) -> MaidBody:
                     poll_seconds=0, result_poll_seconds=0, context_poll_seconds=0)
 
 
+def test_native_argument_catalogue_preserves_action_specific_server_contract():
+    body = make(NativeServer())
+    body._actions = ["guard", "pickup", "walk", "dismount"]
+    fields = {"guard": [], "pickup": ["enabled"], "walk": ["x", "y", "z", "dimension"], "dismount": []}
+    body._schema = {"type": "object", "additionalProperties": False,
+        "properties": {"action": {"enum": body._actions}, "maidId": {"type": "string"},
+            "requestId": {"type": "string"}, "enabled": {"type": "boolean"},
+            **{k: {"type": "number"} for k in ("x", "y", "z")}, "dimension": {"type": "string"}},
+        "oneOf": [{"properties": {"action": {"const": action}},
+            "propertyNames": {"enum": ["action", "maidId", "requestId", *names]},
+            "required": ["action", "requestId", *[k for k in names if k != "dimension"]]}
+            for action, names in fields.items()]}
+    catalogue = {action.name: action.input_schema for action in body.capabilities().native_actions}
+    for action, names in fields.items():
+        schema = catalogue[action]
+        assert set(schema["properties"]) == set(names)
+        assert schema["additionalProperties"] is False
+        assert set(schema["required"]) == set(names) - {"dimension"}
+    assert catalogue["pickup"]["properties"]["enabled"] == {"type": "boolean"}
+
+
 @pytest.mark.parametrize("endpoint", ["http://example.com:80/maid-body", "https://127.0.0.1:19087/maid-body",
     "http://user:password@127.0.0.1:19087/maid-body", ENDPOINT + "?token=private", ENDPOINT + "#fragment",
     "http://127.0.0.1:19087/core", "http://localhost:19087/maid-body"])

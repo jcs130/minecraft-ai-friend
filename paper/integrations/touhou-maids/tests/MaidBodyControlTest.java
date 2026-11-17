@@ -78,6 +78,10 @@ public final class MaidBodyControlTest {
         fault("INVALID_y",()->MaidBodyControl.validateShape(json("{\"action\":\"walk\",\"requestId\":\"x\",\"x\":1,\"z\":2}")));
         fault("UNEXPECTED_FIELD",()->MaidBodyControl.validateShape(json("{\"action\":\"brain\",\"choice\":\"native\"}")));
         check(schema.getAsJsonArray("oneOf").size()==names.size(),"per-action required fields and accepted fields share the runtime contract");
+        check(MaidBodyControl.WRITES.contains("dismount"),"a seated body advertises an explicit dismount action");
+        MaidBodyControl.validateShape(json("{\"action\":\"dismount\",\"requestId\":\"dismount-1\"}"));
+        fault("UNEXPECTED_FIELD",()->MaidBodyControl.validateShape(json("{\"action\":\"dismount\",\"requestId\":\"dismount-1\",\"enabled\":true}")));
+        fault("UNEXPECTED_FIELD",()->MaidBodyControl.validateShape(json("{\"action\":\"guard\",\"requestId\":\"guard-1\",\"enabled\":true}")));
         System.out.println("Native body control: "+checks+" checks passed");
     }
 }
