@@ -14,6 +14,7 @@ import asyncio
 import json
 from typing import Any, Protocol
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from ._reuse import autonomy_bridge
 
@@ -28,7 +29,143 @@ class ToolBridge(Protocol):
 
 
 class ControlChanged(RuntimeError):
-    """numen-hosting fenced this controller (409 CONTROL_CHANGED). Stop; never reattach or retry."""
+    """The server fenced this controller. Stop; never reattach or retry automatically."""
+
+
+MAID_READS = frozenset({"nearby", "brain", "list", "context", "receipt", "inbox", "tasks", "inventory", "workshop",
+                        "skins", "voices", "resources"})
+
+
+def maid_read_only(arguments: dict[str, Any]) -> bool:
+    return arguments.get("action") in MAID_READS and not (arguments.get("action") == "brain" and "choice" in arguments)
+
+
+class NativeMaidBridge:
+    """Authenticated, single-body local transport to the native private companion executor.
+
+    Binding acquires a server-controlled generation. An uncertain action is queried by its original requestId.
+    A stale generation permanently fences this bridge, including reconnect(), until its host explicitly hands
+    control to a new instance. Configuration supplies identities and token; dialogue cannot change them.
+    """
+
+    protocol = "qiandengji-maid-body/v1"
+    transport = "native private companion (loopback /maid-body)"
+
+    def __init__(self, endpoint: str, token: str, *, owner_id: str, maid_id: str, controller_id: str,
+                 http: Any = None) -> None:
+        parsed = urlsplit(endpoint)
+        if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or parsed.path != "/maid-body"
+                or parsed.username or parsed.password or parsed.query or parsed.fragment or not parsed.port):
+            raise ValueError("maid_transport_must_be_loopback")
+        if not token.strip() or "\n" in token or "\r" in token:
+            raise ValueError("maid_transport_token_required")
+        self.owner_id = str(UUID(owner_id))
+        self.maid_id = str(UUID(maid_id))
+        self.controller_id = str(UUID(controller_id))
+        self.endpoint = endpoint
+        self._token = token
+        self.http = http
+        self.tools: list[dict[str, Any]] = []
+        self.generation: str | None = None
+        self.stopping = asyncio.Event()
+        self._closed = False
+        self._bind_lock = asyncio.Lock()
+
+    def _fence(self) -> None:
+        self.stopping.set()
+        raise ControlChanged("CONTROL_CHANGED")
+
+    async def _request(self, operation: str, *, timeout: float = 45, **fields: Any) -> dict[str, Any]:  # noqa: ASYNC109
+        if self._closed or self.stopping.is_set():
+            self._fence()
+        if operation != "bind" and self.generation is None:
+            raise RuntimeError("maid_body_not_bound")
+        if self.http is None:
+            import httpx
+            self.http = httpx.AsyncClient(trust_env=False, follow_redirects=False)
+        payload = {"operation": operation, "ownerId": self.owner_id, "maidId": self.maid_id,
+                   "controllerId": self.controller_id, **fields}
+        if operation != "bind":
+            payload["generation"] = self.generation
+        response = await self.http.post(self.endpoint, json=payload, headers={"Authorization": "Bearer " + self._token},
+                                        timeout=timeout, follow_redirects=False)
+        if response.status_code in (401, 403, 409):
+            self._fence()
+        if response.status_code != 200:
+            raise RuntimeError("maid_body_request_unknown_query_original_receipt")
+        try:
+            envelope = response.json()
+        except ValueError:
+            raise RuntimeError("maid_body_invalid_envelope") from None
+        if not isinstance(envelope, dict):
+            raise RuntimeError("maid_body_invalid_envelope")
+        expected = {"protocol": self.protocol, "ownerId": self.owner_id, "maidId": self.maid_id,
+                    "controllerId": self.controller_id}
+        if any(envelope.get(key) != value for key, value in expected.items()):
+            self._fence()
+        generation = envelope.get("generation")
+        if not isinstance(generation, str) or not generation or len(generation) > 256:
+            self._fence()
+        if self.generation is not None and generation != self.generation:
+            self._fence()
+        return envelope
+
+    async def open(self) -> None:
+        async with self._bind_lock:
+            if self._closed or self.stopping.is_set():
+                self._fence()
+            if self.generation is not None:
+                return
+            envelope = await self._request("bind")
+            self.generation = envelope["generation"]
+            try:
+                offered = envelope.get("tools")
+                if not isinstance(offered, list) or len(offered) != 1 or not isinstance(offered[0], dict):
+                    raise ValueError("missing tools")
+                tool = offered[0]
+                actions = tool.get("inputSchema", {}).get("properties", {}).get("action", {}).get("enum", [])
+                if tool.get("name") != "mc_maids" or not isinstance(actions, list) or not all(isinstance(a, str) for a in actions):
+                    raise ValueError("invalid tools")
+                if not {"list", "context", "receipt"}.issubset(actions):
+                    raise ValueError("missing actions")
+            except (AttributeError, TypeError, ValueError):
+                await self.close()
+                raise RuntimeError("maid_body_invalid_capabilities") from None
+            self.tools = [tool]
+
+    async def call(self, name: str, arguments: dict[str, Any], *, timeout: float = 45, request_id: str | None = None,  # noqa: ASYNC109
+                   turn_id: str | None = None, attribution: dict[str, Any] | None = None) -> dict[str, Any]:
+        if self._closed or self.stopping.is_set():
+            self._fence()
+        if name != "mc_maids" or not self.tools:
+            raise ValueError("maid_body_tool_not_available")
+        actions = self.tools[0]["inputSchema"]["properties"]["action"]["enum"]
+        if arguments.get("action") not in actions:
+            raise ValueError("maid_body_action_not_available")
+        if arguments.get("maidId", self.maid_id) != self.maid_id or arguments.get("ownerId", self.owner_id) != self.owner_id:
+            raise ValueError("maid_body_identity_mismatch")
+        if {"controllerId", "generation", "operation"}.intersection(arguments):
+            raise ValueError("maid_body_transport_fields_are_reserved")
+        if not maid_read_only(arguments) and (not request_id or arguments.get("requestId") != request_id):
+            raise ValueError("maid_body_request_id_mismatch")
+        envelope = await self._request("call", name=name, arguments=dict(arguments), requestId=request_id, timeout=timeout)
+        result = envelope.get("result")
+        if not isinstance(result, dict) or not isinstance(result.get("content"), list):
+            raise RuntimeError("maid_body_invalid_result_query_original_receipt")
+        return result
+
+    async def close(self) -> None:
+        if self._closed:
+            return
+        try:
+            if self.generation is not None and not self.stopping.is_set():
+                await self._request("release")
+        finally:
+            self._closed = True
+            self.tools = []
+            self._token = ""
+            if self.http is not None:
+                await self.http.aclose()
 
 
 def text_content(result: dict[str, Any]) -> str:
