@@ -18,6 +18,7 @@ final class DungeonLoadout {
     static List<String> missing(Player p){
         var inv=p.getInventory();
         var stacks = new ArrayList<>(Arrays.asList(inv.getStorageContents()));
+        if(ResidentCli.isResident(p.getUniqueId()))stacks.add(inv.getItemInMainHand());
         var offhand = inv.getItemInOffHand();
         stacks.add(offhand);
         var items = stacks.stream().filter(DungeonLoadout::usable).toList();

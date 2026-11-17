@@ -12,6 +12,8 @@ public final class GroupSpellAccess {
                 || !plugin.isEnabled() || !plugin.nativeRpgMayAct(caster) || !plugin.nativeRpgMayAct(ally)) return false;
         String source = challenge(plugin, caster);
         String target = challenge(plugin, ally);
+        if(source.isEmpty()&&target.isEmpty()&&(ResidentCli.isResident(caster.getUniqueId())||ResidentCli.isResident(ally.getUniqueId())))
+            try{sameParty|=Boolean.TRUE.equals(ResidentCli.nativeCall("sameParty",new Class[]{java.util.UUID.class,java.util.UUID.class},caster.getUniqueId(),ally.getUniqueId()));}catch(Exception unavailable){return false;}
         return source.isEmpty() && target.isEmpty() ? sameParty : source.equals(target);
     }
 

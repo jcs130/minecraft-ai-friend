@@ -1,0 +1,620 @@
+{
+  "schemaVersion": 1,
+  "kind": "npc-gameplay-candidate",
+  "date": "2026-11-17",
+  "sourceBase": "72f9be4fbd952a604ff12d3277b71448e2cf47c0",
+  "releaseReady": false,
+  "productionChanged": false,
+  "candidateVersions": {
+    "residents": "0.3.8",
+    "agentFriend": "0.4.47.86-npc-gameplay",
+    "nativePermissions": "0.1.40-resident-permissions",
+    "nativeCamera": "0.2.1"
+  },
+  "artifacts": {
+    "residents": {
+      "sha256": "71b1153a32842defb285acf8f68c3da8b8bfeee635f435c7069844c32def7a40",
+      "privateBuildRecord": "npc-gameplay-final-validation-20261117/residents-final-candidate.jar",
+      "distributedInGit": false
+    },
+    "agentFriend": {
+      "sha256": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764",
+      "privateBuildRecord": "npc-gameplay-final-validation-20261117/AgentFriend-residents-candidate.jar",
+      "distributedInGit": false
+    },
+    "nativePermissions": {
+      "sha256": "9b54f37df062da7d6b3c7256cd1de9a96d27251e371316aa0a244bbea3810c13",
+      "privateBuildRecord": "npc-gameplay-final-results-20261117/maid-bridge-resident-permissions.jar",
+      "distributedInGit": false
+    },
+    "nativeCamera": {
+      "sha256": "948796f99dfb5e04d374f4d548f298323e654cc92d1c1f348e9b6977a585521a",
+      "privateBuildRecord": "npc-gameplay-photo-results-20261117/camera-build/qiandeng-native-camera-0.2.1-neoforge.jar",
+      "distributedInGit": false
+    }
+  },
+  "isolatedRuntimeChecks": [
+    {
+      "name": "gameplay",
+      "result": "passed",
+      "checks": 46,
+      "record": "npc-gameplay-full-regression-r2-results-20261117/gameplay-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "c97cb23af678da2dc7e822db3e6b18a33d2adcb00b7ff623f31b1c4dc25f9ab2",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      }
+    },
+    {
+      "name": "restart",
+      "result": "passed",
+      "checks": 2,
+      "record": "npc-gameplay-full-regression-r2-results-20261117/restart-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "c97cb23af678da2dc7e822db3e6b18a33d2adcb00b7ff623f31b1c4dc25f9ab2",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      }
+    },
+    {
+      "name": "farm_permissions_growth",
+      "result": "passed",
+      "checks": 21,
+      "record": "npc-gameplay-native-farm-r11-results-20261117/native-farm.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "c97cb23af678da2dc7e822db3e6b18a33d2adcb00b7ff623f31b1c4dc25f9ab2",
+        "AgentFriend-npc-candidate.jar": "635330454d6a49dc959ac766c3a85aa6d79ce734a546a9cfefcd461976f17617"
+      }
+    },
+    {
+      "name": "native_photo",
+      "result": "passed",
+      "checks": 13,
+      "record": "npc-gameplay-photo-r4-results-20261117/photo-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "378c4037f0a06fd53eca795faa3e1c1fdb92e9b5026c81cb6537cea8f5327723",
+        "AgentFriend-npc-candidate.jar": "635330454d6a49dc959ac766c3a85aa6d79ce734a546a9cfefcd461976f17617"
+      }
+    },
+    {
+      "name": "sites_earlier_candidate",
+      "result": "passed",
+      "checks": 31,
+      "record": "npc-gameplay-sites-results-20261117/site-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "1f467329991c894a14d2412d931079e1d3ecf39163effd649e721a61a3b56c7a",
+        "AgentFriend-npc-candidate.jar": "e8730a9d38d7bbd9ba9e222b9069f94c6dde916514f9298fb0ea2085e3a3a8dd"
+      }
+    },
+    {
+      "name": "trial_earlier_candidate",
+      "result": "passed",
+      "checks": 23,
+      "record": "npc-gameplay-combat-results-20261117/combat-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "1f467329991c894a14d2412d931079e1d3ecf39163effd649e721a61a3b56c7a",
+        "AgentFriend-npc-candidate.jar": "e8730a9d38d7bbd9ba9e222b9069f94c6dde916514f9298fb0ea2085e3a3a8dd"
+      }
+    },
+    {
+      "name": "planning_candidate_planning-results",
+      "result": "passed",
+      "checks": 14,
+      "record": "npc-gameplay-planning-results-20261117/planning-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "6498e58a91159a6c131a3b2b7736380e6988f5b03fac8674868e983ce031e61f",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      },
+      "realModel": false,
+      "stage": "maid-resident-hybrid-b0f8936e"
+    },
+    {
+      "name": "planning_candidate_planning-restart-results",
+      "result": "passed",
+      "checks": 7,
+      "record": "npc-gameplay-planning-results-20261117/planning-restart-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "6498e58a91159a6c131a3b2b7736380e6988f5b03fac8674868e983ce031e61f",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      },
+      "realModel": false,
+      "stage": "maid-resident-hybrid-b0f8936e"
+    },
+    {
+      "name": "planning_candidate_gameplay-results",
+      "result": "passed",
+      "checks": 46,
+      "record": "npc-gameplay-planning-results-20261117/gameplay-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "6498e58a91159a6c131a3b2b7736380e6988f5b03fac8674868e983ce031e61f",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      },
+      "realModel": false,
+      "stage": "maid-resident-hybrid-b0f8936e"
+    },
+    {
+      "name": "planning_candidate_restart-results",
+      "result": "passed",
+      "checks": 2,
+      "record": "npc-gameplay-planning-results-20261117/restart-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "6498e58a91159a6c131a3b2b7736380e6988f5b03fac8674868e983ce031e61f",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      },
+      "realModel": false,
+      "stage": "maid-resident-hybrid-b0f8936e"
+    },
+    {
+      "name": "followup_npc-gameplay-effects-results-20261117_planning-results",
+      "result": "passed",
+      "checks": 14,
+      "record": "npc-gameplay-effects-results-20261117/planning-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "45f3e2ccb655ddbe6fc02abd9c0ef1e84aee4018a051fcbc11fb64fc09549eb3",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    },
+    {
+      "name": "followup_npc-gameplay-effects-results-20261117_planning-restart-results",
+      "result": "passed",
+      "checks": 7,
+      "record": "npc-gameplay-effects-results-20261117/planning-restart-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "45f3e2ccb655ddbe6fc02abd9c0ef1e84aee4018a051fcbc11fb64fc09549eb3",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    },
+    {
+      "name": "followup_npc-gameplay-effects-results-20261117_gameplay-results",
+      "result": "passed",
+      "checks": 48,
+      "record": "npc-gameplay-effects-results-20261117/gameplay-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "45f3e2ccb655ddbe6fc02abd9c0ef1e84aee4018a051fcbc11fb64fc09549eb3",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    },
+    {
+      "name": "followup_npc-gameplay-effects-results-20261117_restart-results",
+      "result": "passed",
+      "checks": 2,
+      "record": "npc-gameplay-effects-results-20261117/restart-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "45f3e2ccb655ddbe6fc02abd9c0ef1e84aee4018a051fcbc11fb64fc09549eb3",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    },
+    {
+      "name": "followup_npc-gameplay-final-validation-20261117_planning-results",
+      "result": "passed",
+      "checks": 14,
+      "record": "npc-gameplay-final-validation-20261117/planning-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "e39cd4c67458d78c0c920c7934d0ca185e0085a07f185ab4f1c835b06c9d4e56",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    },
+    {
+      "name": "followup_npc-gameplay-final-validation-20261117_planning-restart-results",
+      "result": "passed",
+      "checks": 7,
+      "record": "npc-gameplay-final-validation-20261117/planning-restart-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "e39cd4c67458d78c0c920c7934d0ca185e0085a07f185ab4f1c835b06c9d4e56",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    },
+    {
+      "name": "followup_npc-gameplay-final-validation-20261117_goal-context-results",
+      "result": "passed",
+      "checks": 12,
+      "record": "npc-gameplay-final-validation-20261117/goal-context-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "e39cd4c67458d78c0c920c7934d0ca185e0085a07f185ab4f1c835b06c9d4e56",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    },
+    {
+      "name": "followup_npc-gameplay-final-validation-20261117_gameplay-results",
+      "result": "passed",
+      "checks": 48,
+      "record": "npc-gameplay-final-validation-20261117/gameplay-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "e39cd4c67458d78c0c920c7934d0ca185e0085a07f185ab4f1c835b06c9d4e56",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    },
+    {
+      "name": "followup_npc-gameplay-final-validation-20261117_restart-results",
+      "result": "passed",
+      "checks": 2,
+      "record": "npc-gameplay-final-validation-20261117/restart-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "e39cd4c67458d78c0c920c7934d0ca185e0085a07f185ab4f1c835b06c9d4e56",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    },
+    {
+      "name": "followup_npc-gameplay-final-validation-20261117_goal-context-restart-results",
+      "result": "passed",
+      "checks": 2,
+      "record": "npc-gameplay-final-validation-20261117/goal-context-restart-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "e39cd4c67458d78c0c920c7934d0ca185e0085a07f185ab4f1c835b06c9d4e56",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    },
+    {
+      "name": "followup_npc-gameplay-final-validation-20261117_final-goal-context-results",
+      "result": "passed",
+      "checks": 12,
+      "record": "npc-gameplay-final-validation-20261117/final-goal-context-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "71b1153a32842defb285acf8f68c3da8b8bfeee635f435c7069844c32def7a40",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    },
+    {
+      "name": "followup_npc-gameplay-final-validation-20261117_final-contract-results",
+      "result": "passed",
+      "checks": 3,
+      "record": "npc-gameplay-final-validation-20261117/final-contract-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "71b1153a32842defb285acf8f68c3da8b8bfeee635f435c7069844c32def7a40",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    },
+    {
+      "name": "final_complete_online_gameplay-results",
+      "result": "passed",
+      "checks": 48,
+      "record": "npc-gameplay-goals-r4-results-20261117/gameplay-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "71b1153a32842defb285acf8f68c3da8b8bfeee635f435c7069844c32def7a40",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    },
+    {
+      "name": "final_complete_online_restart-results",
+      "result": "passed",
+      "checks": 2,
+      "record": "npc-gameplay-goals-r4-results-20261117/restart-results.json",
+      "artifactSha256": {
+        "residents-candidate.jar": "71b1153a32842defb285acf8f68c3da8b8bfeee635f435c7069844c32def7a40",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      }
+    }
+  ],
+  "unitChecks": {
+    "javaContractsAndLedger": 183,
+    "javaGpuPolicy": 10,
+    "pythonGatewayAndBenchmark": 18,
+    "javaPlanningHealth": 21,
+    "javaExamCompletion": 33,
+    "javaRecycleQuotes": 21,
+    "javaBedrockVisualRules": 20,
+    "javaCoreGoalContext": 11,
+    "nodeMemoryProjection": 10
+  },
+  "onlineSamples": [
+    {
+      "record": "npc-gameplay-online-r9-results-20261117/online-results.json",
+      "model": "tokenplan/qwen3.8-max",
+      "thinking": false,
+      "outputTokenLimit": 320,
+      "scheduledAutonomy": false,
+      "goalVerified": true,
+      "metrics": {
+        "turns": 10,
+        "elapsedSeconds": 40.859,
+        "completedActions": 10,
+        "refusedOrFailedActions": 0,
+        "goalVerified": true,
+        "successRateSampleSize": 1
+      },
+      "fullNativeDependencies": false,
+      "artifactSha256": {
+        "residents-candidate.jar": "263c98309e5a0ffb4054c7c41b78208d363b13efc5b3acda1b671b7ea852b6f7",
+        "AgentFriend-npc-candidate.jar": "574f8522006109ba683ad8cbb2e434c11acab1d74de6a1f1214ac31232d5e6f2"
+      },
+      "providerCalls": 10,
+      "usage": {
+        "prompt_tokens": 60848,
+        "completion_tokens": 370,
+        "total_tokens": 61218
+      }
+    },
+    {
+      "record": "npc-gameplay-online-r10-results-20261117/online-results.json",
+      "model": "tokenplan/qwen3.8-max",
+      "thinking": false,
+      "outputTokenLimit": 320,
+      "scheduledAutonomy": false,
+      "goalVerified": false,
+      "metrics": {
+        "turns": 14,
+        "elapsedSeconds": 57.844,
+        "completedActions": 14,
+        "refusedOrFailedActions": 0,
+        "goalVerified": false,
+        "successRateSampleSize": 1
+      },
+      "fullNativeDependencies": true,
+      "artifactSha256": {
+        "residents-candidate.jar": "a02b14074befa5ddea3eb1c803e4f2825fa574864a5a776a58ff902ea1fb250f",
+        "AgentFriend-npc-candidate.jar": "635330454d6a49dc959ac766c3a85aa6d79ce734a546a9cfefcd461976f17617"
+      },
+      "providerCalls": 14,
+      "usage": {
+        "prompt_tokens": 92062,
+        "completion_tokens": 644,
+        "total_tokens": 92706
+      }
+    },
+    {
+      "record": "npc-gameplay-online-thinking-r2-results-20261117/online-results.json",
+      "stopRecord": "npc-gameplay-online-thinking-r2-results-20261117/intentional-stop.json",
+      "model": "tokenplan/qwen3.8-max",
+      "thinking": true,
+      "outputTokenLimit": 1024,
+      "scheduledAutonomy": false,
+      "goalVerified": false,
+      "metrics": {
+        "turns": 9,
+        "elapsedSeconds": 364.578,
+        "completedActions": 1,
+        "refusedOrFailedActions": 8,
+        "goalVerified": false,
+        "successRateSampleSize": 1
+      },
+      "stoppedReason": "repeated_provider_deadline_no_more_inference",
+      "completedTurnsBeforeStop": 9,
+      "fullNativeDependencies": true,
+      "artifactSha256": {
+        "residents-candidate.jar": "c97cb23af678da2dc7e822db3e6b18a33d2adcb00b7ff623f31b1c4dc25f9ab2",
+        "AgentFriend-npc-candidate.jar": "ef266cbdf208356416f1722dd86cc705aa20c515ac95938b835325e57467ccb2"
+      },
+      "providerCalls": 10,
+      "usage": {
+        "prompt_tokens": 21337,
+        "completion_tokens": 15732,
+        "total_tokens": 37069
+      }
+    },
+    {
+      "record": "npc-gameplay-scheduled-results-20261117/online-results.json",
+      "model": "tokenplan/qwen3.8-max",
+      "thinking": false,
+      "outputTokenLimit": 320,
+      "scheduledAutonomy": true,
+      "goalSource": "qa_persona",
+      "goalVerified": false,
+      "goalReverifiedWithInventoryDelta": false,
+      "metrics": {
+        "turns": 14,
+        "elapsedSeconds": 2392.141,
+        "completedActions": 13,
+        "refusedOrFailedActions": 1,
+        "goalVerified": false,
+        "successRateSampleSize": 1
+      },
+      "originalIntegrationResult": "objective_failed",
+      "fullNativeDependencies": true,
+      "artifactSha256": {
+        "residents-candidate.jar": "45f3e2ccb655ddbe6fc02abd9c0ef1e84aee4018a051fcbc11fb64fc09549eb3",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      },
+      "providerCalls": 13,
+      "allProviderCallsSuccessful": true,
+      "usage": {
+        "prompt_tokens": 84520,
+        "completion_tokens": 461,
+        "total_tokens": 84981
+      }
+    },
+    {
+      "record": "npc-gameplay-goals-results-20261117/online-results.json",
+      "model": "tokenplan/qwen3.8-max",
+      "thinking": false,
+      "outputTokenLimit": 320,
+      "scheduledAutonomy": true,
+      "goalSource": "mc_core_checkpoint",
+      "goalVerified": true,
+      "goalReverifiedWithInventoryDelta": true,
+      "metrics": {
+        "turns": 13,
+        "elapsedSeconds": 421.203,
+        "completedActions": 13,
+        "refusedOrFailedActions": 0,
+        "goalVerified": true,
+        "successRateSampleSize": 1
+      },
+      "originalIntegrationResult": "failed_missing_notice_identity",
+      "fullNativeDependencies": true,
+      "artifactSha256": {
+        "residents-candidate.jar": "c04e8f1cff98047c35fd8ef5e0b21dc8aa8707466e74fe304a3bf38f85d8d3bf",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      },
+      "providerCalls": 13,
+      "allProviderCallsSuccessful": true,
+      "usage": {
+        "prompt_tokens": 90524,
+        "completion_tokens": 540,
+        "total_tokens": 91064
+      },
+      "allCallsReceivedCoreGoalContext": true
+    },
+    {
+      "record": "npc-gameplay-goals-r2-results-20261117/online-results.json",
+      "model": "tokenplan/qwen3.8-max",
+      "thinking": false,
+      "outputTokenLimit": 320,
+      "scheduledAutonomy": true,
+      "goalSource": "mc_core_checkpoint",
+      "goalVerified": true,
+      "goalReverifiedWithInventoryDelta": true,
+      "metrics": {
+        "turns": 13,
+        "elapsedSeconds": 419.016,
+        "completedActions": 13,
+        "refusedOrFailedActions": 0,
+        "goalVerified": true,
+        "successRateSampleSize": 1
+      },
+      "originalIntegrationResult": "failed_test_worker_shutdown_timeout",
+      "fullNativeDependencies": true,
+      "artifactSha256": {
+        "residents-candidate.jar": "43c0395187977d4de6c71e623972585ef74dff243e38f7a26ff3ec6bc5aecfde",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      },
+      "providerCalls": 13,
+      "allProviderCallsSuccessful": true,
+      "usage": {
+        "prompt_tokens": 90685,
+        "completion_tokens": 546,
+        "total_tokens": 91231
+      },
+      "allCallsReceivedCoreGoalContext": true,
+      "workerShutdownFollowup": {
+        "record": "npc-gameplay-goals-r2-results-20261117/worker-stop-verification.json",
+        "result": "passed",
+        "normalExitCode": 0,
+        "recordsImported": 14,
+        "sourceGoalUnchanged": true
+      }
+    },
+    {
+      "record": "npc-gameplay-goals-final-results-20261117/online-results.json",
+      "model": "tokenplan/qwen3.8-max",
+      "thinking": false,
+      "outputTokenLimit": 320,
+      "scheduledAutonomy": true,
+      "goalSource": "mc_core_checkpoint",
+      "goalVerified": false,
+      "goalReverifiedWithInventoryDelta": true,
+      "reverifiedAtTurn": 14,
+      "metrics": {
+        "turns": 14,
+        "elapsedSeconds": 454.578,
+        "completedActions": 14,
+        "refusedOrFailedActions": 0,
+        "goalVerified": false,
+        "successRateSampleSize": 1
+      },
+      "originalIntegrationResult": "failed_test_native_food_transfer_observation",
+      "fullNativeDependencies": true,
+      "artifactSha256": {
+        "residents-candidate.jar": "71b1153a32842defb285acf8f68c3da8b8bfeee635f435c7069844c32def7a40",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      },
+      "providerCalls": 14,
+      "allProviderCallsSuccessful": true,
+      "allCallsReceivedCoreGoalContext": true,
+      "usage": {
+        "prompt_tokens": 96582,
+        "completion_tokens": 643,
+        "total_tokens": 97225
+      }
+    },
+    {
+      "record": "npc-gameplay-goals-r4-results-20261117/online-results.json",
+      "model": "tokenplan/qwen3.8-max",
+      "thinking": false,
+      "outputTokenLimit": 320,
+      "scheduledAutonomy": true,
+      "goalSource": "mc_core_checkpoint",
+      "goalVerified": true,
+      "goalReverifiedWithInventoryDelta": true,
+      "reverifiedAtTurn": 13,
+      "metrics": {
+        "turns": 13,
+        "elapsedSeconds": 415.485,
+        "completedActions": 13,
+        "refusedOrFailedActions": 0,
+        "goalVerified": true,
+        "successRateSampleSize": 1
+      },
+      "originalIntegrationResult": "passed",
+      "fullNativeDependencies": true,
+      "artifactSha256": {
+        "residents-candidate.jar": "71b1153a32842defb285acf8f68c3da8b8bfeee635f435c7069844c32def7a40",
+        "AgentFriend-npc-candidate.jar": "ba7c3a3117e4b9aa9218c55619f2bc1d1086bf6acf0572a8663ff8b8d8b55764"
+      },
+      "providerCalls": 13,
+      "allProviderCallsSuccessful": true,
+      "allCallsReceivedCoreGoalContext": true,
+      "usage": {
+        "prompt_tokens": 88877,
+        "completion_tokens": 560,
+        "total_tokens": 89437
+      },
+      "completeRunNormalExitCode": 0,
+      "memoryReadback": {
+        "record": "npc-gameplay-goals-r4-results-20261117/memory-final-readback.json",
+        "result": "passed",
+        "records": 14,
+        "imported": 14,
+        "canonicalIdentities": true,
+        "workerStoppedNormally": true,
+        "sameOriginalScope": true
+      },
+      "readOnlyPostActionObservations": 0
+    }
+  ],
+  "releaseBlockers": [
+    "Bounded core-goal scenario completed in 13 scheduled turns, but sustained multi-NPC operation and harness-driven goal creation/update/verification are not fully accepted; the new integration is a read-only projection of the existing core goal authority.",
+    "Complete ordinary player CLI, profession growth and native crafting/fishing/trade/exploration events are not all adapted.",
+    "Real Bedrock and web appearance/animation/bubble/menu acceptance is incomplete; encrypted YSM is not claimed converted.",
+    "New residents still require production housing, identity, model, persona, memory scope and protection/work-area provisioning with checks."
+  ],
+  "optionalInitialFeatures": [
+    "Japanese character voice can remain unconfigured; no listening acceptance claimed."
+  ],
+  "recordsPolicy": "Private local evidence only. No credentials, runtime memories, world saves, original models or captured images are committed.",
+  "finalArtifactDelta": {
+    "fromSha256": "e39cd4c67458d78c0c920c7934d0ca185e0085a07f185ab4f1c835b06c9d4e56",
+    "toSha256": "71b1153a32842defb285acf8f68c3da8b8bfeee635f435c7069844c32def7a40",
+    "changedEntries": [
+      "local/qdj/maids/brain/ResidentCliContract$Operation.class",
+      "local/qdj/maids/brain/ResidentCliContract.class"
+    ],
+    "verification": "Full gameplay, fault and restart groups are attributed to the preceding artifact; the final discovery-only class change has Java contract checks plus the 12 goal-context and 3 native contract checks recorded separately. The final artifact subsequently passed the complete scheduled online scenario, 48 native gameplay checks and 2 cold-restart checks; see final_complete_online groups."
+  },
+  "earlierUnitChecks": {
+    "javaContractsAndLedger": 108,
+    "javaGpuPolicy": 10,
+    "nodeMemoryAndCamera": 26,
+    "pythonGatewayAndBenchmark": 12,
+    "javaPlanningHealth": 21,
+    "javaExamCompletion": 33,
+    "javaRecycleQuotes": 21,
+    "javaBedrockVisualRules": 20
+  },
+  "noticeRecovery": {
+    "record": "npc-gameplay-goals-r2-results-20261117/real-notice-recovery.json",
+    "readback": "npc-gameplay-goals-r2-results-20261117/real-notice-readback.json",
+    "originalRawNoticeUnchanged": true,
+    "newlyImported": 7,
+    "totalImported": 14,
+    "repeatImported": 0,
+    "sameActorCoreMemoryReadback": true
+  },
+  "additionalRecoveryEvidence": [
+    {
+      "record": "npc-gameplay-combat-restart-r2-results-20261117/combat-results.json",
+      "checks": 38,
+      "scope": "0.3.4 real combat, normal restart and party-defeat recovery; not nearby teammate revival"
+    },
+    {
+      "record": "npc-gameplay-rescue-restart-results-20261117/rescue-results.json",
+      "checks": 19,
+      "scope": "0.3.4 explicit nearby_teammate revive after cold restart, using a physical shelter; not autonomous tactical competence"
+    }
+  ],
+  "nativeMealVerification": {
+    "record": "npc-gameplay-goals-final-results-20261117/native-meal-inspection.json",
+    "passed": true,
+    "handFoodObserved": true,
+    "remainingSevenInBagObserved": true,
+    "nativeFoodAiUnmodified": true,
+    "normalExitCode": 0
+  }
+}

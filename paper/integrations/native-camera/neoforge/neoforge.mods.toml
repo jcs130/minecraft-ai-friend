@@ -3,7 +3,7 @@ loaderVersion="[4,)"
 license="MIT"
 [[mods]]
 modId="qiandeng_native_camera"
-version="0.2.0"
+version="0.2.1"
 displayName="Qiandengji Native Camera"
 [[dependencies.qiandeng_native_camera]]
 modId="neoforge"

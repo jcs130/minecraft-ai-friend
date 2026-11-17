@@ -26,6 +26,14 @@ public final class VortexBridge extends JavaPlugin {
     private VortexCorePlugin vortex;
     private QuestService quests;
     private ManaManager mana;
+    private ResidentRpgApi residents;
+    public void residentTick(UUID id,String role){if(residents==null)residents=new ResidentRpgApi(vortex,this);residents.tick(id,role);}
+    public String residentState(UUID id){if(residents==null)return "{\"available\":false,\"backend\":\"vortex\",\"reason\":\"profile_loading\"}";return residents.state(id);}
+    public String residentReflex(UUID id,boolean fighting){return residents==null?"":residents.reflex(id,fighting);}
+    public boolean residentMana(UUID id,double amount,boolean spend){return residents!=null&&residents.mana(id,amount,spend);}
+    public boolean residentRefill(UUID id){return residents!=null&&residents.refill(id);}
+    public void residentExperience(UUID id,long amount){if(residents==null)throw new IllegalStateException("profile_loading");residents.xp(id,amount);}
+    public void residentCombatExperience(UUID id,long cumulative){if(residents==null)throw new IllegalStateException("profile_loading");residents.combatXp(id,cumulative);}
     private CustomItemService items;
     private Map<?,?> registeredEffects=Map.of();
     private YamlConfiguration city;
@@ -403,7 +411,10 @@ public final class VortexBridge extends JavaPlugin {
     private boolean skillFailure(Player p,UnifiedPlayer state,BridgeRules.Request r){
         if(!(r.group().equals("cast")||r.group().equals("skills")&&Set.of("info","explain","status","learn","prepare","equip").contains(r.action()))||r.arguments().size()!=1)return false;
         String id=r.arguments().getFirst();
-        if(SkillTransition.COMMON.contains(id))return false;
+        if(SkillTransition.COMMON.contains(id)){
+            if(io.vortexcore.rpg.ResidentActors.registered(p.getUniqueId())){emit(p,r,Map.of("success",false,"changed",false,"reason","native_body_adapter_required","skill",id,"nextCommand","/mycli skills list"),"此通用玩家技能尚未接入居民身体；职业技能请查询 skills list。");return true;}
+            return false;
+        }
         boolean spell=vortex.spellbookService().editorSpellSnapshots().stream().anyMatch(s->s.id().equals(id));
         boolean node=vortex.classSkillService().skillsFor(state).stream().anyMatch(s->s.id().equals(id))
             ||vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).flatMap(t->t.find(id)).isPresent();
@@ -416,7 +427,7 @@ public final class VortexBridge extends JavaPlugin {
         if(spell||node)return false;
         boolean chosen=vortex.classSkillService().hasClass(state);String next=SkillTransition.next(chosen);
         emit(p,r,Map.of("success",false,"reason",SkillTransition.reason(id),"skill",id,"nextCommand",next,"changed",false),SkillTransition.message(id,chosen));
-        if(SkillTransition.reason(id).equals("unknown_skill")){
+        if(SkillTransition.reason(id).equals("unknown_skill")&&!io.vortexcore.rpg.ResidentActors.registered(p.getUniqueId())){
             var friend=Bukkit.getPluginManager().getPlugin("AgentFriend");
             if(friend!=null&&friend.isEnabled())try{
                 var words=new ArrayList<String>();words.add(r.group());if(!r.group().equals("cast"))words.add(r.action());words.addAll(r.arguments());if(r.json())words.add("--json");
@@ -434,7 +445,7 @@ public final class VortexBridge extends JavaPlugin {
             case "menu"->{noArgs(r);vortex.classSkillService().openSkillMenu(p,state);if(r.json())emit(p,r,Map.of("requestedMenu","skills","learningConfirmed",false,"nextCommand","/mycli skills status"),"已请求打开技能菜单；尚未学习。");}
             case "list", "status", "mine", "points"->{noArgs(r);var ids=vortex.spellbookService().availableSpells(state);var learnable=vortex.classSkillService().skillsFor(state).stream().filter(k->!vortex.classSkillService().unlockedSkillIds(state).contains(k.id())).toList();
                 String active=vortex.spellbookService().activeSpellId(state).orElse("");
-                emit(p,r,Map.of("available",ids,"common",SkillTransition.COMMON,"learnable",learnable,"skillPoints",vortex.classSkillService().unspentSkillPoints(state),"activeSpell",active),
+                emit(p,r,Map.of("available",ids,"common",io.vortexcore.rpg.ResidentActors.registered(p.getUniqueId())?List.of():SkillTransition.COMMON,"learnable",learnable,"skillPoints",vortex.classSkillService().unspentSkillPoints(state),"activeSpell",active),
                     "基础：home/selfheal/food/blink/starbolt/frostnova/give；其他通用：travel/prospect/night/feather；职业可用："+String.join("、",ids)+"；当前点击技 "+(active.isEmpty()?"未设置":active)+"；学习点 "+vortex.classSkillService().unspentSkillPoints(state)+"；可学："+String.join("、",learnable.stream().map(k->k.id()+"("+k.cost()+"点,Lv"+k.requiredLevel()+")").toList())+"。详情：/mycli skills info <ID>");}
             case "prepare", "equip"->{String id=BridgeRules.id(r);if(SkillTransition.COMMON.contains(id)){emit(p,r,Map.of("success",false,"reason","common_direct_cast","changed",false,"nextCommand","/mycli skills info "+id),"基础通用技直接施放或用原法杖绑定；无需学习，也不占职业点击技。下一步：/mycli skills info "+id);return;}write(p,r,()->{vortex.spellbookService().setActiveSpell(state,id);return CompletableFuture.completedFuture(null);},true,"已设置点击技能并保存；施放：/mycli cast "+id);}
             case "info"->{String id=BridgeRules.id(r);

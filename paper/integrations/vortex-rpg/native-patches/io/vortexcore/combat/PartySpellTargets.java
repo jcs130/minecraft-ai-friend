@@ -41,9 +41,10 @@ public final class PartySpellTargets {
         }
         List<Player> players = new ArrayList<>();
         for (var entity : caster.getNearbyEntities(range, range, range)) {
-            if (!(entity instanceof Player ally) || ally.equals(caster) || !ally.isOnline() || ally.isDead()
+            Player ally=entity instanceof Player player?player:io.vortexcore.rpg.ResidentActors.player(entity.getUniqueId());
+            if (ally==null || ally.equals(caster) || !ally.isOnline() || ally.isDead()
                     || ally.getGameMode() == GameMode.SPECTATOR || ally.getGameMode() == GameMode.CREATIVE
-                    || location.distanceSquared(ally.getLocation()) > range * range || !caster.hasLineOfSight(ally)) continue;
+                    || location.distanceSquared(ally.getLocation()) > range * range || !caster.hasLineOfSight(io.vortexcore.rpg.ResidentActors.source(ally))) continue;
             boolean sameParty = members.contains(ally.getUniqueId());
             if (activity == null ? sameParty : canAssist(activity, caster, ally, sameParty)) players.add(ally);
         }

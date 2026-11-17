@@ -31,7 +31,14 @@ final class ResidentCommands {
         var body=Commands.argument("residentId",UuidArgument.uuid());
         body.then(Commands.literal("travel-receipt").requires(s->s.hasPermission(2)).then(Commands.argument("requestId",UuidArgument.uuid())
             .executes(c->reply(c.getSource(),runtime.get(),r->r.travelReceipt(UuidArgument.getUuid(c,"residentId"),UuidArgument.getUuid(c,"requestId"))))));
+        body.then(Commands.literal("travel-inspect").requires(s->s.hasPermission(2))
+            .then(Commands.argument("requestId",UuidArgument.uuid()).then(Commands.argument("reviewId",UuidArgument.uuid())
+            .then(Commands.argument("inspection",StringArgumentType.greedyString()).executes(c->reply(c.getSource(),runtime.get(),r->{
+                String raw=StringArgumentType.getString(c,"inspection");if(raw.length()>2048)throw new IllegalArgumentException("inspection_too_large");
+                return r.inspectTravel(UuidArgument.getUuid(c,"residentId"),UuidArgument.getUuid(c,"requestId"),UuidArgument.getUuid(c,"reviewId"),JsonParser.parseString(raw).getAsJsonObject());}))))));
         body.then(Commands.literal("status").executes(c->reply(c.getSource(),runtime.get(),r->c.getSource().hasPermission(2)?r.observe(UuidArgument.getUuid(c,"residentId")):r.publicView(UuidArgument.getUuid(c,"residentId")))));
+        body.then(Commands.literal("travel-resume").requires(s->s.hasPermission(2)).then(Commands.argument("reviewId",UuidArgument.uuid())
+            .executes(c->reply(c.getSource(),runtime.get(),r->r.resumeTravel(UuidArgument.getUuid(c,"residentId"),UuidArgument.getUuid(c,"reviewId"))))));
         body.then(Commands.literal("receipt").requires(s->s.hasPermission(2)).then(Commands.argument("requestId",UuidArgument.uuid())
             .executes(c->reply(c.getSource(),runtime.get(),r->r.receipt(UuidArgument.getUuid(c,"residentId"),UuidArgument.getUuid(c,"requestId"))))));
         body.then(Commands.literal("plan").requires(s->s.hasPermission(2)).executes(c->reply(c.getSource(),runtime.get(),r->r.plan(UuidArgument.getUuid(c,"residentId")))));

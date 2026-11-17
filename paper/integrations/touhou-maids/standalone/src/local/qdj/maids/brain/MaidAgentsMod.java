@@ -36,6 +36,8 @@ public final class MaidAgentsMod {
         NeoForge.EVENT_BUS.addListener(MaidAgentsMod::tick);
         NeoForge.EVENT_BUS.addListener(MaidAgentsMod::interact);
         NeoForge.EVENT_BUS.addListener(MaidAgentsMod::damage);
+        NeoForge.EVENT_BUS.addListener(MaidAgentsMod::damaged);
+        NeoForge.EVENT_BUS.addListener(MaidAgentsMod::projectile);
         NeoForge.EVENT_BUS.addListener(MaidAgentsMod::drops);
         NeoForge.EVENT_BUS.addListener(MaidAgentsMod::chat);
     }
@@ -72,6 +74,7 @@ public final class MaidAgentsMod {
             running.residents().tick();
         if (event.getServer().getTickCount() % 20 == 0 && running != null && running.companions() != null)
             running.companions().tick();
+        if(event.getServer().getTickCount()%5==0&&running!=null&&running.residents()!=null)running.residents().combatTick();
     }
 
     private static void interact(net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.EntityInteract event) {
@@ -89,10 +92,23 @@ public final class MaidAgentsMod {
     private static void damage(net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent event) {
         if (running == null) return;
         var attacker = event.getSource().getEntity();
+        if(event.getSource().getDirectEntity() instanceof net.minecraft.world.entity.projectile.Projectile shot
+            &&shot.getPersistentData().getBoolean("tlm_resident_shot")&&attacker==null){event.setCanceled(true);return;}
+        if(attacker instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid resident
+            &&ResidentProtection.registered(resident)&&!ResidentCombat.hostile(resident,event.getEntity())){event.setCanceled(true);return;}
         // Native jobs may target hostiles. A contract never authorizes harming players, pets, villagers or NPCs.
         if (attacker instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid &&
                 running.reserved(maid.getUUID()) && !(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy))
             event.setCanceled(true);
+    }
+    private static void projectile(net.neoforged.neoforge.event.entity.EntityJoinLevelEvent event){
+        if(event.getEntity() instanceof net.minecraft.world.entity.projectile.Projectile shot
+            &&shot.getOwner() instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid
+            &&ResidentProtection.registered(maid))shot.getPersistentData().putBoolean("tlm_resident_shot",true);
+    }
+    private static void damaged(net.neoforged.neoforge.event.entity.living.LivingDamageEvent.Post event){
+        if(running!=null&&running.residents()!=null&&event.getSource().getEntity() instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid
+            &&ResidentProtection.registered(maid))running.residents().combat.damaged(maid,event.getEntity(),event.getNewDamage(),event.getSource().getDirectEntity() instanceof net.minecraft.world.entity.projectile.Projectile);
     }
 
     private static void drops(net.neoforged.neoforge.event.entity.living.LivingDropsEvent event) {

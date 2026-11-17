@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';
-import {validateNativeCamera,nativeCameraPose,createNativePhotoRenderer,replaceNativePhotoFile} from './native-photo-renderer.mjs';
+import {validateNativeCamera,nativeCameraPose,createNativePhotoRenderer,replaceNativePhotoFile,nativePhotoOwner} from './native-photo-renderer.mjs';
 const id='bdab127e-4ef3-4380-adca-a6f1430223d5';
 const state=()=>({schema:'qiandeng-native-camera/v1',instanceId:id,playerUuid:id,at:new Date().toISOString(),connected:true,renderer:'Intel(R) UHD Graphics 770',server:'127.0.0.1:29090',shadersEnabled:true,cleanHud:true,cleanToasts:true,modelCatalogueSize:4});
 const job={job:id,nonce:id,owner:id,entityId:12,mode:'first',x:0,y:64,z:0,yaw:Math.PI,pitch:-0.25,anchorX:0,anchorY:64,anchorZ:0};
@@ -33,7 +33,22 @@ test('web pose is converted to actual Minecraft camera coordinates and angles wi
  assert.equal(nativeCameraPose({...job,mode:'top',y:84,pitch:-Math.PI/2},state()).pitch,90);
  for(const change of [{x:100},{pitch:NaN},{entityId:1.5},{owner:'wrong'},{mode:'free'}])assert.throws(()=>nativeCameraPose({...job,...change},state()));
 });
-for(const scenario of [{shaders:true},{shaders:false},{shaders:false,scene:true},{shaders:false,scene:'failed'},{shaders:true,gpu:'rtx3080ti',scene:true}])test(`native handshake (${JSON.stringify(scenario)}) keeps photograph delivery independent of scene storage and expires its render lease`,async()=>{
+
+test('a native NPC photo requires its exact entity and loaded renderer, without inventing a player connection',()=>{
+ const maid={uuid:id,entityId:12,type:'touhou_little_maid:maid',model:'kirito',modelLoaded:true,renderKind:'ysm'};
+ assert.equal(nativePhotoOwner({players:[],maids:[maid]},job),maid);
+ for(const change of [{entityId:13},{uuid:'wrong'},{type:'minecraft:pig'},{modelLoaded:false},{modelLoaded:undefined},{renderKind:'unknown'}])
+   assert.equal(nativePhotoOwner({maids:[{...maid,...change}]},job),undefined);
+ assert.equal(nativePhotoOwner({maids:[{...maid,renderKind:'native_maid'}]},job).renderKind,'native_maid');
+});
+
+test('the independent QA adapter has an explicit profile and does not match the production GPU profile',()=>{
+ const actual={...state(),renderer:'NVIDIA RTX PRO 5000 72GB Blackwell/PCIe/SSE2',vendor:'NVIDIA Corporation',expectedGpu:'rtxpro5000'};
+ assert.equal(validateNativeCamera(actual,Date.now(),true,'rtxpro5000'),actual);
+ assert.throws(()=>validateNativeCamera(actual,Date.now(),true,'rtx3080ti'),/NOT_READY/);
+ for(const change of [{renderer:'NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2'},{vendor:'Other'},{expectedGpu:undefined}])assert.throws(()=>validateNativeCamera({...actual,...change},Date.now(),true,'rtxpro5000'),/NOT_READY/);
+});
+for(const scenario of [{shaders:true},{shaders:false},{shaders:false,scene:true},{shaders:false,scene:'failed'},{shaders:true,gpu:'rtx3080ti',scene:true},{shaders:false,maid:true}])test(`native handshake (${JSON.stringify(scenario)}) keeps photograph delivery independent of scene storage and expires its render lease`,async()=>{
  const shadersEnabled=scenario.shaders;
  const cameraState=()=>({...state(),shadersEnabled,...(scenario.gpu?{renderer:'NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2',vendor:'NVIDIA Corporation',expectedGpu:scenario.gpu}:{})});
  const root=await mkdtemp(path.join(os.tmpdir(),'native-photo-'));let timer;
@@ -43,7 +58,7 @@ for(const scenario of [{shaders:true},{shaders:false},{shaders:false,scene:true}
   await writeFile(path.join(root,'agent-mc-bridge/connection.json'),JSON.stringify({protocol:'agent-mc-java/v1',endpoint:'http://127.0.0.1:12345',token:'x'.repeat(64)}));
   // The real NativeCameraClient publishes diagnostics with an atomic move.
   // Match that contract: truncating the live file races the renderer's probe.
-  let busy=false;timer=setInterval(async()=>{if(busy)return;busy=true;try{const row=JSON.parse(await readFile(pose,'utf8'));if(row.expiresAt>0){await writeFile(file+'.writing',JSON.stringify({...cameraState(),job:row.job,nonce:row.nonce,poseOwner:row.owner,renderedJob:row.job,renderedFrames:3,cameraPosition:[row.x,row.y,row.z],players:[{uuid:id,model:'test',modelLoaded:true}]}));await replaceNativePhotoFile(file+'.writing',file);}}catch{}finally{busy=false;}},30);
+  let busy=false;timer=setInterval(async()=>{if(busy)return;busy=true;try{const row=JSON.parse(await readFile(pose,'utf8'));if(row.expiresAt>0){await writeFile(file+'.writing',JSON.stringify({...cameraState(),job:row.job,nonce:row.nonce,poseOwner:row.owner,renderedJob:row.job,renderedFrames:3,cameraPosition:[row.x,row.y,row.z],players:scenario.maid?[]:[{uuid:id,model:'test',modelLoaded:true}],maids:scenario.maid?[{uuid:id,entityId:12,type:'touhou_little_maid:maid',model:'test',modelLoaded:true,renderKind:'ysm'}]:[]}));await replaceNativePhotoFile(file+'.writing',file);}}catch{}finally{busy=false;}},30);
   const png=Buffer.alloc(2048);Buffer.from('89504e470d0a1a0a','hex').copy(png);png.writeUInt32BE(256,16);png.writeUInt32BE(256,20);
   const renderer=createNativePhotoRenderer({gameDir:root,shadersEnabled,expectedGpu:scenario.gpu??'intel',...(scenario.scene?{sceneDirectory:path.join(root,'scenes'),sceneRadius:0}:{}),PNG:{sync:{read:()=>({width:256,height:256,data:Buffer.alloc(256*256*4,128)})}},fetchImpl:async(url,options)=>{
    assert.equal(url,'http://127.0.0.1:12345/v1/rpc');assert.equal(options.headers.Authorization,'Bearer '+'x'.repeat(64));const call=JSON.parse(options.body);assert.equal(call.params.expectedUuid,id);assert.equal('controllerId' in call.params,false);
