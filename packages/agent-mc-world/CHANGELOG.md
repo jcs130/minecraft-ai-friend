@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.97
+
+- Exclude unloaded blocks during idle path searches and live replanning. A missing block position leaves the game connection and existing movement constraints intact.
+
 ## 0.5.7-rc.160-preview.95
 
 - Preserve plugin menus opened by villager interaction, with bounded slot readback and explicit no-purchase evidence. Keep native trade indices distinct from plugin button slots.

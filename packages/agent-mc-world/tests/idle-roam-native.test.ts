@@ -103,3 +103,34 @@ it('rejects missing chunks, a cliff and routes outside the idle anchor',async()=
   await result;expect(h.b.entity.position.distanceTo(start)).toBeLessThan(.1);
  }finally{h.close();}
 });
+
+it('excludes the native coordinate-less block during idle sampling and live route checks',async()=>{
+ const h=fixture();
+ try{
+  const bot=h.b,origin=bot.entity.position.clone();
+  const blockAt=bot.blockAt.bind(bot);
+  bot.blockAt=(p,...args)=>p.x>=16?null:blockAt(p,...args);
+  const search=bot.pathfinder.getPathTo.bind(bot.pathfinder);
+  let calls=0;
+  const probe=vi.spyOn(bot.pathfinder,'getPathTo').mockImplementation((movements,...args)=>{
+   const missing=movements.getBlock(new Vec3(15,64,0),1,0,0);
+   expect(missing.position).toBeUndefined();
+   expect(movements.exclusionStep(missing)).toBeGreaterThanOrEqual(100);
+   expect(movements.exclusionStep(movements.getBlock(origin,0,0,0))).toBeLessThan(100);
+   calls++;
+   return search(movements,...args);
+  });
+  try{
+   sampleIdleRoam(bot,origin,()=>0);
+   expect(calls).toBeGreaterThan(0);
+   const sampled=calls, stop=new AbortController();
+   const walking=executeIdleRoam(bot,{origin,destination:new Vec3(5,64,0),anchor:origin},stop.signal,()=>true);
+   await vi.advanceTimersByTimeAsync(250);
+   stop.abort();
+   await vi.advanceTimersByTimeAsync(50);
+   await walking;
+   expect(calls).toBeGreaterThan(sampled);
+   expect(idleRoamOwnsPath(bot)).toBe(false);
+  }finally{probe.mockRestore();}
+ }finally{h.close();}
+});
