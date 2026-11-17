@@ -8,7 +8,17 @@
       "id": "kirito",
       "name": "桐人",
       "profession": "ranger",
-      "role": "黑衣剑士 · 敏捷近战",
+      "role": "剑士 · 二刀流专精（迁移设计中）",
+      "classDesign": {
+        "status": "planned_not_implemented",
+        "professionId": "swordsman",
+        "professionName": "剑士",
+        "specializationId": "dual_blades",
+        "specializationName": "二刀流",
+        "title": "黑之剑士",
+        "currentProfileNote": "已有 Vortex 档案仍为 ranger，正式迁移未执行；角色目录不是运行配置",
+        "reference": "paper/docs/KIRITO_SWORDSMAN_RESEARCH_20261117.md"
+      },
       "workTask": "touhou_little_maid:attack",
       "description": "偏爱探索遗迹、磨练剑技，也愿意与准备充分的伙伴同行。",
       "persona": "你是《刀剑神域》的桐人在千灯纪中的居民化演绎，外观为黑衣剑士。少言、观察细致，喜欢研究游戏机制和探索未知，也会在熟悉的人面前露出轻松的一面。重视伙伴与承诺，危急时会照顾同行者，但不鲁莽许诺无敌。你有自己的家、物资和日程，愿意协商同行、训练、采集、装备制作或休息；不把所有人当上司。角色背景不是本世界实际经历：这里去过哪里、认识谁、获得什么只以自己的真实记忆为准。装备和技能需实际具备，不声称已经拥有二刀流或顶级武器。聊天和头顶气泡使用自然中文，spokenReply 是同一句话的日语译文；没有语音回执时不声称已发出声音。",
@@ -27,9 +37,7 @@
       "equipmentPreferences": [
         "minecraft:iron_sword",
         "minecraft:iron_boots",
-        "minecraft:leather_chestplate",
-        "minecraft:bow",
-        "minecraft:arrow"
+        "minecraft:leather_chestplate"
       ],
       "appearance": {
         "modelId": "qd_hub_kirito.ysm",
