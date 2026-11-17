@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+import hashlib
+import json
 from datetime import datetime
 from typing import Any, Protocol
 
@@ -64,6 +66,12 @@ def episode_from_event(event: BodyEvent, identity: BodyIdentity, seq: int) -> Me
     speaker = event.data.get("speaker") or event.data.get("speakerId")
     who = f"{speaker}: " if speaker else ""
     where = f" [{identity.world.dimension}]" if identity.world.dimension else ""
-    return MemoryEpisode(id=f"{identity.body_id[:8]}-{seq}", kind=event.kind, name=f"{event.kind}{where}",
+    # A process-local counter repeats after restart and used to overwrite older SQLite rows.
+    # Prefer the original event ID; otherwise the observation time and payload identify the event.
+    source_id = event.data.get("eventId") or event.data.get("event_id")
+    material = [identity.body_id, event.kind, source_id] if source_id else [
+        identity.body_id, event.kind, event.at.isoformat(), event.request_id, speaker, event.text]
+    event_id = hashlib.sha256(json.dumps(material, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    return MemoryEpisode(id=f"event-{event_id}", kind=event.kind, name=f"{event.kind}{where}",
                          body=f"{who}{event.text}"[:20_000], source_description=f"{identity.kind} body {identity.name or identity.body_id}",
                          reference_time=event.at, actors=[a for a in (identity.name, speaker) if a])

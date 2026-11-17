@@ -100,4 +100,5 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
             api_key_env=_env_name(e.get("AGENT_MEMORY_EMBED_API_KEY_ENV"), "OPENAI_API_KEY"),
             dim=int(e.get("AGENT_MEMORY_EMBED_DIM") or 384),
         ),
+        extra={"receipts": e.get("AGENT_MEMORY_RECEIPTS_PATH") or os.path.join(".data", "graphiti-receipts.sqlite3")},
     )

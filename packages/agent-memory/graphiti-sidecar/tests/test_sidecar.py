@@ -74,3 +74,23 @@ def test_bearer_token_required_when_configured():
     client = TestClient(create_app(FakeService(), token="t0k"))
     assert client.get("/health").status_code == 401
     assert client.get("/health", headers={"authorization": "Bearer t0k"}).status_code == 200
+
+
+def test_private_failures_are_not_exposed_and_service_closes():
+    class Unavailable(FakeService):
+        closed = False
+        async def add_episode(self, *args):
+            raise ValueError('episode_id_conflict')
+        async def search(self, *args):
+            raise RuntimeError('private-api-key-in-upstream-exception')
+        async def close(self):
+            self.closed = True
+    service = Unavailable()
+    with TestClient(create_app(service, token='secret')) as client:
+        headers = {'authorization': 'Bearer secret'}
+        response = client.post('/search', headers=headers, json={'group_id': 'test', 'query': 'where'})
+        assert response.status_code == 503 and response.json() == {'detail': 'memory_search_unavailable'}
+        response = client.post('/episodes', headers=headers, json={'group_id': 'test', 'episode': {
+            'id': 'id', 'kind': 'chat', 'name': 'chat', 'body': 'message', 'reference_time': '2026-11-17T00:00:00Z'}})
+        assert response.status_code == 409
+    assert service.closed

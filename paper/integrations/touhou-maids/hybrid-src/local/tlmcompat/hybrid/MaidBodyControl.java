@@ -11,7 +11,7 @@ final class MaidBodyControl {
     static final String PROTOCOL="qiandengji-maid-body/v1";
     static final long LEASE_MILLIS=120_000;
     static final Set<String> READS=Set.of("list","context","inventory","tasks","brain","receipt","inbox","spells");
-    static final Set<String> WRITES=Set.of("walk","stop","stay","sit","follow","companion","cast","task","equip","pickup","schedule","speak","ack");
+    static final Set<String> WRITES=Set.of("walk","stop","stay","sit","follow","guard","companion","cast","task","equip","pickup","schedule","speak","ack");
     static Set<String> fields(String action){
         var keys=new HashSet<>(Set.of("action","maidId","requestId"));
         keys.addAll(switch(action){case "walk"->Set.of("x","y","z","dimension");case "receipt"->Set.of("operationId","operationAction");

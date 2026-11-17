@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 
 
 def main() -> None:
@@ -15,8 +16,10 @@ def main() -> None:
         raise SystemExit("Refusing to bind a non-loopback address without AGENT_MEMORY_SIDECAR_TOKEN_ENV")
     logging.getLogger("agent_memory_sidecar").info(
         "driver=%s llm=%s embedder=%s", settings.driver, settings.llm.describe(), settings.embedder.describe())
-    app = create_app(GraphitiService(settings), settings.token())
-    uvicorn.run(app, host=settings.host, port=settings.port, log_level="info")
+    async def serve():
+        app = create_app(GraphitiService(settings), settings.token())
+        await uvicorn.Server(uvicorn.Config(app, host=settings.host, port=settings.port, log_level="info")).serve()
+    asyncio.run(serve())
 
 
 if __name__ == "__main__":

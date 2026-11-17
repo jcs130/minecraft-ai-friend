@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import json
 import os
+import sqlite3
+import uuid
+from types import SimpleNamespace
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
@@ -115,14 +121,46 @@ class GraphitiService:
                 driver._database = ""  # type: ignore[attr-defined]
         else:
             from graphiti_core.driver.falkordb_driver import FalkorDriver
-            driver = FalkorDriver(host=settings.falkordb_host, port=settings.falkordb_port)
+            class ScopedFalkorDriver(FalkorDriver):
+                """Reuse graph-scoped drivers; drain their index tasks before closing the shared client."""
+                def __init__(self, **kwargs):
+                    super().__init__(**kwargs)
+                    self.scopes = {}
+
+                def clone(self, database):
+                    if database == self._database:
+                        return self
+                    if database not in self.scopes:
+                        self.scopes[database] = super().clone(database)
+                    return self.scopes[database]
+
+                async def close(self):
+                    tasks = [d._init_task for d in self.scopes.values() if d._init_task is not None]
+                    if tasks:
+                        await asyncio.gather(*tasks, return_exceptions=True)
+                    await super().close()
+            driver = ScopedFalkorDriver(host=settings.falkordb_host, port=settings.falkordb_port)
 
         llm = settings.llm
         api_key = os.environ.get(llm.api_key_env)
+        from openai import AsyncOpenAI
+        class BoundedCompletionClient:
+            def __init__(self):
+                self.transport = AsyncOpenAI(api_key=api_key, base_url=llm.base_url, timeout=25, max_retries=0)
+                self.chat = SimpleNamespace(completions=self)
+
+            async def create(self, **kwargs):
+                kwargs["max_tokens"] = min(kwargs.get("max_tokens", 4096), 4096)
+                if str(kwargs.get("model", "")).lower().startswith("qwen"):
+                    kwargs["extra_body"] = {"enable_thinking": False}
+                return await self.transport.chat.completions.create(**kwargs)
+
+        self._completion = BoundedCompletionClient()
         llm_client = OpenAIGenericClient(
             config=LLMConfig(api_key=api_key, model=llm.model, small_model=llm.small_model or llm.model,
                              base_url=llm.base_url),
             structured_output_mode=llm.structured_output,  # type: ignore[arg-type]
+            client=self._completion, max_tokens=4096,
         )
         emb = settings.embedder
         if emb.kind == "hash":
@@ -135,6 +173,14 @@ class GraphitiService:
         self.graphiti = Graphiti(graph_driver=driver, llm_client=llm_client, embedder=embedder,
                                  cross_encoder=PassthroughReranker(), max_coroutines=4)
         self._ready = False
+        path = settings.extra.get("receipts", os.path.join(".data", "graphiti-receipts.sqlite3"))
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        self._receipts = sqlite3.connect(path)
+        self._receipts.execute("PRAGMA journal_mode=WAL")
+        self._receipts.execute("PRAGMA synchronous=FULL")
+        self._receipts.execute("CREATE TABLE IF NOT EXISTS episodes (scope TEXT, id TEXT, digest TEXT NOT NULL, result TEXT, PRIMARY KEY(scope,id))")
+        self._receipts.commit()
+        self._extract_lock = asyncio.Lock()
 
     async def _ensure(self) -> None:
         if not self._ready:
@@ -164,18 +210,53 @@ class GraphitiService:
                 "llm_configured": s.llm.configured}
 
     async def add_episode(self, group_id: str, episode: EpisodeIn, hints: list[str]) -> dict[str, Any]:
-        from graphiti_core.nodes import EpisodeType
+        # One extraction writer also bounds model/CPU pressure. An identical delivery
+        # after a lost HTTP response returns the durable receipt without another LLM call.
+        digest = hashlib.sha256(json.dumps({"episode": episode.model_dump(mode="json"), "hints": hints},
+                                          ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+        async with self._extract_lock:
+            old = self._receipts.execute("SELECT digest,result FROM episodes WHERE scope=? AND id=?", (group_id, episode.id)).fetchone()
+            if old:
+                if old[0] != digest:
+                    raise ValueError("episode_id_conflict")
+                if old[1] is not None:
+                    return json.loads(old[1])
+            else:
+                with self._receipts:
+                    self._receipts.execute("INSERT INTO episodes(scope,id,digest) VALUES (?,?,?)", (group_id, episode.id, digest))
+            # Extraction is offline enrichment. A stalled provider must release
+            # the single writer so other roles and retries can make progress.
+            result = await asyncio.wait_for(self._extract_episode(group_id, episode, hints), 100)
+            with self._receipts:
+                self._receipts.execute("UPDATE episodes SET result=? WHERE scope=? AND id=?", (json.dumps(result), group_id, episode.id))
+            return result
+
+    async def _extract_episode(self, group_id: str, episode: EpisodeIn, hints: list[str]) -> dict[str, Any]:
+        from graphiti_core.nodes import EpisodeType, EpisodicNode
+        from graphiti_core.errors import NodeNotFoundError
         await self._ensure()
         if not self.settings.llm.configured:
             raise RuntimeError("LLM not configured: set AGENT_MEMORY_LLM_MODEL and the key env named by AGENT_MEMORY_LLM_API_KEY_ENV")
         instructions = RELATION_GUIDE + ("\nRule-extracted hints (may be incomplete):\n- " + "\n- ".join(hints[:20]) if hints else "")
+        episode_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"agent-mc-memory/{group_id}/{episode.id}"))
+        source = EpisodeType.message if episode.kind in ("chat", "whisper") else EpisodeType.text
+        # In Graphiti 0.31, uuid selects an EXISTING episode. Create its raw node
+        # first, in the same request-scoped graph, so interrupted retries keep identity.
+        _, driver, _ = self.graphiti._resolve_request_scope(group_id)
+        try:
+            await EpisodicNode.get_by_uuid(driver, episode_uuid)
+        except NodeNotFoundError:
+            await EpisodicNode(uuid=episode_uuid, name=episode.name, group_id=group_id,
+                               source=source, content=episode.body, source_description=episode.source_description,
+                               created_at=datetime.now(timezone.utc), valid_at=episode.reference_time).save(driver)
         result = await self.graphiti.add_episode(
             name=episode.name, episode_body=episode.body, source_description=episode.source_description,
-            reference_time=episode.reference_time, source=EpisodeType.message if episode.kind in ("chat", "whisper") else EpisodeType.text,
+            uuid=episode_uuid,
+            reference_time=episode.reference_time, source=source,
             group_id=group_id, entity_types=ENTITY_TYPES, custom_extraction_instructions=instructions,
         )
         nodes = {n.uuid: n for n in result.nodes}
-        edges = await self._render(result.edges, nodes)
+        edges = await self._render(result.edges, nodes, driver)
         return {
             "episode_uuid": result.episode.uuid,
             "edges": [e for e in edges if e["invalid_at"] is None and e["expired_at"] is None],
@@ -201,17 +282,18 @@ class GraphitiService:
         edges = await self.graphiti.search(query, group_ids=[group_id], num_results=limit * 3, search_filter=f)
         # NOTE: Graphiti updates invalid_at/expired_at in place, so known_at only hides edges created after K;
         # it cannot restore an invalidation that happened after K. The local TS backend versions rows instead.
-        rendered = await self._render(edges, {})
+        _, driver, _ = self.graphiti._resolve_request_scope(group_id)
+        rendered = await self._render(edges, {}, driver)
         if at is not None:
             rendered = [e for e in rendered if (e["valid_at"] or e["created_at"]) <= _iso(at)
                         and (e["invalid_at"] is None or e["invalid_at"] > _iso(at))]
         return rendered[:limit]
 
-    async def _render(self, edges: list[Any], nodes: dict[str, Any]) -> list[dict[str, Any]]:
+    async def _render(self, edges: list[Any], nodes: dict[str, Any], driver=None) -> list[dict[str, Any]]:
         from graphiti_core.nodes import EntityNode
         missing = list({u for e in edges for u in (e.source_node_uuid, e.target_node_uuid) if u not in nodes})
         if missing:
-            for n in await EntityNode.get_by_uuids(self.graphiti.driver, missing):
+            for n in await EntityNode.get_by_uuids(driver or self.graphiti.driver, missing):
                 nodes[n.uuid] = n
 
         def node(uuid: str) -> dict[str, Any]:
@@ -226,4 +308,8 @@ class GraphitiService:
         } for e in edges]
 
     async def close(self) -> None:
-        await self.graphiti.close()
+        try:
+            await self.graphiti.close()
+        finally:
+            await self._completion.transport.close()
+            self._receipts.close()

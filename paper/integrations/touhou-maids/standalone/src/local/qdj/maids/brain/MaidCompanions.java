@@ -530,6 +530,7 @@ final class MaidCompanions {
                     message.codePoints().anyMatch(Character::isISOControl)) throw new IllegalArgumentException("say_one_line_up_to_400_characters");
             if (pending.containsKey(id)) throw new IllegalArgumentException("npc_is_thinking");
             if(agents.residents()!=null&&agents.residents().busy(id))throw new IllegalArgumentException("npc_is_finishing_action");
+            if(ResidentBodyAccess.external(id))return ResidentBodyAccess.conversation(id,speaker,message);
             var site = maid.getAiChatManager().getLLMSite();
             if (site == null || !site.enabled() || !agent.binding().choices().containsKey(agent.brain(maid)))
                 throw new IllegalArgumentException("npc_brain_unavailable");

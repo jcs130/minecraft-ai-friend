@@ -278,6 +278,8 @@ class Controller:
             raise ValueError("事件入口必须是 console 或 channel")
         self.outbound_epoch = 0
         self.controller_epoch = uuid.uuid4().hex
+        self.connection_epoch = None
+        self.event_connections = {}
         if not isinstance(self.event_session_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", self.event_session_id):
             raise ValueError("请配置有效且稳定的事件会话标识")
         self.journal = Journal(Path(cfg["journal_dir"]))
@@ -374,7 +376,8 @@ class Controller:
             return types.CallToolResult(content=[types.TextContent(type="text", text=json.dumps(
                 {"transport": self.event_transport, "connected": self.session is not None and self.body_available,
                  "outboundEpoch": self.outbound_epoch, "controllerEpoch": self.controller_epoch,
-                 "events": [{"id": key, "text": text, "wake": should_wake(text)} for key, text in rows]}, ensure_ascii=False))])
+                 "events": [{"id": key, "text": text, "wake": should_wake(text),
+                             "connectionEpoch": self.event_connections.get(key)} for key, text in rows]}, ensure_ascii=False))])
         if name not in ALLOWED:
             raise ValueError("未开放的操作")
         if not self.session:
@@ -425,7 +428,8 @@ class Controller:
                 refused = self.consent_denials > denials_before or (is_error(result) and re.search(
                     r"\bREFUSED\b|refused by the owner", result_text(result)))
                 outcome = ("approval_required" if refused else "unknown"
-                           if structured_of(result).get("status") == "unknown" or CUT_OFF.search(result_text(result)) else None)
+                           if structured_of(result).get("status") == "unknown" or CUT_OFF.search(result_text(result))
+                           or re.search(r'; t\d+ keeps running\.', result_text(result)) else None)
                 self.save_action(key, outcome)
             self.journal.write("tool_result", tool=name, result=dump(result))
             return result
@@ -446,9 +450,11 @@ class Controller:
                 if has_events(text):
                     key = self.journal.accept(text)
                     if key:
+                        self.event_connections[key] = self.connection_epoch
                         self.pending.append((key, text))
                         # Bound model context; full records remain in the private journal.
                         self.pending = self.pending[-32:]
+                        self.event_connections = {key: self.event_connections.get(key) for key, _ in self.pending}
                 await asyncio.sleep(0.25)
             except Exception as exc:
                 self.status("connection_lost", error=type(exc).__name__)
@@ -522,6 +528,7 @@ class Controller:
                         self.tool_cache.write_text(json.dumps({"v": 1, "tools": [dump(t) for t in tools]}, ensure_ascii=False), encoding="utf-8")
                         # Let Numen flip the driving seat to us before any program is sent (see SEAT_SETTLE_SECONDS).
                         await asyncio.sleep(SEAT_SETTLE_SECONDS)
+                        self.connection_epoch = uuid.uuid4().hex
                         self.session = session
                         backoff = 1
                         self.ready.set()

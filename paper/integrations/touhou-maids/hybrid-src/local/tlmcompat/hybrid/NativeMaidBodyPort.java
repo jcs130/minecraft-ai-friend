@@ -38,6 +38,12 @@ final class NativeMaidBodyPort implements AutoCloseable {
             if(bindings.put(maid,owner)!=null)throw new IllegalArgumentException("duplicate_body");
             var registered=plugin.registeredMaids().get(maid.toString());
             if(registered==null||!owner.toString().equals(registered.getAsJsonObject().get("ownerId").getAsString()))throw new IllegalArgumentException("original_binding_required");
+            if(row.has("controller")){
+                if(!"unified".equals(row.get("controller").getAsString()))throw new IllegalArgumentException("unknown_controller");
+                // A disconnected unified host must not wake the retired dialogue
+                // planner. This designation survives lease expiry and bind errors.
+                plugin.registerUnifiedBody(maid);
+            }
         }
         control=new MaidBodyControl(plugin.getDataFolder().toPath().resolve("native-body-receipts"),bindings);
         actions=new NativeMaidBodyActions(plugin,control);
@@ -49,6 +55,7 @@ final class NativeMaidBodyPort implements AutoCloseable {
     }
     boolean active(UUID maid){return control.active(maid);}
     boolean exclusive(UUID maid){return active(maid)&&!actions.companion(maid);}
+    boolean guarding(UUID maid){return active(maid)&&actions.guarding(maid);}
     long epoch(UUID maid){return control.epoch(maid);}
     boolean travelAllowed(UUID maid){return !active(maid)||actions.following(maid);}
     void ownerTakeover(UUID owner,UUID maid){var lease=control.lease(maid);if(lease!=null&&lease.owner().equals(owner))release(maid,"owner_takeover");}
@@ -89,7 +96,10 @@ final class NativeMaidBodyPort implements AutoCloseable {
             MaidBodyControl.keys(input,Set.of("operation","ownerId","maidId","controllerId"));
             if(!control.active(maid)){
                 // A public resident has its own controller. Never take it over by weakening its registration.
-                if(local.qdj.maids.brain.MaidAgentsMod.residentIdentities().containsKey(maid))throw new MaidBodyControl.Fault(409,"RESIDENT_CONTROLLER_ACTIVE");
+                if(local.qdj.maids.brain.MaidAgentsMod.residentIdentities().containsKey(maid)){
+                    if(!local.qdj.maids.brain.ResidentBodyAccess.external(maid))throw new MaidBodyControl.Fault(409,"RESIDENT_CONTROLLER_ACTIVE");
+                    local.qdj.maids.brain.ResidentBodyAccess.externalReady(maid);
+                }
                 plugin.nativeReady(owner,maid);plugin.nativeQuiesce(plugin.ownedLoaded(owner,maid));
             }
             lease=control.bind(owner,maid,controller,System.currentTimeMillis());

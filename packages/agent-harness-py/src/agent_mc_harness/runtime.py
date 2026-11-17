@@ -24,6 +24,7 @@ from .learning.strategies import StrategyStore
 from .memory.base import Fact, MemoryEpisode
 from .memory.router import MemoryRouter
 from .models import ACTION_VERBS, ActionReceipt, BodyAction, BodyEvent, BodySnapshot, Capabilities, utcnow
+from .journal import ActionJournal
 from .scheduler import BodyLease, BrainMetrics, WorkerPool
 
 IntentState = Literal["queued", "active", "paused", "completed", "failed", "cancelled"]
@@ -61,6 +62,7 @@ class Intent(BaseModel):
     defers: int = 0
     strategy_refs: list[tuple[str, int]] = Field(default_factory=list)  # (key, version) of lessons the planner was given
     receipts: list[ActionReceipt] = Field(default_factory=list)
+    source_events: list[str] = Field(default_factory=list, max_length=32)  # host-observed inbox IDs, never model-generated
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
@@ -79,6 +81,7 @@ class PlanContext(BaseModel):
     memories: list[Fact] = Field(default_factory=list)  # warm (Graphiti) then cold (local) recall
     hot: list[MemoryEpisode] = Field(default_factory=list)  # hot tier: latest episodes of this body's group
     recent: list[HarnessEvent] = Field(default_factory=list)
+    dialogue: list[BodyEvent] = Field(default_factory=list, max_length=32)  # current host-selected input, including ordinary chat
     decision: Decision | None = None  # route level, requested/effective thinking tier, output budget profile
     snapshot: BodySnapshot | None = None
     lessons: list[str] = Field(default_factory=list)  # active versioned lessons (self-iteration store), trial or adopted
@@ -111,9 +114,11 @@ class HarnessRuntime:
     def __init__(self, *, body: BodyAdapter | None = None, planner: Planner = explicit_steps, reflection: ReflectionLoop | None = None,
                  memory: MemoryRouter | None = None, execute: bool = False, step_timeout: float = 120.0,
                  fastslow: FastSlow | None = None, verifier: Verifier | None = None, strategies: StrategyStore | None = None,
-                 review_interval: float = 1800.0, max_workers: int = 2, defer_seconds: float = 5.0, max_defers: int = 12) -> None:
+                 review_interval: float = 1800.0, max_workers: int = 2, defer_seconds: float = 5.0, max_defers: int = 12,
+                 journal: ActionJournal | None = None) -> None:
         self.body, self.planner, self.reflection, self.memory = body, planner, reflection, memory
         self.execute, self.step_timeout = execute, step_timeout
+        self.journal = journal
         self.fastslow, self.verifier, self.strategies, self.review_interval = fastslow, verifier, strategies, review_interval
         self.defer_seconds, self.max_defers = defer_seconds, max_defers
         self.lease, self.metrics, self.pool = BodyLease(), BrainMetrics(), WorkerPool(max_workers)
@@ -373,7 +378,7 @@ class HarnessRuntime:
         try:
             self._transition(intent, "active")
             context = await self._context(intent)
-            if self.fastslow is not None:
+            if self.fastslow is not None or not intent.steps:
                 context.snapshot = await self._snapshot()
             decision, steps = await self.decide(intent, context)
             intent.decision = decision
@@ -387,7 +392,7 @@ class HarnessRuntime:
                 intent.state, intent.defer_until = "queued", asyncio.get_running_loop().time() + self.defer_seconds
                 self.emit("body", f"{intent.goal}: deferred, {decision.defer}", 1, {"intentId": intent.id})
                 return
-            if not steps:
+            if steps is None:
                 self._transition(intent, "paused", "no steps: host must supply constraints.steps", needs_host=True)
                 return
             intent.steps = steps
@@ -401,6 +406,10 @@ class HarnessRuntime:
                 self._transition(intent, "completed")
             else:
                 self.metrics.goals[intent.state] += 1
+        except Exception as error:
+            identity = self.body.identity()
+            uncertain = bool(self.journal and identity and self.journal.unresolved(identity.body_id))
+            self._transition(intent, "paused" if uncertain else "failed", "execution_or_planning_unavailable:" + type(error).__name__, needs_host=uncertain)
         finally:
             self._active = None
             self._settle_strategies(intent)
@@ -451,19 +460,32 @@ class HarnessRuntime:
     async def _execute(self, step: Step, intent: Intent) -> ActionReceipt:
         assert self.body is not None
         rid = new_request_id("hs")
+        identity = self.body.identity()
+        body_key = identity.body_id if identity else ""
+        action = step.action(rid)
+        if self.journal is not None:
+            if not body_key or self.journal.unresolved(body_key):
+                return ActionReceipt(request_id=rid, verb=action.verb, status="unknown", terminal=False,
+                                     text="unresolved_original_request_requires_reconciliation")
+            # This commit must succeed before any body write is dispatched.
+            self.journal.begin(body_key, action, intent.source_events)
         future: asyncio.Future[BodyEvent] = asyncio.get_running_loop().create_future()
         self._results[rid] = future
+        def record(receipt: ActionReceipt) -> ActionReceipt:
+            if self.journal is not None:
+                self.journal.settle(body_key, receipt)
+            return receipt
         try:
-            receipt = await self.body.act(step.action(rid))
+            receipt = await self.body.act(action)
             if receipt.status != "accepted":
-                return receipt
+                return record(receipt)
             deadline = asyncio.get_running_loop().time() + self.step_timeout
             while not future.done() and intent.state == "active" and asyncio.get_running_loop().time() < deadline:
                 await asyncio.wait({future}, timeout=0.25)
             if future.done():
                 event = future.result()
-                return receipt.model_copy(update={"status": event.status or "completed", "terminal": True, "text": event.text})
-            return await self.body.result(rid)
+                return record(receipt.model_copy(update={"status": event.status or "unknown", "terminal": event.status not in (None, "accepted", "unknown"), "text": event.text}))
+            return record(await self.body.result(rid))
         finally:
             self._results.pop(rid, None)
 
