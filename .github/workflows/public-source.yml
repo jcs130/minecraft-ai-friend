@@ -40,7 +40,10 @@ jobs:
           node --check paper/probe/rpg-usability/dungeon-readiness.mjs
           node --check paper/probe/inventory-tidy/stage.mjs
       - name: Check player menu navigation and single-use responses
-        run: python paper/ops/test-player-ui.py
+        run: |
+          python paper/ops/test-player-ui.py
+          node --check paper/plugins/AgentFriend/tests/spell-wheel-loadout-stage.mjs
+          node --check paper/plugins/AgentFriend/tests/weapon-skill-wheel-stage.mjs
       - name: Check native travel marker planning without touching a world
         run: |
           python paper/ops/test_travel_markers.py
