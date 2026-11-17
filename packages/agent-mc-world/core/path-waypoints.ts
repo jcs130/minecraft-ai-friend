@@ -7,6 +7,7 @@
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { createRequire } from 'node:module';
+import { approveNavigationDrop, clearNavigationDrop, estimateFallDamage, finishNavigationDrop, navigationFallBudget, verifiedDryLanding } from './navigation-fall.ts';
 
 const physicsRequire = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 const { PlayerState } = physicsRequire('prismarine-physics');
@@ -62,7 +63,7 @@ function hasCollisionVerifiedClimb(bot: Pick<Bot, 'entity' | 'blockAt'>, from: V
 /** Verify the final executable prefix after waypoint height adjustment, before any control input.
  * A later edge with dig/place depends on future geometry and is deliberately not certified here.
  */
-export function checkGroundPath(bot: Pick<Bot, 'entity' | 'blockAt'> & Partial<Pick<Bot, 'registry'>>, path: readonly Waypoint[]): Omit<GroundPathIssue, 'sequence'> | null {
+export function checkGroundPath(bot: Pick<Bot, 'entity' | 'blockAt'> & Partial<Pick<Bot, 'registry' | 'health'>>, path: readonly Waypoint[]): Omit<GroundPathIssue, 'sequence'> | null {
   const climb = new Set(['ladder', 'vine', 'scaffolding', 'water', 'bubble_column']);
   // Effect-assisted movement has a different jump envelope; the vanilla bound cannot certify it.
   if (Object.keys(bot.entity?.effects ?? {}).some(id => {
@@ -71,16 +72,21 @@ export function checkGroundPath(bot: Pick<Bot, 'entity' | 'blockAt'> & Partial<P
   })) return null;
   let from = bot.entity?.position;
   if (!from) return null;
+  let spent = 0;
+  const budget = navigationFallBudget(bot);
   for (let i = 0; i < Math.min(path.length, 128); i++) {
     const to = path[i];
     if (to.toBreak?.length || to.toPlace?.length) break;
     const rise = to.y - from.y;
-    if (rise < -SAFE_GROUND_DROP && (i > 0 || bot.entity.onGround)) {
+    if (estimateFallDamage(-rise, bot) > 0 && (i > 0 || bot.entity.onGround)) {
       const start = bot.blockAt(new Vec3(from.x, from.y, from.z).floored());
       const end = bot.blockAt(new Vec3(to.x, to.y, to.z).floored());
-      if (start && end && !climb.has(start.name) && !climb.has(end.name)) {
-        return { from: { x: from.x, y: from.y, z: from.z }, to: { x: to.x, y: to.y, z: to.z }, rise,
-          reason: `路径内部几何校验：脚高 ${from.y.toFixed(3)}→${to.y.toFixed(3)}，单步落差 ${(-rise).toFixed(3)} 格会产生摔落伤害；未读到水中或攀爬条件。已拒绝这条路径；目标在低处不代表可以直接跳下，请核实阶梯或其他安全路线。` };
+      if (!(start && end && (climb.has(start.name) || climb.has(end.name)))) {
+        spent += estimateFallDamage(-rise, bot);
+        if (spent > budget.damageBudget || !verifiedDryLanding(bot, from, to)) {
+          return { from: { x: from.x, y: from.y, z: from.z }, to: { x: to.x, y: to.y, z: to.z }, rise,
+            reason: `路径下落校验：脚高 ${from.y.toFixed(3)}→${to.y.toFixed(3)}，落差 ${(-rise).toFixed(3)} 格，原版未减伤估计累计摔伤 ${spent} 点，当前预算 ${budget.damageBudget} 点（生命 ${budget.health ?? '未知'}，保留 ${budget.reserveHealth} 点）；${spent > budget.damageBudget ? '超出预算' : '尚未核实落点支撑与下落净空'}。拒绝该路线，不代表目标不可达。` };
+        }
       }
     }
     if (rise > 1.25 && (i > 0 || bot.entity.onGround)) {
@@ -112,6 +118,10 @@ function predictedGroundFall(bot: Bot, path: readonly Waypoint[]): Omit<GroundPa
     return !name || ['JumpBoost', 'Levitation', 'SlowFalling'].includes(name);
   })) return null;
   const from = bot.entity.position, state: State = new PlayerState(bot, { ...bot.controlState }), next = path[0];
+  const plannedDrop = next && from.y - next.y > SAFE_GROUND_DROP
+    && estimateFallDamage(from.y - next.y + (bot.controlState.jump ? 1.25 : 0), bot) <= navigationFallBudget(bot).damageBudget
+    && verifiedDryLanding(bot, from, next);
+  if (plannedDrop) approveNavigationDrop(bot, from, next);
   let peak = from.y;
   const unknown = Symbol('unreceived_collision');
   const world = { getBlock(position: Vec3) {
@@ -126,7 +136,9 @@ function predictedGroundFall(bot: Bot, path: readonly Waypoint[]): Omit<GroundPa
       if (state.isInWater || state.isInLava) return null;
       peak = Math.max(peak, state.pos.y);
       const drop = peak - state.pos.y;
-      if (drop > SAFE_GROUND_DROP) return { from: { x: from.x, y: from.y, z: from.z },
+      const landing = next ? { x: state.pos.x, y: next.y, z: state.pos.z } : null;
+      const allowed = plannedDrop && landing && state.pos.y >= next.y - .02 && verifiedDryLanding(bot, from, landing);
+      if (drop > SAFE_GROUND_DROP && !allowed) return { from: { x: from.x, y: from.y, z: from.z },
         to: { x: state.pos.x, y: state.pos.y, z: state.pos.z }, rise: state.pos.y - from.y,
         reason: `路径内部几何校验：按当前控制与已加载的真实碰撞，未来 ${(tick + 1) * 50}ms 会出现超过 ${SAFE_GROUND_DROP} 格的干燥落差（预测 ${drop.toFixed(2)} 格）；已在离开支撑前制动。此为物理预测而非已发生位移，请改走安全阶梯或核实路线。` };
       if (state.onGround && tick > 0 && state.pos.y < from.y) return null;
@@ -163,6 +175,7 @@ export function repairDoorWaypoints(
 export function installDoorWaypointRepair(bot: Bot): void {
   let path: Waypoint[] = [], braking = false;
   bot.prependListener('path_update', (result: { path?: Waypoint[]; status?: string }) => {
+    clearNavigationDrop(bot);
     if (!result.path) return;
     path = result.path;
     repairDoorWaypoints(bot, result.path);
@@ -177,12 +190,20 @@ export function installDoorWaypointRepair(bot: Bot): void {
   // next tick, including shortcut/sprint execution, rather than only its A* nodes.
   bot.on('physicsTick', () => {
     if (braking) { bot.setControlState('sneak', false); braking = false; }
-    const issue = predictedGroundFall(bot, path);
+    // Health may change after A* completed. Check again before leaving support.
+    const next = path[0];
+    const issue = (bot.entity?.onGround && bot.pathfinder?.goal && next && estimateFallDamage(bot.entity.position.y - next.y, bot) > 0
+      ? checkGroundPath(bot, [next]) : null) ?? predictedGroundFall(bot, path);
     if (!issue) return;
     groundPathIssues.set(bot, { ...issue, sequence: (groundPathIssues.get(bot)?.sequence ?? 0) + 1 });
     bot.pathfinder.setGoal(null);
+    clearNavigationDrop(bot);
     bot.clearControlStates();
     bot.setControlState('sneak', true);
     braking = true;
   });
+  for (const event of ['death', 'respawn', 'end'] as const) bot.on(event, () => { path = []; clearNavigationDrop(bot); });
+  bot.prependListener('goal_reached', goal => finishNavigationDrop(bot, goal));
+  bot.on('goal_updated', goal => clearNavigationDrop(bot, goal == null));
+  bot.on('path_stop', () => { path = []; clearNavigationDrop(bot); });
 }
