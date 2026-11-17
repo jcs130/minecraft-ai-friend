@@ -13,6 +13,10 @@ final class ResidentCliContract {
     // extra capability also requires its native end-to-end acceptance.
     private static Operation internal(Operation operation){return new Operation(operation.syntax(),operation.queryOnly(),operation.effect(),false);}
     static final List<Operation> OPERATIONS=List.of(
+        read("profession list"),read("profession info <ID>"),internal(write("profession choose <ID>","choose_native_vortex_class_once")),
+        read("skills list"),read("skills tree"),read("skills points"),read("skills info <ID>"),
+        write("skills learn <ID>","spend_native_learning_points"),write("skills prepare <ID>","select_native_click_skill"),
+        write("cast <ID>","execute_native_vortex_skill_not_guaranteed_hit"),
         read("status"),read("land here"),read("land list [page]"),read("land info <ID>"),read("land members <ID> [page]"),
         write("land trust <ID> <player-or-resident UUID>","change_owned_land_membership"),write("land untrust <ID> <player-or-resident UUID>","change_owned_land_membership"),
         read("archive status"),read("archive list [book --page 1]"),internal(read("archive mine")),read("archive info <UUID>"),read("archive read <UUID> [--page 1]"),

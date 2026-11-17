@@ -22,6 +22,9 @@ public final class ResidentCli {
         if(a.length==1&&a[0].equals("status"))return true;
         if(a.length<2)return false;
         return switch(a[0]){
+            case "cast" -> a.length==2&&a[1].matches("[a-z0-9_]{1,48}");
+            case "profession" -> a.length==2&&a[1].equals("list")||a.length==3&&Set.of("info","choose").contains(a[1]);
+            case "skills" -> a.length==2&&Set.of("list","tree","points").contains(a[1])||a.length==3&&Set.of("info","learn","prepare").contains(a[1]);
             case "archive" -> ARCHIVE.contains(a[1]); case "photo" -> PHOTO.contains(a[1]);
             case "tasks" -> Set.of("list","info","status").contains(a[1]);
             case "dungeon" -> Set.of("list","info","status","travel","start","join","resume","leave","claim").contains(a[1]);
@@ -44,6 +47,18 @@ public final class ResidentCli {
         catch(InvocationTargetException e){if(e.getCause() instanceof RuntimeException r)throw r;throw e;}
     }
     public static boolean isResident(UUID id){return NativeResidentIdentities.all().containsKey(id);}
+    public static Player residentPlayer(UUID id){if(!isResident(id))throw new IllegalArgumentException("native_resident_required");return find(id);}
+    /** Shared targeting gate, including authored dungeon membership; actual damage events still decide land permissions. */
+    public static boolean mayTarget(UUID id,UUID targetId){
+        var actor=find(id);var target=Bukkit.getEntity(targetId);
+        if(actor==null||!isResident(id)||!(target instanceof LivingEntity living)||living.isDead()||living.isInvulnerable()
+            ||target.hasMetadata("NPC")||target instanceof Player||isResident(targetId)||target instanceof Tameable
+            ||!plugin().nativeRpgMayAct(actor))return false;
+        if(target.getScoreboardTags().contains("afu_dungeon_mob")||target.getScoreboardTags().contains("afu_site_dungeon")
+            ||target.getPersistentDataContainer().getKeys().stream().anyMatch(k->k.toString().equals("vortexrpg:dungeon_instance_id")))
+            return CompanionTravelAccess.mayGuardDungeonTarget(actor,actual(actor),target);
+        return true;
+    }
     static Entity actual(Player p){if(!isResident(p.getUniqueId()))return p;try{return (Entity)nativeCall("entity",new Class[]{UUID.class},p.getUniqueId());}catch(Exception e){throw new IllegalStateException("resident_unavailable",e);}}
     static boolean mana(Player p,double amount,boolean spend){try{return Boolean.TRUE.equals(nativeCall("mana",new Class[]{UUID.class,double.class,boolean.class},p.getUniqueId(),amount,spend));}catch(Exception e){return false;}}
     static Player find(UUID id){var player=Bukkit.getPlayer(id);if(player!=null)return player;if(!isResident(id))return null;
@@ -74,6 +89,8 @@ public final class ResidentCli {
             if(m.getName().equals("isOnline"))return body.isValid()&&!body.isDead();
             if(m.getName().equals("getName")||m.getName().equals("getDisplayName"))return NativeResidentIdentities.all().get(id);
             if(m.getName().equals("getEyeLocation"))return body.getEyeLocation();
+            if(m.getName().equals("hasLineOfSight")&&args[0]instanceof Entity target){var real=target instanceof Player p&&isResident(p.getUniqueId())?actual(p):target;return body.hasLineOfSight(real);}
+            if(m.getName().equals("getFoodLevel"))return ((Number)nativeCall("hunger",new Class[]{UUID.class},id)).intValue();
             if(m.getName().equals("updateInventory")||m.getName().equals("closeInventory"))return null;
             if(m.getName().equals("saveData")){nativeCall("save",new Class[]{UUID.class},id);return null;}
             if(Set.of("sendTitle","resetTitle","sendActionBar","playSound","stopSound","sendExperienceChange").contains(m.getName()))return null;
@@ -117,11 +134,12 @@ public final class ResidentCli {
             if(command.startsWith("photo take")){
                 String status=value.has("status")?value.get("status").getAsString():"";
                 terminal=Set.of("success","denied","cancelled","stopped","expired","unknown").contains(status);success=status.equals("success");
-            }else if(command.startsWith("archive ")||command.startsWith("photo ")||command.startsWith("tasks ")||command.startsWith("arena ")||command.startsWith("dungeon ")||command.startsWith("land ")){
+            }else if(command.startsWith("cast ")||command.startsWith("profession ")||command.startsWith("skills ")||command.startsWith("archive ")||command.startsWith("photo ")||command.startsWith("tasks ")||command.startsWith("arena ")||command.startsWith("dungeon ")||command.startsWith("land ")){
                 terminal=true;success=!value.has("errorCode")&&(!value.has("success")||value.get("success").getAsBoolean());
                 if(value.has("status")&&Set.of("denied","unavailable","error").contains(value.get("status").getAsString()))success=false;
             }
-            boolean unknown=value.has("status")&&value.get("status").getAsString().equals("unknown")||value.has("errorCode")&&value.get("errorCode").getAsString().contains("UNKNOWN");
+            boolean unchangedRefusal=value.has("success")&&!value.get("success").getAsBoolean()&&value.has("changed")&&!value.get("changed").getAsBoolean();
+            boolean unknown=value.has("status")&&value.get("status").getAsString().equals("unknown")||!unchangedRefusal&&value.has("errorCode")&&value.get("errorCode").getAsString().contains("UNKNOWN");
             if(value.has("pending")&&value.get("pending").getAsBoolean()&&value.has("reason")&&Set.of("recycle_pending","recycle_unverified","money_pending","money_unverified").contains(value.get("reason").getAsString()))unknown=true;
             if(terminal){row.addProperty("status",unknown?"unknown":success?"completed":"blocked");row.addProperty("completed",success&&!unknown);row.addProperty("reason",unknown?"service_result_unknown_query_original_request":success?"service_receipt_received":"service_refused");row.add("serviceReceipt",value);}
         }catch(Exception notStructured){/* Human prose is evidence, never proof of success. */}
@@ -204,6 +222,10 @@ public final class ResidentCli {
                 var denied=new JsonObject();denied.addProperty("success",false);denied.addProperty("reason","trial_downed_read_status_wait_for_rescue");finish(id,request,denied);return row.toString();
             }
             switch(args[0]){
+                case "cast","profession","skills" -> {
+                    var rpg=Bukkit.getPluginManager().getPlugin("QiandengjiRpg");if(rpg==null||!rpg.isEnabled())throw new IllegalStateException("native_rpg_unavailable");
+                    ((org.bukkit.command.CommandExecutor)rpg).onCommand(player,((org.bukkit.plugin.java.JavaPlugin)rpg).getCommand("qdrpg"),"qdrpg",(command+" --json").split(" +"));
+                }
                 case "status" -> {var observed=JsonParser.parseString((String)nativeCall("status",new Class[]{UUID.class},id)).getAsJsonObject();observed.addProperty("success",true);observed.addProperty("queryOnly",true);observed.addProperty("reason","own_native_body_observed");finish(id,request,observed);}
                 case "archive" -> plugin().archives().command(player,(command+" --json"+(Set.of("create","restore").contains(args[1])?" --request-id "+request:"")).split(" +"));
                 case "photo" -> plugin().residentPhoto(player,args);

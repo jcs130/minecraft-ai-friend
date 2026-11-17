@@ -33,6 +33,8 @@ final class MaidResidents {
     private final ResidentReceipts receipts;
     private final ResidentState state;
     private final ResidentPlanningHealth planningHealth;
+    final ResidentCombat combat=new ResidentCombat(this);
+    private final java.util.Set<UUID> combatReady=new java.util.HashSet<>();
     final ResidentSettings settings;
     private final Map<UUID,ResidentConfig.Resident> roles=new LinkedHashMap<>();
     private final Map<UUID,Job> jobs=new java.util.HashMap<>();
@@ -65,9 +67,17 @@ final class MaidResidents {
     Map<String,Object> resumeTravel(UUID id,UUID review)throws Exception{require(id);return agents.companions().resumeAfterInspection(id,review);}
     void notice(UUID id,String text)throws IOException{require(id);agents.companions().notice(id,text);}
     List<UUID> ids() { return List.copyOf(roles.keySet()); }
+    boolean sameParty(UUID a,UUID b){return agents.companions()!=null&&agents.companions().sameParty(a,b);}
     boolean busy(UUID id) { return jobs.containsKey(id)||thinking.containsKey(id); }
     boolean holdsPosition(UUID id) { var job=jobs.get(id);return job!=null&&ResidentContract.holdsPosition(job.input()); }
     boolean ownsMovement(UUID id){var job=jobs.get(id);return job!=null&&(ResidentContract.holdsPosition(job.input())||List.of("walk","home").contains(job.input().get("action").getAsString()));}
+    void combatStarted(UUID id){agents.agent(id).invalidateActions();}
+    void combatTick(){for(var id:ids()){
+        var maid=body(id);if(maid==null||!combatReady.contains(id))continue;
+        boolean allowed=!jobs.containsKey(id)&&maid.getPersistentData().getString(ACTIVE).isBlank()
+            &&(agents.companions()==null||agents.companions().combatAllowed(id));
+        combat.tick(maid,allowed);
+    }}
     EntityMaid body(UUID id) { var a=agents.agent(id);return a==null?null:agents.loaded(a); }
     private boolean leased(UUID id) { return agents.companions()!=null&&agents.companions().reserved(id); }
     Map<String,Object> observe(UUID id) {
@@ -80,6 +90,7 @@ final class MaidResidents {
             row.put("downed",maid.getPersistentData().getBoolean(ResidentBodyAccess.DOWNED));
             row.put("appearance",Map.of("ysm",maid.isYsmModel(),"modelId",maid.getYsmModelId(),"texture",maid.getYsmModelTexture()));
             row.put("rpg",ResidentRpg.observe(maid,r.profession()));row.put("inventory",agents.agent(id).observation(maid));
+            row.put("combat",combat.observe(id));
             row.put("inventorySlots",ResidentActions.inventory(maid));row.put("roamingWork",r.roamingWork());
             row.put("homeInstalled",maid.getPersistentData().getBoolean(INSTALLED));
             String pending=maid.getPersistentData().getString(ACTIVE);
@@ -198,6 +209,7 @@ final class MaidResidents {
             // A home in another dimension must not load the same coordinates in this world.
             var block=List.of("break","place").contains(action)?maid.level().getBlockState(target):net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
             row.put("status","accepted");row.put("input",input);row.put("before",ResidentActions.point(maid.blockPosition()));
+            combat.stop(maid,"finite_action_owns_body");
             receipts.write(id,request,row);state.locate(id,maid.level().dimension().location().toString(),maid.chunkPosition().x,maid.chunkPosition().z);state.begin(id,request);maid.getPersistentData().putString(ACTIVE,request.toString());
             jobs.put(id,new Job(request,input.deepCopy(),target,now+(action.equals("cli")?240_000:90_000),now+duration,maid.level().dimension().location().toString(),agents.agent(id).revision(),maid.isMaidInSittingPose(),item,block));
             if(ResidentContract.holdsPosition(input)){maid.getNavigation().stop();maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);}
@@ -248,11 +260,12 @@ final class MaidResidents {
                 else if(last.pending()==null&&!jobs.containsKey(id))maid.getPersistentData().remove(ACTIVE);
             }catch(Exception error){latest.put(id,Map.of("status","unknown","reason","resident_checkpoint_unavailable"));continue;}
             settings.install(id);
+            combatReady.add(id);
             ResidentRpg.tick(maid);
             var job=jobs.get(id);
             if(job!=null){step(r,maid,job,now);continue;}
             if(maid.getPersistentData().getBoolean(ResidentBodyAccess.DOWNED))continue;
-            if(leased(id)||busy(id)||!maid.getPersistentData().getString(ACTIVE).isBlank()||!maid.getPersistentData().getBoolean(INSTALLED)
+            if(combat.active(id)||leased(id)||busy(id)||!maid.getPersistentData().getString(ACTIVE).isBlank()||!maid.getPersistentData().getBoolean(INSTALLED)
                 ||agents.companions()!=null&&agents.companions().pendingTravel(id))continue;
             // TLM handles reaching the configured sleep point and using its real bed.
             if(!maid.level().isDay()){
@@ -299,7 +312,7 @@ final class MaidResidents {
                 case "place"->ResidentActions.place(maid,r,job.input());
                 case "equip"->{MaidAgent.equip(maid,job.input().get("equipmentSlot").getAsString(),job.input().get("slot").getAsBigDecimal().intValueExact(),ResourceLocation.parse(job.input().get("expectedItem").getAsString()));yield Map.of("status","completed","completed",true,"reason","equipment_exchanged");}
                 case "task"->{MaidAgent.task(maid,ResourceLocation.parse(job.input().get("task").getAsString()));yield Map.of("status","completed","completed",true,"reason","native_mode_selected_work_not_yet_completed");}
-                case "cast"->ResidentRpg.cast(maid,r.profession(),job.input().get("skill").getAsString(),allies(maid));
+                case "cast"->ResidentRpg.cast(maid,r.profession(),job.input().get("skill").getAsString(),allies(maid),job.id());
                 case "rest"->{
                     boolean homeDimension=maid.level().dimension().location().toString().equals(r.home().dimension());
                     if(homeDimension)ResidentHomes.bind(maid,r);
@@ -321,17 +334,23 @@ final class MaidResidents {
         catch(Exception e){row.put("status","unknown");row.put("reason","receipt_storage_failed_no_replay");}
         if((action.equals("walk")||action.equals("home"))&&!"completed".equals(row.get("status"))){maid.getNavigation().stop();maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);}
         if((action.equals("break")||action.equals("place"))&&!leased(r.maidId())&&agents.agent(r.maidId()).revision()==job.revision())maid.setInSittingPose(job.sitting());
-        if(Boolean.TRUE.equals(row.get("completed"))&&List.of("break","place").contains(action))ResidentRpg.xp(maid,1);
+        // The world action already has its terminal receipt. A later RPG failure must not replay it next tick.
+        jobs.remove(r.maidId());
+        if(Boolean.TRUE.equals(row.get("completed"))&&List.of("break","place").contains(action)){
+            try{ResidentRpg.xp(maid,1);row.put("progressionStatus","submitted_to_native_profile");}
+            catch(RuntimeException unavailable){row.put("progressionStatus","unknown_no_automatic_replay");}
+            try{receipts.write(r.maidId(),job.id(),row);}catch(Exception unavailable){row.put("progressionReceipt","unconfirmed_original_world_receipt_retained");}
+        }
         if(agents.companions()!=null)try{agents.companions().rememberAction(r.maidId(),job.id(),row);}catch(Exception error){row.put("memoryStatus","journal_unavailable_original_receipt_retained");}
         latest.put(r.maidId(),row);jobs.remove(r.maidId());nextPlan.put(r.maidId(),now+config.planningSeconds()*1000L);
     }
-    private List<LivingEntity> allies(EntityMaid maid){var out=new ArrayList<LivingEntity>();out.add(maid);
+    List<LivingEntity> allies(EntityMaid maid){var out=new ArrayList<LivingEntity>();out.add(maid);
         for(var id:roles.keySet()){var other=body(id);if(other!=null&&other!=maid)out.add(other);}
         if(agents.companions()!=null)for(var p:server.getPlayerList().getPlayers())if(agents.companions().leader(maid.getUUID(),p.getUUID()))out.add(p);
         return out;}
     Map<String,Object> plan(UUID id) {
         var r=require(id);var maid=body(id);long now=System.currentTimeMillis();
-        if(maid==null||busy(id)||leased(id)||!maid.getPersistentData().getString(ACTIVE).isBlank())return Map.of("status","blocked","reason","body_unavailable_or_busy");
+        if(maid==null||combat.active(id)||busy(id)||leased(id)||!maid.getPersistentData().getString(ACTIVE).isBlank())return Map.of("status","blocked","reason","body_unavailable_or_busy");
         if(agents.companions()!=null&&agents.companions().pendingTravel(id))return Map.of("status","blocked","reason","unknown_companion_travel_read_original_receipt");
         try{
             var health=planningHealth.status(id,now);long retry=((Number)health.get("retryAfterMs")).longValue();

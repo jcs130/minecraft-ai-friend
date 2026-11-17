@@ -131,6 +131,21 @@ final class MaidCompanions {
         var e = ledger.get(id);
         return e != null && !List.of("available", "dead").contains(e.mode());
     }
+    boolean combatAllowed(UUID id){
+        if(pendingTravel(id))return false;
+        var e=ledger.get(id);if(e==null||e.mode().equals("available"))return true;
+        if(!List.of("follow","work").contains(e.mode()))return false;
+        var leader=actor(e.leader());var maid=agents.loaded(agents.agent(id));
+        return leader!=null&&maid!=null&&leader.isAlive()&&!leader.isSpectator()&&leader.level()==maid.level()
+            &&leader.distanceToSqr(maid)<=32*32;
+    }
+    boolean sameParty(UUID a,UUID b){
+        if(a.equals(b))return true;
+        var x=ledger.get(a);var y=ledger.get(b);
+        UUID left=x!=null&&reserved(a)&&x.leader()!=null?x.leader():a;
+        UUID right=y!=null&&reserved(b)&&y.leader()!=null?y.leader():b;
+        return left.equals(right);
+    }
     UUID contract(UUID id) { var e = ledger.get(id); return e == null ? null : e.contract(); }
 
     Map<String, Object> execute(LivingEntity player, UUID id, String action, UUID expected, boolean checkContract) {

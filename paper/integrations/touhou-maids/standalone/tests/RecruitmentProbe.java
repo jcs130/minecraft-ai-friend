@@ -34,6 +34,63 @@ public final class RecruitmentProbe {
                     try{synthetic|=java.nio.file.Files.readString(java.nio.file.Path.of(marker.getKey())).strip().equals(marker.getValue());}catch(java.io.IOException missing){}
                 if(!synthetic)throw new IllegalArgumentException("synthetic_fixture_marker_required");
                 ServerPlayer player = server.getPlayerList().getPlayerByName("NpcModelQA");
+                if(a[0].equals("create-resident")){
+                    UUID id=UUID.fromString(a[1]),owner=UUID.fromString(a[2]);if(source.getLevel().getEntity(id)!=null)throw new IllegalArgumentException("body_exists");
+                    var maid=(EntityMaid)net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.get(net.minecraft.resources.ResourceLocation.parse("touhou_little_maid:maid")).create(source.getLevel());
+                    maid.setUUID(id);maid.setOwnerUUID(owner);maid.setTame(true,true);maid.setPos(180.5,81,100.5);
+                    if(!source.getLevel().addFreshEntity(maid))throw new IllegalArgumentException("fixture_spawn_refused");return tell(source,Map.of("created",id));
+                }
+                if(a[0].equals("combat-inspect")){
+                    var out=new java.util.ArrayList<Object>();
+                    for(var e:source.getLevel().getAllEntities())if(e.getTags().contains("qa_combat")&&e instanceof net.minecraft.world.entity.LivingEntity mob){
+                        var row=new LinkedHashMap<String,Object>();row.put("uuid",e.getStringUUID());row.put("type",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).toString());
+                        row.put("health",mob.getHealth());row.put("position",java.util.List.of(e.getX(),e.getY(),e.getZ()));row.put("alive",e.isAlive());
+                        row.put("lastAttacker",mob.getLastHurtByMob()==null?"none":mob.getLastHurtByMob().getStringUUID());
+                        row.put("ai",!(mob instanceof net.minecraft.world.entity.Mob m)||!m.isNoAi());out.add(row);
+                    }return tell(source,Map.of("entities",out));
+                }
+                if(a[0].equals("combat-enemy")){
+                    var maid=(EntityMaid)source.getLevel().getEntity(UUID.fromString(a[1]));double offset=Double.parseDouble(a[2]);
+                    var enemy=net.minecraft.world.entity.EntityType.HUSK.create(source.getLevel());enemy.setPos(maid.getX()+offset,maid.getY(),maid.getZ());
+                    enemy.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH).setBaseValue(100);enemy.setHealth(100);enemy.setPersistenceRequired();enemy.addTag("qa_combat");
+                    if(!source.getLevel().addFreshEntity(enemy))throw new IllegalArgumentException("fixture_spawn_failed");
+                    return tell(source,Map.of("id",enemy.getStringUUID(),"health",enemy.getHealth(),"ai",!enemy.isNoAi()));
+                }
+                if(a[0].equals("native-rpg")){
+                    try{
+                        var manager=Class.forName("org.bukkit.Bukkit").getMethod("getPluginManager").invoke(null);
+                        var pm=Class.forName("org.bukkit.plugin.PluginManager");var af=pm.getMethod("getPlugin",String.class).invoke(manager,"AgentFriend");
+                        var bridge=pm.getMethod("getPlugin",String.class).invoke(manager,"QiandengjiRpg");
+                        var vortex=pm.getMethod("getPlugin",String.class).invoke(manager,"VortexRPG");
+                        var resident=af.getClass().getClassLoader().loadClass("org.afuhome.agentfriend.ResidentCli");
+                        var find=resident.getDeclaredMethod("find",UUID.class);find.setAccessible(true);var actor=find.invoke(null,UUID.fromString(a[1]));
+                        var playerType=Class.forName("org.bukkit.entity.Player");
+                        if(a[2].equals("effects"))return tell(source,Map.of("effects",((java.util.Collection<?>)playerType.getMethod("getActivePotionEffects").invoke(actor)).stream().map(Object::toString).toList()));
+                        var profiles=vortex.getClass().getMethod("playerProfileService").invoke(vortex);
+                        if(a[2].startsWith("xp ")){profiles.getClass().getMethod("grantExperience",playerType,long.class,String.class).invoke(profiles,actor,Long.parseLong(a[2].substring(3)),"synthetic_acceptance");return tell(source,Map.of("grantedForSyntheticFixture",true));}
+                        if(a[2].equals("load")){
+                            var join=Class.forName("org.bukkit.event.player.PlayerJoinEvent");var e=join.getConstructor(playerType,String.class).newInstance(actor,null);
+                            profiles.getClass().getMethod("onPlayerJoin",join).invoke(profiles,e);return tell(source,Map.of("submitted",true));
+                        }
+                        if(a[2].equals("state"))return tell(source,new Gson().fromJson((String)bridge.getClass().getMethod("selfState",playerType).invoke(bridge,actor),Map.class));
+                        var fields=a[2].split(" ",2);var profile=profiles.getClass().getMethod("profile",playerType).invoke(profiles,actor);
+                        var service=vortex.getClass().getMethod(fields[0].equals("choose")?"classSkillService":"spellbookService").invoke(vortex);
+                        var method=service.getClass().getMethod(fields[0].equals("choose")?"chooseClass":"cast",playerType,profile.getClass(),String.class);
+                        var future=(java.util.concurrent.CompletableFuture<?>)method.invoke(service,actor,profile,fields[1]);
+                        future.whenComplete((v,error)->{if(error!=null)source.sendFailure(Component.literal("NATIVE_RPG_ERROR "+error));});
+                        return tell(source,Map.of("submitted",true,"done",future.isDone(),"failed",future.isCompletedExceptionally()));
+                    }catch(ReflectiveOperationException error){throw new IllegalArgumentException(error.getCause()==null?error:error.getCause());}
+                }
+                if(a[0].equals("party-control")){
+                    UUID id=UUID.fromString(a[1]);String[] words=a[2].split(" ");var leader=source.getLevel().getEntity(UUID.fromString(words[0]));
+                    if(!(leader instanceof EntityMaid))throw new IllegalArgumentException("synthetic_resident_leader_required");
+                    try{var type=Class.forName("local.qdj.maids.brain.MaidAgentsMod");var running=type.getDeclaredField("running");running.setAccessible(true);var runtime=running.get(null);
+                        var get=runtime.getClass().getDeclaredMethod("companions");get.setAccessible(true);var companions=get.invoke(runtime);
+                        var contract=companions.getClass().getDeclaredMethod("contract",UUID.class);contract.setAccessible(true);var expected=contract.invoke(companions,id);
+                        var execute=companions.getClass().getDeclaredMethod("execute",net.minecraft.world.entity.LivingEntity.class,UUID.class,String.class,UUID.class,boolean.class);execute.setAccessible(true);
+                        return tell(source,execute.invoke(companions,leader,id,words[1],expected,true));
+                    }catch(ReflectiveOperationException error){throw new IllegalArgumentException(error);}
+                }
                 if(a[0].equals("notice")){
                     try{Class.forName("local.qdj.maids.brain.ResidentBodyAccess").getMethod("notice",UUID.class,String.class).invoke(null,UUID.fromString(a[1]),a[2]);return tell(source,Map.of("recorded",true));}
                     catch(ReflectiveOperationException failed){throw new IllegalArgumentException(failed);}

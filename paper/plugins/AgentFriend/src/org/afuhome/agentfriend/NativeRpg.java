@@ -67,7 +67,6 @@ final class NativeRpg {
         catch(Exception error){throw new IllegalStateException("RPG资料暂不可用；稍后查询 /mycli status，不要重复执行。");}
     }
     JsonObject state(Player p) {
-        if(ResidentCli.isResident(p.getUniqueId()))try{var result=JsonParser.parseString((String)ResidentCli.nativeCall("rpg",new Class[]{UUID.class},p.getUniqueId())).getAsJsonObject();result.addProperty("available",true);result.addProperty("combat",result.get("profession").getAsString());return result;}catch(Exception e){var out=new JsonObject();out.addProperty("available",false);return out;}
         try{return JsonParser.parseString((String)call("selfState",new Class<?>[]{Player.class},p)).getAsJsonObject();}
         catch(RuntimeException unavailable){var out=new JsonObject();out.addProperty("available",false);out.addProperty("backend","vortex");return out;}
     }

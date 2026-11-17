@@ -31,6 +31,8 @@ public final class ResidentBodyAccess {
         throw new IllegalArgumentException("resident_destination_world_unavailable");
     }
     public static int capacity(UUID id){var b=body(id);return Math.min(b.getMaidInv().getSlots(),b.getMaidBackpackType().getAvailableMaxContainerIndex());}
+    public static int hunger(UUID id){return body(id).getHunger();}
+    public static boolean sameParty(UUID a,UUID b){var r=MaidAgentsMod.residents();return r!=null&&r.sameParty(a,b);}
     public static Object item(UUID id,int slot)throws Exception{
         if(slot<0||slot>=capacity(id))throw new IllegalArgumentException("resident_slot_out_of_range");
         return Class.forName("org.bukkit.craftbukkit.inventory.CraftItemStack").getMethod("asBukkitCopy",ItemStack.class).invoke(null,body(id).getMaidInv().getStackInSlot(slot));
@@ -72,6 +74,11 @@ public final class ResidentBodyAccess {
         body(id);MaidAgentsMod.residents().notice(id,text);
     }
     public static String rpg(UUID id){var b=body(id);return new com.google.gson.Gson().toJson(ResidentRpg.observe(b,MaidAgentsMod.residents().role(id).profession()));}
+    public static boolean visibleHostile(UUID id,UUID target,double range){
+        if(!Double.isFinite(range)||range<0||range>64)return false;
+        var b=body(id);var entity=((net.minecraft.server.level.ServerLevel)b.level()).getEntity(target);
+        return entity instanceof net.minecraft.world.entity.LivingEntity living&&ResidentCombat.visibleHostile(b,living,range);
+    }
     public static String cliContract(String command){return new com.google.gson.Gson().toJson(ResidentCliContract.describe(command));}
     public static String status(UUID id){
         body(id);var row=new java.util.LinkedHashMap<>(MaidAgentsMod.residents().observe(id));
@@ -83,9 +90,10 @@ public final class ResidentBodyAccess {
         }
         return new com.google.gson.Gson().toJson(row);
     }
-    public static boolean refillMana(UUID id){var b=body(id);ResidentRpg.data(b).putDouble("mana",ResidentRpg.max(b));return true;}
+    public static boolean refillMana(UUID id){var b=body(id);if(ResidentVortex.selected())return ResidentVortex.refill(id);ResidentRpg.data(b).putDouble("mana",ResidentRpg.max(b));return true;}
     public static void combatExperience(UUID id,long cumulative){
         if(cumulative<0)throw new IllegalArgumentException("negative_combat_experience");
+        if(ResidentVortex.selected()){ResidentVortex.call("residentCombatExperience",new Class[]{UUID.class,long.class},id,cumulative);return;}
         var d=ResidentRpg.data(body(id));d.putLong("combatXp",Math.max(d.getLong("combatXp"),Math.min(1_000_000,cumulative)));
     }
     /** Entity-only checkpoint for the occupied chunk; no block save, global save or invented player data. */
@@ -98,7 +106,6 @@ public final class ResidentBodyAccess {
     }
     public static boolean mana(UUID id,double amount,boolean spend){
         if(!Double.isFinite(amount)||amount<0||amount>1000)throw new IllegalArgumentException("invalid_mana_amount");
-        var value=ResidentRpg.data(body(id));double current=value.getDouble("mana");if(current<amount)return false;
-        if(spend)value.putDouble("mana",current-amount);return true;
+        return ResidentRpg.mana(body(id),amount,spend);
     }
 }

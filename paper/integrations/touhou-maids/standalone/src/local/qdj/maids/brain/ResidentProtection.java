@@ -14,6 +14,15 @@ public final class ResidentProtection {
     public static boolean registered(EntityMaid maid) {
         var residents=MaidAgentsMod.residents();return residents!=null&&residents.role(maid.getUUID())!=null;
     }
+    static boolean combat(EntityMaid maid,net.minecraft.world.entity.LivingEntity target){
+        Class<?> bukkit;try{bukkit=Class.forName("org.bukkit.Bukkit");}catch(ClassNotFoundException stock){return true;}
+        try{
+            var manager=bukkit.getMethod("getPluginManager").invoke(null);
+            var plugin=Class.forName("org.bukkit.plugin.PluginManager").getMethod("getPlugin",String.class).invoke(manager,"AgentFriend");if(plugin==null)return false;
+            var access=plugin.getClass().getClassLoader().loadClass("org.afuhome.agentfriend.ResidentCli");
+            return Boolean.TRUE.equals(access.getMethod("mayTarget",java.util.UUID.class,java.util.UUID.class).invoke(null,maid.getUUID(),target.getUUID()));
+        }catch(ReflectiveOperationException|LinkageError|RuntimeException unavailable){return false;}
+    }
     static boolean travel(EntityMaid maid,ServerLevel level,BlockPos at){
         Class<?> bukkit;try{bukkit=Class.forName("org.bukkit.Bukkit");}catch(ClassNotFoundException stock){return true;}
         try{

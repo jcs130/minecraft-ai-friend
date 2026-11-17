@@ -4,7 +4,7 @@ license="MIT"
 
 [[mods]]
 modId="tlm_maid_agents"
-version="0.3.8"
+version="0.3.9"
 displayName="TLM Maid Agents"
 displayTest="IGNORE_ALL_VERSION"
 description="Role-scoped model routing, persistent conversations and native companion parties for Touhou Little Maid."
