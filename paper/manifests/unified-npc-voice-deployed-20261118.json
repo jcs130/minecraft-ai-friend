@@ -1,0 +1,363 @@
+{
+  "schema": 1,
+  "release": "unified-npc-voice-20261118-r1",
+  "verifiedAt": "2026-11-17T17:46:19.057783+00:00",
+  "pullRequest": 295,
+  "mergeCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+  "sourceTree": "6515f0c16c80f7536c96a3f673825cfee8213cd9",
+  "deployedAt": "2026-11-18T01:41:16.9060052+08:00",
+  "stages": {
+    "codeMerged": true,
+    "candidateValidated": true,
+    "productionDeployed": true,
+    "productionNativeBodyVerified": true,
+    "originalPlayerVisualAndAudioAcceptance": false,
+    "longRunningCrowdAcceptance": false,
+    "productionNativeVoicePacketsCaptured": false
+  },
+  "components": {
+    "AgentFriend": {
+      "version": "0.4.47.87-npc-combat",
+      "sha256": "5f776640e200cef644febd848c0f3c21b031bd52a9cf35a6abbfd7c6957561cc",
+      "previousSha256": "7eb4dc5dbe86735714354371aa017fc5b1fa52dcf996d3cfd2945c71d15abbb7",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "codeChangedThisBatch": false
+    },
+    "tlm_maid_agents": {
+      "version": "0.3.11",
+      "sha256": "a7b90fb03a8885757a257aa4aa64711007a46be30fecd75bc69680422309d926",
+      "previousSha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
+      "loadedPath": "E:/MC/server/mods/qiandengji-maid-brain-0.1.0.jar",
+      "codeChangedThisBatch": true,
+      "sourceCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+      "lastChangedPullRequest": 295,
+      "note": "Shared JAR; only registered voice hook changed in this batch."
+    },
+    "QiandengjiMaidBridge": {
+      "version": "0.1.47-npc-voice",
+      "sha256": "1aa45dca4c75b288d797e84ee70e9e78bbe037394a7a721bde78d2d7a217b5f4",
+      "previousSha256": "abb2350c3d813bcf4535b3145892ae15a78af2b081ef336d4c85446300c99f23",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "codeChangedThisBatch": true,
+      "sourceCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+      "lastChangedPullRequest": 295
+    },
+    "VortexRPG": {
+      "version": "1.2.2-alpha",
+      "sha256": "a7b3df79933e1df3c205c4940f6c880cc7653cafbdc50bb9663d60a5127f9fdf",
+      "previousSha256": "04489c418211925cbedb2f7d7f40df65ccf53ab2bb03ff8ba8230fbf51a5b223",
+      "loadedPath": "E:/MC/server/plugins/VortexRPG-1.2.2-alpha-qd29.jar",
+      "codeChangedThisBatch": false
+    },
+    "QiandengjiRpg": {
+      "version": "0.2.31-unified-npc",
+      "sha256": "7aed57c18c6755b5bdadc2ca1b95aa0a0146b405f2e8aaff2986213fda187f20",
+      "previousSha256": "88f80916df4a1b18cb24b4982f030940c6f7473e91799333e07dd0b843e43c4a",
+      "loadedPath": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
+      "codeChangedThisBatch": false
+    },
+    "qiandengji_maid_brain": {
+      "version": "0.1.2",
+      "sha256": "a7b90fb03a8885757a257aa4aa64711007a46be30fecd75bc69680422309d926",
+      "previousSha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
+      "loadedPath": "E:/MC/server/mods/qiandengji-maid-brain-0.1.0.jar",
+      "codeChangedThisBatch": true,
+      "sourceCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+      "lastChangedPullRequest": 295
+    },
+    "numen_hosted": {
+      "version": "0.1.5-hosted.2",
+      "sha256": "be85eb1a78b252a524dc9a2724d6d2b8a0d65d2e508190d6df934c89e5fcfb2c",
+      "loadedPath": "E:/MC/server/plugins/numen_hosted-1.21.1-0.1.5-hosted.2-880cd67f7836.jar",
+      "codeChangedThisBatch": false
+    },
+    "numen_hosted_api": {
+      "version": "0.1.5-hosted.2",
+      "sha256": "c883704af157f86f9af43a05da8de24e9a4ecc5552b358f7cbf7eaed3c68e322",
+      "loadedPath": "E:/MC/server/plugins/numen_hosted_api-1.21.1-0.1.5-hosted.2-8e13a2d3174c.jar",
+      "codeChangedThisBatch": false
+    },
+    "qiandengji_hosted_bridge": {
+      "version": "0.1.2",
+      "sha256": "a5e5ca4df082ab8880a8cffcfa67fba86a784a45f28c2189cf06c0472676cf76",
+      "previousSha256": "379d1dc216df4ec996e0f489714c356b2351b703733be7768f9848cedc563d68",
+      "loadedPath": "E:/MC/server/mods/qiandengji-hosted-bridge-0.1.0.jar",
+      "codeChangedThisBatch": true,
+      "sourceCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+      "lastChangedPullRequest": 295
+    },
+    "QiandengVoice": {
+      "version": "0.1.8",
+      "sha256": "0fd7a02d7d65159558de9a168a709717cf78101b762da443e48c2e0fc181d668",
+      "previousSha256": "b1548e6d4c86f19cbd35fd77708550ea737669dac5f5272ff9adfe10971c8398",
+      "loadedPath": "E:/MC/server/plugins/QiandengVoice-0.1.0.jar",
+      "codeChangedThisBatch": true,
+      "sourceCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+      "lastChangedPullRequest": 295
+    }
+  },
+  "nativeCombatSupport": [
+    {
+      "loadedPath": "E:\\MC\\server\\mods\\bettercombat-neoforge-2.4.0+1.21.1.jar",
+      "version": "2.4.0",
+      "sha256": "0446e9faa98b764ba010ac31e337d14ac96bbb2fbfeff9b599e1efd510dfde5a"
+    },
+    {
+      "loadedPath": "E:\\MC\\server\\mods\\cloth-config-15.0.140-neoforge.jar",
+      "version": "15.0.140",
+      "sha256": "65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4"
+    },
+    {
+      "loadedPath": "E:\\MC\\server\\mods\\player-animation-lib-forge-2.0.4+1.21.1.jar",
+      "version": "2.0.4",
+      "sha256": "dbe5de45f5cd60c0e5e47af14e6d564534a98456e973cf670cb881f6938eee92"
+    }
+  ],
+  "runtime": {
+    "gamePid": 26468,
+    "supervisorPid": 45444,
+    "npcPid": 23212,
+    "graphiti": "0.31.2",
+    "falkordb": "4.22.4",
+    "systemOne": "Token Plan decision-model-preview"
+  },
+  "roles": [
+    {
+      "id": "feiyu",
+      "bodyKind": "maid",
+      "bodyId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+      "provider": "tokenplan",
+      "model": "deepseek-v4.1-flash",
+      "unknownRequests": 0,
+      "route": {
+        "provider": "tokenplan",
+        "model": "deepseek-v4.1-flash",
+        "responseId": "chatcmpl-f2b290f6-c7c1-43a7-9d01-d5659ba9a6fd",
+        "seconds": 1.078
+      }
+    },
+    {
+      "id": "kirito",
+      "bodyKind": "numen",
+      "bodyId": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+      "provider": "tokenplan",
+      "model": "qwen3.8-flash",
+      "unknownRequests": 0,
+      "route": {
+        "provider": "tokenplan",
+        "model": "qwen3.8-flash",
+        "responseId": "chatcmpl-463238a1-45a0-49f7-a312-727042df9ef3",
+        "seconds": 0.844
+      }
+    },
+    {
+      "id": "yui",
+      "bodyKind": "maid",
+      "bodyId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+      "provider": "codingplan",
+      "model": "qwen3.7-plus",
+      "unknownRequests": 0,
+      "route": {
+        "provider": "codingplan",
+        "model": "qwen3.7-plus",
+        "responseId": "chatcmpl-d18b3e78-4d95-93f9-abad-0ff9dfa1fb88",
+        "seconds": 1.203
+      }
+    }
+  ],
+  "conversation": {
+    "sharedPolicy": true,
+    "crowdDefaultsToListening": true,
+    "proposedReplyFastReview": true,
+    "realProviderSyntheticChecks": 72,
+    "externalCorticoAdoption": false,
+    "priorValidationEvidence": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+  },
+  "productionChecks": [
+    {
+      "name": "normal_deployment_succeeded",
+      "passed": true
+    },
+    {
+      "name": "current_single_host",
+      "passed": true
+    },
+    {
+      "name": "supervisor_current",
+      "passed": true
+    },
+    {
+      "name": "installed_qiandengji-maid-native-0.1.12-conversation.jar",
+      "passed": true
+    },
+    {
+      "name": "installed_QiandengVoice-0.1.0.jar",
+      "passed": true
+    },
+    {
+      "name": "installed_qiandengji-maid-brain-0.1.0.jar",
+      "passed": true
+    },
+    {
+      "name": "installed_qiandengji-hosted-bridge-0.1.0.jar",
+      "passed": true
+    },
+    {
+      "name": "installed_npc-voices.json",
+      "passed": true
+    },
+    {
+      "name": "installed_hosted_mcp.py",
+      "passed": true
+    },
+    {
+      "name": "installed_maid.py",
+      "passed": true
+    },
+    {
+      "name": "installed_numen.py",
+      "passed": true
+    },
+    {
+      "name": "installed_conversation.py",
+      "passed": true
+    },
+    {
+      "name": "installed_source-manifest.json",
+      "passed": true
+    },
+    {
+      "name": "installed_aincrad-residents-lifecycle.ps1",
+      "passed": true
+    },
+    {
+      "name": "feiyu_running_original_body",
+      "passed": true
+    },
+    {
+      "name": "feiyu_no_unknown_requests",
+      "passed": true
+    },
+    {
+      "name": "feiyu_alive_original_owner",
+      "passed": true
+    },
+    {
+      "name": "feiyu_voice_enabled",
+      "passed": true
+    },
+    {
+      "name": "kirito_running_original_body",
+      "passed": true
+    },
+    {
+      "name": "kirito_no_unknown_requests",
+      "passed": true
+    },
+    {
+      "name": "yui_running_original_body",
+      "passed": true
+    },
+    {
+      "name": "yui_no_unknown_requests",
+      "passed": true
+    },
+    {
+      "name": "yui_alive_original_owner",
+      "passed": true
+    },
+    {
+      "name": "yui_voice_enabled",
+      "passed": true
+    },
+    {
+      "name": "existing_media_asr_ready",
+      "passed": true
+    }
+  ],
+  "backup": "F:\\MC-backups\\repairs\\unified-npc-voice-20261118-r1-20261118-013445",
+  "preservation": {
+    "installPreservedOtherFiles": true,
+    "files": 24664,
+    "newFiles": 1
+  },
+  "openAcceptance": [
+    "Original Java microphone/headphone listening and spectator rendering.",
+    "Natural multi-party conversation and long-running load.",
+    "Bedrock native audio is outside this release."
+  ],
+  "rollback": {
+    "beforeFirstAdmission": "Exact unchanged postimages only; matching original preimages.",
+    "afterAdmission": "Pause original controllers; retain latest world, inventories, RPG, identities, auth, action journals and memory; never restore an old whole world."
+  },
+  "previousComponentEvidence": "paper/manifests/unified-server-npcs-deployed-20261117.json",
+  "coldChanges": {
+    "serverFiles": 5,
+    "runtimeFiles": 6,
+    "newServerFiles": 1,
+    "identitiesChanged": false,
+    "worldsChangedByInstaller": false
+  },
+  "npcVoice": {
+    "profiles": [
+      {
+        "id": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+        "ownerId": "822d173a-7181-3b9b-be60-804f29b24ecc",
+        "kind": "maid",
+        "name": "肥鱼",
+        "voice": "feiyu-tlm-nahida-cn-20261111",
+        "range": 24
+      },
+      {
+        "id": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+        "ownerId": "b2f9ceb0-8271-3470-b99f-e1c3ffe4edbd",
+        "kind": "numen",
+        "name": "Kirito",
+        "voice": "coo-yunxi-male-20261028",
+        "range": 24
+      },
+      {
+        "id": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+        "ownerId": "b2f9ceb0-8271-3470-b99f-e1c3ffe4edbd",
+        "kind": "maid",
+        "name": "结衣",
+        "voice": "neko-yui-cn",
+        "range": 24
+      }
+    ],
+    "input": "SVC microphone -> CPU ASR -> original native inbox -> shared attention policy",
+    "output": "original body speech -> existing local media service -> SVC",
+    "npcDialogue": "original spoken-text event; no TTS re-recognition",
+    "localModelCases": 12,
+    "nativeIsolatedChecks": 41,
+    "nativeTextScopeChecks": 2,
+    "pythonChecks": 148,
+    "pythonExistingSkips": 3,
+    "ciChecks": 8,
+    "actualHumanHearingVerified": false
+  },
+  "maintenance": {
+    "record": "E:\\MC\\ops\\repairs\\unified-npc-voice-20261118-r1",
+    "backupDrive": "F",
+    "backup": "F:\\MC-backups\\repairs\\unified-npc-voice-20261118-r1-20261118-013445",
+    "newGamePid": 26468,
+    "worldOrIdentityMigration": false,
+    "codeFiles": 5,
+    "runtimeFiles": 6,
+    "runtimeChecks": 25,
+    "rollback": "Pause the NPC host, revert only reviewed code/voice registry; retain latest worlds, items, identities, authentication, memory, life/action/speech receipts. Unknown speech must not be replayed."
+  },
+  "previousMaintenanceRecordsRemainHistorical": true,
+  "productionSpontaneousSpeech": {
+    "actor": "kirito",
+    "requestId": "f7107f30-7f5a-30ab-a0dd-080459ea9e26",
+    "state": "sent",
+    "reason": "VOICE_NO_RECEIVER_CHECK_STATUS",
+    "delivery": {
+      "packetOffers": 0,
+      "listenerCount": 0,
+      "listenersTruncated": false
+    },
+    "note": "Original host speech after restart. No connected listener in range; not a human-hearing acceptance."
+  }
+}
