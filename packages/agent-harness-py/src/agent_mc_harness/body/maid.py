@@ -15,6 +15,7 @@ generation fences writes even while the owner is offline. This transport does no
 from __future__ import annotations
 
 import asyncio
+import copy
 import contextlib
 import json
 import math
@@ -55,6 +56,21 @@ VERBS: dict[str, tuple[str, tuple[str, ...], bool]] = {
 }
 PENDING = {"pending", "reserved", "accepted", "queued", "running", "dispatched", "sent"}
 FAILED = {"rejected", "failed", "refused", "blocked", "cancelled", "expired"}
+
+
+def native_argument_schema(schema: dict[str, Any], action: str) -> dict[str, Any]:
+    """Expose only this action's arguments; identity and request routing belong to the host."""
+    routing = {"action", "maidId", "requestId"}
+    props = schema.get("properties", {})
+    branch = next((row for row in schema.get("oneOf", [])
+                   if row.get("properties", {}).get("action", {}).get("const") == action), None)
+    if branch is not None and isinstance(branch.get("propertyNames", {}).get("enum"), list):
+        allowed = set(branch["propertyNames"]["enum"]) - routing
+        return {"type": "object", "properties": {k: copy.deepcopy(v) for k, v in props.items() if k in allowed},
+                "required": [k for k in branch.get("required", []) if k in allowed], "additionalProperties": False}
+    # Owner-connection transports can advertise a shared schema without branches.
+    return {"type": "object", "properties": {k: copy.deepcopy(v) for k, v in props.items() if k not in routing},
+            "required": [k for k in schema.get("required", []) if k not in routing]}
 
 
 def reply_status(reply: Any, is_error: bool) -> ActionStatus:
@@ -125,7 +141,7 @@ class MaidBody(BaseBody):
                                            notes="mode setting, not arrival/completion" if verb in ("follow", "stay", "sit") else None)
         props = self._schema.get("properties", {})
         native_actions = [NativeAction(name=a, read_only=a in READS and (a != "brain" or "choice" not in props),
-                                       input_schema={"type": "object", "properties": props}) for a in self._actions]
+                                       input_schema=native_argument_schema(self._schema, a)) for a in self._actions]
         events: list[BodyEventKind] = ["death", "respawn", "lifecycle", "dimension", "action_result"]
         if not self._native:
             events += ["dialogue", "position", "system_message", "chat", "safety", "other"]

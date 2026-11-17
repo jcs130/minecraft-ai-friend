@@ -38,8 +38,8 @@ def main():
         updates=compile(a.javac,[a.resident_jar,a.maid_baseline,*libraries,*server.glob('mods/*.jar'),*server.glob('plugins/*.jar')],[source/(n+'.java')for n in OWNERS],Path(tmp))
     if not updates or any(not n.startswith('local/tlmcompat/hybrid/')or n.rsplit('/',1)[1].split('$')[0].removesuffix('.class')not in OWNERS for n in updates):raise ValueError('unexpected_compiled_class')
     with zipfile.ZipFile(a.maid_baseline)as z:entries={n:z.read(n)for n in z.namelist()if not n.endswith('/')}
-    entries.update(updates);entries['plugin.yml']=re.sub(rb'(?m)^version:.*$',b'version: 0.1.45-unified-residents',entries['plugin.yml'])
-    maid=out/'QiandengjiMaidBridge-0.1.45-unified-residents.jar';archive(maid,entries)
+    entries.update(updates);entries['plugin.yml']=re.sub(rb'(?m)^version:.*$',b'version: 0.1.46-unified-actions',entries['plugin.yml'])
+    maid=out/'QiandengjiMaidBridge-0.1.46-unified-actions.jar';archive(maid,entries)
     source=ROOT/'paper/integrations/numen-hosting/native-bridge'
     with tempfile.TemporaryDirectory(dir=out)as tmp:entries=compile(a.javac,[*patched,*libraries,*deps],sorted((source/'src').rglob('*.java')),Path(tmp))
     entries['META-INF/neoforge.mods.toml']=(source/'neoforge.mods.toml').read_bytes()

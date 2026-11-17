@@ -20,6 +20,12 @@ def role(**changes):
     return NpcRole(**(values | changes))
 
 
+def test_unknown_configured_verb_is_rejected_before_host_start():
+    with pytest.raises(ValueError):
+        role(allowed_tools=["body:observe", "body:use"])
+    assert role(allowed_tools=["body:observe", "body:use_item"]).allowed_tools[-1] == "body:use_item"
+
+
 @pytest.mark.parametrize("step", [
     {"tool": "body:command", "args": {"line": "/op anyone"}},
     {"tool": "body:attack", "args": {"target": "player"}},

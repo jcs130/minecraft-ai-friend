@@ -51,6 +51,21 @@ game actions. This is prompt acceptance, not proof of production crowd behaviour
 
 ## Processes and durable state
 
+Provision the complete `packages/agent-memory/graphiti-sidecar` HTTP dependencies,
+including FastAPI and Uvicorn, as well as the selected FalkorDB driver. Before
+activating a release, run `pip check`, import the HTTP entrypoint with the runtime
+interpreter, and verify authenticated health plus anonymous rejection. A live
+supervisor alone does not prove either child has started successfully.
+
+Role configuration is validated against actual body verbs before any character
+starts. `body:use` is invalid; use the advertised `body:use_item` only if the
+current body supports it. Unsupported capabilities are not invented by the host.
+Native maid arguments are derived from each server action's schema, with identity
+and request routing supplied by the adapter. `guard` has no `enabled` argument.
+A seated maid exposes passenger/vehicle facts and an explicit `dismount` action;
+speech and inbox acknowledgement remain possible while seated. Dismounting keeps
+the original body, vehicle and inventory and uses the original durable receipt.
+
 `supervisor.py --config <private-file>` supervises one graph sidecar and one NPC
 host. An OS lock prevents duplicate supervisors/hosts; native controller leases
 fence old generations. Loss of the game port or a maintenance marker pauses the
