@@ -15,8 +15,12 @@ public final class NativeMaidObservation {
         for(var entity:client.level.entitiesForRendering()){
             if(!(entity instanceof EntityMaid maid))continue;
             if(rows.size()>=64)break;
-            rows.add(Map.of("uuid",maid.getUUID().toString(),"type",BuiltInRegistries.ENTITY_TYPE.getKey(maid.getType()).toString(),
-                "model",maid.getModelId(),"renderer",client.getEntityRenderDispatcher().getRenderer(maid).getClass().getName()));
+            var selection=YsmAccess.selection(maid);boolean ysm=selection!=null&&selection.model()!=null;
+            String model=ysm?selection.model():maid.getModelId();
+            boolean loaded=ysm?YsmAccess.hasModel(model):com.github.tartaricacid.touhoulittlemaid.client.resource.CustomPackLoader.MAID_MODELS.getModel(model).isPresent();
+            rows.add(Map.of("uuid",maid.getUUID().toString(),"entityId",maid.getId(),"type",BuiltInRegistries.ENTITY_TYPE.getKey(maid.getType()).toString(),
+                "model",model,"maidModel",maid.getModelId(),"modelLoaded",loaded,"renderKind",ysm?"ysm":"native_maid",
+                "renderer",client.getEntityRenderDispatcher().getRenderer(maid).getClass().getName()));
         }
         data.put("maids",rows);
     }

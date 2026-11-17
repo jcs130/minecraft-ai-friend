@@ -32,7 +32,7 @@ public final class NativeMaidBrainSupport implements Listener,AutoCloseable {
     private final MaidBrainToolGuard toolGuard;
     private final ThreadLocal<LLMCallback> buildingRequest=new ThreadLocal<>();
     private volatile boolean closed;
-    record Selection(String site,String model,UUID maid,UUID owner,String operation){}
+    record Selection(String site,String model,UUID maid,UUID owner,String operation,long controlEpoch){}
 
     public static NativeMaidBrainSupport create(HybridMaidPlugin plugin){
         try{return new NativeMaidBrainSupport(plugin);}
@@ -79,10 +79,10 @@ public final class NativeMaidBrainSupport implements Listener,AutoCloseable {
             // Refresh body facts on the game thread also for native UI/tool continuations.
             if(!Bukkit.isPrimaryThread()){if(plugin.isEnabled()&&!closed)Bukkit.getScheduler().runTask(plugin,()->chat(callback));return;}
             EntityMaid maid=callback.getMaid();
-            if(!allowed(maid)||!maid.getAiChatManager().getLLMSite().id().equals(site.id())){
+            if(plugin.nativeExclusive(maid.getUUID())||!allowed(maid)||!maid.getAiChatManager().getLLMSite().id().equals(site.id())){
                 callback.onFailure(null,new IllegalStateException("SHARED_MAID_MODEL_NOT_ENABLED: only the original configured companion may use this site; query brain choices."),403);plugin.nativeModelFailed(callback,plugin.startingNativeOperation(),"SHARED_MAID_MODEL_NOT_ENABLED");return;
             }
-            selections.putIfAbsent(callback,new Selection(site.id(),maid.getAiChatManager().getLLMModel(),maid.getUUID(),maid.getOwnerUUID(),plugin.startingNativeOperation()));
+            selections.putIfAbsent(callback,new Selection(site.id(),maid.getAiChatManager().getLLMModel(),maid.getUUID(),maid.getOwnerUUID(),plugin.startingNativeOperation(),plugin.nativeControlEpoch(maid.getUUID())));
             LLMCallback previous=buildingRequest.get();
             try{buildingRequest.set(callback);super.chat(callback);}
             catch(Exception error){callback.onFailure(null,new IllegalStateException("MAID_NATIVE_REQUEST_FAILED_QUERY_RECEIPT"),502);failed(callback,"MAID_NATIVE_REQUEST_FAILED_QUERY_RECEIPT");}
@@ -109,10 +109,11 @@ public final class NativeMaidBrainSupport implements Listener,AutoCloseable {
     boolean identityMatches(EntityMaid maid){return !closed&&plugin.isEnabled()&&isScoped(maid)&&ownerId.equals(maid.getOwnerUUID());}
     boolean allowed(EntityMaid maid){return identityMatches(maid)&&maid.isAlive()&&!maid.isRemoved()&&!maid.getPersistentData().contains(CompanionRespawn.TAG);}
     Selection selection(LLMCallback callback){return selections.get(callback);}
+    boolean mayExecute(LLMCallback callback){return !plugin.nativeExclusive(callback.getMaid().getUUID())&&(selection(callback)==null||current(callback));}
     UUID boundMaid(){return maidId;}
     boolean current(LLMCallback callback){
         Selection selection=selections.get(callback);EntityMaid maid=callback.getMaid();
-        return selection!=null&&allowed(maid)&&selection.maid.equals(maid.getUUID())&&selection.owner.equals(maid.getOwnerUUID())
+        return selection!=null&&allowed(maid)&&selection.controlEpoch==plugin.nativeControlEpoch(maid.getUUID())&&selection.maid.equals(maid.getUUID())&&selection.owner.equals(maid.getOwnerUUID())
             &&selection.site.equals(maid.getAiChatManager().getLLMSite().id())&&selection.model.equals(maid.getAiChatManager().getLLMModel());
     }
     void carry(LLMCallback before,LLMCallback after){Selection selection=selections.get(before);if(selection!=null)selections.put(after,selection);}

@@ -13,6 +13,9 @@ public final class CameraGpuPolicyTest {
         rejects("rtx3080ti","D3D12 (NVIDIA GeForce RTX 3080 Ti)","Microsoft Corporation");
         rejects("rtx3080ti","NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2","Other");
         rejects("nvidia","NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2","NVIDIA Corporation");
-        System.out.println("PASS: 7 GPU policy cases");
+        CameraGpuPolicy.verify("rtxpro5000","NVIDIA RTX PRO 5000 72GB Blackwell/PCIe/SSE2","NVIDIA Corporation");
+        rejects("rtxpro5000","NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2","NVIDIA Corporation");
+        rejects("rtxpro5000","NVIDIA RTX PRO 5000 72GB Blackwell/PCIe/SSE2","Other");
+        System.out.println("PASS: 10 GPU policy cases");
     }
 }

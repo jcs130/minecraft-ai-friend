@@ -140,6 +140,7 @@ final class NativeRpg {
         catch(RuntimeException unavailable){return false;}
     }
     boolean refillDungeonMana(Player p) {
+        if(ResidentCli.isResident(p.getUniqueId()))try{return Boolean.TRUE.equals(ResidentCli.nativeCall("refillMana",new Class[]{UUID.class},p.getUniqueId()));}catch(Exception e){return false;}
         try { return Boolean.TRUE.equals(call("refillDungeonMana", new Class<?>[]{Player.class}, p)); }
         catch (RuntimeException unavailable) { return false; }
     }
@@ -153,6 +154,7 @@ final class NativeRpg {
         return enough;
     }
     boolean spend(Player p,double amount){
+        if(ResidentCli.isResident(p.getUniqueId()))return ResidentCli.mana(p,amount,true);
         if(!Double.isFinite(amount)||amount<0)return false;
         try{return (Boolean)call("consumeCommonMana",new Class<?>[]{Player.class,double.class},p,amount);}
         catch(RuntimeException e){p.sendMessage("§eRPG魔力服务未就绪，本次未执行；查询：/mycli status");return false;}

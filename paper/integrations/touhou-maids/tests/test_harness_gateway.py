@@ -27,6 +27,21 @@ class HarnessFramesTest(unittest.TestCase):
         original=self.payload([text,text]);normal=gateway.native_plan_payload(original)
         self.assertEqual(len(normal['output']),1);self.assertEqual(len(original['output']),2)
         self.assertEqual(normal['id'],original['id'])
+    def test_completed_native_dialogue_preserves_text_and_never_invents_tool_calls(self):
+        original=self.payload(['蓝色纸船\n---\nBlue paper boat'])
+        normalized=gateway.native_plan_payload(original,allow_dialogue=True)
+        self.assertEqual(normalized['id'],original['id'])
+        self.assertEqual(json.loads(normalized['output'][0]['content'][0]['text']),
+                         {'content':'蓝色纸船\n---\nBlue paper boat','tool_calls':[]})
+        self.assertEqual(gateway.native_plan_payload(original),original)
+    def test_dialogue_normalization_rejects_partial_ambiguous_and_structured_outputs(self):
+        for texts in [['{"tool_calls":'],['[1,'],['```json\ninvalid\n```'],['one','two'],[''],['x'*16001]]:
+            original=self.payload(texts)
+            self.assertEqual(gateway.native_plan_payload(original,allow_dialogue=True),original)
+        original=self.payload(['hello']);original['status']='in_progress'
+        self.assertEqual(gateway.native_plan_payload(original,allow_dialogue=True),original)
+        original=self.payload(['hello']);original['output'].append({'type':'function_call','name':'move'})
+        self.assertEqual(gateway.native_plan_payload(original,allow_dialogue=True),original)
     def test_different_plans_are_never_arbitrarily_selected(self):
         original=self.payload(['{"content":"one","tool_calls":[]}','{"content":"two","tool_calls":[]}'])
         self.assertEqual(gateway.native_plan_payload(original),original)

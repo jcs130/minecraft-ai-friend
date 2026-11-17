@@ -6,6 +6,18 @@ import java.util.Set;
 
 /** Shared action contract used by validation, discovery and the model's planning prompt. */
 final class ResidentContract {
+    static JsonObject modelInput(String reply){
+        if(reply==null||reply.length()>4096)throw new IllegalArgumentException("input: JSON object up to 4096 characters required");
+        JsonObject parsed;
+        try{parsed=com.google.gson.JsonParser.parseString(reply).getAsJsonObject();}
+        catch(RuntimeException invalid){throw new IllegalArgumentException("input: one JSON object required; no markdown or trailing prose");}
+        validate(parsed);return parsed;
+    }
+    static Map<String,Object> diagnosis(IllegalArgumentException error){
+        String message=String.valueOf(error.getMessage());if(message.length()>300)message=message.substring(0,300);
+        return Map.of("problem",message,"executed",false,"minimumReadOnlyExample",Map.of("action","cli","command","status"),
+            "nextSafeRead","resident-actions","retrySameInput",false);
+    }
     static boolean holdsPosition(JsonObject input) {
         return input != null && input.has("action") && input.get("action").getAsString().equals("cli")
             && input.has("command") && input.get("command").getAsString().strip().matches("photo +take(?: .*|$)");

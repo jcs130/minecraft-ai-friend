@@ -52,7 +52,7 @@ final class TrialRescueVisuals {
     }
     private List<Player> viewers(Player target, Collection<UUID> members) {
         return members.stream().map(Bukkit::getPlayer).filter(Objects::nonNull)
-                .filter(p -> p.isOnline() && p.getWorld() == target.getWorld() && p.canSee(target)
+                .filter(p -> p.isOnline() && p.getWorld() == target.getWorld() && p.canSee(ResidentCli.actual(target))
                         && p.getLocation().distanceSquared(target.getLocation()) <= 48 * 48)
                 .toList();
     }

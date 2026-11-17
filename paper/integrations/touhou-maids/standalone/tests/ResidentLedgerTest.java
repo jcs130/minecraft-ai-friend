@@ -16,6 +16,13 @@ public final class ResidentLedgerTest {
     static String validate(String input){return ResidentContract.validate(JsonParser.parseString(input).getAsJsonObject());}
     public static void main(String[] args)throws Exception{
         Path root=Path.of(args[0]);Files.createDirectories(root);
+        var inspection=JsonParser.parseString("{\"dimension\":\"minecraft:aincrad\",\"x\":12.5,\"y\":80,\"z\":10,\"note\":\"Observed original body and retained the unknown receipt.\"}").getAsJsonObject();
+        ResidentTravelInspection.check(inspection,"minecraft:aincrad",12.5,80,10);check(true);
+        reject("dimension_changed",()->ResidentTravelInspection.check(inspection,"minecraft:overworld",12.5,80,10));
+        reject("position_changed",()->ResidentTravelInspection.check(inspection,"minecraft:aincrad",13.1,80,10));
+        var missing=inspection.deepCopy();missing.remove("y");reject("required",()->ResidentTravelInspection.check(missing,"minecraft:aincrad",12.5,80,10));
+        var vague=inspection.deepCopy();vague.addProperty("note","ok");reject("note_required",()->ResidentTravelInspection.check(vague,"minecraft:aincrad",12.5,80,10));
+        var string=inspection.deepCopy();string.addProperty("x","12.5");reject("finite number",()->ResidentTravelInspection.check(string,"minecraft:aincrad",12.5,80,10));
         check(validate("{\"action\":\"walk\",\"at\":{\"x\":-45,\"y\":67,\"z\":2}}").equals("walk"));
         reject("at: required",()->validate("{\"action\":\"walk\",\"to\":{\"x\":1,\"y\":2,\"z\":3}}"));
         reject("at: exactly",()->validate("{\"action\":\"walk\",\"at\":{\"x\":1,\"z\":3}}"));
@@ -26,6 +33,11 @@ public final class ResidentLedgerTest {
         reject("command: not a field",()->validate("{\"action\":\"rest\",\"command\":\"op me\"}"));
         reject("channel:",()->validate("{\"action\":\"say\",\"text\":\"secret\",\"channel\":\"private\"}"));
         check(ResidentContract.describe().get("reachBlocks").equals(5));
+        reject("one JSON object",()->ResidentContract.modelInput("```json\n{}\n```"));
+        reject("at: required",()->ResidentContract.modelInput("{\"action\":\"walk\",\"to\":{\"x\":1,\"y\":2,\"z\":3}}"));
+        var diagnosis=ResidentContract.diagnosis(new IllegalArgumentException("at.y: integer required"));
+        check(diagnosis.get("problem").equals("at.y: integer required")&&diagnosis.get("executed").equals(false));
+        check(ResidentContract.modelInput("{\"action\":\"cli\",\"command\":\"status\"}").get("command").getAsString().equals("status"));
         check(validate("{\"action\":\"rest\",\"reason\":\"等天亮再工作。\"}").equals("rest"));
         reject("reason: string",()->validate("{\"action\":\"rest\",\"reason\":{\"command\":\"op\"}}"));
         check(ResidentContract.holdsPosition(JsonParser.parseString("{\"action\":\"cli\",\"command\":\"photo take trip third 1\"}").getAsJsonObject()));

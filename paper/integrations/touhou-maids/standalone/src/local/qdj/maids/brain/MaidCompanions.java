@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Set;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -31,6 +32,8 @@ final class MaidCompanions {
     private final CompanionJournal journal;
     private final ResidentState travelState;
     private final ResidentReceipts travelReceipts;
+    private final ResidentReceipts travelReviews;
+    private final Map<UUID,Map.Entry<String,Long>> lastNotices=new HashMap<>();
     private final Map<UUID,Long> nextTravel=new HashMap<>();
     private final Map<UUID, CompanionConfig.Offer> offers = new LinkedHashMap<>();
     private final Map<UUID, String> errors = new HashMap<>();
@@ -51,11 +54,20 @@ final class MaidCompanions {
         journal = new CompanionJournal(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-companion-memory"));
         travelState=new ResidentState(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-companion-travel-state"));
         travelReceipts=new ResidentReceipts(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-companion-travel"));
+        travelReviews=new ResidentReceipts(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-companion-travel-reviews"));
         nextSocial = System.currentTimeMillis() + config.socialIntervalSeconds() * 1000L;
         config.offers().forEach(o -> offers.put(o.maidId(), o));
     }
 
     boolean offered(UUID id) { return offers.containsKey(id); }
+    void notice(UUID id,String text)throws IOException {
+        if(text==null||text.isBlank()||text.length()>2048)return;
+        long now=System.currentTimeMillis();var last=lastNotices.get(id);
+        if(last!=null&&last.getKey().equals(text)&&now-last.getValue()<5000)return;
+        journal.append(id,UUID.randomUUID(),"result",Map.of("maidId",id.toString(),"speakerId",id.toString(),
+            "channel","private","kind","game_notice","reply",text,"sentAt",java.time.Instant.ofEpochMilli(now).toString()));
+        lastNotices.put(id,Map.entry(text,now));
+    }
     boolean thinking(UUID id) { return pending.containsKey(id); }
     boolean leader(UUID id, UUID player) { var row=ledger.get(id);return row!=null&&player.equals(row.leader()); }
     boolean pendingTravel(UUID id) {
@@ -75,14 +87,64 @@ final class MaidCompanions {
         if(maid!=null)result.put("currentPosition",point(maid));
         result.put("observedAt",java.time.Instant.now().toString());result.put("retryable",false);return result;
     }
+    Map<String,Object> inspectTravel(UUID id,UUID request,UUID review,com.google.gson.JsonObject inspection)throws IOException {
+        var prior=travelReviews.read(id,review);
+        if(prior!=null){if(!request.toString().equals(prior.get("sourceRequestId")))throw new IllegalArgumentException("review_id_conflict");return prior;}
+        var pending=travelState.load(id);var original=travelReceipts.read(id,request);
+        if(pending==null||!request.equals(pending.pending())||original==null||!Set.of("accepted","unknown").contains(original.get("status")))
+            throw new IllegalArgumentException("unresolved_travel_request_required");
+        var maid=agents.loaded(agents.agent(id));var contract=ledger.get(id);
+        if(maid==null||!maid.isAlive()||contract==null||thinking(id)||agents.residents()!=null&&agents.residents().busy(id))
+            throw new IllegalArgumentException("original_body_unavailable_or_busy");
+        ResidentTravelInspection.check(inspection,maid.level().dimension().location().toString(),maid.getX(),maid.getY(),maid.getZ());
+        var row=new LinkedHashMap<String,Object>();row.put("maidId",id.toString());row.put("requestId",review.toString());
+        row.put("sourceRequestId",request.toString());row.put("contractId",contract.contract().toString());row.put("originalOutcome","unknown");row.put("originalCompleted",false);
+        row.put("inspection",inspection);row.put("observedAt",java.time.Instant.now().toString());row.put("status","accepted");
+        travelReviews.write(id,review,row);
+        halt(maid);anchor(maid,point(maid));maid.setInSittingPose(true);
+        ledger.put(contract.change(contract.leader(),"paused",point(maid),0,System.currentTimeMillis(),"travel_inspected_no_replay"));
+        travelState.locate(id,maid.level().dimension().location().toString(),maid.chunkPosition().x,maid.chunkPosition().z);
+        travelState.finish(id,request);errors.remove(id);applied.remove(id);agents.agent(id).invalidateActions();
+        row.put("status","completed");row.put("completed",true);row.put("reason","inspection_recorded_body_paused_no_replay");
+        row.put("next_safe_read","/maidagent resident "+id+" status");travelReviews.write(id,review,row);return row;
+    }
+    Map<String,Object> resumeAfterInspection(UUID id,UUID review)throws IOException {
+        var row=travelReviews.read(id,review);
+        if(row==null||!"completed".equals(row.get("status")))throw new IllegalArgumentException("completed_inspection_required");
+        if(Boolean.TRUE.equals(row.get("resumed")))return row;
+        var entry=ledger.get(id);var maid=agents.loaded(agents.agent(id));
+        if(entry==null||!entry.mode().equals("paused")||!entry.contract().toString().equals(row.get("contractId"))||pendingTravel(id)||maid==null||!maid.isAlive())
+            throw new IllegalArgumentException("inspected_body_or_contract_changed");
+        halt(maid);anchor(maid,point(maid));
+        ledger.put(entry.change(entry.leader(),entry.leader()==null?"available":"stay",point(maid),0,System.currentTimeMillis(),"inspection_resumed"));
+        // A held contract needs a new follow/work order. Unleased residents may make a new plan.
+        applied.remove(id);row.put("resumed",true);row.put("resumedAt",java.time.Instant.now().toString());
+        travelReviews.write(id,review,row);return row;
+    }
     boolean mayResidentAct(UUID id,String action) {
         var e=ledger.get(id);if(e==null||!reserved(id))return true;
+          if(e.mode().equals("paused"))return false;
         if(List.of("cli","cast","equip","say").contains(action))return !e.mode().equals("dead");
         return e.mode().equals("work")&&List.of("walk","task","break","place").contains(action);
     }
     boolean reserved(UUID id) {
         var e = ledger.get(id);
         return e != null && !List.of("available", "dead").contains(e.mode());
+    }
+    boolean combatAllowed(UUID id){
+        if(pendingTravel(id))return false;
+        var e=ledger.get(id);if(e==null||e.mode().equals("available"))return true;
+        if(!List.of("follow","work").contains(e.mode()))return false;
+        var leader=actor(e.leader());var maid=agents.loaded(agents.agent(id));
+        return leader!=null&&maid!=null&&leader.isAlive()&&!leader.isSpectator()&&leader.level()==maid.level()
+            &&leader.distanceToSqr(maid)<=32*32;
+    }
+    boolean sameParty(UUID a,UUID b){
+        if(a.equals(b))return true;
+        var x=ledger.get(a);var y=ledger.get(b);
+        UUID left=x!=null&&reserved(a)&&x.leader()!=null?x.leader():a;
+        UUID right=y!=null&&reserved(b)&&y.leader()!=null?y.leader():b;
+        return left.equals(right);
     }
     UUID contract(UUID id) { var e = ledger.get(id); return e == null ? null : e.contract(); }
 
@@ -96,9 +158,11 @@ final class MaidCompanions {
             if (offer == null) throw new IllegalArgumentException("not_recruitable");
             if(pendingTravel(id))throw new IllegalArgumentException("travel_unknown_query_original_request");
             var old = ledger.get(id);
+              if(old!=null&&old.mode().equals("paused")&&!action.equals("status"))throw new IllegalArgumentException("travel_inspection_resume_required");
             if (checkContract && !java.util.Objects.equals(expected, contract(id)))
                 throw new IllegalArgumentException("stale_contract");
             EntityMaid maid = agents.loaded(agents.agent(id));
+              if(maid!=null&&maid.getPersistentData().getBoolean(ResidentBodyAccess.DOWNED)&&!action.equals("status"))throw new IllegalArgumentException("trial_downed_wait_for_rescue");
             if (action.equals("status")) {
                 result.put("status", "ok");
                 result.put("companion", view(player, id, now));
@@ -229,6 +293,9 @@ final class MaidCompanions {
         for (var row : List.copyOf(pending.entrySet())) if (now > row.getValue().deadline())
             finish(row.getKey(), row.getValue().id(), null, "model_timeout_no_replay");
         for (var e : ledger.entries()) {
+            var residentBody=agents.loaded(agents.agent(e.maid()));
+            if(residentBody!=null&&residentBody.getPersistentData().getBoolean(ResidentBodyAccess.DOWNED)){halt(residentBody);continue;}
+            if(e.mode().equals("paused")){var maid=agents.loaded(agents.agent(e.maid()));if(maid!=null)halt(maid);continue;}
             if (!reserved(e.maid()) || !offered(e.maid()) || errors.containsKey(e.maid()) && !errors.get(e.maid()).startsWith("travel_wait:")) continue;
             try {
                 if (e.leader() != null) {
@@ -432,13 +499,10 @@ final class MaidCompanions {
     String persona(UUID id){var offer=offers.get(id);return offer==null?"Minecraft居民":offer.persona();}
     Map<String,Object> residentContext(UUID id)throws IOException{
         var offer=offers.get(id);if(offer==null)return Map.of();
-        return Map.of("persona",agents.agent(id).persona(offer.persona()),"likes",offer.likes(),"dislikes",offer.dislikes(),"ownRecentActions",journal.recall(id,id,false));
+        return Map.of("persona",agents.agent(id).persona(offer.persona()),"likes",offer.likes(),"dislikes",offer.dislikes(),"ownRecentActions",journal.actionRecall(id),"currentGoals",journal.currentGoals(id));
     }
     void rememberAction(UUID id,UUID request,Map<String,Object> receipt)throws IOException{
-        var summary=new LinkedHashMap<String,Object>();
-        for(String key:List.of("requestId","action","status","reason","completed","actualPosition","before","after","consumed","remaining","manaSpent"))
-            if(receipt.containsKey(key))summary.put(key,receipt.get(key));
-        journal.action(id,request,summary);
+        journal.action(id,request,ResidentActionMemory.summarize(receipt));
     }
 
     Map<String,Object> social(UUID id) {

@@ -129,12 +129,14 @@ def main():
     if result.returncode:raise SystemExit(result.stderr.decode(errors='replace'))
     mixins=json.loads((root/'client/qiandeng-camera.mixins.json').read_text());mixins['refmap']='';
     bridge_mixins={'required':True,'package':'org.qiandeng.camera.bridge.mixin','compatibilityLevel':'JAVA_21','client':['VisualBlockMixin','VisualLightMixin'],'injectors':{'defaultRequire':1}}
-    target=out/'qiandeng-native-camera-0.2.0-neoforge.jar'
+    descriptor=(root/'neoforge/neoforge.mods.toml').read_text()
+    version=re.search(r'(?m)^version="([0-9.]+)"$',descriptor).group(1)
+    target=out/f'qiandeng-native-camera-{version}-neoforge.jar'
     with zipfile.ZipFile(target,'w',zipfile.ZIP_DEFLATED) as archive:
         for path in classes.rglob('*.class'):archive.write(path,path.relative_to(classes).as_posix())
         archive.writestr('qiandeng-camera.mixins.json',json.dumps(mixins))
         archive.writestr('qiandeng-camera-visual.mixins.json',json.dumps(bridge_mixins))
-        archive.writestr('META-INF/neoforge.mods.toml',(root/'neoforge/neoforge.mods.toml').read_text())
+        archive.writestr('META-INF/neoforge.mods.toml',descriptor)
     receipt={'loader':'neoforge','minecraft':'1.21.1','sha256':hashlib.sha256(target.read_bytes()).hexdigest(),'sharedSources':{str(p.relative_to(repo)):hashlib.sha256(p.read_bytes()).hexdigest() for p in [shared/'VisualExport.java',shared/'ControlLedger.java',*(root/'client').glob('*.java')]},'artifacts':inputs}
     (out/'build-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n');print(json.dumps({'built':str(target),'sha256':receipt['sha256']}))
 

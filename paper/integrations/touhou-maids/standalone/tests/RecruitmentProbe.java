@@ -29,7 +29,80 @@ public final class RecruitmentProbe {
                 String[] a = StringArgumentType.getString(ctx, "input").split(" ", 3);
                 var source = ctx.getSource();
                 var server = source.getServer();
+                boolean synthetic=false;
+                for(var marker:Map.of(".resident-hybrid-qa","SYNTHETIC_RESIDENT_HYBRID_ONLY",".standalone-maid-agents-lab","SYNTHETIC_STOCK_NEOFORGE").entrySet())
+                    try{synthetic|=java.nio.file.Files.readString(java.nio.file.Path.of(marker.getKey())).strip().equals(marker.getValue());}catch(java.io.IOException missing){}
+                if(!synthetic)throw new IllegalArgumentException("synthetic_fixture_marker_required");
                 ServerPlayer player = server.getPlayerList().getPlayerByName("NpcModelQA");
+                if(a[0].equals("create-resident")){
+                    UUID id=UUID.fromString(a[1]),owner=UUID.fromString(a[2]);if(source.getLevel().getEntity(id)!=null)throw new IllegalArgumentException("body_exists");
+                    var maid=(EntityMaid)net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.get(net.minecraft.resources.ResourceLocation.parse("touhou_little_maid:maid")).create(source.getLevel());
+                    maid.setUUID(id);maid.setOwnerUUID(owner);maid.setTame(true,true);maid.setPos(180.5,81,100.5);
+                    if(!source.getLevel().addFreshEntity(maid))throw new IllegalArgumentException("fixture_spawn_refused");return tell(source,Map.of("created",id));
+                }
+                if(a[0].equals("combat-inspect")){
+                    var out=new java.util.ArrayList<Object>();
+                    for(var e:source.getLevel().getAllEntities())if(e.getTags().contains("qa_combat")&&e instanceof net.minecraft.world.entity.LivingEntity mob){
+                        var row=new LinkedHashMap<String,Object>();row.put("uuid",e.getStringUUID());row.put("type",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).toString());
+                        row.put("health",mob.getHealth());row.put("position",java.util.List.of(e.getX(),e.getY(),e.getZ()));row.put("alive",e.isAlive());
+                        row.put("lastAttacker",mob.getLastHurtByMob()==null?"none":mob.getLastHurtByMob().getStringUUID());
+                        row.put("ai",!(mob instanceof net.minecraft.world.entity.Mob m)||!m.isNoAi());out.add(row);
+                    }return tell(source,Map.of("entities",out));
+                }
+                if(a[0].equals("combat-enemy")){
+                    var maid=(EntityMaid)source.getLevel().getEntity(UUID.fromString(a[1]));double offset=Double.parseDouble(a[2]);
+                    var enemy=net.minecraft.world.entity.EntityType.HUSK.create(source.getLevel());enemy.setPos(maid.getX()+offset,maid.getY(),maid.getZ());
+                    enemy.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH).setBaseValue(100);enemy.setHealth(100);enemy.setPersistenceRequired();enemy.addTag("qa_combat");
+                    if(!source.getLevel().addFreshEntity(enemy))throw new IllegalArgumentException("fixture_spawn_failed");
+                    return tell(source,Map.of("id",enemy.getStringUUID(),"health",enemy.getHealth(),"ai",!enemy.isNoAi()));
+                }
+                if(a[0].equals("native-rpg")){
+                    try{
+                        var manager=Class.forName("org.bukkit.Bukkit").getMethod("getPluginManager").invoke(null);
+                        var pm=Class.forName("org.bukkit.plugin.PluginManager");var af=pm.getMethod("getPlugin",String.class).invoke(manager,"AgentFriend");
+                        var bridge=pm.getMethod("getPlugin",String.class).invoke(manager,"QiandengjiRpg");
+                        var vortex=pm.getMethod("getPlugin",String.class).invoke(manager,"VortexRPG");
+                        var resident=af.getClass().getClassLoader().loadClass("org.afuhome.agentfriend.ResidentCli");
+                        var find=resident.getDeclaredMethod("find",UUID.class);find.setAccessible(true);var actor=find.invoke(null,UUID.fromString(a[1]));
+                        var playerType=Class.forName("org.bukkit.entity.Player");
+                        if(a[2].equals("effects"))return tell(source,Map.of("effects",((java.util.Collection<?>)playerType.getMethod("getActivePotionEffects").invoke(actor)).stream().map(Object::toString).toList()));
+                        var profiles=vortex.getClass().getMethod("playerProfileService").invoke(vortex);
+                        if(a[2].startsWith("xp ")){profiles.getClass().getMethod("grantExperience",playerType,long.class,String.class).invoke(profiles,actor,Long.parseLong(a[2].substring(3)),"synthetic_acceptance");return tell(source,Map.of("grantedForSyntheticFixture",true));}
+                        if(a[2].equals("load")){
+                            var join=Class.forName("org.bukkit.event.player.PlayerJoinEvent");var e=join.getConstructor(playerType,String.class).newInstance(actor,null);
+                            profiles.getClass().getMethod("onPlayerJoin",join).invoke(profiles,e);return tell(source,Map.of("submitted",true));
+                        }
+                        if(a[2].equals("state"))return tell(source,new Gson().fromJson((String)bridge.getClass().getMethod("selfState",playerType).invoke(bridge,actor),Map.class));
+                        var fields=a[2].split(" ",2);var profile=profiles.getClass().getMethod("profile",playerType).invoke(profiles,actor);
+                        var service=vortex.getClass().getMethod(fields[0].equals("choose")?"classSkillService":"spellbookService").invoke(vortex);
+                        var method=service.getClass().getMethod(fields[0].equals("choose")?"chooseClass":"cast",playerType,profile.getClass(),String.class);
+                        var future=(java.util.concurrent.CompletableFuture<?>)method.invoke(service,actor,profile,fields[1]);
+                        future.whenComplete((v,error)->{if(error!=null)source.sendFailure(Component.literal("NATIVE_RPG_ERROR "+error));});
+                        return tell(source,Map.of("submitted",true,"done",future.isDone(),"failed",future.isCompletedExceptionally()));
+                    }catch(ReflectiveOperationException error){throw new IllegalArgumentException(error.getCause()==null?error:error.getCause());}
+                }
+                if(a[0].equals("party-control")){
+                    UUID id=UUID.fromString(a[1]);String[] words=a[2].split(" ");var leader=source.getLevel().getEntity(UUID.fromString(words[0]));
+                    if(!(leader instanceof EntityMaid))throw new IllegalArgumentException("synthetic_resident_leader_required");
+                    try{var type=Class.forName("local.qdj.maids.brain.MaidAgentsMod");var running=type.getDeclaredField("running");running.setAccessible(true);var runtime=running.get(null);
+                        var get=runtime.getClass().getDeclaredMethod("companions");get.setAccessible(true);var companions=get.invoke(runtime);
+                        var contract=companions.getClass().getDeclaredMethod("contract",UUID.class);contract.setAccessible(true);var expected=contract.invoke(companions,id);
+                        var execute=companions.getClass().getDeclaredMethod("execute",net.minecraft.world.entity.LivingEntity.class,UUID.class,String.class,UUID.class,boolean.class);execute.setAccessible(true);
+                        return tell(source,execute.invoke(companions,leader,id,words[1],expected,true));
+                    }catch(ReflectiveOperationException error){throw new IllegalArgumentException(error);}
+                }
+                if(a[0].equals("notice")){
+                    try{Class.forName("local.qdj.maids.brain.ResidentBodyAccess").getMethod("notice",UUID.class,String.class).invoke(null,UUID.fromString(a[1]),a[2]);return tell(source,Map.of("recorded",true));}
+                    catch(ReflectiveOperationException failed){throw new IllegalArgumentException(failed);}
+                }
+                if(a[0].equals("trial-mobs")){
+                    var rows=new java.util.ArrayList<Object>();
+                    for(var level:server.getAllLevels())for(var entity:level.getAllEntities())if((entity.getTags().contains("afu_dungeon_mob")||entity.getTags().contains("afu_site_dungeon"))&&entity instanceof net.minecraft.world.entity.Mob mob){
+                        var row=new LinkedHashMap<String,Object>();row.put("uuid",mob.getStringUUID());row.put("type",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString());
+                        row.put("position",java.util.List.of(mob.getX(),mob.getY(),mob.getZ()));row.put("health",mob.getHealth());row.put("noAi",mob.isNoAi());row.put("mainhand",mob.getMainHandItem().toString());
+                        row.put("target",mob.getTarget()==null?"none":mob.getTarget().getStringUUID());row.put("lastAttacker",mob.getLastHurtByMob()==null?"none":mob.getLastHurtByMob().getStringUUID());rows.add(row);
+                    }return tell(source,Map.of("mobs",rows,"observedAt",java.time.Instant.now().toString()));
+                }
                 if(a[0].equals("npc-ask")) {
                     UUID speakerId=UUID.fromString(a[1]);String[] rest=a[2].split(" ",2);UUID target=UUID.fromString(rest[0]);EntityMaid speaker=null;
                     for(var level:server.getAllLevels())if(level.getEntity(speakerId)instanceof EntityMaid found)speaker=found;
@@ -96,10 +169,23 @@ public final class RecruitmentProbe {
                     maid.getPersistentData().remove("tlm_resident_home_installed");
                     return tell(source,Map.of("syntheticHomeReset",true));
                 }
+                if(a[0].equals("photo-proof")){
+                    try{
+                    var manager=Class.forName("org.bukkit.Bukkit").getMethod("getPluginManager").invoke(null);
+                    var image=Class.forName("org.bukkit.plugin.PluginManager").getMethod("getPlugin",String.class).invoke(manager,"ImageFrame");
+                    var maps=image.getClass().getField("imageMapManager").get(null);
+                    var values=(java.util.Collection<?>)maps.getClass().getMethod("getFromCreator",UUID.class).invoke(maps,UUID.fromString(a[1]));
+                    var proof=new java.util.ArrayList<Object>();
+                    for(var map:values)proof.add(Map.of("owner",map.getClass().getMethod("getCreator").invoke(map).toString(),
+                        "name",map.getClass().getMethod("getName").invoke(map),"index",map.getClass().getMethod("getImageIndex").invoke(map),
+                        "valid",map.getClass().getMethod("isValid").invoke(map)));
+                    return tell(source,Map.of("maps",proof));
+                    }catch(ReflectiveOperationException unavailable){throw new IllegalStateException("actual_photo_proof_unavailable",unavailable);}
+                }
                 if(a[0].equals("native-permission")){
                     var maid=(EntityMaid)source.getLevel().getEntity(UUID.fromString(a[1]));var xyz=a[2].split(" ");
                     var at=new net.minecraft.core.BlockPos(Integer.parseInt(xyz[0]),Integer.parseInt(xyz[1]),Integer.parseInt(xyz[2]));
-                    return tell(source,Map.of("destroy",maid.canDestroyBlock(at),"place",maid.canPlaceBlock(at)));
+                    return tell(source,Map.of("destroy",maid.canDestroyBlock(at),"place",maid.canPlaceBlock(at),"blockState",maid.level().getBlockState(at).toString(),"light",maid.level().getMaxLocalRawBrightness(at)));
                 }
                 if(a[0].equals("path")){
                     var maid=(EntityMaid)source.getLevel().getEntity(UUID.fromString(a[1]));var xyz=a[2].split(" ");
@@ -145,6 +231,10 @@ public final class RecruitmentProbe {
                     result.put("task", maid.getTask().getUid().toString()); result.put("sit", maid.isMaidInSittingPose());
                     result.put("home", maid.isHomeModeEnable()); result.put("center", maid.getRestrictCenter().toShortString());
                     result.put("health", maid.getHealth()); result.put("mainhand", maid.getMainHandItem().toString());
+                    var armor=new java.util.ArrayList<String>();for(var slot:java.util.List.of(EquipmentSlot.HEAD,EquipmentSlot.CHEST,EquipmentSlot.LEGS,EquipmentSlot.FEET))armor.add(maid.getItemBySlot(slot).toString());result.put("armor",armor);
+                    result.put("hunger",maid.getHunger());result.put("downed",maid.getPersistentData().getBoolean("tlm_resident_trial_downed"));
+                    result.put("attackTarget",maid.getTarget()==null?"none":maid.getTarget().getStringUUID());
+                    result.put("brainAttackTarget",maid.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.ATTACK_TARGET).map(e->e.getStringUUID()).orElse("none"));
                     result.put("history", maid.getAiChatManager().getHistory().getDeque().stream()
                         .map(com.github.tartaricacid.touhoulittlemaid.ai.service.llm.LLMMessage::message).toList());
                     result.put("bubbleCount", maid.getChatBubbleManager().getChatBubbleDataCollection().size());
@@ -152,6 +242,9 @@ public final class RecruitmentProbe {
                     result.put("sleeping",maid.isSleeping());
                     result.put("dimension",maid.level().dimension().location().toString());
                     result.put("canMove",maid.canBrainMoving());result.put("noAi",maid.isNoAi());
+                    result.put("sitting",maid.isMaidInSittingPose());result.put("passenger",maid.isPassenger());result.put("leashed",maid.isLeashed());
+                    try {result.put("residentHoldsPosition",Class.forName("local.qdj.maids.brain.MaidAgentsMod",true,EntityMaid.class.getClassLoader()).getMethod("residentHoldsPosition",UUID.class).invoke(null,maid.getUUID()));}
+                    catch(ReflectiveOperationException error){throw new IllegalStateException("resident_motion_probe_unavailable",error);}
                     result.put("rpg",maid.getPersistentData().getCompound("tlm_resident_rpg").toString());
                     result.put("mainhand",maid.getMainHandItem().toString());
                     return tell(source, result);
@@ -170,6 +263,25 @@ public final class RecruitmentProbe {
                     maid.getMaidInv().setStackInSlot(2,new ItemStack(net.minecraft.world.item.Items.IRON_HELMET));
                     level.setBlock(new net.minecraft.core.BlockPos(x+3,81,100),net.minecraft.world.level.block.Blocks.IRON_ORE.defaultBlockState(),3);
                     return tell(source,Map.of("fixture",true,"x",x));
+                }
+                if(a[0].equals("item-fixture")){
+                    var maid=(EntityMaid)source.getLevel().getEntity(UUID.fromString(a[1]));
+                    String[] fields=a[2].split(" ");int slot=Integer.parseInt(fields[0]),count=Integer.parseInt(fields[2]);
+                    var item=net.minecraft.core.registries.BuiltInRegistries.ITEM.get(net.minecraft.resources.ResourceLocation.parse(fields[1]));
+                    if(slot<0||slot>=Math.min(maid.getMaidInv().getSlots(),maid.getMaidBackpackType().getAvailableMaxContainerIndex())||count<0||count>item.getDefaultMaxStackSize())throw new IllegalArgumentException("fixture_slot_or_count");
+                    maid.getMaidInv().setStackInSlot(slot,count==0?ItemStack.EMPTY:new ItemStack(item,count));
+                    return tell(source,Map.of("fixture",true,"slot",slot,"count",count));
+                }
+                if(a[0].equals("service")){
+                    try{
+                    var manager=Class.forName("org.bukkit.Bukkit").getMethod("getPluginManager").invoke(null);
+                    var af=Class.forName("org.bukkit.plugin.PluginManager").getMethod("getPlugin",String.class).invoke(manager,"AgentFriend");
+                    var service=af.getClass().getClassLoader().loadClass("org.afuhome.agentfriend.ResidentCli");
+                    var id=UUID.fromString(a[1]);var fields=a[2].split(" ",2);var request=UUID.fromString(fields[0]);
+                    String result=fields.length==1?(String)service.getMethod("query",UUID.class,UUID.class).invoke(null,id,request)
+                        :(String)service.getMethod("run",UUID.class,UUID.class,String.class).invoke(null,id,request,fields[1]);
+                    source.sendSuccess(()->Component.literal(result),false);return 1;
+                    }catch(ReflectiveOperationException failed){throw new IllegalArgumentException(failed);}
                 }
                 if(a[0].equals("book-fixture")){
                     var maid=(EntityMaid)source.getLevel().getEntity(UUID.fromString(a[1]));

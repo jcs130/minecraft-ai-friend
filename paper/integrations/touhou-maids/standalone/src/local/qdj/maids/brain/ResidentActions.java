@@ -34,7 +34,7 @@ final class ResidentActions {
     static ItemStack stack(EntityMaid maid,JsonObject input){
         String action=input.get("action").getAsString();if(action.equals("break"))return maid.getMainHandItem();
         if(!List.of("place","equip").contains(action))return ItemStack.EMPTY;
-        int slot=ResidentContract.integer(input,"slot");if(slot<0||slot>=maid.getMaidInv().getSlots())throw new IllegalArgumentException("slot_out_of_range");
+        int slot=ResidentContract.integer(input,"slot");if(slot<0||slot>=Math.min(maid.getMaidInv().getSlots(),maid.getMaidBackpackType().getAvailableMaxContainerIndex()))throw new IllegalArgumentException("slot_out_of_range");
         return maid.getMaidInv().getStackInSlot(slot);
     }
     static long miningMillis(EntityMaid maid,BlockPos p) {
@@ -102,7 +102,7 @@ final class ResidentActions {
         int index;
         try { index=input.get("slot").getAsBigDecimal().intValueExact(); } catch(Exception e) { throw new IllegalArgumentException("slot: expected inventory integer"); }
         var bag=maid.getMaidInv();
-        if(index<0||index>=bag.getSlots()) throw new IllegalArgumentException("slot_out_of_range");
+        if(index<0||index>=Math.min(bag.getSlots(),maid.getMaidBackpackType().getAvailableMaxContainerIndex())) throw new IllegalArgumentException("slot_out_of_range");
         var stack=bag.getStackInSlot(index);
         if(stack.isEmpty()||!(stack.getItem() instanceof BlockItem bi)) throw new IllegalArgumentException("block_item_required");
         String id=BuiltInRegistries.BLOCK.getKey(bi.getBlock()).toString();

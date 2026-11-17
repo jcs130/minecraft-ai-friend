@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-17",
+  "productionChanged": false,
+  "releaseReady": false,
+  "artifacts": [
+    {
+      "file": "residents-vortex-final.jar",
+      "sha256": "f3c279117a680471fdb5eb855f71e6a050c00a4987b3f8f17742e7610807a810"
+    },
+    {
+      "file": "AgentFriend-vortex-r3.jar",
+      "sha256": "5f776640e200cef644febd848c0f3c21b031bd52a9cf35a6abbfd7c6957561cc"
+    },
+    {
+      "file": "VortexRPG-resident-r4.jar",
+      "sha256": "a332b7aad7529cd3ebaf5a0ab4e396f8e9b2c7a98f49ed66c2aee66a3bc36f25"
+    },
+    {
+      "file": "QiandengjiRpg-resident-r4.jar",
+      "sha256": "44eeab42546498cdc4834f9eaeccb4327e95e64d985ab9404ca4934d92f79d06"
+    }
+  ],
+  "finalArtifactChecks": [
+    {
+      "group": "final-cold",
+      "passed": 20,
+      "total": 20,
+      "sha256": "1b6d912045d373174be2462b5add95fcab9205b356977031b8546cacf8ab76aa",
+      "productionChanged": false
+    },
+    {
+      "group": "final-classes",
+      "passed": 33,
+      "total": 33,
+      "sha256": "ea921d17fd8aa61d03eec6fbcdff0cab8a46ff04c735398467b4bac461c0e14d",
+      "productionChanged": false
+    },
+    {
+      "group": "final-bow",
+      "passed": 14,
+      "total": 14,
+      "sha256": "c2e3b4f9939b44711d82165b76bba47aed8cfc500cf7e2ca67eda36e876dba48",
+      "productionChanged": false
+    },
+    {
+      "group": "final-crossbow",
+      "passed": 14,
+      "total": 14,
+      "sha256": "2d5bbf235d6f07b367758957304a4f0b4f871be9201073a19b9d4d435e698355",
+      "productionChanged": false
+    },
+    {
+      "group": "final-support",
+      "passed": 6,
+      "total": 6,
+      "sha256": "b38f9fbf96070969d6a7869c7742abec39f10bbec5966c11962a8ea58e5576a4",
+      "productionChanged": false
+    },
+    {
+      "group": "final-boundaries",
+      "passed": 8,
+      "total": 8,
+      "sha256": "cedc3be55cf85f02cb06f5f6d25130034d08d824da4860c2476930bad11ea32c",
+      "productionChanged": false
+    }
+  ],
+  "unitChecks": 225,
+  "earlierEvidence": {
+    "advanced-r4b": "Native XP / learning / single-charge / prepare passed; final heal assertion raced the async terminal, retained as failed run.",
+    "support-r4c": "Actual party healing and stay/dismiss passed after awaiting the original terminal. Final artifacts repeat this group.",
+    "restart-r4": "Six original profiles and prior spell-request replay guards passed. Final cold group additionally preserves learned skills/points/gear."
+  },
+  "retainedFailures": [
+    "combat-r1.json",
+    "weapons-r3.json",
+    "advanced-r4.json",
+    "advanced-r4b.json",
+    "crossbow-r4.json"
+  ],
+  "privateEvidenceRoot": "D:\\codex\\2026-09-14\\new-chat\\work\\npc-combat-results-20261117",
+  "limitations": [
+    "No formal NPC provisioning or production restart",
+    "No new online-model autonomous combat planning benchmark; reflex tests use actual native AI with planning disabled",
+    "Full Java/Bedrock/web YSM, animation and menu parity remains unverified",
+    "Existing common player-only spells are not advertised for residents; no false success",
+    "No real pet or turret entity is created by the current beast_call/deploy_turret definitions"
+  ]
+}

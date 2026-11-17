@@ -33,7 +33,7 @@ final class ResidentTravel {
             throw new IllegalArgumentException("travel_body_unavailable");
         var d=ResidentRpg.data(maid);long now=System.currentTimeMillis();
         if(d.getLong("travelAfter")>now)throw new IllegalArgumentException("travel_cooldown");
-        if(d.getDouble("mana")<5)throw new IllegalArgumentException("travel_mana_low");
+        if(!ResidentRpg.mana(maid,5,false))throw new IllegalArgumentException("travel_mana_low");
         BlockPos landing=null;
         // Stable nearest first, loaded safe floor and body-sized clearance. No chunk generation or block changes.
         for(int radius=2;radius<=4&&landing==null;radius++)for(int x=-radius;x<=radius&&landing==null;x++)for(int z=-radius;z<=radius&&landing==null;z++) {
@@ -45,7 +45,7 @@ final class ResidentTravel {
                     ||world.getBlockState(p.below()).is(net.minecraft.world.level.block.Blocks.MAGMA_BLOCK)
                     ||world.getBlockState(p).is(net.minecraft.world.level.block.Blocks.FIRE)
                     ||!world.noCollision(maid,maid.getBoundingBox().move(at.subtract(maid.position()))))continue;
-                if(partner!=null&&!hybridAllowed(maid,partner,world,p)||!"allow_likely".equals(ResidentProtection.query(maid,world,"use",p).get("status")))continue;
+                if(partner!=null&&!hybridAllowed(maid,partner,world,p)||!ResidentProtection.travel(maid,world,p)||!"allow_likely".equals(ResidentProtection.query(maid,world,"use",p).get("status")))continue;
                 landing=p;break;
             }
         }
@@ -58,11 +58,12 @@ final class ResidentTravel {
             ||maid.position().distanceToSqr(plan.from())>.25||now-plan.preparedAt()>5000)throw new IllegalArgumentException("travel_plan_changed_read_again");
         var before=maid.position();String dimension=plan.fromDimension();var origin=(ServerLevel)maid.level();var world=plan.world();var landing=plan.landing();
         var at=Vec3.atBottomCenterOf(landing);maid.getNavigation().stop();maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+        if(!ResidentProtection.travel(maid,world,landing))throw new IllegalArgumentException("travel_permission_changed_or_unavailable");
         if(!maid.teleportTo(world,at.x,at.y,at.z,Set.of(),maid.getYRot(),maid.getXRot()))throw new IllegalArgumentException("travel_refused");
         // Cross-dimension teleport can replace the native entity object; reconcile the original UUID, never spawn a new identity.
         var arrived=world.getEntity(maid.getUUID());
         if(!(arrived instanceof EntityMaid current)||current.position().distanceToSqr(at)>4)throw new IllegalStateException("travel_result_unknown_query_original");
-        var mana=ResidentRpg.data(current);mana.putDouble("mana",Math.max(0,mana.getDouble("mana")-5));mana.putLong("travelAfter",now+60000);
+        if(!ResidentRpg.mana(current,5,true))throw new IllegalStateException("travel_arrived_mana_payment_unknown");ResidentRpg.data(current).putLong("travelAfter",now+60000);
         origin.sendParticles(ParticleTypes.PORTAL,before.x,before.y+1,before.z,24,.4,.7,.4,.1);
         world.sendParticles(ParticleTypes.PORTAL,at.x,at.y+1,at.z,24,.4,.7,.4,.1);
         world.playSound(null,landing,net.minecraft.sounds.SoundEvents.ENDERMAN_TELEPORT,net.minecraft.sounds.SoundSource.NEUTRAL,.8f,1);

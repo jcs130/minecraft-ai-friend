@@ -178,6 +178,7 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
     }
 
     private void tick() {
+        if(plugin.nativeExclusive(config.maid())){state="external_controller";releaseSource();releaseHome();return;}
         if (!registered()) {
             state = "binding_unavailable";
             releaseSource();
@@ -373,6 +374,7 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
     }
 
     private void beforeMaidTick(EntityTickEvent.Pre event) {
+        if(plugin.nativeExclusive(config.maid()))return;
         if (!(event.getEntity() instanceof EntityMaid maid) || maid.level().isClientSide() || !maid.isAlive() || maid.isRemoved()
             || !config.maid().equals(maid.getUUID()) || !config.owner().equals(maid.getOwnerUUID())
             || !resident(maid) || !canPatrol(maid)) return;
