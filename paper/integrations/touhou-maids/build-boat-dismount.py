@@ -1,4 +1,4 @@
-"""Build the autonomous boat exit over the released unified companion bridge."""
+"""Build boat exit and consistent partner dialogue over the released bridge."""
 
 import argparse
 from importlib.util import module_from_spec, spec_from_file_location
@@ -9,7 +9,7 @@ import tempfile
 
 
 BASE_SHA256 = "00812153254a1167885f663bdbad7aca04e3d2df7d30315f9cc85b3ea59fe274"
-VERSION = "0.1.43-autonomous-dismount"
+VERSION = "0.1.44-partner-chat-range"
 PACKAGE = "local/tlmcompat/hybrid/"
 SOURCES = (
     "HybridMaidPlugin", "MaidBoatExit", "MaidCompanionActions", "NativeMaidFollowSupport",

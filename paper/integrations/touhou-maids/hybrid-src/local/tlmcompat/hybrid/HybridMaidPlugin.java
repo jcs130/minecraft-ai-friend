@@ -350,7 +350,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private EntityMaid nearbyMaid(Player actor,UUID id){
         EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
         if(maid==null||!maid.isAlive()||maid.isRemoved()||!records().has(id.toString()))throw new CompatibilityException("unavailable","女仆当前不在现场；用 /qdmaid nearby 查询附近可见女仆。");
-        requireNearby(actor,maid,8);
+        requireNearby(actor,maid,MaidConversationRange.speaker(maid,actor));
         if(actor.getGameMode()==GameMode.SPECTATOR||actor.isInvisible()||!actor.canSee(maid.getBukkitEntity()))throw new CompatibilityException("actor_unavailable","请用在场的普通角色交谈，观战镜头不能代替本人发言。");
         return maid;
     }
@@ -472,7 +472,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(action.equals("native-menu")&&!VanillaMaidProjection.nativeClient(actor))throw new CompatibilityException("native_client_required","Use the common menu on this client");
         if(!Set.of("follow","stay","sit","speak","talk","chat","brain","task","schedule","pickup","ack","transfer","equip","menu","native-menu").contains(action)&&!NativeMaidCosmetics.WRITES.contains(action))throw new CompatibilityException("unsupported_action",action);
         if(NativeMaidCosmetics.WRITES.contains(action)&&receipts.read(id,operation)==null)cosmetics.validate(actor,maid,action,value);
-        if(action.equals("chat")){requireNearby(actor,maid,16);if(visitor)social.validate(actor,maid);agentSupport.validateChat(actor,maid);}
+        if(action.equals("chat")){requireNearby(actor,maid,MaidConversationRange.speaker(maid,actor));if(visitor)social.validate(actor,maid);agentSupport.validateChat(actor,maid);}
         if(action.equals("brain")){agentSupport.validateIdle(maid);brains.validate(maid,value);}
         JsonObject previous=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));
         if(previous!=null){JsonObject replay=previous.deepCopy();replay.addProperty("replayed",true);return replay;}
@@ -521,6 +521,12 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             default->observation=cosmetics.apply(actor,maid,action,value);
         }
         observation.addProperty("meaning",action.equals("talk")?"human message queued":"operation applied; task objective requires world observation");
+        if(action.equals("talk")){
+            observation.addProperty("delivery","external_inbox");
+            observation.addProperty("modelInvoked",false);
+            observation.addProperty("meaning","留言已进入外部宿主收件箱，等待宿主读取和处理。与原生女仆模型直接交谈请使用 chat。当前留言通过原请求回执与 inbox 核对，勿重复投递。");
+            observation.addProperty("directChatCommand","/qdmaid chat "+id+" <newRequestId> <newMessage>");
+        }
         return receipts.finish(id,operation,action.equals("talk")?"queued":"applied",observation);
     }
 
