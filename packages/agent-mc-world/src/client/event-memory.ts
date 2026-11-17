@@ -41,7 +41,10 @@ function inventoryDelta(before: unknown, after: unknown): Record<string,number> 
 function steps(value: unknown) {
   return !Array.isArray(value) ? [] : value.map(raw=>{
     const s=obj(raw),effect=obj(s.observedEffect),before=obj(effect.before),after=obj(effect.after);
-    return {...pick(s,['step','outcome','reason','why','decision']),skill:s.skill??effect.skill??null,
+    return {...pick(s,['step','what','outcome','reason','why','decision']),skill:s.skill??effect.skill??null,
+      ...(s.observation?{observation:{...pick(obj(s.observation),['kind','status','observedAt']),
+        readout:pick(obj(s.observation.readout),['protocol','kind','worldKey','scanComplete','knownComplete','unknownCount']),
+        boundary:'A read observation, not a mutation or completed gameplay objective.'}}:{}),
       ...(effect.schema==='agent-mc-observed-effect/v1' ? {observed:{
       ...pick(effect,['schema','status','coverage','dimension','at','changed']),
       beforeAt:before.at??null,afterAt:after.at??null,inventoryDelta:inventoryDelta(before.inventory,after.inventory),
@@ -83,6 +86,10 @@ export function projectGameMemoryEvent(event: EventEnvelope): GameMemoryEvent | 
       casts:Array.isArray(r.casts)?r.casts.map((c:any)=>pick(obj(c),['spell','sentAt','reply','replyAt','tacticRevision','manaBefore'])):[],
       castBoundary:'A sent cast is an attempt; reply and measured effect must be checked separately.',
       killCredit:null,goalCompleted:false};
+  } else if(obj(m.positionChange).schema==='agent-mc-position-change/v1') {
+    category='observation';evidence='client-observation';data={kind:'position-change',subject:'self',
+      ...pick(obj(m.positionChange),['schema','source','before','after','distance']),cause:null,initiator:null,
+      boundary:'Position changed; this event alone does not identify its cause or who initiated it. Correlate original actions and server receipts.',goalVerified:false};
   } else if(m.goalRevision || m.taskVerification || m.goalClosure) {
     category='goal';evidence='native-receipt';data=pick(m,['goalRevision','taskVerification','goalClosure']);
   } else if(suffix==='skill') {

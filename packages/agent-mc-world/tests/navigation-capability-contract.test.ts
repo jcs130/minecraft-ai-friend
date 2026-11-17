@@ -9,6 +9,11 @@ import { renderRouteMenu } from '../core/travel.ts';
 import { nullLogger } from '../src/client/index.ts';
 
 describe('configured navigation capability disclosure', () => {
+  it('labels computed routes as unexecuted plans even in a failure readout',()=>{
+    const text=renderRouteMenu([{profile:'walk',status:'complete',steps:9,place:0,breaks:0,interact:0} as any],
+      {x:0,y:64,z:9},{head:'After a blocked attempt:'});
+    expect(text).toContain('未执行');expect(text).toContain('规划路点 9 个');expect(text).not.toContain('走 9 步');
+  });
   it.each([0, 7])('keeps shared tuning unchanged and reports actual dig/scaffold availability (%i blocks)', count => {
     const require = createRequire(import.meta.url);
     const registry = require('minecraft-data')('1.21.1');

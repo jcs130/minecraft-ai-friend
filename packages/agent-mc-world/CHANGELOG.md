@@ -1,3 +1,9 @@
+## 0.5.7-rc.160-preview.94
+
+- Preserve attempted action identity, targets and observed timestamps through native reports, continuation summaries and gameplay memory episodes. Read-only coverage is distinct from inventory or movement effects.
+- Report native forced position changes without guessing an external initiator; retain typed before/after evidence.
+- Label route probes as unexecuted plans. Sampling clocks do not renew progress budgets.
+
 ## 0.5.7-rc.160-preview.93
 
 - Export bounded gameplay memory projections through the public context and client entry points. Preserve native task/combat effects, message authors, timestamps and source references; archive-only delivery does not erase terminal evidence. Keep transport, attributed speech, observed effects and goal completion distinct.

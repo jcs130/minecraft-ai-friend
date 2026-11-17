@@ -14,7 +14,7 @@ export function compactWorkExecutionEvidence(value: unknown): Record<string, unk
   if (!object(value)) return undefined;
   const scalar=(v:unknown,k:string):unknown => typeof v==='string'?v.slice(0,600)
     : v===null||typeof v==='boolean'||typeof v==='number'&&Number.isFinite(v)?v
-    :k==='position'&&Array.isArray(v)&&v.length===3&&v.every(n=>typeof n==='number'&&Number.isFinite(n))?[...v]:undefined;
+    :['position','at'].includes(k)&&Array.isArray(v)&&v.length===3&&v.every(n=>typeof n==='number'&&Number.isFinite(n))?[...v]:undefined;
   const pick=(v:unknown,keys:readonly string[])=>object(v)?Object.fromEntries(keys
     .map(k=>[k,scalar(v[k],k)]).filter(([,v])=>v!==undefined)):undefined;
   const steps=Array.isArray(value.steps)?value.steps.filter(object):[];
@@ -22,7 +22,8 @@ export function compactWorkExecutionEvidence(value: unknown): Record<string, unk
   const total=value.format==='agent-mc/compact-execution-evidence/v1'&&Number.isSafeInteger(value.totalSteps)&&Number(value.totalSteps)>=steps.length?Number(value.totalSteps):steps.length;
   return {format:'agent-mc/compact-execution-evidence/v1',
     ...(typeof value.outcome==='string'?{outcome:value.outcome.slice(0,80)}:{}),
-    steps:selected.map(step=>({step:scalar(step.step,'step'),outcome:scalar(step.outcome,'outcome'),why:typeof step.why==='string'?step.why.slice(0,600):null,
+    steps:selected.map(step=>({step:scalar(step.step,'step'),
+      ...pick(step,['skill','what']),outcome:scalar(step.outcome,'outcome'),why:typeof step.why==='string'?step.why.slice(0,600):null,
       ...(object(step.detail)&&typeof step.detail.text==='string'?{detail:{
         text:step.detail.text.slice(0,600),
         chars:Number.isSafeInteger(step.detail.chars)&&Number(step.detail.chars)>=step.detail.text.length?Number(step.detail.chars):step.detail.text.length,
@@ -30,15 +31,28 @@ export function compactWorkExecutionEvidence(value: unknown): Record<string, unk
       }}:{}),
       decision:pick(step.decision,['status','reason','completed','remaining','unit','retryable','retry_after','continue_when']),
       ...(object(step.observation)?{observation:{
+        ...pick(step.observation,['kind','status','observedAt']),
         readout:pick(step.observation.readout,['protocol','kind','worldKey','selection','revision','scanComplete','knownComplete','remainingCount','unknownCount','continuationAvailable']),
         summary:pick(step.observation.summary,['observedCells','totalCells','unknownCells','headLayerIncluded']),
       }}:{}),
       ...(object(step.observedEffect)&&step.observedEffect.schema==='agent-mc-observed-effect/v1'?{observedEffect:{
-        ...pick(step.observedEffect,['schema','skill','dimension','status','coverage','goalVerified']),
+        ...pick(step.observedEffect,['schema','skill','dimension','at','status','coverage','goalVerified']),
         changed:pick(step.observedEffect.changed,['target','inventory','position','window']),
-        before:pick(step.observedEffect.before,['position']),after:pick(step.observedEffect.after,['position']),
+        before:pick(step.observedEffect.before,['at','position']),after:pick(step.observedEffect.after,['at','position']),
       }}:{}),
     })),totalSteps:total,omittedSteps:total-selected.length,goalCompleted:false};
+}
+
+/** Sampling clocks belong in delivered evidence, but do not renew a task's
+ * progress budget. Strip only clocks owned by this producer contract. */
+function continuationIdentity(value: Record<string, unknown> | undefined): unknown {
+  if (!value || !Array.isArray(value.steps)) return value;
+  const withoutClock=(v:unknown,key:string)=>object(v)?Object.fromEntries(Object.entries(v).filter(([k])=>k!==key)):v;
+  return {...value,steps:value.steps.map(step=>!object(step)?step:{...step,
+    ...(object(step.observation)?{observation:withoutClock(step.observation,'observedAt')} : {}),
+    ...(object(step.observedEffect)?{observedEffect:{...step.observedEffect,
+      before:withoutClock(step.observedEffect.before,'at'),after:withoutClock(step.observedEffect.after,'at')}} : {}),
+  })};
 }
 
 /** Content novelty for a host checkpoint, never proof of task/goal progress.
@@ -64,7 +78,7 @@ export function workContinuationEvidence(input: {tool: string; arguments: unknow
       const projected=compactWorkExecutionEvidence(last.evidence),steps=projected&&Array.isArray(projected.steps)?projected.steps:[];
       if(steps.length&&steps.every(s=>object(s)&&object(s.observation)&&object(s.observation.summary)
         &&s.observation.summary.observedCells===0&&Number(s.observation.summary.unknownCells)>0))return result('unobserved-space');
-      return result('queue-terminal',{kind:last.kind,evidence:projected,
+      return result('queue-terminal',{kind:last.kind,evidence:continuationIdentity(projected),
         ...(!steps.length?{text:typeof last.text==='string'?last.text.replace(/\b\d{2}:\d{2}:\d{2}\b/g,'<clock>').replace(/任务#\d+/g,'任务#<serial>'):last.text}:{})});
     }
     return result('queue-state',current);
@@ -91,7 +105,7 @@ export function workContinuationEvidence(input: {tool: string; arguments: unknow
       &&s.observation.summary.observedCells===0&&Number(s.observation.summary.unknownCells)>0))return result('unobserved-space');
     return result('execution-terminal', {arguments:input.arguments,source:terminal.source,type:terminal.type,
       execution:{kind:terminal.execution.kind,phase:terminal.execution.phase},
-      ...(evidence&&steps.length?{evidence}:{text})});
+      ...(evidence&&steps.length?{evidence:continuationIdentity(evidence)}:{text})});
   }
   return result('opaque-result', [input.arguments, value]);
 }

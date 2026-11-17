@@ -250,7 +250,8 @@ export function renderRouteMenu(
   target: { x: number; y: number; z: number },
   opts?: { startDist?: number; diag?: TargetDiag | null; head?: string },
 ): string {
-  const head = [opts?.head ?? `探路到 (${target.x}, ${target.y}, ${target.z}):`];
+  const head = [opts?.head ?? `探路到 (${target.x}, ${target.y}, ${target.z}):`,
+    '以下仅为路径试算，未执行；步数是规划路点数，不是实际已走步数。是否移动以身体位置与原生终态为准。'];
   if (probes.some(p => p.capabilities && p.status === 'noPath')) {
     head.push('算不出路仅表示在所列能力下未找到路线；未确定具体受阻原因，不证明所有移动方式或显式改结构都不可行。');
   }
@@ -266,13 +267,13 @@ export function renderRouteMenu(
     const label = `${PROBE_LABEL[p.profile]}${capabilityText}:`;
     switch (p.status) {
       case 'complete': {
-        const bits = [`走 ${p.steps} 步`];
-        if (p.place > 0) bits.push(`垫 ${p.place} 块`);
-        if (p.breaks > 0) bits.push(`挖 ${p.breaks} 块`);
-        if (p.interact) bits.push(`交互 ${p.interact} 次（开门等）`);
+        const bits = [`规划路点 ${p.steps} 个`];
+        if (p.place > 0) bits.push(`预计垫 ${p.place} 块`);
+        if (p.breaks > 0) bits.push(`预计挖 ${p.breaks} 块`);
+        if (p.interact) bits.push(`预计交互 ${p.interact} 次（开门等）`);
         return label + bits.join(',');
       }
-      case 'partial': return label + `只有部分路,能推进到离目标 ${fmtDist(p.endDist)} 格`;
+      case 'partial': return label + `只算出部分路径，规划末点离目标 ${fmtDist(p.endDist)} 格；尚未执行`;
       case 'timeout': return label + (near ? `限时内没算完(${near})` : '限时内没算完');
       // 三份试算同因全灭时,光说"算不出路"三遍会把她引向目标;起点锁死是另一回事
       case 'noPath': return label + (

@@ -5,6 +5,21 @@ const event=(patch:Partial<EventEnvelope>={}):EventEnvelope=>({source:'minecraft
   run:'run-a',ts:'2026-11-17T00:00:00Z',origin:'external',text:'A: I caught a fish',
   meta:{from:'A',senderUuid:'actor-a',body:'I caught a fish',channel:'public',chatChannel:'nearby'},...patch});
 describe('source-owned historical gameplay evidence',()=>{
+ it('retains action names and read coverage without turning a partial observation into item gain',()=>{
+  const r=projectGameMemoryEvent(event({execution:{kind:'task',id:'self:1',phase:'blocked',terminal:true,goalCompleted:false,
+    evidence:{steps:[{step:1,skill:'goto',what:'Go to shore',outcome:'fail'},
+      {step:2,skill:'observe',what:'Read voxels',outcome:'ok',decision:{status:'partial',unit:'cells'},
+        observation:{kind:'voxels',observedAt:'2026-01-01T00:00:00Z',readout:{knownComplete:false,unknownCount:3}}}]}}}))!;
+  expect(r.actor.self).toBe(true);expect(r.data.steps).toMatchObject([{skill:'goto',outcome:'fail'},
+    {skill:'observe',what:'Read voxels',observation:{kind:'voxels',readout:{knownComplete:false}}}]);
+  expect(r.goalVerified).toBe(false);
+ });
+ it('records native position changes without inventing another actor or successful self travel',()=>{
+  const r=projectGameMemoryEvent(event({type:'minecraft.event',meta:{positionChange:{schema:'agent-mc-position-change/v1',
+    source:'native-forcedMove',before:[0,64,0],after:[20,64,0],distance:20}},text:'Position changed; cause unknown'}))!;
+  expect(r).toMatchObject({category:'observation',evidence:'client-observation',goalVerified:false});
+  expect(r.data).toMatchObject({subject:'self',cause:null,initiator:null,before:[0,64,0],after:[20,64,0]});
+ });
  it('preserves actual actor and words while keeping an attributed claim separate from measured effects',()=>{
   const e=event(),original=structuredClone(e),r=projectGameMemoryEvent(e)!;
   expect(e).toEqual(original);expect(r.actor).toMatchObject({name:'A',uuid:'actor-a',self:false});
