@@ -1,0 +1,737 @@
+{
+  "schema": 1,
+  "release": "unified-npc-actions-20261117-r1",
+  "verifiedAt": "2026-11-17T15:47:53.808456+00:00",
+  "pullRequest": 293,
+  "mergeCommit": "43db3af4e1dd06ab95cfe30dd933087a530b8bb7",
+  "initialPullRequest": 291,
+  "initialMerge": "79f7ef0f3e034529f0a23fe9bb3496311f60688a",
+  "sourceTree": "14b0fb63277c52f1786ead9fa6ace5f7bac6231c",
+  "deployedAt": "2026-11-17T23:42:27.9419439+08:00",
+  "initialDeployedAt": "2026-11-17T22:54:22.7879322+08:00",
+  "stages": {
+    "codeMerged": true,
+    "candidateValidated": true,
+    "productionDeployed": true,
+    "productionNativeBodyVerified": true,
+    "originalPlayerVisualAndAudioAcceptance": false,
+    "longRunningCrowdAcceptance": false
+  },
+  "components": {
+    "AgentFriend": {
+      "version": "0.4.47.87-npc-combat",
+      "sha256": "5f776640e200cef644febd848c0f3c21b031bd52a9cf35a6abbfd7c6957561cc",
+      "previousSha256": "7eb4dc5dbe86735714354371aa017fc5b1fa52dcf996d3cfd2945c71d15abbb7",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "codeChangedThisBatch": false
+    },
+    "tlm_maid_agents": {
+      "version": "0.3.11",
+      "sha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
+      "previousSha256": "f3c279117a680471fdb5eb855f71e6a050c00a4987b3f8f17742e7610807a810",
+      "loadedPath": "E:\\MC\\server\\mods\\qiandengji-maid-brain-0.1.0.jar",
+      "codeChangedThisBatch": true,
+      "sourceCommit": "79f7ef0f3e034529f0a23fe9bb3496311f60688a",
+      "lastChangedPullRequest": 291
+    },
+    "QiandengjiMaidBridge": {
+      "version": "0.1.46-unified-actions",
+      "sha256": "abb2350c3d813bcf4535b3145892ae15a78af2b081ef336d4c85446300c99f23",
+      "previousSha256": "1456114f95c2922be1c3369c9d279d444923b8f2c4abb3f406ddfee6a74673fa",
+      "loadedPath": "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar",
+      "codeChangedThisBatch": true,
+      "sourceCommit": "43db3af4e1dd06ab95cfe30dd933087a530b8bb7",
+      "lastChangedPullRequest": 293
+    },
+    "VortexRPG": {
+      "version": "1.2.2-alpha",
+      "sha256": "a7b3df79933e1df3c205c4940f6c880cc7653cafbdc50bb9663d60a5127f9fdf",
+      "previousSha256": "04489c418211925cbedb2f7d7f40df65ccf53ab2bb03ff8ba8230fbf51a5b223",
+      "loadedPath": "E:/MC/server/plugins/VortexRPG-1.2.2-alpha-qd29.jar",
+      "codeChangedThisBatch": false
+    },
+    "QiandengjiRpg": {
+      "version": "0.2.31-unified-npc",
+      "sha256": "7aed57c18c6755b5bdadc2ca1b95aa0a0146b405f2e8aaff2986213fda187f20",
+      "previousSha256": "88f80916df4a1b18cb24b4982f030940c6f7473e91799333e07dd0b843e43c4a",
+      "loadedPath": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
+      "codeChangedThisBatch": false
+    },
+    "qiandengji_maid_brain": {
+      "version": "0.1.1",
+      "sha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
+      "previousSha256": "f3c279117a680471fdb5eb855f71e6a050c00a4987b3f8f17742e7610807a810",
+      "loadedPath": "E:\\MC\\server\\mods\\qiandengji-maid-brain-0.1.0.jar",
+      "codeChangedThisBatch": true,
+      "sourceCommit": "79f7ef0f3e034529f0a23fe9bb3496311f60688a",
+      "lastChangedPullRequest": 291
+    },
+    "numen_hosted": {
+      "version": "0.1.5-hosted.2",
+      "sha256": "be85eb1a78b252a524dc9a2724d6d2b8a0d65d2e508190d6df934c89e5fcfb2c",
+      "loadedPath": "E:/MC/server/plugins/numen_hosted-1.21.1-0.1.5-hosted.2-880cd67f7836.jar",
+      "codeChangedThisBatch": false
+    },
+    "numen_hosted_api": {
+      "version": "0.1.5-hosted.2",
+      "sha256": "c883704af157f86f9af43a05da8de24e9a4ecc5552b358f7cbf7eaed3c68e322",
+      "loadedPath": "E:/MC/server/plugins/numen_hosted_api-1.21.1-0.1.5-hosted.2-8e13a2d3174c.jar",
+      "codeChangedThisBatch": false
+    },
+    "qiandengji_hosted_bridge": {
+      "version": "0.1.1",
+      "sha256": "379d1dc216df4ec996e0f489714c356b2351b703733be7768f9848cedc563d68",
+      "previousSha256": "6799afd2640036205fea94a46ad92048791f07c8e747821d361cbd4eae1a98da",
+      "loadedPath": "E:/MC/server/mods/qiandengji-hosted-bridge-0.1.0.jar",
+      "codeChangedThisBatch": true,
+      "sourceCommit": "79f7ef0f3e034529f0a23fe9bb3496311f60688a",
+      "lastChangedPullRequest": 291
+    }
+  },
+  "nativeCombatSupport": [
+    {
+      "loadedPath": "E:\\MC\\server\\mods\\bettercombat-neoforge-2.4.0+1.21.1.jar",
+      "version": "2.4.0",
+      "sha256": "0446e9faa98b764ba010ac31e337d14ac96bbb2fbfeff9b599e1efd510dfde5a"
+    },
+    {
+      "loadedPath": "E:\\MC\\server\\mods\\cloth-config-15.0.140-neoforge.jar",
+      "version": "15.0.140",
+      "sha256": "65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4"
+    },
+    {
+      "loadedPath": "E:\\MC\\server\\mods\\player-animation-lib-forge-2.0.4+1.21.1.jar",
+      "version": "2.0.4",
+      "sha256": "dbe5de45f5cd60c0e5e47af14e6d564534a98456e973cf670cb881f6938eee92"
+    }
+  ],
+  "runtime": {
+    "gamePid": 46892,
+    "supervisorPid": 35936,
+    "npcPid": 36576,
+    "graphiti": "0.31.2",
+    "falkordb": "4.22.4",
+    "systemOne": "Token Plan decision-model-preview"
+  },
+  "roles": [
+    {
+      "id": "feiyu",
+      "bodyKind": "maid",
+      "bodyId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+      "provider": "tokenplan",
+      "model": "deepseek-v4.1-flash",
+      "unknownRequests": 0,
+      "route": {
+        "provider": "tokenplan",
+        "model": "deepseek-v4.1-flash",
+        "responseId": "chatcmpl-8883fbee-1262-4cff-ba6d-532e3963edb3",
+        "seconds": 1.328
+      }
+    },
+    {
+      "id": "kirito",
+      "bodyKind": "numen",
+      "bodyId": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+      "provider": "tokenplan",
+      "model": "qwen3.8-flash",
+      "unknownRequests": 0,
+      "route": {
+        "provider": "tokenplan",
+        "model": "qwen3.8-flash",
+        "responseId": "chatcmpl-1cbacfa7-2f15-47d7-bac7-c1fdc9cd9fe7",
+        "seconds": 1.094
+      }
+    },
+    {
+      "id": "yui",
+      "bodyKind": "maid",
+      "bodyId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+      "provider": "codingplan",
+      "model": "qwen3.7-plus",
+      "unknownRequests": 0,
+      "route": {
+        "provider": "codingplan",
+        "model": "qwen3.7-plus",
+        "responseId": "chatcmpl-951879a9-2d18-97df-932f-fbca0f796d1c",
+        "seconds": 1.594
+      }
+    }
+  ],
+  "conversation": {
+    "sharedPolicy": true,
+    "crowdDefaultsToListening": true,
+    "proposedReplyFastReview": true,
+    "realProviderSyntheticChecks": 72,
+    "externalCorticoAdoption": false
+  },
+  "productionChecks": [
+    {
+      "name": "exact_runtime_loaded",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "name": "original_numen_admitted",
+      "passed": true,
+      "evidence": {
+        "roleUuid": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+        "name": "Kirito",
+        "ready": true
+      }
+    },
+    {
+      "name": "kirito_original_uuid_and_inventory",
+      "passed": true,
+      "evidence": {
+        "originalStacks": 4,
+        "actualStacks": 8,
+        "health": 30.0
+      }
+    },
+    {
+      "name": "kirito_original_health_migration_committed",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "name": "single_fenced_numen_body",
+      "passed": true,
+      "evidence": {
+        "uuid": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+        "name": "Kirito",
+        "session": true
+      }
+    },
+    {
+      "name": "navigation_no_break",
+      "passed": true,
+      "evidence": {
+        "status": "completed",
+        "text": "ok · 1 call · 0 s\nreturned: {changed = true, row = \"deny break(*)\", told = true}"
+      }
+    },
+    {
+      "name": "navigation_no_place",
+      "passed": true,
+      "evidence": {
+        "status": "completed",
+        "text": "ok · 1 call · 0 s\nreturned: {changed = true, row = \"deny place(*)\", told = true}"
+      }
+    },
+    {
+      "name": "old_kirito_maid_absent",
+      "passed": true,
+      "evidence": "Test failed"
+    },
+    {
+      "name": "kirito_original_appearance_assignment",
+      "passed": true,
+      "evidence": {
+        "model": "qd_hub_kirito.ysm",
+        "texture": "skin",
+        "phase": "applied",
+        "at": 1794926866233
+      }
+    },
+    {
+      "name": "kirito_actual_native_appearance",
+      "passed": true,
+      "evidence": {
+        "schemaVersion": 1,
+        "type": "state",
+        "source": "ysm_native_backend",
+        "epoch": "6895e809-3fb2-41c3-9058-7112fc38d096",
+        "playerUuid": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+        "playerName": "Kirito",
+        "ysmVersion": "2.6.5",
+        "protocolVersion": "2.6.0",
+        "jarSha256": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb",
+        "available": true,
+        "nativeDecoderReady": false,
+        "entityId": 352,
+        "modelId": "qd_hub_kirito.ysm",
+        "texture": "skin",
+        "mandatory": false,
+        "animation": "",
+        "stateStatus": "confirmed",
+        "webAvailable": false,
+        "webReason": "YSM_ENCRYPTED_SOURCE_REQUIRED",
+        "message": "原生模型已确认；网页需要可公开的原始模型资源，加密原包暂仅原生客户端显示。"
+      }
+    },
+    {
+      "name": "yui_original_bound_alive",
+      "passed": true,
+      "evidence": {
+        "bodyId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+        "position": {
+          "x": -671.4732491427455,
+          "y": 67.0,
+          "z": 827.2612054833583
+        },
+        "dimension": "minecraft:aincrad",
+        "life": "alive"
+      }
+    },
+    {
+      "name": "yui_legacy_controller_fenced",
+      "passed": true,
+      "evidence": {
+        "maidId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+        "conversationOwner": "original_tlm",
+        "sharedModelEnabled": false,
+        "physicalController": "native_body",
+        "nextCommand": "/qdmaid brain 00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+        "selected": "external_or_unconfigured",
+        "choices": [],
+        "meaning": "Unified NPC controller owns decisions and character memory. Original native history is retained read-only for migration; native task execution is separate from a model loop.",
+        "reason": "共享智能服务暂仅对服主指定的原女仆启用；普通原生工作仍可使用。",
+        "readOnly": true,
+        "originalDialogueControllerActive": false,
+        "memoryOwner": "unified_character_store"
+      }
+    },
+    {
+      "name": "yui_healer_ready",
+      "passed": true,
+      "evidence": {
+        "abilities": [
+          {
+            "cooldownRemainingMs": 0.0,
+            "cooldownMs": 5000.0,
+            "id": "mycli:mend",
+            "learned": true,
+            "level": 1.0,
+            "manaCost": 6.0,
+            "name": "愈合"
+          },
+          {
+            "cooldownRemainingMs": 0.0,
+            "cooldownMs": 8000.0,
+            "id": "mycli:radiant_pulse",
+            "learned": true,
+            "level": 1.0,
+            "manaCost": 6.0,
+            "name": "辉光脉冲"
+          },
+          {
+            "cooldownRemainingMs": 0.0,
+            "cooldownMs": 6000.0,
+            "id": "mycli:wardens_bloom",
+            "learned": true,
+            "level": 1.0,
+            "manaCost": 6.0,
+            "name": "守望绽放"
+          }
+        ],
+        "economy": {
+          "balance": 0.0,
+          "available": true
+        },
+        "xp": 3300.0,
+        "activeSkill": "radiant_pulse",
+        "backend": "vortex",
+        "level": 4.0,
+        "skillPoints": 3.0,
+        "mana": {
+          "max": 68.0,
+          "current": 68.0
+        },
+        "combat": "cleric",
+        "available": true,
+        "className": "牧师",
+        "nextLevelXp": 1680.0,
+        "xpTotal": 3300.0,
+        "xpProgress": 1320.0,
+        "xpRequired": 3000.0,
+        "xpRemaining": 1680.0,
+        "isMaxLevel": false,
+        "profession": "cleric",
+        "title": "牧师",
+        "progressionSystem": "VortexRPG",
+        "skills": [
+          "mend",
+          "radiant_pulse",
+          "wardens_bloom"
+        ],
+        "stateSource": "native_resident_vortex",
+        "residentRpgAccount": true,
+        "maidId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+        "ownerId": "b2f9ceb0-8271-3470-b99f-e1c3ffe4edbd",
+        "sampledAt": "2026-11-17T14:54:19.475288800Z"
+      }
+    },
+    {
+      "name": "feiyu_original_bound_alive",
+      "passed": true,
+      "evidence": {
+        "bodyId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+        "position": {
+          "x": -539.8570006184179,
+          "y": 63.71051890702825,
+          "z": -392.7810689196719
+        },
+        "dimension": "minecraft:overworld",
+        "life": "alive"
+      }
+    },
+    {
+      "name": "feiyu_legacy_controller_fenced",
+      "passed": true,
+      "evidence": {
+        "maidId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+        "conversationOwner": "original_tlm",
+        "sharedModelEnabled": true,
+        "physicalController": "native_body",
+        "nextCommand": "/qdmaid brain af86ae0c-c524-467b-a28c-8da5af88d45e",
+        "selected": "dsh",
+        "choices": [
+          {
+            "id": "native",
+            "label": "原生女仆 AI（保留原模型）",
+            "model": "codingplan-qwen3.7-plus",
+            "configured": true
+          },
+          {
+            "id": "dsh",
+            "label": "HarnessRouter · DSH",
+            "model": "qwen3.7-plus",
+            "configured": true
+          },
+          {
+            "id": "codex",
+            "label": "HarnessRouter · Codex",
+            "model": "qwen3.7-plus-responses",
+            "configured": true
+          }
+        ],
+        "meaning": "Unified NPC controller owns decisions and character memory. Original native history is retained read-only for migration; native task execution is separate from a model loop.",
+        "readOnly": true,
+        "originalDialogueControllerActive": false,
+        "memoryOwner": "unified_character_store"
+      }
+    },
+    {
+      "name": "patch_deployed",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "name": "current_host_sample",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "name": "feiyu_running_and_actual_route",
+      "passed": true,
+      "evidence": {
+        "bodyId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+        "model": "deepseek-v4.1-flash",
+        "provider": "tokenplan",
+        "route": {
+          "provider": "tokenplan",
+          "model": "deepseek-v4.1-flash",
+          "responseId": "chatcmpl-0ca51cca-127d-4558-b5c9-0779f3dc1f29",
+          "seconds": 1.187
+        }
+      }
+    },
+    {
+      "name": "feiyu_no_new_failure_or_unknown",
+      "passed": true,
+      "evidence": {
+        "actions": 2,
+        "completed": 2,
+        "accepted": 0,
+        "failed": 0,
+        "unknown": 0,
+        "unsupported": 0,
+        "safety_blocked": 0,
+        "events": 4,
+        "errors": 0
+      }
+    },
+    {
+      "name": "feiyu_successful_decision",
+      "passed": true,
+      "evidence": [
+        {
+          "id": "in_1_b8d9a309",
+          "state": "completed",
+          "reason": null
+        },
+        {
+          "id": "in_2_f6f95296",
+          "state": "completed",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "name": "feiyu_original_alive_identity",
+      "passed": true,
+      "evidence": {
+        "maidId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+        "ownerId": "822d173a-7181-3b9b-be60-804f29b24ecc",
+        "lifeState": "alive"
+      }
+    },
+    {
+      "name": "feiyu_native_guard_enabled",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "name": "feiyu_no_longer_passenger",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "name": "feiyu_autonomous_dismount_receipt",
+      "passed": true,
+      "evidence": [
+        {
+          "action": {
+            "verb": "native",
+            "args": {},
+            "name": "dismount",
+            "request_id": "hs_f011d213433344248e5106ec"
+          },
+          "receipt": {
+            "request_id": "hs_f011d213433344248e5106ec",
+            "verb": "native",
+            "status": "completed",
+            "terminal": true,
+            "text": "dismount completed",
+            "execution_id": "hs_f011d213433344248e5106ec",
+            "data": {
+              "maidAction": "dismount",
+              "reply": {
+                "protocol": "qiandengji-maids/v1",
+                "ok": true,
+                "status": "applied",
+                "data": {
+                  "schema": 1,
+                  "namespace": "native-body",
+                  "maidId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+                  "ownerId": "822d173a-7181-3b9b-be60-804f29b24ecc",
+                  "requestId": "hs_f011d213433344248e5106ec",
+                  "operationId": "hs_f011d213433344248e5106ec",
+                  "action": "dismount",
+                  "arguments": "{\"action\":\"dismount\",\"maidId\":\"af86ae0c-c524-467b-a28c-8da5af88d45e\",\"requestId\":\"hs_f011d213433344248e5106ec\"}",
+                  "status": "applied",
+                  "terminal": true,
+                  "retryAllowed": false,
+                  "observedAt": "2026-11-17T15:42:30.403415Z",
+                  "goalCompleted": false,
+                  "actualPosition": {
+                    "x": -539.8570006184179,
+                    "y": 64.08551890702824,
+                    "z": -392.7810689196719,
+                    "dimension": "minecraft:overworld"
+                  },
+                  "observation": {
+                    "effectsApplied": true,
+                    "passengerBefore": true,
+                    "passengerAfter": false,
+                    "meaning": "original body left its vehicle; no vehicle or inventory was removed",
+                    "actualPosition": {
+                      "x": -539.8570006184179,
+                      "y": 64.08551890702824,
+                      "z": -392.7810689196719,
+                      "dimension": "minecraft:overworld"
+                    }
+                  }
+                }
+              }
+            },
+            "retry_allowed": false,
+            "retry_after_ms": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "kirito_running_and_actual_route",
+      "passed": true,
+      "evidence": {
+        "bodyId": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+        "model": "qwen3.8-flash",
+        "provider": "tokenplan",
+        "route": {
+          "provider": "tokenplan",
+          "model": "qwen3.8-flash",
+          "responseId": "chatcmpl-46ae1f32-de00-40b1-bb86-4daf9cb9f703",
+          "seconds": 0.641
+        }
+      }
+    },
+    {
+      "name": "kirito_no_new_failure_or_unknown",
+      "passed": true,
+      "evidence": {
+        "actions": 0,
+        "completed": 0,
+        "accepted": 0,
+        "failed": 0,
+        "unknown": 0,
+        "unsupported": 0,
+        "safety_blocked": 0,
+        "events": 35,
+        "errors": 0
+      }
+    },
+    {
+      "name": "kirito_successful_decision",
+      "passed": true,
+      "evidence": [
+        {
+          "id": "in_1_34030e38",
+          "state": "completed",
+          "reason": null
+        },
+        {
+          "id": "in_2_5971efab",
+          "state": "completed",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "name": "yui_running_and_actual_route",
+      "passed": true,
+      "evidence": {
+        "bodyId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+        "model": "qwen3.7-plus",
+        "provider": "codingplan",
+        "route": {
+          "provider": "codingplan",
+          "model": "qwen3.7-plus",
+          "responseId": "chatcmpl-2d5a7461-3885-9b8c-a205-82b5165cc520",
+          "seconds": 1.844
+        }
+      }
+    },
+    {
+      "name": "yui_no_new_failure_or_unknown",
+      "passed": true,
+      "evidence": {
+        "actions": 2,
+        "completed": 2,
+        "accepted": 0,
+        "failed": 0,
+        "unknown": 0,
+        "unsupported": 0,
+        "safety_blocked": 0,
+        "events": 4,
+        "errors": 0
+      }
+    },
+    {
+      "name": "yui_successful_decision",
+      "passed": true,
+      "evidence": [
+        {
+          "id": "in_1_3c6ee815",
+          "state": "completed",
+          "reason": null
+        },
+        {
+          "id": "in_2_a42e44e1",
+          "state": "completed",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "name": "yui_original_alive_identity",
+      "passed": true,
+      "evidence": {
+        "maidId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+        "ownerId": "b2f9ceb0-8271-3470-b99f-e1c3ffe4edbd",
+        "lifeState": "alive"
+      }
+    },
+    {
+      "name": "yui_native_guard_enabled",
+      "passed": true,
+      "evidence": null
+    },
+    {
+      "name": "graphiti_authenticated_health",
+      "passed": true,
+      "evidence": {
+        "anonymous": 401,
+        "authenticated": 200,
+        "health": {
+          "ok": true,
+          "driver": "falkordb",
+          "llm": "qwen3.8-flash@token-plan.cn-beijing.maas.aliyuncs.com",
+          "embedder": "jina-embeddings-v5-text-nano-retrieval-768",
+          "llm_configured": true
+        }
+      }
+    }
+  ],
+  "backup": {
+    "drive": "F",
+    "path": "F:\\MC-backups\\repairs\\unified-npc-actions-20261117-r1-20261117-233618",
+    "verified": {
+      "complete": true,
+      "count": 24526,
+      "bytes": 4572622299,
+      "gameRuntimeFiles": {
+        "diagnostic_log": 1579,
+        "jvm_lock": 5,
+        "sqlite_runtime": 2
+      },
+      "backupRuntimeFiles": {
+        "diagnostic_log": 1579,
+        "jvm_lock": 5,
+        "sqlite_runtime": 2
+      }
+    }
+  },
+  "initialBackup": "F:\\MC-backups\\repairs\\unified-npcs-20261117-r4-20261117-224056",
+  "initialRelease": "unified-npcs-20261117-r4",
+  "patchPreservation": {
+    "installPreservedOtherFiles": true,
+    "files": 24525
+  },
+  "coldChanges": {
+    "aincrad/entities/r.19.16.mca": "94eb66d6a5f6e32f81b102d11cab7ad54be0f1156d0b48e5c188a424466c258f",
+    "aincrad/entities/r.-2.1.mca": "840c779645eb485abbb83f2f248b9f0d3b75b0b81b8c34e90db803faf9aa5147",
+    "world/playerdata/8ae995f9-5944-48c9-b720-0ab91bdfff09.dat": "27133ff747ba73a9582bcde1a6c4767bad15b1dd01970f7b7baf73f2c703a95b"
+  },
+  "preservation": {
+    "installPreservedOtherFiles": true,
+    "files": 24482
+  },
+  "staleFeiyu": {
+    "uuid": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+    "oldRevision": 348,
+    "currentRevisionMinimum": 454,
+    "quarantine": "F:\\MC-backups\\repairs\\unified-npcs-20261117-r4-20261117-224056/feiyu-stale-quarantine",
+    "latestRegionPreservedByteForByte": true,
+    "itemsMerged": false,
+    "isolatedChecks": 8,
+    "recurrenceRootCauseNotEstablished": true
+  },
+  "openAcceptance": [
+    "Original Cortico attention-policy adoption; cross-machine thread unavailable",
+    "Native NeoForge/Bedrock pixels, animation and real listening",
+    "Long-running crowd conversation, follow/guard/combat/healing quality",
+    "Dedicated SAO Yui appearance asset; native TLM default is currently used",
+    "Numen ordinary public-channel subscription beyond its current native directed inbox"
+  ],
+  "rollback": {
+    "beforeFirstAdmission": "Exact unchanged postimages only; matching original preimages.",
+    "afterAdmission": "Pause original controllers; retain latest world, inventories, RPG, identities, auth, action journals and memory; never restore an old whole world."
+  },
+  "artifacts": "artifacts/npc-joint-release-20261117",
+  "unrelatedPullRequestsNotIncluded": [
+    279,
+    256,
+    287
+  ]
+}
