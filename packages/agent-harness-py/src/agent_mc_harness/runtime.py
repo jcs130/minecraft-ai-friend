@@ -81,6 +81,7 @@ class PlanContext(BaseModel):
     memories: list[Fact] = Field(default_factory=list)  # warm (Graphiti) then cold (local) recall
     hot: list[MemoryEpisode] = Field(default_factory=list)  # hot tier: latest episodes of this body's group
     recent: list[HarnessEvent] = Field(default_factory=list)
+    dialogue: list[BodyEvent] = Field(default_factory=list, max_length=32)  # current host-selected input, including ordinary chat
     decision: Decision | None = None  # route level, requested/effective thinking tier, output budget profile
     snapshot: BodySnapshot | None = None
     lessons: list[str] = Field(default_factory=list)  # active versioned lessons (self-iteration store), trial or adopted

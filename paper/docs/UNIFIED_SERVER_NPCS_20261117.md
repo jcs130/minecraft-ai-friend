@@ -17,7 +17,9 @@ They do not mutate Feiyu, Kirito or player inventories.
 
 | Evidence | Observed result |
 |---|---|
-| `unit-regression.xml` | 133 passed, 3 pre-existing conditional skips; graph dependency emits one Pydantic deprecation warning |
+| `unit-regression.xml` | 145 passed, 3 pre-existing conditional skips; graph dependency emits one Pydantic deprecation warning |
+| `attention-before.xml` → `attention-after.xml` | Reproduced silent inputs recurring and ordinary chat missing from model input; corrected before/after checks include restart and distinct speech vs listening records |
+| `attention-model-captured.json` → `attention-model-accepted.json` | Prompt-only replay exposed Feiyu answering another person's request; final shared policy plus System One review passed 72 synthetic real-provider cases across all three configured models |
 | `unified-healer-stage.json` | 12 checks, including Coding Plan Qwen real single/group healing and Token Plan fast guard selection |
 | `unified-guard-stage.json` | 6 checks: guard survives scheduling, cast resumes guard only at the original terminal receipt, stay stops it |
 | `combined-admit.json` | Same-UUID TLM→Numen admission, original equipment and migration health verified |
@@ -31,6 +33,10 @@ They do not mutate Feiyu, Kirito or player inventories.
 Another regression first reproduced a repeated Numen reply to an already
 delivered event. Consuming the original completed dialogue receipt stops that
 loop; an uncertain speech result is not silently acknowledged or resent.
+The initial fast attention confidence cutoff also suppressed direct questions
+after a group greeting; removing the uncalibrated numeric cutoff restored those
+cases. All earlier probe reports remain available, including rejected malformed
+plans. This does not establish long-running production conversation quality.
 
 ## Fixes required by real integration
 

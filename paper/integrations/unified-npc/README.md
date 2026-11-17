@@ -22,6 +22,33 @@ selects only from actions grounded in a fresh observation. Unavailable or stale
 fast decisions fall back to the character's ordinary planner. Body denial,
 server acceptance and actual task completion remain distinct receipts.
 
+## Conversation attention
+
+Every registered NPC receives the same `conversation.py` policy: decide who is
+being addressed and whether speaking is useful before answering. Being nearby
+or being the speaker's companion is insufficient. Direct questions and genuine
+follow-ups are answerable; third-person mentions, other people's conversations,
+group greetings, already answered questions and closing acknowledgements usually
+need no reply. Important new warnings and relevant help remain possible.
+
+The host supplies current inputs with their actual attribution, separately from
+older context. Ordinary chat is not lost merely because it has low event severity.
+Prompt-only real-provider tests exposed an occasional reply to somebody else's
+request. System One therefore reviews a proposed reply before it is spoken. This
+check does not run on every tick or gate movement, combat or healing. Both models
+must choose speech; the fast model's uncalibrated confidence is recorded, not used
+as an arbitrary cutoff that would suppress genuine follow-up questions.
+
+A valid silent plan is durably recorded as listened, independently of delivered
+speech. Maid inbox acknowledgement occurs once; unknown speech keeps its original
+request for reconciliation. Model/transport failures do not mark inputs handled.
+All future roles in this service inherit the policy. External player clients have
+their own hosts and must adopt the policy separately; these files do not alter them.
+
+`attention_probe.py --provider-dir <private-directory> --output <report>` tests
+synthetic conversations against the configured real providers without executing
+game actions. This is prompt acceptance, not proof of production crowd behaviour.
+
 ## Processes and durable state
 
 `supervisor.py --config <private-file>` supervises one graph sidecar and one NPC

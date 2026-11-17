@@ -16,6 +16,8 @@ class ActionJournal:
         self.db.execute("PRAGMA synchronous=FULL")
         self.db.execute("CREATE TABLE IF NOT EXISTS dispatch (id TEXT PRIMARY KEY, body TEXT NOT NULL, action TEXT NOT NULL, receipt TEXT)")
         self.db.execute("CREATE TABLE IF NOT EXISTS replies (body TEXT, event TEXT, request TEXT, PRIMARY KEY(body,event,request))")
+        self.db.execute("CREATE TABLE IF NOT EXISTS acknowledgements (body TEXT, event TEXT, request TEXT, PRIMARY KEY(body,event,request))")
+        self.db.execute("CREATE TABLE IF NOT EXISTS listened (body TEXT, event TEXT, intent TEXT, decided_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(body,event))")
         self.db.commit()
 
     def begin(self, body: str, action: BodyAction, sources: list[str] | None = None) -> None:
@@ -26,9 +28,24 @@ class ActionJournal:
                             (action.request_id, body, action.model_dump_json()))
             if action.verb == "chat":
                 self.db.executemany("INSERT INTO replies VALUES (?,?,?)", [(body, event, action.request_id) for event in dict.fromkeys(sources or [])])
+            if action.verb == "native" and action.name == "ack" and action.args.get("eventId"):
+                self.db.execute("INSERT INTO acknowledgements VALUES (?,?,?)", (body, action.args["eventId"], action.request_id))
 
     def replied(self, body: str, event: str) -> bool:
         rows = self.db.execute("SELECT d.receipt FROM replies r JOIN dispatch d ON d.id=r.request AND d.body=r.body WHERE r.body=? AND r.event=?", (body, event))
+        return any(receipt and json.loads(receipt).get("status") == "completed" for (receipt,) in rows)
+
+    def listen(self, body: str, events: list[str], intent: str) -> None:
+        """A valid no-speech/no-write plan handled these inputs; this is not a reply receipt."""
+        with self.db:
+            self.db.executemany("INSERT OR IGNORE INTO listened (body,event,intent) VALUES (?,?,?)",
+                                [(body, event, intent) for event in dict.fromkeys(events)])
+
+    def handled(self, body: str, event: str) -> bool:
+        return bool(self.db.execute("SELECT 1 FROM listened WHERE body=? AND event=?", (body, event)).fetchone()) or self.replied(body, event)
+
+    def acknowledged(self, body: str, event: str) -> bool:
+        rows = self.db.execute("SELECT d.receipt FROM acknowledgements a JOIN dispatch d ON d.id=a.request AND d.body=a.body WHERE a.body=? AND a.event=?", (body, event))
         return any(receipt and json.loads(receipt).get("status") == "completed" for (receipt,) in rows)
 
     def settle(self, body: str, receipt: ActionReceipt) -> None:
