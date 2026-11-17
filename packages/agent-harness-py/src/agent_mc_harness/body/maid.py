@@ -17,16 +17,18 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import math
 import re
 from collections import OrderedDict
 from typing import Any
 
-from ..bridges import MAID_READS, ControlChanged, EventCursor, NativeMaidBridge, ToolBridge, json_text, maid_read_only
+from ..bridges import MAID_READS, ControlChanged, EventCursor, MaidRequestRejected, NativeMaidBridge, ToolBridge, json_text, maid_read_only
 from ..models import (
     ActionReceipt,
     ActionStatus,
     ActionSupport,
     BodyAction,
+    BodyEventKind,
     BodyIdentity,
     BodySnapshot,
     Capabilities,
@@ -122,18 +124,24 @@ class MaidBody(BaseBody):
                 acts[verb] = ActionSupport(native=f"mc_maids {native}", args=list(args), async_=is_async,
                                            notes="mode setting, not arrival/completion" if verb in ("follow", "stay", "sit") else None)
         props = self._schema.get("properties", {})
-        native_actions = [NativeAction(name=a, read_only=a in READS and a != "brain", input_schema={"type": "object", "properties": props}) for a in self._actions]
+        native_actions = [NativeAction(name=a, read_only=a in READS and (a != "brain" or "choice" not in props),
+                                       input_schema={"type": "object", "properties": props}) for a in self._actions]
+        events: list[BodyEventKind] = ["death", "respawn", "lifecycle", "dimension", "action_result"]
+        if not self._native:
+            events += ["dialogue", "position", "system_message", "chat", "safety", "other"]
+        elif "inbox" in actions:
+            events.append("dialogue")
         return Capabilities(
             kind="maid", transport=NativeMaidBridge.transport if self._native else "mc_maids (maid-port via owner connection)",
             actions=acts, native_actions=native_actions,
-            events=["dialogue", "death", "respawn", "lifecycle", "dimension", "position", "action_result", "system_message", "chat", "safety", "other"],
-            snapshot=["life_state", "dimension", "position", "inventory", "text"],
+            events=events,
+            snapshot=["life_state", "dimension", "position", "health", "inventory", "text"],
             lifecycle=LifecycleCaps(spawn="bind-existing", reconnect=True, destroy="detach"), perception="poll",
             safety=SafetyCaps(native_guards=["server controller generation" if self._native else "maid-port pacing and max 8 pending", "TLM ownership",
                                              "no automatic retry or recreate", "owner-only shared inference"]),
             limits=["movement only through advertised native actions; tasks use the original native AI",
                     "stop = stay", "craft only via workshop make (after the workshop handshake)",
-                    "health/hunger not pushed; life state from context / lifecycle envelopes"],
+                    "health and life state are sampled from context; hunger is not available"],
         )
 
     # ---- tool calls -------------------------------------------------------------------------------
@@ -143,6 +151,9 @@ class MaidBody(BaseBody):
         except ControlChanged:
             self._set_state("error", "server control changed; explicit handoff required")
             raise
+        except MaidRequestRejected as error:
+            status = "unknown" if error.original_request else "not_dispatched"
+            return {"ok": False, "status": status, "reason": str(error)}, {"isError": True}
         if self._native:
             text = "\n".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
             try:
@@ -187,6 +198,11 @@ class MaidBody(BaseBody):
         except Exception as error:
             self.last_error = type(error).__name__
             self._set_state("error", f"bind failed: {error}"[:300])
+            if self._native and self.open_bridge:
+                try:
+                    await self.bridge.close()
+                except Exception as release_error:
+                    raise RuntimeError("bind_failed_control_release_unconfirmed") from release_error
             raise
         self._generation += 1
         self._identity = BodyIdentity(kind="maid", body_id=self.maid_id, name=entry.get("name"), owner_id=self.owner_id,
@@ -292,11 +308,10 @@ class MaidBody(BaseBody):
         if write:
             args["requestId"] = request_id
         reply, result = await self._maids(args, request_id if write else None)
-        if self._native and write and isinstance(reply, dict):
+        if self._native and write and isinstance(reply, dict) and reply.get("ok") is True:
             data = reply.get("data")
-            if isinstance(data, dict) and any(data.get(key, expected) != expected for key, expected in
-                                            (("operationId", request_id), ("action", args["action"]),
-                                             ("maidId", self.maid_id), ("ownerId", self.owner_id))):
+            if (not isinstance(data, dict) or data.get("operationId") != request_id or data.get("action") != args["action"]
+                    or data.get("maidId", self.maid_id) != self.maid_id or data.get("ownerId", self.owner_id) != self.owner_id):
                 reply = {"ok": False, "status": "unknown", "reason": "action_reply_mismatch_query_original_request"}
         status = reply_status(reply, bool(result.get("isError")))
         if self._native and args["action"] == "walk" and status == "completed":
@@ -403,8 +418,12 @@ class MaidBody(BaseBody):
         await self._read_context(emit=True)
         inv, _ = await self._maids({"action": "inventory", "maidId": self.maid_id})
         pos = self._context.get("position")
-        position = {k: float(pos[k]) for k in "xyz"} if isinstance(pos, dict) and all(isinstance(pos.get(k), int | float) for k in "xyz") else None
+        if isinstance(pos, list) and len(pos) == 3:
+            pos = dict(zip("xyz", pos, strict=True))
+        position = {k: float(pos[k]) for k in "xyz"} if isinstance(pos, dict) and all(_number(pos.get(k)) is not None for k in "xyz") else None
+        raw = self._context.get("raw") or {}
         return BodySnapshot(life_state=self._life, position=position, dimension=self._context.get("dimension"),
+                            health=_number(raw.get("health")), max_health=_number(raw.get("maxHealth")),
                             inventory=(inv or {}).get("data") if isinstance(inv, dict) else None,
                             text=f"maid {self.maid_id} lifeState={self._context.get('lifeState')}", raw=self._context.get("raw"))
 
@@ -473,3 +492,7 @@ class MaidBody(BaseBody):
         h = super().health()
         h.extra = {"maidId": self.maid_id, "lifeState": self._life, "workshop": self.workshop}
         return h
+
+
+def _number(value: Any) -> float | None:
+    return float(value) if isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value) else None

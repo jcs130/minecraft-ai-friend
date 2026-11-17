@@ -280,6 +280,187 @@ def test_brain_selection_requires_original_write_id(run: Any) -> None:
     run(scenario())
 
 
+@pytest.mark.parametrize("field,value", [("ownerId", OTHER), ("maidId", OTHER), ("controllerId", OTHER),
+                                          ("generation", "stale-generation")])
+def test_wrong_envelope_fences_adapter(field: str, value: str, run: Any) -> None:
+    async def scenario() -> None:
+        server = NativeServer()
+        body = make(server)
+        await body.spawn()
+        original = server.__call__
+
+        def changed(request: httpx.Request) -> httpx.Response:
+            response = original(request)
+            return httpx.Response(200, json={**response.json(), field: value})
+
+        await body.bridge.http.aclose()
+        body.bridge.http = httpx.AsyncClient(transport=httpx.MockTransport(changed))
+        with pytest.raises(ControlChanged):
+            await body.snapshot()
+        assert body.lifecycle() == "error" and not server.writes
+        await body.destroy()
+    run(scenario())
+
+
+def test_missing_capabilities_release_the_confirmed_binding(run: Any) -> None:
+    async def scenario() -> None:
+        server = NativeServer()
+        server.actions.remove("receipt")
+        body = make(server)
+        with pytest.raises(RuntimeError, match="invalid_capabilities"):
+            await body.spawn()
+        assert server.controller is None and server.calls[-1]["operation"] == "release"
+        await body.destroy()
+    run(scenario())
+
+
+def test_release_failure_is_visible_to_the_host(run: Any) -> None:
+    async def scenario() -> None:
+        server = NativeServer()
+        body = make(server)
+        await body.spawn()
+
+        def broken(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(503, json={"error": "unavailable"})
+
+        await body.bridge.http.aclose()
+        body.bridge.http = httpx.AsyncClient(transport=httpx.MockTransport(broken))
+        with pytest.raises(RuntimeError, match="unknown"):
+            await body.destroy()
+        assert body.lifecycle() == "error" and body.bridge.http.is_closed
+    run(scenario())
+
+
+def test_missing_historical_receipt_and_request_conflict_do_not_change_control(run: Any) -> None:
+    async def scenario() -> None:
+        server = NativeServer()
+        body = make(server)
+        await body.spawn()
+
+        def historical(request: httpx.Request) -> httpx.Response:
+            payload = json.loads(request.content)
+            if payload.get("arguments", {}).get("action") == "receipt":
+                return httpx.Response(409, json={"error": "receipt_missing"})
+            if payload.get("arguments", {}).get("requestId") == "legacy-conflict-001":
+                return httpx.Response(409, json={"error": "REQUEST_CONFLICT_LEGACY_QUERY_ORIGINAL"})
+            return server(request)
+
+        await body.bridge.http.aclose()
+        body.bridge.http = httpx.AsyncClient(transport=httpx.MockTransport(historical))
+        try:
+            assert (await body.result("historical-missing-001")).status == "unknown"
+            conflict = await body.act(BodyAction(verb="chat", args={"text": "hello"}, request_id="legacy-conflict-001"))
+            assert conflict.status == "unknown" and not server.writes
+            assert body.lifecycle() == "ready"
+            assert (await body.stop()).status == "completed"
+        finally:
+            await body.destroy()
+    run(scenario())
+
+
 @pytest.mark.parametrize("reply", [None, "success", {}, {"ok": True, "status": "unavailable"}])
 def test_ambiguous_reply_cannot_complete_action(reply: Any) -> None:
     assert reply_status(reply, False) == "unknown"
+
+
+@pytest.mark.parametrize("missing", ["data", "operationId", "action"])
+def test_native_write_needs_an_identified_receipt(missing: str, run: Any) -> None:
+    async def scenario() -> None:
+        server = NativeServer()
+        body = make(server)
+        await body.spawn()
+
+        def incomplete(request: httpx.Request) -> httpx.Response:
+            response = server(request)
+            if json.loads(request.content).get("arguments", {}).get("action") == "speak":
+                envelope = response.json()
+                reply = json.loads(envelope["result"]["content"][0]["text"])
+                if missing == "data":
+                    reply.pop("data")
+                else:
+                    reply["data"].pop(missing)
+                envelope["result"]["content"][0]["text"] = json.dumps(reply)
+                return httpx.Response(200, json=envelope)
+            return response
+
+        await body.bridge.http.aclose()
+        body.bridge.http = httpx.AsyncClient(transport=httpx.MockTransport(incomplete))
+        try:
+            receipt = await body.act(BodyAction(verb="chat", args={"text": "hello"}, request_id="missing-evidence-001"))
+            assert receipt.status == "unknown"
+            assert (await body.result(receipt.request_id)).status == "completed"
+            assert len(server.writes) == 1
+        finally:
+            await body.destroy()
+    run(scenario())
+
+
+def test_failed_context_during_bind_releases_control(run: Any) -> None:
+    async def scenario() -> None:
+        server = NativeServer()
+        body = make(server)
+
+        def unavailable(request: httpx.Request) -> httpx.Response:
+            if json.loads(request.content).get("arguments", {}).get("action") == "context":
+                return httpx.Response(503, json={"error": "unavailable"})
+            return server(request)
+
+        await body.bridge.http.aclose()
+        body.bridge.http = httpx.AsyncClient(transport=httpx.MockTransport(unavailable))
+        with pytest.raises(RuntimeError, match="unknown"):
+            await body.spawn()
+        assert body.lifecycle() == "error" and server.controller is None
+        assert server.calls[-1]["operation"] == "release" and body.bridge.http.is_closed
+    run(scenario())
+
+
+def test_server_conflict_remains_queryable_by_original_id(run: Any) -> None:
+    async def scenario() -> None:
+        server = NativeServer()
+        original_id = "legacy-original-001"
+        server.receipts[original_id] = {"operationId": original_id, "action": "speak", "status": "applied"}
+        body = make(server)
+        await body.spawn()
+
+        def conflict(request: httpx.Request) -> httpx.Response:
+            if json.loads(request.content).get("arguments", {}).get("requestId") == original_id:
+                return httpx.Response(409, json={"error": "REQUEST_CONFLICT_LEGACY_QUERY_ORIGINAL"})
+            return server(request)
+
+        await body.bridge.http.aclose()
+        body.bridge.http = httpx.AsyncClient(transport=httpx.MockTransport(conflict))
+        try:
+            receipt = await body.act(BodyAction(verb="chat", args={"text": "hello"}, request_id=original_id))
+            assert receipt.status == "unknown" and not receipt.retry_allowed
+            assert (await body.result(original_id)).status == "completed"
+            assert not server.writes
+        finally:
+            await body.destroy()
+    run(scenario())
+
+
+def test_native_context_coordinate_array_and_health_are_observable(run: Any) -> None:
+    async def scenario() -> None:
+        server = NativeServer()
+        body = make(server)
+
+        def native_shape(request: httpx.Request) -> httpx.Response:
+            response = server(request)
+            if json.loads(request.content).get("arguments", {}).get("action") == "context":
+                envelope = response.json()
+                reply = json.loads(envelope["result"]["content"][0]["text"])
+                reply["data"].update(position=[3.25, 81.0, 4.75], health=15.5, maxHealth=20.0)
+                envelope["result"]["content"][0]["text"] = json.dumps(reply)
+                return httpx.Response(200, json=envelope)
+            return response
+
+        await body.bridge.http.aclose()
+        body.bridge.http = httpx.AsyncClient(transport=httpx.MockTransport(native_shape))
+        await body.spawn()
+        try:
+            snapshot = await body.snapshot()
+            assert snapshot.position == {"x": 3.25, "y": 81.0, "z": 4.75}
+            assert (snapshot.health, snapshot.max_health) == (15.5, 20.0)
+        finally:
+            await body.destroy()
+    run(scenario())

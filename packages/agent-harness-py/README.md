@@ -67,12 +67,16 @@ finally:
 Its `result` is an MCP CallToolResult with the existing maid reply in text content. The server advertises
 the live `mc_maids` schema during bind. `move` is available only when it advertises `walk(x,y,z)`.
 Body kind remains `maid`, preserving the configured memory partition across transports and dimensions.
+Existing companions still need an explicit mapping to their original conversation history and PowerContext
+namespace. Reusing the body UUID alone does not migrate an existing brain or its memories.
 
 `result(original_id)` queries the server after process recreation, even when this adapter has no local
 receipt. It validates the original operation, action and body association before accepting a terminal
-result. Historical unknowns remain queryable. A 401/403/409 or mismatched identity/generation fences the
+result. Historical unknowns remain queryable. An authorization failure, control-conflict response or mismatched identity/generation fences the
 bridge; its host must arrange an explicit control handoff. The adapter never automatically rebinds after
 that fence. Release failure is reported so the host can inspect control before starting a replacement.
+An original-request conflict remains unknown until the server's original receipt is queried; a local rejection
+must not hide that receipt. Missing or mismatched action identifiers cannot prove successful execution.
 
 The native endpoint reuses the private companion executor. Its supplied action catalogue determines
 equipment, follow and other available operations. Public-resident registration and owner inventory

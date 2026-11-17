@@ -32,6 +32,14 @@ class ControlChanged(RuntimeError):
     """The server fenced this controller. Stop; never reattach or retry automatically."""
 
 
+class MaidRequestRejected(RuntimeError):
+    """The native server rejected this call before dispatching its action."""
+
+    def __init__(self, reason: str, *, original_request: bool = False) -> None:
+        super().__init__(reason)
+        self.original_request = original_request
+
+
 MAID_READS = frozenset({"nearby", "brain", "list", "context", "receipt", "inbox", "tasks", "inventory", "workshop",
                         "skins", "voices", "resources"})
 
@@ -89,8 +97,20 @@ class NativeMaidBridge:
             payload["generation"] = self.generation
         response = await self.http.post(self.endpoint, json=payload, headers={"Authorization": "Bearer " + self._token},
                                         timeout=timeout, follow_redirects=False)
-        if response.status_code in (401, 403, 409):
+        if response.status_code in (401, 403):
             self._fence()
+        if response.status_code in (400, 409):
+            try:
+                error = response.json().get("error")
+            except (ValueError, AttributeError):
+                error = None
+            if error in {"CONTROL_CHANGED", "CONTROL_EXPIRED", "CONTROL_BUSY", "RESIDENT_CONTROLLER_ACTIVE"}:
+                self._fence()
+            if (response.status_code == 400 and isinstance(error, str) and
+                    (error.startswith("INVALID_") or error in {"UNSUPPORTED_ACTION", "UNEXPECTED_FIELD", "REQUEST_ID_MISMATCH"})):
+                raise MaidRequestRejected("native_action_rejected_before_dispatch")
+            if error in {"REQUEST_CONFLICT", "REQUEST_CONFLICT_LEGACY_QUERY_ORIGINAL"}:
+                raise MaidRequestRejected("request_id_conflict_query_original_request", original_request=True)
         if response.status_code != 200:
             raise RuntimeError("maid_body_request_unknown_query_original_receipt")
         try:
