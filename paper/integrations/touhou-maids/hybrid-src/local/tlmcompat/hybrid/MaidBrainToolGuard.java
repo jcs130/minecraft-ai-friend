@@ -6,7 +6,7 @@ import local.qdj.maids.brain.MaidBrainControl;
 final class MaidBrainToolGuard implements AutoCloseable {
     private final MaidBrainControl.Registration registration;
     MaidBrainToolGuard(NativeMaidBrainSupport brains){
-        registration=MaidBrainControl.bind(brains.boundMaid(),brains.siteIds(),brains::client,callback->brains.selection(callback)==null||brains.current(callback),brains::carry);
+        registration=MaidBrainControl.bind(brains.boundMaid(),brains.siteIds(),brains::client,brains::mayExecute,brains::carry);
     }
     @Override public void close(){registration.close();}
 }

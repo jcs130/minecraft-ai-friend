@@ -57,6 +57,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         if(pending.containsKey(maid.getUUID()))throw new CompatibilityException("chat_busy","她正在回答附近访客，请等本轮结束再交谈或更换运行方式。");
     }
     boolean enabled(EntityMaid maid){return plugin.sharedDialogueEnabled(maid);}
+    boolean busy(UUID id){return pending.containsKey(id);}
     void validate(Player actor,EntityMaid maid){
         plugin.requireNearby(actor,maid,MaidConversationRange.speaker(maid,actor));
         if(!maid.isAlive()||maid.isRemoved())throw new CompatibilityException("unavailable","女仆当前不在现场，请重新靠近后查询 nearby。");
@@ -76,6 +77,10 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
     }
     private JsonObject start(Player actor,EntityMaid maid,String operation,String text,Set<UUID> deliveredTo,
                              boolean proactive,boolean finalTurn,ActionCue cue)throws Exception{
+        if(plugin.nativeControlled(maid.getUUID())){
+            if(proactive)throw new CompatibilityException("controlled_externally","External controller owns spontaneous dialogue");
+            return plugin.nativeConversation(actor,maid,operation,text);
+        }
         if(proactive)plugin.humanConversation(actor,operation);
         Set<UUID> listeners=new HashSet<>();
         for(Player listener:maid.getBukkitEntity().getLocation().getNearbyPlayers(MaidConversationRange.PARTNER))if((deliveredTo==null||deliveredTo.contains(listener.getUniqueId()))&&MaidConversationRange.hears(maid,listener)&&listener.canSee(actor)&&listener.canSee(maid.getBukkitEntity()))listeners.add(listener.getUniqueId());

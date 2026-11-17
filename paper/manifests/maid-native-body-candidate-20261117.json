@@ -1,0 +1,165 @@
+{
+  "schema": 1,
+  "status": "candidate-isolated-verified",
+  "deploymentReady": false,
+  "productionChanged": false,
+  "date": "2026-11-17",
+  "version": "0.1.41-native-body",
+  "artifactSha256": "4ef5414ab569e71d127d20b5d94cb93d94d51518d680962431c9af8b0c976cfa",
+  "baselineSha256": "7e9a8de37c57e21a4ac68c7e7b284e2603e307e3ae9636c1a6bfe362239a53a0",
+  "includesPermissionsPatch": "PR280 NativeWorldPermissions .40",
+  "pythonPeer": {
+    "pr": 282,
+    "testedHead": "118fe5a410a733a17b22667c0a1a8ae41b4f9194"
+  },
+  "sourceHashes": {
+    "HybridMaidPlugin.java": "09376c21f800d1e8b8868b7ff7527ebb61276b2d98238c093b1cb94b9f1b62eb",
+    "MaidBodyControl.java": "0b4fdef83b9a3e1545817eb9b78ea5824a81f50a7e74d1ad8e0e0ad0d6721f61",
+    "NativeMaidBodyPort.java": "8c1a91c04dc46d6127bb95e100ad60bae723dfd1064abd33fcb81560d1e3f31b",
+    "NativeMaidBodyActions.java": "71cefa764ccefcdc7944d3da26409012bf09145e56d74182732b2bdca64c6c37",
+    "NativeMaidAgentSupport.java": "32b89a85e19f613c6113eb9e9699ca45e5c2d08e32fda26e2ba96a71b01ce418",
+    "NativeMaidBrainSupport.java": "c2373a42c02cf707036747ebf0d68f9eae15aeff5b71f8a792aac1c208146b0f",
+    "MaidBrainToolGuard.java": "5d35f3a4cbc628999767cde8a468456e7aeaaf690b15c65a07473c29cd515fa6",
+    "NativeMaidInventory.java": "67b691ad7c3936e7616a20696cb94d4a8a3908aae77b769aa59a7f8f540d48c8",
+    "NativeMaidCompanionSupport.java": "dd2b6f7e480758d1b009eff8fac880493125a17d352482079a67fc35b24673ec",
+    "NativeMaidResidence.java": "5b7902a4077f127dbae0c427dad2aade2ec9fc4b3c48d1bd9e69c73780b5f085",
+    "NativeMaidOwnerTravel.java": "133567025f50e4c1b3578c24e9640fd82a30b7bb6f500da805ab5030d18ab79f",
+    "NativeMaidSocialSupport.java": "eddcdd4e385d725a881adb2a767026be352cb39dda6c914f9cbeafec8f797170",
+    "NativeWorldPermissions.java": "fe3b33a3a4df70c826cc6c03ff6cb3062e8c4745c03628e91755b4c4fb4347e2"
+  },
+  "validation": {
+    "javaControlChecks": 42,
+    "previousFollowChecks": 31,
+    "previousConversationChecks": 75,
+    "readOnlyMigrationAuditTests": 9,
+    "realReports": [
+      {
+        "name": "native-boundaries-r5",
+        "file": "native-safety-r5.json",
+        "sha256": "6fc68d53339b84a3aa87d462bb7d1e4c83f13f2df8df779d6ea31c5cc94ac57d",
+        "passed": 31,
+        "checks": [
+          "wrong_bearer_rejected",
+          "malformed_utf8_rejected",
+          "request_byte_limit_enforced",
+          "foreign_owner_cannot_bind",
+          "original_owner_offline",
+          "same_controller_bind_is_idempotent",
+          "second_controller_busy",
+          "brain_projection_consistent",
+          "equipment_help_does_not_promise_transfer",
+          "brain_query_cannot_mutate_choice",
+          "missing_coordinate_diagnosed",
+          "ambiguous_coordinate_alias_not_guessed",
+          "out_of_range_rejection_is_durable",
+          "legacy_unknown_stays_in_original_namespace",
+          "legacy_action_id_not_redispatched",
+          "duplicate_write_does_not_restore_old_setting",
+          "walk_admission_does_not_claim_arrival",
+          "native_walk_reaches_real_world_target",
+          "equivalent_numeric_duplicate_returns_original_result",
+          "changed_target_same_id_refused",
+          "stop_cancels_active_walk_without_claiming_goal",
+          "stop_not_blocked_by_no_ai",
+          "equip_moves_real_native_stack",
+          "binding_curse_not_bypassed_without_player",
+          "actual_owner_change_blocks_state",
+          "actual_owner_change_blocks_mutation",
+          "ownership_rejection_did_not_change_setting",
+          "foreign_player_cannot_take_control",
+          "owner_takeover_invalidates_controller",
+          "new_controller_attaches_same_body",
+          "cancelled_result_survives_controller_replacement"
+        ]
+      },
+      {
+        "name": "real-lease-expiry-r4",
+        "file": "native-expiry-r4.json",
+        "sha256": "66bab1422329e646143bb2e8800502f01a565afe4424dba918833ec98a7fe1b6",
+        "passed": 3,
+        "checks": [
+          "real_idle_lease_expires_and_stops_body",
+          "expired_generation_refused_without_rebind",
+          "expiry_invalidates_delayed_callback_epoch"
+        ]
+      },
+      {
+        "name": "python-r4-cold-restart",
+        "file": "native-stage-4a53fc6aeaf6.json",
+        "sha256": "ec77e08bdcd35aa2d40d0f34e019c3c748441faa23e9a026209de1270f543877",
+        "passed": 23,
+        "checks": [
+          "original_identity_no_owner_client",
+          "native_coordinates_and_health",
+          "cold_restart_original_receipt_py-walk-064d551c10f3",
+          "cold_restart_original_receipt_py-lost-064d551c10f3",
+          "cold_restart_original_identity_inventory",
+          "truthful_live_capabilities",
+          "empty_inbox_query",
+          "native_stop_changes_sitting",
+          "second_controller_rejected",
+          "walk_acceptance_is_not_arrival",
+          "local_duplicates_reuse_receipt",
+          "local_changed_request_rejected",
+          "physical_walk_arrived",
+          "java_duplicate_returns_same_receipt",
+          "java_changed_request_rejected",
+          "original_inventory_unchanged",
+          "dropped_real_response_remains_unknown",
+          "unknown_submission_not_replayed",
+          "new_adapter_retains_body_and_scope",
+          "original_receipt_after_adapter_recreation",
+          "completed_walk_history_without_reexecution",
+          "missing_history_preserves_controller",
+          "body_inventory_health_preserved"
+        ]
+      },
+      {
+        "name": "python-r5-owner-inbox",
+        "file": "native-dialogue-ff6b7d38d188.json",
+        "sha256": "e5f27a01c4a82dde302f737405e457ac26410dc861a2de2470e1e80c329b5cff",
+        "passed": 7,
+        "checks": [
+          "original_inbox_reaches_body_event",
+          "original_sender_and_binding_preserved",
+          "original_time_namespace_and_untrusted_source_preserved",
+          "same_event_is_not_emitted_twice",
+          "bounded_native_speech_receipt",
+          "original_event_acknowledged",
+          "acknowledged_event_not_redelivered_after_rebind"
+        ]
+      },
+      {
+        "name": "python-r5-visitor-inbox",
+        "file": "native-dialogue-10c39256dbb1.json",
+        "sha256": "ebca1980b0c6a8bc77df23a25598436ea00e00e0bd216e94058959bd8460657d",
+        "passed": 7,
+        "checks": [
+          "original_inbox_reaches_body_event",
+          "original_sender_and_binding_preserved",
+          "original_time_namespace_and_untrusted_source_preserved",
+          "same_event_is_not_emitted_twice",
+          "bounded_native_speech_receipt",
+          "original_event_acknowledged",
+          "acknowledged_event_not_redelivered_after_rebind"
+        ]
+      }
+    ]
+  },
+  "limitations": [
+    "No production Feiyu cutover",
+    "Original DSH/local/PowerContext memory integration is still a release gate",
+    "No craft/cast/transfer/custom-guard capability on this private port",
+    "No real-player UI, Bedrock or hearing verification",
+    "No second LLM or full delayed-online-model callback was started",
+    "Native walk, permissions and receipts tested in a synthetic world only"
+  ],
+  "releaseRequirements": [
+    "One final combined bridge with PR280 permissions patch; preserve newer hosted Numen",
+    "Keep original owner/maid, appearance, inventory, original brain choices, voice and memory bindings",
+    "Complete original gameplay capability routing and actual selected-harness memory validation before cutover",
+    "One normal release process with current F-drive backup; do not replay historical maintenance or restore synthetic data"
+  ],
+  "sourceHashEncoding": "UTF-8 with LF (Git-normalized)",
+  "byteIdenticalRebuildVerified": true
+}

@@ -280,6 +280,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
     }
 
     void tick(EntityMaid maid) {
+        if(plugin.nativeControlled(maid.getUUID()))return;
         if (!plugin.sharedDialogueEnabled(maid)) return;
         if (guard.maid != maid) {
             guard = new Guard();
