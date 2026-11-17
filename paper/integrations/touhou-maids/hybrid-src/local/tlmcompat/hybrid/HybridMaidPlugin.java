@@ -50,7 +50,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private NativeMaidAgentSupport agentSupport;
     private NativeMaidBrainSupport brains;
     private NativeMaidSocialSupport social;
-    private NativeMaidSpeech speech;
+    private NativeMaidVoices speech;
     private NativeMaidNearbyChat nearbyChat;
     private NativeMaidCompanionSupport companion;
     private NativeMaidWorkshop workshops;
@@ -73,6 +73,16 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     public void queueResidentConversation(UUID id,UUID speaker,String name,String text,String event)throws Exception{
         if(!Bukkit.isPrimaryThread()||!local.qdj.maids.brain.ResidentBodyAccess.external(id))throw new IllegalStateException("unified_resident_required");
         inbox.add(id,event,speaker,name,text);
+    }
+    /** Authored by the server voice relay; nearby speech is observation, never action authority. */
+    public boolean acceptUnifiedNpcDialogue(UUID id,UUID expectedOwner,UUID speaker,String name,String text,String event)throws Exception{
+        if(!Bukkit.isPrimaryThread()||!nativeExclusive(id)||!event.startsWith("qdvoice:"+speaker+":"))return false;
+        EntityMaid maid=ownedLoaded(expectedOwner,id);var source=Bukkit.getEntity(speaker);
+        if(source==null||source.getUniqueId().equals(id)||!source.isValid()||source.isDead()||!maid.isAlive()||maid.isRemoved())return false;
+        var target=maid.getBukkitEntity();
+        if(!source.getWorld().equals(target.getWorld())||source.getLocation().distanceSquared(target.getLocation())>24*24)return false;
+        if(text==null||text.isBlank()||text.length()>1200||text.codePoints().anyMatch(Character::isISOControl))return false;
+        if(!inbox.contains(id,event))inbox.add(id,event,speaker,name,text);return true;
     }
     JsonObject nativeLegacyReceipt(UUID owner,UUID id,String request)throws Exception{owned(owner,id);return receipts.read(id,request);}
     JsonObject nativeInbox(UUID owner,UUID id)throws Exception{var original=owned(owner,id);var result=inbox.snapshot(id);for(String key:List.of("sessionKey","memoryNamespace"))if(original.has(key))result.add(key,original.get(key).deepCopy());return result;}
@@ -147,6 +157,15 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         maid.getChatBubbleManager().addChatBubble(com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.implement.TextChatBubbleData.type2(
             net.minecraft.network.chat.Component.literal(text.replaceAll("§[0-9a-fk-or]",""))));
         getLogger().info(line);
+        publishNativeSpeech(maid,operation,text);
+    }
+    void publishNativeSpeech(EntityMaid maid,String operation,String text){
+        if(!Bukkit.isPrimaryThread()||maid==null||!maid.isAlive()||maid.isRemoved())return;
+        var voiceBridge=Bukkit.getPluginManager().getPlugin("QiandengVoice");
+        if(voiceBridge!=null&&voiceBridge.isEnabled())try{
+            voiceBridge.getClass().getMethod("publishNpcSpeech",UUID.class,String.class,String.class,long.class)
+                .invoke(voiceBridge,maid.getUUID(),operation,text,System.currentTimeMillis());
+        }catch(ReflectiveOperationException unavailable){getLogger().warning("NPC semantic speech delivery unavailable; no replay");}
     }
     private final Map<String,Long> humanDialogue=new LinkedHashMap<>();
     void humanConversation(Player actor,String request){
@@ -227,7 +246,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             residence=NativeMaidResidence.open(this,travel);
             social=new NativeMaidSocialSupport(this,receipts);
             nearbyChat=new NativeMaidNearbyChat(this);
-            speech=NativeMaidSpeech.create(this);
+            speech=NativeMaidVoices.create(this);
             getServer().getMessenger().registerOutgoingPluginChannel(this,CHANNEL);
             getServer().getPluginManager().registerEvents(this,this);
             getServer().getPluginManager().registerEvents(new SoulTalismanGuidance(),this);

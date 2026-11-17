@@ -221,7 +221,7 @@ class NativeNumenPort:
         mapped = self._map(await self.controller.call(tool, args))
         if ledger:
             ledger.save(request_id, mapped.status, mapped.text, mapped.execution_id)
-            if mapped.execution_id and (epoch, mapped.execution_id) in self._finishes:
+            if isinstance(epoch, str) and mapped.execution_id and (epoch, mapped.execution_id) in self._finishes:
                 status, text = self._finishes[(epoch, mapped.execution_id)]
                 for key in ledger.finish(epoch, mapped.execution_id, status, text):
                     self.controller.save_action(key, None)

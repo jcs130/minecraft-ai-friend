@@ -16,6 +16,8 @@
 
 这是一层可选语音传输，不创建新的 Agent 大脑或 Minecraft 连接。复用 `world/god-voice-src` 的 `SpeechFrames`、`SpeechLane`、`CaptureFence`；ASR 每段只识别一次，再向附近角色分发。
 
+服务端 Numen／Maid 的按身份语音登记、原生收件及出站接口见[三位 NPC 语音候选](../../docs/UNIFIED_NPC_VOICE_20261118.md)。候选验证与正式部署分别记录。
+
 ## 玩家和 Agent 的入口
 
 Java 玩家听说需安装与游戏版本匹配的 [Simple Voice Chat 客户端](https://modrinth.com/plugin/simple-voice-chat/versions?g=1.21.1&l=fabric)。不安装的原版、Mineflayer 和基岩玩家仍能入服；真人麦克风语音识别为附近私有短字幕。基岩／原版浏览器音频桥尚未实现，不要宣传已经能听到音频。

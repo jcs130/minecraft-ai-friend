@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "roles": [
+    {"id": "10000000-0000-0000-0000-000000000011", "ownerId": "20000000-0000-0000-0000-000000000021", "kind": "numen", "name": "QaKirito", "voice": "existing-male-voice", "range": 24},
+    {"id": "10000000-0000-0000-0000-000000000012", "ownerId": "20000000-0000-0000-0000-000000000022", "kind": "maid", "name": "QaCompanion", "voice": "existing-companion-voice", "range": 24},
+    {"id": "10000000-0000-0000-0000-000000000017", "ownerId": "20000000-0000-0000-0000-000000000027", "kind": "maid", "name": "QaHealer", "voice": "existing-healer-voice", "range": 24}
+  ]
+}
