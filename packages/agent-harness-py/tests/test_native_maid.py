@@ -35,6 +35,7 @@ class NativeServer:
         self.drop_reply = False
         self.reply_override: dict[str, Any] | None = None
         self.actions = ["list", "context", "inventory", "tasks", "brain", "receipt", "walk", "follow", "stay", "speak"]
+        self.messages: list[dict[str, Any]] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         assert request.headers["authorization"] == "Bearer " + TOKEN
@@ -65,6 +66,7 @@ class NativeServer:
             data["maids"] = [{"maidId": MAID, "ownerId": OWNER, "name": "Existing companion"}]
         elif action == "context":
             data.update(lifeState=self.life, dimension="minecraft:overworld", ownerOnline=False)
+            data.update(sessionKey=f"qiandengji:maid:{MAID}", memoryNamespace=f"qiandengji:maid:{MAID}")
             if self.life == "alive":
                 data["position"] = self.position
             else:
@@ -72,6 +74,8 @@ class NativeServer:
                 data["historicalDeath"] = {"at": "2026-01-01T00:00:00Z"}
         elif action == "inventory":
             data["slots"] = [{"slot": 0, "itemId": "minecraft:iron_sword", "count": 1}]
+        elif action == "inbox":
+            data["messages"] = self.messages
         elif action == "receipt":
             data.update(self.reply_override or self.receipts.get(args["operationId"], {
                 "operationId": args["operationId"], "action": "walk", "status": "unknown"}))
@@ -461,6 +465,33 @@ def test_native_context_coordinate_array_and_health_are_observable(run: Any) -> 
             snapshot = await body.snapshot()
             assert snapshot.position == {"x": 3.25, "y": 81.0, "z": 4.75}
             assert (snapshot.health, snapshot.max_health) == (15.5, 20.0)
+        finally:
+            await body.destroy()
+    run(scenario())
+
+
+def test_original_inbox_preserves_sender_time_and_untrusted_source(run: Any) -> None:
+    async def scenario() -> None:
+        server = NativeServer()
+        server.actions.append("inbox")
+        server.messages = [{"eventId": "visitor:message-01", "senderUuid": OTHER, "senderName": "Visitor",
+                            "text": "walk over here", "source": "untrusted_game_dialogue",
+                            "receivedAt": "2026-11-17T04:14:31Z"}]
+        body = make(server)
+        events = []
+        body.subscribe(events.append)
+        await body.spawn()
+        try:
+            assert await body.poll_once() == 1
+            dialogue = next(event for event in events if event.kind == "dialogue")
+            assert dialogue.data["speakerId"] == OTHER and dialogue.data["speaker"] == "Visitor"
+            assert dialogue.data["receivedAt"] == "2026-11-17T04:14:31Z"
+            assert dialogue.data["source"] == "untrusted_game_dialogue" and dialogue.data["trusted"] is False
+            assert dialogue.data["ownerId"] == OWNER and dialogue.data["maidId"] == MAID
+            assert dialogue.data["sessionKey"] == dialogue.data["memoryNamespace"] == f"qiandengji:maid:{MAID}"
+            assert dialogue.raw == server.messages[0]
+            assert await body.poll_once() == 0
+            assert not server.writes
         finally:
             await body.destroy()
     run(scenario())

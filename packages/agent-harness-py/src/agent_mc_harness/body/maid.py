@@ -441,13 +441,19 @@ class MaidBody(BaseBody):
         if "inbox" in self._actions:
             reply, _ = await self._maids({"action": "inbox", "maidId": self.maid_id})
             data = (reply.get("data") or {}) if isinstance(reply, dict) else {}
-            # The inbox row list is not documented in-repo (DialogueInbox.snapshot ships compiled): accept the plausible keys.
+            # The original DialogueInbox uses messages with senderUuid/senderName/receivedAt.
             rows: list[Any] = next((data[k] for k in ("events", "items", "pending", "messages") if isinstance(data.get(k), list)), [])
             for row in rows:
                 if isinstance(row, dict) and row.get("eventId") and self._fresh("inbox:" + str(row["eventId"])):
+                    context = self._context.get("raw") or {}
                     self.emit("dialogue", str(row.get("text") or "")[:1000], severity=2,
-                              data={**{k: row.get(k) for k in ("eventId", "memoryNamespace", "speaker", "speakerId")},
-                                    "sessionKey": row.get("sessionKey") or data.get("sessionKey")})
+                              data={"eventId": row["eventId"], "maidId": self.maid_id, "ownerId": self.owner_id,
+                                    "speaker": row.get("speaker") or row.get("senderName"),
+                                    "speakerId": row.get("speakerId") or row.get("senderUuid"),
+                                    "receivedAt": row.get("receivedAt"), "source": row.get("source") or "untrusted_game_dialogue",
+                                    "trusted": False,
+                                    "memoryNamespace": row.get("memoryNamespace") or data.get("memoryNamespace") or context.get("memoryNamespace"),
+                                    "sessionKey": row.get("sessionKey") or data.get("sessionKey") or context.get("sessionKey")}, raw=row)
                     count += 1
         for e in await self.cursor.read():
             kind = classify_envelope(str(e.get("type") or ""))
