@@ -1,0 +1,11 @@
+# Historical game-event projection
+
+`projectGameMemoryEvent(event)` and `gameMemoryGroup(record)` are pure public functions in `agent-mc-world/context` and `/client`. They require no model, Graphiti database or host package. SDK, MCP archive and direct hosts can use the same envelope contract.
+
+The projection keeps the World, original run/cursor/time, source hash and reference, actor UUID/name, speech channel, logical message ID, execution ID and observed outcomes. Chat is a speaker claim. `chatDelivery.text` supplies outgoing words; a client transport receipt does not establish recipient hearing/reading. Structured native companion replies are admitted while unstructured system echoes stay in the original archive. Independent identical utterances are not deduplicated by text.
+
+Native terminal executions are admitted even with `contextDelivery: archive-only`, which controls foreground routing rather than memory retention. Task steps retain recovery decisions and measured resource/position deltas when both original samples exist; missing samples remain unknown. Combat observations retain actual hit counters, health changes, tactic versions and cast attempts. Lost sight is not death; local clear is not room completion; sent casts are not effects; kill credit remains unknown. Goal/version and skill-source notifications retain their own evidence class. High-frequency snapshots, queue updates, tactics and arbitrary server text are not extracted as new experiences.
+
+Records are bounded, with `truncated` and an original reference. Hosts must keep the raw journal, validate identity/World scopes, persist any ingestion queue and distinguish queue acceptance from indexing. Grouping never crosses a World, run, minute, execution or channel. A host may add a separately labelled task attribution only after matching an actually issued execution; current task state must not be relabelled as the action's past stage.
+
+The core does not select a personal-memory backend or put recalled history into a permanent prefix. Historical retrieval should return original evidence and source versions, bounded to the current task; current state remains authoritative. A graph extraction is a search aid, not automatically a verified game fact or learned method. Corrections must retain prior sources and versioned reasons.
