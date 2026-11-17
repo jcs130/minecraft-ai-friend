@@ -11,7 +11,7 @@ from zipfile import ZipFile
 ROOT = Path(__file__).resolve().parent
 ANDROID = ROOT.parent / 'android-client'
 PACK_VERSION = '1.1.0'
-WHEEL_PACK_VERSION = '1.1.1'
+WHEEL_PACK_VERSION = '1.1.2'
 NEOFORGE = '21.1.252'
 SHARED_CLIENT_MODS = ('touhou-little-maid', 'yes-steve-model', 'simple-voice-chat')
 
@@ -26,6 +26,8 @@ def build(cache, output, catalog=None, controls_mod=None):
     android_mods = {mod['id']: mod for mod in baseline['files']}
     mods = [android_mods[mod_id] for mod_id in SHARED_CLIENT_MODS]
     mods += json.loads((ROOT / 'controller.lock.json').read_bytes())
+    if controls_mod:
+        mods += json.loads((ANDROID / 'better-combat.lock.json').read_bytes())
     cache.mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(lambda row: common.load_input(row, cache), mods))
@@ -59,7 +61,10 @@ def build(cache, output, catalog=None, controls_mod=None):
                 raise ValueError('Expected the Qiandeng Controls spell wheel build')
         contents['overrides/mods/qiandeng-controls-0.1.1.jar'] = controls_mod.read_bytes()
         guide += '\n## 施法轮盘\n\n按 F6 或手柄十字键上打开轮盘。选中技能后点击或按 A 施放。\n'
-        included += 'F6 或手柄十字键上可打开施法轮盘。'
+        combat = 'Better Combat 2.4.0、playerAnimator 2.0.4 和 Cloth Config API 15.0.140'
+        guide = guide.replace('配置库 YACL。', f'配置库 YACL，以及 {combat}。', 1)
+        guide = guide.replace('五份官方模组', '清单中的官方模组', 1)
+        included += f'包含 {combat}。F6 或手柄十字键上可打开施法轮盘。'
     contents['overrides/README-Qiandengji.md'] = guide.encode('utf-8')
     data = common.archive(contents)
     row = {

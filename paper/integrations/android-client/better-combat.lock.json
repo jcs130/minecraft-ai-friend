@@ -1,0 +1,35 @@
+[
+  {
+    "bytes": 1045389,
+    "filename": "bettercombat-neoforge-2.4.0+1.21.1.jar",
+    "id": "better-combat",
+    "license": "ARR",
+    "sha1": "bacbc8c86671663e9998b141c5732250c1f4d4fb",
+    "sha512": "db24730a42ae7e2dd546ee031d2f5e0dd6f9896418417a529fa21a44121761ebb29c8b8299db8f20500f7497f7b60a7d793b66c93abf37a8ea0aa3edafd80eb6",
+    "source": "https://modrinth.com/mod/better-combat/version/VhIOvcXP",
+    "url": "https://cdn.modrinth.com/data/5sy6g3kz/versions/VhIOvcXP/bettercombat-neoforge-2.4.0%2B1.21.1.jar",
+    "version": "2.4.0+1.21.1-neoforge"
+  },
+  {
+    "bytes": 203149,
+    "filename": "player-animation-lib-forge-2.0.4+1.21.1.jar",
+    "id": "playeranimator",
+    "license": "MIT",
+    "sha1": "05be8ddcc78532b9a5520c718edc6c971cd0057c",
+    "sha512": "fc00450fb6c95ec1779021bdc726122dacb5915c6baddaacc981cd221b01b8db35f2a0dfde5d6fa6766d877266dc82f58854f571ea53cc5c4d468b80e1548a5f",
+    "source": "https://modrinth.com/mod/playeranimator/version/HJZB6bmA",
+    "url": "https://cdn.modrinth.com/data/gedNE4y2/versions/HJZB6bmA/player-animation-lib-forge-2.0.4%2B1.21.1.jar",
+    "version": "2.0.4+1.21.1-forge"
+  },
+  {
+    "bytes": 1163890,
+    "filename": "cloth-config-15.0.140-neoforge.jar",
+    "id": "cloth-config",
+    "license": "LGPL-3.0-only",
+    "sha1": "c3e5733ba4503b102589a026000fd5ce0212f6f2",
+    "sha512": "aaf9b010955b8cd294e5a92f069985b18729fd5e2cf22d351f1dff9680f15488688803ec41e77e941cbde130ceb535014ca4c868047d80ab69c2d508e216654d",
+    "source": "https://modrinth.com/mod/cloth-config/version/izKINKFg",
+    "url": "https://cdn.modrinth.com/data/9s6osm5g/versions/izKINKFg/cloth-config-15.0.140-neoforge.jar",
+    "version": "15.0.140+neoforge"
+  }
+]
