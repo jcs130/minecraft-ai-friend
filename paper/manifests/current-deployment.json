@@ -1,31 +1,20 @@
 {
-  "inventoryScope": "component_runtime_verified_20261118_unified_npc_voice",
-  "currentComponentEvidence": "paper/manifests/unified-npc-voice-deployed-20261118.json",
-  "acceptanceDocument": "paper/docs/PLAYER_NAVIGATION_20261114.md",
+  "inventoryScope": "component_runtime_verified_20261118_daily_closeout",
+  "currentComponentEvidence": "paper/manifests/daily-closeout-deployed-20261118.json",
+  "acceptanceDocument": "paper/docs/DAILY_CLOSEOUT_DEPLOYED_20261118.md",
   "historicalFieldsPreserved": true,
-  "state": "deployed-with-open-client-and-long-running-acceptance",
-  "latestRelease": "unified-npc-voice-20261118-r1",
-  "verifiedAt": "2026-11-17T17:46:19.057783+00:00",
-  "releaseDocument": "paper/docs/UNIFIED_NPC_VOICE_DEPLOYED_20261118.md",
+  "state": "deployed-with-explicit-client-and-long-running-acceptance-open",
+  "latestRelease": "daily-closeout-20261118",
+  "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+  "releaseDocument": "paper/docs/DAILY_CLOSEOUT_DEPLOYED_20261118.md",
   "numenHostingCurrent": {
     "state": "deployed-and-component-verified",
-    "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
-    "document": "paper/docs/NUMEN_SYSTEM_ONE_20261113.md",
-    "minecraft": "1.21.1",
-    "upstreamNumen": "143ba409a62c99bf1e985b6047bcad0f00e9313e",
-    "hostedNumen": "0.1.5-hosted.2",
-    "classicNumen": "0.1.4",
-    "classicRuntimeBuild": "0.1.4-qd-youer3",
-    "embeddedCore": "0.5.7-rc.160-preview.68",
-    "autonomy": "0.2.156",
-    "hostingPullRequest": 203,
-    "embeddedCorePullRequest": 207,
-    "systemOneModel": "StartLux-Decision-4B",
-    "systemOneScope": "advisory-plus-scoped-read-only-combat-attention",
-    "originalCredentialsPreserved": 80,
-    "productionRoleControlInvoked": false,
-    "combatAttention": true,
-    "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json"
+    "verifiedAt": "2026-11-18T04:07:47.585090+08:00",
+    "manifest": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "embeddedCore": "0.5.7-rc.160-preview.97",
+    "embeddedCorePullRequest": 301,
+    "originalHostingRecordsUnchanged": true,
+    "scope": "Standalone hosted core. Classic Numen and external Cortico runtimes are not claimed upgraded by this record."
   },
   "eyeBossBarLifecycle": {
     "state": "deployed-with-open-acceptance",
@@ -178,7 +167,7 @@
     "original remote modded client acceptance and complete rendering/animation parity",
     "Remote Cortico host terminal error consumption remains unverified"
   ],
-  "scopeNotice": "Use currentRuntime, componentRuntimeEvidence and currentComponentEvidence for present loading. Older runtime/override/release blocks are historical; no source-only SDK or unrelated PR is declared installed.",
+  "scopeNotice": "Use daily-closeout-deployed-20261118.json and currentRuntime for the named current components. Historical runtime, override and prior release fields retain their original dates; they are not current loading claims.",
   "verification": {
     "formalStartupChecks": 24,
     "enabledPlugins": 55,
@@ -324,23 +313,23 @@
   },
   "distribution": {
     "coreSource": "0.5.7-rc.160-preview.18",
-    "publicSkill": "1.3.8",
-    "publicSkillCore": "0.5.7-rc.130",
+    "publicSkill": "1.3.11",
+    "publicSkillCore": "0.5.7-rc.160-preview.97",
     "harnessBodyCore": "0.5.7-rc.160-preview.18",
-    "website": "0.8.40",
+    "website": "0.8.42",
     "photoLibraryCandidate": null,
     "npmSourceCorePublished": false,
-    "verifiedAt": "2026-11-05T18:34:26.261655+00:00",
-    "manifest": "paper/manifests/all-fixes-deployed-20261106.json",
+    "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+    "manifest": "paper/manifests/daily-closeout-deployed-20261118.json",
     "mediaStorage": "OSS",
-    "coreSourceNote": "Builtin harness preview.18 was already updated; public Skill 1.3.8 still embeds rc.130. No npm publish or automatic remote-client upgrade.",
+    "coreSourceNote": "The verified public Skill embeds preview.97. External clients and their separately distributed core versions require their own runtime evidence.",
     "clientDownloads": {
       "neko": "0.6.114",
       "corticoLite": "0.1.2",
       "dshPlugin": "0.3.0-rc.24",
       "nativeYsm": "2.6.5"
     },
-    "websiteManifest": "paper/manifests/all-fixes-deployed-20261106.json"
+    "websiteManifest": "paper/manifests/daily-closeout-deployed-20261118.json"
   },
   "websiteRelease": {
     "release": "all-pending-20261109-r1",
@@ -1576,14 +1565,14 @@
   },
   "currentComponentOverrides": {
     "AgentFriend": {
-      "version": "0.4.47.87-npc-combat",
-      "sha256": "5f776640e200cef644febd848c0f3c21b031bd52a9cf35a6abbfd7c6957561cc",
-      "evidence": "paper/manifests/maid-unified-deployed-20261117.json"
+      "version": "0.4.47.89-daily-ui",
+      "sha256": "58dbcfce3a0fc2c295b0753695d60f063ff2a1d8396819624723955666da7ad5",
+      "evidence": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "QiandengjiMaidBridge": {
-      "version": "0.1.46-unified-actions",
-      "sha256": "abb2350c3d813bcf4535b3145892ae15a78af2b081ef336d4c85446300c99f23",
-      "evidence": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      "version": "0.1.48-unified-continuity",
+      "sha256": "ad0d377745e2c681d3044d6f068535d96ffa179ce8811724b7ab935418f27e91",
+      "evidence": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "PlatformIdentity": {
       "version": "0.1.0",
@@ -1598,69 +1587,72 @@
     "QiandengjiRpg": {
       "version": "0.2.31-unified-npc",
       "sha256": "7aed57c18c6755b5bdadc2ca1b95aa0a0146b405f2e8aaff2986213fda187f20",
-      "evidence": "paper/manifests/maid-unified-deployed-20261117.json"
+      "evidence": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "VortexRPG": {
       "version": "1.2.2-alpha",
       "sha256": "a7b3df79933e1df3c205c4940f6c880cc7653cafbdc50bb9663d60a5127f9fdf",
-      "evidence": "paper/manifests/maid-unified-deployed-20261117.json"
+      "evidence": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "QiandengVoice": {
-      "version": "0.1.7",
-      "sha256": "b1548e6d4c86f19cbd35fd77708550ea737669dac5f5272ff9adfe10971c8398",
-      "evidence": "paper/manifests/server-pr207-trial-deployed-20261114.json"
+      "version": "0.1.8",
+      "sha256": "0fd7a02d7d65159558de9a168a709717cf78101b762da443e48c2e0fc181d668",
+      "evidence": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "numen_hosted": {
       "version": "0.1.5-hosted.2",
       "sha256": "be85eb1a78b252a524dc9a2724d6d2b8a0d65d2e508190d6df934c89e5fcfb2c",
-      "evidence": "paper/manifests/maid-unified-deployed-20261117.json"
+      "evidence": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "numen_hosted_api": {
       "version": "0.1.5-hosted.2",
       "sha256": "c883704af157f86f9af43a05da8de24e9a4ecc5552b358f7cbf7eaed3c68e322",
-      "evidence": "paper/manifests/maid-unified-deployed-20261117.json"
+      "evidence": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "hostedNumenCore": {
-      "version": "0.5.7-rc.160-preview.68",
-      "sha256": "c9676c815d8323bcabd5c8fbc43623072a650c01dcb9a701b155875e031f6e23",
-      "evidence": "paper/manifests/server-pr207-trial-deployed-20261114.json"
+      "version": "0.5.7-rc.160-preview.97",
+      "sha256": "e51116ff32519ab1fbfd6da1251d6a7e83aeb64fb15329f02b7636de7784eca5",
+      "evidence": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "tlm_maid_agents": {
       "version": "0.3.11",
-      "sha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
-      "evidence": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      "sha256": "a7b90fb03a8885757a257aa4aa64711007a46be30fecd75bc69680422309d926",
+      "evidence": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "qiandengji_maid_brain": {
-      "version": "0.1.1",
-      "sha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
-      "evidence": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      "version": "0.1.2",
+      "sha256": "a7b90fb03a8885757a257aa4aa64711007a46be30fecd75bc69680422309d926",
+      "evidence": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "qiandengji_hosted_bridge": {
-      "version": "0.1.1",
-      "sha256": "379d1dc216df4ec996e0f489714c356b2351b703733be7768f9848cedc563d68",
-      "evidence": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      "version": "0.1.2",
+      "sha256": "a5e5ca4df082ab8880a8cffcfa67fba86a784a45f28c2189cf06c0472676cf76",
+      "evidence": "paper/manifests/daily-closeout-deployed-20261118.json"
     }
   },
   "componentEvidenceByName": {
-    "QiandengjiMaidBridge": "paper/manifests/unified-server-npcs-deployed-20261117.json",
+    "QiandengjiMaidBridge": "paper/manifests/daily-closeout-deployed-20261118.json",
     "PlatformIdentity": "paper/manifests/platform-identity-companion-deployed-20261114.json",
     "LoginGuard": "paper/manifests/platform-identity-companion-deployed-20261114.json",
-    "AgentFriend": "paper/manifests/maid-unified-deployed-20261117.json",
-    "QiandengjiRpg": "paper/manifests/maid-unified-deployed-20261117.json",
-    "VortexRPG": "paper/manifests/maid-unified-deployed-20261117.json",
-    "QiandengVoice": "paper/manifests/server-pr207-trial-deployed-20261114.json",
-    "numen_hosted": "paper/manifests/maid-unified-deployed-20261117.json",
-    "numen_hosted_api": "paper/manifests/maid-unified-deployed-20261117.json",
-    "hostedNumenCore": "paper/manifests/server-pr207-trial-deployed-20261114.json",
-    "tlm_maid_agents": "paper/manifests/unified-server-npcs-deployed-20261117.json",
-    "qiandengji_maid_brain": "paper/manifests/unified-server-npcs-deployed-20261117.json",
-    "qiandengji_hosted_bridge": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+    "AgentFriend": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "QiandengjiRpg": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "VortexRPG": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "QiandengVoice": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "numen_hosted": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "numen_hosted_api": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "hostedNumenCore": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "tlm_maid_agents": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "qiandengji_maid_brain": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "qiandengji_hosted_bridge": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "CortiEyeMirror": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "AgentVision": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "WorldObserver": "paper/manifests/daily-closeout-deployed-20261118.json"
   },
   "latestVerifiedComponents": {
     "QiandengjiMaidBridge": {
-      "version": "0.1.46-unified-actions",
-      "artifactSha256": "abb2350c3d813bcf4535b3145892ae15a78af2b081ef336d4c85446300c99f23",
-      "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      "version": "0.1.48-unified-continuity",
+      "artifactSha256": "ad0d377745e2c681d3044d6f068535d96ffa179ce8811724b7ab935418f27e91",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "PlatformIdentity": {
       "version": "0.1.0",
@@ -1668,24 +1660,24 @@
       "manifest": "paper/manifests/platform-identity-companion-deployed-20261114.json"
     },
     "AgentFriend": {
-      "version": "0.4.47.87-npc-combat",
-      "artifactSha256": "5f776640e200cef644febd848c0f3c21b031bd52a9cf35a6abbfd7c6957561cc",
-      "manifest": "paper/manifests/maid-unified-deployed-20261117.json"
+      "version": "0.4.47.89-daily-ui",
+      "artifactSha256": "58dbcfce3a0fc2c295b0753695d60f063ff2a1d8396819624723955666da7ad5",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "QiandengVoice": {
-      "version": "0.1.7",
-      "artifactSha256": "b1548e6d4c86f19cbd35fd77708550ea737669dac5f5272ff9adfe10971c8398",
-      "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json"
+      "version": "0.1.8",
+      "artifactSha256": "0fd7a02d7d65159558de9a168a709717cf78101b762da443e48c2e0fc181d668",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "WorldObserver": {
       "version": "0.1.4-maid-ysm",
       "artifactSha256": "79f37b1230e9f4313e065c845c4e31dd4421b0bd6c212db29cf82d927561b40f",
-      "manifest": "paper/manifests/hutao-joint-deployed-20261110.json"
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "CortiEyeMirror": {
-      "version": "0.1.21-hud-baseline",
-      "artifactSha256": "1fa97aa995597e76f64386bae2566bb77535b09fba095705385eb4131c4bbfe9",
-      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
+      "version": "0.1.22-native-presentation",
+      "artifactSha256": "d6d8adbd98159fa9b108f6ba635da4ec65448886f0770b9cbeebc8a0562b3913",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "LoginGuard": {
       "version": "0.1.13-platform-identity",
@@ -1695,71 +1687,69 @@
     "AgentVision": {
       "version": "0.1.4",
       "artifactSha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
-      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "QiandengjiRpg": {
       "version": "0.2.31-unified-npc",
       "artifactSha256": "7aed57c18c6755b5bdadc2ca1b95aa0a0146b405f2e8aaff2986213fda187f20",
-      "manifest": "paper/manifests/maid-unified-deployed-20261117.json"
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "VortexRPG": {
       "version": "1.2.2-alpha",
       "artifactSha256": "a7b3df79933e1df3c205c4940f6c880cc7653cafbdc50bb9663d60a5127f9fdf",
-      "manifest": "paper/manifests/maid-unified-deployed-20261117.json"
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "numen_hosted": {
       "version": "0.1.5-hosted.2",
       "artifactSha256": "be85eb1a78b252a524dc9a2724d6d2b8a0d65d2e508190d6df934c89e5fcfb2c",
-      "manifest": "paper/manifests/maid-unified-deployed-20261117.json"
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "numen_hosted_api": {
       "version": "0.1.5-hosted.2",
       "artifactSha256": "c883704af157f86f9af43a05da8de24e9a4ecc5552b358f7cbf7eaed3c68e322",
-      "manifest": "paper/manifests/maid-unified-deployed-20261117.json"
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "hostedNumenCore": {
-      "version": "0.5.7-rc.160-preview.68",
-      "artifactSha256": "c9676c815d8323bcabd5c8fbc43623072a650c01dcb9a701b155875e031f6e23",
-      "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json"
+      "version": "0.5.7-rc.160-preview.97",
+      "artifactSha256": "e51116ff32519ab1fbfd6da1251d6a7e83aeb64fb15329f02b7636de7784eca5",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "tlm_maid_agents": {
       "version": "0.3.11",
-      "artifactSha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
-      "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      "artifactSha256": "a7b90fb03a8885757a257aa4aa64711007a46be30fecd75bc69680422309d926",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "qiandengji_maid_brain": {
-      "version": "0.1.1",
-      "artifactSha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
-      "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      "version": "0.1.2",
+      "artifactSha256": "a7b90fb03a8885757a257aa4aa64711007a46be30fecd75bc69680422309d926",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     "qiandengji_hosted_bridge": {
-      "version": "0.1.1",
-      "artifactSha256": "379d1dc216df4ec996e0f489714c356b2351b703733be7768f9848cedc563d68",
-      "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      "version": "0.1.2",
+      "artifactSha256": "a5e5ca4df082ab8880a8cffcfa67fba86a784a45f28c2189cf06c0472676cf76",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     }
   },
   "currentRuntime": {
-    "AgentFriend": "0.4.47.87-npc-combat",
-    "CortiEyeMirror": "0.1.21-hud-baseline",
-    "QiandengjiMaidBridge": "0.1.46-unified-actions",
-    "PlatformIdentity": "0.1.0",
-    "embeddedCore": "0.5.7-rc.160-preview.37",
-    "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
-    "plugins": 57,
-    "mods": 6,
+    "AgentFriend": "0.4.47.89-daily-ui",
+    "tlm_maid_agents": "0.3.11",
+    "QiandengjiMaidBridge": "0.1.48-unified-continuity",
     "VortexRPG": "1.2.2-alpha",
     "QiandengjiRpg": "0.2.31-unified-npc",
-    "QiandengVoice": "0.1.7",
-    "WorldObserver": "0.1.4-maid-ysm",
-    "website": "0.8.41",
-    "LoginGuard": "0.1.13-platform-identity",
-    "AgentVision": "0.1.4",
-    "hostedNumenCore": "0.5.7-rc.160-preview.68",
+    "qiandengji_maid_brain": "0.1.2",
     "numen_hosted": "0.1.5-hosted.2",
     "numen_hosted_api": "0.1.5-hosted.2",
-    "tlm_maid_agents": "0.3.11",
-    "qiandengji_maid_brain": "0.1.1",
-    "qiandengji_hosted_bridge": "0.1.1"
+    "qiandengji_hosted_bridge": "0.1.2",
+    "QiandengVoice": "0.1.8",
+    "CortiEyeMirror": "0.1.22-native-presentation",
+    "AgentVision": "0.1.4",
+    "WorldObserver": "0.1.4-maid-ysm",
+    "hostedNumenCore": "0.5.7-rc.160-preview.97",
+    "embeddedCore": "0.5.7-rc.160-preview.97",
+    "website": "0.8.42",
+    "publicAgentSkill": "1.3.11",
+    "YSM": "2.6.5",
+    "TouhouLittleMaid": "1.5.3"
   },
   "currentGameContent": {
     "sites": 15,
@@ -2007,27 +1997,138 @@
   },
   "componentRuntimeEvidence": [
     {
-      "name": "CortiEyeMirror",
-      "version": "0.1.21-hud-baseline",
-      "loadedPath": "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar",
-      "sha256": "1fa97aa995597e76f64386bae2566bb77535b09fba095705385eb4131c4bbfe9",
-      "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
-      "processId": 23436,
-      "processStartedAt": "2026-11-10T17:04:48.9264617Z",
-      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
-      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
-      "codeChangedThisBatch": false
+      "name": "AgentFriend",
+      "version": "0.4.47.89-daily-ui",
+      "sha256": "58dbcfce3a0fc2c295b0753695d60f063ff2a1d8396819624723955666da7ad5",
+      "previousSha256": "5f776640e200cef644febd848c0f3c21b031bd52a9cf35a6abbfd7c6957561cc",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "codeChangedThisBatch": true,
+      "sourceCommit": "569be256fca659e61dd234406c316dbf0a2dbc36",
+      "lastChangedPullRequest": 279,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
     },
     {
-      "name": "LoginGuard",
-      "version": "0.1.12-ordered-voice",
-      "loadedPath": "E:/MC/private/ysm/proxy/plugins/LoginGuard-0.1.10.jar",
-      "sha256": "58b53c94e682382b5d9061434eb08ccf4620dae97ea05a89d887d02a8082ba0a",
-      "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
-      "processId": 21556,
-      "processStartedAt": "2026-11-10T17:07:24.3660960Z",
-      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
-      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
+      "name": "tlm_maid_agents",
+      "version": "0.3.11",
+      "sha256": "a7b90fb03a8885757a257aa4aa64711007a46be30fecd75bc69680422309d926",
+      "previousSha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
+      "loadedPath": "E:/MC/server/mods/qiandengji-maid-brain-0.1.0.jar",
+      "codeChangedThisBatch": false,
+      "sourceCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+      "lastChangedPullRequest": 295,
+      "note": "Shared JAR; only registered voice hook changed in this batch.",
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    {
+      "name": "QiandengjiMaidBridge",
+      "version": "0.1.48-unified-continuity",
+      "sha256": "ad0d377745e2c681d3044d6f068535d96ffa179ce8811724b7ab935418f27e91",
+      "previousSha256": "1aa45dca4c75b288d797e84ee70e9e78bbe037394a7a721bde78d2d7a217b5f4",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "codeChangedThisBatch": true,
+      "sourceCommit": "17098b0846a7d466e3839dacb08448e880476d51",
+      "lastChangedPullRequest": 303,
+      "mergeCommit": "e3ea0ced1b70e4a5918c5b238e551007813c4c38",
+      "deployedAt": "2026-11-18T04:48:58.7797109+08:00",
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    {
+      "name": "VortexRPG",
+      "version": "1.2.2-alpha",
+      "sha256": "a7b3df79933e1df3c205c4940f6c880cc7653cafbdc50bb9663d60a5127f9fdf",
+      "previousSha256": "04489c418211925cbedb2f7d7f40df65ccf53ab2bb03ff8ba8230fbf51a5b223",
+      "loadedPath": "E:/MC/server/plugins/VortexRPG-1.2.2-alpha-qd29.jar",
+      "codeChangedThisBatch": false,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    {
+      "name": "QiandengjiRpg",
+      "version": "0.2.31-unified-npc",
+      "sha256": "7aed57c18c6755b5bdadc2ca1b95aa0a0146b405f2e8aaff2986213fda187f20",
+      "previousSha256": "88f80916df4a1b18cb24b4982f030940c6f7473e91799333e07dd0b843e43c4a",
+      "loadedPath": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
+      "codeChangedThisBatch": false,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    {
+      "name": "qiandengji_maid_brain",
+      "version": "0.1.2",
+      "sha256": "a7b90fb03a8885757a257aa4aa64711007a46be30fecd75bc69680422309d926",
+      "previousSha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
+      "loadedPath": "E:/MC/server/mods/qiandengji-maid-brain-0.1.0.jar",
+      "codeChangedThisBatch": false,
+      "sourceCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+      "lastChangedPullRequest": 295,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    {
+      "name": "numen_hosted",
+      "version": "0.1.5-hosted.2",
+      "sha256": "be85eb1a78b252a524dc9a2724d6d2b8a0d65d2e508190d6df934c89e5fcfb2c",
+      "loadedPath": "E:/MC/server/plugins/numen_hosted-1.21.1-0.1.5-hosted.2-880cd67f7836.jar",
+      "codeChangedThisBatch": false,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    {
+      "name": "numen_hosted_api",
+      "version": "0.1.5-hosted.2",
+      "sha256": "c883704af157f86f9af43a05da8de24e9a4ecc5552b358f7cbf7eaed3c68e322",
+      "loadedPath": "E:/MC/server/plugins/numen_hosted_api-1.21.1-0.1.5-hosted.2-8e13a2d3174c.jar",
+      "codeChangedThisBatch": false,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    {
+      "name": "qiandengji_hosted_bridge",
+      "version": "0.1.2",
+      "sha256": "a5e5ca4df082ab8880a8cffcfa67fba86a784a45f28c2189cf06c0472676cf76",
+      "previousSha256": "379d1dc216df4ec996e0f489714c356b2351b703733be7768f9848cedc563d68",
+      "loadedPath": "E:/MC/server/mods/qiandengji-hosted-bridge-0.1.0.jar",
+      "codeChangedThisBatch": false,
+      "sourceCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+      "lastChangedPullRequest": 295,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    {
+      "name": "QiandengVoice",
+      "version": "0.1.8",
+      "sha256": "0fd7a02d7d65159558de9a168a709717cf78101b762da443e48c2e0fc181d668",
+      "previousSha256": "b1548e6d4c86f19cbd35fd77708550ea737669dac5f5272ff9adfe10971c8398",
+      "loadedPath": "E:/MC/server/plugins/QiandengVoice-0.1.0.jar",
+      "codeChangedThisBatch": false,
+      "sourceCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+      "lastChangedPullRequest": 295,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    {
+      "name": "CortiEyeMirror",
+      "version": "0.1.22-native-presentation",
+      "loadedPath": "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar",
+      "sha256": "d6d8adbd98159fa9b108f6ba635da4ec65448886f0770b9cbeebc8a0562b3913",
+      "sourceCommit": null,
+      "sourceProvenance": "existing artifact preserved; commit not inferred from filename",
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json",
       "codeChangedThisBatch": false
     },
     {
@@ -2035,148 +2136,39 @@
       "version": "0.1.4",
       "loadedPath": "E:/MC/server/plugins/AgentVision-0.1.2.jar",
       "sha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
-      "codeChangedThisBatch": false,
       "sourceCommit": null,
-      "processId": 23436,
-      "processStartedAt": "2026-11-10T17:04:48.9264617Z",
-      "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
-      "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
-    },
-    {
-      "name": "VortexRPG",
-      "version": "1.2.2-alpha",
-      "loadedPath": "E:/MC/server/plugins/VortexRPG-1.2.2-alpha-qd29.jar",
-      "sha256": "a7b3df79933e1df3c205c4940f6c880cc7653cafbdc50bb9663d60a5127f9fdf",
-      "sourceCommit": "87047df87093b5a7d04b4529c235de3dce5f6ea5",
-      "processId": 25044,
-      "processStartedAt": "2026-11-17T14:39:25.9243780+08:00",
-      "verifiedAt": "2026-11-17T14:42:39.2094328+08:00",
-      "manifest": "paper/manifests/maid-unified-deployed-20261117.json",
-      "codeChangedThisBatch": true
-    },
-    {
-      "name": "AgentFriend",
-      "version": "0.4.47.87-npc-combat",
-      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
-      "sha256": "5f776640e200cef644febd848c0f3c21b031bd52a9cf35a6abbfd7c6957561cc",
-      "sourceCommit": "87047df87093b5a7d04b4529c235de3dce5f6ea5",
-      "processId": 25044,
-      "processStartedAt": "2026-11-17T14:39:25.9243780+08:00",
-      "verifiedAt": "2026-11-17T14:42:39.2094328+08:00",
-      "manifest": "paper/manifests/maid-unified-deployed-20261117.json",
-      "codeChangedThisBatch": true
-    },
-    {
-      "name": "QiandengVoice",
-      "version": "0.1.7",
-      "loadedPath": "E:/MC/server/plugins/QiandengVoice-0.1.0.jar",
-      "sha256": "b1548e6d4c86f19cbd35fd77708550ea737669dac5f5272ff9adfe10971c8398",
-      "sourceCommit": "9326de9b5a28697ff9ab8e8494dfc221bee92933",
-      "processId": 38380,
-      "processStartedAt": "2026-11-14T07:42:19.0145085+08:00",
-      "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
-      "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json",
-      "codeChangedThisBatch": true
-    },
-    {
-      "name": "numen_hosted",
-      "version": "0.1.5-hosted.2",
-      "loadedPath": "E:/MC/server/plugins/numen_hosted-1.21.1-0.1.5-hosted.2-880cd67f7836.jar",
-      "sha256": "be85eb1a78b252a524dc9a2724d6d2b8a0d65d2e508190d6df934c89e5fcfb2c",
-      "sourceCommit": "b189fc123d3d2139271abf73341f22026d446f52",
-      "processId": 25044,
-      "processStartedAt": "2026-11-17T14:39:25.9243780+08:00",
-      "verifiedAt": "2026-11-17T14:42:39.2094328+08:00",
-      "manifest": "paper/manifests/maid-unified-deployed-20261117.json",
+      "sourceProvenance": "existing artifact preserved; commit not inferred from filename",
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json",
       "codeChangedThisBatch": false
     },
     {
-      "name": "numen_hosted_api",
-      "version": "0.1.5-hosted.2",
-      "loadedPath": "E:/MC/server/plugins/numen_hosted_api-1.21.1-0.1.5-hosted.2-8e13a2d3174c.jar",
-      "sha256": "c883704af157f86f9af43a05da8de24e9a4ecc5552b358f7cbf7eaed3c68e322",
-      "sourceCommit": "b189fc123d3d2139271abf73341f22026d446f52",
-      "processId": 25044,
-      "processStartedAt": "2026-11-17T14:39:25.9243780+08:00",
-      "verifiedAt": "2026-11-17T14:42:39.2094328+08:00",
-      "manifest": "paper/manifests/maid-unified-deployed-20261117.json",
+      "name": "WorldObserver",
+      "version": "0.1.4-maid-ysm",
+      "loadedPath": "E:/MC/server/plugins/WorldObserver-0.1.3.jar",
+      "sha256": "79f37b1230e9f4313e065c845c4e31dd4421b0bd6c212db29cf82d927561b40f",
+      "sourceCommit": null,
+      "sourceProvenance": "existing artifact preserved; commit not inferred from filename",
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json",
       "codeChangedThisBatch": false
     },
     {
       "name": "hostedNumenCore",
-      "version": "0.5.7-rc.160-preview.68",
+      "version": "0.5.7-rc.160-preview.97",
       "loadedPath": "E:/MC/clients/numen-hosting/release-20261106-r1/core/package",
-      "sha256": "c9676c815d8323bcabd5c8fbc43623072a650c01dcb9a701b155875e031f6e23",
-      "sourceCommit": "656afc659ba896d10118ec2e9223f982d7577fb7",
-      "processId": 37468,
-      "processStartedAt": "2026-11-14T07:42:17.830+08:00",
-      "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
-      "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json",
+      "sha256": "e51116ff32519ab1fbfd6da1251d6a7e83aeb64fb15329f02b7636de7784eca5",
+      "hashScope": "dist/build.json; full physical package hashes in release file-hashes.json",
+      "archiveSha256": "0c9eb8de64248812b2b3f73c8eee639183a14c9c241629ced5c67cc89905b4f6",
+      "sourceCommit": "d6cdc58982c636d536608aaf602d445525f99879",
+      "mergeCommit": "72f81b04a07aa476a74fd9b927e86d555a3d9b2d",
+      "processId": 45952,
+      "deployedAt": "2026-11-18T04:07:40.4972753+08:00",
+      "verifiedAt": "2026-11-18T04:07:47.585090+08:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json",
       "codeChangedThisBatch": true
-    },
-    {
-      "name": "QiandengjiRpg",
-      "version": "0.2.31-unified-npc",
-      "loadedPath": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
-      "sha256": "7aed57c18c6755b5bdadc2ca1b95aa0a0146b405f2e8aaff2986213fda187f20",
-      "sourceCommit": "87047df87093b5a7d04b4529c235de3dce5f6ea5",
-      "processId": 25044,
-      "processStartedAt": "2026-11-17T14:39:25.9243780+08:00",
-      "verifiedAt": "2026-11-17T14:42:39.2094328+08:00",
-      "manifest": "paper/manifests/maid-unified-deployed-20261117.json",
-      "codeChangedThisBatch": true
-    },
-    {
-      "name": "tlm_maid_agents",
-      "version": "0.3.11",
-      "sha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
-      "previousSha256": "f3c279117a680471fdb5eb855f71e6a050c00a4987b3f8f17742e7610807a810",
-      "loadedPath": "E:\\MC\\server\\mods\\qiandengji-maid-brain-0.1.0.jar",
-      "codeChangedThisBatch": true,
-      "sourceCommit": "79f7ef0f3e034529f0a23fe9bb3496311f60688a",
-      "lastChangedPullRequest": 291,
-      "processId": 46892,
-      "verifiedAt": "2026-11-17T15:47:53.808456+00:00",
-      "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json"
-    },
-    {
-      "name": "qiandengji_maid_brain",
-      "version": "0.1.1",
-      "sha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
-      "previousSha256": "f3c279117a680471fdb5eb855f71e6a050c00a4987b3f8f17742e7610807a810",
-      "loadedPath": "E:\\MC\\server\\mods\\qiandengji-maid-brain-0.1.0.jar",
-      "codeChangedThisBatch": true,
-      "sourceCommit": "79f7ef0f3e034529f0a23fe9bb3496311f60688a",
-      "lastChangedPullRequest": 291,
-      "processId": 46892,
-      "verifiedAt": "2026-11-17T15:47:53.808456+00:00",
-      "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json"
-    },
-    {
-      "name": "QiandengjiMaidBridge",
-      "version": "0.1.46-unified-actions",
-      "sha256": "abb2350c3d813bcf4535b3145892ae15a78af2b081ef336d4c85446300c99f23",
-      "previousSha256": "1456114f95c2922be1c3369c9d279d444923b8f2c4abb3f406ddfee6a74673fa",
-      "loadedPath": "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar",
-      "codeChangedThisBatch": true,
-      "sourceCommit": "43db3af4e1dd06ab95cfe30dd933087a530b8bb7",
-      "lastChangedPullRequest": 293,
-      "processId": 46892,
-      "verifiedAt": "2026-11-17T15:47:53.808456+00:00",
-      "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json"
-    },
-    {
-      "name": "qiandengji_hosted_bridge",
-      "version": "0.1.1",
-      "sha256": "379d1dc216df4ec996e0f489714c356b2351b703733be7768f9848cedc563d68",
-      "previousSha256": "6799afd2640036205fea94a46ad92048791f07c8e747821d361cbd4eae1a98da",
-      "loadedPath": "E:/MC/server/mods/qiandengji-hosted-bridge-0.1.0.jar",
-      "codeChangedThisBatch": true,
-      "sourceCommit": "79f7ef0f3e034529f0a23fe9bb3496311f60688a",
-      "lastChangedPullRequest": 291,
-      "processId": 46892,
-      "verifiedAt": "2026-11-17T15:47:53.808456+00:00",
-      "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json"
     }
   ],
   "latestComponentEvidence": {
@@ -2246,7 +2238,7 @@
     "gameRestarted": false,
     "record": "paper/manifests/public-viewer-deployed-20261109.json"
   },
-  "currentComponentEvidenceScope": "The linked release records these deployed game, hosting and backup components. Other component timestamps remain historical.",
+  "currentComponentEvidenceScope": "Actual game, NPC host, standalone hosted core and public downloads; external personality/client adoption remains separate.",
   "previousCanonicalRuntimeBeforeHutao20261110": {
     "currentRuntime": {
       "AgentFriend": "0.4.47.68-player-ui-rpg",
@@ -2323,7 +2315,7 @@
       "originalLedgerAndConfigUnchanged": true
     }
   ],
-  "componentRuntimeEvidenceScope": "The linked release records these deployed game, hosting and backup components. Other component timestamps remain historical.",
+  "componentRuntimeEvidenceScope": "Actual game, NPC host, standalone hosted core and public downloads; external personality/client adoption remains separate.",
   "previousComponentRuntimeEvidenceBeforeCompanion20261110": [
     {
       "name": "AgentFriend",
@@ -2548,9 +2540,9 @@
     "padAudioAcceptance": false
   },
   "serverNpcCurrent": {
-    "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json",
-    "document": "paper/docs/UNIFIED_SERVER_NPCS_DEPLOYED_20261117.md",
-    "scope": "three explicitly unified server NPCs; external clients and unrelated classic Numen consumers unchanged"
+    "manifest": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "document": "paper/docs/DAILY_CLOSEOUT_DEPLOYED_20261118.md",
+    "scope": "Three original unified NPC bodies with read recovery and native behavior continuity overlays."
   },
   "unifiedNpcVoiceCurrent": {
     "state": "deployed-runtime-verified-human-hearing-open",
@@ -2561,5 +2553,303 @@
     "verifiedAt": "2026-11-17T17:46:19.057783+00:00",
     "threeOriginalBodiesPreserved": true,
     "humanHearingVerified": false
+  },
+  "previousCanonicalBeforeDailyCloseout20261118": {
+    "currentRuntime": {
+      "AgentFriend": "0.4.47.87-npc-combat",
+      "CortiEyeMirror": "0.1.21-hud-baseline",
+      "QiandengjiMaidBridge": "0.1.46-unified-actions",
+      "PlatformIdentity": "0.1.0",
+      "embeddedCore": "0.5.7-rc.160-preview.37",
+      "paper": "Youer 1.21.1 build920 (Paper API compatibility)",
+      "plugins": 57,
+      "mods": 6,
+      "VortexRPG": "1.2.2-alpha",
+      "QiandengjiRpg": "0.2.31-unified-npc",
+      "QiandengVoice": "0.1.7",
+      "WorldObserver": "0.1.4-maid-ysm",
+      "website": "0.8.41",
+      "LoginGuard": "0.1.13-platform-identity",
+      "AgentVision": "0.1.4",
+      "hostedNumenCore": "0.5.7-rc.160-preview.68",
+      "numen_hosted": "0.1.5-hosted.2",
+      "numen_hosted_api": "0.1.5-hosted.2",
+      "tlm_maid_agents": "0.3.11",
+      "qiandengji_maid_brain": "0.1.1",
+      "qiandengji_hosted_bridge": "0.1.1"
+    },
+    "componentRuntimeEvidence": [
+      {
+        "name": "CortiEyeMirror",
+        "version": "0.1.21-hud-baseline",
+        "loadedPath": "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar",
+        "sha256": "1fa97aa995597e76f64386bae2566bb77535b09fba095705385eb4131c4bbfe9",
+        "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
+        "processId": 23436,
+        "processStartedAt": "2026-11-10T17:04:48.9264617Z",
+        "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+        "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
+        "codeChangedThisBatch": false
+      },
+      {
+        "name": "LoginGuard",
+        "version": "0.1.12-ordered-voice",
+        "loadedPath": "E:/MC/private/ysm/proxy/plugins/LoginGuard-0.1.10.jar",
+        "sha256": "58b53c94e682382b5d9061434eb08ccf4620dae97ea05a89d887d02a8082ba0a",
+        "sourceCommit": "e5a68f0bf4d624c115f523f6e98470312bb2f4d6",
+        "processId": 21556,
+        "processStartedAt": "2026-11-10T17:07:24.3660960Z",
+        "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+        "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json",
+        "codeChangedThisBatch": false
+      },
+      {
+        "name": "AgentVision",
+        "version": "0.1.4",
+        "loadedPath": "E:/MC/server/plugins/AgentVision-0.1.2.jar",
+        "sha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
+        "codeChangedThisBatch": false,
+        "sourceCommit": null,
+        "processId": 23436,
+        "processStartedAt": "2026-11-10T17:04:48.9264617Z",
+        "verifiedAt": "2026-11-11T01:18:36.434752+08:00",
+        "manifest": "paper/manifests/maid-dialogue-once-deployed-20261111.json"
+      },
+      {
+        "name": "VortexRPG",
+        "version": "1.2.2-alpha",
+        "loadedPath": "E:/MC/server/plugins/VortexRPG-1.2.2-alpha-qd29.jar",
+        "sha256": "a7b3df79933e1df3c205c4940f6c880cc7653cafbdc50bb9663d60a5127f9fdf",
+        "sourceCommit": "87047df87093b5a7d04b4529c235de3dce5f6ea5",
+        "processId": 25044,
+        "processStartedAt": "2026-11-17T14:39:25.9243780+08:00",
+        "verifiedAt": "2026-11-17T14:42:39.2094328+08:00",
+        "manifest": "paper/manifests/maid-unified-deployed-20261117.json",
+        "codeChangedThisBatch": true
+      },
+      {
+        "name": "AgentFriend",
+        "version": "0.4.47.87-npc-combat",
+        "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+        "sha256": "5f776640e200cef644febd848c0f3c21b031bd52a9cf35a6abbfd7c6957561cc",
+        "sourceCommit": "87047df87093b5a7d04b4529c235de3dce5f6ea5",
+        "processId": 25044,
+        "processStartedAt": "2026-11-17T14:39:25.9243780+08:00",
+        "verifiedAt": "2026-11-17T14:42:39.2094328+08:00",
+        "manifest": "paper/manifests/maid-unified-deployed-20261117.json",
+        "codeChangedThisBatch": true
+      },
+      {
+        "name": "QiandengVoice",
+        "version": "0.1.7",
+        "loadedPath": "E:/MC/server/plugins/QiandengVoice-0.1.0.jar",
+        "sha256": "b1548e6d4c86f19cbd35fd77708550ea737669dac5f5272ff9adfe10971c8398",
+        "sourceCommit": "9326de9b5a28697ff9ab8e8494dfc221bee92933",
+        "processId": 38380,
+        "processStartedAt": "2026-11-14T07:42:19.0145085+08:00",
+        "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
+        "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json",
+        "codeChangedThisBatch": true
+      },
+      {
+        "name": "numen_hosted",
+        "version": "0.1.5-hosted.2",
+        "loadedPath": "E:/MC/server/plugins/numen_hosted-1.21.1-0.1.5-hosted.2-880cd67f7836.jar",
+        "sha256": "be85eb1a78b252a524dc9a2724d6d2b8a0d65d2e508190d6df934c89e5fcfb2c",
+        "sourceCommit": "b189fc123d3d2139271abf73341f22026d446f52",
+        "processId": 25044,
+        "processStartedAt": "2026-11-17T14:39:25.9243780+08:00",
+        "verifiedAt": "2026-11-17T14:42:39.2094328+08:00",
+        "manifest": "paper/manifests/maid-unified-deployed-20261117.json",
+        "codeChangedThisBatch": false
+      },
+      {
+        "name": "numen_hosted_api",
+        "version": "0.1.5-hosted.2",
+        "loadedPath": "E:/MC/server/plugins/numen_hosted_api-1.21.1-0.1.5-hosted.2-8e13a2d3174c.jar",
+        "sha256": "c883704af157f86f9af43a05da8de24e9a4ecc5552b358f7cbf7eaed3c68e322",
+        "sourceCommit": "b189fc123d3d2139271abf73341f22026d446f52",
+        "processId": 25044,
+        "processStartedAt": "2026-11-17T14:39:25.9243780+08:00",
+        "verifiedAt": "2026-11-17T14:42:39.2094328+08:00",
+        "manifest": "paper/manifests/maid-unified-deployed-20261117.json",
+        "codeChangedThisBatch": false
+      },
+      {
+        "name": "hostedNumenCore",
+        "version": "0.5.7-rc.160-preview.68",
+        "loadedPath": "E:/MC/clients/numen-hosting/release-20261106-r1/core/package",
+        "sha256": "c9676c815d8323bcabd5c8fbc43623072a650c01dcb9a701b155875e031f6e23",
+        "sourceCommit": "656afc659ba896d10118ec2e9223f982d7577fb7",
+        "processId": 37468,
+        "processStartedAt": "2026-11-14T07:42:17.830+08:00",
+        "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
+        "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json",
+        "codeChangedThisBatch": true
+      },
+      {
+        "name": "QiandengjiRpg",
+        "version": "0.2.31-unified-npc",
+        "loadedPath": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
+        "sha256": "7aed57c18c6755b5bdadc2ca1b95aa0a0146b405f2e8aaff2986213fda187f20",
+        "sourceCommit": "87047df87093b5a7d04b4529c235de3dce5f6ea5",
+        "processId": 25044,
+        "processStartedAt": "2026-11-17T14:39:25.9243780+08:00",
+        "verifiedAt": "2026-11-17T14:42:39.2094328+08:00",
+        "manifest": "paper/manifests/maid-unified-deployed-20261117.json",
+        "codeChangedThisBatch": true
+      },
+      {
+        "name": "tlm_maid_agents",
+        "version": "0.3.11",
+        "sha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
+        "previousSha256": "f3c279117a680471fdb5eb855f71e6a050c00a4987b3f8f17742e7610807a810",
+        "loadedPath": "E:\\MC\\server\\mods\\qiandengji-maid-brain-0.1.0.jar",
+        "codeChangedThisBatch": true,
+        "sourceCommit": "79f7ef0f3e034529f0a23fe9bb3496311f60688a",
+        "lastChangedPullRequest": 291,
+        "processId": 46892,
+        "verifiedAt": "2026-11-17T15:47:53.808456+00:00",
+        "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      },
+      {
+        "name": "qiandengji_maid_brain",
+        "version": "0.1.1",
+        "sha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
+        "previousSha256": "f3c279117a680471fdb5eb855f71e6a050c00a4987b3f8f17742e7610807a810",
+        "loadedPath": "E:\\MC\\server\\mods\\qiandengji-maid-brain-0.1.0.jar",
+        "codeChangedThisBatch": true,
+        "sourceCommit": "79f7ef0f3e034529f0a23fe9bb3496311f60688a",
+        "lastChangedPullRequest": 291,
+        "processId": 46892,
+        "verifiedAt": "2026-11-17T15:47:53.808456+00:00",
+        "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      },
+      {
+        "name": "QiandengjiMaidBridge",
+        "version": "0.1.46-unified-actions",
+        "sha256": "abb2350c3d813bcf4535b3145892ae15a78af2b081ef336d4c85446300c99f23",
+        "previousSha256": "1456114f95c2922be1c3369c9d279d444923b8f2c4abb3f406ddfee6a74673fa",
+        "loadedPath": "E:\\MC\\server\\plugins\\qiandengji-maid-native-0.1.12-conversation.jar",
+        "codeChangedThisBatch": true,
+        "sourceCommit": "43db3af4e1dd06ab95cfe30dd933087a530b8bb7",
+        "lastChangedPullRequest": 293,
+        "processId": 46892,
+        "verifiedAt": "2026-11-17T15:47:53.808456+00:00",
+        "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      },
+      {
+        "name": "qiandengji_hosted_bridge",
+        "version": "0.1.1",
+        "sha256": "379d1dc216df4ec996e0f489714c356b2351b703733be7768f9848cedc563d68",
+        "previousSha256": "6799afd2640036205fea94a46ad92048791f07c8e747821d361cbd4eae1a98da",
+        "loadedPath": "E:/MC/server/mods/qiandengji-hosted-bridge-0.1.0.jar",
+        "codeChangedThisBatch": true,
+        "sourceCommit": "79f7ef0f3e034529f0a23fe9bb3496311f60688a",
+        "lastChangedPullRequest": 291,
+        "processId": 46892,
+        "verifiedAt": "2026-11-17T15:47:53.808456+00:00",
+        "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      }
+    ],
+    "numenHostingCurrent": {
+      "state": "deployed-and-component-verified",
+      "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
+      "document": "paper/docs/NUMEN_SYSTEM_ONE_20261113.md",
+      "minecraft": "1.21.1",
+      "upstreamNumen": "143ba409a62c99bf1e985b6047bcad0f00e9313e",
+      "hostedNumen": "0.1.5-hosted.2",
+      "classicNumen": "0.1.4",
+      "classicRuntimeBuild": "0.1.4-qd-youer3",
+      "embeddedCore": "0.5.7-rc.160-preview.68",
+      "autonomy": "0.2.156",
+      "hostingPullRequest": 203,
+      "embeddedCorePullRequest": 207,
+      "systemOneModel": "StartLux-Decision-4B",
+      "systemOneScope": "advisory-plus-scoped-read-only-combat-attention",
+      "originalCredentialsPreserved": 80,
+      "productionRoleControlInvoked": false,
+      "combatAttention": true,
+      "manifest": "paper/manifests/server-pr207-trial-deployed-20261114.json"
+    },
+    "latestRelease": "unified-npc-voice-20261118-r1",
+    "currentComponentEvidence": "paper/manifests/unified-npc-voice-deployed-20261118.json",
+    "overlappingComponentOverrides": {
+      "AgentFriend": {
+        "version": "0.4.47.87-npc-combat",
+        "sha256": "5f776640e200cef644febd848c0f3c21b031bd52a9cf35a6abbfd7c6957561cc",
+        "evidence": "paper/manifests/maid-unified-deployed-20261117.json"
+      },
+      "QiandengjiMaidBridge": {
+        "version": "0.1.46-unified-actions",
+        "sha256": "abb2350c3d813bcf4535b3145892ae15a78af2b081ef336d4c85446300c99f23",
+        "evidence": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      },
+      "QiandengjiRpg": {
+        "version": "0.2.31-unified-npc",
+        "sha256": "7aed57c18c6755b5bdadc2ca1b95aa0a0146b405f2e8aaff2986213fda187f20",
+        "evidence": "paper/manifests/maid-unified-deployed-20261117.json"
+      },
+      "VortexRPG": {
+        "version": "1.2.2-alpha",
+        "sha256": "a7b3df79933e1df3c205c4940f6c880cc7653cafbdc50bb9663d60a5127f9fdf",
+        "evidence": "paper/manifests/maid-unified-deployed-20261117.json"
+      },
+      "QiandengVoice": {
+        "version": "0.1.7",
+        "sha256": "b1548e6d4c86f19cbd35fd77708550ea737669dac5f5272ff9adfe10971c8398",
+        "evidence": "paper/manifests/server-pr207-trial-deployed-20261114.json"
+      },
+      "numen_hosted": {
+        "version": "0.1.5-hosted.2",
+        "sha256": "be85eb1a78b252a524dc9a2724d6d2b8a0d65d2e508190d6df934c89e5fcfb2c",
+        "evidence": "paper/manifests/maid-unified-deployed-20261117.json"
+      },
+      "numen_hosted_api": {
+        "version": "0.1.5-hosted.2",
+        "sha256": "c883704af157f86f9af43a05da8de24e9a4ecc5552b358f7cbf7eaed3c68e322",
+        "evidence": "paper/manifests/maid-unified-deployed-20261117.json"
+      },
+      "hostedNumenCore": {
+        "version": "0.5.7-rc.160-preview.68",
+        "sha256": "c9676c815d8323bcabd5c8fbc43623072a650c01dcb9a701b155875e031f6e23",
+        "evidence": "paper/manifests/server-pr207-trial-deployed-20261114.json"
+      },
+      "tlm_maid_agents": {
+        "version": "0.3.11",
+        "sha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
+        "evidence": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      },
+      "qiandengji_maid_brain": {
+        "version": "0.1.1",
+        "sha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
+        "evidence": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      },
+      "qiandengji_hosted_bridge": {
+        "version": "0.1.1",
+        "sha256": "379d1dc216df4ec996e0f489714c356b2351b703733be7768f9848cedc563d68",
+        "evidence": "paper/manifests/unified-server-npcs-deployed-20261117.json"
+      }
+    },
+    "publicDistribution": {
+      "publicSkill": "1.3.8",
+      "publicSkillCore": "0.5.7-rc.130",
+      "website": "0.8.40",
+      "websiteManifest": "paper/manifests/all-fixes-deployed-20261106.json",
+      "manifest": "paper/manifests/all-fixes-deployed-20261106.json",
+      "verifiedAt": "2026-11-05T18:34:26.261655+00:00",
+      "coreSourceNote": "Builtin harness preview.18 was already updated; public Skill 1.3.8 still embeds rc.130. No npm publish or automatic remote-client upgrade."
+    }
+  },
+  "dailyCloseoutCurrent": {
+    "manifest": "paper/manifests/daily-closeout-deployed-20261118.json",
+    "document": "paper/docs/DAILY_CLOSEOUT_DEPLOYED_20261118.md",
+    "heldDrafts": [
+      256,
+      287
+    ],
+    "productionReadRecoveryVerified": true,
+    "nativeNpcContinuityPullRequest": 303,
+    "downloadSkill": "1.3.11"
   }
 }

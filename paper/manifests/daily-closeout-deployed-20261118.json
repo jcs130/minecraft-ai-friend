@@ -1,0 +1,2185 @@
+{
+  "schema": 1,
+  "release": "daily-closeout-20261118",
+  "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+  "scope": "Actual game, NPC host, standalone hosted core and public downloads; external personality/client adoption remains separate.",
+  "stages": {
+    "codeMerged": true,
+    "candidateValidated": true,
+    "productionDeployed": true,
+    "productionReadOnlyAcceptance": true,
+    "originalPlayerVisualAndAudioAcceptance": false,
+    "externalCormyRuntimeAdoption": false,
+    "longRunningCrowdAcceptance": false
+  },
+  "components": {
+    "AgentFriend": {
+      "version": "0.4.47.89-daily-ui",
+      "sha256": "58dbcfce3a0fc2c295b0753695d60f063ff2a1d8396819624723955666da7ad5",
+      "previousSha256": "5f776640e200cef644febd848c0f3c21b031bd52a9cf35a6abbfd7c6957561cc",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "codeChangedThisBatch": true,
+      "sourceCommit": "569be256fca659e61dd234406c316dbf0a2dbc36",
+      "lastChangedPullRequest": 279,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    "tlm_maid_agents": {
+      "version": "0.3.11",
+      "sha256": "a7b90fb03a8885757a257aa4aa64711007a46be30fecd75bc69680422309d926",
+      "previousSha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
+      "loadedPath": "E:/MC/server/mods/qiandengji-maid-brain-0.1.0.jar",
+      "codeChangedThisBatch": false,
+      "sourceCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+      "lastChangedPullRequest": 295,
+      "note": "Shared JAR; only registered voice hook changed in this batch.",
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    "QiandengjiMaidBridge": {
+      "version": "0.1.48-unified-continuity",
+      "sha256": "ad0d377745e2c681d3044d6f068535d96ffa179ce8811724b7ab935418f27e91",
+      "previousSha256": "1aa45dca4c75b288d797e84ee70e9e78bbe037394a7a721bde78d2d7a217b5f4",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "codeChangedThisBatch": true,
+      "sourceCommit": "17098b0846a7d466e3839dacb08448e880476d51",
+      "lastChangedPullRequest": 303,
+      "mergeCommit": "e3ea0ced1b70e4a5918c5b238e551007813c4c38",
+      "deployedAt": "2026-11-18T04:48:58.7797109+08:00",
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    "VortexRPG": {
+      "version": "1.2.2-alpha",
+      "sha256": "a7b3df79933e1df3c205c4940f6c880cc7653cafbdc50bb9663d60a5127f9fdf",
+      "previousSha256": "04489c418211925cbedb2f7d7f40df65ccf53ab2bb03ff8ba8230fbf51a5b223",
+      "loadedPath": "E:/MC/server/plugins/VortexRPG-1.2.2-alpha-qd29.jar",
+      "codeChangedThisBatch": false,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    "QiandengjiRpg": {
+      "version": "0.2.31-unified-npc",
+      "sha256": "7aed57c18c6755b5bdadc2ca1b95aa0a0146b405f2e8aaff2986213fda187f20",
+      "previousSha256": "88f80916df4a1b18cb24b4982f030940c6f7473e91799333e07dd0b843e43c4a",
+      "loadedPath": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
+      "codeChangedThisBatch": false,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    "qiandengji_maid_brain": {
+      "version": "0.1.2",
+      "sha256": "a7b90fb03a8885757a257aa4aa64711007a46be30fecd75bc69680422309d926",
+      "previousSha256": "d401a7bb80cc910f94e55ebdfc774db090ac8f1a5747dbf885a68772898c4b65",
+      "loadedPath": "E:/MC/server/mods/qiandengji-maid-brain-0.1.0.jar",
+      "codeChangedThisBatch": false,
+      "sourceCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+      "lastChangedPullRequest": 295,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    "numen_hosted": {
+      "version": "0.1.5-hosted.2",
+      "sha256": "be85eb1a78b252a524dc9a2724d6d2b8a0d65d2e508190d6df934c89e5fcfb2c",
+      "loadedPath": "E:/MC/server/plugins/numen_hosted-1.21.1-0.1.5-hosted.2-880cd67f7836.jar",
+      "codeChangedThisBatch": false,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    "numen_hosted_api": {
+      "version": "0.1.5-hosted.2",
+      "sha256": "c883704af157f86f9af43a05da8de24e9a4ecc5552b358f7cbf7eaed3c68e322",
+      "loadedPath": "E:/MC/server/plugins/numen_hosted_api-1.21.1-0.1.5-hosted.2-8e13a2d3174c.jar",
+      "codeChangedThisBatch": false,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    "qiandengji_hosted_bridge": {
+      "version": "0.1.2",
+      "sha256": "a5e5ca4df082ab8880a8cffcfa67fba86a784a45f28c2189cf06c0472676cf76",
+      "previousSha256": "379d1dc216df4ec996e0f489714c356b2351b703733be7768f9848cedc563d68",
+      "loadedPath": "E:/MC/server/mods/qiandengji-hosted-bridge-0.1.0.jar",
+      "codeChangedThisBatch": false,
+      "sourceCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+      "lastChangedPullRequest": 295,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    "QiandengVoice": {
+      "version": "0.1.8",
+      "sha256": "0fd7a02d7d65159558de9a168a709717cf78101b762da443e48c2e0fc181d668",
+      "previousSha256": "b1548e6d4c86f19cbd35fd77708550ea737669dac5f5272ff9adfe10971c8398",
+      "loadedPath": "E:/MC/server/plugins/QiandengVoice-0.1.0.jar",
+      "codeChangedThisBatch": false,
+      "sourceCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+      "lastChangedPullRequest": 295,
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json"
+    },
+    "CortiEyeMirror": {
+      "version": "0.1.22-native-presentation",
+      "loadedPath": "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar",
+      "sha256": "d6d8adbd98159fa9b108f6ba635da4ec65448886f0770b9cbeebc8a0562b3913",
+      "sourceCommit": null,
+      "sourceProvenance": "existing artifact preserved; commit not inferred from filename",
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json",
+      "codeChangedThisBatch": false
+    },
+    "AgentVision": {
+      "version": "0.1.4",
+      "loadedPath": "E:/MC/server/plugins/AgentVision-0.1.2.jar",
+      "sha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c",
+      "sourceCommit": null,
+      "sourceProvenance": "existing artifact preserved; commit not inferred from filename",
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json",
+      "codeChangedThisBatch": false
+    },
+    "WorldObserver": {
+      "version": "0.1.4-maid-ysm",
+      "loadedPath": "E:/MC/server/plugins/WorldObserver-0.1.3.jar",
+      "sha256": "79f37b1230e9f4313e065c845c4e31dd4421b0bd6c212db29cf82d927561b40f",
+      "sourceCommit": null,
+      "sourceProvenance": "existing artifact preserved; commit not inferred from filename",
+      "processId": 46224,
+      "verifiedAt": "2026-11-17T20:56:47.538890+00:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json",
+      "codeChangedThisBatch": false
+    },
+    "hostedNumenCore": {
+      "version": "0.5.7-rc.160-preview.97",
+      "loadedPath": "E:/MC/clients/numen-hosting/release-20261106-r1/core/package",
+      "sha256": "e51116ff32519ab1fbfd6da1251d6a7e83aeb64fb15329f02b7636de7784eca5",
+      "hashScope": "dist/build.json; full physical package hashes in release file-hashes.json",
+      "archiveSha256": "0c9eb8de64248812b2b3f73c8eee639183a14c9c241629ced5c67cc89905b4f6",
+      "sourceCommit": "d6cdc58982c636d536608aaf602d445525f99879",
+      "mergeCommit": "72f81b04a07aa476a74fd9b927e86d555a3d9b2d",
+      "processId": 45952,
+      "deployedAt": "2026-11-18T04:07:40.4972753+08:00",
+      "verifiedAt": "2026-11-18T04:07:47.585090+08:00",
+      "manifest": "paper/manifests/daily-closeout-deployed-20261118.json",
+      "codeChangedThisBatch": true
+    }
+  },
+  "game": {
+    "release": "daily-closeout-20261118-r1",
+    "success": true,
+    "productionChanged": true,
+    "backupDrive": "F",
+    "pr": 279,
+    "head": "569be256fca659e61dd234406c316dbf0a2dbc36",
+    "bodyMigration": false,
+    "newEntities": false,
+    "phase": "deployed-awaiting-runtime-acceptance",
+    "time": "2026-11-18T03:17:14.2388833+08:00",
+    "oldGamePid": 26468,
+    "backup": "F:\\MC-backups\\repairs\\daily-closeout-20261118-r1-20261118-030850",
+    "supervisor": {
+      "supervisorPid": 48184,
+      "state": "started"
+    },
+    "newGamePid": 30836,
+    "services": {
+      "supervisorPid": 48184,
+      "state": "running",
+      "error": null
+    }
+  },
+  "coldBackup": {
+    "before": {
+      "complete": true,
+      "count": 24768,
+      "bytes": 4580029197,
+      "gameRuntimeFiles": {
+        "diagnostic_log": 1588,
+        "jvm_lock": 5,
+        "sqlite_runtime": 4
+      },
+      "backupRuntimeFiles": {
+        "diagnostic_log": 1588,
+        "jvm_lock": 5,
+        "sqlite_runtime": 4
+      }
+    },
+    "after": {
+      "installPreservedOtherFiles": true,
+      "files": 24767,
+      "newFiles": 0
+    },
+    "onlyChangedGameArtifact": "AgentFriend"
+  },
+  "nativeCombatSupport": [
+    {
+      "loadedPath": "E:\\MC\\server\\mods\\bettercombat-neoforge-2.4.0+1.21.1.jar",
+      "version": "2.4.0",
+      "sha256": "0446e9faa98b764ba010ac31e337d14ac96bbb2fbfeff9b599e1efd510dfde5a"
+    },
+    {
+      "loadedPath": "E:\\MC\\server\\mods\\cloth-config-15.0.140-neoforge.jar",
+      "version": "15.0.140",
+      "sha256": "65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4"
+    },
+    {
+      "loadedPath": "E:\\MC\\server\\mods\\player-animation-lib-forge-2.0.4+1.21.1.jar",
+      "version": "2.0.4",
+      "sha256": "dbe5de45f5cd60c0e5e47af14e6d564534a98456e973cf670cb881f6938eee92"
+    }
+  ],
+  "preservedGameArtifacts": [
+    {
+      "loadedPath": "E:/MC/server/mods/bettercombat-neoforge-2.4.0+1.21.1.jar",
+      "sha256": "0446e9faa98b764ba010ac31e337d14ac96bbb2fbfeff9b599e1efd510dfde5a"
+    },
+    {
+      "loadedPath": "E:/MC/server/mods/cloth-config-15.0.140-neoforge.jar",
+      "sha256": "65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4"
+    },
+    {
+      "loadedPath": "E:/MC/server/mods/player-animation-lib-forge-2.0.4+1.21.1.jar",
+      "sha256": "dbe5de45f5cd60c0e5e47af14e6d564534a98456e973cf670cb881f6938eee92"
+    },
+    {
+      "loadedPath": "E:/MC/server/mods/proxy-compatible-forge-1.3.1.jar",
+      "sha256": "ea541aff6276970d98506965c8e71bd4ad7329452f631b2f45eb08edea425271"
+    },
+    {
+      "loadedPath": "E:/MC/server/mods/qiandengji-hosted-bridge-0.1.0.jar",
+      "sha256": "a5e5ca4df082ab8880a8cffcfa67fba86a784a45f28c2189cf06c0472676cf76"
+    },
+    {
+      "loadedPath": "E:/MC/server/mods/qiandengji-maid-brain-0.1.0.jar",
+      "sha256": "a7b90fb03a8885757a257aa4aa64711007a46be30fecd75bc69680422309d926"
+    },
+    {
+      "loadedPath": "E:/MC/server/mods/qiandengji-native-platform-0.1.4.jar",
+      "sha256": "9e9c2bd6ecfb73e7a48a5bffef74ed33dd8b3d75ec7cc449dec19297262fb965"
+    },
+    {
+      "loadedPath": "E:/MC/server/mods/touhoulittlemaid-1.5.3-qiandengji.jar",
+      "sha256": "f4bb0ec576f7b2226430808efa177521be48d36dd3176080ee0f76bfbaa4e23b"
+    },
+    {
+      "loadedPath": "E:/MC/server/mods/ysm-2.6.5-neoforge+mc1.21.1-release.jar",
+      "sha256": "b285c73d4ec010d9a9be3c53c1bee890cf269645be5f1bcf1c27a2e8e82807cb"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/AgentAppearanceNative-0.4.3.jar",
+      "sha256": "7cce0408eadd7ef3f5d49b088e03996aa6be8e80bcea09aaa1619403f946e18a"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/AgentVision-0.1.2.jar",
+      "sha256": "b0989f9b01f3d532cc85103927c81d4753ea0c10bc47ad46a3e6632ec35d2f9c"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/AuraSkills-2.4.0.jar",
+      "sha256": "de54cbd2e33d65e8b1704751ae4121ed2f5b466ba89c63a1aadf3a3e629d6a40"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/BetonQuest-3.2.0.jar",
+      "sha256": "70a43c05a4a6d627fd0bc9908e07a6551a26a36671360416410f1d96bdd363b0"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/Chunky-Bukkit-1.4.40.jar",
+      "sha256": "2a5477fc80f71012e15ade1ce34dbeb836e17623b28db112492c0f1443c09721"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/Citizens-2.0.35-b3592.jar",
+      "sha256": "35ca802f482ff0844c8cba4c5122a332a91499dbbd5bb07b0805402ae60f64b9"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/CommandAPI-12.1.0.jar",
+      "sha256": "ab48e55fd06264dd239cf015b501936cb50eb6c38d967fbffca6c91a48064049"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/ConditionalEvents-4.80.3.jar",
+      "sha256": "3f9c588d664d604b09113397a6dc04c1b7ad288c2550d8270c96669eb61c7e74"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/CoreProtect-CE-24.1.jar",
+      "sha256": "a2acef7c06ef201355cef07d591a6055dfed358ad768faaaaaf4e276865ecc97"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/CortiEyeMirror-0.1.19.jar",
+      "sha256": "d6d8adbd98159fa9b108f6ba635da4ec65448886f0770b9cbeebc8a0562b3913"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/Denizen-1.3.1-b7074-paper1211.jar",
+      "sha256": "5ecb7f7fa4141c2f8acb8b8c7cf2c004cd8e8f69fe22b31574431db9484574c6"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/EssentialsX-2.22.0.jar",
+      "sha256": "bda4685105977fca2e209820a9f0ad24275bd103390a03236f38e59bfdac58e6"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/EssentialsXChat-2.22.0.jar",
+      "sha256": "e5b0211f98af1eaba712d9294997639a39209db1fc842394a0923820073ec65a"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/FancyNpcs-2.9.0.jar",
+      "sha256": "b7c992bdc7c01f9a7dc2943351ba7d37abb3a0c317ba0a52125326352230f57e"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/FastAsyncWorldEdit-2.16.1.jar",
+      "sha256": "dc3ed55005e71bc298a82ecb2ac23a03a36a288e78b7be48d7b5d61f030884b2"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/floodgate-spigot.jar",
+      "sha256": "81b7b3c6cb77b387aaea9fec44e1074b76fa299d674dcd51df2f5aba92da69eb"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/Geyser-Spigot.jar",
+      "sha256": "3cd7e6b87a795ff50fa19bd32feadb48cf0085b4df9c344cfa0c43fb980e64fd"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/ImageFrame-2026.1.5.0.jar",
+      "sha256": "65b5c14eb6bd847f1cc0f4985efa95ab43d2f3e2f67dbaec2ecf3ea327fde9b1"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/LightAntiCheat-1.2.6-qd1.jar",
+      "sha256": "9a0903649a841cced3fbcdd31bfe346c670e309d75272d7359a70c11f8ec18ad"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/LuckPerms-Bukkit-5.5.71.jar",
+      "sha256": "49cecb66fa1fd22a133039a490e9c1e5095a238e7cd66eb9d2a16fe6c897550d"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/MagicSpells-4.0-Beta-15.jar",
+      "sha256": "4da599c6998f965707a5f0fbfc14f0a9a185bb09015b0dd940a030e3c8bad1a6"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/Minepacks-2.5.9-Release.jar",
+      "sha256": "185dd911d7dd6e0f93b56d35924e8b61c6452e29b79c2a73c31e48f83c777a04"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/Multiverse-Core-5.8.1.jar",
+      "sha256": "bc3f34e2d747fdf024f44868747bb016b08fa11d98ccb4ffcac958f083151a83"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/MythicMobs-5.9.5.jar",
+      "sha256": "faeeb0e9e896f052c872380f6ce89d977df05e1ed4cf08ada2a36e942f9e5e84"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/NamedVillagers-1.2.1.jar",
+      "sha256": "83ec1b56d4048b42644dca11ebe08bd3b07d33b07f17fd3c3453a726d75fb574"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/NPCSpeak-1.0.jar",
+      "sha256": "0bfb634a96e1791822b76bb367efb881f21bdd767385d5d1ff9524d11837cd1e"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/numen-paper-1.21.1-0.1.4.jar",
+      "sha256": "06f47a1d5105e482541c05375ab6617a133afaf4064d9b5bf8806aa320d43380"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/NumenBedrock-0.1.0.jar",
+      "sha256": "08ace492d5b7758d8316c66dd839e0d14b7017465d98c2ec855ed33f9d4cab96"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/numen_api-paper-1.21.1-0.1.4.jar",
+      "sha256": "667f1523cb9d4c3cae4ee7c870530c9515c6025407b695377fae266c7a077d9c"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/numen_hosted-1.21.1-0.1.5-hosted.2-880cd67f7836.jar",
+      "sha256": "be85eb1a78b252a524dc9a2724d6d2b8a0d65d2e508190d6df934c89e5fcfb2c"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/numen_hosted_api-1.21.1-0.1.5-hosted.2-8e13a2d3174c.jar",
+      "sha256": "c883704af157f86f9af43a05da8de24e9a4ecc5552b358f7cbf7eaed3c68e322"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/OlEncounters-1.7.0.jar",
+      "sha256": "c7e00ec3dd58b9dd0dc789b16b7c638e794220f4627f36f0f53d6dcd66eca4fc"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/PlatformIdentity-0.1.0.jar",
+      "sha256": "7aea3fba20c7438958d253402dda4e4b0c73f1ee2086b47a95a0e85be8c447ce"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/ProtocolLib-5.3.0.jar",
+      "sha256": "a91028876b974f870e1ac90cb433a1a4cb06930a39f2c0edc50d6165e26e940d"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "sha256": "ad0d377745e2c681d3044d6f068535d96ffa179ce8811724b7ab935418f27e91"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/qiandengji-paper-world-layout-0.1.0.jar",
+      "sha256": "6682fa15e0e7175de62b9c82a50e77c3661137789517a4f3166d6c35604e0bea"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/QiandengjiAntiCheat-0.1.0.jar",
+      "sha256": "f8e540eed3bad1434e28ba736739725c4840dca92672b641676c675740d3a378"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/QiandengjiFaweHybrid-0.1.0.jar",
+      "sha256": "98903723c2e63cbd32133a32bef7a74fe0774a6db1cc023bf7a56139f8fe6d15"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/QiandengjiMcbot-0.1.0.jar",
+      "sha256": "a2525b1f1349063fe697afda9429f15ec6622841c01f9df22e57051ea890af59"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
+      "sha256": "7aed57c18c6755b5bdadc2ca1b95aa0a0146b405f2e8aaff2986213fda187f20"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/QiandengVoice-0.1.0.jar",
+      "sha256": "0fd7a02d7d65159558de9a168a709717cf78101b762da443e48c2e0fc181d668"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/Sentinel-2.9.1.jar",
+      "sha256": "3967a2f2f890a0990066927604a7463610bad4f863132b924a14a5f948cb9799"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/Shopkeepers-2.23.3.jar",
+      "sha256": "8228d8c11d98c8b74a80b0336f5b65735cab249aa56a2a1218edcee6c61c725c"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/SkinsRestorer.jar",
+      "sha256": "a85b4a370f988741c9a38f4d0498262edacbf3220314790ac1c127461996359c"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/spark-1.10.187-bukkit.jar",
+      "sha256": "7e1b1c38f131f04da32c86cee6af519fd8ec40c5af54dcbab77921e82bded852"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/spectatorplus-paper-1.2.1.jar",
+      "sha256": "76d11860b947ec619978ffacb85a5b9799416a060d5e1628406658183a54828a"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/TAB-6.2.1-Paper-1.20.5-1.21.4.jar",
+      "sha256": "bdf8ea4e6b194197a02fdd7abee9845e1000183bc4df9c0e5280505fc1f51c24"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/Vault-1.7.3.jar",
+      "sha256": "a6b5ed97f43a5cf5bbaf00a7c8cd23c5afc9bd003f849875af8b36e6cf77d01d"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/ViaBackwards.jar",
+      "sha256": "9a148a80ea22074f4bd1626cdbe254a4cd998bf44e7ceaff4e285a1b6b35da42"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/ViaVersion.jar",
+      "sha256": "24e4876fefe73e08a4c87cd6c457ee0916e62dd69656631caf41e26f909d504b"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/VillagerLife-1.0.0-qiandengji1.jar",
+      "sha256": "ae83e95991faa3bbf11408c67c2639e5c431e686d741f64688e668eb670261ab"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/voicechat-bukkit-2.6.27.jar",
+      "sha256": "b2fab978bfd891576d6d2417b2886228493db30e9ffd81ad4f7b97af3a3cd13e"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/VortexRPG-1.2.2-alpha-qd29.jar",
+      "sha256": "a7b3df79933e1df3c205c4940f6c880cc7653cafbdc50bb9663d60a5127f9fdf"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/WorldEvents-1.8.30.jar",
+      "sha256": "381f1a5bc64d0754a428bf2a814d492233dc73537c09f8dc3e23c54e0c1f0601"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/worldguard-bukkit-7.0.12-dist.jar",
+      "sha256": "48b136938b3cd4816a95887847ff28e56a06fb110103344bb574739c35f9e86c"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/WorldObserver-0.1.3.jar",
+      "sha256": "79f37b1230e9f4313e065c845c4e31dd4421b0bd6c212db29cf82d927561b40f"
+    },
+    {
+      "loadedPath": "E:/MC/server/plugins/WorldVariety-0.1.0.jar",
+      "sha256": "0461df00648460bb17e6f591dd410fddfc0d808d0fd863d14be66554f645d126"
+    }
+  ],
+  "candidateChecks": {
+    "menuAndLoadoutRules": 90,
+    "campAndTaskProtocol": 20,
+    "wheelProtocol": 20,
+    "bedrockFormCodec": 43,
+    "weaponGestures": 23,
+    "wheelRestart": 5,
+    "campRestart": 7,
+    "weaponRestart": 4,
+    "coldInstallFailureChecks": 5
+  },
+  "ci": [
+    {
+      "pr": 298,
+      "run": 44149227470,
+      "merge": "475c2cccc97e8c670ea6d2c63939559528eea38a",
+      "passed": true,
+      "jobs": [
+        "review-boundaries",
+        "agent-mc-core",
+        "portal-release",
+        "compile-paper",
+        "source-safety",
+        "backup-path-compatibility"
+      ]
+    },
+    {
+      "pr": 279,
+      "run": 44152530730,
+      "merge": "d8b528ea93d79301179f41a7d96fe863896d4771",
+      "passed": true,
+      "jobs": [
+        "source-safety",
+        "review-boundaries",
+        "compile-paper",
+        "portal-release",
+        "agent-mc-core",
+        "backup-path-compatibility"
+      ]
+    },
+    {
+      "pr": 299,
+      "run": 44157101603,
+      "merge": "c86da925338cea047e60f4316305a4b3aa99b647",
+      "passed": true,
+      "jobs": [
+        "backup-path-compatibility",
+        "source-safety",
+        "compile-paper",
+        "agent-mc-core",
+        "review-boundaries",
+        "portal-release"
+      ]
+    },
+    {
+      "pr": 300,
+      "run": 44159192508,
+      "merge": "5247055eab843a155769d1485289c55498401f07",
+      "passed": true,
+      "jobs": [
+        "agent-mc-core",
+        "source-safety",
+        "review-boundaries",
+        "backup-path-compatibility",
+        "portal-release",
+        "compile-paper"
+      ]
+    },
+    {
+      "pr": 300,
+      "run": 44159192413,
+      "passed": true,
+      "jobs": [
+        "python-body-adapters"
+      ]
+    },
+    {
+      "pr": 300,
+      "run": 44159192391,
+      "passed": true,
+      "jobs": [
+        "lifecycle-memory-migration"
+      ]
+    },
+    {
+      "pr": 301,
+      "run": 44160733323,
+      "merge": "72f81b04a07aa476a74fd9b927e86d555a3d9b2d",
+      "passed": true,
+      "jobs": [
+        "source-safety",
+        "backup-path-compatibility",
+        "portal-release",
+        "review-boundaries",
+        "compile-paper",
+        "agent-mc-core"
+      ]
+    },
+    {
+      "pr": 302,
+      "run": 44162211614,
+      "merge": "6ad6bef9320ea715340562337f79a3d32be7df77",
+      "passed": true,
+      "jobs": [
+        "agent-mc-core",
+        "review-boundaries",
+        "portal-release",
+        "backup-path-compatibility",
+        "compile-paper",
+        "source-safety"
+      ]
+    },
+    {
+      "pr": 303,
+      "run": 44169865420,
+      "passed": true,
+      "jobs": [
+        "python-body-adapters"
+      ],
+      "merge": "e3ea0ced1b70e4a5918c5b238e551007813c4c38"
+    },
+    {
+      "pr": 303,
+      "run": 44169864999,
+      "passed": true,
+      "jobs": [
+        "lifecycle-memory-migration"
+      ],
+      "merge": "e3ea0ced1b70e4a5918c5b238e551007813c4c38"
+    },
+    {
+      "pr": 303,
+      "run": 44169865142,
+      "passed": true,
+      "jobs": [
+        "portal-release",
+        "source-safety",
+        "compile-paper",
+        "backup-path-compatibility",
+        "agent-mc-core",
+        "review-boundaries"
+      ],
+      "merge": "e3ea0ced1b70e4a5918c5b238e551007813c4c38"
+    }
+  ],
+  "npcReadRecovery": {
+    "deployment": {
+      "release": "npc-read-recovery-20261118-r1",
+      "success": true,
+      "gameRestarted": false,
+      "backupDrive": "F",
+      "originalRequest": "hs_794d97eaa7de4dae90095bc4",
+      "oldHostPid": 48980,
+      "phase": "deployed-original-read-reconciled",
+      "time": "2026-11-17T19:39:21.344998+00:00",
+      "newHostPid": 28516,
+      "originalReadStatus": "failed",
+      "originalIdRetained": true,
+      "originalBodiesPreserved": true,
+      "noOriginalActionReplayed": true,
+      "backup": "F:\\MC-backups\\repairs\\npc-read-recovery-20261118-r1"
+    },
+    "acceptance": {
+      "passed": true,
+      "originalRequest": "hs_794d97eaa7de4dae90095bc4",
+      "receipt": {
+        "request_id": "hs_794d97eaa7de4dae90095bc4",
+        "verb": "observe",
+        "status": "failed",
+        "terminal": true,
+        "text": "read_result_unavailable; obtain a fresh observation",
+        "execution_id": null,
+        "data": {
+          "maidAction": "context",
+          "readOnly": true,
+          "effectsApplied": false
+        },
+        "retry_allowed": false,
+        "retry_after_ms": null
+      },
+      "originalBodies": [
+        {
+          "id": "feiyu",
+          "body_id": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+          "owner_id": "822d173a-7181-3b9b-be60-804f29b24ecc",
+          "body_kind": "maid"
+        },
+        {
+          "id": "kirito",
+          "body_id": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+          "owner_id": "b2f9ceb0-8271-3470-b99f-e1c3ffe4edbd",
+          "body_kind": "numen"
+        },
+        {
+          "id": "yui",
+          "body_id": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+          "owner_id": "b2f9ceb0-8271-3470-b99f-e1c3ffe4edbd",
+          "body_kind": "maid"
+        }
+      ],
+      "codeSha256": "44244e6c4fc4c94a91f1ec1b40dab34d220f8ac71a40d46ceaad2ffe2aa646e0"
+    },
+    "patchSha256": "44244e6c4fc4c94a91f1ec1b40dab34d220f8ac71a40d46ceaad2ffe2aa646e0",
+    "baseSourceTree": "6515f0c16c80f7536c96a3f673825cfee8213cd9",
+    "patchCommit": "3d51544f6e093135041048ce1fa7e2684ffeaf27",
+    "mergeCommit": "5247055eab843a155769d1485289c55498401f07",
+    "failedReadWasNotReplayed": true,
+    "underlyingTransientHttpErrorRootCauseConfirmed": false,
+    "redRegression": {
+      "failed": 10,
+      "passed": 2
+    },
+    "greenHarnessRegression": {
+      "passed": 143,
+      "skipped": 2
+    }
+  },
+  "roles": [
+    {
+      "id": "feiyu",
+      "bodyId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+      "model": "deepseek-v4.1-flash",
+      "provider": "tokenplan",
+      "route": {
+        "provider": "tokenplan",
+        "model": "deepseek-v4.1-flash",
+        "responseId": "chatcmpl-1870dd56-fc0c-49b4-b57d-a93d1d2950d5",
+        "seconds": 0.875
+      },
+      "unknownRequests": 0,
+      "running": true,
+      "error": null,
+      "recentReceiptEvidence": [
+        {
+          "requestId": "hs_6cea14420e044e9098cec37a",
+          "bodyId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+          "verb": "native",
+          "name": "guard",
+          "status": "completed",
+          "terminal": true
+        },
+        {
+          "requestId": "hs_cd0779e7f5ef440f94bc1584",
+          "bodyId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+          "verb": "native",
+          "name": "ack",
+          "status": "completed",
+          "terminal": true
+        },
+        {
+          "requestId": "hs_30a38ded4b8740db8d010b32",
+          "bodyId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+          "verb": "observe",
+          "name": null,
+          "status": "completed",
+          "terminal": true
+        },
+        {
+          "requestId": "hs_077cb5f455e9428985e0e5b7",
+          "bodyId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+          "verb": "observe",
+          "name": null,
+          "status": "completed",
+          "terminal": true
+        },
+        {
+          "requestId": "hs_c86206e85a154585bcb93e35",
+          "bodyId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+          "verb": "chat",
+          "name": null,
+          "status": "completed",
+          "terminal": true
+        }
+      ]
+    },
+    {
+      "id": "kirito",
+      "bodyId": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+      "model": "qwen3.8-flash",
+      "provider": "tokenplan",
+      "route": {
+        "provider": "tokenplan",
+        "model": "qwen3.8-flash",
+        "responseId": "chatcmpl-a7576798-6302-415b-ba5c-16dd5fcb082e",
+        "seconds": 0.688
+      },
+      "unknownRequests": 0,
+      "running": true,
+      "error": null,
+      "recentReceiptEvidence": [
+        {
+          "requestId": "hs_ab067bd29a2f46a8b1fd2a37",
+          "bodyId": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+          "verb": "observe",
+          "name": null,
+          "status": "completed",
+          "terminal": true
+        },
+        {
+          "requestId": "hs_a86857c06a6b44f0a6411a4b",
+          "bodyId": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+          "verb": "observe",
+          "name": null,
+          "status": "completed",
+          "terminal": true
+        },
+        {
+          "requestId": "hs_21ccec13f03f44b5bcd92655",
+          "bodyId": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+          "verb": "observe",
+          "name": null,
+          "status": "completed",
+          "terminal": true
+        },
+        {
+          "requestId": "hs_a04ac20c15334c738b282685",
+          "bodyId": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+          "verb": "observe",
+          "name": null,
+          "status": "completed",
+          "terminal": true
+        },
+        {
+          "requestId": "hs_87cefaeeb37d4c59a3267e9f",
+          "bodyId": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+          "verb": "observe",
+          "name": null,
+          "status": "completed",
+          "terminal": true
+        }
+      ]
+    },
+    {
+      "id": "yui",
+      "bodyId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+      "model": "qwen3.7-plus",
+      "provider": "codingplan",
+      "route": {
+        "provider": "codingplan",
+        "model": "qwen3.7-plus",
+        "responseId": "chatcmpl-9a8633e2-0e99-9694-afe9-b1bb95797446",
+        "seconds": 2.266
+      },
+      "unknownRequests": 0,
+      "running": true,
+      "error": null,
+      "recentReceiptEvidence": [
+        {
+          "requestId": "hs_c3b121f2d4c24da5ad93e857",
+          "bodyId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+          "verb": "native",
+          "name": "guard",
+          "status": "completed",
+          "terminal": true
+        },
+        {
+          "requestId": "hs_6631fe8dfaef42258b929814",
+          "bodyId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+          "verb": "native",
+          "name": "guard",
+          "status": "completed",
+          "terminal": true
+        },
+        {
+          "requestId": "hs_d7965ac749d847ffa3d15fd9",
+          "bodyId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+          "verb": "native",
+          "name": "guard",
+          "status": "completed",
+          "terminal": true
+        },
+        {
+          "requestId": "hs_641a12d029a7410ea05ac312",
+          "bodyId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+          "verb": "native",
+          "name": "guard",
+          "status": "completed",
+          "terminal": true
+        },
+        {
+          "requestId": "hs_95678b95abb24071a30f79db",
+          "bodyId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+          "verb": "native",
+          "name": "guard",
+          "status": "completed",
+          "terminal": true
+        }
+      ]
+    }
+  ],
+  "runtime": {
+    "gamePid": 46224,
+    "npcPid": 19200,
+    "supervisorPid": 24548,
+    "graphiti": "0.31.2",
+    "falkordb": "4.22.4",
+    "systemOne": "Token Plan decision-model-preview"
+  },
+  "observation": {
+    "observedAt": "2026-11-17T20:55:59.839210+00:00",
+    "tps": "Overworld: 20.000 TPS (10.887 ms/tick)\nThe End: 20.000 TPS (0.178 ms/tick)\nThe Nether: 20.000 TPS (0.242 ms/tick)\nminecraft:aincrad: 20.000 TPS (7.822 ms/tick)\nOverall: 20.000 TPS (26.974 ms/tick)\n",
+    "plugins": {
+      "AgentFriend": "§aAgentFriend§r version §a0.4.47.89-daily-ui\n\nAgent-friendly /mycli, Goddess skill path, vanilla compass, and village trial arena.\n\nAuthor: §aAfuHome\n\n",
+      "QiandengjiMaidBridge": "§aQiandengjiMaidBridge§r version §a0.1.48-unified-continuity\n\n",
+      "QiandengVoice": "§aQiandengVoice§r version §a0.1.8\n\nNearby speech, local TTS and CPU ASR for players and Agents\n\n"
+    },
+    "roles": [
+      {
+        "id": "feiyu",
+        "running": true,
+        "bodyId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+        "model": "deepseek-v4.1-flash",
+        "provider": "tokenplan",
+        "route": {
+          "provider": "tokenplan",
+          "model": "deepseek-v4.1-flash",
+          "responseId": "chatcmpl-52105687-210b-474e-bc43-ae85892328ef",
+          "seconds": 0.781
+        },
+        "unknownRequests": 0,
+        "error": null
+      },
+      {
+        "id": "kirito",
+        "running": true,
+        "bodyId": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+        "model": "qwen3.8-flash",
+        "provider": "tokenplan",
+        "route": {
+          "provider": "tokenplan",
+          "model": "qwen3.8-flash",
+          "responseId": "chatcmpl-5e379bc6-ad29-458f-a46d-3b6c73db0db2",
+          "seconds": 0.813
+        },
+        "unknownRequests": 0,
+        "error": null
+      },
+      {
+        "id": "yui",
+        "running": true,
+        "bodyId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+        "model": "qwen3.7-plus",
+        "provider": "codingplan",
+        "route": {
+          "provider": "codingplan",
+          "model": "qwen3.7-plus",
+          "responseId": "chatcmpl-215acf26-aafc-96a5-ad88-4ca2ec809e69",
+          "seconds": 2.203
+        },
+        "unknownRequests": 0,
+        "error": null
+      }
+    ],
+    "unresolved": [],
+    "camera": {
+      "phase": "ready",
+      "observedAt": "2026-11-18T04:55:59.643432+08:00",
+      "pid": 50648,
+      "renderer": "NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2",
+      "cleanHud": true,
+      "fps": 5,
+      "shadersEnabled": true,
+      "frameBudget": 5
+    },
+    "noGameActionsDispatched": true
+  },
+  "hostedCore": {
+    "deployment": {
+      "release": "core-nav-20261118-r1",
+      "success": true,
+      "phase": "production-running",
+      "backupDrive": "F",
+      "sourceCommit": "d6cdc58982c636d536608aaf602d445525f99879",
+      "version": "0.5.7-rc.160-preview.97",
+      "gameRestarted": false,
+      "oldProcessId": 40004,
+      "at": "2026-11-18T04:07:40.4972753+08:00",
+      "newProcessId": 45952,
+      "runtimeBuildSha256": "e51116ff32519ab1fbfd6da1251d6a7e83aeb64fb15329f02b7636de7784eca5"
+    },
+    "postflight": {
+      "at": "2026-11-18T04:07:47.585090+08:00",
+      "passed": true,
+      "sourceCommit": "d6cdc58982c636d536608aaf602d445525f99879",
+      "mergeCommit": "72f81b04a07aa476a74fd9b927e86d555a3d9b2d",
+      "version": "0.5.7-rc.160-preview.97",
+      "buildSha256": "e51116ff32519ab1fbfd6da1251d6a7e83aeb64fb15329f02b7636de7784eca5",
+      "hostingRecordsUnchanged": true,
+      "gameRestarted": false,
+      "backupDrive": "F",
+      "productionMutatedByCheck": false
+    },
+    "packedConsumerChecks": 7,
+    "nativePathfinderChecks": 10
+  },
+  "publicDownloads": {
+    "deployment": {
+      "passed": true,
+      "version": "1.3.11",
+      "core": "0.5.7-rc.160-preview.97",
+      "deployedAt": "2026-11-17T19:56:01.526669+00:00",
+      "changed": [
+        "public/downloads/qiandengji-agent-1.3.11.zip",
+        "src/agent-skill.mjs"
+      ],
+      "clientPacksPreserved": true,
+      "oldSkillLinkVerified": true,
+      "databaseRestorePerformed": false,
+      "previousImage": "sha256:5db43761f9d4cceb61a66652378be5061fe096e317f9576b85a1a21081c4bde9",
+      "image": "sha256:97c8323b687beb1fcb357d6904930279c622ce43439f48318308a9301c8be02e"
+    },
+    "skill": {
+      "version": "1.3.11",
+      "filename": "qiandengji-agent-1.3.11.zip",
+      "bytes": 5063456,
+      "sha256": "aada7ed6adf15c60501ad71e6c9c2d2e59ebb0f635e466a2be7a597db7102ff7",
+      "url": "/downloads/qiandengji-agent-1.3.11.zip",
+      "sdkVersion": "0.5.7-rc.160-preview.97",
+      "sdkSourceCommit": "d6cdc58982c636d536608aaf602d445525f99879",
+      "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-world",
+      "channel": "github-main-candidate",
+      "viewerIncluded": false
+    },
+    "clientPacks": [
+      {
+        "id": "desktop-client-pack",
+        "version": "1.1.2",
+        "available": true,
+        "sha256": "fd140a3ab45819c44ab3a9bc1ea39a53a6775d620c664e15096441787f8efa4c"
+      },
+      {
+        "id": "android-native-client-pack",
+        "version": "1.0.0-preview.6",
+        "available": true,
+        "sha256": "e2ae327f1c219b4782119fdf4f3857a842adecb9714fc6161116bbe3be7db84b"
+      },
+      {
+        "id": "android-client-pack",
+        "version": "1.0.0-preview.6-touch",
+        "available": true,
+        "sha256": "7277e6cd67b198253f23ab6b59ea1efb551d38c1c4438018ea9753f2bd016e68"
+      }
+    ],
+    "freshConsumer": {
+      "passed": true,
+      "version": "1.3.11",
+      "core": "0.5.7-rc.160-preview.97",
+      "anonymousFullDownload": true,
+      "sha256": "aada7ed6adf15c60501ad71e6c9c2d2e59ebb0f635e466a2be7a597db7102ff7",
+      "freshNpmInstall": true,
+      "packedEntryAndDeclarations": true,
+      "realPlayerCredentialsUsed": false
+    }
+  },
+  "heldDrafts": [
+    {
+      "pr": 256,
+      "reason": "current production-derived combined validation missing"
+    },
+    {
+      "pr": 287,
+      "reason": "production-derived Vortex/RPG pair, Youer lifecycle/crash and client parity incomplete"
+    }
+  ],
+  "rollback": {
+    "backupDrive": "F",
+    "game": "F:\\MC-backups\\repairs\\daily-closeout-20261118-r1-20261118-030850",
+    "core": "F:\\MC-backups\\repairs\\core-nav-20261118-r1\\package-before",
+    "npc": "F:\\MC-backups\\repairs\\npc-read-recovery-20261118-r1",
+    "cloudPreviousImage": "sha256:5db43761f9d4cceb61a66652378be5061fe096e317f9576b85a1a21081c4bde9",
+    "policy": "Normal stop and code-only rollback on current data. Preserve latest worlds, original bodies/owners, inventories, auth, memories, lifecycle and action receipts. Never replay unknown writes or reuse consumed maintenance.",
+    "npcContinuity": "F:\\MC-backups\\repairs\\npc-continuity-20261118-r1-20261118-044203"
+  },
+  "evidenceDirectory": "D:\\codex\\2026-09-14\\new-chat\\artifacts\\daily-closeout-20261118",
+  "evidenceFiles": [
+    "candidate-acceptance.json",
+    "combination-integrity.json",
+    "formal-acceptance.json",
+    "runtime-observation.json",
+    "maid-read-original-red.log",
+    "harness-all-tests-r2.log",
+    "public-downloads-final.json",
+    "skill1311-consumer.json",
+    "formal-acceptance-final.json",
+    "npc-production-before.json",
+    "npc-production-after.json",
+    "npc-continuity-stage.json",
+    "npc-continuity-harness-final.log"
+  ],
+  "formalAcceptance": {
+    "observedAt": "2026-11-17T20:50:41.739921+00:00",
+    "gameActionsDispatched": false,
+    "actualHumanHearingVerified": false,
+    "checks": [
+      {
+        "name": "normal_deployment_succeeded",
+        "passed": true,
+        "evidence": {
+          "release": "daily-closeout-20261118-r1",
+          "backup": "F:\\MC-backups\\repairs\\daily-closeout-20261118-r1-20261118-030850",
+          "oldGamePid": 26468,
+          "newGamePid": 30836
+        }
+      },
+      {
+        "name": "npc_continuity_deployed",
+        "passed": true,
+        "evidence": {
+          "release": "npc-continuity-20261118-r1",
+          "backup": "F:\\MC-backups\\repairs\\npc-continuity-20261118-r1-20261118-044203",
+          "oldGamePid": 46036,
+          "newGamePid": 46224
+        }
+      },
+      {
+        "name": "current_single_host",
+        "passed": true,
+        "evidence": {
+          "pid": 19200
+        }
+      },
+      {
+        "name": "supervisor_current",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "installed_AgentFriend-0.4.47.59-shop-rpg.jar",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "installed_qiandengji-maid-native-0.1.12-conversation.jar",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "installed_npc.py",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "installed_source-manifest.json",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "installed_roles.json",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "feiyu_running_original_body",
+        "passed": true,
+        "evidence": {
+          "bodyId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+          "model": "deepseek-v4.1-flash",
+          "provider": "tokenplan",
+          "route": {
+            "provider": "tokenplan",
+            "model": "deepseek-v4.1-flash",
+            "responseId": "chatcmpl-aba07def-22f7-4fc3-b0c1-5497293c7d4f",
+            "seconds": 0.718
+          }
+        }
+      },
+      {
+        "name": "feiyu_no_unknown_requests",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "feiyu_alive_original_owner",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "feiyu_unified_decisions_and_native_body",
+        "passed": true,
+        "evidence": {
+          "lifeState": "alive",
+          "inferenceOwner": "unified_npc_host",
+          "physicalController": "native_body",
+          "nativeGuardDelegated": true
+        }
+      },
+      {
+        "name": "feiyu_voice_enabled",
+        "passed": true,
+        "evidence": {
+          "enabled": true,
+          "voice": "feiyu-tlm-nahida-cn-20261111",
+          "transport": "simple_voice_chat_position",
+          "voiceGainDb": 6.0,
+          "partnerRangeBlocks": 24,
+          "visitorRangeBlocks": 8,
+          "ambientSource": "native_event_chinese_tts",
+          "combatTrigger": "confirmed_damage",
+          "combatMinimumGapSeconds": 30,
+          "combatMaximumAgeSeconds": 12,
+          "ambientIdleEnabled": false,
+          "ambientMinimumGapSeconds": 90,
+          "replyCharacterLimit": 40,
+          "waitingReply": false,
+          "maximumReplyWaitSeconds": 10,
+          "state": "ready",
+          "reason": "",
+          "requestId": "",
+          "hearingVerified": false,
+          "nextStep": "听音需 Simple Voice Chat；/voice status 查询本连接。无语音模组仍可读附近文字。sent只证明音频发送，不证明真人耳听。"
+        }
+      },
+      {
+        "name": "kirito_running_original_body",
+        "passed": true,
+        "evidence": {
+          "bodyId": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+          "model": "qwen3.8-flash",
+          "provider": "tokenplan",
+          "route": {
+            "provider": "tokenplan",
+            "model": "qwen3.8-flash",
+            "responseId": "chatcmpl-87adbb23-5de5-43e4-ab47-9769f6962974",
+            "seconds": 0.641
+          }
+        }
+      },
+      {
+        "name": "kirito_no_unknown_requests",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "yui_running_original_body",
+        "passed": true,
+        "evidence": {
+          "bodyId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+          "model": "qwen3.7-plus",
+          "provider": "codingplan",
+          "route": {
+            "provider": "codingplan",
+            "model": "qwen3.7-plus",
+            "responseId": "chatcmpl-2d553bdd-f197-9c16-bce0-dbfc7f181cee",
+            "seconds": 1.453
+          }
+        }
+      },
+      {
+        "name": "yui_no_unknown_requests",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "yui_alive_original_owner",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "yui_unified_decisions_and_native_body",
+        "passed": true,
+        "evidence": {
+          "lifeState": "alive",
+          "inferenceOwner": "unified_npc_host",
+          "physicalController": "native_body",
+          "nativeGuardDelegated": true
+        }
+      },
+      {
+        "name": "yui_voice_enabled",
+        "passed": true,
+        "evidence": {
+          "enabled": true,
+          "voice": "neko-yui-cn",
+          "transport": "simple_voice_chat_position",
+          "voiceGainDb": 6.0,
+          "partnerRangeBlocks": 24,
+          "visitorRangeBlocks": 8,
+          "ambientSource": "native_event_chinese_tts",
+          "combatTrigger": "confirmed_damage",
+          "combatMinimumGapSeconds": 30,
+          "combatMaximumAgeSeconds": 12,
+          "ambientIdleEnabled": false,
+          "ambientMinimumGapSeconds": 90,
+          "replyCharacterLimit": 40,
+          "waitingReply": false,
+          "maximumReplyWaitSeconds": 10,
+          "state": "ready",
+          "reason": "",
+          "requestId": "",
+          "hearingVerified": false,
+          "nextStep": "听音需 Simple Voice Chat；/voice status 查询本连接。无语音模组仍可读附近文字。sent只证明音频发送，不证明真人耳听。"
+        }
+      },
+      {
+        "name": "existing_media_asr_ready",
+        "passed": true,
+        "evidence": {
+          "ok": true,
+          "version": "0.1.0",
+          "asrDevice": "cpu",
+          "asrLoaded": true,
+          "counts": {
+            "tts": 2070,
+            "asr": 198,
+            "silence": 36,
+            "errors": 17
+          }
+        }
+      }
+    ],
+    "passed": true
+  },
+  "runtimeLogSample": {
+    "observedAt": "2026-11-17T20:56:00.922348+00:00",
+    "log": "E:\\MC\\server\\logs\\latest.log",
+    "windowStart": "2026-11-18T03:17:15+08:00",
+    "boundedTailBytes": 8388608,
+    "lastLogClock": "04:56:00",
+    "counts": {
+      "warnLines": 45,
+      "errorLines": 1,
+      "keepUpWarnings": 1
+    },
+    "exceptionClasses": {},
+    "rawPlayerChatExported": false
+  },
+  "npcContinuity": {
+    "deployment": {
+      "release": "npc-continuity-20261118-r1",
+      "success": true,
+      "productionChanged": true,
+      "backupDrive": "F",
+      "pr": 303,
+      "head": "17098b0846a7d466e3839dacb08448e880476d51",
+      "bodyMigration": false,
+      "newEntities": false,
+      "phase": "failed",
+      "time": "2026-11-18T04:48:58.7797109+08:00",
+      "oldGamePid": 46036,
+      "backup": "F:\\MC-backups\\repairs\\npc-continuity-20261118-r1-20261118-044203",
+      "supervisor": {
+        "supervisorPid": 24548,
+        "state": "started"
+      },
+      "newGamePid": 46224,
+      "error": "Completion notice requires verified running version",
+      "interruptedAt": "deployed-awaiting-runtime-acceptance",
+      "services": {
+        "supervisorPid": 24548,
+        "state": "running",
+        "error": null
+      }
+    },
+    "readOnlyProduction": {
+      "observedAt": "2026-11-17T20:55:57.591746+00:00",
+      "label": "after",
+      "newActionsDispatchedByAudit": false,
+      "supervisorPid": 24548,
+      "npcPid": 19200,
+      "roleReports": [
+        {
+          "id": "feiyu",
+          "bodyKind": "maid",
+          "bodyId": "af86ae0c-c524-467b-a28c-8da5af88d45e",
+          "ownerId": "822d173a-7181-3b9b-be60-804f29b24ecc",
+          "configuredModel": "deepseek-v4.1-flash",
+          "configuredProvider": "tokenplan",
+          "route": {
+            "provider": "tokenplan",
+            "model": "deepseek-v4.1-flash",
+            "responseId": "chatcmpl-52105687-210b-474e-bc43-ae85892328ef",
+            "seconds": 0.781
+          },
+          "lifeState": "alive",
+          "unresolved": [],
+          "actionsInWindow": [
+            {
+              "action": "guard",
+              "status": "completed",
+              "count": 1
+            }
+          ],
+          "lastActionRow": 157,
+          "recentReceipts": [
+            {
+              "requestId": "hs_6cea14420e044e9098cec37a",
+              "action": "guard",
+              "status": "completed"
+            }
+          ],
+          "positionsSampled": 76,
+          "distinctPositions": 76,
+          "positionsSampledInWindow": 0,
+          "distinctPositionsInWindow": 0,
+          "realHitSamples": [
+            {
+              "spell": "astral_convergence",
+              "targetIds": [
+                "92bb2972-e6b6-44ed-b78e-3d6f81a077ef"
+              ],
+              "castAt": "2026-11-17T19:40:20.274040100Z",
+              "sampledAt": "2026-11-17T19:52:26.920535100Z",
+              "observationId": "hs_bc5a75880595413490db9f92"
+            },
+            {
+              "spell": "ember_lance",
+              "targetIds": [
+                "d364806f-e1f0-4b71-8d3b-5a932c002c12"
+              ],
+              "castAt": "2026-11-17T19:58:26.281989300Z",
+              "sampledAt": "2026-11-17T19:59:19.719955100Z",
+              "observationId": "hs_b204d3983acb41659af35970"
+            },
+            {
+              "spell": "ember_lance",
+              "targetIds": [
+                "23fb83cc-3dc9-4653-87f1-3421a1399b97"
+              ],
+              "castAt": "2026-11-17T20:14:44.369166500Z",
+              "sampledAt": "2026-11-17T20:22:04.114411800Z",
+              "observationId": "hs_cc131cd99a004deea85bbcbf"
+            },
+            {
+              "spell": "ember_lance",
+              "targetIds": [
+                "5c82e2f6-1757-4f68-ba30-5452ab202847"
+              ],
+              "castAt": "2026-11-17T20:23:08.367313600Z",
+              "sampledAt": "2026-11-17T20:37:16.114524900Z",
+              "observationId": "hs_30a38ded4b8740db8d010b32"
+            }
+          ],
+          "previousTerminalReceiptsPreserved": 156,
+          "previousLocalMemoryEpisodesPreserved": 210,
+          "localEpisodes": 211,
+          "graphOutboxDone": 19,
+          "graphOutboxPending": 0,
+          "recordedCannedGreetingCount": null,
+          "cannedGreetingsInWindow": null,
+          "context": {
+            "lifeState": "alive",
+            "dimension": "minecraft:overworld",
+            "health": 25.0,
+            "ownerDistance": 4.8692794,
+            "inferenceOwner": "unified_npc_host",
+            "physicalController": "native_body",
+            "nativeGuardDelegated": true,
+            "nativeCompanionDelegated": false,
+            "follow": {
+              "policy": "ranged_idle_companion",
+              "active": true,
+              "state": "within_follow_distance",
+              "walkBeyond": 6,
+              "stopWithin": 3,
+              "recoveryBeyond": 12,
+              "distanceUnit": "blocks",
+              "stuckSeconds": 8,
+              "recoveryCooldownSeconds": 15,
+              "customized": true,
+              "meaning": "模式已设置不等于已走到身边；读取实际位置和ownerDistance。卡路时仅尝试原模组安全落点，不破坏地形。",
+              "temporaryWait": false,
+              "waitUntilEpochMillis": 0
+            },
+            "residence": {
+              "state": "partner_online",
+              "dimension": "minecraft:overworld",
+              "home": [
+                -547,
+                63,
+                -378
+              ],
+              "patrolVisitsThisRun": 0,
+              "rejoinDistance": 24,
+              "holdingResidenceChunk": false
+            },
+            "passenger": false
+          },
+          "brain": {
+            "conversationOwner": "unified_npc_host",
+            "selected": "dsh",
+            "originalDialogueControllerActive": false,
+            "memoryOwner": "unified_character_store"
+          },
+          "speech": {
+            "enabled": true,
+            "voice": "feiyu-tlm-nahida-cn-20261111",
+            "state": "ready",
+            "requestId": "",
+            "hearingVerified": false
+          },
+          "inventoryFacts": {
+            "occupiedSlots": null,
+            "slotCount": 36,
+            "usableSlotIndexes": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              33,
+              34,
+              35
+            ]
+          },
+          "spells": {
+            "stateSource": "original_private_companion_magic",
+            "skills": null,
+            "catalogueIds": [
+              "arcane_bolt",
+              "mage_staff_bolt",
+              "ember_lance",
+              "astral_convergence"
+            ]
+          },
+          "residentCombat": {
+            "enabled": null,
+            "mode": null,
+            "reason": null,
+            "actualHits": null,
+            "decisionIntervalMs": null
+          },
+          "taskCatalogue": {
+            "enabled": [
+              "touhou_little_maid:attack",
+              "touhou_little_maid:board_games",
+              "touhou_little_maid:cocoa",
+              "touhou_little_maid:crossbow_attack",
+              "touhou_little_maid:danmaku_attack",
+              "touhou_little_maid:extinguishing",
+              "touhou_little_maid:farm",
+              "touhou_little_maid:feed",
+              "touhou_little_maid:feed_animal",
+              "touhou_little_maid:fishing",
+              "touhou_little_maid:grass",
+              "touhou_little_maid:honey",
+              "touhou_little_maid:idle",
+              "touhou_little_maid:melon",
+              "touhou_little_maid:milk",
+              "touhou_little_maid:ranged_attack",
+              "touhou_little_maid:shears",
+              "touhou_little_maid:snow",
+              "touhou_little_maid:sugar_cane",
+              "touhou_little_maid:torch",
+              "touhou_little_maid:trident_attack"
+            ]
+          }
+        },
+        {
+          "id": "kirito",
+          "bodyKind": "numen",
+          "bodyId": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+          "ownerId": "b2f9ceb0-8271-3470-b99f-e1c3ffe4edbd",
+          "configuredModel": "qwen3.8-flash",
+          "configuredProvider": "tokenplan",
+          "route": {
+            "provider": "tokenplan",
+            "model": "qwen3.8-flash",
+            "responseId": "chatcmpl-d8ce9a91-1787-47a7-a1b1-0238747f5b80",
+            "seconds": 0.61
+          },
+          "lifeState": "alive",
+          "unresolved": [],
+          "actionsInWindow": [],
+          "lastActionRow": 122,
+          "recentReceipts": [],
+          "positionsSampled": 103,
+          "distinctPositions": 3,
+          "positionsSampledInWindow": 0,
+          "distinctPositionsInWindow": 0,
+          "realHitSamples": [],
+          "previousTerminalReceiptsPreserved": 122,
+          "previousLocalMemoryEpisodesPreserved": 141,
+          "localEpisodes": 141,
+          "graphOutboxDone": 19,
+          "graphOutboxPending": 0,
+          "recordedCannedGreetingCount": 18,
+          "cannedGreetingsInWindow": 0,
+          "numenFacts": {
+            "protocol": "qiandengji-hosted-body/v1",
+            "roleUuid": "8ae995f9-5944-48c9-b720-0ab91bdfff09",
+            "mode": "harness",
+            "fenced": true,
+            "sampledAt": 1794948959424,
+            "health": 30.0,
+            "maxHealth": 30.0,
+            "dimension": "minecraft:aincrad",
+            "workPending": false
+          }
+        },
+        {
+          "id": "yui",
+          "bodyKind": "maid",
+          "bodyId": "00bd198f-c24a-4c0a-a7d4-ce854c68cd71",
+          "ownerId": "b2f9ceb0-8271-3470-b99f-e1c3ffe4edbd",
+          "configuredModel": "qwen3.7-plus",
+          "configuredProvider": "codingplan",
+          "route": {
+            "provider": "codingplan",
+            "model": "qwen3.7-plus",
+            "responseId": "chatcmpl-215acf26-aafc-96a5-ad88-4ca2ec809e69",
+            "seconds": 2.203
+          },
+          "lifeState": "alive",
+          "unresolved": [],
+          "actionsInWindow": [
+            {
+              "action": "guard",
+              "status": "completed",
+              "count": 1
+            }
+          ],
+          "lastActionRow": 192,
+          "recentReceipts": [
+            {
+              "requestId": "hs_c3b121f2d4c24da5ad93e857",
+              "action": "guard",
+              "status": "completed"
+            }
+          ],
+          "positionsSampled": 40,
+          "distinctPositions": 40,
+          "positionsSampledInWindow": 0,
+          "distinctPositionsInWindow": 0,
+          "realHitSamples": [],
+          "previousTerminalReceiptsPreserved": 191,
+          "previousLocalMemoryEpisodesPreserved": 169,
+          "localEpisodes": 170,
+          "graphOutboxDone": 18,
+          "graphOutboxPending": 0,
+          "recordedCannedGreetingCount": null,
+          "cannedGreetingsInWindow": null,
+          "context": {
+            "lifeState": "alive",
+            "dimension": "minecraft:aincrad",
+            "health": 30.0,
+            "ownerDistance": null,
+            "inferenceOwner": "unified_npc_host",
+            "physicalController": "native_body",
+            "nativeGuardDelegated": true,
+            "nativeCompanionDelegated": false,
+            "follow": {
+              "policy": "close_idle_companion",
+              "active": false,
+              "state": "owner_unavailable",
+              "walkBeyond": 3,
+              "stopWithin": 2,
+              "recoveryBeyond": 3,
+              "distanceUnit": "blocks",
+              "stuckSeconds": 8,
+              "recoveryCooldownSeconds": 15,
+              "customized": false,
+              "meaning": "模式已设置不等于已走到身边；读取实际位置和ownerDistance。卡路时仅尝试原模组安全落点，不破坏地形。",
+              "temporaryWait": false,
+              "waitUntilEpochMillis": 0
+            },
+            "residence": null,
+            "passenger": false
+          },
+          "brain": {
+            "conversationOwner": "unified_npc_host",
+            "selected": "external_or_unconfigured",
+            "originalDialogueControllerActive": false,
+            "memoryOwner": "unified_character_store"
+          },
+          "speech": {
+            "enabled": true,
+            "voice": "neko-yui-cn",
+            "state": "ready",
+            "requestId": "",
+            "hearingVerified": false
+          },
+          "inventoryFacts": {
+            "occupiedSlots": null,
+            "slotCount": 36,
+            "usableSlotIndexes": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "spells": {
+            "stateSource": "native_resident_vortex",
+            "skills": [
+              "radiant_pulse",
+              "mend",
+              "wardens_bloom"
+            ],
+            "catalogueIds": []
+          },
+          "residentCombat": {
+            "enabled": true,
+            "mode": "idle",
+            "reason": "no_visible_hostile",
+            "actualHits": 0,
+            "decisionIntervalMs": 250
+          },
+          "taskCatalogue": {
+            "enabled": [
+              "touhou_little_maid:attack",
+              "touhou_little_maid:board_games",
+              "touhou_little_maid:cocoa",
+              "touhou_little_maid:crossbow_attack",
+              "touhou_little_maid:danmaku_attack",
+              "touhou_little_maid:extinguishing",
+              "touhou_little_maid:farm",
+              "touhou_little_maid:feed",
+              "touhou_little_maid:feed_animal",
+              "touhou_little_maid:fishing",
+              "touhou_little_maid:grass",
+              "touhou_little_maid:honey",
+              "touhou_little_maid:idle",
+              "touhou_little_maid:melon",
+              "touhou_little_maid:milk",
+              "touhou_little_maid:ranged_attack",
+              "touhou_little_maid:shears",
+              "touhou_little_maid:snow",
+              "touhou_little_maid:sugar_cane",
+              "touhou_little_maid:torch",
+              "touhou_little_maid:trident_attack"
+            ]
+          }
+        }
+      ],
+      "bridgeVersion": "0.1.48-unified-continuity",
+      "tps": "Overworld: 20.000 TPS (10.541 ms/tick)\nThe End: 20.000 TPS (0.171 ms/tick)\nThe Nether: 20.000 TPS (0.232 ms/tick)\nminecraft:aincrad: 20.000 TPS (7.321 ms/tick)\nOverall: 20.000 TPS (25.549 ms/tick)",
+      "gamePid": 46224,
+      "window": "after the stopped controller's F-drive journal snapshot"
+    },
+    "completionNoticeCorrection": {
+      "passed": true,
+      "at": "2026-11-17T20:50:28.874Z",
+      "gamePid": 46224,
+      "component": "QiandengjiMaidBridge",
+      "version": "0.1.48-unified-continuity",
+      "originalFailure": "Completion notice requires verified running version",
+      "commandsAcknowledged": 3
+    },
+    "baseline": {
+      "sampledAt": "2026-11-17T20:32:28.063766+00:00",
+      "roles": [
+        {
+          "id": "feiyu",
+          "actionsInWindow": [
+            {
+              "action": "observe",
+              "status": "completed",
+              "count": 73
+            },
+            {
+              "action": "guard",
+              "status": "completed",
+              "count": 33
+            },
+            {
+              "action": "ack",
+              "status": "completed",
+              "count": 17
+            },
+            {
+              "action": "chat",
+              "status": "completed",
+              "count": 13
+            },
+            {
+              "action": "guard",
+              "status": "failed",
+              "count": 3
+            },
+            {
+              "action": "follow",
+              "status": "completed",
+              "count": 3
+            },
+            {
+              "action": "stay",
+              "status": "completed",
+              "count": 2
+            },
+            {
+              "action": "guard",
+              "status": "rejected",
+              "count": 1
+            },
+            {
+              "action": "dismount",
+              "status": "completed",
+              "count": 1
+            },
+            {
+              "action": "pickup",
+              "status": "completed",
+              "count": 1
+            },
+            {
+              "action": "observe",
+              "status": "failed",
+              "count": 1
+            },
+            {
+              "action": "move",
+              "status": "completed",
+              "count": 1
+            }
+          ],
+          "positionsSampled": 73,
+          "distinctPositions": 73,
+          "recordedCannedGreetingCount": null,
+          "realHitSamples": [
+            {
+              "spell": "ember_lance",
+              "targetIds": [
+                "23fb83cc-3dc9-4653-87f1-3421a1399b97"
+              ],
+              "sampledAt": "2026-11-17T20:18:14.376098400Z"
+            },
+            {
+              "spell": "ember_lance",
+              "targetIds": [
+                "23fb83cc-3dc9-4653-87f1-3421a1399b97"
+              ],
+              "sampledAt": "2026-11-17T20:22:04.114411800Z"
+            },
+            {
+              "spell": "ember_lance",
+              "targetIds": [
+                "5c82e2f6-1757-4f68-ba30-5452ab202847"
+              ],
+              "sampledAt": "2026-11-17T20:23:35.663500200Z"
+            },
+            {
+              "spell": "ember_lance",
+              "targetIds": [
+                "5c82e2f6-1757-4f68-ba30-5452ab202847"
+              ],
+              "sampledAt": "2026-11-17T20:25:53.612843500Z"
+            }
+          ]
+        },
+        {
+          "id": "kirito",
+          "actionsInWindow": [
+            {
+              "action": "observe",
+              "status": "completed",
+              "count": 99
+            },
+            {
+              "action": "chat",
+              "status": "completed",
+              "count": 18
+            },
+            {
+              "action": "inventory",
+              "status": "completed",
+              "count": 1
+            }
+          ],
+          "positionsSampled": 99,
+          "distinctPositions": 3,
+          "recordedCannedGreetingCount": 17,
+          "realHitSamples": []
+        },
+        {
+          "id": "yui",
+          "actionsInWindow": [
+            {
+              "action": "guard",
+              "status": "completed",
+              "count": 119
+            },
+            {
+              "action": "observe",
+              "status": "completed",
+              "count": 40
+            },
+            {
+              "action": "ack",
+              "status": "completed",
+              "count": 18
+            },
+            {
+              "action": "guard",
+              "status": "rejected",
+              "count": 3
+            },
+            {
+              "action": "follow",
+              "status": "completed",
+              "count": 2
+            },
+            {
+              "action": "chat",
+              "status": "completed",
+              "count": 1
+            }
+          ],
+          "positionsSampled": 40,
+          "distinctPositions": 40,
+          "recordedCannedGreetingCount": null,
+          "realHitSamples": []
+        }
+      ]
+    },
+    "candidateChecks": [
+      {
+        "name": "candidate_bridge_loaded",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "original_unified_identity_12",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "original_unified_identity_17",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "fixture_follow_mode_12",
+        "passed": true,
+        "evidence": {
+          "receipt": {
+            "request_id": "qa_e026318436d941d2",
+            "verb": "follow",
+            "status": "completed",
+            "terminal": true,
+            "text": "follow completed",
+            "execution_id": "qa_e026318436d941d2",
+            "data": {
+              "maidAction": "follow",
+              "reply": {
+                "protocol": "qiandengji-maids/v1",
+                "ok": true,
+                "status": "applied",
+                "data": {
+                  "schema": 1,
+                  "namespace": "native-body",
+                  "maidId": "10000000-0000-0000-0000-000000000012",
+                  "ownerId": "20000000-0000-0000-0000-000000000022",
+                  "requestId": "qa_e026318436d941d2",
+                  "operationId": "qa_e026318436d941d2",
+                  "action": "follow",
+                  "arguments": "{\"action\":\"follow\",\"maidId\":\"10000000-0000-0000-0000-000000000012\",\"requestId\":\"qa_e026318436d941d2\"}",
+                  "status": "applied",
+                  "terminal": true,
+                  "retryAllowed": false,
+                  "observedAt": "2026-11-17T20:34:42.218049800Z",
+                  "goalCompleted": false,
+                  "actualPosition": {
+                    "x": 116.5,
+                    "y": 81.0,
+                    "z": 99.5,
+                    "dimension": "minecraft:overworld"
+                  },
+                  "observation": {
+                    "effectsApplied": true,
+                    "meaning": "follow mode set; arrival requires observation; offline owner cannot be followed",
+                    "actualPosition": {
+                      "x": 116.5,
+                      "y": 81.0,
+                      "z": 99.5,
+                      "dimension": "minecraft:overworld"
+                    }
+                  }
+                }
+              }
+            },
+            "retry_allowed": false,
+            "retry_after_ms": null
+          },
+          "canMove": false,
+          "passenger": false,
+          "home": false
+        }
+      },
+      {
+        "name": "configured_guard_resumed_1",
+        "passed": true,
+        "evidence": {
+          "route": {
+            "layer": "native-policy",
+            "reason": "resume_configured_guard"
+          },
+          "state": "completed"
+        }
+      },
+      {
+        "name": "configured_guard_resumed_2",
+        "passed": true,
+        "evidence": {
+          "route": {
+            "layer": "native-policy",
+            "reason": "resume_configured_guard"
+          },
+          "state": "completed"
+        }
+      },
+      {
+        "name": "repeated_guard_does_not_reset_original_navigation",
+        "passed": true,
+        "evidence": {
+          "requestId": "qa_36d5ccacb8ba463a",
+          "effectsApplied": false
+        }
+      },
+      {
+        "name": "offline_companion_returns_to_original_residence",
+        "passed": true,
+        "evidence": {
+          "position": {
+            "x": 122.5,
+            "y": 81.0,
+            "z": 103.5
+          },
+          "residence": {
+            "state": "resident_patrol",
+            "dimension": "minecraft:overworld",
+            "home": [
+              122,
+              81,
+              103
+            ],
+            "patrolVisitsThisRun": 0,
+            "rejoinDistance": 24,
+            "holdingResidenceChunk": true
+          }
+        }
+      },
+      {
+        "name": "explicit_stay_wins_over_residence",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "native_scene_sound_triggered",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "native_scene_audio_still_reaches_connected_players",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "ambient_sound_is_not_a_new_npc_conversation",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "deliberate_dialogue_reaches_original_numen_once",
+        "passed": true,
+        "evidence": {
+          "requestId": "qa_bf8831a37f4e4912"
+        }
+      },
+      {
+        "name": "adjacent_numen_ally_was_injured",
+        "passed": true,
+        "evidence": {
+          "before": 30.0,
+          "injured": 16.0
+        }
+      },
+      {
+        "name": "native_yui_guard_healed_original_numen",
+        "passed": true,
+        "evidence": {
+          "injured": 16.0,
+          "after": 28.9
+        }
+      },
+      {
+        "name": "numen_typed_move_reaches_test_landing",
+        "passed": true,
+        "evidence": {
+          "status": "completed",
+          "position": {
+            "x": 122.0,
+            "y": 81.0,
+            "z": 102.0
+          },
+          "requestId": "qa_8e0e0e056ade4402"
+        }
+      },
+      {
+        "name": "numen_equips_existing_sword",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "numen_sees_real_hostile",
+        "passed": true,
+        "evidence": null
+      },
+      {
+        "name": "system_one_selected_typed_attack",
+        "passed": true,
+        "evidence": {
+          "provider": "tokenplan",
+          "model": "decision-model-preview",
+          "layer": "system1",
+          "responseId": "2122620a-bac7-406e-acff-d592c69ea4d1"
+        }
+      },
+      {
+        "name": "hostile_damage_and_original_terminal",
+        "passed": true,
+        "evidence": {
+          "worldHealthEvidence": "未找到实体",
+          "receiptIds": [
+            "hs_5fabac9de0d84106af654b1a"
+          ]
+        }
+      }
+    ],
+    "harnessRegression": {
+      "passed": 149,
+      "skipped": 2
+    },
+    "coldBefore": {
+      "complete": true,
+      "count": 24891,
+      "bytes": 4582947473,
+      "gameRuntimeFiles": {
+        "diagnostic_log": 1596,
+        "jvm_lock": 5,
+        "sqlite_runtime": 2
+      },
+      "backupRuntimeFiles": {
+        "diagnostic_log": 1596,
+        "jvm_lock": 5,
+        "sqlite_runtime": 2
+      }
+    },
+    "coldAfter": {
+      "installPreservedOtherFiles": true,
+      "files": 24890,
+      "newFiles": 0
+    },
+    "limits": [
+      "Natural production party-heal and Numen combat observation remains open",
+      "The unified model port still lacks workshop writes. The original read-only catalog remains available to its owner.",
+      "Native fishing is listed but the production unified role does not currently allow that task."
+    ]
+  }
+}
