@@ -1,8 +1,8 @@
 package dev.qiandeng.navigationqa;
 
-import com.dwinovo.numen.entity.CompanionFactory;
-import com.dwinovo.numen.entity.CompanionRegistry;
-import com.dwinovo.numen.entity.NumenPlayer;
+import com.dwinovo.numen.api.entity.CompanionFactory;
+import com.dwinovo.numen.api.entity.CompanionRegistry;
+import com.dwinovo.numen.api.entity.NumenPlayer;
 import com.google.gson.JsonObject;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.Commands;
