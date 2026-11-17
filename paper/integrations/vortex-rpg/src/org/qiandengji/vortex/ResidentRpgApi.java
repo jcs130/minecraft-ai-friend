@@ -12,9 +12,10 @@ import org.bukkit.entity.*;
 final class ResidentRpgApi {
     private final VortexCorePlugin vortex;
     private final VortexBridge bridge;
+    private final ResidentSwordArts swordArts;
     private final Set<UUID> loading=new HashSet<>(),ready=new HashSet<>();
     private final Map<UUID,CompletableFuture<?>> writes=new HashMap<>();
-    ResidentRpgApi(VortexCorePlugin vortex,VortexBridge bridge){this.vortex=vortex;this.bridge=bridge;}
+    ResidentRpgApi(VortexCorePlugin vortex,VortexBridge bridge,ResidentSwordArts swordArts){this.vortex=vortex;this.bridge=bridge;this.swordArts=swordArts;}
     private Player actor(UUID id){
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main_thread_required");
         try{var af=Bukkit.getPluginManager().getPlugin("AgentFriend");return (Player)af.getClass().getClassLoader()
@@ -34,14 +35,29 @@ final class ResidentRpgApi {
             writes.put(id,vortex.classSkillService().chooseClass(p,profile,requested).thenCompose(v->profiles.qiandengjiSave(p)));return;
         }
         // A saved class is authoritative. A changed config never resets it or grants another starting kit.
-        ResidentActors.register(p);vortex.qiandengjiMana().refillFull(id);ready.add(id);
+        ResidentActors.register(p);vortex.qiandengjiMana().refillFull(id);swordArts.restore(p,profile);ready.add(id);
+    }
+    boolean usesSwords(UUID id) {
+        return ready.contains(id) && vortex.playerProfileService().profile(id).filter(swordArts::isSwordsman).isPresent();
     }
     String state(UUID id){
         if(!ready.contains(id))return new Gson().toJson(Map.of("available",false,"backend","vortex","reason",writes.containsKey(id)&&writes.get(id).isCompletedExceptionally()?"profile_save_unconfirmed":"profile_loading","abilities",List.of(),"skills",List.of()));
         var value=JsonParser.parseString(bridge.selfState(actor(id))).getAsJsonObject();
         value.addProperty("profession",value.get("combat").getAsString());value.addProperty("title",value.get("className").getAsString());value.addProperty("progressionSystem","VortexRPG");
-        value.add("skills",new Gson().toJsonTree(vortex.spellbookService().availableSpells(vortex.playerProfileService().profile(id).orElseThrow())));
+        var profile=vortex.playerProfileService().profile(id).orElseThrow();
+        var skills=new LinkedHashSet<>(vortex.spellbookService().availableSpells(profile));
+        if(usesSwords(id)){
+            value.addProperty("title","");
+            swordArts.abilities(actor(id),profile).forEach(art->skills.add(art.get("id").toString().substring("mycli:".length())));
+            if(vortex.classSkillService().unlockedSkillIds(profile).contains("dual_blades"))
+                value.addProperty("specialization","dual_blades");
+        }
+        value.add("skills",new Gson().toJsonTree(skills));
         return value.toString();
+    }
+    String swordReflex(UUID id, UUID targetId) {
+        if (!usesSwords(id)) return "";
+        return swordArts.reflex(actor(id), vortex.playerProfileService().profile(id).orElseThrow(), targetId);
     }
     String reflex(UUID id,boolean fighting){
         if(!ready.contains(id))return "";var p=actor(id);var state=vortex.playerProfileService().profile(id).orElseThrow();

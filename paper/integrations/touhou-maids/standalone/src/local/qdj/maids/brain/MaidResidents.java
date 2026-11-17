@@ -71,6 +71,31 @@ final class MaidResidents {
     boolean busy(UUID id) { return jobs.containsKey(id)||thinking.containsKey(id); }
     boolean holdsPosition(UUID id) { var job=jobs.get(id);return job!=null&&ResidentContract.holdsPosition(job.input()); }
     boolean ownsMovement(UUID id){var job=jobs.get(id);return job!=null&&(ResidentContract.holdsPosition(job.input())||List.of("walk","home").contains(job.input().get("action").getAsString()));}
+    String swordControl(UUID id) {
+        var maid=body(id);
+        var job=jobs.get(id);
+        if (maid==null || !maid.isAlive() || maid.isNoAi() || maid.guiOpening || maid.isSleeping()
+                || maid.isPassenger() || maid.isMaidInSittingPose() || maid.getPersistentData().getBoolean(ResidentBodyAccess.DOWNED)
+                || job==null || leased(id) && !agents.companions().mayResidentAct(id, "cast")) return "";
+        String action=job.input().get("action").getAsString();
+        boolean casting=action.equals("cast") || action.equals("cli") && job.input().get("command").getAsString().strip().startsWith("cast ");
+        if(!casting || agents.agent(id).revision()!=job.revision()) return "";
+        return job.id().toString();
+    }
+    Map<String,Object> swordReflex(EntityMaid maid, UUID target) {
+        try {
+            UUID id=maid.getUUID();
+            String skill=(String)ResidentVortex.call("residentSwordReflex",new Class<?>[]{UUID.class,UUID.class},id,target);
+            if(skill.isBlank()) return Map.of();
+            var command=new JsonObject();
+            command.addProperty("action","cast");
+            command.addProperty("skill",skill);
+            Map<String,Object> result=submit(id,UUID.randomUUID(),command);
+            return "accepted".equals(result.get("status")) ? result : Map.of();
+        } catch (Exception unavailable) {
+            return Map.of();
+        }
+    }
     void combatStarted(UUID id){agents.agent(id).invalidateActions();}
     void combatTick(){for(var id:ids()){
         var maid=body(id);if(maid==null||!combatReady.contains(id))continue;
@@ -146,11 +171,15 @@ final class MaidResidents {
     }
     Map<String,Object> receipt(UUID id,UUID request) throws Exception {
         require(id);var row=receipts.read(id,request);
-        if(row!=null&&"cli".equals(row.get("action"))&&!jobs.containsKey(id)&&List.of("accepted","unknown").contains(row.get("status"))){
+        if(row!=null&&List.of("cli","cast").contains(row.get("action"))&&(!jobs.containsKey(id)||body(id)==null)
+                &&List.of("accepted","unknown").contains(row.get("status"))){
             var service=ResidentServices.query(id,request);
             if(List.of("completed","blocked","rejected").contains(service.get("status"))){
                 row.putAll(service);row.put("observedAt",java.time.Instant.now().toString());receipts.write(id,request,row);
                 var current=state.load(id);if(current!=null&&request.equals(current.pending())){state.finish(id,request);var maid=body(id);if(maid!=null)maid.getPersistentData().remove(ACTIVE);}
+                var job=jobs.get(id);
+                if(job!=null&&request.equals(job.id()))jobs.remove(id);
+                combat.swordReceipt(id,request,row);
                 latest.put(id,row);
             }
         }
@@ -237,6 +266,10 @@ final class MaidResidents {
             var maid=body(id);
             if(maid==null){
                 var lost=jobs.get(id);
+                if(lost!=null&&lost.input().get("action").getAsString().equals("cast")&&ResidentVortex.selected()){
+                    try { receipt(id,lost.id()); } catch (Exception unavailable) { /* Keep the original fence. */ }
+                    lost=jobs.get(id);
+                }
                 if(lost!=null&&now>lost.deadline()){
                     var row=base(id,lost.id(),lost.input().get("action").getAsString());
                     row.put("status","unknown");row.put("reason","body_unavailable_read_original_request_no_replay");
@@ -284,7 +317,8 @@ final class MaidResidents {
     private void step(ResidentConfig.Resident r,EntityMaid maid,Job job,long now) {
         String action=job.input().get("action").getAsString();Map<String,Object> result=null;
         try {
-            if(maid.getPersistentData().getBoolean(ResidentBodyAccess.DOWNED)&&!action.equals("cli"))throw new IllegalArgumentException("trial_downed_action_stopped");
+            if(maid.getPersistentData().getBoolean(ResidentBodyAccess.DOWNED)&&!action.equals("cli")
+                &&!(action.equals("cast")&&ResidentVortex.selected()&&ResidentVortex.usesSwords(r.maidId())))throw new IllegalArgumentException("trial_downed_action_stopped");
             if(ResidentContract.holdsPosition(job.input())){maid.getNavigation().stop();maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);}
             if(List.of("break","place","equip").contains(action)&&!net.minecraft.world.item.ItemStack.matches(job.item(),ResidentActions.stack(maid,job.input())))
                 throw new IllegalArgumentException("item_components_changed_read_again");
@@ -334,6 +368,7 @@ final class MaidResidents {
         catch(Exception e){row.put("status","unknown");row.put("reason","receipt_storage_failed_no_replay");}
         if((action.equals("walk")||action.equals("home"))&&!"completed".equals(row.get("status"))){maid.getNavigation().stop();maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);}
         if((action.equals("break")||action.equals("place"))&&!leased(r.maidId())&&agents.agent(r.maidId()).revision()==job.revision())maid.setInSittingPose(job.sitting());
+        combat.swordReceipt(r.maidId(),job.id(),row);
         // The world action already has its terminal receipt. A later RPG failure must not replay it next tick.
         jobs.remove(r.maidId());
         if(Boolean.TRUE.equals(row.get("completed"))&&List.of("break","place").contains(action)){
