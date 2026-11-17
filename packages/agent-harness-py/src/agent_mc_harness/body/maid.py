@@ -271,6 +271,28 @@ class MaidBody(BaseBody):
                 self.last_error = type(error).__name__
 
     # ---- actions ----------------------------------------------------------------------------------
+    def _remember_input(self, action: BodyAction) -> None:
+        rid = action.request_id
+        if rid is None:
+            raise ValueError("original_request_id_required")
+        original = self._inputs.get(rid)
+        if original is not None and original != action:
+            raise ValueError("request_id_conflict; query the original request")
+        self._inputs[rid] = action.model_copy(deep=True)
+        self._inputs.move_to_end(rid)
+        while len(self._inputs) > self.LEDGER:
+            self._inputs.popitem(last=False)
+
+    def restore_request(self, action: BodyAction) -> None:
+        # Keep the durable verb/arguments so restart recovery cannot mistake a
+        # read for a write, or brain(choice=...) for its read-only variant.
+        self._remember_input(action)
+        super().restore_request(action)
+
+    def _failed_read(self, request_id: str, verb: str, name: str) -> ActionReceipt:
+        return self.receipt(request_id, verb, "failed", "read_result_unavailable; obtain a fresh observation",
+                            data={"maidAction": name, "readOnly": True, "effectsApplied": False})
+
     async def act(self, action: BodyAction) -> ActionReceipt:
         action = action.model_copy(deep=True)
         action.request_id = action.request_id or new_request_id()
@@ -279,10 +301,7 @@ class MaidBody(BaseBody):
             original = self._inputs.get(rid)
             if original is not None and original != action:
                 return self.receipt(rid, action.verb, "rejected", "request_id_conflict; query the original request")
-            self._inputs[rid] = action
-            self._inputs.move_to_end(rid)
-            while len(self._inputs) > self.LEDGER:
-                self._inputs.popitem(last=False)
+            self._remember_input(action)
             return await super().act(action)
 
     async def _do_act(self, action: BodyAction, request_id: str) -> ActionReceipt:
@@ -323,7 +342,14 @@ class MaidBody(BaseBody):
         write = not maid_read_only(args)
         if write:
             args["requestId"] = request_id
-        reply, result = await self._maids(args, request_id if write else None)
+        try:
+            reply, result = await self._maids(args, request_id if write else None)
+        except ControlChanged:
+            raise  # A failed read never grants a new controller generation.
+        except Exception:
+            if write:
+                raise
+            return self._failed_read(request_id, action.verb, args["action"])
         if self._native and write and isinstance(reply, dict) and reply.get("ok") is True:
             data = reply.get("data")
             if (not isinstance(data, dict) or data.get("operationId") != request_id or data.get("action") != args["action"]
@@ -336,6 +362,8 @@ class MaidBody(BaseBody):
                 status = "accepted"
         if not write and status == "accepted":
             status = "completed"
+        if not write and status == "unknown":
+            return self._failed_read(request_id, action.verb, args["action"])
         text = str((reply or {}).get("reason") or (reply or {}).get("error") or (reply or {}).get("text") or f"{args['action']} {status}")
         if args["action"] == "context" and isinstance(reply, dict) and reply.get("ok"):
             self._apply_context(reply.get("data") or {}, emit=True)
@@ -363,6 +391,11 @@ class MaidBody(BaseBody):
         original = self._inputs.get(request_id)
         if maid_action is None and original is not None:
             maid_action = original.name if original.verb == "native" else VERBS.get(original.verb, (None, (), False))[0]
+        if original is not None and maid_read_only({**original.args, "action": maid_action}):
+            # Reads have no server-side operation receipt. A lost observation is
+            # a failed read, never a completed action and never a reason to replay.
+            # Settle the original ID locally; the host may then plan a fresh read.
+            return self._remember(self._failed_read(request_id, original.verb, str(maid_action)))
         args: dict[str, Any] = {"action": "receipt", "maidId": self.maid_id, "operationId": previous.execution_id or request_id}
         if maid_action and maid_action not in READS:
             args["operationAction"] = maid_action
