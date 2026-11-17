@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.95
+
+- Preserve plugin menus opened by villager interaction, with bounded slot readback and explicit no-purchase evidence. Keep native trade indices distinct from plugin button slots.
+- Clean up merchant listeners and cancelled new windows without closing unrelated pre-existing windows. Native quotation behavior is preserved.
+
 ## 0.5.7-rc.160-preview.94
 
 - Preserve attempted action identity, targets and observed timestamps through native reports, continuation summaries and gameplay memory episodes. Read-only coverage is distinct from inventory or movement effects.
