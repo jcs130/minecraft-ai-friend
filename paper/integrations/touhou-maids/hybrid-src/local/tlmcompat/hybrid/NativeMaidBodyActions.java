@@ -105,6 +105,7 @@ final class NativeMaidBodyActions {
                 case "schedule"->maid.setSchedule(MaidSchedule.valueOf(value));
                 case "pickup"->maid.setPickup(input.get("enabled").getAsBoolean());
                 case "speak"->{
+                    plugin.publishNativeSpeech(maid,request,value);
                     Set<UUID> audience=new HashSet<>();for(var player:maid.getBukkitEntity().getLocation().getNearbyPlayers(16))if(player.canSee(maid.getBukkitEntity())){player.sendMessage(net.kyori.adventure.text.Component.text("<"+maid.getName().getString()+"> "+value));audience.add(player.getUniqueId());}
                     plugin.publishPublicSpeech(maid,request,value,audience.size());plugin.speakPublicReply(maid,request,value,audience);
                     maid.getChatBubbleManager().addTextChatBubble(value);

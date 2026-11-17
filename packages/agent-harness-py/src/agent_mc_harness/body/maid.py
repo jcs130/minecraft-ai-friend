@@ -462,10 +462,16 @@ class MaidBody(BaseBody):
             for row in rows:
                 if isinstance(row, dict) and row.get("eventId") and self._fresh("inbox:" + str(row["eventId"])):
                     context = self._context.get("raw") or {}
+                    speaker = row.get("speakerId") or row.get("senderUuid")
+                    prefix = "qdvoice:" + str(speaker) + ":"
+                    relay = str(row["eventId"])[len(prefix):] if str(row["eventId"]).startswith(prefix) else ""
+                    channel = ("voice" if relay.startswith("voice_") else "npc_chat" if relay.startswith("npc_") else "chat")
                     self.emit("dialogue", str(row.get("text") or "")[:1000], severity=2,
                               data={"eventId": row["eventId"], "maidId": self.maid_id, "ownerId": self.owner_id,
                                     "speaker": row.get("speaker") or row.get("senderName"),
                                     "speakerId": row.get("speakerId") or row.get("senderUuid"),
+                                    "channel": channel, "listenerId": self.maid_id,
+                                    **({"deliveryScope": "nearby"} if relay else {}),
                                     "receivedAt": row.get("receivedAt"), "source": row.get("source") or "untrusted_game_dialogue",
                                     "trusted": False,
                                     "memoryNamespace": row.get("memoryNamespace") or data.get("memoryNamespace") or context.get("memoryNamespace"),

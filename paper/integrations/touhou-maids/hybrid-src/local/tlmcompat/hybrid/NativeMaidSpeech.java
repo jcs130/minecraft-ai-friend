@@ -59,14 +59,16 @@ final class NativeMaidSpeech implements AutoCloseable {
     static NativeMaidSpeech create(HybridMaidPlugin plugin){
         Path path=plugin.getDataFolder().toPath().resolve("companion-speech.json");
         if(!Files.exists(path))return null;
-        try{return new NativeMaidSpeech(plugin,JsonParser.parseString(Files.readString(path)).getAsJsonObject());}
+        try{return new NativeMaidSpeech(plugin,JsonParser.parseString(Files.readString(path)).getAsJsonObject(),false);}
         catch(Exception|LinkageError error){plugin.getLogger().warning("Companion speech not enabled: "+error.getClass().getSimpleName()+"; text dialogue remains available");return null;}
     }
-    private NativeMaidSpeech(HybridMaidPlugin plugin,JsonObject config)throws Exception{
+    NativeMaidSpeech(HybridMaidPlugin plugin,JsonObject config,boolean registeredProfile)throws Exception{
         this.plugin=plugin;if(config.get("schema").getAsInt()!=1)throw new IllegalArgumentException("Unknown voice config");
         maidId=UUID.fromString(config.get("maidId").getAsString());ownerId=UUID.fromString(config.get("ownerId").getAsString());
-        JsonObject brain=JsonParser.parseString(Files.readString(plugin.getDataFolder().toPath().resolve("brain-routing.json"))).getAsJsonObject();
-        if(!maidId.toString().equals(brain.get("maidId").getAsString())||!ownerId.toString().equals(brain.get("ownerId").getAsString()))throw new IllegalArgumentException("Companion identity mismatch");
+        if(!registeredProfile){
+            JsonObject brain=JsonParser.parseString(Files.readString(plugin.getDataFolder().toPath().resolve("brain-routing.json"))).getAsJsonObject();
+            if(!maidId.toString().equals(brain.get("maidId").getAsString())||!ownerId.toString().equals(brain.get("ownerId").getAsString()))throw new IllegalArgumentException("Companion identity mismatch");
+        }
         voice=config.get("voice").getAsString();if(!voice.matches("[A-Za-z0-9_.-]{1,96}"))throw new IllegalArgumentException("Explicit voice required");
         gainDb=config.has("voiceGainDb")?config.get("voiceGainDb").getAsDouble():6;
         volume=new MaidSpeechVolume(gainDb);
@@ -80,7 +82,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         if(service==null)throw new IllegalStateException("Existing voicechat service required");
         soundHook=local.qdj.maids.brain.MaidSpeechControl.bind(maidId,ownerId,this::ambient);
         service.registerPlugin(new VoicechatPlugin(){
-            public String getPluginId(){return "qiandengji_maid_voice";}
+            public String getPluginId(){return "qiandengji_maid_voice_"+maidId.toString().replace("-","");}
             public void registerEvents(EventRegistration events){
                 events.registerEvent(VoicechatServerStartedEvent.class,event->api=event.getVoicechat());
                 events.registerEvent(VoicechatServerStoppedEvent.class,event->{api=null;main(()->cancel("voice_service_stopped"));});
@@ -90,7 +92,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         Bukkit.getScheduler().runTaskTimer(plugin,this::tick,5,5);
     }
     private void main(Runnable action){if(!closed&&plugin.isEnabled())Bukkit.getScheduler().runTask(plugin,()->{if(!closed)action.run();});}
-    private boolean valid(EntityMaid maid){return !closed&&maid.isAlive()&&!maid.isRemoved()&&maidId.equals(maid.getUUID())&&ownerId.equals(maid.getOwnerUUID())&&plugin.sharedDialogueEnabled(maid)&&!maid.isSilent();}
+    private boolean valid(EntityMaid maid){return !closed&&maid.isAlive()&&!maid.isRemoved()&&maidId.equals(maid.getUUID())&&ownerId.equals(maid.getOwnerUUID())&&(plugin.sharedDialogueEnabled(maid)||plugin.unifiedBody(maidId))&&!maid.isSilent();}
     JsonObject describe(EntityMaid maid){
         JsonObject out=new JsonObject();out.addProperty("enabled",valid(maid));
         if(!maidId.equals(maid.getUUID())||!ownerId.equals(maid.getOwnerUUID())){out.addProperty("reason","shared_voice_not_enabled_for_this_maid");return out;}

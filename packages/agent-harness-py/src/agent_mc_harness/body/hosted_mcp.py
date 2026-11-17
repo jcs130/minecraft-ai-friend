@@ -184,6 +184,22 @@ class HostedMcpPort:
             if key in self.seen: continue
             self.seen.add(key)
             kind, words = row["type"], row["text"]
+            if kind == "qd_npc_dialogue":
+                # Only the server-authored event kind is decoded; arbitrary chat
+                # containing JSON never gains speaker identity or private privileges.
+                try:
+                    dialogue = json.loads(words)
+                    if (dialogue.get("schema") != 1 or dialogue.get("listenerId") != self.body
+                            or not isinstance(dialogue.get("speakerId"), str)
+                            or not str(dialogue.get("eventId", "")).startswith("qdvoice:" + dialogue["speakerId"] + ":")
+                            or dialogue.get("channel") not in ("chat", "voice", "npc_chat")
+                            or not isinstance(dialogue.get("text"), str)):
+                        continue
+                    result.append(RawEvent(key, dialogue["text"][:1200], "chat",
+                        {**dialogue, "trusted": False, "nativeKind": kind, "source": "untrusted_game_dialogue"}))
+                except (ValueError, TypeError, AttributeError):
+                    pass
+                continue
             if kind == "task_finished":
                 for task, status, detail in finished_tasks("<events>" + words + "</events>"):
                     self.ledger.finish(self.boot, task, status, detail)

@@ -3,7 +3,7 @@ loaderVersion="[4,)"
 license="MIT"
 [[mods]]
 modId="qiandengji_maid_brain"
-version="0.1.1"
+version="0.1.2"
 displayName="Qiandengji maid brain adapter"
 displayTest="IGNORE_ALL_VERSION"
 [[mixins]]

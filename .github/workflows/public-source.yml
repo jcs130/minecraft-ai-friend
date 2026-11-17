@@ -115,6 +115,8 @@ jobs:
           curl --proto '=https' --tlsv1.2 -fsSL https://cdn.modrinth.com/data/HYKaKraK/versions/QrZrSKnd/packetevents-velocity-2.8.0.jar -o "$RUNNER_TEMP/voice-deps/packetevents.jar"
           python paper/integrations/login-guard/tests/run_transport_tests.py --deps "$RUNNER_TEMP/voice-deps" --output "$RUNNER_TEMP/voice-transport-tests"
           node --test paper/integrations/proximity-voice/tests/client.test.mjs paper/integrations/proximity-voice/tests/trace-client.test.mjs
+          javac --release 21 -cp "$RUNNER_TEMP/maid-life-gson.jar" -d "$RUNNER_TEMP/npc-voice" paper/integrations/proximity-voice/src/dev/god/godvoice/VoiceAudience.java paper/integrations/proximity-voice/src/dev/god/godvoice/NpcDialoguePolicy.java paper/integrations/proximity-voice/tests/NpcDialoguePolicyTest.java
+          java -cp "$RUNNER_TEMP/npc-voice:$RUNNER_TEMP/maid-life-gson.jar" dev.god.godvoice.NpcDialoguePolicyTest
           node --test paper/ops/tests/agent-vision-acceptance.test.mjs
           node --check paper/integrations/proximity-voice/tests/upload-recovery-stage.mjs
           node --check paper/integrations/login-guard/tests/protocol/voice-chunks.mjs

@@ -8,6 +8,7 @@ public final class HostedNativeBridge {
     }
     private void tick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event){
         HostedMigration.tick(event.getServer());
+        HostedNativeSpeech.tick(event.getServer());
         if(net.neoforged.fml.ModList.get().isLoaded("bettercombat"))HostedBetterCombat.tick(event.getServer());
     }
 }

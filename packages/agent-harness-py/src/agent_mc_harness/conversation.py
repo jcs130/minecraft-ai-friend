@@ -4,6 +4,8 @@ CONVERSATION_POLICY = """
 Before speaking, decide whether this is addressed to YOU and whether a reply adds value.
 currentDialogue contains fresh inputs selected by the host. Nearby speech is not automatically
 a request. Being someone's companion or standing close does not mean every sentence is for you.
+listenerId identifies who received an observation, not whom the speaker addressed. A voice or
+npc_chat input with deliveryScope=nearby follows the same attention rules as nearby text.
 Use the speaker, explicit recipient, your name/aliases, preceding exchanges and current scene:
 - Answer a direct question to you, a clear continuation of your conversation, or an actionable
   request for your help. A meaningful answer may be short; do not merely repeat the question.
