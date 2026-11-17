@@ -1,7 +1,30 @@
 import {describe,it,expect} from 'vitest';
 import {workContinuationEvidence as evidence, compactWorkExecutionEvidence as compact} from '../src/contracts/continuation-evidence.ts';
 const read=(id:string,at:string,data:unknown)=>({text:'correlated '+id+' at '+at,data:{requestId:id,query:'dungeon.info',arguments:['crypt'],generation:'realm:1',username:'self',phase:'replied',sentAt:at,afterSequence:id.length,reply:{ok:true,text:id,data},endedAt:at}});
+
+it('keeps the attempted action and observation separate across repeated compaction',()=>{
+  const raw={steps:[{step:1,skill:'goto',what:'Go to (0,64,9)',outcome:'fail',why:'no movement',
+    observedEffect:{schema:'agent-mc-observed-effect/v1',skill:'goto',at:[0,64,9],status:'unchanged',
+      before:{at:'2026-01-01T00:00:00Z',position:[0,64,0]},after:{at:'2026-01-01T00:00:10Z',position:[0,64,0]}}},
+    {step:2,skill:'observe',what:'Read local voxels',outcome:'ok',decision:{status:'partial',completed:91,remaining:261,unit:'cells'},
+      observation:{kind:'voxels',status:'partial',observedAt:'2026-01-01T00:00:10Z',readout:{kind:'voxels',knownComplete:false},cells:Array(352).fill(1)}}]};
+  const result=compact(compact(raw))!;
+  expect(result.steps).toMatchObject([{skill:'goto',what:'Go to (0,64,9)',outcome:'fail',observedEffect:{at:[0,64,9],
+    before:{at:'2026-01-01T00:00:00Z',position:[0,64,0]},after:{at:'2026-01-01T00:00:10Z',position:[0,64,0]}}},
+    {skill:'observe',what:'Read local voxels',decision:{unit:'cells'},observation:{kind:'voxels',readout:{knownComplete:false}}}]);
+  expect(JSON.stringify(result)).not.toContain('"cells":[');expect(result.goalCompleted).toBe(false);
+});
 describe('checkpoint evidence content',()=>{
+  it('delivers evidence clocks without counting resampling as new progress',()=>{
+    const raw=(at:string,x:number)=>({steps:[{step:1,skill:'goto',what:'goto',observedEffect:{schema:'agent-mc-observed-effect/v1',at:[1,64,2],status:'unchanged',before:{at,position:[x,64,0]},after:{at,position:[x,64,0]}}},
+      {step:2,skill:'observe',observation:{kind:'voxels',observedAt:at,summary:{observedCells:20,unknownCells:3}}}]});
+    for(const kind of ['queue','terminal']){
+      const run=(at:string,x:number)=>evidence({tool:'do',arguments:{},receipt:kind==='queue'?{data:{protocol:'agent-mc/task-queue-read/v1',last:{kind:'done',evidence:raw(at,x)}}}:{},
+        ...(kind==='terminal'?{terminal:{execution:{kind:'task',phase:'completed',terminal:true,evidence:raw(at,x)}}}:{})}).key;
+      expect(run('old',0)).toBe(run('new',0));expect(run('old',0)).not.toBe(run('new',1));
+    }
+    expect(JSON.stringify(compact(raw('observed-now',0)))).toContain('observed-now');
+  });
   it('compares reply facts rather than request ids, timestamps, ordering or prose wrappers',()=>{
     const a=evidence({tool:'query',arguments:{query:'dungeon.info'},receipt:JSON.stringify(read('q-1','10:00',{entranceConfigured:false,routeVerified:false}))});
     const b=evidence({tool:'query',arguments:{requestId:'q-1234567'},receipt:read('q-1234567','11:00',{routeVerified:false,entranceConfigured:false})});

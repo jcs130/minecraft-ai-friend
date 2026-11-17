@@ -65,6 +65,7 @@ describe('server travel task lifecycle', () => {
     expect(r.said).toEqual([]);
     const report = r.reports.find(report => report.taskId === task.taskId)!;
     expect(report.kind).toBe('done');
+    expect(report.steps?.[0]).toMatchObject({skill:'server_travel',what:expect.any(String)});
     expect(report.text).toContain('命令未发送');
     expect(report.text).toContain('chat');
     const compact = compactWorkExecutionEvidence(report)!;
