@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate-validated-not-deployed",
+  "version": "0.4.47.88-wheel-loadout",
+  "artifactSha256": "808f9574f77e83b4f86efcac29f1fc18e444ad8f0448c2d1e6920c3050395155",
+  "baseLiveVersion": "0.4.47.87-npc-combat",
+  "baseLiveSha256": "5f776640e200cef644febd848c0f3c21b031bd52a9cf35a6abbfd7c6957561cc",
+  "sourceHashEncoding": "git-text-lf",
+  "sourceSha256": {
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/AdventureMenuModel.java": "9ba72723f0e19b8eee172ded773e109ba269f51dbdf8e3605f34dad8b500a7b9",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/PlayerAdventureMenus.java": "0a3d1d852646a3338f917ff0252a7655d21d122e3c0b1967badc7329ab4aa589",
+    "paper/plugins/AgentFriend/src/org/afuhome/agentfriend/SpellWheelLoadout.java": "f1301bc072e5efabf8da750b6f31de34f484d2086bd70b0ff6c0451df18ccf35"
+  },
+  "checks": {
+    "menuAndTicketRules": 76,
+    "loadoutRules": 14,
+    "nativeWheel": 20,
+    "normalRestart": 5,
+    "realCumulusCodec": 43,
+    "weaponRegression": 23,
+    "weaponRestart": 4,
+    "baselineMissingConfigurationReproduced": true,
+    "physicalDeviceAcceptance": false
+  },
+  "phases": {
+    "codeMerged": false,
+    "candidateValidated": true,
+    "productionDeployed": false,
+    "realPlayerDeviceAccepted": false
+  },
+  "evidenceRoot": "D:\\codex\\2026-09-14\\new-chat\\artifacts\\spell-wheel-loadout-20261118",
+  "stage": "E:\\MC\\staging\\spell-wheel-loadout-20261118-r1",
+  "productionChanged": false,
+  "clientJarUpdateRequired": false,
+  "rollback": "Code JAR only; preserve current world, accounts, inventory, config and personal wheel preferences."
+}

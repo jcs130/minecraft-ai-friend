@@ -96,5 +96,48 @@
     "keptPatches": [
       "none - our remaining code is the actuator and the two bridges, which use upstream public APIs"
     ]
+  },
+  "candidate": {
+    "status": "verified locally on a 0.1.3-save snapshot server; NOT deployed. The live server still runs `deployed` above.",
+    "verifiedAt": "2026-11-17",
+    "numen": {
+      "tag": "v0.1.5 (Dwinovo/minecraft-numen)",
+      "commit": "06422d18",
+      "asset": "numen-neoforge-1.21.1-0.1.5.jar",
+      "sha256": "db9dbfea03cb20c3f1444b558bc082224d4f698111a4b19c215ccf6cd7886b94",
+      "sizeBytes": 7798320,
+      "note": "Upstream release used as-is; no local patches. Native MCP endpoint (config/numen/server/mcp_server.json, 127.0.0.1 only) replaces numen_act invoke and the qdworld receipt bridge."
+    },
+    "companionArtifacts": {
+      "numen_act-neoforge-1.21.1-0.1.5.jar": {
+        "sha256": "6c530b24a946a125f115310f864033784958ad966a508d5c780c0016594000bd",
+        "build": "python tools/build_numen_actuator.py (assembled from source resources; restore contract test 153 assertions)",
+        "keeps": [
+          "numen_restore_existing",
+          "GodChannel (invoke verb retired)",
+          "numen_act snapshot (vision)",
+          "pad",
+          "skin",
+          "say/whisper",
+          "dumpregistry"
+        ],
+        "retired": [
+          "numen_act invoke (use MCP lua)"
+        ]
+      },
+      "qiandeng-irons-bridge-0.1.0.jar": {
+        "sha256": "029bbbaa80662aadf81213eeb6c1e2f58bf808e42c9080ac1ec89257448d6a9d",
+        "build": "python tools/build_irons_bridge.py --numen-jar <0.1.5> (155 contract checks)",
+        "retired": [
+          "qdworld interact/eat/drop/mine receipt bridge (use numen.use.block, numen.inv.eat/drop, numen.work.mine)"
+        ]
+      }
+    },
+    "deployPrerequisites": [
+      "world/survival gateway still calls `numen_act invoke` and `qdworld interact|eat|drop|mine`; migrate it to the native MCP NumenBody (agent-harness-py, lua_dialect numen-0.1.5) before swapping jars on the live server.",
+      "0.1.5 move.walk may dig and place under Numen's permission rules (factory rules allow breaking nature and placing non-hazard blocks). For walk-only bodies the owner adds `/numen permission rules add deny break(*)` and `... deny place(*)` (scope with @name).",
+      "A brain token is issued in game by the owner: /numen token create brain <companion|all> <days>."
+    ],
+    "runbook": "docs: /workspace/numen-0.1.5-upgrade-notes.md (box-local) section 'Server upgrade runbook'"
   }
 }

@@ -14,7 +14,9 @@ export interface ExecutionReceipt {
    * original event timestamp when retaining causal history beside newer state. */
   evidence?: Record<string, unknown>;
 }
-export interface CallOptions { requestId?: string; turnId?: string; signal?: AbortSignal; attribution?: import('../../core/operation-experience.ts').OperationAttribution }
+export interface CallOptions { requestId?: string; turnId?: string; signal?: AbortSignal; attribution?: import('../../core/operation-experience.ts').OperationAttribution;
+  /** Capability for MinecraftClientOptions.bodyGate; never serialized. */
+  bodyKey?: object }
 export interface CallControl {
   protocol: ProtocolVersion;
   requestId: string;

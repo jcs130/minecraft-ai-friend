@@ -40,7 +40,10 @@ jobs:
           node --check paper/probe/rpg-usability/dungeon-readiness.mjs
           node --check paper/probe/inventory-tidy/stage.mjs
       - name: Check player menu navigation and single-use responses
-        run: python paper/ops/test-player-ui.py
+        run: |
+          python paper/ops/test-player-ui.py
+          node --check paper/plugins/AgentFriend/tests/spell-wheel-loadout-stage.mjs
+          node --check paper/plugins/AgentFriend/tests/weapon-skill-wheel-stage.mjs
       - name: Check native travel marker planning without touching a world
         run: |
           python paper/ops/test_travel_markers.py
@@ -64,8 +67,10 @@ jobs:
           node --check paper/integrations/touhou-maids/tests/follow-radius-stage.mjs
           node --check paper/integrations/touhou-maids/tests/portal-travel-stage.mjs
           python -m unittest discover -s paper/integrations/touhou-maids/tests -p test_harness_gateway.py -v
+          python -m unittest discover -s paper/ops/tests -p test_maid_controller_migration.py -v
           python -m unittest discover -s paper/integrations/touhou-maids/standalone/tests -p 'test_*.py' -v
           python paper/integrations/touhou-maids/standalone/tests/run_companion_ledger.py --jdk "$JAVA_HOME" --gson "$RUNNER_TEMP/maid-life-gson.jar"
+          python paper/integrations/touhou-maids/tests/run-native-body.py --jdk "$JAVA_HOME" --gson "$RUNNER_TEMP/maid-life-gson.jar"
           node --check paper/integrations/touhou-maids/tests/brain-harness-stage.mjs
           node --check paper/integrations/touhou-maids/tests/social-stage.mjs
           python paper/integrations/touhou-maids/tests/run-conversation-rules.py
@@ -113,6 +118,8 @@ jobs:
           curl --proto '=https' --tlsv1.2 -fsSL https://cdn.modrinth.com/data/HYKaKraK/versions/QrZrSKnd/packetevents-velocity-2.8.0.jar -o "$RUNNER_TEMP/voice-deps/packetevents.jar"
           python paper/integrations/login-guard/tests/run_transport_tests.py --deps "$RUNNER_TEMP/voice-deps" --output "$RUNNER_TEMP/voice-transport-tests"
           node --test paper/integrations/proximity-voice/tests/client.test.mjs paper/integrations/proximity-voice/tests/trace-client.test.mjs
+          javac --release 21 -cp "$RUNNER_TEMP/maid-life-gson.jar" -d "$RUNNER_TEMP/npc-voice" paper/integrations/proximity-voice/src/dev/god/godvoice/VoiceAudience.java paper/integrations/proximity-voice/src/dev/god/godvoice/NpcDialoguePolicy.java paper/integrations/proximity-voice/tests/NpcDialoguePolicyTest.java
+          java -cp "$RUNNER_TEMP/npc-voice:$RUNNER_TEMP/maid-life-gson.jar" dev.god.godvoice.NpcDialoguePolicyTest
           node --test paper/ops/tests/agent-vision-acceptance.test.mjs
           node --check paper/integrations/proximity-voice/tests/upload-recovery-stage.mjs
           node --check paper/integrations/login-guard/tests/protocol/voice-chunks.mjs

@@ -48,7 +48,7 @@ def tool_signature(call):
         return None
 
 
-def native_plan_payload(payload):
+def native_plan_payload(payload, *, allow_dialogue=False):
     """Normalize exactly one fenced JSON plan or repeated identical complete frames.
 
     Never select between conflicting plans or turn arbitrary prose into a call.
@@ -68,6 +68,19 @@ def native_plan_payload(payload):
         if not all(isinstance(value, dict) and set(value) <= {'content', 'tool_calls'} and value == values[0] for value in values):
             return payload
     except (ValueError, TypeError, KeyError):
+        # TLM can request its bilingual literal reply. A single completed text
+        # frame is speech only; never infer tools or repair a partial JSON plan.
+        if allow_dialogue and len(frames) == 1:
+            parts = frames[0].get('content', [])
+            if (len(parts) == 1 and parts[0].get('type') == 'output_text'
+                    and isinstance(parts[0].get('text'), str)
+                    and all(row.get('type') in {'message', 'reasoning'} for row in payload['output'])):
+                text = parts[0]['text']
+                if (0 < len(text.strip()) <= 16000 and not text.lstrip().startswith(('{', '[', '"', '`'))
+                        and '```' not in text and not any(c in text for c in ('\x00', '\x01'))):
+                    original = {**frames[0], 'content': [{'type': 'output_text', 'text': json.dumps(
+                        {'content': text, 'tool_calls': []}, ensure_ascii=False, allow_nan=False)}]}
+                    return {**payload, 'output': [original if row is frames[0] else row for row in payload['output']]}
         return payload
     if len(frames) == 1 and not fenced[0]:
         return payload
@@ -196,7 +209,7 @@ class ExistingPlanner:
         module = self.module
         class NativePlanner(module.HarnessRouterPlanner):
             async def request(self, method, path, **kwargs):
-                return native_plan_payload(await super().request(method, path, **kwargs))
+                return native_plan_payload(await super().request(method, path, **kwargs), allow_dialogue=True)
         config = module.HarnessRouterConfig.parse({
             'base_url': self.config['hub']['base_url'],
             'harness_id': choice['harness_id'], 'model': choice['model'],

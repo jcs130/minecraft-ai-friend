@@ -1,6 +1,6 @@
 package com.dwinovo.numen.actuator;
 
-import com.dwinovo.numen.entity.NumenPlayer;
+import com.dwinovo.numen.api.entity.NumenPlayer;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.minecraft.commands.CommandSourceStack;

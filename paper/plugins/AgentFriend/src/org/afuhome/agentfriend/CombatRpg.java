@@ -37,17 +37,17 @@ final class CombatRpg implements Listener {
     CombatRpg(AgentFriendPlugin plugin)throws Exception {
         this.plugin=plugin;ledger=new CombatRpgLedger(plugin.getDataFolder().toPath().resolve("combat-rpg-ledger.json"));
         origin=new NamespacedKey(plugin,"combat_origin");healthKey=new NamespacedKey(plugin,"combat_health");attackKey=new NamespacedKey(plugin,"combat_attack");
+        Bukkit.getPluginManager().registerEvents(this,plugin);
         if(plugin.nativeRpg().selected()){
             Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
             return;
         }
-        Bukkit.getPluginManager().registerEvents(this,plugin);
         Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
         if(Bukkit.getPluginManager().isPluginEnabled("TAB"))tab=new RpgTabBridge(plugin,this);
     }
     private boolean eligible(Player p){return p.isOnline()&&!p.isDead()&&!plugin.isObserver(p)&&!plugin.pvpParticipant(p)
             &&Set.of(GameMode.SURVIVAL,GameMode.ADVENTURE).contains(p.getGameMode());}
-    private Player attacker(Entity e){return e instanceof Player p?p:e instanceof Projectile projectile&&projectile.getShooter() instanceof Player p?p:null;}
+    private Player attacker(Entity e){return ResidentCli.fromEntity(e instanceof Projectile projectile&&projectile.getShooter() instanceof Entity source?source:e);}
     private LivingEntity hostileAttacker(Entity e){return e instanceof Enemy enemy?enemy:e instanceof Projectile projectile&&projectile.getShooter() instanceof Enemy enemy?enemy:null;}
     private boolean eligibleMob(LivingEntity e){
         if(!(e instanceof Enemy)||!XP.containsKey(e.getType())||e.hasMetadata("NPC"))return false;
@@ -58,6 +58,8 @@ final class CombatRpg implements Listener {
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
     public void spawn(CreatureSpawnEvent e){if(e.getEntity() instanceof Enemy)e.getEntity().getPersistentDataContainer().set(origin,PersistentDataType.STRING,e.getSpawnReason().name());}
     private void record(LivingEntity enemy,Player p,double damage,double tanking,double healing){
+        // Native players keep Vortex's XP path. Only resident bodies use this ledger's combat XP there.
+        if(plugin.nativeRpg().selected()&&!ResidentCli.isResident(p.getUniqueId()))return;
         if(!eligible(p)||!eligibleMob(enemy)||fault||stopping)return;
         if(contributions.size()>=2048&&!contributions.containsKey(enemy.getUniqueId()))return;
         var rows=contributions.computeIfAbsent(enemy.getUniqueId(),id->new HashMap<>());
@@ -69,7 +71,7 @@ final class CombatRpg implements Listener {
     public void damage(EntityDamageByEntityEvent e){
         if(e.getEntity() instanceof LivingEntity enemy){var p=attacker(e.getDamager());
             if(p!=null&&e.getFinalDamage()>0)record(enemy,p,Math.min(e.getFinalDamage(),enemy.getHealth()+enemy.getAbsorptionAmount()),0,0);}
-        if(e.getEntity() instanceof Player p){var enemy=hostileAttacker(e.getDamager());
+        Player victim=ResidentCli.fromEntity(e.getEntity());if(victim!=null){var p=victim;var enemy=hostileAttacker(e.getDamager());
             if(enemy!=null)record(enemy,p,0,Math.min(20,Math.max(0,e.getOriginalDamage(EntityDamageEvent.DamageModifier.BASE))),0);}
     }
     /** Only call with effective healing measured by the native skill executor. */
@@ -88,7 +90,7 @@ final class CombatRpg implements Listener {
         var enemy=e.getEntity();var rows=contributions.remove(enemy.getUniqueId());if(rows==null||!eligibleMob(enemy))return;
         long now=System.currentTimeMillis();var fighters=new ArrayList<CombatRpgRules.Fighter>();
         for(var row:rows.entrySet()){
-            Player p=Bukkit.getPlayer(row.getKey());if(p==null||p.getWorld()!=enemy.getWorld())continue;var c=row.getValue();
+            Player p=ResidentCli.find(row.getKey());if(p==null||p.getWorld()!=enemy.getWorld())continue;var c=row.getValue();
             fighters.add(new CombatRpgRules.Fighter(p.getUniqueId(),p.getName(),c.damage,c.tanking,c.healing,
                     now-c.at<=60_000&&p.getLocation().distanceSquared(enemy.getLocation())<=32*32,eligible(p)));
         }
@@ -163,7 +165,11 @@ final class CombatRpg implements Listener {
         if(stopping)return;long now=System.currentTimeMillis();
         // Durable outbox written with the actual dungeon reward receipt. Recover
         // across a crash between dungeon settlement and this ledger's disk write.
-        if(++ticks%5==0)for(Player p:Bukkit.getOnlinePlayers()){
+        if(++ticks%5==0)for(Player p:ResidentCli.online()){
+            if(ResidentCli.isResident(p.getUniqueId()))try{
+                // Set a cumulative projection from the durable ledger, never re-add an award on reconnect.
+                ResidentCli.nativeCall("combatExperience",new Class[]{UUID.class,long.class},p.getUniqueId(),(long)ledger.snapshot().player(p.getUniqueId(),p.getName()).xp());
+            }catch(ReflectiveOperationException|RuntimeException missing){plugin.getLogger().warning("Resident combat projection unavailable: "+p.getUniqueId());}
             var proof=plugin.getConfig().getConfigurationSection("site-dungeons.conquest-proofs."+p.getUniqueId());
             if(proof!=null)for(String floor:proof.getKeys(false))try{
                 int number=Integer.parseInt(floor);UUID run=UUID.fromString(proof.getString(floor,""));

@@ -652,9 +652,9 @@ final class TaskMarketManager implements Listener {
             player.sendMessage("§c任务状态无效；未交付或领奖。停止重交，/mycli guild status 保留当前记录并把任务ID和时间告知服主。"); finish.accept(false); return;
         }
         long now = System.currentTimeMillis();
-        if (!checking.add(player.getUniqueId())) { player.sendMessage("§e正在验收，请等待当前结果。"); return; }
+        if (!checking.add(player.getUniqueId())) { player.sendMessage("§e正在验收，请等待当前结果。"); verificationRefused(player,"verification_in_progress",1000,finish); return; }
         if (now - lastCheck.getOrDefault(player.getUniqueId(), 0L) < 1000) {
-            checking.remove(player.getUniqueId()); player.sendMessage("§e请等待一秒再验收。"); return;
+            checking.remove(player.getUniqueId()); player.sendMessage("§e请等待一秒再验收。"); verificationRefused(player,"verification_throttled",1000-(now-lastCheck.get(player.getUniqueId())),finish); return;
         }
         lastCheck.put(player.getUniqueId(), now);
         String run = run(player); int step = index(player);
@@ -685,6 +685,12 @@ final class TaskMarketManager implements Listener {
             else checked(player, task, run, step, result, finish);
         });
     }
+    private void verificationRefused(Player player,String reason,long retryAfter,Consumer<Boolean> finish) {
+        JsonObject data=new JsonObject();data.addProperty("success",false);data.addProperty("reason",reason);
+        data.addProperty("completed",false);data.addProperty("changed",false);data.addProperty("retryable",true);
+        data.addProperty("retryAfterMs",retryAfter);data.addProperty("nextSafeRead","/mycli guild status");
+        send(player,"MC_MARKET_VERIFY",data);finish.accept(false);
+    }
     private void recheckEarlier(Player player, Task task, String run, int currentStep, int earlier,
             EngineeringSites.Result current, Consumer<Boolean> finish) {
         while (earlier < currentStep && !engineering(task.contract(earlier))) earlier++;
@@ -700,7 +706,7 @@ final class TaskMarketManager implements Listener {
     }
     private void checked(Player player, Task task, String run, int step, EngineeringSites.Result result, Consumer<Boolean> finish) {
         checking.remove(player.getUniqueId());
-        if (!run.equals(run(player)) || step != index(player) || !player.isOnline()) return;
+        if (!run.equals(run(player)) || step != index(player) || !player.isOnline()) { finish.accept(false); return; }
         if(!plugin.skillAssessments().photoExam(player).isEmpty()) {
             JsonArray photos=new JsonArray();boolean complete=true;
             for(int i=0;i<task.steps.size();i++)if(photoStep(task.steps.get(i))&&(i==step||step==task.steps.size()-1)) {
@@ -776,6 +782,19 @@ final class TaskMarketManager implements Listener {
         plugin.getConfig().set(path + ".last-evidence", null); plugin.getConfig().set(path + ".last-reason", null);
         plugin.getConfig().set(activePath(player) + ".progress", 0);
         plugin.getConfig().set(path + ".action-evidence", null); plugin.getConfig().set(path + ".action-amount", null);
+        // Native harvesters can replant before the owner has time to claim the harvest
+        // step. Carry only verified replant events for that immediately paired step.
+        if (task.steps.get(index).goal == GuildManager.Goal.HARVEST
+                && task.steps.get(index + 1).goal == GuildManager.Goal.REPLANT
+                && java.util.Objects.equals(task.steps.get(index).site, task.steps.get(index + 1).site)) {
+            String crop = task.steps.get(index + 1).site;
+            for (String proof : plugin.getConfig().getStringList(path + ".paired-replants")) {
+                String prefix = crop + ":";
+                if (proof.startsWith(prefix) && harvested(player, crop, proof.substring(prefix.length())))
+                    action(player, GuildManager.Goal.REPLANT, 1, proof.substring(prefix.length()), false);
+            }
+        }
+        plugin.getConfig().set(path + ".paired-replants", null);
         plugin.saveConfig();
         GuildManager.Contract next = task.contract(index + 1);
         player.sendMessage("§a阶段已交付，继续：" + next.title() + "。" + next.description()
@@ -922,6 +941,20 @@ final class TaskMarketManager implements Listener {
     }
     boolean harvested(Player player, String crop, String location) {
         return frozen(player) != null && plugin.getConfig().getStringList(marketPath(player) + ".harvested").contains(crop + ":" + location);
+    }
+    /** Called only after a real planting event; never by status/claim or model input. */
+    void replanted(Player player, String crop, String location) {
+        Task task = frozen(player);
+        if (task == null || player.isDead() || player.getGameMode() != GameMode.SURVIVAL || !harvested(player, crop, location)) return;
+        int current = index(player); Step step = task.steps.get(current);
+        if (step.goal == GuildManager.Goal.REPLANT) {
+            worldAction(player, GuildManager.Goal.REPLANT, crop, location, System.currentTimeMillis());
+        } else if (step.goal == GuildManager.Goal.HARVEST && crop.equals(step.site) && current + 1 < task.steps.size()
+                && task.steps.get(current + 1).goal == GuildManager.Goal.REPLANT && crop.equals(task.steps.get(current + 1).site)) {
+            String path = marketPath(player) + ".paired-replants", key = crop + ":" + location;
+            List<String> proofs = new ArrayList<>(plugin.getConfig().getStringList(path));
+            if (!proofs.contains(key) && proofs.size() < 4096) { proofs.add(key); plugin.getConfig().set(path, proofs); plugin.saveConfig(); }
+        }
     }
     boolean createdPhoto(Player player, String evidence) {
         return frozen(player) != null && plugin.getConfig().getStringList(marketPath(player) + ".photos").contains(evidence);

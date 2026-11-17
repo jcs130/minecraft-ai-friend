@@ -26,7 +26,11 @@ record ResidentConfig(int schema, int planningSeconds, List<Resident> residents)
     record Home(String dimension, Point door, Point bed, String facing, Point sign, String signFacing,
                 Point work, Area interior, List<Furniture> furniture) {}
     record Resident(UUID maidId, String name, String profession, String nativeTask, Home home,
-                    Area workArea, List<String> mineBlocks, List<String> buildBlocks, boolean autonomous, Appearance appearance,boolean roamingWork) {}
+                    Area workArea, List<String> mineBlocks, List<String> buildBlocks, boolean autonomous, Appearance appearance,boolean roamingWork,Boolean combatEnabled,String controller,List<UUID> allies) {
+        boolean combat(){return !Boolean.FALSE.equals(combatEnabled);}
+        boolean external(){return "unified".equals(controller);}
+        boolean allied(UUID other){return external()&&allies!=null&&allies.contains(other);}
+    }
     static ResidentConfig read(Path path, MaidAgentsServer agents) throws java.io.IOException {
         if(!Files.exists(path)) return new ResidentConfig(1,180,List.of());
         if(Files.size(path)>128*1024) throw new IllegalArgumentException("residents_config_too_large");
@@ -35,8 +39,10 @@ record ResidentConfig(int schema, int planningSeconds, List<Resident> residents)
             throw new IllegalArgumentException("invalid_residents_config");
         var ids=new HashSet<UUID>(); var names=new HashSet<String>(); var beds=new HashSet<String>();
         for(var r:c.residents) {
+            if(r!=null&&r.controller!=null&&!List.of("native","unified").contains(r.controller))throw new IllegalArgumentException("invalid_resident_controller");
+            if(r!=null&&r.allies!=null&&(r.allies.size()>16||r.allies.contains(null)||new HashSet<>(r.allies).size()!=r.allies.size()))throw new IllegalArgumentException("invalid_resident_allies");
             if(r==null||r.maidId==null||agents.agent(r.maidId)==null||!ids.add(r.maidId)||!text(r.name,24)||
-                !names.add(r.name)||!List.of("guardian","ranger","mage","healer","artisan","farmer").contains(r.profession))
+                !names.add(r.name)||!List.of("guardian","ranger","mage","healer","artisan","farmer","knight","cleric","engineer","beastmaster").contains(r.profession))
                 throw new IllegalArgumentException("invalid_resident_identity_or_profession");
             ResourceLocation.parse(r.nativeTask);
             if(r.appearance!=null&&(r.appearance.modelId==null||!r.appearance.modelId.matches("[A-Za-z0-9_-][A-Za-z0-9_.-]{0,110}\\.ysm")||

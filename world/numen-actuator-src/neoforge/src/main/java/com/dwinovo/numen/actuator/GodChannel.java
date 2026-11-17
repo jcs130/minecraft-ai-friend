@@ -1,9 +1,7 @@
 package com.dwinovo.numen.actuator;
 
-import com.dwinovo.numen.agent.tool.NumenTool;
-import com.dwinovo.numen.agent.tool.ToolRegistry;
-import com.dwinovo.numen.entity.Companions;
-import com.dwinovo.numen.entity.NumenPlayer;
+import com.dwinovo.numen.api.entity.Companions;
+import com.dwinovo.numen.api.entity.NumenPlayer;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -47,7 +45,7 @@ import java.util.stream.Stream;
  * </pre>
  *
  * <p>动词表（与 /numen_act 同源，另加 exec 通用命令）：
- * list / summon / invoke / dismiss / say / whisper / exec / status。
+ * list / summon / dismiss / say / whisper / exec / status（invoke 已随 Numen 0.1.5 退役，改走原生 MCP lua）。
  *
  * <p>协议要点：单写者（女神侧写 inbox，服务器侧写 outbox/processed/status）；
  * 请求文件由写方 tmp+rename 原子落盘；处理即归档，失败也归档（不自动重试，
@@ -214,7 +212,7 @@ public final class GodChannel {
                 case "list" -> resp.addProperty("result", doList(server));
                 case "status" -> resp.add("result", buildStatus(server));
                 case "summon" -> resp.addProperty("result", doSummon(server, req));
-                case "invoke" -> resp.addProperty("result", doInvoke(server, req));
+                // "invoke" was retired with Numen 0.1.5: tools run through native MCP lua.
                 case "dismiss" -> resp.addProperty("result", doDismiss(server, req));
                 case "say" -> resp.addProperty("result", doSayCmd(server, req));
                 case "whisper" -> resp.addProperty("result", doWhisperCmd(server, req));
@@ -254,23 +252,13 @@ public final class GodChannel {
         String name = req.get("name").getAsString();
         ServerLevel level = server.overworld();
         Vec3 pos = Vec3.atCenterOf(level.getSharedSpawnPos());
-        NumenPlayer body = Companions.summon(server, ownerUuid, name, level, pos);
+        // NeoForge admission is synchronous: the arrival is known before summon returns.
+        java.util.concurrent.atomic.AtomicReference<com.dwinovo.numen.api.entity.Arrivals.Arrival<NumenPlayer>> arrival =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        Companions.summon(server, ownerUuid, name, level, pos, arrival::set);
+        NumenPlayer body = arrival.get() == null ? null : arrival.get().body();
         if (body == null) throw new IllegalStateException("summon failed: " + name);
         return "summoned=" + name + "|uuid=" + body.getUUID();
-    }
-
-    private static String doInvoke(MinecraftServer server, JsonObject req) {
-        NumenPlayer companion = needCompanion(server, req);
-        String toolName = req.get("tool").getAsString();
-        NumenTool tool = ToolRegistry.get(toolName);
-        if (tool == null) throw new IllegalArgumentException("no tool: " + toolName);
-        JsonObject args = req.has("args") && req.get("args").isJsonObject()
-                ? req.getAsJsonObject("args") : new JsonObject();
-        String callId = UUID.randomUUID().toString();
-        String[] result = new String[1];
-        tool.onServerCall(callId, args, companion, reply -> result[0] = reply);
-        return result[0] != null ? result[0]
-                : "{\"accepted\":true,\"note\":\"no immediate reply (async tool)\"}";
     }
 
     private static String doDismiss(MinecraftServer server, JsonObject req) {

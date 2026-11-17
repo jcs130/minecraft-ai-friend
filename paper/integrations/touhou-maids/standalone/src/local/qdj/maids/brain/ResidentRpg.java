@@ -14,7 +14,7 @@ import net.minecraft.world.entity.monster.Enemy;
 /** Per-body progression. Native jobs handle attacks; these modest class skills consume finite resources. */
 final class ResidentRpg {
     static final String KEY="tlm_resident_rpg";
-    static String title(String job) { return switch(job){case "guardian"->"守护剑士";case "ranger"->"游侠";case "mage"->"寒霜术士";case "healer"->"行医者";case "artisan"->"工匠";default->"草药师";}; }
+    static String title(String job) { return switch(job){case "knight"->"骑士";case "cleric"->"牧师";case "engineer"->"工程师";case "beastmaster"->"驯兽师";case "guardian"->"守护剑士";case "ranger"->"游侠";case "mage"->"法师";case "healer"->"行医者";case "artisan"->"工匠";default->"草药师";}; }
     static List<String> skills(String job) { return switch(job){case "guardian"->List.of("guard");case "ranger"->List.of("sprint");case "mage"->List.of("frost");case "healer","farmer"->List.of("mend");default->List.of("haste");}; }
     static CompoundTag data(EntityMaid maid) {
         var persistent=maid.getPersistentData();
@@ -31,9 +31,13 @@ final class ResidentRpg {
         return data;
     }
     static long now(EntityMaid maid){return maid.getServer().overworld().getGameTime();}
-    static int level(EntityMaid maid) { return Math.min(20,1+data(maid).getInt("xp")/100); }
-    static void xp(EntityMaid maid,int amount) { var d=data(maid);d.putInt("xp",Math.min(1_000_000,d.getInt("xp")+amount)); }
+    static long experience(EntityMaid maid){return data(maid).getInt("xp")+data(maid).getLong("combatXp");}
+    static int level(EntityMaid maid) { return (int)Math.min(20,1+experience(maid)/100); }
+    static void xp(EntityMaid maid,int amount) { if(ResidentVortex.selected()){ResidentVortex.xp(maid.getUUID(),amount);return;}var d=data(maid);d.putInt("xp",Math.min(1_000_000,d.getInt("xp")+amount)); }
     static void tick(EntityMaid maid) {
+        if(ResidentVortex.selected()){
+            try{ResidentVortex.tick(maid,MaidAgentsMod.residents().role(maid.getUUID()).profession());}catch(RuntimeException unavailable){/* Read status reports the unavailable native backend; no legacy fallback. */}return;
+        }
         var d=data(maid); long time=now(maid);
         if(time-d.getLong("regenerated")>=20) {d.putDouble("mana",Math.min(max(maid),d.getDouble("mana")+.25));d.putLong("regenerated",time);}
     }
@@ -51,17 +55,19 @@ final class ResidentRpg {
                 default->"本人急迫 I，5秒";})).toList();
     }
     static Map<String,Object> observe(EntityMaid maid,String profession) {
-        return Map.of("progressionSystem","resident_classes_v1","profession",profession,"title",title(profession),"level",level(maid),"xp",data(maid).getInt("xp"),
+        if(ResidentVortex.selected())return ResidentVortex.observe(maid.getUUID());
+        return Map.of("progressionSystem","resident_classes_v1","profession",profession,"title",title(profession),"level",level(maid),"xp",experience(maid),"workXp",data(maid).getInt("xp"),"combatXp",data(maid).getLong("combatXp"),
             "mana",Map.of("current",data(maid).getDouble("mana"),"max",max(maid)),"skills",skills(profession),"abilities",abilities(maid,profession));
     }
     static Map<String,Object> cast(EntityMaid maid,String profession,String id,List<LivingEntity> allies) {
+        if(ResidentVortex.selected())throw new IllegalArgumentException("native_cast_requires_request_id");
         if(!skills(profession).contains(id)) throw new IllegalArgumentException("skill_not_learned_for_profession");
         var d=data(maid); long now=now(maid); int cost=id.equals("frost")?4:5;
         if(d.getLong("cooldown_"+id)>now) throw new IllegalArgumentException("skill_cooldown");
         if(d.getDouble("mana")<cost) throw new IllegalArgumentException("mana_low");
         var world=(ServerLevel)maid.level(); LivingEntity target=null; int affected=0;
         if(id.equals("frost")) {
-            target=world.getEntitiesOfClass(LivingEntity.class,maid.getBoundingBox().inflate(10),e->e instanceof Enemy&&e.isAlive()&&maid.canAttack(e)&&maid.hasLineOfSight(e))
+            target=world.getEntitiesOfClass(LivingEntity.class,maid.getBoundingBox().inflate(10),e->ResidentCombat.visibleHostile(maid,e,10))
                 .stream().min(java.util.Comparator.comparingDouble(maid::distanceToSqr)).orElse(null);
             if(target==null) throw new IllegalArgumentException("no_visible_hostile");
             if(!target.hurt(world.damageSources().mobAttack(maid),3+Math.min(3,level(maid)/3))) throw new IllegalArgumentException("damage_refused");
@@ -82,5 +88,12 @@ final class ResidentRpg {
         var at=target==null?maid.position():target.position();
         world.sendParticles(id.equals("frost")?ParticleTypes.SNOWFLAKE:ParticleTypes.HAPPY_VILLAGER,at.x,at.y+1,at.z,14,.4,.5,.4,.02);
         return Map.of("status","completed","completed",true,"reason","skill_applied","skill",id,"affected",affected,"manaSpent",cost);
+    }
+    static Map<String,Object> cast(EntityMaid maid,String profession,String id,List<LivingEntity> allies,java.util.UUID request){
+        return ResidentVortex.selected()?ResidentVortex.cast(maid,request,id):cast(maid,profession,id,allies);
+    }
+    static boolean mana(EntityMaid maid,double amount,boolean spend){
+        if(ResidentVortex.selected())return ResidentVortex.mana(maid.getUUID(),amount,spend);
+        var d=data(maid);if(d.getDouble("mana")<amount)return false;if(spend)d.putDouble("mana",d.getDouble("mana")-amount);return true;
     }
 }

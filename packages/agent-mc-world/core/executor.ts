@@ -16,6 +16,7 @@ import { skillSwim } from './swim-route.ts';
 import { observeDamage, type DamageEvidence } from './damage-evidence.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
+import { clearNavigationDrop, hasApprovedNavigationDrop } from './navigation-fall.ts';
 import type { Logger } from './support/host-contract.ts';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import type { MinecraftLog } from './log.ts';
@@ -1122,7 +1123,7 @@ export interface TaskReport {
   progress?: TaskEffectProgress;
   /** Last completed step of a successful task. */
   lastSkill?: SkillCall['skill'];
-  steps?: Array<{ step: number; outcome: StepOutcome | 'cut'; why: string | null;
+  steps?: Array<{ step: number; skill?: SkillCall['skill']; what?: string; outcome: StepOutcome | 'cut'; why: string | null;
     detail?: { text: string; chars: number; truncated: boolean }; observedEffect?: ObservedEffect;
     decision?: StepDecision; observation?: Record<string,unknown> }>;
   /** 同形状任务在短时间内再次未达整体目标时，附上上一回的受阻事实。 */
@@ -5145,7 +5146,8 @@ export class Executor {
       data: { by, landings },
     });
     this.opts.report({ kind: 'cancelled', text, taskId: task.id,
-      steps: landings.map(landing => ({ step: landing.step, outcome: landing.outcome, why: landing.why,
+      steps: landings.map(landing => ({ step: landing.step, skill: task.steps[landing.step - 1]?.skill,
+        what: landing.what, outcome: landing.outcome, why: landing.why,
         decision: 'decision' in landing && landing.decision ? landing.decision
           : stepDecision(landing.outcome, undefined, landing.outcome === 'cut' ? progress?.count ?? undefined : undefined),
         ...('observation' in landing && landing.observation ? { observation: landing.observation } : {}),
@@ -6356,7 +6358,7 @@ export class Executor {
     });
     const lastLanding = t?.stepLog.at(-1);
     this.opts.report({ ...report, text,
-      ...(t ? { steps: t.stepLog.map(({ step, outcome, why, detail, observedEffect, decision, observation }) => ({ step, outcome, why,
+      ...(t ? { steps: t.stepLog.map(({ step, what, outcome, why, detail, observedEffect, decision, observation }) => ({ step, what, skill:t.steps[step-1]?.skill, outcome, why,
         ...(decision ? { decision } : {}), ...(observation ? { observation } : {}),
         ...(detail ? { detail } : {}),
         ...(observedEffect ? { observedEffect } : {}) })) } : {}),
@@ -7735,6 +7737,10 @@ export class Reflexes {
       });
     }
     if (this.fall.handled || drop < FALL_TASK_STOP_BLOCKS) return;
+    if (hasApprovedNavigationDrop(bot, this.fall.fromY)) {
+      if (!falling) { this.fall = null; clearNavigationDrop(bot); }
+      return;
+    }
     // A lower destination does not establish water, a ladder or a safe landing.
     // This is already an observed deep fall; never exempt it using goal.y.
     this.fall.handled = true;

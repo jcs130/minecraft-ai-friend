@@ -20,7 +20,7 @@ export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
     learningCall: isCombatTacticLearning,
     description:
       'Read or update combat spell rules and an agent-authored fast tactic program. {} reads it; omitted fields keep their current values; '
-      + '{samples:true} indexes recorded pre-program battlefields. {probe:{program,samples?:[id]}} compares your candidate with the recorded program on exactly those historical inputs, without controlling the body or changing the active tactic. This branch is available to background learning. '
+      + '{samples:true} indexes recorded pre-program battlefields and retains returned IDs until availableUntil even as live samples rotate. Respect retention.omittedRecent at capacity; unavailable IDs require a new index, not inventing IDs or replaying live actions. {probe:{program,samples?:[id]}} compares your candidate with the recorded program on exactly those historical inputs, without controlling the body or changing the active tactic. This branch is available to background learning. '
       + 'A successful probe proves only menu validity, not survival or improvement; inspect candidate differences, then install with expectedRevision. {history:true} indexes retained tactic versions; {version:n} reads an exact saved version for comparison/rollback. '
       + '{enabled:false} clears it. A spell list of server-listed combat spell IDs sets priority order while fighting; '
       + 'healAtOrBelow is the optional ability provider healing threshold, not a body lock; a cooling-down heal does not stop fast decisions. Without a provider it never sends a command. '

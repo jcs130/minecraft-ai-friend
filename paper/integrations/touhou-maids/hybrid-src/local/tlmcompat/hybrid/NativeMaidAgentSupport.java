@@ -130,10 +130,13 @@ public final class NativeMaidAgentSupport implements Listener {
         death.addProperty("tombstoneLoaded",matching&&Bukkit.getEntity(UUID.fromString(found.get("tombstoneId").getAsString()))!=null);
     }
     public void enrich(Player actor,UUID id,JsonObject context) {
+        enrich(actor.getUniqueId(),id,context);
+    }
+    public void enrich(UUID actor,UUID id,JsonObject context) {
         EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
         boolean alive=maid!=null&&maid.isAlive()&&!maid.isRemoved();
-        JsonObject found=grave(actor.getUniqueId(),id);
-        JsonObject state=lifecycle.view(actor.getUniqueId(),id,System.currentTimeMillis(),alive?facts(maid):null,found);
+        JsonObject found=grave(actor,id);
+        JsonObject state=lifecycle.view(actor,id,System.currentTimeMillis(),alive?facts(maid):null,found);
         persistLifecycle();
         for(var entry:state.entrySet())context.add(entry.getKey(),entry.getValue());
         if(context.has("historicalDeath"))annotateGrave(context.getAsJsonObject("historicalDeath"),found);
@@ -182,6 +185,7 @@ public final class NativeMaidAgentSupport implements Listener {
         if(tokens.get()>=AIConfig.MAX_TOKENS_PER_PLAYER.get())throw new CompatibilityException("chat_budget_exhausted","原模组本角色对话额度不足，请联系服主查看模型额度；没有发送请求。");
     }
     public JsonObject chat(Player actor,EntityMaid maid,String operation,String text)throws Exception {
+        var queued=plugin.nativeConversation(actor,maid,operation,text);if(queued!=null)return queued;
         var seen=Collections.newSetFromMap(new IdentityHashMap<LLMMessage,Boolean>());
         seen.addAll(maid.getAiChatManager().getHistory().getDeque());
         Pending call=new Pending(actor.getUniqueId(),operation,text,maid,seen,System.nanoTime()+120_000_000_000L);
@@ -258,7 +262,7 @@ public final class NativeMaidAgentSupport implements Listener {
             UUID id=UUID.fromString(entry.getKey());registered.add(id);
             EntityMaid loaded=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
             if(loaded!=null){
-                try{if(registeredOwner(loaded)!=null&&!loaded.getPersistentData().contains(CompanionRespawn.TAG)){plugin.companionTick(loaded);if(!plugin.rescuingTeammate(loaded))following.tick(loaded,plugin.closingInToGuard(loaded));}else following.unavailable(id);}catch(Exception error){plugin.getLogger().fine("Native following observation unavailable: "+error.getClass().getSimpleName());}
+                try{if(registeredOwner(loaded)!=null&&!loaded.getPersistentData().contains(CompanionRespawn.TAG)){plugin.companionTick(loaded);if(plugin.nativeTravelAllowed(loaded.getUUID())&&!plugin.rescuingTeammate(loaded))following.tick(loaded,plugin.closingInToGuard(loaded));}else following.unavailable(id);}catch(Exception error){plugin.getLogger().fine("Native following observation unavailable: "+error.getClass().getSimpleName());}
                 if(lifecycleDue)observeLoaded(loaded);
             }else following.unavailable(id);
             if(!lifecycleDue)continue;

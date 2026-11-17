@@ -51,6 +51,14 @@ jobs:
             --touch-base "$RUNNER_TEMP/android-touch-base.mrpack" \
             --wheel "$RUNNER_TEMP/qiandeng-controls-0.1.2.jar" \
             --output "$RUNNER_TEMP/android-release/with-wheel" \
+            --catalog paper/integrations/agent-portal/src/android-client-downloads.json
+      - name: Reproduce both Better Combat packs and verify the current catalog
+        run: |
+          python paper/integrations/android-client/add-better-combat.py \
+            --native-base "$RUNNER_TEMP/android-release/with-wheel/qiandengji-android-1.21.1-neoforge-1.0.0-preview.5.mrpack" \
+            --touch-base "$RUNNER_TEMP/android-release/with-wheel/qiandengji-android-1.21.1-neoforge-1.0.0-preview.5-touch.mrpack" \
+            --cache "$RUNNER_TEMP/android-inputs" \
+            --output "$RUNNER_TEMP/android-release/with-combat" \
             --catalog paper/integrations/agent-portal/src/android-client-downloads.json --verify-catalog
       - name: Install Chinese fonts for browser review
         run: |

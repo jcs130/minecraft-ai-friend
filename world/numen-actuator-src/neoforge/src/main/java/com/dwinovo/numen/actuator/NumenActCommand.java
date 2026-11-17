@@ -1,10 +1,9 @@
 package com.dwinovo.numen.actuator;
 
-import com.dwinovo.numen.agent.tool.NumenTool;
-import com.dwinovo.numen.agent.tool.ToolRegistry;
-import com.dwinovo.numen.entity.CompanionRegistry;
-import com.dwinovo.numen.entity.Companions;
-import com.dwinovo.numen.entity.NumenPlayer;
+import com.dwinovo.numen.api.entity.Arrivals;
+import com.dwinovo.numen.api.entity.CompanionRegistry;
+import com.dwinovo.numen.api.entity.Companions;
+import com.dwinovo.numen.api.entity.NumenPlayer;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -42,15 +41,15 @@ import java.util.UUID;
  * <pre>
  *   numen_act list                         列全部假玩家（名字|uuid|owner|维度|坐标）
  *   numen_act summon &lt;ownerUuid&gt; &lt;name&gt;  在 overworld 出生点召唤假玩家
- *   numen_act invoke &lt;name&gt; &lt;tool&gt; &lt;json&gt;  直调工具（服务端 onServerCall，回结果）
  *   numen_act dismiss &lt;name&gt;               遣散假玩家
  *   numen_act say &lt;name&gt; &lt;消息&gt;            假玩家以本人身份公屏发言
  *   numen_act whisper &lt;name&gt; &lt;target&gt; &lt;消息&gt; 假玩家向目标玩家私语（咏唱通道）
  * </pre>
  *
- * <p>回执口径：查询型工具当场回结果；动作型（goto/mine/build 等）经
- * {@code TaskDispatch.setTask} 受理即回 task_id（均在本线程回调），RCON 同步拿得到。
- * 动作型收尾须由调用方另发 {@code invoke &lt;name&gt; task_status &lt;json&gt;} 轮询。
+ * <p>Numen 0.1.5: tool invocation moved to the native MCP endpoint (lua / say /
+ * get_events), so the old {@code invoke} bridge is gone. What stays here is only
+ * what native MCP does not cover: existing-body restore, the god channel, vision
+ * snapshots, skins, the pad, and the registry dump.
  */
 public final class NumenActCommand {
 
@@ -70,11 +69,6 @@ public final class NumenActCommand {
                         .then(Commands.argument("owner", StringArgumentType.string())
                                 .then(Commands.argument("name", StringArgumentType.string()) // string 非 word：支持中文名（桐人/鸣人）
                                         .executes(NumenActCommand::summon))))
-                .then(Commands.literal("invoke")
-                        .then(Commands.argument("companion", StringArgumentType.string()) // string：中文名
-                                .then(Commands.argument("tool", StringArgumentType.word())
-                                        .then(Commands.argument("args", StringArgumentType.greedyString())
-                                                .executes(NumenActCommand::invoke)))))
                 .then(Commands.literal("dismiss")
                         .then(Commands.argument("companion", StringArgumentType.string()) // string：中文名
                                 .executes(NumenActCommand::dismiss)))
@@ -128,39 +122,28 @@ public final class NumenActCommand {
                 count++;
             }
         }
-        // Companions that exist in the catalogue but are not in the world (dead, or
-        // waiting on a respawn) are reported in a separate section. The online section
-        // keeps its exact shape so presence checks cannot mistake a dead companion for
-        // a live body, and the death state is the body's own registry speaking rather
-        // than something inferred from the server's bookkeeping.
+        // Companions that exist in the catalogue but are not in the world are reported in a
+        // separate section, so presence checks cannot mistake them for a live body. Numen
+        // 0.1.5 has no recorded-death state (bodies respawn natively); what it records is
+        // a body removed from outside (removedFor), which stays out until its owner summons.
         StringBuilder dead = new StringBuilder();
         int deadCount = 0;
         try {
-            for (Map.Entry<UUID, CompanionRegistry.Entry> e : CompanionRegistry.get(server).all()) {
-                CompanionRegistry.Entry entry = e.getValue();
-                if (entry.diedAt() <= 0L) {
-                    continue;
-                }
-                boolean online = false;
-                for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-                    if (p instanceof NumenPlayer np && np.getUUID().equals(e.getKey())) {
-                        online = true;
-                        break;
-                    }
-                }
-                if (online) {
+            CompanionRegistry registry = CompanionRegistry.get(server);
+            for (UUID id : registry.all()) {
+                CompanionRegistry.Entry entry = registry.find(id);
+                if (entry == null || server.getPlayerList().getPlayer(id) instanceof NumenPlayer) {
                     continue;
                 }
                 dead.append(entry.name())
-                        .append("|uuid=").append(e.getKey())
+                        .append("|uuid=").append(id)
                         .append("|owner=").append(entry.owner())
                         .append("|dim=").append(entry.dimension().location())
                         .append("|pos=").append(entry.pos().getX())
                         .append(',').append(entry.pos().getY())
                         .append(',').append(entry.pos().getZ())
-                        .append("|dead=1")
-                        .append("|diedAt=").append(entry.diedAt())
-                        .append("|cause=").append(entry.deathCause() == null ? "" : entry.deathCause())
+                        .append("|removed=").append(entry.removed() ? 1 : 0)
+                        .append("|reason=").append(entry.removedFor())
                         .append('\n');
                 deadCount++;
             }
@@ -174,7 +157,7 @@ public final class NumenActCommand {
             src.sendSuccess(() -> Component.literal(sb.toString()), false);
         }
         if (deadCount > 0) {
-            dead.insert(0, "dead=" + deadCount + "\n");
+            dead.insert(0, "offline=" + deadCount + "\n");
             src.sendSuccess(() -> Component.literal(dead.toString()), false);
         }
         return count;
@@ -196,7 +179,11 @@ public final class NumenActCommand {
         }
         ServerLevel level = server.overworld();
         Vec3 pos = Vec3.atCenterOf(level.getSharedSpawnPos());
-        NumenPlayer body = Companions.summon(server, ownerUuid, name, level, pos);
+        // NeoForge admission is synchronous: the arrival is known before summon returns.
+        java.util.concurrent.atomic.AtomicReference<Arrivals.Arrival<NumenPlayer>> arrival =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        Companions.summon(server, ownerUuid, name, level, pos, arrival::set);
+        NumenPlayer body = arrival.get() == null ? null : arrival.get().body();
         if (body == null) {
             src.sendFailure(Component.literal("summon failed: " + name));
             return 0;
@@ -209,49 +196,6 @@ public final class NumenActCommand {
     // The strict restore implementation distinguishes offline data from a recorded death.
     private static void registerRestore(CommandDispatcher<CommandSourceStack> dispatcher) {
         ExistingBodyRestore.register(dispatcher);
-    }
-
-    // ==================== invoke ====================
-
-    private static int invoke(CommandContext<CommandSourceStack> ctx) {
-        CommandSourceStack src = ctx.getSource();
-        MinecraftServer server = src.getServer();
-        String companionName = StringArgumentType.getString(ctx, "companion");
-        String toolName = StringArgumentType.getString(ctx, "tool");
-        String argsJson = StringArgumentType.getString(ctx, "args");
-
-        NumenPlayer companion = findCompanion(server, companionName);
-        if (companion == null) {
-            src.sendFailure(Component.literal("no companion: " + companionName));
-            return 0;
-        }
-        NumenTool tool = ToolRegistry.get(toolName);
-        if (tool == null) {
-            src.sendFailure(Component.literal("no tool: " + toolName));
-            return 0;
-        }
-        JsonObject args;
-        try {
-            args = JsonParser.parseString(argsJson).getAsJsonObject();
-        } catch (Exception ex) {
-            src.sendFailure(Component.literal("bad json args: " + ex.getMessage()));
-            return 0;
-        }
-
-        String callId = com.dwinovo.numen.task.TaskRecord.EXTERNAL_CALL_PREFIX + UUID.randomUUID();
-        // 查询型当场回、动作型(setTask)受理即回 task_id，均在本线程回调；异步 runSync
-        // 类工具（当前无调用方）才会 null，兜底回受理提示。
-        String[] result = new String[1];
-        try {
-            tool.onServerCall(callId, args, companion, reply -> result[0] = reply);
-        } catch (Exception ex) {
-            src.sendFailure(Component.literal("invoke error: " + ex));
-            return 0;
-        }
-        String replyStr = result[0] != null ? result[0]
-                : "{\"accepted\":true,\"note\":\"no immediate reply (async tool)\"}";
-        src.sendSuccess(() -> Component.literal(replyStr), false);
-        return 1;
     }
 
     // ==================== skin ====================
@@ -279,8 +223,9 @@ public final class NumenActCommand {
         CompanionRegistry registry = CompanionRegistry.get(server);
         UUID found = null;
         CompanionRegistry.Entry hit = null;
-        for (Map.Entry<UUID, CompanionRegistry.Entry> e : registry.all()) {
-            if (e.getValue().name().equals(name)) { found = e.getKey(); hit = e.getValue(); break; }
+        for (UUID id : registry.all()) {
+            CompanionRegistry.Entry e = registry.find(id);
+            if (e != null && e.name().equals(name)) { found = id; hit = e; break; }
         }
         if (found == null) {
             src.sendFailure(Component.literal("no companion in registry: " + name));
@@ -291,8 +236,10 @@ public final class NumenActCommand {
         boolean refreshed = false;
         if (server.getPlayerList().getPlayerByName(name) instanceof NumenPlayer body) {
             Companions.dormant(server, body);
-            NumenPlayer back = Companions.respawn(server, found);
-            refreshed = back != null;
+            java.util.concurrent.atomic.AtomicReference<Arrivals.Arrival<NumenPlayer>> back =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            Companions.respawn(server, found, back::set);
+            refreshed = back.get() != null && back.get().body() != null;
         }
         String out = "skin " + (clear ? "cleared" : "set") + " for " + name
                 + (refreshed ? "|body_refreshed" : "|applies_on_next_summon");

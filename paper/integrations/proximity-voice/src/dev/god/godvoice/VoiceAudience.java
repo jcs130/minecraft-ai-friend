@@ -4,7 +4,10 @@ import java.util.*;
 
 /** Immutable main-thread observations; audio/ASR threads never read Bukkit entities. */
 final class VoiceAudience {
-    record Actor(UUID id, UUID session, UUID world, double x, double y, double z, String name, boolean captions) { }
+    record Actor(UUID id, UUID session, UUID world, double x, double y, double z, String name, boolean captions, double hearingRange, UUID partner, double visitorRange) {
+        Actor(UUID id,UUID session,UUID world,double x,double y,double z,String name,boolean captions){this(id,session,world,x,y,z,name,captions,Double.POSITIVE_INFINITY);}
+        Actor(UUID id,UUID session,UUID world,double x,double y,double z,String name,boolean captions,double range){this(id,session,world,x,y,z,name,captions,range,null,range);}
+    }
     record Snapshot(long at, Map<UUID,Actor> actors) {
         Snapshot { actors=Map.copyOf(actors); }
     }
@@ -22,7 +25,9 @@ final class VoiceAudience {
                     // opt-out and session/world fences as nearby listeners.
                     if(!actor.captions||!actor.world.equals(source.world))continue;
                     double x=actor.x-source.x,y=actor.y-source.y,z=actor.z-source.z;
-                    if(x*x+y*y+z*z<=distance*distance)heard.put(actor.id,actor);
+                    double limit=Math.min(distance,actor.hearingRange);
+                    if(actor.partner!=null&&!source.id.equals(actor.partner))limit=Math.min(limit,actor.visitorRange);
+                    if(limit>0&&x*x+y*y+z*z<=limit*limit)heard.put(actor.id,actor);
                 }
             }
             if(listeners==null)listeners=heard;

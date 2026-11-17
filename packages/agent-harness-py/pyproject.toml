@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-mc-harness-py"
+version = "0.1.0"
+description = "Lightweight Python harness runtime + unified body adapter for server-hosted Numen and Touhou Little Maid bodies"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = ["pydantic>=2.7,<3"]
+
+[project.optional-dependencies]
+# Native Numen MCP driver = numen-paper/qwenpaw/numen_controller.py. It runs on mcp 1.x (QwenPaw's pin) and 2.x
+# (agent-mc-autonomy pins mcp==2.1.1), so one venv can hold the harness, the bridge and the driver.
+numen = ["mcp>=1.28,<3", "httpx>=0.27,<1"]
+# Maid / hosted Numen over the agent-mc-world tool bridge of agent-mc-autonomy (DSH).
+bridge = ["agent-mc-autonomy", "httpx>=0.27,<1"]
+# Private companions through the server's authenticated loopback /maid-body endpoint.
+native-maid = ["httpx>=0.27,<1"]
+# In-process Graphiti through the existing agent-memory graphiti-sidecar service class.
+graphiti = ["graphiti-core[kuzu]>=0.31,<0.32"]
+# Shared server Graphiti uses the authenticated HTTP sidecar, not one database per NPC.
+server-npc = ["httpx>=0.27,<1", "mcp>=1.28,<3"]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ASYNC"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"examples/*" = ["ASYNC240"]
+"tests/*" = ["ASYNC240", "ASYNC109"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["agent_mc_harness"]
+mypy_path = "src"
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = true
+plugins = ["pydantic.mypy"]

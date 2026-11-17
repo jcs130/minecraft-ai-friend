@@ -61,19 +61,19 @@ final class PlayerAdventureMenus implements Listener {
             case HOME->"千灯纪 · 冒险大厅";case TRAVEL->"传送与集合";case GROWTH->"角色与技能";case ADVENTURE->"冒险与任务";
             case STORAGE->"背包与仓库";case TRADE->"商城与交易";case SOCIAL->"队伍与伙伴";
             case MEMORIES->"留影与生活";case COMMON->"通用生存技能";case COMMON_DETAIL->"技能说明";
-            case WHEEL->"施法轮盘";
+            case WHEEL->"施法轮盘";case WHEEL_EDIT->"配置快捷施法";case WHEEL_PICK->"选择槽位技能";
             case CHARACTER->"我的角色";case TIDY_BAG,TIDY_STASH->"确认无损合并";case PARTY->"组队大厅";case PARTY_CONFIRM->"确认组队操作";case HELP->"聊天与入门";case ERROR->"入口暂不可用";
         };
         buttons.addAll(category(page));
         if(page==Page.HOME){
-            content="你好，"+p.getName()+"。\n使用罗盘打开大厅；潜行时使用罗盘直接施法。";
+            content="你好，"+p.getName()+"。\n使用罗盘打开大厅；潜行时使用罗盘打开施法轮盘。";
             buttons.add(button(4,Action.NONE,"COMPASS","欢迎，"+p.getName(),"点击图标浏览；物品只是按钮","按 Esc 关闭；CLI仍可使用"));
             buttons.add(button(28,Action.TRAVEL,"ENDER_PEARL","传送与集合","公共地标、个人传送点、归乡、战斗增援"));
             buttons.add(button(30,Action.STASH,"ENDER_CHEST","个人仓库 · 10页540格","直接选择页码；与大背包、公共箱分开"));
             buttons.add(button(29,Action.ONBOARDING,"OAK_SIGN","我的下一步","查看职业、通用技能、公会委托和任务交付建议"));
-            buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","直接点选通用技能或已学职业技"));
-        }else if(page!=Page.WHEEL)buttons.add(button(4,Action.NONE,"PAPER",title,"先查看内容与条件，再自行决定","下方箭头返回；罗盘回到大厅"));
-        if(page==Page.GROWTH)buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","直接点选通用技能或已学职业技"));
+            buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","八槽混排通用技与职业技；可按习惯配置"));
+        }else if(page!=Page.WHEEL&&page!=Page.WHEEL_EDIT&&page!=Page.WHEEL_PICK)buttons.add(button(4,Action.NONE,"PAPER",title,"先查看内容与条件，再自行决定","下方箭头返回；罗盘回到大厅"));
+        if(page==Page.GROWTH)buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","八槽混排通用技与职业技；可按习惯配置"));
         if(page==Page.COMMON){
             content=NativeRpg.COMMON_IDS.size()+"项通用技能无需选职；公用同一个魔力池。选择页码，再点技能看条件和消耗。";
             int pageNumber=detail.equals("2")?1:0,start=pageNumber*CONTENT.length;
@@ -94,6 +94,8 @@ final class PlayerAdventureMenus implements Listener {
             buttons.add(new Button(22,Action.COMMON_USE,detail,"LIME_DYE",use,List.of(e.costLine(),e.command(),"关闭本页后按当前状态检查；失败不自动重试")));
         }else if(page==Page.WHEEL){
             content=wheel(p,detail,buttons);
+        }else if(page==Page.WHEEL_EDIT){content=wheelEdit(p,buttons);
+        }else if(page==Page.WHEEL_PICK){content=wheelPick(p,detail,buttons);
         }else if(page==Page.CHARACTER){
             JsonObject state=owner.nativeRpg().state(p);boolean available=state.has("available")&&state.get("available").getAsBoolean();
             double max=p.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue();
@@ -152,25 +154,16 @@ final class PlayerAdventureMenus implements Listener {
             buttons.add(button(13,Action.NONE,"BARRIER","服务暂不可用",content));
         }
         if(page!=Page.HOME)buttons.add(button(27,Action.BACK,"ARROW","返回上一页"));
-        buttons.add(button(31,Action.HOME,"COMPASS","冒险大厅"));
+        if(page!=Page.WHEEL)buttons.add(button(31,Action.HOME,"COMPASS","冒险大厅"));
         buttons.add(button(35,Action.CLOSE,"BARRIER","关闭"));
         return new View(page,detail,title,content,buttons);
     }
-    private String wheel(Player player, String detail, List<Button> buttons) {
-        boolean profession = detail.startsWith("profession:");
-        String group = profession ? "profession:" : "common:";
-        int requested = detail.startsWith(group) ? Integer.parseInt(detail.substring(group.length())) : 0;
+    private List<WheelSkill> wheelSkills(Player player, boolean profession) {
         List<WheelSkill> skills = new ArrayList<>();
-        String message = "瞄准后打开轮盘。选技能施放，传送、探矿或造物会先让你选目标。";
         if (profession) {
-            var state = owner.nativeRpg().state(player);
-            if (state.has("abilities") && state.get("abilities").isJsonArray()) {
-                for (var spell : owner.nativeRpg().classSpells(state)) {
-                    skills.add(new WheelSkill(Action.WHEEL_CAST, spell.id(), "ENCHANTED_BOOK", spell.name(),
-                            List.of("魔力 " + spell.mana() + " · " + cooldown(spell.cooldownRemainingMs()))));
-                }
-                if (skills.isEmpty()) message = "职业技能已学会后会出现在这里。";
-            } else message = "职业技能资料正在加载。稍后重新打开轮盘。";
+            for (var spell : owner.nativeRpg().classSpells(owner.nativeRpg().state(player)))
+                skills.add(new WheelSkill(Action.WHEEL_CAST, spell.id(), "ENCHANTED_BOOK", spell.name(),
+                        List.of("魔力 " + spell.mana() + " · " + cooldown(spell.cooldownRemainingMs()), "点击施放职业技能")));
         } else {
             for (String id : NativeRpg.COMMON_IDS) {
                 var spell = guide(id);
@@ -180,22 +173,117 @@ final class PlayerAdventureMenus implements Listener {
                                 selectTarget ? "点击选择目标" : "点击施放")));
             }
         }
-        int pages = Math.max(1, (skills.size() + WHEEL_CELLS.length - 1) / WHEEL_CELLS.length);
-        int page = Math.max(0, Math.min(requested, pages - 1)), start = page * WHEEL_CELLS.length;
-        buttons.add(button(4, Action.NONE, "END_CRYSTAL", (profession ? "已学职业技" : "通用技能") + " · " + (page + 1) + "/" + pages, message));
-        for (int index = start; index < Math.min(start + WHEEL_CELLS.length, skills.size()); index++) {
-            var spell = skills.get(index);
-            buttons.add(new Button(WHEEL_CELLS[index - start], spell.action(), spell.id(), spell.icon(), spell.name(), spell.lore()));
+        return List.copyOf(skills);
+    }
+    private static String wheelKey(Player p) { return "spell-wheel.players." + p.getUniqueId() + ".slots"; }
+    private List<String> wheelSlots(Player p, List<WheelSkill> learned) {
+        return SpellWheelLoadout.read(owner.getConfig().get(wheelKey(p)), learned.stream().map(WheelSkill::id).toList());
+    }
+    private Map<String,WheelSkill> wheelCatalogue(Player p, List<WheelSkill> learned) {
+        var result = new LinkedHashMap<String,WheelSkill>();
+        wheelSkills(p,false).forEach(s -> result.put(s.id(),s));
+        learned.forEach(s -> result.put(s.id(),s));
+        return result;
+    }
+    private String wheel(Player player, String detail, List<Button> buttons) {
+        boolean profession = detail.startsWith("profession:"), quick = !detail.matches("(?:common|profession):[0-9]{1,2}");
+        String group = profession ? "profession:" : "common:";
+        int requested = quick ? 0 : Integer.parseInt(detail.substring(group.length()));
+        List<WheelSkill> learned = wheelSkills(player,true);
+        String message = "瞄准后打开轮盘并点技能。通用技与已学职业技可混排；配置不施法、不花学习点。";
+        if (quick) {
+            var catalogue = wheelCatalogue(player,learned);
+            List<String> slots;
+            try { slots=wheelSlots(player,learned); }
+            catch(IllegalArgumentException invalid) { slots=Collections.nCopies(8,"");message="快捷配置暂不可读，请打开配置并选择恢复推荐；旧资料保留。"; }
+            buttons.add(button(4,Action.NONE,"END_CRYSTAL","我的快捷轮盘 · 8槽",message));
+            for (int index=0;index<slots.size();index++) {
+                String id=slots.get(index);WheelSkill spell=catalogue.get(id);
+                if(spell==null) {
+                    buttons.add(new Button(WHEEL_CELLS[index],Action.WHEEL_SLOT,Integer.toString(index),id.isEmpty()?"LIGHT_GRAY_DYE":"BARRIER",
+                            (index+1)+" · "+(id.isEmpty()?"空槽":"技能暂不可用"),
+                            List.of(id.isEmpty()?"点击选择通用技或已学职业技":"保留原绑定："+id,"点击配置；不会自动学习或施放")));
+                } else buttons.add(new Button(WHEEL_CELLS[index],spell.action(),spell.id(),spell.icon(),(index+1)+" · "+spell.name(),spell.lore()));
+            }
+        } else {
+            List<WheelSkill> skills=profession?learned:wheelSkills(player,false);
+            int pages=Math.max(1,(skills.size()+7)/8),page=Math.max(0,Math.min(requested,pages-1)),start=page*8;
+            if(profession&&skills.isEmpty())message=owner.nativeRpg().state(player).has("abilities")
+                    ?"尚无可用的已学职业技能，打开职业技能书查看条件；本页不会替你学习。"
+                    :"职业技能资料暂不可用，请稍后重新打开；已保存的快捷位置保持。";
+            buttons.add(button(4,Action.NONE,"END_CRYSTAL",(profession?"已学职业技":"通用技能")+" · "+(page+1)+"/"+pages,message));
+            for(int index=start;index<Math.min(start+8,skills.size());index++) {
+                var spell=skills.get(index);
+                buttons.add(new Button(WHEEL_CELLS[index-start],spell.action(),spell.id(),spell.icon(),spell.name(),spell.lore()));
+            }
+            if(page>0)buttons.add(wheelPage(28,group+(page-1),"ARROW","上一页"));
+            if(page+1<pages)buttons.add(wheelPage(30,group+(page+1),"ARROW","下一页"));
+            if(profession&&skills.isEmpty())buttons.add(button(13,Action.SKILL_MENU,"BOOK","打开职业技能书","查看学习条件与已学技能"));
         }
-        if (page > 0) buttons.add(wheelPage(28, group + (page - 1), "ARROW", "上一页"));
-        if (page + 1 < pages) buttons.add(wheelPage(30, group + (page + 1), "ARROW", "下一页"));
-        if (owner.nativeRpg().selected()) {
-            buttons.add(wheelPage(33, profession ? "common:0" : "profession:0", "BOOK", profession ? "通用技能" : "已学职业技"));
-            if (profession && skills.isEmpty())
-                buttons.add(button(13, Action.SKILL_MENU, "BOOK", "打开职业技能书", "查看学习条件与已学技能"));
-        }
+        buttons.add(wheelPage(31,quick?"profession:0":profession?"common:0":"quick:0","BOOK",quick?"职业技能":profession?"通用技能":"我的快捷"));
+        buttons.add(button(33,Action.WHEEL_EDIT,"REPEATER","配置轮盘","选择槽位，再选技能；保存后再次打开即用"));
         return message;
     }
+    private String wheelEdit(Player p,List<Button> buttons) {
+        var learned=wheelSkills(p,true);var catalogue=wheelCatalogue(p,learned);List<String> slots;
+        String message="选一个槽位，更换或清空。可混排通用技和已学职业技，保存后跨设备、重登及重启保留。";
+        try{slots=wheelSlots(p,learned);}catch(IllegalArgumentException invalid){slots=Collections.nCopies(8,"");message="配置资料暂不可读；可点恢复推荐，或保留资料并联系服主。";}
+        buttons.add(button(4,Action.NONE,"REPEATER","选择要调整的槽位",message));
+        for(int index=0;index<8;index++) {
+            String id=slots.get(index);WheelSkill spell=catalogue.get(id);
+            buttons.add(new Button(WHEEL_CELLS[index],Action.WHEEL_SLOT,Integer.toString(index),spell==null?"LIGHT_GRAY_DYE":spell.icon(),
+                    "槽位 "+(index+1)+" · "+(id.isEmpty()?"空":spell==null?id:spell.name()),List.of("点击更换或清空","只调整快捷位置，不施法、不学习")));
+        }
+        buttons.add(button(22,Action.WHEEL_DEFAULTS,"CLOCK","恢复推荐布局","优先本人已学职业技，再加入治疗、控制与位移","这是恢复快捷位置，不会遗忘技能"));
+        buttons.add(button(33,Action.WHEEL,"END_CRYSTAL","完成 · 打开轮盘","配置即时保存，无需再点保存"));
+        return message;
+    }
+    private String wheelPick(Player p,String detail,List<Button> buttons) {
+        if(!detail.matches("[0-7]\\|(?:common|profession):[0-9]{1,2}"))return "槽位无效，请返回配置页。";
+        int slot=detail.charAt(0)-'0';String section=detail.substring(2);boolean profession=section.startsWith("profession:");
+        var skills=wheelSkills(p,profession);int pages=Math.max(1,(skills.size()+13)/14);
+        int page=Math.min(Integer.parseInt(section.substring(section.indexOf(':')+1)),pages-1),start=page*14;
+        buttons.add(button(4,Action.NONE,"REPEATER","槽位 "+(slot+1)+" · "+(profession?"职业技能":"通用技能")+" · "+(page+1)+"/"+pages,
+                "点选即保存，不施法、不学习；下方可清空或切换目录"));
+        for(int index=start;index<Math.min(start+14,skills.size());index++) {
+            var spell=skills.get(index);
+            var lore=new ArrayList<>(spell.lore());lore.removeIf(s->s.startsWith("点击"));
+            lore.add("放入槽位 "+(slot+1)+"；只配置，不施法");
+            lore.add("若已在其它槽位，会移动到此处");
+            buttons.add(new Button(CONTENT[index-start],Action.WHEEL_ASSIGN,slot+"|"+spell.id(),spell.icon(),spell.name(),lore));
+        }
+        if(profession&&skills.isEmpty())buttons.add(button(13,Action.SKILL_MENU,"BOOK","查看职业技能书","只显示本人已学会且可用的技能"));
+        String prefix=slot+"|"+(profession?"profession:":"common:");
+        if(page>0)buttons.add(new Button(28,Action.WHEEL_PICK_PAGE,prefix+(page-1),"ARROW","上一页",List.of()));
+        if(page+1<pages)buttons.add(new Button(30,Action.WHEEL_PICK_PAGE,prefix+(page+1),"ARROW","下一页",List.of()));
+        buttons.add(new Button(32,Action.WHEEL_CLEAR,Integer.toString(slot),"RED_DYE","清空此槽位",List.of("只移除快捷位置，不会遗忘技能")));
+        buttons.add(new Button(33,Action.WHEEL_PICK_PAGE,slot+"|"+(profession?"common:0":"profession:0"),"BOOK",profession?"选择通用技":"选择职业技",List.of("切换候选目录，不修改槽位")));
+        return "配置槽位 "+(slot+1)+" · "+(profession?"已学职业技":"通用技能")+" · "+(page+1)+"/"+pages+"。点击技能后即时保存，战斗时在轮盘释放。";
+    }
+    private void changeWheel(Player p,Button b) {
+        String key=wheelKey(p);Object before=owner.getConfig().get(key);Object after=null;
+        try {
+            if(b.action()!=Action.WHEEL_DEFAULTS) {
+                String[] parts=b.payload().split("\\|",-1);
+                if(!parts[0].matches("[0-7]")||b.action()==Action.WHEEL_ASSIGN&&parts.length!=2)throw new IllegalArgumentException("invalid_slot");
+                var learned=wheelSkills(p,true);var available=List.copyOf(wheelCatalogue(p,learned).keySet());
+                after=SpellWheelLoadout.assign(wheelSlots(p,learned),Integer.parseInt(parts[0]),b.action()==Action.WHEEL_CLEAR?"":parts[1],available);
+            }
+        } catch(IllegalArgumentException unavailable) {
+            p.sendMessage("§e该技能或配置状态已变化，本次未保存、未施法。请重新选择；学习条件在职业技能书里查看。");
+            open(p,Page.WHEEL_EDIT,"");return;
+        }
+        owner.getConfig().set(key,after);
+        try {owner.nativeRpg().saveConfigVerified();}
+        catch(RuntimeException failure) {
+            owner.getConfig().set(key,before);
+            owner.getLogger().log(java.util.logging.Level.WARNING,"Wheel preferences save unconfirmed for "+p.getUniqueId(),failure);
+            p.sendMessage("§e轮盘保存未确认，本次未施法。请重新打开查看；不要反复点击，必要时联系服主。");return;
+        }
+        p.sendMessage("§a快捷轮盘已保存；再次打开即用。技能学习、魔力与冷却没有改变。");
+        open(p,Page.WHEEL_EDIT,"");
+    }
+
     private static Button wheelPage(int slot, String next, String icon, String title) {
         return new Button(slot, Action.WHEEL_PAGE, next, icon, title, List.of());
     }
@@ -235,6 +323,11 @@ final class PlayerAdventureMenus implements Listener {
         if(b.action()==Action.BACK){open(p,parent(view.page()),"");return;}
         if(b.action()==Action.COMMON_PAGE){open(p,Page.COMMON,b.payload());return;}
         if(b.action()==Action.WHEEL_PAGE){open(p,Page.WHEEL,b.payload());return;}
+        if(b.action()==Action.WHEEL_SLOT){open(p,Page.WHEEL_PICK,b.payload()+"|common:0");return;}
+        if(b.action()==Action.WHEEL_PICK_PAGE){open(p,Page.WHEEL_PICK,b.payload());return;}
+        if(b.action()==Action.WHEEL_ASSIGN||b.action()==Action.WHEEL_CLEAR||b.action()==Action.WHEEL_DEFAULTS){
+            changeWheel(p,b);return;
+        }
         if(b.action()==Action.COMMON_DETAIL){open(p,Page.COMMON_DETAIL,b.payload());return;}
         if(b.action()==Action.PARTY_CONFIRM){open(p,Page.PARTY_CONFIRM,b.payload());return;}
         if(b.action()==Action.CLOSE)return;

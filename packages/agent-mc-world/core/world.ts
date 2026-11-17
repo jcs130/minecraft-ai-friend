@@ -4543,6 +4543,7 @@ export class MinecraftWorld implements World {
       managedServer: () => this.managedLocalServer(),
       scaffoldBlocks: () => this.scaffoldBlocksForUse(),
       jumpMode: () => this.policy.get().jump,
+      fallMode: () => this.policy.get().fall,
       movementCosts: () => TRAVEL_COSTS[this.policy.get().travel],
       taskId: () => this.executor?.currentTask?.id ?? null,
       protectionFile: this.dataDir ? join(this.dataDir, 'minecraft-break-permissions.json') : null,
@@ -8122,8 +8123,12 @@ export class MinecraftWorld implements World {
       this.emit(
         'minecraft.event',
         `[Minecraft] 位置突然变了:从 (${Math.round(prev.x)}, ${Math.round(prev.y)}, ${Math.round(prev.z)}) ` +
-          `跳到 (${Math.round(p.x)}, ${Math.round(p.y)}, ${Math.round(p.z)}),挪了 ${Math.round(dist)} 格(被传送或强推)。`,
+          `更新到 (${Math.round(p.x)}, ${Math.round(p.y)}, ${Math.round(p.z)}),相差 ${Math.round(dist)} 格。` +
+          '这是服务端位置更新，原因与发起者未由此事件确认；可能是自己发起的移动/传送，也可能是外部影响，须对照原动作与服务端回执。',
         true,
+        {meta:{positionChange:{schema:'agent-mc-position-change/v1',source:'native-forcedMove',
+          before:[prev.x,prev.y,prev.z],after:[p.x,p.y,p.z],distance:dist,
+          cause:null,initiator:null,goalVerified:false}}},
       );
     });
     bot.on('spawnReset', () => {

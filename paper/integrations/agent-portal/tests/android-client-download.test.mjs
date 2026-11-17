@@ -24,10 +24,14 @@ test('Android download keeps the existing explicit activation and fixed-byte red
     assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
     assert.equal((await response.arrayBuffer()).byteLength, 0);
   }
-  assert.equal(regular.version, '1.0.0-preview.5-touch');
+  assert.equal(regular.version, '1.0.0-preview.6-touch');
+  assert.match(regular.includes, /Better Combat 2\.4\.0/);
   const previous = await fetch(available.origin + '/downloads/qiandengji-android-1.21.1-neoforge-1.0.0-preview.1.mrpack', { redirect: 'manual' });
   assert.equal(previous.status, 307);
   assert.equal(previous.headers.get('x-checksum-sha256'), '0da4f0207be0a9ebdb5935da64493e0c14df5798697474087eab102412b70220');
+  const beforeCombat = await fetch(available.origin + '/downloads/qiandengji-android-1.21.1-neoforge-1.0.0-preview.5-touch.mrpack', { redirect: 'manual' });
+  assert.equal(beforeCombat.status, 307);
+  assert.equal(beforeCombat.headers.get('x-checksum-sha256'), '8d8d8b143fe800eeb79f13073de5c24fc1f2e08ce5b48d1e1d3c78b05e4c8389');
   assert.equal(packageAt('/downloads/' + regular.filename), regular);
   assert.equal((await available.client().request('/session')).data.owner, null);
 });
@@ -44,10 +48,14 @@ test('native gamepad preview has an independent activation, direct link and down
       assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
     }
   }
-  assert.equal(native.version, '1.0.0-preview.5');
+  assert.equal(native.version, '1.0.0-preview.6');
+  assert.match(native.includes, /Better Combat 2\.4\.0/);
   const previous = await fetch(f.origin + '/downloads/qiandengji-android-1.21.1-neoforge-1.0.0-preview.4.mrpack', { redirect: 'manual' });
   assert.equal(previous.status, 307);
   assert.equal(previous.headers.get('x-checksum-sha256'), 'ccf0f717a2385c9731222fd78553c8a0ea758117ba288f224e2ebf021dc6599c');
+  const beforeCombat = await fetch(f.origin + '/downloads/qiandengji-android-1.21.1-neoforge-1.0.0-preview.5.mrpack', { redirect: 'manual' });
+  assert.equal(beforeCombat.status, 307);
+  assert.equal(beforeCombat.headers.get('x-checksum-sha256'), '777b596169f422969558d7e7f83f5a3dbc896690f1a1ebe915e21cdd2e7a8e0c');
   const legacy = await fetch(f.origin + oldNative, { redirect: 'manual' });
   assert.equal(legacy.status, 307);
   assert.equal(legacy.headers.get('x-checksum-sha256'), '76e8f1f05fa11b28100711be2c23d4bd28b0794a6d6ea48006a7bfaee9c9e1ba');

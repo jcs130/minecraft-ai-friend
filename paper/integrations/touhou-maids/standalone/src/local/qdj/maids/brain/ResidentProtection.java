@@ -11,8 +11,31 @@ import net.neoforged.neoforge.common.util.FakePlayerFactory;
 
 /** The NPC's own UUID is the land principal. Neither its creator nor its party leader is impersonated. */
 public final class ResidentProtection {
+    public static boolean registered(EntityMaid maid) {
+        var residents=MaidAgentsMod.residents();return residents!=null&&residents.role(maid.getUUID())!=null;
+    }
+    static boolean combat(EntityMaid maid,net.minecraft.world.entity.LivingEntity target){
+        Class<?> bukkit;try{bukkit=Class.forName("org.bukkit.Bukkit");}catch(ClassNotFoundException stock){return true;}
+        try{
+            var manager=bukkit.getMethod("getPluginManager").invoke(null);
+            var plugin=Class.forName("org.bukkit.plugin.PluginManager").getMethod("getPlugin",String.class).invoke(manager,"AgentFriend");if(plugin==null)return false;
+            var access=plugin.getClass().getClassLoader().loadClass("org.afuhome.agentfriend.ResidentCli");
+            return Boolean.TRUE.equals(access.getMethod("mayTarget",java.util.UUID.class,java.util.UUID.class).invoke(null,maid.getUUID(),target.getUUID()));
+        }catch(ReflectiveOperationException|LinkageError|RuntimeException unavailable){return false;}
+    }
+    static boolean travel(EntityMaid maid,ServerLevel level,BlockPos at){
+        Class<?> bukkit;try{bukkit=Class.forName("org.bukkit.Bukkit");}catch(ClassNotFoundException stock){return true;}
+        try{
+            var manager=bukkit.getMethod("getPluginManager").invoke(null);
+            var plugin=Class.forName("org.bukkit.plugin.PluginManager").getMethod("getPlugin",String.class).invoke(manager,"AgentFriend");if(plugin==null)return false;
+            var world=level.getClass().getMethod("getWorld").invoke(level);
+            var worldId=(java.util.UUID)Class.forName("org.bukkit.World").getMethod("getUID").invoke(world);
+            var access=plugin.getClass().getClassLoader().loadClass("org.afuhome.agentfriend.ResidentTravelAccess");
+            return Boolean.TRUE.equals(access.getMethod("allowed",java.util.UUID.class,java.util.UUID.class,double.class,double.class,double.class).invoke(null,maid.getUUID(),worldId,at.getX()+.5,(double)at.getY(),at.getZ()+.5));
+        }catch(ReflectiveOperationException|LinkageError|RuntimeException unavailable){return false;}
+    }
     public static boolean nativeAllowed(EntityMaid maid,String action,BlockPos pos) {
-        if(!MaidAgentsMod.managed(maid)&&!maid.getPersistentData().getBoolean("tlm_resident_home_installed"))return true;
+        if(!registered(maid)&&!MaidAgentsMod.managed(maid)&&!maid.getPersistentData().getBoolean("tlm_resident_home_installed"))return true;
         return "allow_likely".equals(query(maid,action,pos).get("status"));
     }
     static Map<String,Object> query(EntityMaid maid,String action,BlockPos pos) {return query(maid,(ServerLevel)maid.level(),action,pos);}

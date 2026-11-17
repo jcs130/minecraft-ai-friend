@@ -45,7 +45,9 @@ public final class QiandengIronsBridge {
     public QiandengIronsBridge() {
         TownProtection.install();
         NeoForge.EVENT_BUS.addListener(this::registerCommands);
-        if (ModList.get().isLoaded("numen")) WorldInteractionBridge.install();
+        // Numen 0.1.5: interact/eat/drop/mine run natively through MCP lua (numen.use.block,
+        // numen.inv.eat/drop, numen.work.mine) with native job receipts; the qdworld
+        // receipt bridge over the 0.1.3 task internals was retired.
     }
 
     private void registerCommands(RegisterCommandsEvent event) {
@@ -76,7 +78,6 @@ public final class QiandengIronsBridge {
         TradeBridge.register(event.getDispatcher());
         WorldMenuBridge.register(event.getDispatcher());
         WorldScanBridge.register(event.getDispatcher());
-        if (ModList.get().isLoaded("numen")) WorldInteractionBridge.register(event.getDispatcher());
         if (ModList.get().isLoaded("numen")) WorldNavigationSense.register(event.getDispatcher());
     }
 

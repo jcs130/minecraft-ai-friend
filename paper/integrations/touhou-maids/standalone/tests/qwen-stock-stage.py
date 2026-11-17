@@ -27,7 +27,9 @@ TASKS = ("farm", "shears", "attack")
 MODEL = "qa-flash"
 
 
-def model_relay(token, upstream_key, alias, calls):
+def model_relay(token, upstream_key, alias, calls, *, thinking=False, output_tokens=320):
+    if not isinstance(thinking,bool) or not isinstance(output_tokens,int) or not 256<=output_tokens<=1024:
+        raise ValueError('bounded inference profile required')
     class Relay(BaseHTTPRequestHandler):
         def do_POST(self):
             if self.path != "/v1/chat/completions" or self.headers.get("Authorization") != f"Bearer {token}":
@@ -38,15 +40,18 @@ def model_relay(token, upstream_key, alias, calls):
                 "Qwen Code must make a single plan without host tools"
             )
             index = [i for i, name in enumerate(ROLES) if name in json.dumps(payload["messages"], ensure_ascii=False)]
-            entry = {"role": ROLES[index[0]] if len(index) == 1 else None}
+            message_text=json.dumps(payload["messages"],ensure_ascii=False)
+            entry = {"role": ROLES[index[0]] if len(index) == 1 else None,"thinking":thinking,"outputTokenLimit":output_tokens,
+                "coreGoalContextPresent":'agent-mc-goals/v1' in message_text and 'intentions_not_current_world_evidence' in message_text,
+                "messageBytes":len(message_text.encode('utf8'))}
             calls.append(entry)
             payload["model"] = alias
             # Dedicated NPC test route. Shared LiteLLM presets are untouched.
             payload.pop("reasoning_effort", None)
             payload.pop("thinking_budget", None)
             payload.pop("max_completion_tokens", None)
-            payload["enable_thinking"] = False
-            payload["max_tokens"] = 320
+            payload["enable_thinking"] = thinking
+            payload["max_tokens"] = output_tokens
             payload["stream_options"] = {**(payload.get("stream_options") or {}), "include_usage": True}
             request = Request("http://127.0.0.1:4000/v1/chat/completions",
                 data=json.dumps(payload).encode(), headers={"Authorization": f"Bearer {upstream_key}",

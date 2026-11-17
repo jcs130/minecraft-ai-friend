@@ -76,6 +76,10 @@ python dsh_gateway.py /path/to/private/dsh.json
 
 ## 构建
 
+共享 MC 核心目标可通过 `companion-memory.mjs` 接入。在现有私有配置中添加绝对路径 `goalsDirectory`，指向核心运行时的 `minecraft-goals` 目录；目标 Scope 必须使用该角色固定的 `realm`、`account=npc:<UUID>`、`agent=<UUID>`。不同框架沿用这份身份和数据。省略此字段不启用目标投影，不复制另一个玩家的目标。同步器需持续运行，超过五分钟未更新的投影会阻止新的自主模型决策并留下可查询原因。
+
+这只是读取核心的目标意图；原生居民不会自动把历史计划、模型判断或查询成功当作世界成果，也不会自动覆盖核心目标。上层运行时仍负责通过原核心接口管理和核验目标。参数、兼容性、私人通知恢复及发布门槛见 [玩法候选记录](../../../docs/NPC_GAMEPLAY_CANDIDATE_20261117.md)。
+
 在官方 NeoForge 21.1 安装器准备的服务端目录和官方车万女仆 JAR 上构建。源码目录下运行以下命令。
 
 ```sh

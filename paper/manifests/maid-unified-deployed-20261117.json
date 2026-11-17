@@ -1,0 +1,173 @@
+{
+  "schema": 1,
+  "release": "maid-unified-release-20261117-r2",
+  "verifiedAt": "2026-11-17T14:44:56.6098963+08:00",
+  "pullRequest": 285,
+  "includedPullRequests": [
+    280,
+    282,
+    283
+  ],
+  "sourceCommit": "87047df87093b5a7d04b4529c235de3dce5f6ea5",
+  "mergeCommit": "240edfb1316f71bdc158c0fde5d666a057eb9d75",
+  "stages": {
+    "codeMerged": true,
+    "candidateValidated": true,
+    "productionDeployed": true,
+    "productionNativeBodyVerified": true,
+    "originalPlayerAcceptance": false
+  },
+  "components": {
+    "AgentFriend": {
+      "version": "0.4.47.87-npc-combat",
+      "sha256": "5f776640e200cef644febd848c0f3c21b031bd52a9cf35a6abbfd7c6957561cc",
+      "previousSha256": "7eb4dc5dbe86735714354371aa017fc5b1fa52dcf996d3cfd2945c71d15abbb7",
+      "loadedPath": "E:/MC/server/plugins/AgentFriend-0.4.47.59-shop-rpg.jar",
+      "codeChangedThisBatch": true
+    },
+    "tlm_maid_agents": {
+      "version": "0.3.9",
+      "sha256": "f3c279117a680471fdb5eb855f71e6a050c00a4987b3f8f17742e7610807a810",
+      "previousSha256": "3446cd9679c9a9a459e163c0d93f265b3d06a30a5a6ea8737232728effba0855",
+      "loadedPath": "E:/MC/server/mods/qiandengji-maid-brain-0.1.0.jar",
+      "codeChangedThisBatch": true
+    },
+    "QiandengjiMaidBridge": {
+      "version": "0.1.42-unified-companion",
+      "sha256": "00812153254a1167885f663bdbad7aca04e3d2df7d30315f9cc85b3ea59fe274",
+      "previousSha256": "7e9a8de37c57e21a4ac68c7e7b284e2603e307e3ae9636c1a6bfe362239a53a0",
+      "loadedPath": "E:/MC/server/plugins/qiandengji-maid-native-0.1.12-conversation.jar",
+      "codeChangedThisBatch": true
+    },
+    "VortexRPG": {
+      "version": "1.2.2-alpha",
+      "sha256": "a7b3df79933e1df3c205c4940f6c880cc7653cafbdc50bb9663d60a5127f9fdf",
+      "previousSha256": "04489c418211925cbedb2f7d7f40df65ccf53ab2bb03ff8ba8230fbf51a5b223",
+      "loadedPath": "E:/MC/server/plugins/VortexRPG-1.2.2-alpha-qd29.jar",
+      "codeChangedThisBatch": true
+    },
+    "QiandengjiRpg": {
+      "version": "0.2.31-unified-npc",
+      "sha256": "7aed57c18c6755b5bdadc2ca1b95aa0a0146b405f2e8aaff2986213fda187f20",
+      "previousSha256": "88f80916df4a1b18cb24b4982f030940c6f7473e91799333e07dd0b843e43c4a",
+      "loadedPath": "E:/MC/server/plugins/QiandengjiRpg-0.2.20.jar",
+      "codeChangedThisBatch": true
+    },
+    "qiandengji_maid_brain": {
+      "version": "0.1.1",
+      "sha256": "f3c279117a680471fdb5eb855f71e6a050c00a4987b3f8f17742e7610807a810",
+      "previousSha256": "3446cd9679c9a9a459e163c0d93f265b3d06a30a5a6ea8737232728effba0855",
+      "loadedPath": "E:/MC/server/mods/qiandengji-maid-brain-0.1.0.jar",
+      "codeChangedThisBatch": true
+    },
+    "numen_hosted": {
+      "version": "0.1.5-hosted.2",
+      "sha256": "be85eb1a78b252a524dc9a2724d6d2b8a0d65d2e508190d6df934c89e5fcfb2c",
+      "loadedPath": "E:/MC/server/plugins/numen_hosted-1.21.1-0.1.5-hosted.2-880cd67f7836.jar",
+      "codeChangedThisBatch": false
+    },
+    "numen_hosted_api": {
+      "version": "0.1.5-hosted.2",
+      "sha256": "c883704af157f86f9af43a05da8de24e9a4ecc5552b358f7cbf7eaed3c68e322",
+      "loadedPath": "E:/MC/server/plugins/numen_hosted_api-1.21.1-0.1.5-hosted.2-8e13a2d3174c.jar",
+      "codeChangedThisBatch": false
+    }
+  },
+  "bodyPort": {
+    "loopbackOnly": true,
+    "explicitBindings": 1
+  },
+  "gateway": {
+    "updatedAt": "2026-11-17T14:31:48.9414931+08:00",
+    "processId": 17996,
+    "files": [
+      {
+        "name": "gateway.py",
+        "sha256": "84dd62a131aeac676e70aa27e1f9b8709b4e41fe0fbd0d75af6d07c1c1b8f22c",
+        "previousSha256": "1034b5e3a0e548f92e1e469d94f6ac0602c10dcbba444b0a875f0549493ac79f"
+      },
+      {
+        "name": "service.json",
+        "sha256": "66b63354986a0c45f0e5778fb44243d3f024c3307cdfe80d2b6bf14102dc65fc",
+        "previousSha256": "505625e74cf07ec91284f4bd14b8c6de5a4adac6b04eaa01172d79941b95ba2a"
+      }
+    ]
+  },
+  "validation": {
+    "python": 93,
+    "pythonSkipped": 3,
+    "javaControl": 46,
+    "gateway": 26,
+    "combinedLive": 17,
+    "coldRestart": 5,
+    "ciJobs": [
+      "source-safety",
+      "review-boundaries",
+      "compile-paper",
+      "agent-mc-core",
+      "portal-release",
+      "backup-path-compatibility",
+      "python-body-adapters"
+    ],
+    "ciRuns": [
+      44026608293,
+      44026608407
+    ],
+    "javaStatus": true,
+    "bedrockDiscovery": true,
+    "authenticationAndProxy": true,
+    "kiritoOriginalResidentLoaded": true,
+    "feiyuOriginalBrain": "dsh",
+    "feiyuMemoryOwner": "original_tlm",
+    "feiyuSampledAt": "2026-11-17T06:44:19.994943400Z"
+  },
+  "runtime": {
+    "gamePid": 25044,
+    "gameStartedAt": "2026-11-17T14:39:25.9243780+08:00",
+    "systemOnePolicyPid": 28864
+  },
+  "backup": {
+    "drive": "F",
+    "path": "F:\\MC-backups\\repairs\\maid-unified-release-20261117-r2-20261117-143607",
+    "complete": true,
+    "filesVerified": 24161,
+    "bytesVerified": 4561282263,
+    "serverManifestSha256": "18b1a0787612d3d85f53581013e2a8ed217b5f8ebf35ebe06de67125e102fc3f"
+  },
+  "preservation": {
+    "unchangedGameFilesVerifiedBeforeBoot": 24156,
+    "originalConfigurationFilesVerified": 6,
+    "originalWorldAndRecordsRetained": true
+  },
+  "remainingAcceptance": [
+    "Real player client audio and visual presentation",
+    "Sustained autonomous play with the original owner and NPCs"
+  ],
+  "rollback": "Use a new safe maintenance window. Quiesce body leases, restore the reviewed JAR and gateway preimages, and remove only the exact added port configuration. Retain the latest world, identities, inventories, memories and receipts.",
+  "evidence": {
+    "deployment.json": {
+      "directory": "maid-unified-release-20261117-r2",
+      "sha256": "b97150a9fb3024e32043140c7953bf1d569784ffeda5fdc46670c20e5cd3fea9"
+    },
+    "verified-running.json": {
+      "directory": "maid-unified-release-20261117-r2",
+      "sha256": "64bc59faf952bfd36632ac496911cf7baea31319d9d7e2d70ddb5b5486635867"
+    },
+    "completion.json": {
+      "directory": "maid-unified-release-20261117-r2",
+      "sha256": "9ae40080bbde7829f2a732042a22e2f9155b180d03b6fcbef21d605ced862228"
+    },
+    "resident-postflight.json": {
+      "directory": "maid-unified-release-20261117-r2",
+      "sha256": "00532688c5e3eac6f160a1c98717f28a3417cf82507a269a8e9380148f830f7f"
+    },
+    "gateway-deployed.json": {
+      "directory": "maid-unified-release-20261117-r1",
+      "sha256": "b09f46c1052d678f1345a3c0ead140a63a1d951820d1235341f98dd0bef641af"
+    },
+    "native-postflight.json": {
+      "directory": "maid-unified-release-20261117-r2",
+      "sha256": "f49b67b5b2581b945b9b15bea9b64a1a9cd1cb8d24bfa012d7ad876f236de450"
+    }
+  }
+}

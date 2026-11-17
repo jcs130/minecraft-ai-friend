@@ -166,6 +166,7 @@ final class MaidCompanionActions {
         facts.addProperty("health", maid.getHealth());
         facts.addProperty("maxHealth", maid.getMaxHealth());
         facts.addProperty("canMove", maid.canBrainMoving());
+        facts.addProperty("ridingBoat", maid.getVehicle() instanceof Boat);
         facts.addProperty("nativeDefending", !maid.getPersistentData().getString("qiandengji_auto_defence_task").isEmpty());
         var attack=NativeMaidCompanionSupport.weaponTask(maid);
         facts.addProperty("guardWeaponReady", attack != null);

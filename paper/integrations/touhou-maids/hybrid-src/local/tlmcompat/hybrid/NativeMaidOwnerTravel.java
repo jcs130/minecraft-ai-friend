@@ -131,6 +131,7 @@ final class NativeMaidOwnerTravel implements Listener {
     }
 
     boolean recoverFollowing(EntityMaid maid, Player owner) {
+        if(!plugin.nativeTravelAllowed(maid.getUUID()))return false;
         Location origin = maid.getBukkitEntity().getLocation();
         Location target = owner.getLocation();
         if (!canTravel(owner) || maid.isSleeping() || maid.isPassenger() || maid.isVehicle()
@@ -261,6 +262,7 @@ final class NativeMaidOwnerTravel implements Listener {
     }
 
     private EntityMaid followingMaid(UUID id, UUID ownerId, World source) {
+        if(!plugin.nativeTravelAllowed(id))return null;
         EntityMaid maid = HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
         if (maid == null || !ownerId.equals(maid.getOwnerUUID()) || !source.equals(maid.getBukkitEntity().getWorld())
                 || !plugin.sharedDialogueEnabled(maid) || !maid.isAlive() || maid.isRemoved() || maid.isNoAi()
@@ -321,7 +323,7 @@ final class NativeMaidOwnerTravel implements Listener {
         return safeBlock(ownerBlock) && allowed.test(ownerBlock) ? ownerBlock : null;
     }
 
-    private static boolean safeBlock(Location at) {
+    static boolean safeBlock(Location at) {
         World world = at.getWorld();
         int x = at.getBlockX(), y = at.getBlockY(), z = at.getBlockZ();
         if (y <= world.getMinHeight() || y + 1 >= world.getMaxHeight()

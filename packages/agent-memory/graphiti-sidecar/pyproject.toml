@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-mc-memory-sidecar"
+version = "0.1.0"
+description = "Graphiti (bi-temporal knowledge graph) HTTP sidecar for agent-mc-memory"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+  "graphiti-core[kuzu]>=0.31,<0.32",
+  "fastapi>=0.110,<1",
+  "uvicorn>=0.29,<1",
+]
+
+[project.optional-dependencies]
+falkordb = ["graphiti-core[falkordb]>=0.31,<0.32"]
+test = ["pytest>=8", "httpx>=0.27,<1"]
+
+[project.scripts]
+agent-mc-memory-sidecar = "agent_memory_sidecar.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["agent_memory_sidecar*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

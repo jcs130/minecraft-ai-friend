@@ -1,3 +1,18 @@
+## 0.5.7-rc.160-preview.95
+
+- Preserve plugin menus opened by villager interaction, with bounded slot readback and explicit no-purchase evidence. Keep native trade indices distinct from plugin button slots.
+- Clean up merchant listeners and cancelled new windows without closing unrelated pre-existing windows. Native quotation behavior is preserved.
+
+## 0.5.7-rc.160-preview.94
+
+- Preserve attempted action identity, targets and observed timestamps through native reports, continuation summaries and gameplay memory episodes. Read-only coverage is distinct from inventory or movement effects.
+- Report native forced position changes without guessing an external initiator; retain typed before/after evidence.
+- Label route probes as unexecuted plans. Sampling clocks do not renew progress budgets.
+
+## 0.5.7-rc.160-preview.93
+
+- Export bounded gameplay memory projections through the public context and client entry points. Preserve native task/combat effects, message authors, timestamps and source references; archive-only delivery does not erase terminal evidence. Keep transport, attributed speech, observed effects and goal completion distinct.
+
 ## 0.5.7-rc.160-preview.91
 
 - Export the exact get/score/review input schemas used by the trajectory validators. Task-scoped consumers can expose real nested score fields instead of relying on prose beside an opaque input object. Help and execution share the same definitions; no game/model execution is added.

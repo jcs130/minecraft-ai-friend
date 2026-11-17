@@ -5,6 +5,9 @@ gradle.projectsEvaluated {
         dependsOn target.tasks.named('compileJava')
         source target.fileTree(System.getProperty('hostingBridgeSource')) {include '**/*.java'}
         classpath=target.sourceSets.main.compileClasspath
+        def combatJar=System.getProperty('hostingBetterCombatJar')
+        if(combatJar==null||!new File(combatJar).isFile())throw new GradleException('hostingBetterCombatJar must name the reviewed Better Combat 2.4.0 compile dependency')
+        classpath+=target.files(combatJar)
         destinationDirectory=target.file(System.getProperty('hostingBridgeOutput'))
         options.encoding='UTF-8'
         options.compilerArgs.add('-proc:none')

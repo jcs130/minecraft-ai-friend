@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "candidate": "0.1.44-partner-chat-range",
+  "verifiedAt": "2026-11-17T08:47:14.432401+00:00",
+  "sourceBase": "f326e96511b5f23b6d163f8facf1468bca30837c",
+  "baseline": "0.1.43-autonomous-dismount",
+  "sha256": "39f2cae4794542bfdc36dcb7fc5c24ba781598a6497f17b8a4362a598eff1ac9",
+  "productionChanged": false,
+  "productionDeployed": false,
+  "syntheticOnly": true,
+  "model": "local deterministic fixture, not production DSH",
+  "baselineFailedChecks": [
+    "BodyOwnerQA chat at 24 blocks",
+    "BodyOwnerQA talk at 9 blocks"
+  ],
+  "candidateChecks": [
+    {
+      "name": "BodyOwnerQA chat at 9 blocks",
+      "passed": true,
+      "evidence": {
+        "ok": true,
+        "status": "pending"
+      }
+    },
+    {
+      "name": "BodyOwnerQA receives completed reply at 9 blocks",
+      "passed": true
+    },
+    {
+      "name": "BodyOwnerQA chat at 24 blocks",
+      "passed": true,
+      "evidence": {
+        "ok": true,
+        "status": "pending"
+      }
+    },
+    {
+      "name": "BodyOwnerQA receives completed reply at 24 blocks",
+      "passed": true
+    },
+    {
+      "name": "BodyOwnerQA chat at 24.1 blocks",
+      "passed": true,
+      "evidence": {
+        "ok": false,
+        "error": "out_of_range"
+      }
+    },
+    {
+      "name": "RangeVisitorQA chat at 8 blocks",
+      "passed": true,
+      "evidence": {
+        "ok": true,
+        "status": "pending"
+      }
+    },
+    {
+      "name": "RangeVisitorQA receives completed reply at 8 blocks",
+      "passed": true
+    },
+    {
+      "name": "RangeVisitorQA chat at 8.1 blocks",
+      "passed": true,
+      "evidence": {
+        "ok": false,
+        "error": "out_of_range"
+      }
+    },
+    {
+      "name": "BodyOwnerQA talk at 9 blocks",
+      "passed": true,
+      "evidence": {
+        "ok": true,
+        "status": "queued"
+      }
+    },
+    {
+      "name": "queued message identifies its external consumer and direct dialogue usage",
+      "passed": true
+    },
+    {
+      "name": "original synthetic owner and body are retained",
+      "passed": true
+    }
+  ],
+  "acceptanceLimit": [
+    "Native chat delivery and range boundaries are verified with a deterministic model.",
+    "This does not establish original Feiyu natural conversation, audio or sustained autonomous behavior.",
+    "The boat-exit changes from PR 286 are retained; the production bridge remains 0.1.42."
+  ]
+}

@@ -1,0 +1,200 @@
+{
+  "stage": "E:\\MC\\staging\\better-combat-qa-cde33375",
+  "gamePort": 63500,
+  "serverSha256": "ccb6e44668919d6a5a69aeffbe3fefb71f7c9c6127cc01ea1febc3f20f32fca1",
+  "productionChanged": false,
+  "checks": [
+    {
+      "name": "unchanged vanilla Mineflayer joins baseline Youer",
+      "passed": true
+    },
+    {
+      "name": "vanilla particle packets received",
+      "passed": true
+    },
+    {
+      "name": "vanilla sound packet received",
+      "passed": true
+    },
+    {
+      "name": "verified bettercombat-neoforge-2.4.0+1.21.1.jar",
+      "passed": true
+    },
+    {
+      "name": "verified cloth-config-15.0.140-neoforge.jar",
+      "passed": true
+    },
+    {
+      "name": "verified player-animation-lib-forge-2.0.4+1.21.1.jar",
+      "passed": true
+    },
+    {
+      "name": "unmodified client is rejected by default mod contract",
+      "passed": true
+    }
+  ],
+  "baseline": {
+    "version": "1.21.1",
+    "client": "unmodified mineflayer",
+    "clientMods": [],
+    "spawned": true,
+    "particles": [
+      {
+        "longDistance": true,
+        "x": -6.5,
+        "y": -58.8,
+        "z": 7.5,
+        "offsetX": 0,
+        "offsetY": 0,
+        "offsetZ": 0,
+        "velocityOffset": 0,
+        "amount": 1,
+        "particle": {
+          "type": "crit"
+        }
+      },
+      {
+        "longDistance": true,
+        "x": -6.5,
+        "y": -58.8,
+        "z": 7.5,
+        "offsetX": 0,
+        "offsetY": 0,
+        "offsetZ": 0,
+        "velocityOffset": 0,
+        "amount": 1,
+        "particle": {
+          "type": "end_rod"
+        }
+      },
+      {
+        "longDistance": true,
+        "x": -6.5,
+        "y": -58.8,
+        "z": 7.5,
+        "offsetX": 0,
+        "offsetY": 0,
+        "offsetZ": 0,
+        "velocityOffset": 0,
+        "amount": 1,
+        "particle": {
+          "type": "sweep_attack"
+        }
+      },
+      {
+        "longDistance": true,
+        "x": -6.5,
+        "y": -58.8,
+        "z": 7.5,
+        "offsetX": 0,
+        "offsetY": 0,
+        "offsetZ": 0,
+        "velocityOffset": 0,
+        "amount": 1,
+        "particle": {
+          "type": "dust",
+          "data": {
+            "red": 0.20000000298023224,
+            "green": 0.699999988079071,
+            "blue": 1,
+            "scale": 0.699999988079071
+          }
+        }
+      }
+    ],
+    "sounds": [
+      {
+        "sound": {
+          "data": {
+            "soundName": "minecraft:entity.player.attack.sweep"
+          }
+        },
+        "soundCategory": "master",
+        "x": -52,
+        "y": -470,
+        "z": 60,
+        "volume": 0.5,
+        "pitch": 1,
+        "seed": [
+          829620208,
+          -935742901
+        ]
+      }
+    ],
+    "errors": [],
+    "position": {
+      "x": -6.5,
+      "y": -60,
+      "z": 5.5
+    },
+    "endReason": "observation_complete"
+  },
+  "baselineExitCode": 0,
+  "mods": [
+    {
+      "version": "2.4.0+1.21.1-neoforge",
+      "modrinthVersion": "VhIOvcXP",
+      "filename": "bettercombat-neoforge-2.4.0+1.21.1.jar",
+      "sha512": "db24730a42ae7e2dd546ee031d2f5e0dd6f9896418417a529fa21a44121761ebb29c8b8299db8f20500f7497f7b60a7d793b66c93abf37a8ea0aa3edafd80eb6",
+      "sha256": "0446e9faa98b764ba010ac31e337d14ac96bbb2fbfeff9b599e1efd510dfde5a",
+      "url": "https://cdn.modrinth.com/data/5sy6g3kz/versions/VhIOvcXP/bettercombat-neoforge-2.4.0%2B1.21.1.jar",
+      "bytes": 1045389
+    },
+    {
+      "version": "15.0.140+neoforge",
+      "modrinthVersion": "izKINKFg",
+      "filename": "cloth-config-15.0.140-neoforge.jar",
+      "sha512": "aaf9b010955b8cd294e5a92f069985b18729fd5e2cf22d351f1dff9680f15488688803ec41e77e941cbde130ceb535014ca4c868047d80ab69c2d508e216654d",
+      "sha256": "65e722e0d98431a07c45f8bdd8d529a217cc8c175fde1740248bd5c1b4f3c0d4",
+      "url": "https://cdn.modrinth.com/data/9s6osm5g/versions/izKINKFg/cloth-config-15.0.140-neoforge.jar",
+      "bytes": 1163890
+    },
+    {
+      "version": "2.0.4+1.21.1-forge",
+      "modrinthVersion": "HJZB6bmA",
+      "filename": "player-animation-lib-forge-2.0.4+1.21.1.jar",
+      "sha512": "fc00450fb6c95ec1779021bdc726122dacb5915c6baddaacc981cd221b01b8db35f2a0dfde5d6fa6766d877266dc82f58854f571ea53cc5c4d468b80e1548a5f",
+      "sha256": "dbe5de45f5cd60c0e5e47af14e6d564534a98456e973cf670cb881f6938eee92",
+      "url": "https://cdn.modrinth.com/data/gedNE4y2/versions/HJZB6bmA/player-animation-lib-forge-2.0.4%2B1.21.1.jar",
+      "bytes": 203149
+    }
+  ],
+  "bettercombat": {
+    "version": "1.21.1",
+    "client": "unmodified mineflayer",
+    "clientMods": [],
+    "spawned": false,
+    "particles": [],
+    "sounds": [],
+    "errors": [],
+    "kicked": {
+      "type": "string",
+      "value": "你正在尝试连接一个安装了 NeoForge 的服务器，但是你没有安装。为了连接到此服务器，请安装 NeoForge 版本 21.1.252。"
+    },
+    "endReason": "kicked"
+  },
+  "bettercombatExitCode": 0,
+  "observedAt": "2026-11-17T02:51:01Z",
+  "schemaVersion": 1,
+  "releaseReady": false,
+  "scope": "Isolated default Better Combat contract and vanilla particle/sound packets; not a full production-stack, modded-client, YSM, Geyser or sword-skill acceptance.",
+  "betterCombatSourceCommit": "e4a6a4a2ae109045d7a1eae334728bd726c305ea",
+  "betterMobCombatSourceCommit": "f6c3167635dbb0e03eacef67485ecbc6384151eb",
+  "rawEvidenceSha256": "a341cfca4f4425c99789705e55a7788a6c81feae5414d62151a9daf9453b6319",
+  "probeSources": [
+    {
+      "path": "D:\\codex\\2026-09-14\\new-chat\\work\\bettercombat-audit-20261117\\verify.py",
+      "sha256": "402fe95af8aa773e1e8db0ef1045ec6cc02fcf565e98575d7f48cc56e24f6071"
+    },
+    {
+      "path": "D:\\codex\\2026-09-14\\new-chat\\work\\bettercombat-audit-20261117\\client.cjs",
+      "sha256": "8551237209984d36bc5500201e99e8f1bd666d586b6600c06bf233478c7fcd98"
+    }
+  ],
+  "expectedParticleTypes": [
+    "crit",
+    "end_rod",
+    "sweep_attack",
+    "dust"
+  ]
+}

@@ -51,6 +51,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private ExecutorService io,media,recognition;
     private ScheduledExecutorService captureClock;
     private VoiceLedger ledger;
+    private NpcConversations npcs;
     private YamlConfiguration profiles;
     private Path profileFile;
     private HttpClient http;
@@ -91,6 +92,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             token=Files.readString(secret).strip();if(token.length()<32||token.length()>128)throw new IllegalArgumentException("Private bridge token required");
             profileFile=getDataFolder().toPath().resolve("profiles.yml");profiles=YamlConfiguration.loadConfiguration(profileFile.toFile());
             ledger=new VoiceLedger(getDataFolder().toPath().resolve("receipts"));
+            npcs=new NpcConversations(this,getDataFolder().toPath().resolve("npc-voices.json"));
             io=Executors.newSingleThreadExecutor(r->new Thread(r,"qiandeng-voice-ledger"));
             media=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(32),r->new Thread(r,"qiandeng-voice-media"),new ThreadPoolExecutor.AbortPolicy());
             recognition=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(16),r->new Thread(r,"qiandeng-voice-asr"),new ThreadPoolExecutor.AbortPolicy());
@@ -138,6 +140,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             UUID session=sessions.computeIfAbsent(p.getUniqueId(),key->UUID.randomUUID());Location at=p.getLocation();
             all.put(p.getUniqueId(),new VoiceAudience.Actor(p.getUniqueId(),session,at.getWorld().getUID(),at.getX(),at.getY(),at.getZ(),p.getName(),profiles.getBoolean(p.getUniqueId()+".captions",getConfig().getBoolean("captions-default",true))));
         }
+        if(npcs!=null)npcs.sample(all);
         snapshot=new VoiceAudience.Snapshot(System.currentTimeMillis(),all);
         uploads.expire(System.currentTimeMillis());
     }
@@ -270,6 +273,34 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         if(delivery!=null&&receiver!=null&&receiver.isInstalled()&&receiver.isConnected()&&!receiver.isDisabled())delivery.offered(receiver.getPlayer().getUuid());
     }
     private static boolean validVoice(String voice){return voice!=null&&voice.matches("[A-Za-z0-9_.-]{1,96}");}
+    /** Server-only bridge: exact registered body and owner, never a client-selected voice identity. */
+    public String npcVoiceProfiles(){return npcs==null?"[]":npcs.catalogue().toString();}
+    public boolean bindHostedNpcVoice(UUID actor,UUID owner,java.util.function.Function<String,Boolean> input){
+        return Bukkit.isPrimaryThread()&&npcs!=null&&npcs.bind(actor,owner,input);
+    }
+    public void publishNpcSpeech(UUID actor,String original,String text,long occurredAt){
+        if(Bukkit.isPrimaryThread()&&npcs!=null)npcs.said(actor,original,text,occurredAt);
+    }
+    public String speakHostedNpc(UUID actor,UUID owner,String original,String text,long occurredAt){
+        if(!Bukkit.isPrimaryThread()||npcs==null)throw new IllegalStateException("NPC_VOICE_NOT_READY");
+        var profile=npcs.profile(actor);
+        if(profile==null||!profile.kind().equals("numen")||!profile.owner().equals(owner)||!(npcs.live(actor) instanceof Player player))throw new IllegalArgumentException("NPC_IDENTITY_MISMATCH");
+        UUID request=NpcDialoguePolicy.speechId(actor,original);
+        // Query the original result before age checks: a restart never creates a new speech request.
+        var old=ledger.get(actor,request);
+        if(old!=null){if(!old.fingerprint().equals(hash("tts\0"+profile.voice()+"\0"+text)))throw new IllegalArgumentException("REQUEST_ID_REUSED");return npcSpeechStatus(actor,original);}
+        if(!NpcDialoguePolicy.fresh(occurredAt,System.currentTimeMillis()))return "{\"state\":\"skipped\",\"reason\":\"stale_speech\"}";
+        NpcDialoguePolicy.text(text);
+        npcs.said(actor,original,text,occurredAt);
+        submitText(player,request,text,profile.voice());
+        return "{\"state\":\"submitted\",\"requestId\":\""+request+"\",\"actualHearingVerified\":false}";
+    }
+    public String npcSpeechStatus(UUID actor,String original){
+        UUID request=NpcDialoguePolicy.speechId(actor,original);var row=ledger.get(actor,request);
+        var result=new JsonObject();result.addProperty("requestId",request.toString());result.addProperty("state",row==null?"not_found":row.state());
+        result.addProperty("reason",row==null?"":row.reason());result.addProperty("actualHearingVerified",false);
+        if(row!=null&&row.delivery()!=null)result.add("delivery",gson.toJsonTree(row.delivery()));return result.toString();
+    }
     private void submitText(Player p,UUID id,String text,String voice){
         if(text==null||text.isBlank()||text.length()>200)throw new IllegalArgumentException("TEXT_REQUIRED_MAX_200");
         if(!validVoice(voice))throw new IllegalArgumentException("VOICE_NOT_SELECTED");
@@ -414,6 +445,10 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private void maidHeard(Capture capture,String text,Set<UUID> audience){
         if(!capture.session.equals(sessions.get(capture.actor)))return;
         Player speaker=Bukkit.getPlayer(capture.actor);if(speaker==null||!speaker.getWorld().getUID().equals(capture.originWorld))return;
+        if(npcs!=null&&npcs.enabled()){
+            npcs.voice(capture.actor,capture.originWorld,capture.request,capture.startedAt,text,audience);
+            return;
+        }
         var maid=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");if(maid==null||!maid.isEnabled())return;
         try{maid.getClass().getMethod("acceptNearbyVoice",UUID.class,UUID.class,UUID.class,long.class,long.class,double[].class,double.class,String.class,Set.class)
             .invoke(maid,capture.actor,capture.originWorld,capture.request,capture.startedAt,capture.last,capture.speakerBounds.clone(),capture.hearingRange,text,audience);}
@@ -463,6 +498,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             if(requestId!=null)reply(p,requestId,"failed",code==null?"VOICE_PROTOCOL_INVALID":code.replaceAll("[^A-Za-z0-9_]",""));else error(p,code);}
     }
     private void reply(Player p,UUID request,String state,String reason){
+        if(p!=null&&npcs!=null&&npcs.live(p.getUniqueId())==p)return; // Internal receipt, not a new NPC chat input.
         if(p==null)return;JsonObject row=new JsonObject();row.addProperty("type","voice_result");row.addProperty("requestId",request.toString());row.addProperty("state",state);row.addProperty("reason",reason);
         row.addProperty("actualHearingVerified",false);
         VoiceLedger.Entry receipt=ledger.get(p.getUniqueId(),request);

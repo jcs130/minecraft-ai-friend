@@ -12,7 +12,7 @@ import { ClientOperationLearning } from './operation-learning.ts';
 import { operationObservation, type OperationAttribution } from '../../core/operation-experience.ts';
 import { appendFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { EventEnvelope, Logger, ModelFacts, ToolOutcome, World, WorldHost, WorldRequestFacts } from './contracts.ts';
+import type { EventEnvelope, Logger, ModelFacts, ToolDef, ToolOutcome, World, WorldHost, WorldRequestFacts } from './contracts.ts';
 import { MinecraftClientWorld } from './world.ts';
 import { JavaClientWorld, JAVA_CLIENT_ENVIRONMENT } from './java-client.ts';
 import { assertMinecraftReady } from './config.ts';
@@ -52,8 +52,23 @@ export interface MinecraftClientOptions {
   commandRepetitionLimit?: number;
   /** Identical control-only requests require inspection when measured motion repeats or stays still; 0 disables. */
   motionRepetitionLimit?: number;
+  /** Optional passive observers of each stored host event (e.g. agent-mc-memory). Absent by default.
+   * Called after the journal write; `facts` is lazy. Observers cannot alter, block or reorder delivery,
+   * and their exceptions are isolated and logged. */
+  eventObservers?: readonly MinecraftEventObserver[];
+  /** Optional host-supplied body-independent tools appended after the core tools; a name already
+   * provided by the core is skipped, so these can never shadow a game tool. Absent by default. */
+  extraTools?: readonly ToolDef[];
+  /** Optional exclusive body control (e.g. a harness that alone drives the body). Tools for which `expose(name)` is false
+   * are hidden from tools()/MCP/context and refused by call() unless CallOptions.bodyKey is this exact `key` object.
+   * Absent by default (everything exposed). */
+  bodyGate?: MinecraftBodyGate;
   log: Logger;
 }
+
+export interface MinecraftBodyGate { key: object; expose: (toolName: string) => boolean }
+
+export type MinecraftEventObserver = (event: EventEnvelope, facts: () => WorldRequestFacts | null) => void;
 
 export type ClientEnvironment = World & {
   requestFacts?(): unknown;
@@ -115,7 +130,7 @@ export class MinecraftAgentClient {
       pushEvent: async (event, opts) => {
         if (event.execution) this.recordExecution(event.execution);
         const stored=await this.journal.pushEvent(event, opts);
-        this.motionReview.book.recordEvents([stored]);return stored;
+        this.motionReview.book.recordEvents([stored]);this.notifyEventObservers(stored);return stored;
       },
       pushDeferred: (event, opts) => this.journal.pushDeferred(event, opts),
       drainPendingEvents: filter => this.journal.drainPendingEvents(filter),
@@ -196,7 +211,29 @@ export class MinecraftAgentClient {
   }
   protected validateConfig(): void { assertMinecraftReady(this.options.cfg); }
 
+  private notifyEventObservers(event: EventEnvelope): void {
+    const observers = this.options.eventObservers;
+    if (!observers?.length) return;
+    const facts = () => this.phase === 'started' ? (this.world.requestFacts?.() as WorldRequestFacts | null) ?? null : null;
+    for (const observer of observers) {
+      try { observer(event, facts); }
+      catch (error) { this.options.log.warn('event observer failed', { type: event.type, err: String(error).slice(0, 200) }); }
+    }
+  }
+
   tools() {
+    const all = this.allTools(), gate = this.options.bodyGate;
+    return gate ? all.filter(tool => gate.expose(tool.name)) : all;
+  }
+
+  private allTools() {
+    const core = this.coreTools(), extra = this.options.extraTools;
+    if (!extra?.length) return core;
+    const names = new Set(core.map(tool => tool.name));
+    return [...core, ...extra.filter(tool => !names.has(tool.name))];
+  }
+
+  private coreTools() {
     const tools = this.world.tools(), name = `${this.toolPrefix}_choose`;
     const choices=this.options.decisions && !tools.some(tool => tool.name === name || tool.name === 'mc_choose')
       ? [...tools, { ...this.hostChoice, name }] : tools;
@@ -220,7 +257,7 @@ export class MinecraftAgentClient {
     if (this.phase === 'starting' || this.phase === 'stopping') throw new Error('Notebook connection is transitioning; retry after it settles.');
     const result = this.phase === 'disconnected'
       ? await this.call(`${this.toolPrefix}_memory`, args, { signal })
-      : await this.tools().find(tool => tool.name === `${this.toolPrefix}_memory`)!.handler(args,
+      : await this.allTools().find(tool => tool.name === `${this.toolPrefix}_memory`)!.handler(args,
         { role: 'operator', log: this.options.log, signal });
     if (typeof result === 'string' || result.failed || !result.meta?.gameMemory)
       throw new Error(typeof result === 'string' ? result : result.text || 'Notebook operation failed');
@@ -485,6 +522,9 @@ export class MinecraftAgentClient {
 
   async call(name: string, args: Record<string, unknown>, options: string | CallOptions = {}, legacySignal?: AbortSignal): Promise<ToolOutcome> {
     const { requestId: callId = randomUUID(), turnId, signal = legacySignal, attribution } = typeof options === 'string' ? { requestId: options } : options;
+    const gate = this.options.bodyGate;
+    if (gate && !gate.expose(name) && (typeof options === 'string' || options.bodyKey !== gate.key))
+      throw new Error(`Tool ${name} is reserved for the body owner (exclusive body control); use the harness instead.`);
     const offlineMemory = this.phase === 'disconnected' && name === `${this.toolPrefix}_memory`;
     const offlineKnowledge = this.phase === 'disconnected' && name === `${this.toolPrefix}_knowledge`;
     const offlinePractice = this.phase === 'disconnected' && name === `${this.toolPrefix}_practice` && ['help','status'].includes(String(args.op));
@@ -504,7 +544,7 @@ export class MinecraftAgentClient {
     if (turnId && this.turn?.id !== turnId) throw new Error('Unknown decision turn');
     if (this.barrier && !stopping) throw new Error(`Acknowledge tool barrier ${this.barrier} before the next call`);
     if (this.turn && this.endRequested && !stopping) throw new Error('Host must end the current decision turn before submitting more calls');
-    const tool = this.tools().find(candidate => candidate.name === name)
+    const tool = this.allTools().find(candidate => candidate.name === name)
       ?? (offlineKnowledge ? { ...KNOWLEDGE_TOOL, name, handler: async () => '' } : undefined);
     if (!tool) throw new Error(`Unknown game tool: ${name}`);
     if (signal?.aborted) throw new Error('Tool call cancelled before submission.');

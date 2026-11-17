@@ -80,7 +80,7 @@ def main() -> None:
     subprocess.run([str(javac), "@" + str(argfile)], check=True, timeout=300)
     test_classes = build / "test-classes"
     test_classes.mkdir(exist_ok=True)
-    test_names = ("ActorLookupTest", "TradeRulesTest", "InteractionArgumentsTest", "TownProtectionPolicyTest", "TownCommandScopeTest", "TownBlockMaskTest")
+    test_names = ("ActorLookupTest", "TradeRulesTest", "TownProtectionPolicyTest", "TownCommandScopeTest", "TownBlockMaskTest")
     test_sources = [SOURCE / "tests" / (name + ".java") for name in test_names]
     test_cp = os.pathsep.join([str(classes), str(test_classes), str(SOURCE / 'resources'), classpath])
     subprocess.run([str(javac), "-proc:none", "--release", "21", "-encoding", "UTF-8", "-cp", test_cp, "-d", str(test_classes),

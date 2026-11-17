@@ -1,0 +1,35 @@
+{
+  "name": "agent-mc-harness",
+  "version": "0.1.0-phase1",
+  "private": true,
+  "type": "module",
+  "description": "Harness runtime between a persona host and the Minecraft body: intents, layered memory, key events and a small host API",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "packageManager": "pnpm@11.5.0",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./sdk": "./src/sdk/client.ts",
+    "./gateway": "./src/gateway/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "serve": "tsx src/server/cli.ts",
+    "example:agent": "tsx examples/third-party-agent.ts"
+  },
+  "dependencies": {
+    "agent-mc-memory": "link:../agent-memory",
+    "ws": "8.21.3",
+    "tsx": "4.23.15"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "8.18.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

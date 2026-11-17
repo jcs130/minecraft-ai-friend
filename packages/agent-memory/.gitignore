@@ -1,0 +1,4 @@
+node_modules/
+.data/
+graphiti-sidecar/.venv/
+graphiti-sidecar/**/__pycache__/

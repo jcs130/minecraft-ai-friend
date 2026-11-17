@@ -28,9 +28,11 @@ def main():
     mods = args.resource_root / 'server/mc/mods'
     numens = list(mods.glob('numen-neoforge-*.jar'))
     actuators = list(mods.glob('numen_act-neoforge-*.jar'))
-    if len(numens) != 1 or len(actuators) != 1:
-        raise ValueError('exact_numen_and_actuator_required')
-    numen, baseline = numens[0], args.baseline_jar or actuators[0]
+    if len(numens) != 1 or len(actuators) > 1:
+        raise ValueError('exact_numen_and_at_most_one_actuator_required')
+    numen = numens[0]
+    # Without a baseline JAR the mod is assembled from source resources (Numen 0.1.5+).
+    baseline = args.baseline_jar or (actuators[0] if actuators else None)
     build = args.output_dir.resolve()
     if not build.is_relative_to(ROOT.resolve()):
         raise ValueError('build_output_must_be_within_project')
@@ -75,14 +77,30 @@ def main():
         test_result = json.loads(test.stdout.strip().splitlines()[-1])
         if test_result.get('ok') is not True or test_result.get('assertions', 0) < 40:
             raise ValueError('restore_contract_test_failed')
-        target = build / baseline.name
-        with zipfile.ZipFile(baseline) as before, zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as after:
+        numen_version = numen.stem.rsplit('-', 1)[-1]
+        target = build / (baseline.name if baseline else f'numen_act-neoforge-1.21.1-{numen_version}.jar')
+        with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as after:
             preserved = []
-            for name in before.namelist():
-                if name.startswith('com/dwinovo/numen/actuator/') and name.endswith('.class'):
-                    continue
-                after.writestr(name, before.read(name))
-                preserved.append(name)
+            if baseline:
+                with zipfile.ZipFile(baseline) as before:
+                    for name in before.namelist():
+                        if name.startswith('com/dwinovo/numen/actuator/') and name.endswith('.class'):
+                            continue
+                        after.writestr(name, before.read(name))
+                        preserved.append(name)
+            else:
+                values = {'mod_id': 'numen_act', 'version': numen_version,
+                          'neoforge_loader_version_range': '[4,)', 'neoforge_version': '21.1.233',
+                          'minecraft_version_range': '[1.21.1, 1.21.2)'}
+                toml = (SOURCE / 'neoforge/src/main/resources/META-INF/neoforge.mods.toml').read_text(encoding='utf8')
+                for key, value in values.items():
+                    toml = toml.replace('${' + key + '}', value)
+                if '${' in toml:
+                    raise ValueError('unexpanded_mods_toml_property')
+                after.writestr('META-INF/MANIFEST.MF', 'Manifest-Version: 1.0\r\n'
+                               f'Implementation-Title: numen_act\r\nImplementation-Version: {numen_version}\r\n\r\n')
+                after.writestr('META-INF/neoforge.mods.toml', toml)
+                preserved = ['META-INF/MANIFEST.MF', 'META-INF/neoforge.mods.toml']
             for path in sorted(classes.rglob('*.class')):
                 if not path.relative_to(classes).as_posix().startswith('com/dwinovo/numen/actuator/'):
                     continue  # Isolated test classes never enter the production mod.
@@ -91,7 +109,8 @@ def main():
             if archive.testzip():
                 raise ValueError('archive_crc_failed')
         record = {'ok': True, 'jar': str(target), 'sha256': sha(target),
-                  'baseline': str(baseline), 'baselineSha256': sha(baseline),
+                  'baseline': str(baseline) if baseline else 'assembled from source resources',
+                  'baselineSha256': sha(baseline) if baseline else None,
                   'numenJar': str(numen), 'numenSha256': sha(numen),
                   'sources': {p.relative_to(ROOT).as_posix(): sha(p) for p in [*sources, Path(__file__)]},
                   'tests': {'restoreContract': dict(test_result, source=test_source.relative_to(ROOT).as_posix(),

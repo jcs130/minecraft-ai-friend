@@ -1,8 +1,8 @@
 package dev.qiandeng.irons;
 
-import com.dwinovo.numen.entity.NumenPlayer;
-import com.dwinovo.numen.task.CompanionTickDispatcher;
-import com.dwinovo.numen.task.Task;
+import com.dwinovo.numen.api.entity.NumenPlayer;
+import com.dwinovo.numen.api.task.CompanionTickDispatcher;
+import com.dwinovo.numen.api.task.Task;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
@@ -61,7 +61,7 @@ public final class WorldNavigationSense {
             Object brain = brains.get(actor.getUUID());
             if (brain == null) { out.addProperty("code", "brain_not_initialized"); return out; }
             Class<?> type = brain.getClass();
-            if (!type.getName().equals("com.dwinovo.numen.task.CompanionBrain")
+            if (!type.getName().equals("com.dwinovo.numen.api.task.CompanionBrain")
                     || field(type, "body", brain) != actor) throw new ReflectiveOperationException();
             Object holder = field(type, "holder", brain);
             String kind, name;

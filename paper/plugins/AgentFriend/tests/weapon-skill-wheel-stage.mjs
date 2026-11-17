@@ -9,8 +9,10 @@ import { installRecipePacketBypass } from '../../../ops/mineflayer-client-compat
 const stage = await fs.realpath(process.env.WEAPON_SKILL_STAGE);
 assert.equal((await fs.readFile(path.join(stage, '.weapon-skill-qa'), 'utf8')).trim(), 'SYNTHETIC_WEAPON_SKILL_ONLY');
 const properties = path.join(stage, 'server.properties');
+const port = Number(process.env.WEAPON_SKILL_PORT ?? 26515);
+assert(Number.isInteger(port) && port >= 1024 && port < 65535);
 const bindings = (await fs.readFile(properties, 'utf8')).split(/\r?\n/);
-for (const binding of ['server-ip=127.0.0.1', 'server-port=26515', 'rcon.port=26516', 'online-mode=false'])
+for (const binding of ['server-ip=127.0.0.1', 'server-port=' + port, 'rcon.port=' + (port + 1), 'online-mode=false'])
     assert(bindings.includes(binding), 'fixture binding ' + binding);
 const mineflayer = createRequire(path.resolve(process.env.MINEFLAYER_PACKAGE))('mineflayer');
 const tag = process.env.WEAPON_QA_TAG ?? '';
@@ -18,7 +20,7 @@ assert(/^[a-z0-9]{0,3}$/.test(tag), 'use a short synthetic test tag');
 const username = 'WheelSwordQA' + tag;
 const checks = [];
 const bots = [];
-const rc = (text) => command(text, 10000, { port: 26516, properties });
+const rc = (text) => command(text, 10000, { port: port + 1, properties });
 
 function check(name, condition) {
     assert(condition, name);
@@ -34,7 +36,7 @@ async function until(fn, label, timeout = 6000) {
     throw new Error('Timed out waiting for ' + label);
 }
 async function connect(name) {
-    const bot = mineflayer.createBot({ host: '127.0.0.1', port: 26515, username: name,
+    const bot = mineflayer.createBot({ host: '127.0.0.1', port, username: name,
         version: '1.21.1', auth: 'offline', hideErrors: true, checkTimeoutInterval: 45000 });
     bots.push(bot);
     bot.lines = [];
@@ -57,13 +59,13 @@ function line(bot, mark, contains) {
 }
 async function open(bot, text) {
     await chat(bot, text);
-    const window = await until(() => bot.currentWindow, text);
+    const window = await until(() => bot.currentWindow?.slots[4] && bot.currentWindow, text);
     return window;
 }
 async function switchPage(bot, slot) {
     const before = bot.currentWindow;
     await bot.clickWindow(slot, 0, 0);
-    return until(() => bot.currentWindow && bot.currentWindow !== before && bot.currentWindow, 'wheel page');
+    return until(() => bot.currentWindow && bot.currentWindow !== before && bot.currentWindow.slots[4] && bot.currentWindow, 'wheel page');
 }
 function title(window, name) {
     return JSON.stringify(window.title).includes(name);
@@ -76,7 +78,7 @@ const selected = (bot, key) => rc('minecraft:data get entity ' + bot.username + 
 const engraving = bot => selected(bot, '"minecraft:custom_data".PublicBukkitValues."agentfriend:weapon_spell_preset"');
 const binding = bot => selected(bot, '"minecraft:custom_data".PublicBukkitValues."agentfriend:weapon_spell_combo_v1"');
 const enchantments = bot => selected(bot, '"minecraft:enchantments"');
-const target = bot => Object.values(bot.entities).find(entity => entity.name === 'husk');
+const target = bot => Object.values(bot.entities).find(entity => entity.name === 'husk' && entity.position.distanceTo(bot.entity.position) < 8);
 const health = () => rc('minecraft:data get entity @e[tag=weapon_target,limit=1] Health')
     .then(text => Number(text.match(/: (\d+(?:\.\d+)?)f?\s*$/)?.[1]));
 async function airUse(bot, sneaking = false, pitch = 0.65) {
@@ -172,7 +174,9 @@ try {
         const useMark = await airUse(bot);
         await line(bot, useMark, '星芒箭命中');
         const sharedMark = bot.lines.length;
-        const wheel = await open(bot, '/mycli skills wheel');
+        await open(bot, '/mycli skills wheel');
+        await switchPage(bot, 31); // quick -> profession
+        const wheel = await switchPage(bot, 31); // profession -> common
         check('ordinary right-click selects Starbolt, and the wheel exposes the same spell', title(wheel, '施法轮盘')
             && wheel.slots[14]?.name === 'amethyst_shard');
         await bot.clickWindow(14, 0, 0);
@@ -182,14 +186,17 @@ try {
         await line(bot, await airUse(bot, true), '霜环：');
         check('sneaking right-click casts Frost Ring', true);
 
-        const wheelMenu = await open(bot, '/mycli menu wheel');
+        await open(bot, '/mycli menu wheel');
+        await switchPage(bot, 31);
+        const wheelMenu = await switchPage(bot, 31);
         const common2 = await switchPage(bot, 30);
         check('both common pages expose eight selectable spells in their fixed wheel cells',
             wheelMenu !== common2 && common2.slots[16]?.name === 'firework_rocket' && common2.slots[19]?.name === 'glowstone_dust');
         await switchPage(bot, 28);
-        const classPage = await switchPage(bot, 33);
+        await switchPage(bot, 31); // common -> quick
+        const classPage = await switchPage(bot, 31);
         check('unselected class offers its skill book without a cast button', classPage.slots[13]?.name === 'book');
-        await switchPage(bot, 33);
+        await switchPage(bot, 31);
         await bot.clickWindow(19, 0, 0);
         check('waypoint wheel button opens destination selection', !!(await until(() => bot.currentWindow, 'waypoints')));
         bot.closeWindow(bot.currentWindow);
@@ -213,7 +220,7 @@ try {
         await rc('minecraft:tp ' + mage.username + ' 0.5 -52 4.5');
         await line(mage, await chat(mage, '/mycli profession choose mage --json'), '"saved":true');
         await open(mage, '/mycli menu wheel');
-        const abilities = await switchPage(mage, 33);
+        const abilities = await switchPage(mage, 31);
         check('an actual learned class skill appears as a clickable native ability', abilities.slots[10]?.name === 'enchanted_book');
         const classMark = mage.lines.length;
         await mage.lookAt(mob.position.offset(0, 1, 0), true);
