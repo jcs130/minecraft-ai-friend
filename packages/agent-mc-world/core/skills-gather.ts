@@ -41,6 +41,7 @@ import { cancelOwnedFishing, ownedFishingBobber } from './fishing.ts';
 import { confirmFishingLoot } from './fishing-loot.ts';
 import { flushActionAim } from './action-orientation.ts';
 import { minecraftTextComponent } from './text-component.ts';
+import { readOpenWindow, renderWindowReadout } from './window-readout.ts';
 import { beginTemporaryScaffold, closeTemporaryScaffold, reclaimTemporaryScaffold,
   type TemporaryScaffoldScope } from './temporary-scaffold.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
@@ -1551,6 +1552,7 @@ export async function skillTrade(
   };
   let win: VillagerWindow | null;
   let openError: Error | null = null;
+  const beforeWindow = bot.currentWindow;
   try {
     if (villagerId !== undefined) eAny.entityType = villagerId;
     const opening = (bot as unknown as { openVillager(e: unknown): Promise<VillagerWindow> })
@@ -1563,14 +1565,30 @@ export async function skillTrade(
   } finally {
     eAny.entityType = origType;
   }
+  if (ctx.aborted()) {
+    clearTradeListeners();
+    const opened = bot.currentWindow;
+    if (opened && opened !== beforeWindow && (!win || opened === (win as unknown))) bot.closeWindow(opened);
+    checkAbort(ctx);
+  }
   if (!win) {
     clearTradeListeners();
     const opened = bot.currentWindow;
-    if (opened) {
+    if (opened && opened !== beforeWindow) {
       const title = minecraftTextComponent(opened.title);
       const kind = String(opened.type ?? '未知类型');
+      // Plugins may handle the same entity interaction with a button GUI.
+      // Mineflayer rejects that screen as a merchant, but the open window and
+      // its slots are valid. Keep it available to mc_window/menu_click rather
+      // than destroying the result and forcing another identical right-click.
+      if (kind !== 'minecraft:villager' && kind !== 'minecraft:merchant') {
+        const note = `右键${who}已打开${title ? `「${title}」` : '一个界面'}(${kind})；这是插件交互界面，不是原版村民报价。窗口保留，未成交、未取得图标物品；用 mc_window 读最新格子，按服务端说明选择 menu_click，用完 menu_close。`;
+        if (call.index !== undefined) throw new SkillBlocked(`${note} 原版交易 index=${call.index} 不会自动当作菜单槽位点击。`,
+          [], 'server', undefined, { next_safe_read: { tool: 'mc_window', arguments: {} }, retryable: false });
+        return `${note}\n${renderWindowReadout(readOpenWindow(bot), 2400)}`;
+      }
       bot.closeWindow(opened);
-      throw new SkillBlocked(`右键${who}打开了${title ? `「${title}」` : '一个窗口'}(${kind})，不是原版村民报价窗口；不能按交易 index 成交。先查该菜单或服务端命令的操作方法`);
+      throw new SkillBlocked(`右键${who}打开了${title ? `「${title}」` : '原版交易窗口'}(${kind})，但未收到报价；未成交，窗口已关闭。先核对服务端回应`);
     }
     if (openError) {
       throw new SkillBlocked(`右键${who}没打开原版村民报价窗口:${zhErrorText(openError.message)}`);
