@@ -323,7 +323,7 @@ final class NativeMaidOwnerTravel implements Listener {
         return safeBlock(ownerBlock) && allowed.test(ownerBlock) ? ownerBlock : null;
     }
 
-    private static boolean safeBlock(Location at) {
+    static boolean safeBlock(Location at) {
         World world = at.getWorld();
         int x = at.getBlockX(), y = at.getBlockY(), z = at.getBlockZ();
         if (y <= world.getMinHeight() || y + 1 >= world.getMaxHeight()

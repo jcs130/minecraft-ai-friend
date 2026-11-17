@@ -48,6 +48,7 @@ public final class NativeMaidFollowSupport {
         if(!maid.isAlive()||maid.isRemoved())return "maid_unavailable";
         if(maid.isMaidInSittingPose())return "sitting";
         if(maid.isHomeModeEnable())return "home_mode";
+        if(maid.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat)return "riding_boat";
         if(maid.isNoAi()||!maid.canBrainMoving())return "movement_paused";
         if(!maid.getTask().getUid().toString().equals("touhou_little_maid:idle")||maid.getTarget()!=null)return "native_work_or_combat";
         if(maid.getSwimManager().isGoingToBreath())return "native_breathing";
@@ -99,6 +100,7 @@ public final class NativeMaidFollowSupport {
         out.addProperty("waitUntilEpochMillis",maid.getPersistentData().getLong(MaidCompanionActions.WAIT));
         if(reason.equals("sitting")||reason.equals("home_mode"))out.addProperty("nextStep",MaidCompanionActions.waiting(maid)?"短暂停等结束后自动恢复跟随。":"当前处于驻守。可以在同维度近处说“肥鱼，跟我走”，也可用 /qdmaid follow <maidId> <新requestId> 立即切换。");
         if(reason.equals("different_dimension"))out.addProperty("nextStep","伙伴与女仆不在同一维度；可用 /qdmaid recall 召回，随后核对实际维度和位置。");
+        if(reason.equals("riding_boat"))out.addProperty("nextStep","正在乘船。船靠岸停稳、同行伙伴在岸上且附近有可站立的干地时，可自主下船再跟随。");
         if(reason.equals("native_work_or_combat"))out.addProperty("nextStep","当前工作或战斗由原生AI处理；闲置且非停留状态时才启用近距陪伴。");
         return out;
     }
