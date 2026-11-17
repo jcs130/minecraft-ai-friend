@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "7472d13bb8b7cd4f5bb6535f3c14cf863328a9b7",
+  "includesPullRequests": [
+    280,
+    285
+  ],
+  "productionChanged": false,
+  "releaseReady": false,
+  "exactProductionDerivedArtifactsBuilt": false,
+  "requiredBuildInputs": {
+    "VortexRPG": {
+      "version": "1.2.2-alpha",
+      "sha256": "a7b3df79933e1df3c205c4940f6c880cc7653cafbdc50bb9663d60a5127f9fdf"
+    },
+    "QiandengjiRpg": {
+      "version": "0.2.31-unified-npc",
+      "sha256": "7aed57c18c6755b5bdadc2ca1b95aa0a0146b405f2e8aaff2986213fda187f20"
+    },
+    "AgentFriend": {
+      "version": "0.4.47.87-npc-combat",
+      "sha256": "5f776640e200cef644febd848c0f3c21b031bd52a9cf35a6abbfd7c6957561cc"
+    },
+    "QiandengjiMaidBridge": {
+      "version": "0.1.42-unified-companion",
+      "sha256": "00812153254a1167885f663bdbad7aca04e3d2df7d30315f9cc85b3ea59fe274"
+    },
+    "qiandengji_maid_brain": {
+      "version": "0.1.1",
+      "sha256": "f3c279117a680471fdb5eb855f71e6a050c00a4987b3f8f17742e7610807a810"
+    }
+  },
+  "candidateVersions": {
+    "QiandengjiRpg": "0.2.32-swordsman-candidate",
+    "tlm_maid_agents": "0.3.10"
+  },
+  "isolatedPaper": {
+    "version": "1.21.1 build 133",
+    "java": "21",
+    "artifacts": [
+      {
+        "file": "paper.jar",
+        "sha256": "39bd8c00b9e18de91dcabd3cc3dcfa5328685a53b7187a2f63280c22e2d287b9"
+      },
+      {
+        "file": "vortex-upstream.jar",
+        "sha256": "a7a574173a1888478be5b9cc0dcfcb1e167c9badc0d4686eb8320fcc9583d844"
+      },
+      {
+        "file": "vortex-swordsman-qa-r2.jar",
+        "sha256": "67d78318ae0f572c1fe57a17c49b3f2f50f181831324cacf3d6e81923b7a8c7b"
+      },
+      {
+        "file": "vortex-swordsman-paper.jar",
+        "sha256": "a113788a734ccceb7f11ec1e6d6314d7f008f540ec27a1908187d349c3254ed2"
+      },
+      {
+        "file": "swordsman-fixture.jar",
+        "sha256": "59db301823842cfc95a1bc5419addc7f7a303097a9ea0024bfe1a1f663578199"
+      }
+    ],
+    "qaOnlyAttributeRemapSites": 5,
+    "warmChecks": [
+      "seven_native_archetypes",
+      "sword_base_dexterity_over_strength",
+      "ranger_has_original_tree",
+      "native_cast_cannot_bypass_resident_cli",
+      "native_choose_on_unselected_profile",
+      "starter_sword_step",
+      "own_tree_only",
+      "level_gate_and_no_debit",
+      "native_curve_and_skill_points",
+      "starburst_prerequisites",
+      "horizontal_learned",
+      "specialization_learned",
+      "starburst_learned",
+      "duplicate_learning_uncharged",
+      "ranger_rejects_sword_skill",
+      "existing_ranger_cannot_be_reselected",
+      "sixteen_actual_health_losses",
+      "native_hurt_window_waited",
+      "alternating_damage_and_separate_visual_count",
+      "bukkit_cancelled_hit_zero_damage_separate_swing",
+      "dead_source_leaves_only_applied_hit"
+    ],
+    "coldChecks": [
+      "cold_profile_level_and_points",
+      "cold_skill_and_class",
+      "cold_resource_checkpoint_stored_in_native_profile",
+      "cold_ranger_unchanged"
+    ],
+    "retainedFailure": "First fixture used experienceForLevel(8); replaced by totalExperienceToReach(8) before rerunning both processes.",
+    "controller": "Synthetic Paper actor and Bukkit zombies. No TLM runtime or deployed RPG bridge."
+  },
+  "remainingGates": [
+    "Build from digest-matched unified Vortex/bridge/maid-brain artifacts and validate in isolated Youer.",
+    "Live TLM two-sword equipment, cooldown/mana/readback and realm, friends, protection, movement and receipt lifecycle acceptance.",
+    "Disconnect, controlled stop and crash during actual resident combo with exact tool receipts.",
+    "Client animation and sustained autonomous gameplay acceptance.",
+    "Review and separately authorize the original ranger migration."
+  ],
+  "standaloneResidentBuild": {
+    "java": 21,
+    "neoForge": "21.1.248",
+    "touhouLittleMaid": "1.5.3-neoforge+mc1.21.1",
+    "sha256": "77cade62ee9b3c4da2419969442336656c15217ac50cac64dddf9da34f53ef2e",
+    "hybridBrainMerged": false,
+    "fullYouerAcceptance": false
+  },
+  "existingRegressions": {
+    "standalonePythonTests": 18,
+    "companionLedgerChecks": 137,
+    "residentContractChecks": 56,
+    "residentInferenceChecks": 21,
+    "coreGoalProjectionChecks": 11,
+    "nativeBodyControlChecks": 46
+  }
+}

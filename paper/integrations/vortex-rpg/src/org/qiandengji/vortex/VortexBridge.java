@@ -27,8 +27,11 @@ public final class VortexBridge extends JavaPlugin {
     private QuestService quests;
     private ManaManager mana;
     private ResidentRpgApi residents;
-    public void residentTick(UUID id,String role){if(residents==null)residents=new ResidentRpgApi(vortex,this);residents.tick(id,role);}
+    private ResidentSwordArts swordArts;
+    public boolean residentUsesSwords(UUID id){return residents!=null&&residents.usesSwords(id);}
+    public void residentTick(UUID id,String role){if(residents==null)residents=new ResidentRpgApi(vortex,this,swordArts);residents.tick(id,role);}
     public String residentState(UUID id){if(residents==null)return "{\"available\":false,\"backend\":\"vortex\",\"reason\":\"profile_loading\"}";return residents.state(id);}
+    public String residentSwordReflex(UUID id,UUID targetId){return residents==null?"":residents.swordReflex(id,targetId);}
     public String residentReflex(UUID id,boolean fighting){return residents==null?"":residents.reflex(id,fighting);}
     public boolean residentMana(UUID id,double amount,boolean spend){return residents!=null&&residents.mana(id,amount,spend);}
     public boolean residentRefill(UUID id){return residents!=null&&residents.refill(id);}
@@ -57,6 +60,7 @@ public final class VortexBridge extends JavaPlugin {
             if(!vortex.getPluginMeta().getVersion().equals("1.2.2-alpha"))throw new IllegalStateException("Vortex版本未验证");
             quests=vortex.qiandengjiQuests();
             mana=vortex.qiandengjiMana();
+            swordArts=new ResidentSwordArts(vortex,this);
             items=vortex.qiandengjiItems();
             registeredEffects=loadRegisteredEffects();
             Objects.requireNonNull(quests);Objects.requireNonNull(mana);
@@ -84,7 +88,10 @@ public final class VortexBridge extends JavaPlugin {
             Bukkit.getPluginManager().disablePlugin(this);
         }
     }
-    @Override public void onDisable(){auctionSafety.restore();}
+    @Override public void onDisable(){
+        try { if(swordArts!=null)swordArts.stop(); }
+        finally { auctionSafety.restore(); }
+    }
     private void notifyAgentFriend(String name,Class<?>[] types,Object...args){
         var af=Bukkit.getPluginManager().getPlugin("AgentFriend");if(af==null||!af.isEnabled())return;
         try{af.getClass().getMethod(name,types).invoke(af,args);}catch(Exception error){getLogger().warning("冒险证明未能确认："+name+"；不伪造考试完成。");}
@@ -178,19 +185,27 @@ public final class VortexBridge extends JavaPlugin {
         try{return Boolean.TRUE.equals(Bukkit.getPluginManager().getPlugin("AgentFriend").getClass().getMethod("nativeRpgSelected").invoke(Bukkit.getPluginManager().getPlugin("AgentFriend")));}
         catch(Exception e){return false;}
     }
+    private String activeSkill(UnifiedPlayer state) {
+        return (swordArts.isSwordsman(state) ? vortex.classSkillService().activeSpellId(state)
+                : vortex.spellbookService().activeSpellId(state)).orElse("");
+    }
+
     // Narrow public ABI consumed by AgentFriend without importing native classes.
     // No full metadata, raw profile or credentials are exposed to clients.
     public String selfState(Player p){
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main thread required");
         var state=profile(p);String id=vortex.classSkillService().selectedClassDefinition(state).map(c->c.id()).orElse("");
         var result=new LinkedHashMap<String,Object>(Map.of("available",true,"backend","vortex","combat",id,"level",state.level(),"xp",state.experience(),
-            "skillPoints",vortex.classSkillService().unspentSkillPoints(state),"activeSkill",vortex.spellbookService().activeSpellId(state).orElse(""),
+            "skillPoints",vortex.classSkillService().unspentSkillPoints(state),"activeSkill",activeSkill(state),
             "mana",Map.of("current",mana.getMana(p.getUniqueId()),"max",mana.getMaxMana(p)),
             "economy",Map.of("available",vortex.qiandengjiVault().isAvailable(),"balance",vortex.qiandengjiVault().balance(p)),
             "abilities",vortex.spellbookService().editorSpellSnapshots().stream().filter(s->vortex.spellbookService().availableSpells(state).contains(s.id())).limit(48).map(s->Map.of(
                 "id","mycli:"+s.id(),"name",vortex.spellbookService().spellLabel(s.id()),"level",1,"learned",true,
                 "cooldownRemainingMs",vortex.spellbookService().qiandengjiCooldown(p.getUniqueId(),s.id()),
                 "cooldownMs",s.cooldownMillis(),"manaCost",io.vortexcore.combat.ManaGate.cost(vortex,s.id()))).toList()));
+        var abilities=new ArrayList<Object>((List<?>)result.get("abilities"));
+        abilities.addAll(swordArts.abilities(p,state));
+        result.put("abilities",abilities);
         result.put("className",BridgeRules.className(id));
         result.putAll(io.vortexcore.rpg.ExperienceProgress.of(state,vortex.playerProfileService().experienceCurve()).fields());
         return gson.toJson(result);
@@ -330,7 +345,7 @@ public final class VortexBridge extends JavaPlugin {
             if(r.help()){help(p,r);return true;}
             if(!getConfig().getString("backend","preview").equals("vortex")&&!getConfig().getStringList("allowed-worlds").contains(p.getWorld().getName()))throw new IllegalArgumentException("当前世界未开放Vortex预览。");
             var state=profile(p);
-            if(skillFailure(p,state,r))return true;
+            if(swordCommand(p,state,r)||skillFailure(p,state,r))return true;
             switch(r.group()){
                 case "status"->status(p,state,r);
                 case "class"->classes(p,state,r);
@@ -408,6 +423,40 @@ public final class VortexBridge extends JavaPlugin {
             default->throw new IllegalArgumentException("class 仅 list/info/choose；查询不自动选职。");
         }
     }
+    private boolean swordCommand(Player p, UnifiedPlayer state, BridgeRules.Request r) {
+        if (!(r.group().equals("cast") || r.group().equals("skills")) || r.arguments().size()!=1) return false;
+        var art=ResidentSwordArts.find(r.arguments().getFirst());
+        if (art==null) return false;
+        if (r.group().equals("skills")) {
+            if (Set.of("info","explain","status").contains(r.action())) {
+                var detail=swordArts.info(p,state,art);
+                detail.put("queryOnly",true);
+                emit(p,r,detail,detail.get("summary").toString());
+                return true;
+            }
+            if (Set.of("prepare","equip").contains(r.action())) {
+                emit(p,r,Map.of("success",false,"changed",false,"reason","resident_art_direct_cast"),"居民剑技通过 cast 技能ID 使用。");
+                return true;
+            }
+            return false; // Native unlockSkill owns learning and the skill-point write.
+        }
+        var id=p.getUniqueId();
+        if (!pending.add(id)) {
+            emit(p,r,Map.of("success",false,"changed",false,"reason","actor_busy"),"上一操作仍在确认。");
+            return true;
+        }
+        try {
+            swordArts.cast(p,state,art,result -> {
+                try { emit(p,r,result,art.name()+" "+result.get("reason")); }
+                finally { pending.remove(id); }
+            });
+        } catch (RuntimeException | LinkageError error) {
+            pending.remove(id);
+            throw error;
+        }
+        return true;
+    }
+
     private boolean skillFailure(Player p,UnifiedPlayer state,BridgeRules.Request r){
         if(!(r.group().equals("cast")||r.group().equals("skills")&&Set.of("info","explain","status","learn","prepare","equip").contains(r.action()))||r.arguments().size()!=1)return false;
         String id=r.arguments().getFirst();
@@ -443,7 +492,9 @@ public final class VortexBridge extends JavaPlugin {
             case "tree"->{noArgs(r);var tree=vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).orElseThrow(()->new IllegalArgumentException("先选择职业；/mycli profession list"));
                 async(p,r,vortex.qiandengjiTalents().talentData(p.getUniqueId()).thenApply(data->Map.<String,Object>of("talentPoints",data.talentPoints(),"allocated",data.allocatedNodes(),"nodes",tree.nodes(),"summary","天赋点 "+data.talentPoints()+"；"+String.join("、",tree.nodes().values().stream().map(n->n.id()+" "+n.displayName()+"("+n.cost()+"点)").toList())+"。查看条件：/mycli skills info <ID>")),"天赋资料暂不可用");}
             case "menu"->{noArgs(r);vortex.classSkillService().openSkillMenu(p,state);if(r.json())emit(p,r,Map.of("requestedMenu","skills","learningConfirmed",false,"nextCommand","/mycli skills status"),"已请求打开技能菜单；尚未学习。");}
-            case "list", "status", "mine", "points"->{noArgs(r);var ids=vortex.spellbookService().availableSpells(state);var learnable=vortex.classSkillService().skillsFor(state).stream().filter(k->!vortex.classSkillService().unlockedSkillIds(state).contains(k.id())).toList();
+            case "list", "status", "mine", "points"->{noArgs(r);var ids=new LinkedHashSet<>(vortex.spellbookService().availableSpells(state));
+                swordArts.abilities(p,state).forEach(skill->ids.add(skill.get("id").toString().substring("mycli:".length())));
+                var learnable=vortex.classSkillService().skillsFor(state).stream().filter(k->!vortex.classSkillService().unlockedSkillIds(state).contains(k.id())).toList();
                 String active=vortex.spellbookService().activeSpellId(state).orElse("");
                 emit(p,r,Map.of("available",ids,"common",io.vortexcore.rpg.ResidentActors.registered(p.getUniqueId())?List.of():SkillTransition.COMMON,"learnable",learnable,"skillPoints",vortex.classSkillService().unspentSkillPoints(state),"activeSpell",active),
                     "基础：home/selfheal/food/blink/starbolt/frostnova/give；其他通用：travel/prospect/night/feather；职业可用："+String.join("、",ids)+"；当前点击技 "+(active.isEmpty()?"未设置":active)+"；学习点 "+vortex.classSkillService().unspentSkillPoints(state)+"；可学："+String.join("、",learnable.stream().map(k->k.id()+"("+k.cost()+"点,Lv"+k.requiredLevel()+")").toList())+"。详情：/mycli skills info <ID>");}

@@ -22,6 +22,10 @@ final class ResidentVortex {
         try{return new Gson().fromJson((String)call("residentState",new Class[]{UUID.class},id),Map.class);}
         catch(RuntimeException unavailable){return Map.of("available",false,"backend","vortex","reason","native_adapter_unavailable","abilities",List.of(),"skills",List.of());}
     }
+    static boolean usesSwords(UUID id) {
+        try { return Boolean.TRUE.equals(call("residentUsesSwords", new Class[]{UUID.class}, id)); }
+        catch(IllegalStateException olderBridge) { return false; }
+    }
     static boolean mana(UUID id,double amount,boolean spend){return Boolean.TRUE.equals(call("residentMana",new Class[]{UUID.class,double.class,boolean.class},id,amount,spend));}
     static boolean refill(UUID id){return Boolean.TRUE.equals(call("residentRefill",new Class[]{UUID.class},id));}
     static void xp(UUID id,long amount){call("residentExperience",new Class[]{UUID.class,long.class},id,amount);}
