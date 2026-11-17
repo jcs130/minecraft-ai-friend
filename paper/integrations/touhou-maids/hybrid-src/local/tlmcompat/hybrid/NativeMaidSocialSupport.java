@@ -30,7 +30,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
     private long nextAutonomousDecision;
     private long lastActionOpportunity;
     private AutonomousDecision lastDecision;
-    private record ActionCue(String mode,UUID threat,String observation){}
+    private record ActionCue(String mode,UUID subject,String observation){}
     private record AutonomousDecision(EntityMaid maid,long revision,ActionCue cue){}
     private record VisibleChange(long sequence,long at,UUID world,String text){}
     private final Map<UUID,VisibleChange> changes=new HashMap<>();
@@ -106,7 +106,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         if(cue!=null){
             messages.add(LLMMessage.systemChat(maid,"你是肥鱼，和可米平等相处的冒险伙伴，直接叫可米，不称主人。根据服务器现场事实独立决定自己的下一步。"+
                 "伙伴正在冒险时，遇到确认的敌人优先中断自己安排的休息或工作并护卫。"+
-                "伙伴继续出发时，考虑收竿跟上。需要执行就调用一次工具，确实没有适合的动作才输出[[结束]]。"+
+                "伙伴继续出发时，考虑收竿或离开停在岸边的船，恢复随行。需要执行就调用一次工具，确实没有适合的动作才输出[[结束]]。"+
                 "无法用文字执行动作，不发问、不催促、不声称已经击中或走到。"));
             messages.add(LLMMessage.userChat(maid,cue.observation()+" 身体实测："+MaidCompanionActions.facts(maid,actor)));
             submitModel(call,messages);
@@ -184,7 +184,10 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         }
         @Override public void addCompanionTools(com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.request.ChatCompletion request){
             if(partnerAction&&!actionAttempted){
-                if(call.cue!=null)MaidCompanionActions.autonomousTool(request,call.cue.mode());
+                if(call.cue!=null){
+                    if(MaidBoatExit.TOOL.equals(call.cue.mode()))MaidBoatExit.offer(request);
+                    else MaidCompanionActions.autonomousTool(request,call.cue.mode());
+                }
                 else{
                     MaidCompanionActions.tools(request);
                     plugin.workshops().addTool(request,call.maid,call.actorConnection);
@@ -216,7 +219,10 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
                 JsonObject args;
                 try{args=JsonParser.parseString(tool.getFunction().getArguments()).getAsJsonObject();}
                 catch(RuntimeException malformed){throw new CompatibilityException("bad_companion_action","工具参数须为JSON对象。");}
-                if(NativeMaidWorkshop.TOOL.equals(name)&&call.cue==null){
+                if(MaidBoatExit.TOOL.equals(name) && call.cue!=null && MaidBoatExit.TOOL.equals(call.cue.mode())){
+                    if(!args.isEmpty())throw new CompatibilityException("bad_companion_action","下船工具不接收参数。");
+                    result=plugin.dismountBoat(call.actorConnection,call.maid,operation,call.cue.subject());
+                }else if(NativeMaidWorkshop.TOOL.equals(name)&&call.cue==null){
                     result=plugin.dispatch(call.actorConnection,NativeMaidWorkshop.ACTION,call.maid.getUUID(),operation,NativeMaidWorkshop.modelOrder(args));
                 }else if(CAST_TOOL.equals(name) && call.ownerRequested()){
                     if (args.size() != 1 || !(args.get("spellId") instanceof JsonPrimitive id) || !id.isString()
@@ -333,15 +339,21 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
     }
 
     private static boolean sameActionCue(ActionCue first,ActionCue current){
-        return current!=null&&first.mode().equals(current.mode())&&Objects.equals(first.threat(),current.threat());
+        return current!=null&&first.mode().equals(current.mode())&&Objects.equals(first.subject(),current.subject());
     }
 
     private ActionCue actionCue(EntityMaid maid,Player partner){
         if(partner==null||!partner.isOnline()||partner.isDead()||partner.isSleeping()||partner.isInvisible()
                 ||partner.getGameMode()==org.bukkit.GameMode.SPECTATOR||!partner.canSee(maid.getBukkitEntity())
                 ||!MaidConversationRange.within(maid,partner,32)||!maid.isAlive()||maid.isRemoved()||maid.isNoAi()
-                ||maid.isSleeping()||plugin.editingMaidInventory(maid)||plugin.workshops().busy(maid.getUUID()))return null;
+                ||maid.isSleeping()||plugin.nativeExclusive(maid.getUUID())
+                ||plugin.editingMaidInventory(maid)||plugin.workshops().busy(maid.getUUID()))return null;
         boolean idle=maid.getTask().getUid().toString().equals(MaidCompanionActions.IDLE);
+        if(idle && maid.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat boat
+                && MaidBoatExit.findLanding(maid,partner)!=null){
+            return new ActionCue(MaidBoatExit.TOOL,boat.getUUID(),
+                "你独自坐在已经停稳的船里，同行伙伴已在岸上走出跟随距离。服务器确认附近有可直接到达的安全干地，可以用下船工具再继续跟随。");
+        }
         boolean resting=MaidCompanionActions.waiting(maid)&&maid.isMaidInSittingPose()&&maid.isHomeModeEnable()&&idle;
         boolean fishing=MaidCompanionActions.selfDirectedFishing(maid)&&!maid.isHomeModeEnable();
         double distance=maid.getBukkitEntity().getLocation().distanceSquared(partner.getLocation());

@@ -365,6 +365,53 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             default->dispatch(actor,"follow",id,operation,"",mode);
         };
     }
+    JsonObject dismountBoat(Player actor, EntityMaid maid, String operation, UUID expectedBoat) throws Exception {
+        UUID id = maid.getUUID();
+        if (ownedLoaded(actor, id) != maid || !sharedDialogueEnabled(maid) || nativeExclusive(id)) {
+            throw new CompatibilityException("control_changed", "当前伙伴的原生控制状态已变化。");
+        }
+        requireNearby(actor, maid, 32);
+        String action = MaidBoatExit.TOOL;
+        JsonObject previous = receipts.reserve(id, actor.getUniqueId(), operation, action, expectedBoat.toString());
+        if (previous != null) return reconcile(previous);
+        JsonObject observation = new JsonObject();
+        observation.addProperty("boatId", expectedBoat.toString());
+        observation.addProperty("retryAllowed", false);
+        var vehicle = maid.getVehicle();
+        Location landing = vehicle != null && expectedBoat.equals(vehicle.getUUID())
+                && !editingMaidInventory(maid) && !workshops.busy(id) ? MaidBoatExit.findLanding(maid, actor) : null;
+        if (landing == null || ownerTravel == null) {
+            observation.addProperty("effectsApplied", false);
+            observation.addProperty("reason", "safe_dismount_unavailable");
+            return receipts.finish(id, operation, "rejected", observation);
+        }
+
+        Location before = maid.getBukkitEntity().getLocation();
+        landing.setPitch(before.getPitch());
+        ownerTravel.transfer(maid, landing);
+        Location after = maid.getBukkitEntity().getLocation();
+        boolean dismounted = !maid.isPassenger() && maid.isAlive() && !maid.isRemoved();
+        boolean landed = dismounted && after.getWorld().equals(landing.getWorld()) && after.distanceSquared(landing) < 0.01;
+        observation.addProperty("dismounted", dismounted);
+        observation.addProperty("landedOnShore", landed);
+        var position = new JsonArray();
+        position.add(after.getX());
+        position.add(after.getY());
+        position.add(after.getZ());
+        observation.add("actualPosition", position);
+        if (landed) {
+            observation.addProperty("effectsApplied", true);
+            return receipts.finish(id, operation, "applied", observation);
+        }
+        if (!dismounted && maid.getVehicle() == vehicle && before.getWorld().equals(after.getWorld())
+                && after.distanceSquared(before) < 0.01) {
+            observation.addProperty("effectsApplied", false);
+            observation.addProperty("reason", "dismount_blocked");
+            return receipts.finish(id, operation, "rejected", observation);
+        }
+        observation.addProperty("reason", "dismount_result_uncertain");
+        return receipts.finish(id, operation, "unknown", observation);
+    }
     private JsonObject dispatch(Player actor,String action,UUID id,String operation,String value,String companionMode)throws Exception{
         boolean temporaryWait="wait".equals(companionMode);
         if(!actor.isOnline()||actor.isDead())throw new CompatibilityException("actor_unavailable","Connected living player required");
