@@ -8,7 +8,7 @@ import { BattlefieldObserver } from './battlefield.ts';
 import { CombatAbilities, type CombatSpell } from './combat-abilities.ts';
 import { CombatTacticBook } from './combat-tactics.ts';
 import { combatTacticHash } from './combat-tactics.ts';
-import { CombatProgramProbe, validCombatProbe } from './combat-probe.ts';
+import { CombatProgramProbe, CombatProbeSampleUnavailableError, validCombatProbe } from './combat-probe.ts';
 import { tacticSupervisorView } from '../src/client/event-context.ts';
 import { COMBAT_EXECUTION_DEFAULTS, sameCombatSearch, type CombatCandidate, type CombatExecutionPolicy, type CombatDecisionFrame } from './combat-decision-types.ts';
 import { combatReactions, openingSpellBattlefield } from './combat-reactions.ts';
@@ -65,7 +65,15 @@ protected async setCombatTactic(args: Record<string, unknown>, hostSampling = fa
       if (Number.isSafeInteger(args.version) && Number(args.version) > 0)
         return this.toolLog(tool,args,JSON.stringify(this.tactics.tacticHistory(Number(args.version))));
       if (!validCombatProbe(args.probe)) return this.toolLog(tool,args,'未执行：probe 需要 program 和可选的历史 samples 编号。');
-      const result = await this.combatProbe.run(args.probe,this.tactics.tacticRevision(),signal);
+      let result;
+      try { result = await this.combatProbe.run(args.probe,this.tactics.tacticRevision(),signal); }
+      catch (error) {
+        if (!(error instanceof CombatProbeSampleUnavailableError)) throw error;
+        const receipt = {protocol:'combat-program-probe/v1',status:'rejected',code:error.code,
+          sampleId:error.sampleId,executed:false,adopted:false,improvement:null,
+          recovery:'Read samples:true again; keep the candidate source and compare only the newly returned historical samples. No live tactic or body action was changed.'};
+        return {text:this.toolLog(tool,args,JSON.stringify(receipt)),meta:{protocol:'combat-program-probe/v1',probe:receipt}};
+      }
       return {text:this.toolLog(tool,args,JSON.stringify(result)),meta:{protocol:'combat-program-probe/v1',probe:result}};
     }
     if (args.choice !== undefined) {
