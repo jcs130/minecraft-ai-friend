@@ -177,8 +177,15 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
             && player.getGameMode() != GameMode.SPECTATOR;
     }
 
+    private boolean canRunResidence() {
+        UUID id = config.maid();
+        // For unified bodies, guard is the explicit native delegation. Walk,
+        // stay, work and unresolved casts do not carry that delegation.
+        return !plugin.nativeExclusive(id) || plugin.unifiedBody(id)
+            && plugin.nativeGuard(id) && plugin.nativeTravelAllowed(id);
+    }
+
     private void tick() {
-        if(plugin.nativeExclusive(config.maid())){state="external_controller";releaseSource();releaseHome();return;}
         if (!registered()) {
             state = "binding_unavailable";
             releaseSource();
@@ -189,6 +196,22 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
         EntityMaid maid = original();
         Player partner = Bukkit.getPlayer(config.owner());
         if (sourceChunk != null && now >= sourceDeadline) releaseSource();
+        if (!canRunResidence()) {
+            state = "external_controller";
+            releaseHome();
+            // Make the last confirmed original reachable for rebinding after
+            // a restart. Loading an existing generated chunk grants no control.
+            if (plugin.unifiedBody(config.maid()) && !plugin.nativeControlled(config.maid())
+                    && (partner == null || playable(partner))) {
+                if (maid == null && sourceChunk == null && now >= nextSourceAttempt) {
+                    nextSourceAttempt = now + SOURCE_RETRY;
+                    findOriginal(now);
+                }
+            } else {
+                releaseSource();
+            }
+            return;
+        }
         if (maid == null) {
             if (partner == null && now - offlineSince < RECONNECT_GRACE) return;
             releaseHome();
@@ -374,7 +397,7 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
     }
 
     private void beforeMaidTick(EntityTickEvent.Pre event) {
-        if(plugin.nativeExclusive(config.maid()))return;
+        if (!canRunResidence()) return;
         if (!(event.getEntity() instanceof EntityMaid maid) || maid.level().isClientSide() || !maid.isAlive() || maid.isRemoved()
             || !config.maid().equals(maid.getUUID()) || !config.owner().equals(maid.getOwnerUUID())
             || !resident(maid) || !canPatrol(maid)) return;

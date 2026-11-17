@@ -75,6 +75,13 @@ final class NativeMaidBodyActions {
         if(physical&&companions.contains(id)&&!Set.of("stop","stay","sit").contains(action))try{plugin.nativeReady(owner,id);}catch(CompatibilityException busy){return blocked(owner,id,input,busy.code());}
         control.reserve(owner,id,request,input);
         try{
+            if(action.equals("guard")&&guarding(id)&&!maid.isMaidInSittingPose()){
+                var unchanged=new JsonObject();
+                unchanged.addProperty("effectsApplied",false);
+                unchanged.addProperty("meaning","native guard already active");
+                unchanged.add("actualPosition",position(maid));
+                return reply(true,control.finish(id,request,"applied",unchanged),null);
+            }
             if(physical){plugin.nativeQuiesce(maid);companions.remove(id);guards.remove(id);resumeGuards.remove(id);control.invalidateCallbacks(id);}
             var observed=new JsonObject();observed.addProperty("effectsApplied",false);
             switch(action){
@@ -107,8 +114,8 @@ final class NativeMaidBodyActions {
                 case "speak"->{
                     plugin.publishNativeSpeech(maid,request,value);
                     Set<UUID> audience=new HashSet<>();for(var player:maid.getBukkitEntity().getLocation().getNearbyPlayers(16))if(player.canSee(maid.getBukkitEntity())){player.sendMessage(net.kyori.adventure.text.Component.text("<"+maid.getName().getString()+"> "+value));audience.add(player.getUniqueId());}
-                    plugin.publishPublicSpeech(maid,request,value,audience.size());plugin.speakPublicReply(maid,request,value,audience);
-                    maid.getChatBubbleManager().addTextChatBubble(value);
+                    if(!plugin.presentPublicSpeech(maid,request,value,audience.size()))maid.getChatBubbleManager().addTextChatBubble(value);
+                    plugin.speakPublicReply(maid,request,value,audience);
                     observed.addProperty("deliveredPlayers",audience.size());observed.add("voice",plugin.nativeSpeechState(maid));observed.addProperty("hearingVerified",false);
                 }
                 case "ack"->plugin.nativeAck(id,value);
@@ -137,11 +144,28 @@ final class NativeMaidBodyActions {
             if(loaded!=null){data.addProperty("passenger",loaded.isPassenger());if(loaded.getVehicle()!=null)data.addProperty("vehicleType",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(loaded.getVehicle().getType()).toString());}
             if(local.qdj.maids.brain.ResidentBodyAccess.external(id))data.add("resident",JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.status(id)));
             else data.add("scene",plugin.companionScene(plugin.ownedLoaded(owner,id)));}
-        if(action.equals("context")){data.addProperty("physicalController","native_body");data.addProperty("nativeCompanionDelegated",companion(id));var caps=new JsonArray();MaidBodyControl.READS.stream().sorted().forEach(caps::add);MaidBodyControl.WRITES.stream().sorted().forEach(caps::add);data.add("capabilities",caps);if(data.has("brain"))externalBrain(data.getAsJsonObject("brain"),id);}
+        if(action.equals("context")){
+            data.addProperty("physicalController","native_body");
+            data.addProperty("nativeCompanionDelegated",companion(id));
+            if(plugin.unifiedBody(id))data.addProperty("inferenceOwner","unified_npc_host");
+            var caps=new JsonArray();
+            MaidBodyControl.READS.stream().sorted().forEach(caps::add);
+            MaidBodyControl.WRITES.stream().sorted().forEach(caps::add);
+            data.add("capabilities",caps);
+            if(data.has("brain"))externalBrain(data.getAsJsonObject("brain"),id);
+        }
         if(action.equals("brain"))externalBrain(data,id);
         return reply(true,data,null);
     }
-    private void externalBrain(JsonObject brain,UUID id){brain.addProperty("physicalController","native_body");brain.addProperty("readOnly",true);brain.addProperty("originalDialogueControllerActive",!plugin.unifiedBody(id)&&companion(id));brain.addProperty("memoryOwner",plugin.unifiedBody(id)?"unified_character_store":"original_tlm");brain.addProperty("meaning",plugin.unifiedBody(id)?"Unified NPC controller owns decisions and character memory. Original native history is retained read-only for migration; native task execution is separate from a model loop.":companion(id)?"Original selected brain/history and native companion behaviours are delegated by this lease. No shadow dialogue model or new memory scope.":"Original configured brain selection is retained; dialogue queues in inbox while exclusive control is active. Brain choice cannot be changed on this port.");}
+    private void externalBrain(JsonObject brain,UUID id){
+        boolean unified=plugin.unifiedBody(id);
+        brain.addProperty("physicalController","native_body");
+        brain.addProperty("readOnly",true);
+        brain.addProperty("originalDialogueControllerActive",!unified&&companion(id));
+        brain.addProperty("memoryOwner",unified?"unified_character_store":"original_tlm");
+        if(unified)brain.addProperty("conversationOwner","unified_npc_host");
+        brain.addProperty("meaning",unified?"Unified NPC controller owns decisions and character memory. Original native history is retained read-only for migration; native task execution is separate from a model loop.":companion(id)?"Original selected brain/history and native companion behaviours are delegated by this lease. No shadow dialogue model or new memory scope.":"Original configured brain selection is retained; dialogue queues in inbox while exclusive control is active. Brain choice cannot be changed on this port.");
+    }
     private JsonObject receipt(UUID owner,UUID id,String request)throws Exception {
         var value=control.read(id,request);
         if(value==null){value=plugin.nativeLegacyReceipt(owner,id,request);if(value==null)throw new CompatibilityException("receipt_missing","Query the original namespace; never replay");
