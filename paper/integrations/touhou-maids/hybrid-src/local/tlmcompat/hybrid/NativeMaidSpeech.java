@@ -213,7 +213,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         nextAmbient = now + MaidAmbientPolicy.GLOBAL_GAP;
         String operation = "c_" + UUID.randomUUID();
         for (Player p : audience) p.sendMessage("[附近·女仆] " + maid.getName().getString() + "：" + text);
-        plugin.publishPublicSpeech(maid,operation,text,audience.size());
+        plugin.publishSceneSpeech(maid,operation,text,audience.size());
         plugin.conversationSpoken();
         submit(maid,operation,text,"combat",null);
     }
@@ -233,7 +233,9 @@ final class NativeMaidSpeech implements AutoCloseable {
         String operation="a_"+UUID.randomUUID();
         int delivered=0;
         for(Player p:audience){p.sendMessage("[附近·女仆] "+maid.getName().getString()+"："+text);delivered++;}
-        plugin.publishPublicSpeech(maid,operation,text,delivered);
+        // Ambient clips are player-facing presentation. Their text can sound
+        // like a question, but it is not an NPC initiating a conversation.
+        plugin.publishSceneSpeech(maid,operation,text,delivered);
         submit(maid,operation,text,"ambient",null,original);
     }
     private void tick(){

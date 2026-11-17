@@ -45,6 +45,12 @@ request for reconciliation. Model/transport failures do not mark inputs handled.
 All future roles in this service inherit the policy. External player clients have
 their own hosts and must adopt the policy separately; these files do not alter them.
 
+Native ambient and combat voice lines remain visible and audible to nearby
+players. They enter the public presentation feed separately from authored
+dialogue. A canned greeting therefore cannot repeatedly wake another NPC.
+The native context reports the active unified inference and conversation owner.
+The old TLM selection is retained in the read-only configuration for history.
+
 `attention_probe.py --provider-dir <private-directory> --output <report>` tests
 synthetic conversations against the configured real providers without executing
 game actions. This is prompt acceptance, not proof of production crowd behaviour.
@@ -65,6 +71,18 @@ and request routing supplied by the adapter. `guard` has no `enabled` argument.
 A seated maid exposes passenger/vehicle facts and an explicit `dismount` action;
 speech and inbox acknowledgement remain possible while seated. Dismounting keeps
 the original body, vehicle and inventory and uses the original durable receipt.
+
+Maid roles with `default_native_guard: true` restore guard once on a fresh idle
+observation after a new lease. The check respects seating, passenger status,
+manual work and a temporary wait. A fresh delegated guard does not need another
+write. Native combat, follow and healing continue through quiet turns and keep
+their own confirmed effects.
+
+An existing registered companion residence can run under that native guard
+delegation. It holds at most the original configured residence and a short
+ticket for the original body's last confirmed generated chunk. If a body needs
+rebinding, the ticket only makes that original reachable. It does not create an
+entity or give the old planner control.
 
 `supervisor.py --config <private-file>` supervises one graph sidecar and one NPC
 host. An OS lock prevents duplicate supervisors/hosts; native controller leases

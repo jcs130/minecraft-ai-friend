@@ -146,18 +146,24 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     JsonObject nativeSpeechState(EntityMaid maid){if(speech!=null)return speech.describe(maid);var state=new JsonObject();state.addProperty("enabled",false);state.addProperty("reason","voice_not_configured");return state;}
     private final Map<String,Boolean> publishedDialogue=new LinkedHashMap<>();
     void publishPublicSpeech(EntityMaid maid,String operation,String text,int delivered){
-        if(!Bukkit.isPrimaryThread()||maid==null||!maid.isAlive()||maid.isRemoved())return;
-        UUID owner=owner(maid);if(owner==null)return;
+        if(presentPublicSpeech(maid,operation,text,delivered))publishNativeSpeech(maid,operation,text);
+    }
+    void publishSceneSpeech(EntityMaid maid,String operation,String text,int delivered){
+        presentPublicSpeech(maid,operation,text,delivered);
+    }
+    boolean presentPublicSpeech(EntityMaid maid,String operation,String text,int delivered){
+        if(!Bukkit.isPrimaryThread()||maid==null||!maid.isAlive()||maid.isRemoved())return false;
+        UUID owner=owner(maid);if(owner==null)return false;
         String line=PublicMaidDialogue.line(maid.getUUID(),Bukkit.getOfflinePlayer(owner).getName(),maid.getName().getString(),maid.level().dimension().location().toString(),operation,text,delivered);
-        if(line==null)return;
-        String key=maid.getUUID()+":"+operation;if(publishedDialogue.putIfAbsent(key,true)!=null)return;
+        if(line==null)return false;
+        String key=maid.getUUID()+":"+operation;if(publishedDialogue.putIfAbsent(key,true)!=null)return false;
         while(publishedDialogue.size()>256)publishedDialogue.remove(publishedDialogue.keySet().iterator().next());
         // This path is reached only after actual public delivery. Owner-only
         // history never calls it; use literal text rather than translation keys.
         maid.getChatBubbleManager().addChatBubble(com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.implement.TextChatBubbleData.type2(
             net.minecraft.network.chat.Component.literal(text.replaceAll("§[0-9a-fk-or]",""))));
         getLogger().info(line);
-        publishNativeSpeech(maid,operation,text);
+        return true;
     }
     void publishNativeSpeech(EntityMaid maid,String operation,String text){
         if(!Bukkit.isPrimaryThread()||maid==null||!maid.isAlive()||maid.isRemoved())return;

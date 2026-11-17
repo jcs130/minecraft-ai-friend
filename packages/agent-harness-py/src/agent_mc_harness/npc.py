@@ -22,6 +22,11 @@ from .models import BodyEvent, Scope
 from .runtime import HarnessRuntime, Intent, PlanContext, Step, step_support
 
 
+IDLE_GOAL = "Choose one useful activity grounded in the current scene; rest silently when none is needed."
+DANGER_GOAL = "React to a fresh danger observation."
+DIALOGUE_GOAL = "Decide whether current dialogue is addressed to you and needs a reply; listening silently is valid. Continue useful activity."
+
+
 class NpcRole(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,31}$")
@@ -35,6 +40,7 @@ class NpcRole(BaseModel):
     model: str = Field(min_length=1, max_length=100)
     allowed_tools: list[str] = Field(min_length=1, max_length=32)
     native_tasks: list[str] = Field(default_factory=list, max_length=32)
+    default_native_guard: bool = False
     interval_seconds: int = Field(default=45, ge=10, le=600)
     max_speech_chars: int = Field(default=40, ge=10, le=100)
 
@@ -48,6 +54,8 @@ class NpcRole(BaseModel):
             Step(tool=tool).action("config_validation")
         if self.owner_id == self.body_id:
             raise ValueError("independent_owner_identity_required")
+        if self.default_native_guard and (self.body_kind != "maid" or "body:native:guard" not in self.allowed_tools):
+            raise ValueError("default_guard_requires_native_maid_capability")
         return self
 
     def scope(self, server_id: str) -> Scope:
@@ -65,10 +73,53 @@ def load_roles(path: Path) -> list[NpcRole]:
     return roles
 
 
+def current_native_state(context: PlanContext) -> dict[str, Any]:
+    snapshot = context.snapshot
+    if snapshot is None or snapshot.life_state != "alive" or not isinstance(snapshot.raw, dict):
+        return {}
+    age = time.time() - snapshot.sampled_at.timestamp()
+    return snapshot.raw if -1 <= age <= 5 else {}
+
+
+def already_guarding(native: dict[str, Any]) -> bool:
+    return native.get("nativeGuardDelegated") is True and native.get("sitting") is not True
+
+
+def restore_default_guard(role: NpcRole, context: PlanContext) -> Step | None:
+    native = current_native_state(context)
+    if not role.default_native_guard or native.get("nativeGuardDelegated") is not False:
+        return None
+    follow = native.get("follow")
+    if (native.get("taskId") != "touhou_little_maid:idle" or native.get("canMove") is not True
+            or any(native.get(flag) is not False for flag in ("passenger", "sitting", "homeMode"))
+            or not isinstance(follow, dict) or follow.get("temporaryWait") is not False):
+        return None
+    step = Step(tool="body:native:guard")
+    return step if context.capabilities is not None and not step_support(step, context.capabilities) else None
+
+
+def unnecessary_step(step: Step, context: PlanContext, native: dict[str, Any]) -> bool:
+    if not native:
+        return False
+    if step.tool == "body:observe":
+        return not step.args and context.snapshot.position is not None
+    if step.tool == "body:inventory":
+        return not step.args and context.snapshot.inventory is not None
+    if step.tool == "body:native:guard":
+        return not step.args and already_guarding(native)
+    if step.tool == "body:follow":
+        follow = native.get("follow")
+        return (not step.args and isinstance(follow, dict) and follow.get("active") is True
+                and follow.get("temporaryWait") is not True and native.get("sitting") is not True)
+    return False
+
+
 def reviewed_steps(role: NpcRole, context: PlanContext, values: Any) -> list[Step]:
     if not isinstance(values, list) or len(values) > 3:
         raise ValueError("at_most_three_game_actions")
     out = []
+    native = current_native_state(context)
+    body_changed = False
     for value in values:
         step = Step.model_validate(value)
         if step.tool not in role.allowed_tools or step_support(step, context.capabilities):
@@ -83,7 +134,12 @@ def reviewed_steps(role: NpcRole, context: PlanContext, values: Any) -> list[Ste
             text = step.args.get("text")
             if not isinstance(text, str) or not 1 <= len(text) <= role.max_speech_chars or any(ord(c) < 32 for c in text):
                 raise ValueError("short_single_line_speech_required")
+        # The plan already received this sample. A mode write is necessary
+        # again after an earlier step has actually changed the body.
+        if not body_changed and unnecessary_step(step, context, native):
+            continue
         out.append(step)
+        body_changed |= step.tool not in {"body:chat", "body:observe", "body:inventory"}
     # A sentence written before an action cannot know its outcome. Perform the
     # physical plan first; a later observation can support an actual result reply.
     if any(step.tool not in {"body:chat", "body:observe", "body:inventory"} for step in out):
@@ -123,6 +179,11 @@ class NpcPlanner:
     async def __call__(self, intent: Intent, context: PlanContext):
         role = self.role
         caps = context.capabilities
+        if intent.goal == IDLE_GOAL and not context.dialogue:
+            restore = restore_default_guard(role, context)
+            if restore:
+                self.last_route = {"layer": "native-policy", "reason": "resume_configured_guard"}
+                return [restore]
         tools = [tool for tool in role.allowed_tools if not step_support(Step(tool=tool), caps)]
         schemas, native_catalogue = {}, []
         for action in caps.native_actions if caps else []:
@@ -134,7 +195,7 @@ class NpcPlanner:
                 key = "arguments_" + str(len(schemas))
                 schemas[key] = json.loads(encoded)
             native_catalogue.append({"name": action.name, "description": action.description, "schema": key})
-        if intent.goal == "React to a fresh danger observation." and self.fast is not None:
+        if intent.goal == DANGER_GOAL and self.fast is not None:
             choices = reaction_choices(role, context)
             if len(choices) >= 2:
                 try:
@@ -142,8 +203,9 @@ class NpcPlanner:
                 except (httpx.HTTPError, ValueError, KeyError):
                     choice = None
                 if choice is not None:
-                    self.last_route = {"provider": "tokenplan", "model": self.fast.model, "layer": "system1"}
-                    return [choice]
+                    self.last_route = {"provider": "tokenplan", "model": self.fast.model, "layer": "system1",
+                                       "responseId": self.fast.last_response.get("requestId")}
+                    return [] if choice.tool == "body:observe" else [choice]
         facts = {"goal": intent.goal, "self": {"name": role.name, "characterId": str(role.character_id)},
                  "currentDialogue": [event.model_dump(mode="json") for event in context.dialogue],
                  "observed": context.snapshot.model_dump(mode="json", exclude={"raw"}) if context.snapshot else None,
@@ -160,6 +222,9 @@ class NpcPlanner:
                         "Return JSON {\"steps\":[{\"tool\":\"body:...\",\"args\":{}}]}. At most 3 steps. "
                         "Use [] to rest. Only these tools: " + json.dumps(tools) + ". Never invent success, inventory, abilities or coordinates. "
                         "cast spellId is the learned skill's bare ID, for example radiant_pulse; omit the display prefix mycli:. "
+                        "The observation is already supplied. Read again only for missing facts or after an action. "
+                        "When nativeGuardDelegated is true, let native guard keep following, defending and healing. "
+                        "Do not set the same mode again or switch to a different mode merely because it is quiet. "
                         "A mode set is not arrival or mission completion. Act using tools before describing an outcome. "
                         "Native tool args must match that action's nativeSchemas entry; do not add routing fields or invent enabled flags. "
                         "If passenger is true and dismount is advertised, dismount before trying to walk or guard. "
@@ -187,6 +252,11 @@ class NpcPlanner:
         if not isinstance(plan, dict) or set(plan) != {"steps"}:
             raise ValueError("npc_plan_schema")
         steps = reviewed_steps(role, context, plan["steps"])
+        if intent.goal == IDLE_GOAL and not context.dialogue:
+            inactive = {"body:chat"}
+            if already_guarding(current_native_state(context)):
+                inactive.update({"body:stay", "body:stop", "body:native:sit"})
+            steps = [step for step in steps if step.tool not in inactive]
         speech = [step.args["text"] for step in steps if step.tool == "body:chat"]
         if speech and context.dialogue and self.fast is not None:
             allowed = await self.fast.allow_reply(role, context, speech)
@@ -208,16 +278,30 @@ def danger(snapshot) -> bool:
     resident = raw.get("resident", {})
     if isinstance(resident, dict):
         entities = entities + resident.get("nearbyEntities", [])
-    if any(isinstance(e, dict) and e.get("ally") is True and e.get("maxHealth", 0) > 0 and e.get("health", 0) < e["maxHealth"] * .7 for e in entities):
+    if any(isinstance(e, dict) and e.get("ally") is True
+           and isinstance(e.get("maxHealth"), (int, float)) and e["maxHealth"] > 0
+           and isinstance(e.get("health"), (int, float)) and 0 < e["health"] < e["maxHealth"] * .7
+           for e in entities):
         return True
     return bool(enemies) or any(isinstance(e, dict) and e.get("hostile") is True for e in entities)
 
 
 def reaction_choices(role: NpcRole, context: PlanContext) -> dict[str, Step]:
-    if not danger(context.snapshot):
+    native = current_native_state(context)
+    if not native or not danger(context.snapshot):
         return {}
-    candidates = {"guard": Step(tool="body:native:guard"), "stay": Step(tool="body:stay")} if role.body_kind == "maid" else {
-        "attack_hostile": Step(tool="body:attack", args={"target": "hostile"}), "stop": Step(tool="body:stop")}
+    if role.body_kind == "maid":
+        if already_guarding(native) or native.get("passenger") is True or native.get("sitting") is True:
+            return {}
+        candidates = {"guard": Step(tool="body:native:guard")}
+    else:
+        threats = context.snapshot.entities
+        facts = native.get("facts")
+        if (not isinstance(facts, dict) or facts.get("workPending") is not False or not isinstance(threats, list)
+                or not any(isinstance(entity, dict) and entity.get("hostile") is True for entity in threats)):
+            return {}
+        candidates = {"attack_hostile": Step(tool="body:attack", args={"target": "hostile"})}
+    candidates["wait"] = Step(tool="body:observe")
     return {name: step for name, step in candidates.items() if step.tool in role.allowed_tools and not step_support(step, context.capabilities)}
 
 
@@ -269,12 +353,12 @@ class FastSelector:
         observed["nativeScene"] = {key: resident[key] for key in ("profession", "rpg", "nearbyEntities") if key in resident} if isinstance(resident, dict) else {}
         observed["needsHelp"] = danger(context.snapshot)
         descriptions = {"guard": "Enable native guard: use already learned healing for injured self/allies and defend against hostiles. No movement to an absent owner.",
-                        "stay": "Sit still and suspend healing/combat; appropriate only when there is no help needed.",
-                        "attack_hostile": "Attack the visible nearby hostile enemy using the current real weapon.", "stop": "Stop the current attack and stay in place."}
+                        "attack_hostile": "Attack the visible nearby hostile enemy using the current real weapon.",
+                        "wait": "Take no action this turn. Preserve the current follow, guard, healing or travel mode."}
         started = time.monotonic()
         response = await self.client.request("/systemone", {"model": self.model,
             "state": observed,
-            "questions": {"action": {"type": "choice", "instructions": "Choose from the observed Minecraft NPC's safe actions. Guard enables its already learned native combat and healing when injured or threatened. Stay stops native work and combat, and is appropriate when no help is needed. Never invent a target or spell.",
+            "questions": {"action": {"type": "choice", "instructions": "Choose from the observed Minecraft NPC's safe actions. Guard enables its already learned native combat and healing when injured or threatened. Wait preserves current behaviour when a new action would not help. Never invent a target or spell.",
                                       "criteria": {key: descriptions.get(key, step.model_dump_json()) for key, step in choices.items()}}}}, 2)
         self.last_response = {"model": self.model, "requestId": response.get("request_id") or response.get("id"),
                               "seconds": round(time.monotonic()-started, 3), "health": context.snapshot.health, "needsHelp": observed["needsHelp"], "answer": response.get("answers", {}).get("action", {})}
@@ -389,7 +473,7 @@ class NpcHost:
                     for event in acknowledged:
                         self.pending_dialogue.pop(event, None)
                 elif events and now >= self.next_plan or threatened and not self.last_danger or now >= self.next_plan:
-                    goal = "Decide whether current dialogue is addressed to you and needs a reply; listening silently is valid. Continue useful activity." if events else "React to a fresh danger observation." if threatened else "Observe the current scene and choose one useful achievable activity; rest silently when none is needed."
+                    goal = DIALOGUE_GOAL if events else DANGER_GOAL if threatened else IDLE_GOAL
                     intent = self.runtime.submit_intent(goal, agent=self.role.id)
                     intent.source_events = events
                     self.next_plan = now + self.role.interval_seconds
