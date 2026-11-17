@@ -5,7 +5,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import java.util.HashSet;
-import io.netty.buffer.Unpooled;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -18,9 +17,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.network.protocol.common.custom.DiscardedPayload;
-import net.minecraft.resources.ResourceLocation;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
@@ -28,7 +24,6 @@ import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -1214,11 +1209,7 @@ final class TaskMarketManager implements Listener {
         data.addProperty("schemaVersion", 1); data.addProperty("type", type);
         plugin.communication().stamp(player, data);
         byte[] bytes = data.toString().getBytes(StandardCharsets.UTF_8);
-        if (bytes.length <= 32_768) {
-            if (player.getListeningPluginChannels().contains(CHANNEL)) player.sendPluginMessage(plugin, CHANNEL, bytes);
-            else ((CraftPlayer) player).getHandle().connection.send(new ClientboundCustomPayloadPacket(
-                    new DiscardedPayload(ResourceLocation.tryParse(CHANNEL), Unpooled.wrappedBuffer(bytes))));
-        }
+        if (bytes.length <= 32_768) plugin.communication().privatePayload(player, CHANNEL, bytes);
         // Detail already emitted short private text. Keep the original data channel, without an empty JSON echo.
         if(type.equals("MC_MARKET_DETAIL"))return;
         JsonObject shortNotice = new JsonObject(); shortNotice.addProperty("type", type);
@@ -1285,7 +1276,7 @@ final class TaskMarketManager implements Listener {
     void openMenu(Player player) {
         openMenu(player, 0);
     }
-    private void openMenu(Player player, int page) {
+    void openMenu(Player player, int page) {
         Inventory inventory = Bukkit.createInventory(null, 45, "任务市场 · 千灯纪委托");
         List<String> all = offers().stream().map(Task::id).toList();
         int pages = Math.max(1, (all.size() + 35) / 36); page = Math.max(0, Math.min(page, pages - 1));
@@ -1294,12 +1285,15 @@ final class TaskMarketManager implements Listener {
             Task task = tasks.get(ids.get(i)); ItemStack item = new ItemStack(task.icon);
             var meta = item.getItemMeta(); meta.setDisplayName("§e" + task.title);
             meta.setLore(List.of(TaskGuidance.description(task.description), task.steps.size() + " 个阶段 · " + (task.project ? "公共工程仅结算一次" : task.repeatOnce ? "本人远行履历仅一次" : task.repeatDestination ? "每个新目的地一次，换图可继续" : "本人每日一次"),
-                    "声望 +" + task.fame + " / 绿宝石 ×" + task.emeralds, "状态：" + offerState(task, player), "左键接单，右键看步骤"));
+                    "声望 +" + task.fame + " / 绿宝石 ×" + task.emeralds,
+                    ids.get(i).equals(plugin.guild().activeId(player)) ? "在途 · 打开同一张委托交付"
+                            : "状态：" + TaskRouteCatalog.stateText(offerState(task, player)),
+                    "点击查看步骤和接取"));
             item.setItemMeta(meta); inventory.setItem(i, item);
         }
-        menuItem(inventory, 36, Material.BOOK, "§b当前任务", "查看当前进度");
-        menuItem(inventory, 37, Material.SPYGLASS, "§b验收当前阶段", "真实方块/动作验收");
-        menuItem(inventory, 38, Material.EMERALD, "§a交付当前阶段", "全部阶段完成后统一领奖");
+        menuItem(inventory, 36, Material.BOOK, "§b当前任务", "打开委托详情与进度");
+        menuItem(inventory, 37, Material.SPYGLASS, "§b验收当前阶段", "只检查条件，交付使用旁边的按钮");
+        inventory.setItem(38, plugin.guild().taskButton(player, plugin.guild().activeId(player)));
         menuItem(inventory, 39, Material.BARRIER, "§c放弃任务", "已交付材料不返还；保留评估记录");
         menuItem(inventory, 40, Material.WRITABLE_BOOK, "§6我的能力记录", "已验收步骤、失败和耗时");
         menuItem(inventory,41,Material.WRITABLE_BOOK,"§6玩家委托","自行发布物资、讨伐与探索招募");
@@ -1317,21 +1311,29 @@ final class TaskMarketManager implements Listener {
         Menu menu = menus.get(player.getUniqueId());
         if (menu == null || event.getView().getTopInventory() != menu.inventory) return;
         event.setCancelled(true); int slot = event.getRawSlot();
-        if (slot >= 0 && slot < menu.ids.size()) {
-            if (event.isRightClick()) { Task task = tasks.get(menu.ids.get(slot)); if (task != null) detail(player, task); }
-            else plugin.guild().command(player, new String[]{"guild", "accept", menu.ids.get(slot)});
-        } else switch (slot) {
-            case 36 -> plugin.guild().command(player, new String[]{"guild", "status"});
+        if (!event.isLeftClick() && !event.isRightClick()) return;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline() || player.getOpenInventory().getTopInventory() != menu.inventory) return;
+            if (slot >= 0 && slot < menu.ids.size()) {
+                routes.detailMenu(player, menu.ids.get(slot), "market", menu.page);
+                return;
+            }
+            switch (slot) {
+            case 36 -> routes.openCurrent(player, "market", menu.page);
             case 37 -> plugin.guild().command(player, new String[]{"guild", "verify"});
-            case 38 -> plugin.guild().command(player, new String[]{"guild", "claim"});
+            case 38 -> plugin.guild().clickTaskButton(player, menu.inventory.getItem(slot), () -> {
+                if (player.isOnline() && player.getOpenInventory().getTopInventory() == menu.inventory)
+                    openMenu(player, menu.page);
+            });
             case 39 -> plugin.guild().command(player, new String[]{"guild", "abandon"});
             case 40 -> assessment(player);
-            case 41 -> Bukkit.getScheduler().runTask(plugin,()->plugin.playerContracts().open(player,1));
-            case 42 -> Bukkit.getScheduler().runTask(plugin,()->plugin.dungeon().openStashPages(player));
-            case 43 -> { if (menu.page + 1 < menu.pages) Bukkit.getScheduler().runTask(plugin, () -> openMenu(player, menu.page + 1)); }
-            case 44 -> Bukkit.getScheduler().runTask(plugin, () -> { if (menu.page > 0) openMenu(player, menu.page - 1); else plugin.openGuildMenu(player); });
+            case 41 -> plugin.playerContracts().open(player,1);
+            case 42 -> plugin.dungeon().openStashPages(player);
+            case 43 -> { if (menu.page + 1 < menu.pages) openMenu(player, menu.page + 1); }
+            case 44 -> { if (menu.page > 0) openMenu(player, menu.page - 1); else plugin.openGuildMenu(player); }
             default -> { }
-        }
+            }
+        });
     }
     @EventHandler public void drag(InventoryDragEvent event) {
         Menu menu = menus.get(event.getWhoClicked().getUniqueId());

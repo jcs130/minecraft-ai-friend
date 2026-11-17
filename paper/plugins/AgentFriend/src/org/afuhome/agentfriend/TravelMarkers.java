@@ -199,6 +199,7 @@ final class TravelMarkers implements Listener {
     @EventHandler(priority=EventPriority.HIGHEST) public void interact(PlayerInteractEvent e){
         JsonObject m=marker(e.getClickedBlock());if(m==null||e.getAction()!=Action.RIGHT_CLICK_BLOCK)return;e.setCancelled(true);
         if(e.getHand()!=EquipmentSlot.HAND||!(e.getClickedBlock().getState() instanceof Sign))return;
+        if (plugin.siteDungeons().openCampMarker(e.getPlayer(), m.get("target").getAsString())) return;
         e.getPlayer().sendMessage("§b"+m.get("title").getAsString()+" · "+LocationOutput.worldLabel(e.getClickedBlock().getWorld())+" §7"+m.get("usage").getAsString());
         if("personal".equals(m.get("kind").getAsString()))plugin.waypoints().command(e.getPlayer(),new String[]{"waypoint","menu"});else plugin.openPlacesMenu(e.getPlayer());
     }

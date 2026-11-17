@@ -3002,6 +3002,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return;
         }
         if (guildHall != null && guildHall.handleInteract(event)) return;
+        if (siteDungeons != null && siteDungeons.handleCampRescue(event)) return;
         if (dungeon != null && dungeon.handleInteract(event)) return;
         if (event.getClickedBlock() != null && button(event.getClickedBlock())) {
             startArena(event.getPlayer()); return;
@@ -3060,6 +3061,18 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         ItemStack swordAtClick = previewedSword;
         menus.remove(top); // A second click packet cannot cast from this menu.
+        if (page.equals("guild") && guild.isTaskButton(event.getCurrentItem())) {
+            if (event.isLeftClick() || event.isRightClick()) {
+                ItemStack button = event.getCurrentItem();
+                Bukkit.getScheduler().runTask(this, () -> {
+                    if (!p.isOnline() || p.getOpenInventory().getTopInventory() != top) return;
+                    guild.clickTaskButton(p, button, () -> {
+                        if (p.isOnline() && p.getOpenInventory().getTopInventory() == top) openGuildMenu(p);
+                    });
+                });
+            }
+            return;
+        }
         p.closeInventory();
         Bukkit.getScheduler().runTask(this, () -> {
             if (!p.isOnline()) return;
