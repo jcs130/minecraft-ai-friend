@@ -70,6 +70,7 @@ export type { PublicAccountState, AuthenticationMode } from './authentication.ts
 
 export { planLegacyConfiguration, copyLegacyData } from './migration.ts';
 export * from './world-storage.ts';
+export * from './event-memory.ts';
 export { FactUpdateStream, applyFactUpdate, FACT_UPDATE_GUIDANCE,
   type FactUpdate, type FactUpdateState, type FactValue, type FactValues } from './fact-updates.ts';
 export { GoalCheckpointBook, createGoalCheckpoint, restoreGoalCheckpoint,

@@ -8,5 +8,6 @@ export * from './client/execution-reading.ts';
 export * from './client/schema-reading.ts';
 export * from './client/task-scene-query.ts';
 export * from './client/receipt-text-view.ts';
+export * from './client/event-memory.ts';
 export { preserveToolInputSignatures } from './client/tool-help.ts';
 export { withFactState, type FactState } from '../core/fact-state.ts';
