@@ -35,6 +35,20 @@ Combat program learning uses `mc_combat_tactic`:
    policy change is explicit. Keep failures; retrieve and evaluate the method
    in a later comparable situation before claiming learning.
 
+`samples:true` protects each returned historical ID until its `availableUntil`
+time (30 minutes), independently of the 32-frame live ring. The protected pool
+holds at most 256 immutable frames per realm. At capacity, `omittedRecent`
+reports recent inputs which could not be protected; existing leases are never
+evicted to admit them. Results remain historical, not current world facts.
+With a data directory, a separate bounded retention archive survives reconnects
+and restarts without changing the original archive format used for rollback.
+Check `persistenceError` and `retention.persisted` before assuming durability.
+
+A missing, expired or other-realm ID produces `combat_probe_sample_unavailable`
+with `executed:false` and `adopted:false`. Keep the candidate source, obtain a new
+sample index and explicitly choose a new comparison. It is not an engine outage;
+the tool never substitutes a fresh scene for the requested historical evidence.
+
 Automatic spell rules, target choice, weapon selection and candidate programs
 are separate controls. An empty melee preference list does not prohibit melee;
 a higher healing threshold means healing earlier, not later. A program that
