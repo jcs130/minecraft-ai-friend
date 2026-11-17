@@ -26,6 +26,8 @@ public final class AdventureMenuModelTest {
             check(rows.stream().allMatch(s->{for(int i=0;i<s.length();i++){char c=s.charAt(i);if(Character.isHighSurrogate(c)){if(++i>=s.length()||!Character.isLowSurrogate(s.charAt(i)))return false;}else if(Character.isLowSurrogate(c))return false;}return true;}),"surrogate pairs intact");
         }
         check(destination(Action.TRAVEL)==Page.TRAVEL,"travel is one navigation action, never a cast");
+        check(destination(Action.WHEEL_EDIT)==Page.WHEEL_EDIT&&parent(Page.WHEEL_EDIT)==Page.WHEEL,"wheel settings return to casting wheel");
+        check(parent(Page.WHEEL_PICK)==Page.WHEEL_EDIT&&destination(Action.WHEEL_ASSIGN)==null,"skill selection is a guarded preference write, not a page or cast");
         check(category(Page.TRAVEL).stream().anyMatch(b->b.action()==Action.COMMON_DETAIL&&b.payload().equals("home")),"home shows spell details first");
         UUID owner=UUID.randomUUID(),other=UUID.randomUUID();Ticket ticket=new Ticket(owner,1000);
         check(partyAction("create",true,false,null).equals("create"),"explicit own party creation");
