@@ -232,6 +232,7 @@ final class AgentCliCatalog {
         add(specs,"dungeon.list","adventure","read","/mycli dungeon list","发现不同地点的建筑地下城与可用挑战入口","只读免费，不加载新区块、不传送或开场","私有MC_SITE_DUNGEON_LIST/ITEM；info查选中地点，status查本人场次");
         add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查难度、建议等级、装备搭配和当前一步","只读免费；详细路线用--verbose；地点ID从dungeon list读取","默认精炼中文；--json保留原字段并附实时指引，抵达入口不等于进入首室");
         add(specs,"dungeon.status","adventure","read","/mycli dungeon status [ID]","查当前房间、存档点、剩余机会、占用或待领奖","只读免费；active=false只表示尚无活动场次；查询不领奖或开场","默认当前一步及剩余机会；--json含真实状态和凭据；完整旧结果用--verbose");
+        add(specs,"dungeon.choose","adventure","write","/mycli dungeon choose <本场选项>","确认失联信标章节提供的路线、祝福或现场目标","从本人 dungeon status --json 的 chapter.options 复制 command，需在对应地点","MC_SITE_DUNGEON_RESULT；结果未知只查原场次，重复同选项不会再推进");
         add(specs,"dungeon.travel","adventure","teleport","/mycli dungeon travel <ID>","前往已勘察的入口或外围；沿建筑道路深入首室","8魔力、基础传送资格；不能在试炼/PvP/另一地下城内使用","沿用 MC_TRAVEL 成功回执；抵达入口不计完成");
         add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","一人在首室开场，遗迹内达标者自动同队；可中途加入和离开","生存模式、穿齐护甲并携带可用武器或职业法器，未参加其他活动；不要求日常组队","MC_SITE_DUNGEON_RESULT；战败回存档点，第三次战败结束；真实参战者通关后均生成个人奖励凭据，无须返程");
         add(specs,"dungeon.join","adventure","write","/mycli dungeon join <ID>","兼容入口：确认加入当前挑战；正常进入遗迹即自动加入","同地点、装备与职业等级达标；不限开场十秒","MC_SITE_DUNGEON_RESULT；只影响本场，不修改日常队伍；已参战记录离场后保留");

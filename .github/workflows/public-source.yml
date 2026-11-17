@@ -33,6 +33,12 @@ jobs:
         run: python paper/ops/test-dungeon-entrance.py
       - name: Check training reward progression and ordinary-difficulty caps
         run: python paper/ops/test-trial-reward-balance.py
+      - name: Check Lost Beacon route, saved choices and reward bounds
+        run: |
+          curl --fail --silent --show-error --location --retry 2 https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar --output "$RUNNER_TEMP/beacon-gson.jar"
+          javac --release 21 -encoding UTF-8 -cp "$RUNNER_TEMP/beacon-gson.jar" -d "$RUNNER_TEMP/beacon" paper/plugins/AgentFriend/src/org/afuhome/agentfriend/BeaconExpedition.java paper/plugins/AgentFriend/tests/org/afuhome/agentfriend/BeaconExpeditionTest.java
+          java -cp "$RUNNER_TEMP/beacon:$RUNNER_TEMP/beacon-gson.jar" org.afuhome.agentfriend.BeaconExpeditionTest
+          node --check paper/plugins/AgentFriend/tests/lost-beacon-stage.mjs
       - name: Check dungeon equipment categories and acceptance scripts
         run: |
           javac -encoding UTF-8 -d "$RUNNER_TEMP/dungeon-readiness" paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonLoadoutRules.java paper/probe/DungeonLoadoutRulesTest.java
