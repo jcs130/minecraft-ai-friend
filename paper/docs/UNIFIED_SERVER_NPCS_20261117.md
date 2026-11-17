@@ -5,9 +5,7 @@ healer Yui uses TLM; Feiyu retains the original TLM identity. They share one
 planner/runtime/body contract and server memory service. See the
 [architecture and migration instructions](../integrations/unified-npc/README.md).
 
-**Production NPC migration is not yet complete.** A running synthetic supervisor,
-container or successful model reply is not production character acceptance.
-The deployment manifest must be written only after actual loading and readback.
+**This is the historical candidate record.** The subsequent production migration and readback are recorded in [the deployment report](UNIFIED_SERVER_NPCS_DEPLOYED_20261117.md). A synthetic supervisor or successful model reply alone is not production acceptance.
 
 ## Evidence so far
 
