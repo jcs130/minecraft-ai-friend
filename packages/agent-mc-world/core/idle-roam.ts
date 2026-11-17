@@ -40,8 +40,9 @@ function profile(bot: Bot, anchor: Point, cacheSearch=false): Movements {
     canDig:false, scafoldingBlocks:[], allow1by1towers:false, allowParkour:false,
     allowSprinting:false, allowFreeMotion:false, canOpenDoors:false, maxDropDown:1,
     infiniteLiquidDropdownDistance:false,
-    exclusionAreasStep:[...original.exclusionAreasStep, (b: {position:Point}) =>
-      distance(b.position,anchor)>12 || !dry(b.position) ? 100 : 0],
+    // Pathfinding outside loaded chunks yields a block descriptor with no position.
+    exclusionAreasStep:[...original.exclusionAreasStep, ({position}: {position?:Point}) =>
+      !position || distance(position,anchor)>12 || !dry(position) ? 100 : 0],
   });
 }
 
