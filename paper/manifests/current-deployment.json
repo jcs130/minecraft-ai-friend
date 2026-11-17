@@ -1,12 +1,12 @@
 {
-  "inventoryScope": "component_runtime_verified_20261117_unified_server_npcs",
-  "currentComponentEvidence": "paper/manifests/unified-server-npcs-deployed-20261117.json",
+  "inventoryScope": "component_runtime_verified_20261118_unified_npc_voice",
+  "currentComponentEvidence": "paper/manifests/unified-npc-voice-deployed-20261118.json",
   "acceptanceDocument": "paper/docs/PLAYER_NAVIGATION_20261114.md",
   "historicalFieldsPreserved": true,
   "state": "deployed-with-open-client-and-long-running-acceptance",
-  "latestRelease": "unified-npc-actions-20261117-r1",
-  "verifiedAt": "2026-11-17T15:47:53.808456+00:00",
-  "releaseDocument": "paper/docs/UNIFIED_SERVER_NPCS_DEPLOYED_20261117.md",
+  "latestRelease": "unified-npc-voice-20261118-r1",
+  "verifiedAt": "2026-11-17T17:46:19.057783+00:00",
+  "releaseDocument": "paper/docs/UNIFIED_NPC_VOICE_DEPLOYED_20261118.md",
   "numenHostingCurrent": {
     "state": "deployed-and-component-verified",
     "verifiedAt": "2026-11-14T07:45:20.2554321+08:00",
@@ -2551,5 +2551,15 @@
     "manifest": "paper/manifests/unified-server-npcs-deployed-20261117.json",
     "document": "paper/docs/UNIFIED_SERVER_NPCS_DEPLOYED_20261117.md",
     "scope": "three explicitly unified server NPCs; external clients and unrelated classic Numen consumers unchanged"
+  },
+  "unifiedNpcVoiceCurrent": {
+    "state": "deployed-runtime-verified-human-hearing-open",
+    "pullRequest": 295,
+    "mergeCommit": "13091565e21fabfe709db8717cbe20d869b23d6d",
+    "manifest": "paper/manifests/unified-npc-voice-deployed-20261118.json",
+    "document": "paper/docs/UNIFIED_NPC_VOICE_DEPLOYED_20261118.md",
+    "verifiedAt": "2026-11-17T17:46:19.057783+00:00",
+    "threeOriginalBodiesPreserved": true,
+    "humanHearingVerified": false
   }
 }
