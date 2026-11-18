@@ -27,6 +27,21 @@ final class NpcConversations implements Listener {
     boolean configured(UUID id){return profiles.containsKey(id);}
     boolean enabled(){return !profiles.isEmpty();}
     NpcDialoguePolicy.Profile profile(UUID id){return profiles.get(id);}
+    Collection<NpcDialoguePolicy.Profile> profiles(){return profiles.values();}
+    NpcDialoguePolicy.Profile find(String key) {
+        try { return profiles.get(UUID.fromString(key)); }
+        catch (IllegalArgumentException name) {
+            var matches = profiles.values().stream().filter(profile -> profile.name().equalsIgnoreCase(key)).toList();
+            return matches.size() == 1 ? matches.getFirst() : null;
+        }
+    }
+    boolean hears(Player player, Entity entity, NpcDialoguePolicy.Profile profile) {
+        return entity != null && player.isOnline() && !player.isDead() && !player.isInvisible()
+                && player.getGameMode() != GameMode.SPECTATOR && player.getWorld().equals(entity.getWorld())
+                && player.canSee(entity)
+                && NpcDialoguePolicy.nearby(player.getUniqueId(), entity.getUniqueId(), player.getWorld().getUID(),
+                    entity.getWorld().getUID(), player.getLocation().distanceSquared(entity.getLocation()), profile.range());
+    }
     Entity live(UUID id){
         var profile=profiles.get(id);if(profile==null)return null;
         Entity entity=Bukkit.getEntity(id);if(!(entity instanceof LivingEntity living)||living.isDead()||!living.isValid())return null;
@@ -77,30 +92,31 @@ final class NpcConversations implements Listener {
         NpcDialoguePolicy.text(text);String event="npc_"+NpcDialoguePolicy.speechId(actor,operation);
         for(UUID target:profiles.keySet())deliver(source,target,event,text,"npc_chat",occurredAt);
     }
-    private void deliver(Entity source,UUID target,String event,String text,String channel,long occurredAt){
+    private boolean deliver(Entity source,UUID target,String event,String text,String channel,long occurredAt){
         var profile=profiles.get(target);Entity entity=live(target);
-        if(profile==null||entity==null||!source.getWorld().equals(entity.getWorld())||!NpcDialoguePolicy.nearby(source.getUniqueId(),target,source.getWorld().getUID(),entity.getWorld().getUID(),source.getLocation().distanceSquared(entity.getLocation()),profile.range()))return;
+        if(profile==null||entity==null||!source.getWorld().equals(entity.getWorld())||!NpcDialoguePolicy.nearby(source.getUniqueId(),target,source.getWorld().getUID(),entity.getWorld().getUID(),source.getLocation().distanceSquared(entity.getLocation()),profile.range()))return false;
         // Preserve existing maid partner (24) / visitor (8) speech boundaries.
-        if(channel.equals("voice")&&profile.kind().equals("maid")&&!source.getUniqueId().equals(profile.owner())&&source.getLocation().distanceSquared(entity.getLocation())>64)return;
-        if(source instanceof Player player&&!player.canSee(entity))return;
-        try{NpcDialoguePolicy.text(text);}catch(IllegalArgumentException invalid){return;}
-        if(!delivered.add(target,source.getUniqueId(),event,System.currentTimeMillis()))return;
+        if(channel.equals("voice")&&profile.kind().equals("maid")&&!source.getUniqueId().equals(profile.owner())&&source.getLocation().distanceSquared(entity.getLocation())>64)return false;
+        if(source instanceof Player player&&!player.canSee(entity))return false;
+        try{NpcDialoguePolicy.text(text);}catch(IllegalArgumentException invalid){return false;}
+        if(!delivered.add(target,source.getUniqueId(),event,System.currentTimeMillis()))return false;
         String id="qdvoice:"+source.getUniqueId()+":"+event;
         try{
             if(profile.kind().equals("maid")){
-                var bridge=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");if(bridge==null||!bridge.isEnabled())return;
-                bridge.getClass().getMethod("acceptUnifiedNpcDialogue",UUID.class,UUID.class,UUID.class,String.class,String.class,String.class)
-                    .invoke(bridge,target,profile.owner(),source.getUniqueId(),source.getName(),text,id);
+                var bridge=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");if(bridge==null||!bridge.isEnabled())return false;
+                return Boolean.TRUE.equals(bridge.getClass().getMethod("acceptUnifiedNpcDialogue",UUID.class,UUID.class,UUID.class,String.class,String.class,String.class)
+                    .invoke(bridge,target,profile.owner(),source.getUniqueId(),source.getName(),text,id));
             }else{
-                var binding=hosted.get(target);if(binding==null||binding.entity()!=entity)return;
+                var binding=hosted.get(target);if(binding==null||binding.entity()!=entity)return false;
                 var payload=new JsonObject();payload.addProperty("schema",1);payload.addProperty("eventId",id);payload.addProperty("listenerId",target.toString());
                 payload.addProperty("speakerId",source.getUniqueId().toString());payload.addProperty("speaker",source.getName());payload.addProperty("text",text);
                 payload.addProperty("channel",channel);payload.addProperty("occurredAt",occurredAt);payload.addProperty("receivedAt",System.currentTimeMillis());
                 payload.addProperty("deliveryScope","nearby");
                 payload.addProperty("speakerKind",profiles.containsKey(source.getUniqueId())?"npc":"player");payload.addProperty("trusted",false);
-                if(!Boolean.TRUE.equals(binding.input().apply(payload.toString())))warn();
+                if(Boolean.TRUE.equals(binding.input().apply(payload.toString())))return true;
+                warn();return false;
             }
-        }catch(Exception failed){warn();}
+        }catch(Exception failed){warn();return false;}
     }
     private void warn(){long now=System.nanoTime();if(now-lastWarning>30_000_000_000L){lastWarning=now;plugin.getLogger().warning("NPC dialogue could not be delivered; no action or automatic replay was attempted");}}
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)

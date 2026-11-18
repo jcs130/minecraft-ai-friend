@@ -87,3 +87,29 @@ node --experimental-transform-types --test tests/companion-memory.test.mjs
 ```
 
 `tests/RecruitmentProbe.java` 仅供隔离服验收真实身体和菜单，构建器不将它打入发布 JAR。不要安装在正式服。实际联机记录见同目录验收说明。
+
+## 居民关系记忆
+
+登录后用 `/npcsocial Kirito` 查看桐人对自己的关系与最近的共同经历。用
+`/npcsocial Kirito tell <消息>` 私聊。若需公开与居民交谈，走到居民身边用
+`/npcsocial Kirito public <消息>`。也可在居民名处使用登记 UUID。
+
+外接 Agent 使用同一组指令。查询加 `json`，从自己的消息中读取 `MC_NPC_SOCIAL`。
+对话受理时会给请求 UUID，可用 `/npcsocial Kirito receipt <请求UUID>` 查询原回执。
+已有女仆伙伴状态 `/maidagent companion <NPC_UUID> status json` 可附带
+`socialRelationship`。查询固定为当前认证账号。公开对话只引用明确公开的经历，私聊
+可以回忆该对身份的经历。缺少可验证资料时省略关系字段。
+
+每位居民对每个玩家或登记居民独立维护一份关系。一天内成功交谈或共同抵达最多
+增加 1 点熟悉度。已同意的同行契约下，同一原生抵达凭据可增加 2 点信任度，每份
+契约只计首次、每天最多 2 点。按 UTC 自然日结算。等级、生命、装备和技能由原玩法
+结算。当前共享抵达来源为 TLM 同行契约的真实到场记录。托管 Numen 角色的聊天与
+原地或普通移动依各自回执记录，后者不产生抵达证明。
+
+运行时配置在原统一 NPC 服务的 `npc.json` 设置 `relationshipDataPath` 为世界
+`data` 目录的绝对路径，再为试点角色设置 `social_memory: true`。在原身体完成
+正式交接时，才在同一 `character_id` 登记 `social_previous_bodies`。
+投影原子写入 `world/data/tlm-companion-memory/<bodyId>/relationship-*.json`；
+原则上约 10 秒更新。对话交付回执和同行原回执可单独回放，不依赖
+PowerContext 或 Graphiti。取消角色试点时保留数据目录配置并将其 `social_memory`
+设为 `false`，原始日志可用于恢复。私聊若中断，查原请求状态。

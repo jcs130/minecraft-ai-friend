@@ -252,6 +252,10 @@ final class MaidCompanions {
         }
         if (conversation != null && player.getUUID().toString().equals(conversation.get("speakerId")))
             result.put("conversation", conversation);
+        if (player instanceof ServerPlayer) {
+            Object relationship = ResidentBodyAccess.relationship(id, player.getUUID(), true);
+            if (relationship != null) result.put("socialRelationship", relationship);
+        }
         // Do not expose another party's location, conversations, equipment or controller identity.
         if (mine || nearby && (e == null || e.mode().equals("available"))) {
             result.put("position", maid == null ? null : point(maid));
@@ -293,9 +297,11 @@ final class MaidCompanions {
         for (var row : List.copyOf(pending.entrySet())) if (now > row.getValue().deadline())
             finish(row.getKey(), row.getValue().id(), null, "model_timeout_no_replay");
         for (var e : ledger.entries()) {
-            var residentBody=agents.loaded(agents.agent(e.maid()));
+            var agent = agents.agent(e.maid());
+            if (agent == null) continue; // Retired bodies can have historical contracts.
+            var residentBody=agents.loaded(agent);
             if(residentBody!=null&&residentBody.getPersistentData().getBoolean(ResidentBodyAccess.DOWNED)){halt(residentBody);continue;}
-            if(e.mode().equals("paused")){var maid=agents.loaded(agents.agent(e.maid()));if(maid!=null)halt(maid);continue;}
+            if(e.mode().equals("paused")){if(residentBody!=null)halt(residentBody);continue;}
             if (!reserved(e.maid()) || !offered(e.maid()) || errors.containsKey(e.maid()) && !errors.get(e.maid()).startsWith("travel_wait:")) continue;
             try {
                 if (e.leader() != null) {
@@ -310,7 +316,7 @@ final class MaidCompanions {
                         e = ledger.get(e.maid());
                     }
                 }
-                EntityMaid maid = agents.loaded(agents.agent(e.maid()));
+                EntityMaid maid = agents.loaded(agent);
                 if (maid != null) update(e, maid, now);
             } catch (Exception failure) { errors.put(e.maid(), "execution_needs_attention"); }
         }
@@ -441,6 +447,21 @@ final class MaidCompanions {
         try {receipt.putAll(ResidentTravel.execute(maid,plan));}
         catch(IllegalArgumentException blocked){receipt.put("status","blocked");receipt.put("reason",blocked.getMessage());}
         catch(RuntimeException uncertain){receipt.put("status","unknown");receipt.put("reason","travel_result_unknown_query_original_request");}
+        if (Boolean.TRUE.equals(receipt.get("completed")) && contract != null && plan.partner() != null) {
+            var agreement = ledger.get(id);
+            var leader = actor(plan.partner());
+            var follower = plan.world().getEntity(id);
+            long at = System.currentTimeMillis();
+            if (agreement != null && contract.equals(agreement.contract()) && plan.partner().equals(agreement.leader())
+                    && agreement.mode().equals("follow") && agreement.expiresAt() > at
+                    && leader != null && leader.isAlive() && !leader.isSpectator()
+                    && follower instanceof EntityMaid current && current.isAlive()
+                    && leader.level() == current.level() && current.distanceToSqr(leader) <= 64) {
+                receipt.put("socialArrival", Map.of("schemaVersion", 1, "requestId", request.toString(),
+                        "contractId", contract.toString(), "followerId", id.toString(),
+                        "leaderId", plan.partner().toString(), "arrived", true, "visibility", "peer_only", "at", at));
+            }
+        }
         travelReceipts.write(id,request,receipt);
         if(!"unknown".equals(receipt.get("status")))travelState.finish(id,request);
         return receipt;
@@ -530,7 +551,7 @@ final class MaidCompanions {
                     message.codePoints().anyMatch(Character::isISOControl)) throw new IllegalArgumentException("say_one_line_up_to_400_characters");
             if (pending.containsKey(id)) throw new IllegalArgumentException("npc_is_thinking");
             if(agents.residents()!=null&&agents.residents().busy(id))throw new IllegalArgumentException("npc_is_finishing_action");
-            if(ResidentBodyAccess.external(id))return ResidentBodyAccess.conversation(id,speaker,message);
+            if(ResidentBodyAccess.external(id))return ResidentBodyAccess.conversation(id,speaker,message,channel);
             var site = maid.getAiChatManager().getLLMSite();
             if (site == null || !site.enabled() || !agent.binding().choices().containsKey(agent.brain(maid)))
                 throw new IllegalArgumentException("npc_brain_unavailable");
@@ -562,6 +583,8 @@ final class MaidCompanions {
             facts.put("speaker", Map.of("id", speaker.getUUID().toString(), "name", speaker.getName().getString(),
                     "kind", speaker instanceof EntityMaid ? "npc" : "player"));
             facts.put("sharedPast", journal.recall(id, speaker.getUUID(),channel.equals("private")));
+            Object relationship = ResidentBodyAccess.relationship(id, speaker.getUUID(), channel.equals("private"));
+            if (relationship != null && speaker != maid) facts.put("socialRelationship", relationship);
             // Current PC cache is speaker-scoped, but not yet visibility-scoped. Do not expose it to public speech.
             facts.put("longTermHistory", channel.equals("private")?journal.longTerm(id, speaker.getUUID()):List.of());
             facts.put("channel",channel);

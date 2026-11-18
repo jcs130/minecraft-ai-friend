@@ -52,6 +52,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private ScheduledExecutorService captureClock;
     private VoiceLedger ledger;
     private NpcConversations npcs;
+    private NpcSocial social;
     private YamlConfiguration profiles;
     private Path profileFile;
     private HttpClient http;
@@ -93,6 +94,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             profileFile=getDataFolder().toPath().resolve("profiles.yml");profiles=YamlConfiguration.loadConfiguration(profileFile.toFile());
             ledger=new VoiceLedger(getDataFolder().toPath().resolve("receipts"));
             npcs=new NpcConversations(this,getDataFolder().toPath().resolve("npc-voices.json"));
+            social=new NpcSocial(this,npcs);
             io=Executors.newSingleThreadExecutor(r->new Thread(r,"qiandeng-voice-ledger"));
             media=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(32),r->new Thread(r,"qiandeng-voice-media"),new ThreadPoolExecutor.AbortPolicy());
             recognition=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(16),r->new Thread(r,"qiandeng-voice-asr"),new ThreadPoolExecutor.AbortPolicy());
@@ -104,6 +106,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             Bukkit.getPluginManager().registerEvents(this,this);
             Bukkit.getMessenger().registerIncomingPluginChannel(this,CHANNEL,this);Bukkit.getMessenger().registerOutgoingPluginChannel(this,CHANNEL);
             Objects.requireNonNull(getCommand("voice")).setExecutor(this::command);
+            Objects.requireNonNull(getCommand("npcsocial")).setExecutor(social::command);
             Bukkit.getScheduler().runTaskTimer(this,this::snapshot,1,1);
             captureClock.scheduleAtFixedRate(this::expireCaptures,250,250,TimeUnit.MILLISECONDS);
             BukkitVoicechatService service=Bukkit.getServicesManager().load(BukkitVoicechatService.class);
@@ -275,6 +278,16 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private static boolean validVoice(String voice){return voice!=null&&voice.matches("[A-Za-z0-9_.-]{1,96}");}
     /** Server-only bridge: exact registered body and owner, never a client-selected voice identity. */
     public String npcVoiceProfiles(){return npcs==null?"[]":npcs.catalogue().toString();}
+    public String npcRelationship(UUID body, UUID speaker, boolean privateView) throws java.io.IOException {
+        if (!Bukkit.isPrimaryThread() || social == null) return null;
+        var row = social.view(body, speaker, privateView);
+        return row == null ? null : row.toString();
+    }
+    public String queueNpcPrivateConversation(UUID body, UUID speakerId, String message) throws java.io.IOException {
+        var speaker = Bukkit.getPlayer(speakerId);
+        if (social == null || speaker == null) throw new IllegalArgumentException("npc_private_dialogue_unavailable");
+        return social.queue(body, speaker, message, true).toString();
+    }
     public boolean bindHostedNpcVoice(UUID actor,UUID owner,java.util.function.Function<String,Boolean> input){
         return Bukkit.isPrimaryThread()&&npcs!=null&&npcs.bind(actor,owner,input);
     }
