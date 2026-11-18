@@ -68,7 +68,7 @@ export class GraphitiMemoryGraph implements MemoryGraph {
     const query = [q.text, q.entity?.replace(/^[A-Za-z]+:/, ''), q.relation].filter(Boolean).join(' ') || 'facts';
     const reply = await this.call<{ facts: EdgeOut[] }>('/search', { group_id: scopeKey, query, limit: q.limit ?? 20, ...extra },
       this.options.timeoutMs ?? 30_000);
-    let facts = reply.facts.map(e => toFact(e));
+    let facts = reply.facts.filter(e => e.group_id === scopeKey).map(e => toFact(e));
     if (q.relation) facts = facts.filter(f => f.relation === q.relation!.toUpperCase());
     return facts;
   }

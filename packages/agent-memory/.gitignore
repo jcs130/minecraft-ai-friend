@@ -1,4 +1,6 @@
 node_modules/
+dist/
+*.tgz
 .data/
 graphiti-sidecar/.venv/
 graphiti-sidecar/**/__pycache__/

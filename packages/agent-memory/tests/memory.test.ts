@@ -94,4 +94,56 @@ describe('AgentMemory', () => {
     expect(s.episodeCount()).toBe(5);
     release(); await m.close();
   });
+
+  it('retains exact failed deliveries across a local-only restart; recovery is bounded and scoped', async () => {
+    const dir = tmp(), down = fakeSidecar({ fail: true }), up = fakeSidecar();
+    const other = { ...SCOPE, agent: 'another' };
+    const event = (n: number) => fromEvent({ type: 'minecraft.enter', ts: '2026-11-16T12:00:00Z',
+      cursor: n, text: 'Guest joined', meta: { uname: 'Guest' } }, { self: 'Komi', world: OVERWORLD })!;
+    let m = new AgentMemory({ dataDir: dir, backend: 'hybrid', graphiti: { url: 'http://localhost', fetch: down.fetcher } });
+    const first = await m.scope(SCOPE).ingest(event(40));
+    await m.scope(other).ingest(event(41));
+    await m.close();
+    const firstBody = down.calls[0]!.body;
+    m = new AgentMemory({ dataDir: dir });
+    expect(m.scope(SCOPE).episode(first.episode.id)?.text).toBe(first.episode.text);
+    expect(m.scope(other).episode(first.episode.id)).toBeNull();
+    await m.scope(SCOPE).ingest(event(42)); // explicitly local: this must not be sent on restoration
+    await m.close();
+    m = new AgentMemory({ dataDir: dir, backend: 'hybrid', graphiti: { url: 'http://localhost', fetch: up.fetcher } });
+    expect((await m.scope(SCOPE).ingest(event(40))).duplicate).toBe(true);
+    expect(up.calls).toHaveLength(0);
+    expect(m.scope(SCOPE).retryPendingGraphiti(1)).toEqual({ queued: 1, outstanding: 1 });
+    expect(m.scope(SCOPE).retryPendingGraphiti(1).queued).toBe(0);
+    await m.flush();
+    expect(up.calls.map(c => c.body)).toEqual([firstBody]);
+    expect(m.scope(SCOPE).retryPendingGraphiti()).toEqual({ queued: 0, outstanding: 0 });
+    expect(m.scope(other).retryPendingGraphiti(1).queued).toBe(1);
+    await m.close();
+    expect(up.calls[1]!.body.group_id).not.toBe(firstBody.group_id);
+  });
+
+  it('allows replay after a local write fails without leaving a partial cold record', async () => {
+    const m = new AgentMemory({ dataDir: ':memory:' }), s = m.scope(SCOPE);
+    const draft = fromEvent({ type: 'minecraft.enter', ts: '2026-11-16T12:00:00Z', cursor: 9,
+      text: 'Guest joined', meta: { uname: 'Guest' } }, { self: 'Komi', world: OVERWORLD })!;
+    m.db.exec("CREATE TRIGGER simulate_storage_failure BEFORE INSERT ON facts BEGIN SELECT RAISE(ABORT,'write failed'); END");
+    await expect(s.ingest(draft)).rejects.toThrow('write failed');
+    expect(s.episodeCount()).toBe(0);
+    m.db.exec('DROP TRIGGER simulate_storage_failure');
+    expect((await s.ingest(draft)).duplicate).toBe(false);
+    expect((await s.currentFacts()).facts).toHaveLength(1);
+    await m.close();
+  });
+
+  it('keeps a valid local answer when a graph response carries a different partition', async () => {
+    const m = new AgentMemory({ dataDir: ':memory:', backend: 'hybrid', maxPending: 0, graphiti: {
+      url: 'http://localhost', fetch: async () => Response.json({ facts: [{ group_id: 'other' }] }),
+    } });
+    const s = m.scope(SCOPE);
+    await s.ingest(homeSet({ owner: 'Guest', name: 'home', pos: { x: 5, y: 66, z: 5 }, world: OVERWORLD, at: '2026-11-16T12:00:00Z' }));
+    expect((await s.currentFacts()).facts.map(f => f.scopeKey)).toEqual([s.key]);
+    expect(s.retryPendingGraphiti(1)).toEqual({ queued: 0, outstanding: 1 });
+    await m.close();
+  });
 });

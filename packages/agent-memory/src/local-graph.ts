@@ -42,15 +42,21 @@ export class LocalTemporalGraph implements MemoryGraph {
   }
 
   async addEpisode(episode: Episode, facts: readonly FactInput[]): Promise<MergeResult> {
-    const result: MergeResult = { added: [], confirmed: [], invalidated: [] };
     this.db.exec('BEGIN IMMEDIATE');
     try {
-      for (const input of facts) this.merge(episode, input, result);
+      const result = this.mergeInTransaction(episode, facts);
       this.db.exec('COMMIT');
+      return result;
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
     }
+  }
+
+  /** @internal The caller owns the transaction when archiving the episode alongside its facts. */
+  mergeInTransaction(episode: Episode, facts: readonly FactInput[]): MergeResult {
+    const result: MergeResult = { added: [], confirmed: [], invalidated: [] };
+    for (const input of facts) this.merge(episode, input, result);
     return result;
   }
 
