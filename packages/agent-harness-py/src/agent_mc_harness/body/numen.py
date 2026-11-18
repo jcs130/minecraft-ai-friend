@@ -127,12 +127,17 @@ class PortResult:
 
 
 def measured_inventory(result: PortResult) -> PortResult:
+    if result.status == "unknown":
+        return PortResult("failed", "Native backpack read unavailable. Query inventory again when the body is ready.",
+                          result.data, result.execution_id)
     if result.status != "completed":
         return result
-    if "QD_NUMEN_INVENTORY_END" not in result.text.splitlines():
-        return PortResult("unknown", "native backpack sample incomplete; query the original request", result.data, result.execution_id)
+    lines = result.text.splitlines()
+    if "QD_NUMEN_INVENTORY_END" not in lines:
+        return PortResult("failed", "Native backpack sample incomplete. Query inventory again.",
+                          result.data, result.execution_id)
     inventory, hands = [], {}
-    for line in result.text.splitlines():
+    for line in lines:
         parts = line.split()
         if len(parts) == 3 and parts[0] == "QD_NUMEN_ITEM" and ITEM.fullmatch(parts[1]) and parts[2].isdigit():
             inventory.append({"itemId": parts[1], "count": int(parts[2])})

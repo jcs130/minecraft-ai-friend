@@ -79,7 +79,8 @@ def test_hosted_inventory_keeps_real_namespaced_items_and_requires_complete_outp
     receipt = measured_inventory(PortResult("completed", text))
     assert receipt.data == {"inventory": [{"itemId": "test_mod:magic/charm", "count": 2}],
                             "hands": {"offhand": {"itemId": "minecraft:shield", "count": 1}}}
-    assert measured_inventory(PortResult("completed", text.split("QD_NUMEN_INVENTORY_END")[0])).status == "unknown"
+    assert measured_inventory(PortResult("completed", text.split("QD_NUMEN_INVENTORY_END")[0])).status == "failed"
+    assert measured_inventory(PortResult("unknown")).status == "failed"
 
 
 @pytest.mark.parametrize(("text", "expected"), [
