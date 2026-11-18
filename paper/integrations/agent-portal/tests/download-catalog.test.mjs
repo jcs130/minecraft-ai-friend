@@ -20,8 +20,8 @@ test('public catalogue lists only our fixed plugin packages, with exact versions
     assert.ok(!row.name.includes('主项目'));
     assert.equal((await fetch(f.origin + '/downloads/' + row.filename)).status, 503);
   }
-  assert.equal(data.packages.find(row => row.id === 'dsh-adapter').version, '0.3.0-rc.24');
-  assert.equal(data.packages.find(row => row.id === 'cortico-world').version, '0.4.1-rc.14');
+  assert.equal(data.packages.find(row => row.id === 'dsh-adapter').version, '0.3.0-rc.26');
+  assert.equal(data.packages.find(row => row.id === 'cortico-world').version, '0.4.1-rc.70');
 });
 
 test('approved mirrors serve GET and HEAD redirects for exact plugin paths without relaying the archive or private data', async t => {
@@ -96,18 +96,27 @@ test('download page separates complete hosts, Lite, shared components and legacy
   assert.equal(dom.window.document.querySelectorAll('#component-downloads .download-card').length, 2);
   assert.equal(dom.window.document.querySelectorAll('#advanced-downloads .download-card').length, 4);
   assert.equal(dom.window.document.querySelector('.legacy-downloads').open, false);
-  assert.equal(dom.window.document.querySelectorAll('#package-downloads .download-contents').length, 2);
-  assert.match(dom.window.document.body.textContent, /DSH.*0\.3\.0-rc\.24/s);
+  const recommended = dom.window.document.querySelector('#package-downloads');
+  const archived = dom.window.document.querySelector('#advanced-downloads');
+  assert.match(recommended.textContent, /Cortico World 联网版.*0\.4\.1-rc\.70/s);
+  assert.match(recommended.textContent, /DSH Minecraft 插件联网版.*0\.3\.0-rc\.26/s);
+  assert.match(archived.textContent, /Cortico 旧版离线兼容包.*0\.4\.1-rc\.14/s);
+  assert.match(archived.textContent, /DSH 旧版离线兼容包.*0\.3\.0-rc\.12/s);
   assert.match(dom.window.document.body.textContent, /1\.11 GB/);
   assert.ok([...dom.window.document.querySelectorAll('a[download]')].every(link => link.href.startsWith(f.origin + '/downloads/')));
   assert.equal((await f.client().request('/session')).data.owner, null);
 });
 
-test('recommended Neko is one complete archive; other hosts keep their explicit shared components', () => {
+test('the Neko package and historical offline bundles identify their actual dependencies', () => {
   const lite=packageReleases.find(row=>row.id==='cortico-lite');assert.equal(lite.version,'0.1.2');assert.equal(lite.gameDependenciesBundled,false);assert.match(lite.install,/联网安装依赖/);
-  const hosts = packageReleases.filter(row => row.category === 'host' && row.id!=='cortico-lite');
-  assert.deepEqual(hosts.map(row => row.framework), ['cortico', 'dsh', 'neko']);
-  for (const row of hosts) {
+  for (const id of ['cortico-world', 'dsh-adapter']) {
+    const row = packageReleases.find(release => release.id === id);
+    assert.equal(row.category, 'host');
+    assert.match(row.includes + row.install, /联网/);
+  }
+  for (const id of ['cortico-bundle', 'dsh-bundle', 'neko-base']) {
+    const row = packageReleases.find(release => release.id === id);
+    assert.equal(row.category, id === 'neko-base' ? 'host' : 'advanced');
     assert.equal(row.viewerIncluded, true); assert.equal(row.gameDependenciesBundled, true);
     assert.ok(row.bytes > 100_000_000);
     assert.deepEqual(row.requires, row.framework === 'neko' ? [] : ['shared-audio', 'shared-browser']);
@@ -115,6 +124,19 @@ test('recommended Neko is one complete archive; other hosts keep their explicit 
   }
   assert.match(packageReleases.find(row => row.id === 'neko-plugin').platform, /Linux/);
   assert.equal(packageReleases.find(row => row.id === 'neko-offline').bytes, 1111598162);
+});
+
+test('the previous Cortico and DSH registry mirrors keep their immutable paths', async t => {
+  const f = await siteFixture(t, { downloads: { baseUrl, enabledPackages } });
+  for (const [filename, sha256] of [
+    ['cortico-world-qiandengji-0.4.1-rc.14.tgz', 'c242e6c879c809ee15b010c3bba4783fbad4d2c5404c8f1ce0bc3cf5b55b275e'],
+    ['jcs130-dsh-minecraft-agent-0.3.0-rc.24.tgz', '209618e2693d9707dbfb0ca6f23f370d7e2250a9eca1a4c786c7ed8880219c03'],
+  ]) {
+    const reply = await fetch(f.origin + '/downloads/' + filename, { method: 'HEAD', redirect: 'manual' });
+    assert.equal(reply.status, 307);
+    assert.equal(reply.headers.get('location'), baseUrl + sha256 + '/' + filename);
+    assert.equal(reply.headers.get('x-checksum-sha256'), sha256);
+  }
 });
 
 test('new complete Neko selection preserves the previous immutable base download', async t => {

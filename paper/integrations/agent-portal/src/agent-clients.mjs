@@ -10,11 +10,11 @@ export const agentClients = Object.freeze([
     framework: { name: 'N.E.K.O 主项目', url: 'https://github.com/Project-N-E-K-O/N.E.K.O' } }),
   Object.freeze({ id: 'cortico', name: 'Cortico 千灯纪 World', description: '在 Cortico 中安装 World 扩展，继续使用角色原本的人设与记忆。',
     source: 'https://github.com/jcs130/cortico-world-qiandengji', sourceLabel: 'GitHub · World 与安装说明',
-    install: '新版 Cortico 0.2.12 可选 World Lite 0.1.2；旧 Cortico API 6 用户使用兼容整包。按各包说明安装依赖。',
+    install: 'Cortico 0.2.12 可选 World Lite 0.1.2；完整 World 联网版适用于支持 API 6 的宿主。旧离线包见下载页。',
     framework: { name: 'Cortico 主项目', url: 'https://github.com/Pal-AI-Lab/Cortico' } }),
   Object.freeze({ id: 'dsh', name: 'DSH Minecraft 插件', description: '在 DeepSeek Harness 中使用同一个 Minecraft 核心，继续使用自己的模型与记忆。',
     source: 'https://github.com/jcs130/dsh-minecraft-agent', sourceLabel: 'GitHub · 插件与安装说明',
-    install: '官网整合包已带游戏依赖、现代可视化与千灯纪资料；Node.js 24+，官方 DSH 0.2.1-rc.2。',
+    install: '使用官网下载的联网版安装到已有 DSH；Node.js 24+，官方 DSH 0.2.1-rc.2。旧离线包见下载页。',
     framework: { name: 'DSH 主项目', url: 'https://github.com/deepseek-ai/deepseek-harness' } }),
 ]);
 
