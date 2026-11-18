@@ -1,0 +1,23 @@
+{
+  "id": "sao-client",
+  "category": "game-client",
+  "framework": "minecraft-client",
+  "name": "SAO 真人玩家客户端",
+  "version": "0.76.1-lite-20261030.2",
+  "channel": "website-bundle",
+  "filename": "MyAgentWorld-SAO-0.76.1-lite-1.20.1-r2.mrpack",
+  "bytes": 189698558,
+  "sha256": "e858aee6e22b249a32c33c3a379274683bdedf5b26bd7f682a379f69c6ddb612",
+  "minecraft": "1.20.1",
+  "loader": "Forge 47.4.10",
+  "platform": "Windows / macOS / Linux · Java 17 · 支持导入 .mrpack 的启动器",
+  "license": "原整合包与各模组原许可；保留包内声明",
+  "sourceUrl": "https://pan.quark.cn/s/1a81ea41915c",
+  "install": "在启动器中选择导入整合包，选取 .mrpack 文件，等待下载依赖；使用自己的 Minecraft 账号启动。多人游戏内已预置服务器地址。",
+  "includes": "作者 SAO 0.76.1-lite 客户端配置与资源、178 项依赖下载清单、Java 距离语音和服务器列表。约190 MB；首次安装需联网下载模组，非完整离线包。",
+  "gameAddress": "micro.kangqiang.site:28976",
+  "bedrockAddress": "micro.kangqiang.site:28988",
+  "dependencyDownloadsRequired": true,
+  "voiceVersion": "2.6.27",
+  "voicePort": 28989
+}

@@ -66,6 +66,19 @@ test('mirror activation requires an explicit reviewed package id, not just a bas
   assert.deepEqual(data.packages.filter(row => row.available).map(row => row.id), ['dsh-adapter']);
 });
 
+test('the configured standalone SAO pack bootstraps and serves its original release', async t => {
+  const f = await siteFixture(t, { downloads: { baseUrl, enabledPackages: ['sao-client'] } });
+  const data = (await f.client().request('/downloads')).data;
+  const available = data.packages.filter(row => row.available);
+  assert.deepEqual(available.map(row => row.id), ['sao-client']);
+  const release = available[0];
+  assert.equal(release.filename, 'MyAgentWorld-SAO-0.76.1-lite-1.20.1-r2.mrpack');
+  assert.equal(release.sha256, 'e858aee6e22b249a32c33c3a379274683bdedf5b26bd7f682a379f69c6ddb612');
+  const reply = await fetch(f.origin + release.url, { method: 'HEAD', redirect: 'manual' });
+  assert.equal(reply.status, 307);
+  assert.equal(reply.headers.get('location'), baseUrl + release.sha256 + '/' + release.filename);
+});
+
 test('permanent host and component links redirect to the reviewed OSS object without forwarding request secrets',async t=>{
  const f=await siteFixture(t,{downloads:{baseUrl,enabledPackages}});
  for(const[alias,id]of[['cortico','cortico-bundle'],['dsh','dsh-bundle'],['neko','neko-base'],['audio','shared-audio'],['browser','shared-browser']]){
