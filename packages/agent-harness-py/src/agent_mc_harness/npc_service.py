@@ -68,7 +68,8 @@ async def serve(path: Path):
             port = HostedMcpPort({**transport, "name": transport["name"], "bodyId":str(role.body_id),
                                   "ownerId":str(role.owner_id), "serverId":settings["serverId"],
                                   "journalDirectory":str(state / role.id / "numen")})
-            body = NumenBody(port, scope=scope, server_id=settings["serverId"], name=role.name, owner_id=str(role.owner_id))
+            body = NumenBody(port, scope=scope, server_id=settings["serverId"], name=role.name, owner_id=str(role.owner_id),
+                             item_use_ids=tuple(role.native_items))
         memory = MemoryRouter(LocalMemory(state / role.id / "memory.sqlite3"), RemoteGraphMemory(settings["graphiti"]["endpoint"],
                                 Path(settings["graphiti"]["tokenFile"]).read_text().strip(), state / role.id / "graph-outbox.sqlite3"))
         return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1),

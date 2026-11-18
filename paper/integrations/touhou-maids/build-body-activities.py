@@ -9,10 +9,10 @@ import tempfile
 
 
 BASE_SHA256 = "ad0d377745e2c681d3044d6f068535d96ffa179ce8811724b7ab935418f27e91"
-VERSION = "0.1.50-native-kit"
+VERSION = "0.1.51-mod-combat"
 PACKAGE = "local/tlmcompat/hybrid/"
 SOURCES = (
-    "HybridMaidPlugin", "MaidBodyControl", "MaidCompanionActions",
+    "HybridMaidPlugin", "MaidBodyControl", "MaidCompanionActions", "MaidGuardLoadout",
     "NativeMaidAgentSupport", "NativeMaidBodyActions", "NativeMaidBodyPort",
     "NativeMaidInventory", "NativeMaidKit", "NativeMaidWorkshop",
 )
@@ -20,7 +20,7 @@ SOURCES = (
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("server", "baseline", "jdk", "output"):
+    for name in ("server", "baseline", "resident-bridge", "jdk", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
     args = parser.parse_args()
     source = Path(__file__).resolve().parent
@@ -34,7 +34,7 @@ def main():
         parser.error("Choose a new output outside the server directory")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     classpath = os.pathsep.join(str(path.resolve()) for path in (
-        args.baseline, *args.server.glob("libraries/**/*.jar"),
+        args.baseline, args.resident_bridge, *args.server.glob("libraries/**/*.jar"),
         *args.server.glob("mods/*.jar"), *args.server.glob("plugins/*.jar"),
     ))
     with tempfile.TemporaryDirectory(prefix="maid-body-activities-") as temporary:

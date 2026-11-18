@@ -1,29 +1,23 @@
 package local.tlmcompat.hybrid;
 
 import com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask;
+import com.github.tartaricacid.touhoulittlemaid.api.task.IRangedAttackTask;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskAttack;
-import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskBowAttack;
-import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskCrossBowAttack;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskDanmakuAttack;
-import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
-import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskTridentAttack;
 import io.vortexcore.item.CustomItemDefinition;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ProjectileWeaponItem;
+import local.qdj.maids.brain.NativeCombatTasks;
 import local.tlmcompat.hybrid.MaidGuardDecision.Mode;
 
 /** Only the original maid's equipped item and unlocked backpack can supply a weapon. */
 final class MaidGuardLoadout {
-    private static final List<ResourceLocation> TASKS = List.of(TaskBowAttack.UID, TaskCrossBowAttack.UID,
-        TaskDanmakuAttack.UID, TaskTridentAttack.UID, TaskAttack.UID);
     private static final Set<String> AMMUNITION = Set.of("has_arrow", "has_ammunition");
 
     record Weapon(Mode mode, IAttackTask task, CustomItemDefinition staff, int slot, ItemStack item) {
@@ -55,16 +49,11 @@ final class MaidGuardLoadout {
             var staff = magic.staff(item);
             if (staff != null) return new Weapon(Mode.MAGIC, null, staff, slot, item);
         }
-        for (var id : TASKS) {
-            if (!(TaskManager.getTaskMap().get(id) instanceof IAttackTask attack)
-                    || !attack.isEnable(maid) || !attack.isWeapon(maid, item)) continue;
-            boolean ready = slot < 0 ? ammoReady(maid, attack) : canLoad(maid, item, slot);
-            if (!ready) return null;
-            Mode mode = id.equals(TaskAttack.UID) ? Mode.MELEE
-                : id.equals(TaskDanmakuAttack.UID) ? Mode.MAGIC : Mode.RANGED;
-            return new Weapon(mode, attack, null, slot, item);
-        }
-        return null;
+        var attack = NativeCombatTasks.forWeapon(maid, item, slot < 0);
+        if (attack == null || (slot < 0 ? !ammoReady(maid, attack) : !canLoad(maid, item, slot))) return null;
+        Mode mode = attack.getUid().equals(TaskDanmakuAttack.UID) ? Mode.MAGIC
+            : attack instanceof IRangedAttackTask ? Mode.RANGED : Mode.MELEE;
+        return new Weapon(mode, attack, null, slot, item);
     }
 
     static boolean ammoReady(EntityMaid maid, IAttackTask task) {

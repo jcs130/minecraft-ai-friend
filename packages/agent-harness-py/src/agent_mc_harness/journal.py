@@ -18,6 +18,8 @@ def work_key(action: BodyAction) -> tuple | None:
         return "workshop", action.args.get("workshopId"), recipe, action.args.get("inventory")
     if action.verb == "native" and action.name == "fish":
         return ("fish",)
+    if action.verb == "use_item":
+        return "use_item", action.args.get("item")
     return None
 
 

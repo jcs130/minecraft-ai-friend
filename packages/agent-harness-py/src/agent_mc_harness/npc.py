@@ -9,7 +9,7 @@ import asyncio
 import json
 import time
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -46,6 +46,7 @@ class NpcRole(BaseModel):
     model: str = Field(min_length=1, max_length=100)
     allowed_tools: list[str] = Field(min_length=1, max_length=32)
     native_tasks: list[str] = Field(default_factory=list, max_length=32)
+    native_items: list[Annotated[str, Field(pattern=r"^[a-z0-9_.-]+:[a-z0-9_./-]+$", max_length=128)]] = Field(default_factory=list, max_length=16)
     default_native_guard: bool = False
     interval_seconds: int = Field(default=45, ge=10, le=600)
     max_speech_chars: int = Field(default=40, ge=10, le=100)
@@ -62,6 +63,8 @@ class NpcRole(BaseModel):
             raise ValueError("independent_owner_identity_required")
         if self.default_native_guard and (self.body_kind != "maid" or "body:native:guard" not in self.allowed_tools):
             raise ValueError("default_guard_requires_native_maid_capability")
+        if self.native_items and (self.body_kind != "numen" or "body:use_item" not in self.allowed_tools):
+            raise ValueError("reviewed_item_ids_require_numen_use_item")
         return self
 
     def scope(self, server_id: str) -> Scope:
@@ -181,6 +184,8 @@ def reviewed_steps(role: NpcRole, context: PlanContext, values: Any) -> list[Ste
             raise ValueError("task_not_in_reviewed_native_catalogue")
         if step.tool == "body:native:task" and step.args.get("taskId") == "touhou_little_maid:fishing":
             raise ValueError("use_the_bounded_fishing_action")
+        if step.tool == "body:use_item" and role.body_kind == "numen" and (set(step.args) != {"item"} or step.args["item"] not in role.native_items):
+            raise ValueError("item_not_in_reviewed_native_catalogue")
         if step.tool == "body:chat":
             text = step.args.get("text")
             if not isinstance(text, str) or not 1 <= len(text) <= role.max_speech_chars or any(ord(c) < 32 for c in text):
@@ -473,18 +478,27 @@ class NpcHost:
         body_id = str(self.role.body_id)
         context.dialogue = [self.pending_dialogue[key] for key in intent.source_events if key in self.pending_dialogue]
         results = []
+        inventory_added = False
         for action, receipt in self.journal.recent(body_id):
-            if action.verb in {"chat", "observe", "inventory"} or action.name == "ack":
+            if action.verb in {"chat", "observe"} or action.name == "ack":
                 continue
             result = {"action": action.name or action.verb, "requestId": receipt.request_id,
                       "status": receipt.status, "terminal": receipt.terminal, "text": receipt.text[:450]}
             data = receipt.data if isinstance(receipt.data, dict) else {}
+            if action.verb == "inventory":
+                if not inventory_added and self.role.body_kind == "numen" and isinstance(data.get("inventory"), list):
+                    results.append({**result, "inventorySample": data["inventory"], "handsAtSample": data.get("hands", {}),
+                                    "note": "Past read. Recheck after equipment or inventory changes."})
+                    inventory_added = True
+                continue
             reply = data.get("reply", data)
             if isinstance(reply, dict) and isinstance(reply.get("data"), dict):
                 evidence = reply["data"]
                 result["native"] = {key: evidence[key] for key in ("status", "goalCompleted", "observation", "workshops") if key in evidence}
             if isinstance(data.get("meal"), dict):
                 result["observedMeal"] = data["meal"]
+            if isinstance(data.get("itemUse"), dict):
+                result["observedItemUse"] = data["itemUse"]
             results.append(result)
         context.body_results = results[:6]
         steps = await self.planner(intent, context)

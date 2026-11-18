@@ -3,7 +3,7 @@ from uuid import uuid4
 import pytest
 
 from agent_mc_harness.body.maid import workshop_completed
-from agent_mc_harness.body.numen import PortResult, measured_meal
+from agent_mc_harness.body.numen import PortResult, measured_attack, measured_inventory, measured_item_use, measured_meal
 from agent_mc_harness.journal import ActionJournal
 from agent_mc_harness.models import BodyAction, BodyEvent, BodySnapshot, Capabilities, LifecycleCaps, NativeAction
 from agent_mc_harness.npc import MAID_BOND_TONES, NpcRole, owner_bond, routine_catch, routine_meal
@@ -73,6 +73,30 @@ def test_meal_success_needs_a_confirmed_item_and_hunger_change(message, expected
     assert measured_meal(PortResult("completed", message)).status == expected
 
 
+def test_hosted_inventory_keeps_real_namespaced_items_and_requires_complete_output():
+    text = ("stdout:\nQD_NUMEN_ITEM test_mod:magic/charm 2\n"
+            "QD_NUMEN_HAND offhand minecraft:shield 1\nQD_NUMEN_INVENTORY_END")
+    receipt = measured_inventory(PortResult("completed", text))
+    assert receipt.data == {"inventory": [{"itemId": "test_mod:magic/charm", "count": 2}],
+                            "hands": {"offhand": {"itemId": "minecraft:shield", "count": 1}}}
+    assert measured_inventory(PortResult("completed", text.split("QD_NUMEN_INVENTORY_END")[0])).status == "unknown"
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("QD_NUMEN_USE test_mod:charm 2 1 1", "completed"),
+    ("QD_NUMEN_USE test_mod:charm 2 2 0", "failed"),
+    ("QD_NUMEN_USE wrong_mainhand", "failed"),
+    ("QD_NUMEN_USE test_mod:other 2 1 1", "unknown"),
+])
+def test_item_click_requires_observed_change_for_the_requested_item(text, expected):
+    assert measured_item_use(PortResult("completed", text), "test_mod:charm").status == expected
+
+
+def test_no_native_attack_target_cannot_report_completion():
+    receipt = measured_attack(PortResult("completed", "ok\nstdout:\nQD_NUMEN_ATTACK no_target"))
+    assert receipt.status == "failed" and receipt.data["effectsApplied"] is False
+
+
 def test_workshop_reports_completion_only_for_the_original_verified_result():
     receipt = {"operationId": "original", "action": "make", "status": "completed", "goalCompleted": True,
                "observation": {"effectsApplied": True, "verified": True, "itemId": "minecraft:torch",
@@ -98,5 +122,20 @@ def test_replanning_cannot_duplicate_same_work_for_same_message_across_restart(t
         assert journal.attempted_work("maid", native_alias, source)
         assert not journal.attempted_work("maid", changed_id, ["event-b"])
         assert not journal.attempted_work("another-maid", changed_id, source)
+    finally:
+        journal.close()
+
+
+def test_numen_item_use_is_not_repeated_for_the_original_message(tmp_path):
+    path = tmp_path / "actions.sqlite3"
+    action = BodyAction(verb="use_item", args={"item": "test_mod:charm"}, request_id="qa_original")
+    journal = ActionJournal(path)
+    journal.begin("numen", action, ["event-a"])
+    journal.close()
+    journal = ActionJournal(path)
+    try:
+        repeat = action.model_copy(update={"request_id": "qa_repeat"})
+        assert journal.attempted_work("numen", repeat, ["event-a"])
+        assert not journal.attempted_work("numen", repeat, ["event-b"])
     finally:
         journal.close()

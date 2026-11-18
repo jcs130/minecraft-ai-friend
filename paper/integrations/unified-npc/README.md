@@ -78,6 +78,18 @@ for that handoff before planning again.
   from its own backpack when hunger is at most 14 and the observed body is idle
   and safe. Held food is consumed by the native player-body job. Completion
   carries measured item and hunger deltas.
+- Maid guard selects the installed TLM attack task for the weapon. Native bow,
+  crossbow, gohei and trident behavior stays with TLM. An add-on's task can
+  run with an equipped item when it accepts the weapon, its own prerequisites
+  pass and it accepts the target. The role's normal protection rules apply.
+- With `body:inventory`, a hosted Numen role sees real namespaced items and
+  the hands at the time of the read. `body:equip` can use `hand: "auto"` so
+  the native wardrobe chooses an eligible wearable slot. To permit a
+  specific item use, add its registered ID to `native_items` and grant that
+  role `body:use_item`. The item must already be in the main hand.
+  This performs a short native right click. The receipt carries the original
+  request ID, item count before and after and the number of changes the native
+  click observed. Use the world or mod state to confirm the intended outcome.
 
 The next plan receives recent original receipts, including work still in
 progress. The dialogue journal keeps a work attempt tied to its source event
