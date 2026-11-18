@@ -80,9 +80,10 @@ export async function skillPickup(bot: Bot, ctx: SkillContext, item?: string): P
     for (const id of Object.keys(bot.entities)) {
       if (attempted.has(id)) continue;
       const e = bot.entities[id];
-      if (!e?.position || (e.name !== 'item' && e.name !== 'item_stack')) continue;
-      const stack = droppedStackOf(e);
-      if (item && (!stack || !matchItemName(item, stack.name, bot?.registry))) continue;
+      if (!e?.position || e.isValid === false) continue;
+      const stack = droppedStackOf(e, bot.registry?.items);
+      if (!stack) continue;
+      if (item && !matchItemName(item, stack.name, bot?.registry)) continue;
       // An explicit item request can recover a discarded item; an unqualified
       // loot sweep must not walk straight back to our own recent discard.
       if (!item && isRecentDiscard(bot, e)) continue;

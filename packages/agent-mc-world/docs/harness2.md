@@ -18,6 +18,10 @@ flowchart LR
 
 ## 执行边界
 
+宿主可按需注册具名练习环境。读取 `mc_practice({op:"help"})` 的 `environments` 可查当前支持的工况。对“地上有木头却选了挖方块”这类有原始失败回执的问题，先从方法库取回待改方法的精确 revision，再在原来的 `start` 参数中加入 `environment:"resource-acquisition"`。同一个候选会在掉落物和独立的方块场景各跑一次。两边开局已经有两块木头，评分要求背包再增加一块。按原作业 ID 收取 `result` 或 `compare` 后，宿主可以决定是否将该版本带到自然任务试用。
+
+这个环境经 `MethodRunner` 执行候选源码，并通过核心的 `parseSteps` 解读 `mc.do`。确定性夹具模拟近处可达的单一掉落物或方块，只提供当前库存、可见掉落物和指定脚边格的读数。用已有地图记录回放移动时仍选 `caseIds`。包提供 `createResourceMethodPractice` 和 `harness2CognitionBrief`，后者将当前优化阶段要返回的文件、选项或经验格式显式交给宿主模型。
+
 - `PracticeExecutionPort.binding` 必须显式声明专用实例与 realm；不得与源 Agent 的实例或 realm 相同。绑定由宿主确认，不是远端世界身份的密码学证明。
 - 同一 Runner 只运行一个任务，RPC 在宿主串行执行。上游并行生成方案不意味着同时向一个身体发动作。专用服务端需要实现自身的控制租约、确定性场景恢复、观测和清理确认。
 - `MethodPracticeExecutor` 使用现有 `MethodRunner` 沙箱和 `MethodLibrary` 的语法校验、不可变版本、原执行 UUID、回执及复盘。宿主必须向 `host.call` 提供真实适配器，`settle` 必须确认原动作和按键已释放。`mineflayer` 调用沿用 `{value:...}` 返回封装。

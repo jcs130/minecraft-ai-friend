@@ -5,6 +5,16 @@ import { skillProbe } from '../core/skills-gather.ts';
 import type { SkillContext } from '../core/skill-context.ts';
 import type { Bot } from 'mineflayer';
 import { readSkillHelp } from '../core/skills.ts';
+import { getResourceActionContract } from '../src/collect-contract.ts';
+
+it('returns the dropped-item alternative without rewriting an ambiguous resource operation', () => {
+  const request = [{ skill: 'collect', radius: 12, timeoutMs: 5000 }];
+  const result = parseSteps(request);
+  expect(result).toHaveProperty('error');
+  expect('error' in result && result.error).toContain(getResourceActionContract('block').hint);
+  expect(parseSteps([{ skill: 'pickup', item: 'spruce_log' }])).toMatchObject({ steps: [{ skill: 'pickup', item: 'spruce_log' }] });
+  expect(parseSteps([{ skill: 'collect', block: 'spruce_log' }])).toMatchObject({ steps: [{ skill: 'collect', block: 'spruce_log' }] });
+});
 
 it.each([
   { skill: 'use', item: '大背包', open: true },

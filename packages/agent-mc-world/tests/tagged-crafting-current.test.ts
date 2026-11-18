@@ -17,6 +17,11 @@ function rig(version: string, stock: Record<string, number>) {
 const deps = { resolve: () => null, blockAt: () => null, cellsOf: () => null };
 
 describe('versioned ingredient tags in real registry crafting', () => {
+  it('reports the multi-batch shortfall across interchangeable planks', () => {
+    const bot = rig('1.21.1', { oak_planks:4, spruce_planks:3, oak_log:64 });
+    expect(precheckStep(bot as never,{ skill:'craft',item:'chest',count:2 },deps)?.text)
+      .toContain('任意木板需16、随身7、至少差9');
+  });
   it.each(['1.20.6', '1.21.1'])('can allocate the observed mixed plank inventory to one chest (%s)', version => {
     const bot = rig(version, { oak_planks:5, spruce_planks:4 });
     const before = bot.inventory.items().map(item => [item.type,item.count]);

@@ -15,7 +15,7 @@ import type { SkillCall } from './skills.ts';
 import type { BlockFace, Cell } from './geometry.ts';
 import { matchItemName, type ChestBook } from './chests.ts';
 import { equipDestOf, equippedAlready } from './tools.ts';
-import { itemsInReach, offHandItem, wornItemNamed } from './inventory.ts';
+import { itemsInReach, offHandItem, playerInvIn, wornItemNamed } from './inventory.ts';
 import { DRINKABLES } from './item-facts.ts';
 import { RISKY_FOODS, foodRiskReference, nativeFoodId } from './nutrition.ts';
 import { FOOD_COOKING } from './vanilla-food.ts';
@@ -109,18 +109,19 @@ function precheckCraft(bot: Bot, call: Extract<SkillCall, { skill: 'craft' }>): 
     return { level: 'soft', text: '库存同步或游标归位尚未完成，暂不能判断合成材料缺口；执行前先核对并归还游标', rule: 'craft.inventorySync' };
   }
   const label = zhName(def.name);
-  const tagged = taggedCraftChoice(bot, def.name);
+  const tagged = taggedCraftChoice(bot, def.name, call.count);
   if (tagged) {
     if (tagged.recipe) return null;
-    return { level: 'hard', text: `做${label}需要 ${tagged.needs},包里凑不齐`, rule: 'craft.short' };
+    return { level: 'hard', text: `做${label}需要 ${tagged.needs},包里凑不齐${tagged.shortfall ? '；' + tagged.shortfall : ''}`, rule: 'craft.short' };
   }
-  let all: Array<{ delta?: Array<{ id: number; count: number }> }> = [];
+  let all: Array<{ result?: { count: number }; delta?: Array<{ id: number; count: number }> }> = [];
   try {
     all = (bot.recipesAll?.(def.id, null, true as never) ?? []) as never;
   } catch { return null; }
   if (all.length === 0) return null; // 没配方是另一类受阻,交给技能自己说
   const have = new Map<number, number>();
-  for (const it of bot.inventory.items()) have.set(it.type, (have.get(it.type) ?? 0) + it.count);
+  const stacks = playerInvIn(bot, bot.currentWindow).items();
+  for (const it of stacks) have.set(it.type, (have.get(it.type) ?? 0) + it.count);
   const needsOf = (r: { delta?: Array<{ id: number; count: number }> }): Map<number, number> => {
     const need = new Map<number, number>();
     for (const d of r.delta ?? []) if (d.count < 0) need.set(d.id, (need.get(d.id) ?? 0) + -d.count);
@@ -130,8 +131,10 @@ function precheckCraft(bot: Bot, call: Extract<SkillCall, { skill: 'craft' }>): 
   if (ready) return null;
   const options = all.map((r) => {
     const need = needsOf(r);
+    // Keep the old one-batch bound for providers that omit their output yield.
+    const batches = r.result && r.result.count > 0 ? Math.ceil(call.count / r.result.count) : 1;
     const miss = [...need]
-      .map(([id, n]) => ({ id, gap: n - (have.get(id) ?? 0) }))
+      .map(([id, n]) => ({ id, gap: n * batches - (have.get(id) ?? 0) }))
       .filter((x) => x.gap > 0);
     return { miss, total: miss.reduce((a, b) => a + b.gap, 0) };
   });
@@ -145,8 +148,10 @@ function precheckCraft(bot: Bot, call: Extract<SkillCall, { skill: 'craft' }>): 
     ? `;这些只是缺口并列的配方示例，不是仅允许这些材料；还有 ${tied.length - CRAFT_TIED_MAX} 条配方缺口一样多` : '';
   const gaps = tied.slice(0, CRAFT_TIED_MAX).join(' 或 ');
   const mentionsPlanks = /木板|_planks/.test(gaps);
-  const logHint = mentionsPlanks ? plankSourceHint(bot.inventory.items(), (n) => zhName(n)) : '';
-  return { level: 'hard', text: `做${label}还差 ${gaps}${more}${logHint}`, rule: 'craft.short' };
+  const logHint = mentionsPlanks ? plankSourceHint(stacks, (n) => zhName(n)) : '';
+  const scope = call.count <= 1 ? '' : all.every(r => r.result && r.result.count > 0)
+    ? `×${call.count}` : '（至少）';
+  return { level: 'hard', text: `做${label}${scope}还差 ${gaps}${more}${logHint}`, rule: 'craft.short' };
 }
 
 /** eat:点名的食物是否存在。与 skillEat 共用精确物品 id 口径。 */

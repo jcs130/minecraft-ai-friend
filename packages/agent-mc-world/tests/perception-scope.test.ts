@@ -99,6 +99,25 @@ describe('surrounding observation scope', () => {
     expect(snapshotFromBot(bot,{scanBlocks:false}).entities.some(e=>e.entityId===2)).toBe(false);
   });
 
+  it('exposes a usable registry name and distinguishes unreported stack quantities from one item', () => {
+    const bot = rig();
+    const drop = (id: number, metadata: unknown[]) => ({
+      id, name: 'item', type: 'other', position: new Vec3(.5, 64, -1), height: .25, metadata,
+    });
+    bot.registry.items = { 91: { name: 'spruce_log' } };
+    bot.entities = {
+      2: drop(2, []), 3: drop(3, [{ itemId: 91 }]), 4: drop(4, [{ itemId: 91, itemCount: 2 }]),
+    } as never;
+    const snapshot = snapshotFromBot(bot, { scanBlocks: false });
+    expect(snapshot.entities.map(e => e.item)).toEqual([undefined, { name: 'spruce_log', count: null }, { name: 'spruce_log', count: 2 }]);
+    const life = narrateWorldSegments(snapshot).find(segment => segment.key === 'life')!;
+    expect(life.text).toContain('未识别掉落物（数量未知）');
+    expect(life.text).toContain('（数量未知） [spruce_log]');
+    expect(life.text).toContain('×2 [spruce_log]');
+    expect(life.text).not.toContain('×3');
+    expect(life.text).not.toContain('×1');
+  });
+
   it('keeps a nearby threat and a distant player when dropped items fill the compact snapshot',()=>{
     const bot=rig();
     const drops=Object.fromEntries(Array.from({length:20},(_,n)=>[10+n,{id:10+n,name:'item',type:'other',height:.25,position:new Vec3(.5,64,-1)}]));

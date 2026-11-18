@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 import Ajv from 'ajv';
 import type {ToolDef,ToolOutcome} from '../contracts/host.ts';
 import {parseProcedure,procedureHash,procedureId,type ProcedureVersion} from '../../core/support/procedure.ts';
-import {Harness2Runner,type Harness2Options,type Harness2Job,type Harness2ModelReply,type Harness2Result} from '../decisions/harness2.ts';
+import {Harness2Runner,type Harness2Options,type Harness2Job,type Harness2ModelReply,type Harness2ModelRequest,type Harness2Result} from '../decisions/harness2.ts';
 import {createHarness2Monitor} from '../decisions/harness2-monitor.ts';
 import type {PracticeCase} from './practice.ts';
 import {evaluatePracticeVariants,type PracticeVariant} from './harness-evaluation.ts';
@@ -23,6 +23,7 @@ export const HARNESS2_PRACTICE_TOOL: Omit<ToolDef,'handler'>={
     +'review actual terminal/net change, then explicitly adopt using mc_script library. No production body control or weight training.',
   parameters:{type:'object',additionalProperties:false,properties:{
     op:{type:'string',enum:['help','cases','start','status','result','compare','stage','cancel']},
+    environment:{type:'string',pattern:'^[a-z][a-z0-9-]{0,63}$',description:'Optional named isolated environment from help.environments. Its training and independent holdout cases run together. Omit for default or recorded scene cases.'},
     caseIds:{type:'array',minItems:2,maxItems:9,uniqueItems:true,items:{type:'string',pattern:'^[a-z][a-z0-9-]{0,63}$'},description:'Explicit recorded training case followed by held-out cases. Omit only for built-in flat fixtures. Capture through mc_script scene; never invent a past scene.'},
     id:{type:'string',pattern:'^[a-z][a-z0-9-]{0,63}$'},
     methodId:{type:'string',pattern:'^[a-z][a-z0-9-]{0,63}$'},
@@ -46,6 +47,7 @@ export interface Harness2PracticeOptions {
   model:Harness2Options['model'];
   practice:Harness2Options['practice'];
   fixtures:PracticeCase[];
+  environments?: Record<string,{capability:string;prepare:()=>{practice:Harness2Options['practice'];fixtures:PracticeCase[]}}>;
   cases?():Promise<unknown>;
   prepareCases?(ids:string[],signal:AbortSignal):Promise<{practice:Harness2Options['practice'];fixtures:PracticeCase[];capability:string}>;
   /** Environment capabilities and limits supplied by the actual practice adapter. */
@@ -59,6 +61,18 @@ export interface Harness2PracticeOptions {
   settled?(event:{id:string;status:'completed'|'failed';eligible:boolean|null;error?:string}):Promise<void>;
 }
 interface RequestRecord {job:Harness2Job;source:ProcedureVersion;scopeHash:string;capability?:string;error?:string;staged?:Record<string,unknown>;staging?:'pending'|'saved'}
+
+/** Translate the optimizer's filesystem mission to the reply envelope consumed by its model RPC. */
+export function harness2CognitionBrief(request:Harness2ModelRequest):string {
+  const contract = request.stage.startsWith('select.')
+    ? 'Return {"choice":"<candidate letter>"} using an identifier from the supplied candidate files.'
+    : request.stage.startsWith('experience.')
+      ? 'Return {"experience":{"cue":"…","lesson":"…","evidence":"…"}} for a supported lesson, or {} if the evidence is insufficient.'
+      : 'Return {"files":{"skills/minecraft-method/scripts/run.js":"<complete JavaScript function body>"}}. '
+        + 'The only editable file keys are skills/minecraft-method/scripts/run.js, skills/minecraft-method/scripts/params.json, and skills/minecraft-method/SKILL.md. '
+        + 'Paths are relative to the harness root (no harness/ prefix). Each value is complete file text; omit unchanged files. Paths mentioned as context are read-only.';
+  return 'Return one JSON object. '+contract+'\nThe task, prior artifacts and measured game evidence follow.\n'+JSON.stringify(request);
+}
 
 /** Parse a complete structured answer; truncated model output is rejected, never repaired into a candidate. */
 export function parseHarness2ModelReply(text:string):Harness2ModelReply {
@@ -122,7 +136,7 @@ export class Harness2PracticeService {
   /** Small discovery/continuation index for request facts. Never starts a job or expands source. */
   context() {
     const view=this.snapshot();
-    return {available:!this.closed,scope:view.scope,jobs:view.jobs.slice(-3).map(j=>({id:j.id,methodId:j.methodId,status:j.status,eligible:j.result?.eligible??null,
+    return {available:!this.closed,scope:view.scope,...(this.options.environments?{environments:Object.keys(this.options.environments)}:{}),jobs:view.jobs.slice(-3).map(j=>({id:j.id,methodId:j.methodId,status:j.status,eligible:j.result?.eligible??null,
       staged:this.records.get(j.id)?.staging==='saved',...(j.failure?{failure:j.failure}:{})})),
       next:'For a measured difficulty, first retrieve an applicable mc_script library method. mc_practice help describes the actual fixture; start returns immediately. result/compare read evidence; stage saves a candidate. Natural execution and review/adopt remain separate.'};
   }
@@ -143,6 +157,7 @@ export class Harness2PracticeService {
     signal?.throwIfAborted();if(!validate(args))throw Error('Invalid practice parameters: '+new Ajv().errorsText(validate.errors));
     if(args.op==='cases')return this.options.cases?this.options.cases():{available:false,cases:[]};
     if(args.op==='help')return {available:!this.closed,capability:this.options.capability,budget:this.options.budget,
+      environments:Object.entries(this.options.environments??{}).map(([id,v])=>({id,capability:v.capability})),
       fixtures:this.options.fixtures.map(f=>({id:f.id,environmentVersion:f.environmentVersion,goal:f.goal})),recordedCases:!!this.options.prepareCases,
       sourceMethod:'start needs id, methodId, exact revision and a game-only task. Read the saved source method first; private conversation is not input.',
       objective:'balanced accepts matched success with less measured SDK work on independent fixtures. Elapsed time alone is not enough; unknown token usage stays unknown.',
@@ -196,7 +211,15 @@ export class Harness2PracticeService {
     try{
       const source=this.source();
       if(args.caseIds&&!this.options.prepareCases)throw Error('Recorded practice adapter unavailable');
-      const selected=args.caseIds?await this.options.prepareCases!(args.caseIds as string[],signal??new AbortController().signal):null;
+      let selected: {practice:Harness2Options['practice'];fixtures:PracticeCase[];capability:string}|null=null;
+      if(args.environment){
+        if(args.caseIds)throw Error('Choose a named environment or recorded caseIds, not both');
+        const name=String(args.environment), registry=this.options.environments;
+        if(!registry||!Object.hasOwn(registry,name))throw Error('Unknown practice environment; see help.environments');
+        selected={...registry[name].prepare(),capability:registry[name].capability};
+      }else if(args.caseIds){
+        selected=await this.options.prepareCases!(args.caseIds as string[],signal??new AbortController().signal);
+      }
       const fixtures=selected?.fixtures??this.options.fixtures,capability=selected?.capability??this.options.capability;
       const method=parseProcedure(await this.options.readMethod(String(args.methodId),String(args.revision),signal??new AbortController().signal));
       signal?.throwIfAborted();if(this.closed)throw Error('Practice service is stopped');
