@@ -26,6 +26,7 @@ test('earlier reviewed Skill links keep their bytes when the current bundle chan
     ['1.2.1', '1c3c57962babb47fd2ca2100b12e1d941949e85e6774b63b5cbd1a874e435c66'],
     ['1.3.7', '0672a96ab8cdc7933ffe25a7a268b6b4bf4f182f9a409c63071bccdfb5b96442'],
     ['1.3.10', '858acb272355cc38db95915c405c75e51e6e4164771404b7aa7dbf030c1f580c'],
+    ['1.3.11', 'aada7ed6adf15c60501ad71e6c9c2d2e59ebb0f635e466a2be7a597db7102ff7'],
     ['1.3.9', '160a23dc17e55c209199bb0946287aed28780c8bea5ebf794e2d04663433e3f4'],
   ]) {
     const url = `/downloads/qiandengji-agent-${version}.zip`;
