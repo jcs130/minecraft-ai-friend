@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
 import {mkdtemp, mkdir, writeFile, readFile, readdir, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {runOnce} from '../companion-memory.mjs';
+import {recallConversation,runOnce} from '../companion-memory.mjs';
 import {GoalCheckpointBook} from '../../../../../packages/agent-mc-world/core/goal-checkpoint.ts';
 import {parseGoalPlan} from '../../../../../packages/agent-mc-world/core/goal-plan.ts';
 
@@ -60,6 +61,66 @@ test('shared external scope, duplicate identity and simultaneous writers are rej
   await assert.rejects(runOnce({...cfg,npcs:[{maidId:npc,memory},{maidId:other,memory}]}),/shared_memory_scope/);
   await mkdir(join(cfg.dataDir,'companion-sync.lock'),{recursive:true});
   await assert.rejects(runOnce(cfg),{code:'EEXIST'});
+});
+
+test('topic recall uses hybrid retrieval and returns only allowed original reply IDs',async t=>{
+  const {cfg}=await fixture(t);
+  const conversations = [];
+  const searches = [];
+  let available = true;
+  const endpoint = createServer(async (request,response)=>{
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks));
+    let reply;
+    if (request.url === '/v1/memory/remember') {
+      const artifact = {family:'atomic-memory',artifact_id:`qa-${conversations.length}`,revision:1};
+      const memory = {artifact, kind:body.kind,state:'active',text:body.text};
+      conversations.push(memory);
+      reply = {changed:true,records:[memory]};
+    } else {
+      searches.push(body);
+      if(!available)response.statusCode=503;
+      reply = {hits: conversations.toReversed().map(memory=>({memory}))};
+    }
+    response.setHeader('Content-Type','application/json');
+    response.end(JSON.stringify(reply));
+  });
+  t.after(()=>endpoint.close());
+  await new Promise(resolve=>endpoint.listen(0,'127.0.0.1',resolve));
+  cfg.npcs[0].memory={mode:'remote',provider:'powercontext',scopeId:'only-this-body',
+    endpoint:`http://127.0.0.1:${endpoint.address().port}`};
+  const dir=join(cfg.journalRoot,npc);
+  await mkdir(dir,{recursive:true});
+  const stamp = suffix=>`30000000-0000-0000-0000-0000000000${suffix}`;
+  const shared=stamp(71),privateId=stamp(72),otherPeer=stamp(73),unfinished=stamp(74),request=stamp(75);
+  const historic=(id,speakerId,channel,message,status='answered')=>writeFile(join(dir,id+'-result.json'),JSON.stringify({
+    schemaVersion:1,id,maidId:npc,speakerId,channel,message,reply:'收到',status,at:1000}));
+  await historic(shared,a,'public','旧水车旁边留了灯笼');
+  await historic(privateId,a,'nearby','那个秘密只有我听到');
+  await historic(otherPeer,b,'public','另一个玩家的经历');
+  await historic(unfinished,a,'public','没有送达的回执','failed');
+  assert.equal((await runOnce(cfg))[0].imported,4);
+  const before = await readFile(join(cfg.dataDir,npc,'companion-import.json'));
+  const input=join(dir,request+'-request.json');
+  const submit=(channel)=>writeFile(input,JSON.stringify({schemaVersion:1,kind:'social_dialogue',status:'accepted',
+    id:request,maidId:npc,speakerId:a,channel,at:Date.now(),message:'以前能避雨的地方是哪儿？'}));
+  await submit('public');
+  const publicRecall=await recallConversation(cfg,npc,request);
+  assert.deepEqual(publicRecall,{mode:'hybrid',degraded:false,sourceRequestIds:[shared]});
+  assert.equal(searches.at(-1).mode,'hybrid');
+  assert.equal(searches.at(-1).query,'以前能避雨的地方是哪儿？');
+  assert.equal(searches.at(-1).scope_id,'only-this-body');
+  await submit('private');
+  const privateRecall=await recallConversation(cfg,npc,request);
+  assert.deepEqual(privateRecall.sourceRequestIds,[privateId,shared]);
+  assert.deepEqual(await recallConversation(cfg,other,request),{mode:'local',sourceRequestIds:[]});
+  available=false;
+  const offline=await recallConversation(cfg,npc,request);
+  assert.equal(offline.mode,'local');
+  assert.equal(offline.degraded,true);
+  assert.deepEqual(await readFile(join(cfg.dataDir,npc,'companion-import.json')),before);
+  assert.equal(conversations.length,4);
 });
 
 test('a dialogue and its actual action import separately, with own-action recall and the original request reference',async t=>{

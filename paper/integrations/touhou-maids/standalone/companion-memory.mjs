@@ -1,5 +1,5 @@
 /** Project NPC evidence into the existing MC core notebook and optional PowerContext.
- * node --experimental-transform-types companion-memory.mjs private-config.json [--once]
+ * node --experimental-transform-types companion-memory.mjs private-config.json [--once | --recall body request]
  * No model inference, game commands, new memory engine or automatic unknown-write replay here.
  */
 import { readFile, readdir, mkdir, writeFile, rename, stat, rmdir } from 'node:fs/promises';
@@ -29,7 +29,7 @@ function compactEvidence(row) {
   return result;
 }
 
-export async function runOnce(config) {
+function validate(config) {
   if (config.schema !== 1 || !isAbsolute(config.coreRoot) || !isAbsolute(config.journalRoot) ||
       !isAbsolute(config.dataDir) || typeof config.realm !== 'string' || !config.realm.trim() ||
       !Array.isArray(config.npcs) || config.npcs.length > 64) throw Error('invalid_memory_configuration');
@@ -37,19 +37,69 @@ export async function runOnce(config) {
   if (new Set(config.npcs.map(n=>n.maidId)).size !== config.npcs.length ||
       new Set(config.npcs.filter(n=>n.memory?.mode==='remote').map(n=>`${n.memory.endpoint}:${n.memory.scopeId}`)).size !==
       config.npcs.filter(n=>n.memory?.mode==='remote').length) throw Error('duplicate_npc_or_shared_memory_scope');
+}
+
+export async function runOnce(config) {
+  validate(config);
   await mkdir(config.dataDir,{recursive:true});
   const lock = join(config.dataDir,'companion-sync.lock');
   await mkdir(lock); // Never take over an unknown writer. After a crash the operator checks and removes this lock.
   try { return await synchronize(config); } finally { await rmdir(lock); }
 }
 
-async function synchronize(config) {
-  const core = resolve(config.coreRoot);
-  const extension = config.source === true ? 'ts' : 'js';
+function coreModule(config, name) {
   const prefix = config.source === true ? 'core' : 'dist/runtime/core';
-  const {GameMemoryBook} = await import(pathToFileURL(join(core, prefix, `game-memory.${extension}`)).href);
-  const {GameMemoryService} = await import(pathToFileURL(join(core, prefix, `game-memory-service.${extension}`)).href);
-  const {GoalCheckpointBook} = await import(pathToFileURL(join(core, prefix, `goal-checkpoint.${extension}`)).href);
+  const extension = config.source === true ? 'ts' : 'js';
+  return import(pathToFileURL(join(config.coreRoot, prefix, `${name}.${extension}`)).href);
+}
+
+function memoryContext(config, body) {
+  return {scope:{realm:config.realm,account:`npc:${body}`,agent:body},dimension:null};
+}
+
+/** Read only. The caller verifies these IDs against the original delivered replies. */
+export async function recallConversation(config, body, request) {
+  validate(config);
+  if (!UUID.test(body) || !UUID.test(request)) throw Error('invalid_dialogue_identity');
+  const npc = config.npcs.find(row => row.maidId === body);
+  if (!npc || npc.memory?.mode !== 'remote') return {mode:'local', sourceRequestIds:[]};
+  if (npc.memory.provider !== 'powercontext' || !npc.memory.scopeId) throw Error('dedicated_npc_memory_scope_required');
+  const row = await json(join(config.journalRoot,body,request+'-request.json'),32768);
+  const age = Date.now() - row.at;
+  if (row.schemaVersion !== 1 || row.kind !== 'social_dialogue' || row.status !== 'accepted'
+      || row.id !== request || row.maidId !== body || !UUID.test(row.speakerId) || row.speakerId === body
+      || !['private','public','nearby'].includes(row.channel) || !Number.isSafeInteger(row.at) || age < 0 || age > 120000
+      || typeof row.message !== 'string' || !row.message.trim() || row.message.length > 800)
+    throw Error('invalid_dialogue_request');
+  const [{GameMemoryBook}, {GameMemoryService}] = await Promise.all([
+    coreModule(config,'game-memory'), coreModule(config,'game-memory-service'),
+  ]);
+  const directory = join(config.dataDir,body);
+  const book = new GameMemoryBook(directory);
+  const context = memoryContext(config,body);
+  const result = await new GameMemoryService(book,directory).execute({action:'search',kind:'relationship',
+    query:row.message.trim().slice(0,200),tags:[`peer:${row.speakerId}`],limit:20,dimension:'*',preference:'balanced'},
+    context,{...npc.memory,searchMode:'hybrid',timeoutMs:1500},AbortSignal.timeout(2000));
+  const sourceRequestIds = [];
+  for (const candidate of result.entries ?? []) {
+    const note = book.execute({action:'get',id:candidate.id},context).entry;
+    if (note.revision !== candidate.revision || note.archived || note.expired) continue;
+    const evidence = JSON.parse(note.content);
+    if (evidence.maidId !== body || evidence.speakerId !== row.speakerId || evidence.status !== 'answered'
+        || !UUID.test(evidence.id) || evidence.id === request
+        || !['private','public','nearby','npc'].includes(evidence.channel)
+        || (row.channel !== 'private' && evidence.channel !== 'public')) continue;
+    if (!sourceRequestIds.includes(evidence.id)) sourceRequestIds.push(evidence.id);
+    if (sourceRequestIds.length === 8) break;
+  }
+  return {mode:result.retrieval?.remoteConsulted === true ? 'hybrid' : 'local',
+    degraded:result.retrieval?.degraded === true, sourceRequestIds};
+}
+
+async function synchronize(config) {
+  const {GameMemoryBook} = await coreModule(config,'game-memory');
+  const {GameMemoryService} = await coreModule(config,'game-memory-service');
+  const {GoalCheckpointBook} = await coreModule(config,'goal-checkpoint');
   const summary = [];
   for (const npc of config.npcs) {
     if (!UUID.test(npc.maidId) || (npc.memory?.mode === 'remote' &&
@@ -58,7 +108,7 @@ async function synchronize(config) {
     const directory = join(config.dataDir, npc.maidId);
     await mkdir(directory, {recursive:true});
     const service = new GameMemoryService(new GameMemoryBook(directory), directory);
-    const context = {scope:{realm:config.realm,account:`npc:${npc.maidId}`,agent:npc.maidId},dimension:null};
+    const context = memoryContext(config,npc.maidId);
     // Project the existing core goal book, never introduce a second goal authority.
     // These are durable intentions; restored plans are NOT fresh world verification.
     await mkdir(root,{recursive:true});
@@ -153,13 +203,20 @@ async function synchronize(config) {
   return summary;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const config = await json(resolve(process.argv[2]));
+async function main([path, operation, body, request]) {
+  const config = await json(resolve(path));
+  if (operation === '--recall') {
+    try { process.stdout.write(JSON.stringify(await recallConversation(config,body,request))+'\n'); }
+    catch { process.exitCode = 1; }
+    return;
+  }
   do {
     try { process.stdout.write(JSON.stringify(await runOnce(config))+'\n'); }
     catch (error) { process.stderr.write(`NPC memory sync failed (${error.name}); original evidence is retained.\n`);
-      if (process.argv.includes('--once')) { process.exitCode=1; break; } }
-    if (process.argv.includes('--once')) break;
+      if (operation === '--once') { process.exitCode=1; break; } }
+    if (operation === '--once') break;
     await sleep(15000);
   } while (true);
 }
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) await main(process.argv.slice(2));

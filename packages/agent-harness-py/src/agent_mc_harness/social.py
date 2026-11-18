@@ -13,6 +13,8 @@ import time
 from tempfile import NamedTemporaryFile
 from uuid import UUID
 
+from .memory.local import features
+
 
 DAY_MS = 86_400_000
 LABELS = {
@@ -86,7 +88,7 @@ class SocialEvent:
         return str(UUID(bytes=hashlib.sha256(json.dumps(key).encode()).digest()[:16]))
 
 
-def relationship_view(peer_type: str, peer_id: str, events: list[SocialEvent], public: bool) -> dict:
+def relationship_view(peer_type: str, peer_id: str, events: list[SocialEvent], public: bool, *, evidence_limit: int = 24) -> dict:
     ordered = sorted(events, key=lambda event: (event.at, event.event_id, event.summary))
     visible = {event.event_id: event for event in reversed(ordered)
                if not public or event.visibility == "public"}
@@ -105,18 +107,29 @@ def relationship_view(peer_type: str, peer_id: str, events: list[SocialEvent], p
         "trust": LABELS["trust"][0 if trust < 2 else 1 if trust < 4 else 2],
         "evidence": [{"id": event.event_id, "kind": event.kind, "summary": event.summary,
                       "at": event.at, "source": event.source, "sourceRequestId": event.source_id}
-                     for event in reversed(evidence[-24:])],
+                     for event in reversed(evidence[-evidence_limit:])],
         "scores": {"familiarity": familiar, "trust": trust},
         "sourceCount": len(evidence),
     }
 
 
-def model_view(view: dict, topic: str = "") -> dict:
-    # Match current topic terms first. A recent proof is the fallback.
-    terms = set(topic.casefold().split())
-    evidence = sorted(view["evidence"], key=lambda e: (-sum(term in e["summary"].casefold() for term in terms), -e["at"]))
+def model_view(view: dict, topic: str = "", ranked: tuple[str, ...] = (), history: tuple[dict, ...] | None = None) -> dict:
+    evidence = view["evidence"] if history is None else history
+    terms = features(topic)
+    relevant = [(len(terms & features(entry["summary"])), entry) for entry in evidence]
+    lexical = sorted(((count, entry) for count, entry in relevant if count),
+                     key=lambda match: (-match[0], -match[1]["at"], match[1]["id"]))
+    keyword_rank = {entry["id"]: rank for rank, (_, entry) in enumerate(lexical)}
+    semantic_rank = {source: rank for rank, source in enumerate(ranked)}
+
+    def order(entry):
+        positions = (keyword_rank.get(entry["id"]), semantic_rank.get(entry["sourceRequestId"]))
+        score = sum(1 / (8 + pos) for pos in positions if pos is not None)
+        return -score, -entry["at"], entry["id"]
+
+    selected = sorted(evidence, key=order)[:3]
     return {key: view[key] for key in ("schemaVersion", "policyVersion", "peer", "visibility", "familiarity", "trust")} | {
-        "evidence": [{key: entry[key] for key in ("id", "kind", "summary")} for entry in evidence[:3]],
+        "evidence": [{key: entry[key] for key in ("id", "kind", "summary")} for entry in selected],
     }
 
 
@@ -145,6 +158,7 @@ class SocialWorld:
                            for body in (role.body_id, *role.social_previous_bodies)}
         self.active_body = {str(role.character_id): str(role.body_id) for role in roles}
         self.history = {body: tuple(str(past) for past in role.social_previous_bodies) for body, role in self.roles.items()}
+        self.recent_evidence: dict[tuple[str, str, str, bool], tuple[dict, ...]] = {}
 
     def contacts(self, body: str) -> list[SocialEvent]:
         events = []
@@ -163,7 +177,7 @@ class SocialWorld:
                 if row.get("kind") == "social_dialogue":
                     submitted = read_json(file.with_name(source + "-request.json"))
                     completed = timestamp(row.get("completedAt"))
-                    if (not submitted or submitted.get("status") != "accepted" or channel not in ("private", "public")
+                    if (not submitted or submitted.get("status") != "accepted" or channel not in ("private", "public", "nearby")
                             or not completed or not 0 <= completed - at <= 120_000
                             or any(submitted.get(key) != row.get(key)
                                    for key in ("schemaVersion", "id", "maidId", "speakerId", "kind", "channel", "at", "message"))):
@@ -211,6 +225,7 @@ class SocialWorld:
 
     def refresh(self) -> None:
         arrivals = self.arrivals()
+        index = {}
         publish_json(self.root / "tlm-companion-memory" / "relationship-roster.json",
                      {"schemaVersion": 1, "realm": self.realm, "bodies": self.registered})
         for body, role in self.roles.items():
@@ -229,11 +244,16 @@ class SocialWorld:
                 if peer_type in ("player", "npc") and identifier(peer_id) == peer_id:
                     pairs.setdefault((peer_type, peer_id), [])
             for (peer_type, peer_id), evidence in pairs.items():
+                public = relationship_view(peer_type, peer_id, evidence, True, evidence_limit=256)
+                peer_only = relationship_view(peer_type, peer_id, evidence, False, evidence_limit=256)
+                index[body, peer_type, peer_id, True] = tuple(public["evidence"])
+                index[body, peer_type, peer_id, False] = tuple(peer_only["evidence"])
                 publish_json(directory / f"relationship-{peer_type}-{peer_id}.json", identity | {
-                    "public": relationship_view(peer_type, peer_id, evidence, True),
-                    "peerOnly": relationship_view(peer_type, peer_id, evidence, False),
+                    "public": public | {"evidence": public["evidence"][:24]},
+                    "peerOnly": peer_only | {"evidence": peer_only["evidence"][:24]},
                 })
             publish_json(directory / "relationship-ready.json", identity)
+        self.recent_evidence = index
 
     def dialogue_requests(self, role) -> list[tuple[Path, dict]]:
         if not role.social_memory:
@@ -250,7 +270,7 @@ class SocialWorld:
             request, speaker = identifier(row.get("id")), identifier(row.get("speakerId"))
             at, text = timestamp(row.get("at")), row.get("message")
             if (not request or file.name != f"{request}-request.json" or not speaker or not at
-                    or row.get("channel") not in ("private", "public") or not 0 <= now - at <= 120_000
+                    or row.get("channel") not in ("private", "public", "nearby") or not 0 <= now - at <= 120_000
                     or not isinstance(text, str) or not 0 < len(text) <= 400):
                 continue
             if any((directory / f"{request}-{suffix}.json").exists() for suffix in ("answer", "sending", "result")):
@@ -258,7 +278,8 @@ class SocialWorld:
             requests.append((directory / f"{request}-answer.json", row))
         return sorted(requests, key=lambda item: (item[1]["at"], item[1]["id"]))[:4]
 
-    def lookup(self, body: str, peer_type: str, peer_id: str, *, public: bool, topic: str = "") -> dict | None:
+    def lookup(self, body: str, peer_type: str, peer_id: str, *, public: bool, topic: str = "",
+               ranked: tuple[str, ...] = ()) -> dict | None:
         role = self.roles.get(body)
         if not role or peer_type not in ("player", "npc") or identifier(peer_id) != peer_id:
             return None
@@ -276,6 +297,6 @@ class SocialWorld:
             view = row["public" if public else "peerOnly"]
             if view["peer"] != {"type": peer_type, "id": peer_id} or view["visibility"] != ("public" if public else "peer_only"):
                 return None
-            return model_view(view, topic)
+            return model_view(view, topic, ranked, self.recent_evidence.get((body, peer_type, peer_id, public)))
         except (KeyError, TypeError):
             return None

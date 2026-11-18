@@ -9,7 +9,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.bukkit.Bukkit;
@@ -22,7 +24,7 @@ final class NpcSocial {
     private final PaperVoicePlugin plugin;
     private final NpcConversations residents;
     private final Path root;
-    private record Pending(Player player, long at) {}
+    private record Pending(Player player, long at, UUID world, Set<Player> audience, boolean automatic) {}
     private final Map<UUID, Pending> pending = new HashMap<>();
     private final AtomicBoolean polling = new AtomicBoolean();
 
@@ -164,11 +166,32 @@ final class NpcSocial {
     }
 
     UUID queue(UUID body, Player speaker, String message, boolean privateDialogue) throws IOException {
+        return enqueue(body,speaker,message,privateDialogue?"private":"public",null,false);
+    }
+
+    boolean natural(NpcDialoguePolicy.Profile profile, Player speaker, String message, String scope, Set<UUID> viewers) {
+        try {
+            if(ready(profile.id())==null)return false;
+            Set<Player> audience=new HashSet<>();
+            for(UUID viewer:viewers){
+                Player current=Bukkit.getPlayer(viewer);
+                if(current!=null)audience.add(current);
+            }
+            enqueue(profile.id(),speaker,message,scope,Set.copyOf(audience),true);
+        }catch(IllegalArgumentException busy){
+            // The explicitly addressed resident already owns this dialogue lane.
+        }catch(IOException unavailable){
+            plugin.getLogger().fine("NPC natural dialogue could not be saved: "+unavailable.getClass().getSimpleName());
+        }
+        return true;
+    }
+
+    private UUID enqueue(UUID body, Player speaker, String message, String scope, Set<Player> audience, boolean automatic) throws IOException {
         var entity = residents.live(body);
         if (!Bukkit.isPrimaryThread() || Bukkit.getPlayer(speaker.getUniqueId()) != speaker || ready(body) == null
                 || entity == null || body.equals(speaker.getUniqueId()))
             throw new IllegalArgumentException("居民对话暂不可用");
-        if (!privateDialogue && !residents.hears(speaker, entity, residents.profile(body)))
+        if (!scope.equals("private") && !residents.hears(speaker, entity, residents.profile(body)))
             throw new IllegalArgumentException("请靠近居民并退出旁观模式");
         if (message.isBlank() || message.codePointCount(0, message.length()) > 400
                 || message.codePoints().anyMatch(cp -> Character.isISOControl(cp) || cp == 0xA7))
@@ -185,11 +208,11 @@ final class NpcSocial {
         row.addProperty("maidId", body.toString());
         row.addProperty("speakerId", speaker.getUniqueId().toString());
         row.addProperty("message", message);
-        row.addProperty("channel", privateDialogue ? "private" : "public");
+        row.addProperty("channel", scope);
         row.addProperty("at", now);
         row.addProperty("status", "accepted");
         write(directory(body).resolve(request + "-request.json"), row);
-        pending.put(request, new Pending(speaker, now));
+        pending.put(request, new Pending(speaker, now, speaker.getWorld().getUID(), audience, automatic));
         return request;
     }
 
@@ -228,7 +251,7 @@ final class NpcSocial {
                 || !request.toString().equals(value(submitted, "id"))
                 || !"accepted".equals(value(submitted, "status")) || !"1".equals(value(submitted, "schemaVersion"))
                 || !"social_dialogue".equals(value(submitted, "kind"))
-                || !java.util.Set.of("private", "public").contains(value(submitted, "channel"))) return;
+                || !Set.of("private", "public", "nearby").contains(value(submitted, "channel"))) return;
         Path result = folder.resolve(request + "-result.json");
         Path sending = folder.resolve(request + "-sending.json");
         if (Files.exists(result) || Files.exists(sending)) return;
@@ -242,20 +265,24 @@ final class NpcSocial {
         boolean privateDialogue = "private".equals(value(submitted, "channel"));
         if (source != null && Bukkit.getPlayer(source.player().getUniqueId()) == source.player()
                 && source.player().getUniqueId().toString().equals(value(submitted, "speakerId"))
+                && (!source.automatic() || source.world().equals(source.player().getWorld().getUID()))
                 && System.currentTimeMillis() - source.at() <= REPLY_WINDOW_MS) {
             String reply = value(answer, "reply");
             boolean valid = "prepared".equals(value(answer, "status")) && !reply.isBlank() && reply.codePointCount(0, reply.length()) <= 140
                     && reply.codePoints().noneMatch(cp -> Character.isISOControl(cp) || cp == 0xA7);
             var body = residents.live(profile.id());
-            if (valid && (privateDialogue || residents.hears(source.player(), body, profile))) {
-                if (privateDialogue) source.player().sendMessage("[私聊] " + profile.name() + "：" + reply);
-                else for (Player nearby : body.getWorld().getPlayers()) {
-                    if (residents.hears(nearby, body, profile)) nearby.sendMessage("[居民] " + profile.name() + "：" + reply);
+            if (valid && (privateDialogue && !source.automatic() || residents.hears(source.player(), body, profile))) {
+                String line=(privateDialogue && !source.automatic() ? "[私聊] " : "[居民] ")
+                    +(source.automatic()?profile.display():profile.name())+"："+reply;
+                source.player().sendMessage(line);
+                if(!privateDialogue) for (Player nearby : body.getWorld().getPlayers()) {
+                    if (nearby!=source.player() && (source.audience()==null||source.audience().stream().anyMatch(captured->captured==nearby))
+                            && residents.hears(nearby, body, profile)) nearby.sendMessage(line);
                 }
                 submitted.addProperty("status", "answered");
                 submitted.addProperty("reply", reply);
                 submitted.addProperty("completedAt", System.currentTimeMillis());
-            } else source.player().sendMessage(profile.name() + "暂时无法回复。");
+            } else if(!source.automatic()) source.player().sendMessage(profile.name() + "暂时无法回复。");
         }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try { write(target, submitted); }

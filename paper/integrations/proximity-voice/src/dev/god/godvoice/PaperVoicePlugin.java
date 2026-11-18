@@ -278,6 +278,12 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private static boolean validVoice(String voice){return voice!=null&&voice.matches("[A-Za-z0-9_.-]{1,96}");}
     /** Server-only bridge: exact registered body and owner, never a client-selected voice identity. */
     public String npcVoiceProfiles(){return npcs==null?"[]":npcs.catalogue().toString();}
+    boolean naturalNpcDialogue(NpcDialoguePolicy.Profile profile,Player speaker,String text,String scope,Set<UUID> recipients){
+        return social!=null&&social.natural(profile,speaker,text,scope,recipients);
+    }
+    public boolean acceptNaturalMaidChat(Player speaker,String text,Set<UUID> recipients){
+        return npcs!=null&&npcs.naturalMaidChat(speaker,text,recipients);
+    }
     public String npcRelationship(UUID body, UUID speaker, boolean privateView) throws java.io.IOException {
         if (!Bukkit.isPrimaryThread() || social == null) return null;
         var row = social.view(body, speaker, privateView);
