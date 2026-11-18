@@ -60,12 +60,16 @@ final class WeaponEngravings implements Listener {
         }
 
         List<String> hints() {
-            if (this == ARCANE_EDGE) return List.of("右键 · 回响打击；8魔力、22秒冷却",
-                "潜行右键 · 法术反制；9魔力、24秒冷却","职业Lv.3起，主手持有即可使用对应刻印");
+            if (this == ARCANE_EDGE) return List.of("18 种组合，每把至少有回响打击或法术反制",
+                "命中位：圣愈、饱食、暗处夜视之一",
+                "右键：回响、星芒箭或霜环",
+                "潜行右键：反制、闪现、霜环或羽落",
+                "重刻会换组合，技能费用及冷却按原规则");
             if (binding == null) return List.of("从通用技和本人已学职业技抽取三个不同技能",
                     "普攻命中位抽取恢复或夜视，右键和潜行右键各抽一项主动技");
             return lines(binding, Map.of());
         }
+        boolean rolls(){return binding==null||this==ARCANE_EDGE;}
         int levels(){return this==ARCANE_EDGE?15:LEVELS;}
         int lapis(){return this==ARCANE_EDGE?6:LAPIS;}
         String cost(){return levels()+" 经验等级 + "+lapis()+" 青金石";}
@@ -121,10 +125,13 @@ final class WeaponEngravings implements Listener {
     }
 
     ItemStack engraved(Player player, ItemStack original, Preset preset) {
-        if (preset.binding != null) return engrave(original, preset.binding, preset, Map.of());
+        if (preset == Preset.ARCANE_EDGE)
+            return engrave(original, WeaponSkillRolls.rollArcane(binding(original), ThreadLocalRandom.current()), preset, Map.of());
+        if (!preset.rolls()) return engrave(original, preset.binding, preset, Map.of());
         var known = new java.util.LinkedHashMap<String, String>();
         var rpg = plugin.nativeRpg();
-        if (rpg.selected()) rpg.classSpells(rpg.state(player)).forEach(spell -> known.put(spell.id(), spell.name()));
+        if (rpg.selected()) rpg.classSpells(rpg.state(player)).stream().filter(spell->!spell.source().equals("weapon"))
+            .forEach(spell->known.put(spell.id(),spell.name()));
         Binding next = WeaponSkillRolls.roll(List.copyOf(known.keySet()), binding(original), ThreadLocalRandom.current());
         return engrave(original, next, preset, known);
     }
@@ -145,6 +152,11 @@ final class WeaponEngravings implements Listener {
         Binding binding = binding(item);
         return binding == null ? "" : " weaponHit=" + binding.hit() + " weaponUse=" + binding.use()
                 + " weaponSneakUse=" + binding.sneakUse();
+    }
+
+    String describe(ItemStack item) {
+        Binding binding=binding(item);
+        return binding==null?"":String.join(" / ",lines(binding,Map.of()).subList(0,3));
     }
 
     private ItemStack engrave(ItemStack original, Binding binding, Preset preset, Map<String, String> known) {

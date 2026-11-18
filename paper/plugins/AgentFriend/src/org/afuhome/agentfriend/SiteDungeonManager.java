@@ -67,7 +67,7 @@ final class SiteDungeonManager implements Listener {
         final Map<Integer,Set<UUID>> roomAttendance=new LinkedHashMap<>();
         int attempt,resets,failures;String pauseReason="",lastResetReason="";long lastResetAt,retryReadyAt;
         Location checkpoint;int checkpointRoom=1;boolean retryLoading,storageFault;
-        boolean altarTactics;
+        boolean altarTactics, enemyMoves;
         AltarPoison poison;
         final Map<UUID,DungeonWaveCatalog.Enemy> mobs=new LinkedHashMap<>();final Set<Chunk> held=new HashSet<>();
         final Map<UUID,Long> hits=new HashMap<>();
@@ -729,6 +729,7 @@ final class SiteDungeonManager implements Listener {
         require(receiptCount()<1024,"pending_receipt_capacity");
         if(!loadout(p,"start",s))return;
         Run r=new Run(s,mode);r.altarTactics=s.id.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled();
+        r.enemyMoves=s.id.equals("undead_crypt")&&plugin.dungeonEnemyMoves().enabled();
         r.checkpoint=p.getLocation().clone();r.party.add(p.getUniqueId());r.attendance.put(p.getUniqueId(),0);runs.put(s.id,r);
         try{persist();}catch(RuntimeException failure){runs.remove(s.id);throw failure;}
         reconcile(r);
@@ -779,6 +780,9 @@ final class SiteDungeonManager implements Listener {
         fields.put("combatBounds",Map.of("world",r.site.world,"min",List.of(target.x+.5-target.radius-2,target.y-3,target.z+.5-target.radius-2),"max",List.of(target.x+.5+target.radius+2,target.y+3,target.z+.5+target.radius+2)));
         if(r.poison!=null&&companionCombatPosition(r,p,p.getLocation())){
             var hazard=r.poison.observation(System.currentTimeMillis());if(!hazard.isEmpty())fields.put("hazard",hazard);
+        }
+        if(r.enemyMoves&&companionCombatPosition(r,p,p.getLocation())){
+            var moves=plugin.dungeonEnemyMoves().hazards(p);if(!moves.isEmpty())fields.put("enemyMoves",moves);
         }
         Map<String,Object> previousOutcome=r.party.contains(p.getUniqueId())?Map.of():lastOutcome(p.getUniqueId(),r.site.id);
         lifecycle(fields,r,p,previousOutcome);
@@ -986,9 +990,18 @@ final class SiteDungeonManager implements Listener {
                 String enemyName=spec.name().isEmpty()?(mob.getCustomName()==null?mob.getType().name():ChatColor.stripColor(mob.getCustomName())):spec.name();
                 mob.setCustomName("§c"+r.site.name+" · "+enemyName);mob.setCustomNameVisible(true);
                 r.mobs.put(mob.getUniqueId(),spec);
+                if(r.enemyMoves&&r.stage==r.site.rooms.size()-1&&spec.type()==EntityType.VINDICATOR&&spec.name().equals("亡骸守墓者"))
+                    registerGraveCleave(r,room,mob);
             }
             r.phase="fighting";r.invalid=false;r.attempt++;observeRoom(r);persist();notice(r,"§c"+room.name+"："+room.enemies.size()+"个标记敌人（本室第"+r.attempt+"次出怪）。在室内参战、实际命中或援助队友会记录；不要求最后一刻留在室内。");
         }catch(RuntimeException e){clean(r);r.phase="moving";throw e;}
+    }
+    private void registerGraveCleave(Run r,Room room,Mob mob){
+        var scope=new DungeonEnemyMoves.Scope(
+            ()->runs.get(r.site.id)==r&&r.room()==room&&r.phase.equals("fighting")&&r.pausedAt==0&&r.fault.isEmpty()
+                &&!r.invalid&&r.mobs.containsKey(mob.getUniqueId()),
+            ()->present(r).stream().filter(p->room.contains(p.getLocation())).toList(),room::contains);
+        plugin.dungeonEnemyMoves().register(mob,DungeonEnemyMoves.Move.GRAVE_CLEAVE,scope);
     }
     private void tickAltar(Run r,List<Player> present,long now){
         if(!r.altarTactics||r.stage!=r.site.rooms.size()-1||!plugin.nativeRpg().healingCircleEnabled())return;
@@ -1103,6 +1116,7 @@ final class SiteDungeonManager implements Listener {
                 saved.put("id",r.id);saved.put("mode",r.mode.id);saved.put("definition",definition(r.site));saved.put("stage",r.stage);saved.put("phase",r.phase);saved.put("fault",r.fault);saved.put("started",r.started);saved.put("pausedAt",r.pausedAt);saved.put("faultPausedMillis",r.faultPausedMillis);saved.put("party",r.party.stream().map(UUID::toString).toList());
                 saved.put("declined",r.declined.stream().map(UUID::toString).toList());
                 if(r.altarTactics)saved.put("altarTactics",true);
+                if(r.enemyMoves)saved.put("enemyMoves",true);
                 Map<String,Integer> attendance=new LinkedHashMap<>();r.attendance.forEach((id,count)->attendance.put(id.toString(),count));saved.put("attendance",attendance);plugin.getConfig().createSection(path,saved);
                 Map<String,List<String>> roomAttendance=new LinkedHashMap<>();r.roomAttendance.forEach((stage,ids)->roomAttendance.put(stage.toString(),ids.stream().map(UUID::toString).toList()));
                 plugin.getConfig().set(path+".roomAttendance",roomAttendance);plugin.getConfig().set(path+".attempt",r.attempt);plugin.getConfig().set(path+".resets",r.resets);
@@ -1125,6 +1139,7 @@ final class SiteDungeonManager implements Listener {
         for(String id:saved.getKeys(false))try{
             Site site=site(id);var c=saved.getConfigurationSection(id);Run r=new Run(site,Mode.parse(c.getString("mode","normal")));
             r.altarTactics=id.equals(AltarPoison.SITE)&&c.getBoolean("altarTactics",false);
+            r.enemyMoves=id.equals("undead_crypt")&&c.getBoolean("enemyMoves",false);
             r.id=c.getString("id",r.id);UUID.fromString(r.id);
             require(definition(site).equals(c.getString("definition")),"definition_changed_checkpoint_preserved");
             r.stage=c.getInt("stage");require(r.stage>=0&&r.stage<=site.rooms.size(),"invalid_checkpoint");r.started=c.getLong("started");

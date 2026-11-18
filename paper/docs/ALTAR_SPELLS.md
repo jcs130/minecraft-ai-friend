@@ -9,7 +9,15 @@
 | 回响打击 | 骑士 Lv.5、2 学习点，或使用对应刻印 | 8 | 22 秒 | 手持剑或斧发动，6 秒内下一次有效近战命中可追加回响。基础追击取原命中伤害的 50%，最多 4 点 |
 | 缚足箭 | 游侠 Lv.4、1 学习点 | 7 | 20 秒 | 手持弓或弩蓄势，6 秒内射出的下一箭若实际命中敌怪，施加 3 秒缓慢 II。最多影响一个目标 |
 
-魔剑组合可在现有附魔台刻印页购买，费用为 15 级原版经验和 6 青金石。右键是回响，潜行右键是反制。学习点只用在永久学招。以 20 点基础魔力作例，单体控制占 35%，追击伤害占 40%，打断首领占 45%，持续治疗占 50%。单个成功效果的耗魔和冷却按技能 ID 计算，换装不会重置。角色沿用 Vortex 的成长、基础恢复和魔力上限。成功蓄势后若没打中，仍然支付蓄势费用。
+魔剑可在附魔台刻印，每次消耗 15 级原版经验和 6 个青金石。刻印从 18 种有效组合中等概率抽取。三个触发位各不相同，每把至少带回响打击或法术反制。重刻从其他组合中等概率抽取，旧武器继续使用原有刻印。获得或重刻后，在武器说明中查看实际结果。
+
+| 触发 | 可出现的技能 |
+| --- | --- |
+| 近战命中 | 圣愈术、饱食术、夜视术 |
+| 右键 | 回响打击、星芒箭、霜环术 |
+| 潜行右键 | 法术反制、闪现术、霜环术、羽落术 |
+
+命中技能还会检查是否需要回血、恢复饱食或补夜视。学习点只用在永久学招，刻印技能沿用释放条件。以 20 点基础魔力作例，单体控制占 35%，追击伤害占 40%，打断首领占 45%，持续治疗占 50%。单个成功效果的耗魔和冷却按技能 ID 计算，换装不会重置。角色沿用 Vortex 的成长、基础恢复和魔力上限。成功蓄势后若没打中，仍然支付蓄势费用。
 
 | 职业定位 | 现有可接的玩法与后续扩充方向 |
 | --- | --- |
@@ -37,4 +45,8 @@ enchanted-combat-spells:
 
 现有 `mc_qiandengji state` 可读本人 `mcagent:state`。`abilities` 列出技能与装备来源，`profession.healingCircle.suggestion` 给出当前落点与 `invocation`。施放后从 `profession.healingCircle.effects` 查询同一 `requestId` 的实际回血。缺少可用落点时，先观察站位或用现有单体回复技能。
 
-治愈之环参考了 [Iron’s Spells ’n Spellbooks 的治疗法术](https://github.com/iron431/irons-spells-n-spellbooks/blob/1.21/src/main/java/io/redspace/ironsspellbooks/api/registry/SpellRegistry.java)。千灯纪的施法、职业档案与资源结算由 Vortex 负责。
+## 铁魔法与基础技能
+
+圣愈术适合参考铁魔法 Heal 的即时自疗表现。治愈之环仍承担牧师的范围持续治疗。星芒箭承担低耗单体输出，后续可用 Magic Missile 的清晰弹道表达这个定位。Ray of Frost 可作为独立的瞄准冻结法术，保留霜环的范围控制与灭火用途。 [Heal 源码](https://github.com/iron431/irons-spells-n-spellbooks/blob/1.21/src/main/java/io/redspace/ironsspellbooks/spells/holy/HealSpell.java) · [Magic Missile 源码](https://github.com/iron431/irons-spells-n-spellbooks/blob/1.21/src/main/java/io/redspace/ironsspellbooks/spells/ender/MagicMissileSpell.java) · [Ray of Frost 源码](https://github.com/iron431/irons-spells-n-spellbooks/blob/1.21/src/main/java/io/redspace/ironsspellbooks/spells/ice/RayOfFrostSpell.java)
+
+公共技能沿用 Vortex 的技能 ID、学习档案、魔力、冷却和回执。原生铁魔法书和法杖由 NeoForge 桥接入，按各自的原生法术结算。上线公共版之前，应验证普通 Java、基岩手柄、Mineflayer、Numen 和女仆身体都能通过现有入口取得真实效果回执。归乡、支援传送和闪现仍使用千灯纪的落点与权限判定。 [现有原生铁魔法桥](../../docs/IRONS-NATIVE-BRIDGE.md)

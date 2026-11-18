@@ -232,6 +232,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private long nextWaveAt;
     private long lastRun;
     private DungeonManager dungeon;
+    private DungeonEnemyMoves dungeonEnemyMoves;
     private TrialEntranceControls trialButtons;
     private GuildManager guild;
     private DailyBoardManager dailyBoard;
@@ -271,6 +272,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if(cliRecovery!=null)cliRecovery.reject(player,args,"UNKNOWN_SKILL","该技能ID不在当前Vortex配置中，请核对相近用法");
     }
     NativeRpg nativeRpg(){return nativeRpg;}
+    DungeonEnemyMoves dungeonEnemyMoves(){return dungeonEnemyMoves;}
     InventoryTidy inventoryTidy(){return inventoryFeedback.tidy();}
     /** Only typed, server-owned buttons reach here; existing commands keep their own authority. */
     void executePlayerMenuAction(Player p,AdventureMenuModel.Action action,String payload){
@@ -433,6 +435,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         getCommand("mycli").setExecutor(this);
         getCommand("mycli").setTabCompleter(this);
         weaponEngravings = new WeaponEngravings(this, imprintSpellKey);
+        dungeonEnemyMoves = new DungeonEnemyMoves(this);
         dungeon = new DungeonManager(this);
         trialSharedSupplies = new TrialSharedSupplies(this);
         trialButtons = new TrialEntranceControls(this);
@@ -514,6 +517,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (dungeonEnemyMoves != null) dungeonEnemyMoves.shutdown();
         if(npcEntityReadiness!=null)npcEntityReadiness.close();
         if(cliRecovery!=null)cliRecovery.close();
         if (combatRpg != null) combatRpg.close();
@@ -2451,7 +2455,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (!nearEnchantingTable(player)) {
             player.sendMessage("§e请走到附魔台 4 格内再刻印。"); return;
         }
-        if (preset.binding != null && weaponEngravings.preset(sword) == preset) {
+        if (!preset.rolls() && weaponEngravings.preset(sword) == preset) {
             player.sendMessage("§e此剑已带有" + preset.title + "刻印，本次免费。"); return;
         }
         ItemStack lapis = new ItemStack(Material.LAPIS_LAZULI, preset.lapis());
@@ -2466,7 +2470,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         player.getInventory().setItemInMainHand(engraved);
         player.playSound(player.getLocation(), Sound.BLOCK_ENCHANTMENT_TABLE_USE, 0.8f, 1.2f);
-        player.sendMessage("§d已镌刻" + preset.title + "。将鼠标移到物品上查看操作。");
+        player.sendMessage("§d已镌刻" + preset.title + "。" + weaponEngravings.describe(engraved));
+        if (player.getListeningPluginChannels().contains(AgentStatePublisher.CHANNEL))
+            player.sendMessage("MC_WEAPON_ENGRAVING preset=" + preset.id + weaponEngravings.receipt(engraved));
     }
 
     DungeonLoot.Bonus engraveTrialReward(Player player, DungeonLoot.Bonus bonus, int floor) {
