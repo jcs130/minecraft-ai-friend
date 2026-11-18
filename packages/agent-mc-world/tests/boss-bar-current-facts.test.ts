@@ -1,9 +1,53 @@
 import { describe, expect, it, vi } from 'vitest';
 import { methodHarness } from './method-harness.ts';
 import { structuredVisual } from '../src/client/visual.ts';
-import { readBossBarHud } from '../src/client/index.ts';
+import { bossBarChange, EventCondenser, readBossBarHud, type BossBarReading } from '../src/client/index.ts';
+
+describe('event admission for one observer', () => {
+  const read = (title: string, id = 'a', progress = 0.4): BossBarReading => ({ title, id, progress, kind: 'status' });
+  it('keeps a watched deadline and a timer reset, while preserving objective and coordinate changes', () => {
+    const countdown = (t: string) => read('采集 1/5｜剩余约' + t);
+    expect(bossBarChange(countdown('03:00'), countdown('02:50'))).toBeNull();
+    expect(bossBarChange(countdown('00:20'), countdown('00:10'))).toBe('deadline');
+    expect(bossBarChange(countdown('02:50'), countdown('02:40'), 160)).toBe('deadline');
+    expect(bossBarChange(countdown('00:20'), countdown('03:00'))).toBe('timer-restarted');
+    expect(bossBarChange(countdown('00:20'), read('采集 2/5｜剩余约00:19'))).toBe('stage');
+    expect(bossBarChange(read('落点 X=12:34'), read('落点 X=12:33'))).toBe('stage');
+    expect(bossBarChange(read('Remaining: 02:00'), read('Remaining: 01:59'))).toBeNull();
+    expect(bossBarChange(read('A 剩余01:00 B 剩余00:20'), read('A 剩余00:59 B 剩余00:19'))).toBe('stage');
+  });
+  it('keeps distinct native milestones and returns only unread events for a zero-history request', () => {
+    const events = new EventCondenser();
+    const base = { source: 'minecraft', type: 'minecraft.event', ts: '2026-01-01T00:00:00Z', origin: 'external' as const };
+    for (const cursor of [1, 2, 3]) {
+      events.push([{ ...base, cursor, text: '[Minecraft] Cave | 2:10 状态条进度为 50%。',
+        meta: { bossBar: { id: String(cursor), reason: 'progress' } } }]);
+    }
+    expect(events.view().map(e => e.cursor)).toEqual([1, 2, 3]);
+    expect(events.since(2, 0).map(e => e.cursor)).toEqual([3]);
+    expect(events.since(3, 0)).toEqual([]);
+  });
+});
 
 describe.each(['1.21.1', '1.20.6'])('current server HUD %s', version => {
+  it('delays an empty add until a named observation and admits semantic changes at packet ingress', () => {
+    const r = methodHarness(version);
+    try {
+      const emit = vi.spyOn(r.world as never as { emit(...args: unknown[]): unknown }, 'emit').mockImplementation(() => undefined);
+      (r.world as never as { hookBotEvents(bot: unknown): void }).hookBotEvents(r.bot);
+      const bar = { entityUUID: 'activity', title: { text: '' }, health: 1 };
+      Object.assign(r.bot, { bossBars: { activity: bar } });
+      r.bot.emit('bossBarCreated', bar);
+      expect(emit).not.toHaveBeenCalled();
+      for (const [title, health] of [['03:00', 1], ['02:50', .95], ['02:50', .75], ['02:40', .75], ['00:10', .75]] as const) {
+        bar.title.text = '活动｜剩余约' + title; bar.health = health; r.bot.emit('bossBarUpdated', bar);
+      }
+      r.bot.emit('bossBarDeleted', bar);
+      r.bot.emit('bossBarDeleted', bar);
+      expect(emit.mock.calls.map(call => (call[3] as { meta: {bossBar: { reason: string }} }).meta.bossBar.reason))
+        .toEqual(['appeared', 'progress', 'deadline', 'removed']);
+    } finally { r.close(); }
+  });
   it('keeps countdown ticks in current HUD facts without burying player or audience input in per-second events', () => {
     const r = methodHarness(version);
     try {

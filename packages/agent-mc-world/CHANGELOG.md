@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.103
+
+The event stream distinguishes named HUD bars, stage changes, progress bands, countdown restarts, deadlines and removal. Localized countdown samples remain available in current facts. SDK readers can compare a particular bar against a task-specific deadline or request a strictly unread event tail.
+
 ## 0.5.7-rc.160-preview.102
 
 Toss now reports a focused inventory lookup for unmatched selectors. It suggests a registry ID and pick only when the action would select one matching stack. Explicit unsupported slot selectors reject the entire batch before execution.
