@@ -15,7 +15,7 @@ const observation = z.strictObject({
 });
 const candidateSchema = z.strictObject({id:key, revision:digest, expectedTargets:z.number().int().min(0).max(8),
   expectedAllies:z.number().int().min(0).max(8), cost:amount, priority:z.number().int().min(1).max(3),
-  effect:z.enum(['single_target','single_target_with_bleed','group_damage','group_damage_and_heal'])});
+  effect:z.enum(['single_target','single_target_with_bleed','group_damage','group_damage_and_heal','group_heal'])});
 const frameSchema = z.strictObject({scope:scopeSchema, run:key, sceneId:digest, dimension:key,
   goal:z.enum(['guard','heal']), rangeBand:z.number().int().min(0).max(2), threatType:key,
   threatCount:z.number().int().min(0).max(8), injuredAllies:z.number().int().min(0).max(8),

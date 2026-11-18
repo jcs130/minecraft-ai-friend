@@ -21,6 +21,11 @@ public final class RpgFailure {
             return new Advice("cooldown","技能冷却中"+(left==null?"":"，还需约"+((left+999)/1000)+"秒")+"；结束后再施放，不连续重试",skill,"not_executed",left);
         }
         if(lower.contains("no_valid_target")||lower.contains("no valid target"))return a("no_valid_target","范围内没有符合技能条件的目标；本次未命中，已撤销耗魔与冷却；先靠近可见敌人再施放",skill,"rolled_back");
+        if(lower.startsWith("[circle_invalid_ground]"))return a("circle_invalid_ground","重新瞄准同场次12格内可见地面",skill,"rolled_back");
+        if(lower.startsWith("[no_interruptible_cast]"))return a("no_interruptible_cast","等10格内可见祭仪师出现黄圈读条，再使用反制",skill,"rolled_back");
+        if(lower.startsWith("[melee_weapon_required]"))return a("melee_weapon_required","主手持剑或战斧再发动回响",skill,"rolled_back");
+        if(lower.startsWith("[ranged_weapon_required]"))return a("ranged_weapon_required","主手持弓或弩再发动缚足箭",skill,"rolled_back");
+        if(lower.startsWith("[weapon_skill_unavailable]"))return a("weapon_skill_unavailable","学习本职技能，或在Lv.3后主手装备对应刻印",skill,"rolled_back");
         if(raw.contains("魔力不足")||lower.contains("not enough mana")||lower.contains("insufficient mana"))return a("insufficient_mana","魔力不足，本次未施放；等待恢复并核对当前魔力与技能费用","/mycli status","not_executed");
         if(lower.contains("requires level")||raw.contains("需要等级")||lower.startsWith("reach level")){
             Matcher m=Pattern.compile("(?:level |等级[：:]?\\s*)([0-9]+)").matcher(raw);return a("level_required","等级不足"+(m.find()?"，需要Lv."+m.group(1):"")+"；先完成当前等级的讨伐或探索任务，未花学习点","/mycli tasks list","not_executed");

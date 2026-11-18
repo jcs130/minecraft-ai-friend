@@ -2018,6 +2018,11 @@ final class DungeonManager implements Listener {
 
     private String rescueKey() { return "tower:" + runId; }
     String challengeContext(UUID id) { return active&&participants.contains(id)?rescueKey()+":"+floor:""; }
+    boolean circleRoom(Player player, Location ground) {
+        return isParticipant(player) && pausedAt == 0 && spawned && !cleared
+            && floorAt(player.getLocation()) == floor && floorAt(ground) == floor;
+    }
+    boolean activeCircleRoom(Location ground) { return active && floorAt(ground) == floor; }
     private boolean waveCleared() {
         return cleared || spawned && mobs.stream().noneMatch(uuid -> {
             Entity e = Bukkit.getEntity(uuid); return e instanceof LivingEntity l && e.isValid() && !l.isDead();

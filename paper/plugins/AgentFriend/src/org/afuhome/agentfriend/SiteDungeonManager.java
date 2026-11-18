@@ -67,6 +67,8 @@ final class SiteDungeonManager implements Listener {
         final Map<Integer,Set<UUID>> roomAttendance=new LinkedHashMap<>();
         int attempt,resets,failures;String pauseReason="",lastResetReason="";long lastResetAt,retryReadyAt;
         Location checkpoint;int checkpointRoom=1;boolean retryLoading,storageFault;
+        boolean altarTactics;
+        AltarPoison poison;
         final Map<UUID,DungeonWaveCatalog.Enemy> mobs=new LinkedHashMap<>();final Set<Chunk> held=new HashSet<>();
         final Map<UUID,Long> hits=new HashMap<>();
         int stage;String phase="muster",fault="";long started=System.currentTimeMillis(),readyAt=started+10_000,pausedAt,faultPausedMillis,storageRetryAt;int storageRetryAttempts;boolean invalid;
@@ -207,6 +209,13 @@ final class SiteDungeonManager implements Listener {
     }
     private String rescueKey(Run r){return "site:"+r.id;}
     String challengeContext(UUID id){Run r=runs.values().stream().filter(run->run.party.contains(id)).findFirst().orElse(null);return r==null?"":rescueKey(r)+":"+r.stage+":"+r.attempt;}
+    String circleScene(Player p,Location ground){
+        for(Run r:runs.values())if(companionCombatPosition(r,p,ground))return rescueKey(r)+":"+r.stage+":"+r.attempt;
+        return null;
+    }
+    boolean activeCircleSite(Location ground){return runs.values().stream().anyMatch(r->r.site.contains(ground));}
+    private static String circleProof(UUID id){return ROOT+".healing-circle-proofs."+id;}
+    boolean circleReward(UUID id){return plugin.getConfig().isString(circleProof(id));}
     TrialRescueManager.Team rescueTeam(UUID id){
         Run r=runs.values().stream().filter(run->run.party.contains(id)).findFirst().orElse(null);if(r==null)return null;
         return new TrialRescueManager.Team(rescueKey(r),Set.copyOf(r.party),r.site::contains,r.pausedAt>0||!r.fault.isEmpty(),
@@ -719,7 +728,8 @@ final class SiteDungeonManager implements Listener {
         require(System.currentTimeMillis()-plugin.getConfig().getLong(ROOT+".cooldowns."+s.id,0)>=120_000,"site_cooldown");
         require(receiptCount()<1024,"pending_receipt_capacity");
         if(!loadout(p,"start",s))return;
-        Run r=new Run(s,mode);r.checkpoint=p.getLocation().clone();r.party.add(p.getUniqueId());r.attendance.put(p.getUniqueId(),0);runs.put(s.id,r);
+        Run r=new Run(s,mode);r.altarTactics=s.id.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled();
+        r.checkpoint=p.getLocation().clone();r.party.add(p.getUniqueId());r.attendance.put(p.getUniqueId(),0);runs.put(s.id,r);
         try{persist();}catch(RuntimeException failure){runs.remove(s.id);throw failure;}
         reconcile(r);
         runResult(p,"start",s.id,r.id);tell(r,"§6"+s.name+"〔"+mode.label+"〕10秒后开始；遗迹内达标的玩家与Agent自动同队，目前"+r.party.size()+"人。中途可加入、离开，已参战的房间保留，通关奖励会给每位真实参战者生成凭据。致命伤害先倒地，队友靠近4格停留10秒救援，清室也可复活。单人或全队战败返回存档点，第三次战败才结束；时限30分钟，全员离场宽限5分钟，故障和断线不扣次数。无需建立或修改日常队伍。");
@@ -767,6 +777,9 @@ final class SiteDungeonManager implements Listener {
         List<String> pending=pendingSites(p.getUniqueId());fields.put("pendingRewards",pending);
         fields.put("pendingRewardDetails",pending.stream().map(s->pendingReward(p.getUniqueId(),s)).toList());
         fields.put("combatBounds",Map.of("world",r.site.world,"min",List.of(target.x+.5-target.radius-2,target.y-3,target.z+.5-target.radius-2),"max",List.of(target.x+.5+target.radius+2,target.y+3,target.z+.5+target.radius+2)));
+        if(r.poison!=null&&companionCombatPosition(r,p,p.getLocation())){
+            var hazard=r.poison.observation(System.currentTimeMillis());if(!hazard.isEmpty())fields.put("hazard",hazard);
+        }
         Map<String,Object> previousOutcome=r.party.contains(p.getUniqueId())?Map.of():lastOutcome(p.getUniqueId(),r.site.id);
         lifecycle(fields,r,p,previousOutcome);
         if(!r.party.contains(p.getUniqueId())){fields.put("lastOutcome",previousOutcome);fields.put("outcomeKnown",!previousOutcome.isEmpty());}
@@ -884,6 +897,8 @@ final class SiteDungeonManager implements Listener {
                 if(nearest!=null){mob.setTarget(ResidentCli.living(nearest));if(!r.room().contains(mob.getLocation())){Location safe=safeSpots(r).stream().filter(l->l.distanceSquared(nearest.getLocation())>=9).findFirst().orElse(null);if(safe!=null)mob.teleport(safe);}}
             }
             if(r.invalid)continue;
+            tickAltar(r,present,timestamp);
+            if(runs.get(r.site.id)!=r)continue;
             if(r.mobs.isEmpty()){
                 Set<UUID> credited=new LinkedHashSet<>(r.roomParticipants);credited.retainAll(r.attendance.keySet());
                 r.roomAttendance.put(r.stage,Set.copyOf(credited));
@@ -975,9 +990,37 @@ final class SiteDungeonManager implements Listener {
             r.phase="fighting";r.invalid=false;r.attempt++;observeRoom(r);persist();notice(r,"§c"+room.name+"："+room.enemies.size()+"个标记敌人（本室第"+r.attempt+"次出怪）。在室内参战、实际命中或援助队友会记录；不要求最后一刻留在室内。");
         }catch(RuntimeException e){clean(r);r.phase="moving";throw e;}
     }
+    private void tickAltar(Run r,List<Player> present,long now){
+        if(!r.altarTactics||r.stage!=r.site.rooms.size()-1||!plugin.nativeRpg().healingCircleEnabled())return;
+        Mob boss=altarBoss(r);
+        if(boss==null){r.poison=null;return;}
+        if(r.poison==null)r.poison=new AltarPoison();
+        r.poison.tick(boss,present.stream().filter(p->r.room().contains(p.getLocation())&&plugin.nativeRpgMayAct(p)).toList(),now);
+    }
+    private Mob altarBoss(Run r){
+        for(var enemy:r.mobs.entrySet()){
+            if(!AltarPoison.BOSS.equals(enemy.getValue().mythic()))continue;
+            if(Bukkit.getEntity(enemy.getKey()) instanceof Mob living&&living.isValid()&&!living.isDead())return living;
+        }
+        return null;
+    }
+    boolean interruptAltar(Player caster,boolean apply){
+        Run r=runs.get(AltarPoison.SITE);
+        if(r==null||r.poison==null||!companionCombatPosition(r,caster,caster.getLocation()))return false;
+        Mob boss=altarBoss(r);
+        if(boss==null||caster.getLocation().distanceSquared(boss.getLocation())>100||!caster.hasLineOfSight(boss)
+                ||!r.poison.interrupt(System.currentTimeMillis(),apply))return false;
+        if(apply){
+            boss.getWorld().spawnParticle(Particle.ENCHANT,boss.getLocation().add(0,1,0),16,.2,.35,.2,.07);
+            notice(r,"§b祭仪师的毒藤读条已被打断。");
+        }
+        return true;
+    }
+
     private void complete(Run r){
         // A contribution belongs to its real UUID, even after departure or
         // disconnect. Snapshot once; receipt creation remains atomic/idempotent.
+        var newlyEligible=new ArrayList<Player>();
         for(UUID id:new LinkedHashSet<>(r.attendance.keySet())){
             if(r.attendance.getOrDefault(id,0)==0)continue;
             Player participant=ResidentCli.find(id);
@@ -985,17 +1028,32 @@ final class SiteDungeonManager implements Listener {
                     &&missingRooms(r,id).isEmpty()&&unverifiedRooms(r).isEmpty())
                 plugin.skillAssessments().siteCompleted(participant,r.site.id,r.id,r.started);
             String rewardDay=day();
-            if(rewardDay.equals(plugin.getConfig().getString(ROOT+".claimed."+id+"."+r.site.id))||receipt(id,r.site.id)!=null)continue;
             boolean bossParticipant=r.roomAttendance.getOrDefault(r.site.rooms.size()-1,Set.of()).contains(id);
-            atomic(()->{String path=ROOT+".receipts."+id+"."+r.site.id;plugin.getConfig().createSection(path,Map.of("day",rewardDay,"run",r.id,"started-at",r.started,"emeralds",r.site.emeralds*r.mode.reward,"item",r.site.bonus.name(),"count",r.site.bonusCount*r.mode.reward,"bossParticipant",bossParticipant));
-                if(r.site.conquestFloor>0&&bossParticipant)plugin.getConfig().set(ROOT+".conquest-proofs."+id+"."+r.site.conquestFloor,r.id);
+            boolean grantLoot=!rewardDay.equals(plugin.getConfig().getString(ROOT+".claimed."+id+"."+r.site.id))&&receipt(id,r.site.id)==null;
+            boolean grantCircle=r.altarTactics&&bossParticipant&&!circleReward(id)&&plugin.nativeRpg().healingCircleEnabled();
+            if(!grantLoot&&!grantCircle)continue;
+            atomic(()->{
+                if(grantLoot){
+                    String path=ROOT+".receipts."+id+"."+r.site.id;
+                    plugin.getConfig().createSection(path,Map.of("day",rewardDay,"run",r.id,"started-at",r.started,"emeralds",r.site.emeralds*r.mode.reward,"item",r.site.bonus.name(),"count",r.site.bonusCount*r.mode.reward,"bossParticipant",bossParticipant));
+                    if(r.site.conquestFloor>0&&bossParticipant)plugin.getConfig().set(ROOT+".conquest-proofs."+id+"."+r.site.conquestFloor,r.id);
+                }
+                if(grantCircle)plugin.getConfig().set(circleProof(id),r.id);
             });
-            Player p=ResidentCli.find(id);if(p!=null){
+            if(participant!=null&&grantCircle)newlyEligible.add(participant);
+            Player p=participant;if(p!=null&&grantLoot){
                 applyCompletion(p,r.site.id,receipt(id,r.site.id));
                 p.sendMessage("§6"+r.site.name+"已通关；你的真实参战记录已生成奖励，/mycli dungeon claim "+r.site.id+"领取到个人箱。无需返回首室，今日该处仅奖励一次。");
             }
         }
         end(r,"completed");
+        for(Player p:newlyEligible){
+            var circle=plugin.nativeRpg().state(p).getAsJsonObject("healingCircle");
+            if(circle==null||circle.get("learned").getAsBoolean())continue;
+            p.sendMessage("§a【翠藤古神祭坛】已取得治愈之环学习资格。打开本处结算菜单可免费学习并装入轮盘。");
+            if(!ResidentCli.isResident(p.getUniqueId())&&p.isOnline()&&r.party.contains(p.getUniqueId())
+                    &&p.getOpenInventory().getTopInventory().getType()==org.bukkit.event.inventory.InventoryType.CRAFTING)open(p,r.site.id);
+        }
     }
     private void applyCompletion(Player p,String id,ConfigurationSection saved){
         Site s=sites.get(id);if(saved==null||s==null)return;String run=saved.getString("run");
@@ -1004,7 +1062,7 @@ final class SiteDungeonManager implements Listener {
         if(s.conquestFloor>0&&boss&&plugin.combatRpg()!=null)plugin.combatRpg().formalClear(run,p,s.conquestFloor);
         if(s.conquestFloor==0||boss)plugin.nativeSiteCompleted(p,id,run);
     }
-    private void clean(Run r){for(var entry:new ArrayList<>(shots.entrySet()))if(entry.getValue().run==r){Entity e=Bukkit.getEntity(entry.getKey());if(e!=null)e.remove();shots.remove(entry.getKey());}for(UUID id:r.mobs.keySet()){Entity e=Bukkit.getEntity(id);if(e!=null)e.remove();}r.mobs.clear();r.hits.clear();r.roomParticipants.clear();for(Chunk c:r.held)c.removePluginChunkTicket(plugin);r.held.clear();}
+    private void clean(Run r){r.poison=null;for(var entry:new ArrayList<>(shots.entrySet()))if(entry.getValue().run==r){Entity e=Bukkit.getEntity(entry.getKey());if(e!=null)e.remove();shots.remove(entry.getKey());}for(UUID id:r.mobs.keySet()){Entity e=Bukkit.getEntity(id);if(e!=null)e.remove();}r.mobs.clear();r.hits.clear();r.roomParticipants.clear();for(Chunk c:r.held)c.removePluginChunkTicket(plugin);r.held.clear();}
     private void end(Run r,String reason){
         Map<UUID,Map<String,Object>> outcomes=new LinkedHashMap<>();for(UUID id:r.attendance.keySet())outcomes.put(id,outcome(r,id,reason));
         runs.remove(r.site.id);
@@ -1043,6 +1101,7 @@ final class SiteDungeonManager implements Listener {
                 String path=ROOT+".runs."+r.site.id;Map<String,Object> saved=new LinkedHashMap<>();
                 saved.put("id",r.id);saved.put("mode",r.mode.id);saved.put("definition",definition(r.site));saved.put("stage",r.stage);saved.put("phase",r.phase);saved.put("fault",r.fault);saved.put("started",r.started);saved.put("pausedAt",r.pausedAt);saved.put("faultPausedMillis",r.faultPausedMillis);saved.put("party",r.party.stream().map(UUID::toString).toList());
                 saved.put("declined",r.declined.stream().map(UUID::toString).toList());
+                if(r.altarTactics)saved.put("altarTactics",true);
                 Map<String,Integer> attendance=new LinkedHashMap<>();r.attendance.forEach((id,count)->attendance.put(id.toString(),count));saved.put("attendance",attendance);plugin.getConfig().createSection(path,saved);
                 Map<String,List<String>> roomAttendance=new LinkedHashMap<>();r.roomAttendance.forEach((stage,ids)->roomAttendance.put(stage.toString(),ids.stream().map(UUID::toString).toList()));
                 plugin.getConfig().set(path+".roomAttendance",roomAttendance);plugin.getConfig().set(path+".attempt",r.attempt);plugin.getConfig().set(path+".resets",r.resets);
@@ -1064,6 +1123,7 @@ final class SiteDungeonManager implements Listener {
         List<Run> expired=new ArrayList<>();
         for(String id:saved.getKeys(false))try{
             Site site=site(id);var c=saved.getConfigurationSection(id);Run r=new Run(site,Mode.parse(c.getString("mode","normal")));
+            r.altarTactics=id.equals(AltarPoison.SITE)&&c.getBoolean("altarTactics",false);
             r.id=c.getString("id",r.id);UUID.fromString(r.id);
             require(definition(site).equals(c.getString("definition")),"definition_changed_checkpoint_preserved");
             r.stage=c.getInt("stage");require(r.stage>=0&&r.stage<=site.rooms.size(),"invalid_checkpoint");r.started=c.getLong("started");
@@ -1204,13 +1264,45 @@ final class SiteDungeonManager implements Listener {
                     "在外哨用这张菜单开始清剿，倒数结束后刷第一批守卫。",
                     BlackBannerCamp.RESCUE_HINT, "打完后回来使用入口路牌，可领取本场奖励。"));
         }
+        if(id.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled()){
+            var circle=plugin.nativeRpg().state(p).getAsJsonObject("healingCircle");
+            inv.setItem(33,circle==null
+                ?icon(Material.BOOK,"§b治愈之环","牧师职业技能。毒藤黄圈预警后及时散开。","终室参战通关可取得一次免费学习资格。")
+                :circle.get("learned").getAsBoolean()
+                    ?icon(Material.GLISTERING_MELON_SLICE,"§b装入治愈之环","已学会。放到空槽，或自行选择替换。")
+                    :circle.get("rewardEligible").getAsBoolean()
+                        ?icon(Material.GLISTERING_MELON_SLICE,"§a学会并装入轮盘","免费学习治愈之环。空槽自动装入，满槽可自己选择。")
+                        :icon(Material.BOOK,"§b治愈之环","参与终室并通关后可免费学习。也可在牧师Lv.3用1个学习点学习。"));
+        }
         p.openInventory(inv);
+    }
+    private void learnCircle(Player p){
+        var circle=plugin.nativeRpg().state(p).getAsJsonObject("healingCircle");
+        if(circle==null){p.sendMessage("§e治愈之环由牧师学习。终室参战通关可取得免费学习资格。");return;}
+        if(!circle.get("rewardEligible").getAsBoolean()){
+            if(circle.get("learned").getAsBoolean()){p.closeInventory();plugin.equipHealingCircle(p);}
+            else p.sendMessage("§e参与本遗迹终室并通关，可免费学；也可在职业技能书中用1学习点学习（Lv.3）。");
+            return;
+        }
+        p.closeInventory();
+        plugin.nativeRpg().learnHealingCircle(p).whenComplete((learned,error)->{
+            if(!plugin.isEnabled())return;
+            Bukkit.getScheduler().runTask(plugin,()->{
+                if(!p.isOnline())return;
+                if(error!=null||!Boolean.TRUE.equals(learned)){
+                    p.sendMessage("§e学习保存待确认，资格会保留。稍后打开本处结算重新核对。");
+                }else if(p.getOpenInventory().getTopInventory().getType()==org.bukkit.event.inventory.InventoryType.CRAFTING){
+                    plugin.equipHealingCircle(p);
+                }else p.sendMessage("§a已学会治愈之环，可从本处结算或现有轮盘装入。");
+            });
+        });
     }
     @EventHandler public void click(InventoryClickEvent e){
         Menu menu=menus.get(e.getView().getTopInventory());if(menu==null)return;e.setCancelled(true);if(!(e.getWhoClicked() instanceof Player p))return;int slot=e.getRawSlot();if(slot<0||slot>=54)return;
         Bukkit.getScheduler().runTask(plugin,()->{
             if(!p.isOnline() || p.getOpenInventory().getTopInventory() != e.getView().getTopInventory())return;
             if(menu.site.isEmpty()){List<Site> list=new ArrayList<>(sites.values());if(slot>=10&&slot<10+list.size())open(p,list.get(slot-10).id);return;}
+            if(slot==33&&menu.site.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled()){learnCircle(p);return;}
             String action=switch(slot){case 10->"travel";case 12,13,14->"start";case 16->"join";case 22->"leave";case 30->"claim";case 31->"info";default->"";};
             if(slot==49){open(p,"");return;}if(action.isEmpty())return;
             if((action.equals("start")||action.equals("join"))&&(menu.pendingReward||receipt(p.getUniqueId(),menu.site)!=null)){

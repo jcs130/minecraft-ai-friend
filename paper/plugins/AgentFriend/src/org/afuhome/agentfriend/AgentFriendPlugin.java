@@ -2373,15 +2373,16 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (args.length == 2) openImprintMenu(player);
             else if (args.length == 3 && args[2].equalsIgnoreCase("list")) {
                 for (var preset : WeaponEngravings.Preset.values()) {
-                    player.sendMessage("§d" + preset.title + "刻印 · /mycli imprint weapon " + preset.id);
+                    if(!weaponEngravings.available(preset))continue;
+                    player.sendMessage("§d" + preset.title + "刻印 · " + preset.cost() + " · /mycli imprint weapon " + preset.id);
                     preset.hints().forEach(player::sendMessage);
                 }
-                player.sendMessage("§7附魔台 4 格内手持普通剑或战斧，费用 " + WeaponEngravings.COST + "。");
+                player.sendMessage("§7附魔台 4 格内手持普通剑或战斧。");
             } else if (args.length == 3) {
                 var preset = WeaponEngravings.Preset.find(args[2].toLowerCase(Locale.ROOT));
                 if (preset != null) imprintWeapon(player, preset);
                 else player.sendMessage("§e查看可选组合：/mycli imprint weapon list。");
-            } else player.sendMessage("§e用法：/mycli imprint weapon [list|random|guard|skirmish]。");
+            } else player.sendMessage("§e用 /mycli imprint weapon list 查看当前组合。");
             return;
         }
         if (args.length >= 2 && args[1].equalsIgnoreCase("list")) {
@@ -2438,6 +2439,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 + "。潜行使用即可施放；仍消耗原法术的魔力并遵守冷却。");
     }
     private void imprintWeapon(Player player, WeaponEngravings.Preset preset) {
+        if(!weaponEngravings.available(preset)){player.sendMessage("§e该刻印当前未开放。可在附魔台查看可用组合。");return;}
         boolean creative = player.getGameMode() == GameMode.CREATIVE;
         if (!creative && !nativeRpgMayAct(player)) {
             player.sendMessage("§e当前无法刻印，请以生存或冒险角色在可行动时操作。"); return;
@@ -2452,15 +2454,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (preset.binding != null && weaponEngravings.preset(sword) == preset) {
             player.sendMessage("§e此剑已带有" + preset.title + "刻印，本次免费。"); return;
         }
-        ItemStack lapis = new ItemStack(Material.LAPIS_LAZULI, WeaponEngravings.LAPIS);
-        if (!creative && (player.getLevel() < WeaponEngravings.LEVELS
-                || !player.getInventory().containsAtLeast(lapis, WeaponEngravings.LAPIS))) {
-            player.sendMessage("§e武器刻印需要 " + WeaponEngravings.COST + "。"); return;
+        ItemStack lapis = new ItemStack(Material.LAPIS_LAZULI, preset.lapis());
+        if (!creative && (player.getLevel() < preset.levels()
+                || !player.getInventory().containsAtLeast(lapis, preset.lapis()))) {
+            player.sendMessage("§e武器刻印需要 " + preset.cost() + "。"); return;
         }
         ItemStack engraved = weaponEngravings.engraved(player, sword, preset);
         if (!creative) {
             player.getInventory().removeItem(lapis);
-            player.setLevel(player.getLevel() - WeaponEngravings.LEVELS);
+            player.setLevel(player.getLevel() - preset.levels());
         }
         player.getInventory().setItemInMainHand(engraved);
         player.playSound(player.getLocation(), Sound.BLOCK_ENCHANTMENT_TABLE_USE, 0.8f, 1.2f);
@@ -2472,6 +2474,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     String weaponRewardFields(ItemStack item) { return weaponEngravings.receipt(item); }
+    boolean weaponSpell(Player player,String id){return weaponEngravings!=null&&weaponEngravings.grants(player,id);}
 
     boolean claimItemCast(Player player, long intervalMs) {
         long now = System.currentTimeMillis();
@@ -2729,6 +2732,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
     }
     private void openSpellWheel(Player p) { playerAdventureMenus.open(p, AdventureMenuModel.Page.WHEEL, ""); }
+    void equipHealingCircle(Player p) { playerAdventureMenus.equipHealingCircle(p); }
     private boolean isSpellGuidePage(String page) { return page.equals("spell_guide") || page.startsWith("spell_guide:"); }
     private int spellGuidePage(String page) {
         int requested = page.equals("spell_guide") ? 0 : Integer.parseInt(page.substring("spell_guide:".length()));
@@ -2874,9 +2878,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (weaponEngravings.canEngrave(held)) {
                 var current = weaponEngravings.preset(held);
                 for (var preset : WeaponEngravings.Preset.values()) {
+                    if(!weaponEngravings.available(preset))continue;
                     var lore = new ArrayList<>(preset.hints());
                     lore.add(preset == current && preset.binding != null ? "已镌刻此组合"
-                            : (current == null ? "点击刻印 · " : "点击更换组合 · ") + WeaponEngravings.COST);
+                            : (current == null ? "点击刻印 · " : "点击更换组合 · ") + preset.cost());
                     inv.setItem(preset.slot, item(preset.icon, "§d" + preset.title + "刻印", lore.toArray(String[]::new)));
                 }
             }

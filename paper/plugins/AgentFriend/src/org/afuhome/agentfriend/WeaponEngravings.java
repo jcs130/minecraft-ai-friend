@@ -43,7 +43,8 @@ final class WeaponEngravings implements Listener {
     enum Preset {
         GUARD("guard", "守卫", new Binding("selfheal", "starbolt", "frostnova"), Material.SHIELD, 30),
         RANDOM("random", "随机", null, Material.ENCHANTED_BOOK, 31),
-        SKIRMISH("skirmish", "疾行", new Binding("selfheal", "frostnova", "blink"), Material.ENDER_PEARL, 32);
+        SKIRMISH("skirmish", "疾行", new Binding("selfheal", "frostnova", "blink"), Material.ENDER_PEARL, 32),
+        ARCANE_EDGE("arcane_edge", "魔剑", new Binding("night", "echoing_strikes", "counterspell"), Material.DIAMOND_SWORD, 33);
 
         final String id, title;
         final Binding binding;
@@ -59,10 +60,15 @@ final class WeaponEngravings implements Listener {
         }
 
         List<String> hints() {
+            if (this == ARCANE_EDGE) return List.of("右键 · 回响打击；8魔力、22秒冷却",
+                "潜行右键 · 法术反制；9魔力、24秒冷却","职业Lv.3起，主手持有即可使用对应刻印");
             if (binding == null) return List.of("从通用技和本人已学职业技抽取三个不同技能",
                     "普攻命中位抽取恢复或夜视，右键和潜行右键各抽一项主动技");
             return lines(binding, Map.of());
         }
+        int levels(){return this==ARCANE_EDGE?15:LEVELS;}
+        int lapis(){return this==ARCANE_EDGE?6:LAPIS;}
+        String cost(){return levels()+" 经验等级 + "+lapis()+" 青金石";}
 
         static Preset find(String id) {
             for (Preset preset : values()) if (preset.id.equals(id)) return preset;
@@ -122,6 +128,11 @@ final class WeaponEngravings implements Listener {
         Binding next = WeaponSkillRolls.roll(List.copyOf(known.keySet()), binding(original), ThreadLocalRandom.current());
         return engrave(original, next, preset, known);
     }
+    boolean available(Preset preset){return preset!=Preset.ARCANE_EDGE||plugin.nativeRpg().equipmentTechniquesEnabled();}
+    boolean grants(Player player,String id){
+        Binding held=binding(player.getInventory().getItemInMainHand());
+        return held!=null&&(held.use().equals(id)||held.sneakUse().equals(id));
+    }
 
     DungeonLoot.Bonus reward(Player player, DungeonLoot.Bonus bonus, int floor) {
         if (!canEngrave(bonus.item()) || binding(bonus.item()) != null
@@ -171,10 +182,15 @@ final class WeaponEngravings implements Listener {
                 "右键 · " + name(binding.use(), known),
                 "潜行右键 · " + name(binding.sneakUse(), known),
                 "主手持武器，副手留空。战斧朝空处使用",
-                "职业技能依照本人职业与学习进度");
+                transferable(binding)?"回响与反制：持有刻印且职业Lv.3可临时使用":"职业技能依照本人职业与学习进度");
+    }
+    private static boolean transferable(Binding binding){
+        return List.of(binding.use(),binding.sneakUse()).stream().anyMatch(id->id.equals("echoing_strikes")||id.equals("counterspell"));
     }
 
     private static String name(String id, Map<String, String> known) {
+        if(id.equals("echoing_strikes"))return "回响打击";
+        if(id.equals("counterspell"))return "法术反制";
         var common = SpellGuide.find(id);
         return common != null ? common.name() : known.getOrDefault(id, id);
     }

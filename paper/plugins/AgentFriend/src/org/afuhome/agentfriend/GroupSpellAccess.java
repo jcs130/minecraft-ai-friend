@@ -1,7 +1,9 @@
 package org.afuhome.agentfriend;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import java.util.UUID;
 
 /** Checks automatic encounter membership without creating another party roster. */
 public final class GroupSpellAccess {
@@ -21,5 +23,36 @@ public final class GroupSpellAccess {
         var id = player.getUniqueId();
         String trial = plugin.dungeon().challengeContext(id);
         return trial.isEmpty() && plugin.siteDungeons() != null ? plugin.siteDungeons().challengeContext(id) : trial;
+    }
+
+    /** The healing circle may only be placed in the caster's current combat room. */
+    public static String circleScene(Player caster, Location ground) {
+        if (!(Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin)
+                || !plugin.isEnabled() || !plugin.nativeRpgMayAct(caster)
+                || !caster.getWorld().equals(ground.getWorld())) return null;
+        if (plugin.dungeon().isParticipant(caster))
+            return plugin.dungeon().circleRoom(caster, ground)
+                ? plugin.dungeon().challengeContext(caster.getUniqueId()) : null;
+        var sites = plugin.siteDungeons();
+        if (sites != null && sites.isParticipant(caster)) return sites.circleScene(caster, ground);
+        if (plugin.dungeon().activeCircleRoom(ground) || (sites != null && sites.activeCircleSite(ground))) return null;
+        return "world:" + caster.getWorld().getUID();
+    }
+
+    public static UUID circleRequest(Player caster) {
+        return ResidentCli.currentRequest(caster.getUniqueId());
+    }
+
+    public static boolean circleReward(Player caster) {
+        return Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin
+            && plugin.siteDungeons() != null && plugin.siteDungeons().circleReward(caster.getUniqueId());
+    }
+    public static boolean weaponSpell(Player caster,String spell){
+        return Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin
+            && plugin.weaponSpell(caster,spell);
+    }
+    public static boolean interruptAltar(Player caster,boolean apply){
+        return Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin
+            && plugin.nativeRpgMayAct(caster)&&plugin.siteDungeons()!=null&&plugin.siteDungeons().interruptAltar(caster,apply);
     }
 }
