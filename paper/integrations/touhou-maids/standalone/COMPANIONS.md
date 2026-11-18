@@ -90,15 +90,19 @@ node --experimental-transform-types --test tests/companion-memory.test.mjs
 
 ## 居民关系记忆
 
-登录后用 `/npcsocial Kirito` 查看桐人对自己的关系与最近的共同经历。用
-`/npcsocial Kirito tell <消息>` 私聊。若需公开与居民交谈，走到居民身边用
-`/npcsocial Kirito public <消息>`。也可在居民名处使用登记 UUID。
+靠近桐人或结衣时，面对角色用平常的附近聊天，或在话头自然地叫他的名字，例如
+「桐人，今天去哪里探险？」。有启用 Simple Voice Chat 的玩家也可用附近语音。
+空手与桐人互动会得到一句问候。正常回复和同行回执会自动积累关系。
 
-外接 Agent 使用同一组指令。查询加 `json`，从自己的消息中读取 `MC_NPC_SOCIAL`。
-对话受理时会给请求 UUID，可用 `/npcsocial Kirito receipt <请求UUID>` 查询原回执。
+玩家和外接 Agent 都可直接交谈。需要查看关系时可用 `/npcsocial Kirito`，查询加
+`json` 可从本人的消息中读取 `MC_NPC_SOCIAL`。指定私聊用
+`/npcsocial Kirito tell <消息>`，随后可按发给本人的 UUID 查询
+`/npcsocial Kirito receipt <请求UUID>`。也可使用居民登记 UUID。
 已有女仆伙伴状态 `/maidagent companion <NPC_UUID> status json` 可附带
 `socialRelationship`。查询固定为当前认证账号。公开对话只引用明确公开的经历，私聊
 可以回忆该对身份的经历。缺少可验证资料时省略关系字段。
+普通附近聊天的回复使用原消息的在场受众。语音转写使用原听众范围，
+语音经历作为双方可读的记录。空手问候只回复互动发起者。
 
 每位居民对每个玩家或登记居民独立维护一份关系。一天内成功交谈或共同抵达最多
 增加 1 点熟悉度。已同意的同行契约下，同一原生抵达凭据可增加 2 点信任度，每份
@@ -109,7 +113,18 @@ node --experimental-transform-types --test tests/companion-memory.test.mjs
 运行时配置在原统一 NPC 服务的 `npc.json` 设置 `relationshipDataPath` 为世界
 `data` 目录的绝对路径，再为试点角色设置 `social_memory: true`。在原身体完成
 正式交接时，才在同一 `character_id` 登记 `social_previous_bodies`。
+在现有 `npc-voices.json` 的对应角色下可用 `aliases` 登记「桐人」等常用称呼。
 投影原子写入 `world/data/tlm-companion-memory/<bodyId>/relationship-*.json`；
 原则上约 10 秒更新。对话交付回执和同行原回执可单独回放，不依赖
 PowerContext 或 Graphiti。取消角色试点时保留数据目录配置并将其 `social_memory`
 设为 `false`，原始日志可用于恢复。私聊若中断，查原请求状态。
+
+统一 NPC 服务可在 `npc.json` 增加 `dialogueMemory`，提供 `node`、`script`
+（`companion-memory.mjs`）、`config`（已有 NPC 笔记配置）和 `tokenFile` 的绝对路径。
+笔记配置必须与该服务使用同一个世界和原始对话目录。每个已登记的角色使用自己的
+PowerContext Scope。提取当前话题的中英文关键词并查找该角色和对方最近 256 条已验证
+经历，同时在配置了专属 Scope 时使用 PowerContext 的全文与向量混合查询。
+只接受与本地版本和原始交付记录一致的来源，最多给本轮模型 3 条经历。
+服务不可用、未配置独立 Scope 或超时时继续使用本地关键词和近期记录。
+查询只读，原笔记同步任务仍负责入库。健康文件每角色的 `dialogueMemory` 记录
+最近一次检索方式，分别是 `hybrid`、`local` 和 `local_fallback`。

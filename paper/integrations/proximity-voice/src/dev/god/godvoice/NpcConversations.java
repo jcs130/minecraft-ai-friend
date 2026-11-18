@@ -9,6 +9,9 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.*;
 import org.bukkit.entity.*;
 import org.bukkit.event.*;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.inventory.EquipmentSlot;
 
 /** Scoped text/ASR input for registered NPCs. No model, controller or new player connection. */
 final class NpcConversations implements Listener {
@@ -19,6 +22,7 @@ final class NpcConversations implements Listener {
     private final Map<UUID,Binding> hosted=new HashMap<>();
     private final Map<UUID,Generation> generations=new HashMap<>();
     private final NpcDialoguePolicy.Seen delivered=new NpcDialoguePolicy.Seen();
+    private static final Set<String> CLOSINGS=Set.of("好","好的","嗯","嗯嗯","收到","明白了","知道了","谢谢","谢谢你","辛苦了","再见","拜拜","回头聊");
     private long lastWarning;
     NpcConversations(PaperVoicePlugin plugin,Path file)throws Exception {
         this.plugin=plugin;profiles=Files.exists(file)?NpcDialoguePolicy.profiles(JsonParser.parseString(Files.readString(file)).getAsJsonObject()):Map.of();
@@ -31,7 +35,7 @@ final class NpcConversations implements Listener {
     NpcDialoguePolicy.Profile find(String key) {
         try { return profiles.get(UUID.fromString(key)); }
         catch (IllegalArgumentException name) {
-            var matches = profiles.values().stream().filter(profile -> profile.name().equalsIgnoreCase(key)).toList();
+            var matches = profiles.values().stream().filter(profile -> profile.hasName(key)).toList();
             return matches.size() == 1 ? matches.getFirst() : null;
         }
     }
@@ -85,7 +89,51 @@ final class NpcConversations implements Listener {
         Player source=Bukkit.getPlayer(actor);
         if(source==null||source.isDead()||source.isInvisible()||source.getGameMode()==GameMode.SPECTATOR||!source.getWorld().getUID().equals(world))return;
         if(System.currentTimeMillis()-occurredAt>120_000||occurredAt>System.currentTimeMillis())return;
+        var address=address(source,text,NpcDialoguePolicy.fresh(occurredAt,System.currentTimeMillis()));
+        if(address!=null&&audience.contains(address.profile().id())&&
+            natural(source,address,"nearby",audience,"voice_"+utterance))return;
         for(UUID target:audience)deliver(source,target,"voice_"+utterance,text,"voice",occurredAt);
+    }
+
+    private NpcDialoguePolicy.Address address(Player player,String text,boolean allowLook){
+        var named=NpcDialoguePolicy.addressed(profiles.values(),text);
+        if(named!=null||!allowLook)return named;
+        String line=text.strip();
+        if(line.isEmpty()||line.startsWith("@")||line.startsWith("/")||line.startsWith("!"))return null;
+        var facing=player.getTargetEntity(5);
+        var profile=facing==null?null:profiles.get(facing.getUniqueId());
+        return profile==null?null:new NpcDialoguePolicy.Address(profile,line);
+    }
+
+    private boolean natural(Player player,NpcDialoguePolicy.Address address,String scope,Set<UUID> audience,String input){
+        var profile=address.profile();
+        var body=live(profile.id());
+        if(configured(player.getUniqueId())||!hears(player,body,profile)||!player.hasLineOfSight(body))return false;
+        if(profile.kind().equals("maid")&&profile.owner().equals(player.getUniqueId()))return false;
+        if(profile.kind().equals("maid")&&player.getLocation().distanceSquared(body.getLocation())>64)return false;
+        var words=address.text().replaceAll("[\\p{P}\\s]+","");
+        if(CLOSINGS.contains(words))return true;
+        if(!delivered.add(profile.id(),player.getUniqueId(),"natural_"+input,System.currentTimeMillis()))return true;
+        return plugin.naturalNpcDialogue(profile,player,address.text(),scope,audience);
+    }
+
+    boolean naturalMaidChat(Player actor,String text,Set<UUID> recipients){
+        if(!Bukkit.isPrimaryThread()||Bukkit.getPlayer(actor.getUniqueId())!=actor)return false;
+        var address=address(actor,text,true);
+        return address!=null&&address.profile().kind().equals("maid")&&
+            natural(actor,address,"public",recipients,"chat_"+UUID.randomUUID());
+    }
+
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
+    public void greetAt(PlayerInteractAtEntityEvent event){greet(event);}
+
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
+    public void greet(PlayerInteractEntityEvent event){
+        Player player=event.getPlayer();
+        if(event.getHand()!=EquipmentSlot.HAND||player.isSneaking()||!player.getInventory().getItemInMainHand().getType().isAir())return;
+        var profile=profiles.get(event.getRightClicked().getUniqueId());
+        if(profile==null||!profile.kind().equals("numen")||player.getLocation().distanceSquared(event.getRightClicked().getLocation())>25)return;
+        natural(player,new NpcDialoguePolicy.Address(profile,"你好。"),"private",Set.of(),"greeting");
     }
     void said(UUID actor,String operation,String text,long occurredAt){
         Entity source=live(actor);if(source==null||!NpcDialoguePolicy.fresh(occurredAt,System.currentTimeMillis()))return;
@@ -127,6 +175,8 @@ final class NpcConversations implements Listener {
         UUID input=UUID.randomUUID();long at=System.currentTimeMillis();
         Bukkit.getScheduler().runTask(plugin,()->{
             if(Bukkit.getPlayer(actor.getUniqueId())!=actor||actor.isDead()||actor.isInvisible()||actor.getGameMode()==GameMode.SPECTATOR||!local(actor,original))return;
+            var address=address(actor,text,true);
+            if(address!=null&&(address.profile().kind().equals("maid")||natural(actor,address,"public",recipients,"chat_"+input)))return;
             // Maids already receive their native local-chat path; do not duplicate it.
             for(var p:profiles.values())if(p.kind().equals("numen")&&recipients.contains(p.id()))deliver(actor,p.id(),"chat_"+input,text,"chat",at);
         });

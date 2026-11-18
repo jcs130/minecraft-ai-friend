@@ -13,6 +13,7 @@ from .body.numen import NumenBody
 from .body.hosted_mcp import HostedMcpPort
 from .bridges import NativeMaidBridge
 from .journal import ActionJournal
+from .memory.companion import CompanionRecall
 from .memory.local import LocalMemory
 from .memory.remote import RemoteGraphMemory
 from .memory.router import MemoryRouter
@@ -46,11 +47,15 @@ async def serve(path: Path):
     clients, hosts, tasks = [], [], []
     social_tasks = []
     social = None
+    recall = None
+    recall_modes = {}
     if settings.get("relationshipDataPath"):
         world_data = Path(settings["relationshipDataPath"])
         if not world_data.is_absolute() or not world_data.is_dir():
             raise ValueError("relationship_world_data_unavailable")
         social = SocialWorld(world_data, settings["serverId"], roles)
+        if settings.get("dialogueMemory"):
+            recall = CompanionRecall(settings["dialogueMemory"], world_data / "tlm-companion-memory", settings["serverId"])
     provider = {}
     for name, file in settings["providers"].items():
         private = read(file)
@@ -81,10 +86,12 @@ async def serve(path: Path):
                 for answer, row in await asyncio.to_thread(social.dialogue_requests, role):
                     speaker = row["speakerId"]
                     peer = social.registered.get(speaker, speaker)
-                    public = row["channel"] == "public"
+                    public = row["channel"] != "private"
                     try:
-                        relationship = social.lookup(body, "npc" if speaker in social.registered else "player", peer,
-                                                     public=public, topic=row["message"])
+                        ranked, mode = await recall.search(body, row["id"]) if recall else ((), "local")
+                        recall_modes[role.id] = mode
+                        relationship = await asyncio.to_thread(social.lookup, body, "npc" if speaker in social.registered else "player", peer,
+                                                               public=public, topic=row["message"], ranked=ranked)
                         reply = await planner.answer_dialogue(row["message"], relationship, public=public)
                         response = {"status": "prepared", "reply": reply}
                     except Exception:
@@ -132,6 +139,7 @@ async def serve(path: Path):
                 status["roles"].append({"id": host.role.id, "bodyKind": host.role.body_kind, "bodyId": str(host.role.body_id),
                                         "model": host.role.model, "provider": host.role.provider, "running": not task.done(), "error": error,
                                         "health": host.body.health().model_dump(mode="json"), "route": host.planner.last_route,
+                                        "dialogueMemory": recall_modes.get(host.role.id),
                                         "unknownRequests": len(host.journal.unresolved(str(host.role.body_id))),
                                         "intents": [{"id": i.id, "state": i.state, "reason": i.reason} for i in list(host.runtime.intents.values())[-8:]]})
             temp = state / "health.tmp"

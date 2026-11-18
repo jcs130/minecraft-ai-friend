@@ -128,6 +128,37 @@ def test_hosted_dialogue_counts_only_after_actual_public_delivery(tmp_path):
     assert social.lookup(KIRITO, "player", BOB, public=False)["evidence"] == []
 
 
+def test_nearby_voice_receipt_is_recalled_by_the_pair_only(tmp_path):
+    social, _ = setup_world(tmp_path)
+    answered, directory = result(social, KIRITO, ALICE, 46, kind="social_dialogue", channel="nearby", completedAt=DAY + 49)
+    publish_json(directory / f"{answered['id']}-request.json", answered | {"status": "accepted"})
+    social.refresh()
+    assert social.lookup(KIRITO, "player", ALICE, public=False)["familiarity"] == "认识"
+    assert social.lookup(KIRITO, "player", ALICE, public=True)["evidence"] == []
+    assert social.lookup(KIRITO, "player", BOB, public=False)["evidence"] == []
+
+
+def test_topic_recall_combines_old_chinese_matches_and_validated_ids_without_crossing_visibility(tmp_path):
+    social, _ = setup_world(tmp_path)
+    mine, _ = result(social, KIRITO, ALICE, 20, channel="public", message="在北风矿井修了通路")
+    mill, _ = result(social, KIRITO, ALICE, 21, channel="public", message="旧水车旁边留了灯笼")
+    secret, _ = result(social, KIRITO, ALICE, 22, channel="nearby", message="只有我听到的矿井暗号")
+    foreign, _ = result(social, KIRITO, BOB, 23, channel="public", message="别人的矿井暗号")
+    for number in range(70, 96):
+        result(social, KIRITO, ALICE, number, channel="public", message="早安")
+    social.refresh()
+    snapshot = social.root / "tlm-companion-memory" / KIRITO / f"relationship-player-{ALICE}.json"
+    assert len(json.loads(snapshot.read_bytes())["public"]["evidence"]) == 24
+    lexical = social.lookup(KIRITO, "player", ALICE, public=True, topic="还记得北风矿井怎么走吗？")
+    assert "北风矿井" in lexical["evidence"][0]["summary"]
+    semantic = social.lookup(KIRITO, "player", ALICE, public=True, topic="曾经借宿的地方",
+                             ranked=(foreign["id"], secret["id"], mill["id"]))
+    assert "旧水车" in semantic["evidence"][0]["summary"]
+    assert "暗号" not in str(semantic)
+    private = social.lookup(KIRITO, "player", ALICE, public=False, topic="矿井", ranked=(secret["id"], mine["id"]))
+    assert "只有我听到" in private["evidence"][0]["summary"]
+
+
 def test_planner_requests_use_exact_pair_and_exclude_private_legacy_recall(tmp_path):
     social, roles = setup_world(tmp_path)
     result(social, KIRITO, ALICE, 50)
