@@ -72,6 +72,7 @@ final class NativeMaidWorkshop {
         final int expectedQuantity;
         final Site site;
         final long revision;
+        final Long controllerEpoch;
         final long deadline = System.nanoTime() + TIMEOUT;
         final Inventory inventory;
         final List<ItemStack> before;
@@ -82,7 +83,7 @@ final class NativeMaidWorkshop {
         long pathFailedSince;
         final JsonArray visits = new JsonArray();
         boolean defending;
-        Job(Player owner, EntityMaid maid, ServerLevel level, String request, Order order, Site site, Inventory inventory, int perCraft) {
+        Job(Player owner, EntityMaid maid, ServerLevel level, String request, Order order, Site site, Inventory inventory, int perCraft, Long controllerEpoch) {
             this.owner = owner;
             this.maid = maid;
             this.level = level;
@@ -96,6 +97,7 @@ final class NativeMaidWorkshop {
             batches = expectedQuantity / perCraft;
             this.site = site;
             this.inventory = inventory;
+            this.controllerEpoch = controllerEpoch;
             revision = MaidCompanionActions.revision(maid);
             before = inventory.snapshot();
             phase = order.backpack ? Phase.TABLE : Phase.SUPPLIES;
@@ -267,7 +269,7 @@ final class NativeMaidWorkshop {
         return value.getAsString();
     }
 
-    JsonObject start(Player actor, EntityMaid maid, String request, String value) throws Exception {
+    JsonObject start(Player actor, EntityMaid maid, String request, String value, Long controllerEpoch) throws Exception {
         UUID id = maid.getUUID();
         Job job;
         try {
@@ -291,7 +293,7 @@ final class NativeMaidWorkshop {
             Inventory inventory = order.backpack ? Inventory.backpack(maid) : Inventory.chest(chest(level, site.chest));
             if (!order.backpack) access(actor, site.chest, true);
             int perCraft = MaidWorkshopRecipes.perCraft(level, order.recipe);
-            job = new Job(actor, maid, level, request, order, site, inventory, perCraft);
+            job = new Job(actor, maid, level, request, order, site, inventory, perCraft, controllerEpoch);
             // Report missing materials/capacity before spending time walking. Re-read the recipe at the table.
             plan(job);
         } catch (CompatibilityException error) {
@@ -333,7 +335,7 @@ final class NativeMaidWorkshop {
     }
 
     private static boolean ready(EntityMaid maid) {
-        return maid.canBrainMoving() && !maid.isHomeModeEnable() && !maid.isNoAi() && !maid.guiOpening;
+        return maid.canBrainMoving() && !maid.isHomeModeEnable() && !maid.isNoAi() && !maid.guiOpening && !maid.isPassenger();
     }
 
     private static void table(ServerLevel level, BlockPos pos) {
@@ -397,6 +399,10 @@ final class NativeMaidWorkshop {
         EntityMaid maid = job.maid;
         Player owner = job.owner;
         if (System.nanoTime() > job.deadline) throw new CompatibilityException("workshop_timeout", "工单超时。请检查去箱子和工作台的通路。");
+        if (job.controllerEpoch != null && (!plugin.nativeControlled(maid.getUUID()) ||
+                job.controllerEpoch != plugin.nativeControlEpoch(maid.getUUID()))) {
+            throw new CompatibilityException("workshop_control_changed", "控制权已变更，工单尚未扣料。");
+        }
         if (!owner.isOnline() || owner.isDead() || owner.isInvisible() || owner.getGameMode() == GameMode.SPECTATOR
                 || !owner.getUniqueId().equals(maid.getOwnerUUID()) || !maid.isAlive() || maid.isRemoved()
                 || !job.site.world.equals(owner.getWorld().getUID()) || maid.level() != job.level
@@ -539,7 +545,7 @@ final class NativeMaidWorkshop {
         return receipt;
     }
 
-    private static JsonObject reason(CompatibilityException error, Boolean effects) {
+    static JsonObject reason(CompatibilityException error, Boolean effects) {
         JsonObject out = new JsonObject();
         out.addProperty("error", error.code());
         out.addProperty("message", error.getMessage());

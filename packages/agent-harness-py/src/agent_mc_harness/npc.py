@@ -16,7 +16,7 @@ from uuid import UUID
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .journal import ActionJournal
+from .journal import ActionJournal, work_key
 from .conversation import CONVERSATION_POLICY
 from .models import BodyEvent, Scope
 from .runtime import HarnessRuntime, Intent, PlanContext, Step, step_support
@@ -85,6 +85,31 @@ def already_guarding(native: dict[str, Any]) -> bool:
     return native.get("nativeGuardDelegated") is True and native.get("sitting") is not True
 
 
+def routine_meal(role: NpcRole, context: PlanContext) -> Step | None:
+    native = current_native_state(context)
+    facts = native.get("facts")
+    step = Step(tool="body:native:nourish")
+    if (role.body_kind != "numen" or step.tool not in role.allowed_tools or context.dialogue
+            or not isinstance(facts, dict) or facts.get("workPending") is not False
+            or context.snapshot.food is None or not 0 <= context.snapshot.food <= 14
+            or any(isinstance(entity, dict) and entity.get("hostile") is True for entity in context.snapshot.entities)
+            or context.capabilities is None or step_support(step, context.capabilities)):
+        return None
+    return step
+
+
+def routine_catch(role: NpcRole, context: PlanContext) -> Step | None:
+    native = current_native_state(context)
+    fishing = native.get("fishing")
+    step = Step(tool="body:native:fish")
+    if (role.body_kind != "maid" or step.tool not in role.allowed_tools or context.dialogue
+            or not already_guarding(native) or danger(context.snapshot)
+            or not isinstance(fishing, dict) or fishing.get("canStartNativeCatch") is not True
+            or context.capabilities is None or step_support(step, context.capabilities)):
+        return None
+    return step
+
+
 def restore_default_guard(role: NpcRole, context: PlanContext) -> Step | None:
     native = current_native_state(context)
     if not role.default_native_guard or native.get("nativeGuardDelegated") is not False:
@@ -130,6 +155,8 @@ def reviewed_steps(role: NpcRole, context: PlanContext, values: Any) -> list[Ste
             raise ValueError("npc_cannot_attack_players_or_passive_entities")
         if step.tool == "body:native:task" and step.args.get("taskId") not in role.native_tasks:
             raise ValueError("task_not_in_reviewed_native_catalogue")
+        if step.tool == "body:native:task" and step.args.get("taskId") == "touhou_little_maid:fishing":
+            raise ValueError("use_the_bounded_fishing_action")
         if step.tool == "body:chat":
             text = step.args.get("text")
             if not isinstance(text, str) or not 1 <= len(text) <= role.max_speech_chars or any(ord(c) < 32 for c in text):
@@ -175,15 +202,28 @@ class NpcPlanner:
         self.semaphore = semaphore or asyncio.Semaphore(2)
         self.last_route: dict[str, Any] = {}
         self.fast = fast
+        self.next_meal = 0.0
+        self.next_catch = 0.0
 
     async def __call__(self, intent: Intent, context: PlanContext):
         role = self.role
         caps = context.capabilities
+        now = time.monotonic()
+        if intent.goal in (IDLE_GOAL, DANGER_GOAL) and now >= self.next_meal:
+            meal = routine_meal(role, context)
+            if meal:
+                self.next_meal = now + 90.0
+                self.last_route = {"layer": "native-policy", "reason": "ordinary_meal_needed"}
+                return [meal]
         if intent.goal == IDLE_GOAL and not context.dialogue:
             restore = restore_default_guard(role, context)
             if restore:
                 self.last_route = {"layer": "native-policy", "reason": "resume_configured_guard"}
                 return [restore]
+            if now >= self.next_catch and (catch := routine_catch(role, context)):
+                self.next_catch = now + 300.0
+                self.last_route = {"layer": "native-policy", "reason": "prepared_native_fishing"}
+                return [catch]
         tools = [tool for tool in role.allowed_tools if not step_support(Step(tool=tool), caps)]
         schemas, native_catalogue = {}, []
         for action in caps.native_actions if caps else []:
@@ -210,6 +250,7 @@ class NpcPlanner:
                  "currentDialogue": [event.model_dump(mode="json") for event in context.dialogue],
                  "observed": context.snapshot.model_dump(mode="json", exclude={"raw"}) if context.snapshot else None,
                  "nativeContext": context.snapshot.raw if context.snapshot else None,
+                 "recentBodyResults": context.body_results,
                  "events": [event.model_dump(mode="json") for event in context.recent[-8:]],
                  "memories": [fact.model_dump(mode="json") for fact in context.memories[:8]],
                  "recentEpisodes": [episode.model_dump(mode="json") for episode in context.hot[:6]],
@@ -223,6 +264,9 @@ class NpcPlanner:
                         "Use [] to rest. Only these tools: " + json.dumps(tools) + ". Never invent success, inventory, abilities or coordinates. "
                         "cast spellId is the learned skill's bare ID, for example radiant_pulse; omit the display prefix mycli:. "
                         "The observation is already supplied. Read again only for missing facts or after an action. "
+                        "Use recentBodyResults to continue real work and explain results. A pending work order has not used inputs. "
+                        "For making items, first read the authorized workshop catalogue and use its recipe, quantity and inventory. "
+                        "After dispatch, use the original result before deciding on another order. "
                         "When nativeGuardDelegated is true, let native guard keep following, defending and healing. "
                         "Do not set the same mode again or switch to a different mode merely because it is quiet. "
                         "A mode set is not arrival or mission completion. Act using tools before describing an outcome. "
@@ -394,10 +438,36 @@ class NpcHost:
                 and not self.journal.acknowledged(str(self.role.body_id), key)]
 
     async def _plan(self, intent: Intent, context: PlanContext):
+        body_id = str(self.role.body_id)
         context.dialogue = [self.pending_dialogue[key] for key in intent.source_events if key in self.pending_dialogue]
+        results = []
+        for action, receipt in self.journal.recent(body_id):
+            if action.verb in {"chat", "observe", "inventory"} or action.name == "ack":
+                continue
+            result = {"action": action.name or action.verb, "requestId": receipt.request_id,
+                      "status": receipt.status, "terminal": receipt.terminal, "text": receipt.text[:450]}
+            data = receipt.data if isinstance(receipt.data, dict) else {}
+            reply = data.get("reply", data)
+            if isinstance(reply, dict) and isinstance(reply.get("data"), dict):
+                evidence = reply["data"]
+                result["native"] = {key: evidence[key] for key in ("status", "goalCompleted", "observation", "workshops") if key in evidence}
+            if isinstance(data.get("meal"), dict):
+                result["observedMeal"] = data["meal"]
+            results.append(result)
+        context.body_results = results[:6]
         steps = await self.planner(intent, context)
         if steps is None:
             return None
+        reviewed = []
+        work_selected = False
+        for step in steps:
+            action = step.action("check_00000")
+            if work_key(action) is not None:
+                if work_selected or self.journal.attempted_work(body_id, action, intent.source_events):
+                    continue
+                work_selected = True
+            reviewed.append(step)
+        steps = reviewed
         silent = all(step.tool in {"body:observe", "body:inventory"} for step in steps)
         if intent.source_events and silent:
             # Persist before acknowledging/removing input. A restart must not
@@ -448,7 +518,7 @@ class NpcHost:
                         if intent.state == "paused" and intent.needs_host:
                             intent.state = "cancelled"
                             intent.reason = "original_receipt_reconciled_replan_from_current_observation"
-            elif not any(i.state in ("active", "queued", "paused") for i in self.runtime.intents.values()):
+            elif self.body.health().lifecycle != "error" and not any(i.state in ("active", "queued", "paused") for i in self.runtime.intents.values()):
                 # This read never preempts a running world action. Native guard runs
                 # every tick; the fast model chooses modes only when danger changes.
                 try:

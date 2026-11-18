@@ -51,6 +51,36 @@ dialogue. A canned greeting therefore cannot repeatedly wake another NPC.
 The native context reports the active unified inference and conversation owner.
 The old TLM selection is retained in the read-only configuration for history.
 
+## Body activities
+
+The original player's follow, stay and sit requests can use the same executor as
+an active unified maid. They have their own original receipts and keep the
+controller generation. Looking up a workshop or opening the ordinary inventory
+menu keeps the lease. The explicitly selected brain menu can still hand off
+control. A fenced controller waits for that handoff before planning again.
+
+- For a maid role that allows `body:native:workshop` and `body:craft`, the server
+  exposes the original authorized sites and recipes. The real owner must be
+  present and allowed to use the containers. A completed order includes the
+  original request ID, actual item and count, and which inventory changed.
+  Lease changes interrupt orders that have yet to commit. An unresolved order
+  blocks another host write.
+- A maid role that allows `body:native:fish` can make one catch while otherwise
+  guarding, with the corresponding work schedule, equipped rod, native seat
+  and suitable loaded water. The registered companion must be nearby and safe.
+  Receipt completion requires an original fishing event with loot. The body
+  resumes guard after the catch or an interruption when the previous mode can
+  be restored safely.
+- A hosted Numen role that allows `body:native:nourish` eats an ordinary food
+  from its own backpack when hunger is at most 14 and the observed body is idle
+  and safe. Held food is consumed by the native player-body job. Completion
+  carries measured item and hunger deltas.
+
+The next plan receives recent original receipts, including work still in
+progress. The dialogue journal keeps a work attempt tied to its source event
+across restart so a new planning turn cannot repeat an identical order for the
+same input.
+
 `attention_probe.py --provider-dir <private-directory> --output <report>` tests
 synthetic conversations against the configured real providers without executing
 game actions. This is prompt acceptance, not proof of production crowd behaviour.
@@ -89,6 +119,10 @@ host. An OS lock prevents duplicate supervisors/hosts; native controller leases
 fence old generations. Loss of the game port or a maintenance marker pauses the
 host after its current request. Numen re-admission requires a separate proof of
 the exact original UUID, owner and name. It never creates replacement bodies.
+
+Status snapshots remain atomic when readers hold an older copy on Windows. A
+sharing conflict may delay the reported heartbeat until the reader closes its
+handle. The managed processes continue, and sustained conflicts are logged.
 
 The supervisor must be installed through an independent OS lifecycle. Running it
 inside an interactive chat command is a test, not a persistent deployment. Store

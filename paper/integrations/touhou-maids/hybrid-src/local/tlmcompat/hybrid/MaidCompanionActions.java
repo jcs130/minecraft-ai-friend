@@ -99,7 +99,7 @@ final class MaidCompanionActions {
         if (maid.getTask() instanceof TaskFishing && fishingSeat(maid)) maid.stopRiding();
     }
 
-    private static boolean fishingSeat(EntityMaid maid) {
+    static boolean fishingSeat(EntityMaid maid) {
         return fishingSeat(maid.getVehicle());
     }
 
@@ -109,7 +109,7 @@ final class MaidCompanionActions {
         return maid.getMainHandItem().canPerformAction(ItemAbilities.FISHING_ROD_CAST);
     }
 
-    private static void requireFishingSetup(EntityMaid maid) {
+    static void requireFishingSetup(EntityMaid maid) {
         if (!fishingRod(maid)) {
             throw new CompatibilityException("fishing_rod_required", "请在女仆装备菜单给主手装鱼竿。此次未切换任务。");
         }
@@ -146,6 +146,18 @@ final class MaidCompanionActions {
         if (retrieved > 0) state.addProperty("lastRetrievedAt", java.time.Instant.ofEpochMilli(retrieved).toString());
         state.addProperty("meaning", "原生钓鱼需工作时段、主手鱼竿和水边座位。任务设置、实际抛竿、原生收竿分别观察。鱼获位置可用现场物品或背包核对。");
         return state;
+    }
+
+    static String boundedFishingBlock(EntityMaid maid) {
+        var task = TaskManager.getTaskMap().get(TaskFishing.UID);
+        if (task == null || !task.isEnable(maid)) return "task_requirements";
+        if (!MaidCompanionActions.IDLE.equals(maid.getTask().getUid().toString())
+                || maid.isMaidInSittingPose() || maid.isHomeModeEnable()) return "maid_busy";
+        if (maid.isPassenger() && !fishingSeat(maid)) return "dismount_required";
+        if (maid.getScheduleDetail() != net.minecraft.world.entity.schedule.Activity.WORK) return "fishing_outside_work_time";
+        try { requireFishingSetup(maid); }
+        catch (CompatibilityException unavailable) { return unavailable.code(); }
+        return null;
     }
 
     static String pose(EntityMaid maid) {

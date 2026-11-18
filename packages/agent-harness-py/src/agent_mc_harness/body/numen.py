@@ -90,6 +90,20 @@ BUSY = re.compile(r"a call is already running for this companion|another program
 CUT_OFF = re.compile(r"this turn was cut off", re.I)
 ITEM = re.compile(r"^[a-z0-9_.-]+(?::[a-z0-9_./-]+)?$")
 SCAN_KINDS = ("hostile", "passive", "player", "all", "item")
+NPC_MEAL_FOODS = (
+    "minecraft:cooked_beef", "minecraft:cooked_porkchop", "minecraft:cooked_mutton",
+    "minecraft:cooked_salmon", "minecraft:cooked_chicken", "minecraft:cooked_cod",
+    "minecraft:bread", "minecraft:baked_potato", "minecraft:apple", "minecraft:carrot",
+)
+# The native job holds use until a real item is consumed. Measurements bracket it.
+NPC_MEAL_LUA = (
+    "local n = numen_hosted; local before = n.status.self().hunger; "
+    "if before > 14 then print('QD_NPC_MEAL already_fed'); return end; "
+    "for _, id in ipairs({" + ",".join(json.dumps(item) for item in NPC_MEAL_FOODS) + "}) do "
+    "local count = n.inv.count(id); if count > 0 then n.inv.eat(id); "
+    "print('QD_NPC_MEAL '..id..' '..count..' '..n.inv.count(id)..' '..before..' '..n.status.self().hunger); "
+    "return end end; print('QD_NPC_MEAL no_ordinary_food')"
+)
 
 
 def _field(model: Any, camel: str, snake: str) -> Any:
@@ -103,6 +117,24 @@ class PortResult:
     text: str = ""
     data: Any = None
     execution_id: str | None = None
+
+
+def measured_meal(result: PortResult) -> PortResult:
+    if result.status != "completed":
+        return result
+    sample = re.search(r"QD_NPC_MEAL (\S+) (\d+) (\d+) (\d+) (\d+)\b", result.text)
+    data = result.data if isinstance(result.data, dict) else {}
+    if sample and sample[1] in NPC_MEAL_FOODS:
+        count_before, count_after, food_before, food_after = map(int, sample.groups()[1:])
+        if count_before == count_after + 1 and 0 <= food_before < food_after <= 20:
+            facts = {"itemId": sample[1], "countBefore": count_before, "countAfter": count_after,
+                     "hungerBefore": food_before, "hungerAfter": food_after, "effectsApplied": True}
+            return PortResult("completed", "native meal consumed one item and restored hunger",
+                              {**data, "meal": facts}, result.execution_id)
+    absence = re.search(r"QD_NPC_MEAL (already_fed|no_ordinary_food)\b", result.text)
+    if absence:
+        return PortResult("failed", absence[1], {**data, "effectsApplied": False}, result.execution_id)
+    return PortResult("unknown", "meal outcome unverified; query the original request", result.data, result.execution_id)
 
 
 @dataclass
@@ -458,6 +490,7 @@ class NumenBody(BaseBody):
         self._tasks: list[asyncio.Task[None]] = []
         self._life = "unknown"
         self._last: dict[str, Any] = {}
+        self._meals: OrderedDict[str, None] = OrderedDict()
 
     # ---- identity / capabilities -----------------------------------------------------------------
     def identity(self) -> BodyIdentity | None:
@@ -491,9 +524,14 @@ class NumenBody(BaseBody):
                                             notes="the body's own /mycli commands; normal player permissions")
             acts["inventory"] = ActionSupport(native=via(dialect["inventory"]))
         hosted = self.port.transport == "numen-hosted-mcp"
+        native_actions = self.port.catalog()
+        if hosted and lua:
+            native_actions = [*native_actions, NativeAction(name="nourish",
+                description="Eat one ordinary food carried in your backpack when hunger is at most 14. Observe the actual consumed item and hunger.",
+                input_schema={"type": "object", "properties": {}, "additionalProperties": False})]
         return Capabilities(
             kind="numen", transport=self.port.transport, actions=acts,
-            native_actions=self.port.catalog(),
+            native_actions=native_actions,
             events=["chat", "system_message", "death", "respawn", "hunger", "inventory", "combat", "dimension", "status", "lifecycle",
                     "dialogue", "action_result", "connection", "other", "safety"] if native else
                    ["chat", "whisper", "system_message", "player_join", "player_leave", "death", "respawn", "combat", "action_progress",
@@ -554,9 +592,25 @@ class NumenBody(BaseBody):
         await asyncio.gather(*tasks, return_exceptions=True)
 
     # ---- actions ----------------------------------------------------------------------------------
+    def _remember_meal(self, request_id: str) -> None:
+        self._meals[request_id] = None
+        self._meals.move_to_end(request_id)
+        while len(self._meals) > self.LEDGER:
+            self._meals.popitem(last=False)
+
+    def restore_request(self, action: BodyAction) -> None:
+        super().restore_request(action)
+        if action.verb == "native" and action.name == "nourish":
+            self._remember_meal(action.request_id)
+
     async def _do_act(self, action: BodyAction, request_id: str) -> ActionReceipt:
         verb, args = action.verb, action.args
-        if verb == "native":
+        if verb == "native" and action.name == "nourish":
+            if args or self.port.transport != "numen-hosted-mcp":
+                raise ArgumentError("nourish takes no arguments and requires the hosted body")
+            self._remember_meal(request_id)
+            mapped = measured_meal(await self.port.call("lua", {"code": NPC_MEAL_LUA}, request_id))
+        elif verb == "native":
             mapped = await self.port.call(str(action.name), args, request_id)
         elif verb == "chat":
             text = obj(args, "text", str)
@@ -614,6 +668,8 @@ class NumenBody(BaseBody):
 
     async def _do_result(self, request_id: str, previous: ActionReceipt) -> ActionReceipt:
         mapped = await self.port.result(request_id)
+        if mapped is not None and request_id in self._meals:
+            mapped = measured_meal(mapped)
         if mapped is None or mapped.status in ("accepted",) or (mapped.status == "unknown" and previous.status == "unknown"):
             return previous
         return self.settle(request_id, mapped.status, mapped.text[:4000], mapped.data) or previous

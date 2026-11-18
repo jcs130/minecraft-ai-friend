@@ -8,6 +8,19 @@ from pathlib import Path
 from .models import ActionReceipt, BodyAction
 
 
+def work_key(action: BodyAction) -> tuple | None:
+    if action.verb == "craft" or action.verb == "native" and action.name == "make":
+        recipe = action.args.get("recipeId")
+        if isinstance(recipe, str) and ":" not in recipe:
+            recipe = "minecraft:" + recipe
+        # Varying quantity on another planning turn must not issue the same
+        # recipe again for the same conversation. A fresh input can ask again.
+        return "workshop", action.args.get("workshopId"), recipe, action.args.get("inventory")
+    if action.verb == "native" and action.name == "fish":
+        return ("fish",)
+    return None
+
+
 class ActionJournal:
     def __init__(self, path: str | Path) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -18,6 +31,7 @@ class ActionJournal:
         self.db.execute("CREATE TABLE IF NOT EXISTS replies (body TEXT, event TEXT, request TEXT, PRIMARY KEY(body,event,request))")
         self.db.execute("CREATE TABLE IF NOT EXISTS acknowledgements (body TEXT, event TEXT, request TEXT, PRIMARY KEY(body,event,request))")
         self.db.execute("CREATE TABLE IF NOT EXISTS listened (body TEXT, event TEXT, intent TEXT, decided_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(body,event))")
+        self.db.execute("CREATE TABLE IF NOT EXISTS work_sources (body TEXT, event TEXT, request TEXT, PRIMARY KEY(body,event,request))")
         self.db.commit()
 
     def begin(self, body: str, action: BodyAction, sources: list[str] | None = None) -> None:
@@ -30,6 +44,22 @@ class ActionJournal:
                 self.db.executemany("INSERT INTO replies VALUES (?,?,?)", [(body, event, action.request_id) for event in dict.fromkeys(sources or [])])
             if action.verb == "native" and action.name == "ack" and action.args.get("eventId"):
                 self.db.execute("INSERT INTO acknowledgements VALUES (?,?,?)", (body, action.args["eventId"], action.request_id))
+            if work_key(action) is not None:
+                self.db.executemany("INSERT INTO work_sources VALUES (?,?,?)",
+                                    [(body, event, action.request_id) for event in dict.fromkeys(sources or [])])
+
+    def attempted_work(self, body: str, action: BodyAction, events: list[str]) -> bool:
+        key = work_key(action)
+        if not events or key is None:
+            return False
+        for event in events:
+            rows = self.db.execute("SELECT d.action FROM work_sources w JOIN dispatch d ON d.id=w.request AND d.body=w.body "
+                                   "WHERE w.body=? AND w.event=?", (body, event))
+            for (value,) in rows:
+                old = BodyAction.model_validate_json(value)
+                if work_key(old) == key:
+                    return True
+        return False
 
     def replied(self, body: str, event: str) -> bool:
         rows = self.db.execute("SELECT d.receipt FROM replies r JOIN dispatch d ON d.id=r.request AND d.body=r.body WHERE r.body=? AND r.event=?", (body, event))
@@ -59,6 +89,13 @@ class ActionJournal:
         rows = self.db.execute("SELECT action,receipt FROM dispatch WHERE body=?", (body,)).fetchall()
         return [BodyAction.model_validate_json(action) for action, receipt in rows
                 if receipt is None or json.loads(receipt)["status"] in ("accepted", "unknown")]
+
+    def recent(self, body: str, limit: int = 12) -> list[tuple[BodyAction, ActionReceipt]]:
+        rows = self.db.execute(
+            "SELECT action,receipt FROM dispatch WHERE body=? AND receipt IS NOT NULL ORDER BY rowid DESC LIMIT ?",
+            (body, limit),
+        )
+        return [(BodyAction.model_validate_json(action), ActionReceipt.model_validate_json(receipt)) for action, receipt in rows]
 
     def close(self) -> None:
         self.db.close()

@@ -96,6 +96,23 @@ def reply_status(reply: Any, is_error: bool) -> ActionStatus:
     return "unknown"
 
 
+def workshop_completed(receipt: dict, request_id: str) -> bool:
+    detail = receipt.get("observation")
+    return (receipt.get("operationId") == request_id and receipt.get("action") == "make"
+            and receipt.get("status") == "completed" and receipt.get("goalCompleted") is True
+            and isinstance(detail, dict) and detail.get("effectsApplied") is True and detail.get("verified") is True
+            and isinstance(detail.get("itemId"), str) and bool(detail["itemId"])
+            and type(detail.get("count")) is int and detail["count"] > 0
+            and detail.get("inventory") in {"chest", "backpack"})
+
+
+def fishing_completed(receipt: dict) -> bool:
+    detail = receipt.get("observation")
+    return (receipt.get("status") == "completed" and receipt.get("goalCompleted") is True
+            and isinstance(detail, dict) and detail.get("verifiedCatch") is True
+            and isinstance(detail.get("nativeLoot"), list) and bool(detail["nativeLoot"]))
+
+
 class MaidBody(BaseBody):
     kind = "maid"
 
@@ -208,9 +225,14 @@ class MaidBody(BaseBody):
             if entry.get("ownerId", self.owner_id) != self.owner_id:
                 raise RuntimeError("listed maid owner does not match configured identity")
             await self._read_context(emit=False)
-            with contextlib.suppress(Exception):
-                shop, _ = await self._maids({"action": "workshop", "maidId": self.maid_id})
-                self.workshop = isinstance(shop, dict) and shop.get("ok") is True
+            if "workshop" in self._actions:
+                try:
+                    shop, _ = await self._maids({"action": "workshop", "maidId": self.maid_id})
+                    self.workshop = isinstance(shop, dict) and shop.get("ok") is True
+                except ControlChanged:
+                    raise
+                except Exception:
+                    self.workshop = False
         except Exception as error:
             self.last_error = type(error).__name__
             self._set_state("error", f"bind failed: {error}"[:300])
@@ -360,6 +382,10 @@ class MaidBody(BaseBody):
             data = reply.get("data") or {}
             if data.get("status") != "completed" or data.get("goalCompleted") is not True:
                 status = "accepted"
+        if args["action"] == "make" and status == "completed" and not workshop_completed(reply.get("data") or {}, request_id):
+            status = "unknown"
+        if args["action"] == "fish" and status == "completed" and not fishing_completed(reply.get("data") or {}):
+            status = "unknown"
         if not write and status == "accepted":
             status = "completed"
         if not write and status == "unknown":
@@ -367,6 +393,8 @@ class MaidBody(BaseBody):
         text = str((reply or {}).get("reason") or (reply or {}).get("error") or (reply or {}).get("text") or f"{args['action']} {status}")
         if args["action"] == "context" and isinstance(reply, dict) and reply.get("ok"):
             self._apply_context(reply.get("data") or {}, emit=True)
+        if args["action"] == "workshop" and status == "completed":
+            self.workshop = True
         operation = (reply or {}).get("operationId") if isinstance(reply, dict) else None
         receipt = self.receipt(request_id, action.verb, status, text[:2000], execution_id=operation or (request_id if write else None),
                                data={"maidAction": args["action"], "reply": reply})
@@ -412,12 +440,17 @@ class MaidBody(BaseBody):
         if self._native and (not isinstance(data.get("action"), str) or not data.get("action")):
             return previous
         status = reply_status(data, bool(result.get("isError")))
+        if data.get("action") == "make" and status == "completed" and not workshop_completed(data, request_id):
+            return previous
+        if data.get("action") == "fish" and status == "completed" and not fishing_completed(data):
+            return previous
         if self._native and data.get("action") == "walk" and status == "completed":
             if data.get("status") != "completed" or data.get("goalCompleted") is not True:
                 return previous
         if status in ("accepted",) or (status == "unknown" and previous.status == "unknown"):
             return previous
-        return self.settle(request_id, status, f"receipt: {status}", reply) or previous
+        settled = {"maidAction": data["action"], "reply": reply} if self._native and data.get("action") in {"make", "fish"} else reply
+        return self.settle(request_id, status, f"receipt: {status}", settled) or previous
 
     async def reconcile(self) -> None:
         for rid, receipt in list(self._receipts.items()):

@@ -17,6 +17,7 @@ from .memory.local import LocalMemory
 from .memory.remote import RemoteGraphMemory
 from .memory.router import MemoryRouter
 from .npc import FastSelector, ModelClient, NpcHost, NpcPlanner, load_roles
+from .status_file import StatusFile
 
 
 def read(path):
@@ -30,6 +31,7 @@ async def serve(path: Path):
     roles = load_roles(Path(settings["rolesFile"]))
     state = Path(settings["stateDirectory"])
     state.mkdir(parents=True, exist_ok=True)
+    health_file = StatusFile(state / "health.json")
     # OS-held lock prevents a task restart or another chat from adding a second
     # control loop. Server leases additionally fence stale controller generations.
     lock = (state / "service.lock").open("a+b")
@@ -88,9 +90,7 @@ async def serve(path: Path):
                                         "health": host.body.health().model_dump(mode="json"), "route": host.planner.last_route,
                                         "unknownRequests": len(host.journal.unresolved(str(host.role.body_id))),
                                         "intents": [{"id": i.id, "state": i.state, "reason": i.reason} for i in list(host.runtime.intents.values())[-8:]]})
-            temp = state / "health.tmp"
-            temp.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf8")
-            temp.replace(state / "health.json")
+            await asyncio.to_thread(health_file.publish, status)
             if all(task.done() for task in tasks) and pausing:
                 return
             if not pausing:
