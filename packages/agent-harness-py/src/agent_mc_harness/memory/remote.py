@@ -8,6 +8,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit
+from uuid import UUID
 
 import httpx
 
@@ -54,6 +55,13 @@ class RemoteGraphMemory:
         self.start()
         return {"status": "queued", "episode": episode.id}
 
+    def episode_ids(self, group_id: str, *, completed: bool = False) -> set[str]:
+        return {row[0] for row in self.db.execute(
+            "SELECT id FROM outbox WHERE scope=? AND done>=?", (check_group(group_id), int(completed)))}
+
+    def pending_count(self) -> int:
+        return self.db.execute("SELECT count(*) FROM outbox WHERE done=0").fetchone()[0]
+
     async def _extract(self):
         while True:
             row = self.db.execute("SELECT scope,id,payload FROM outbox WHERE done=0 ORDER BY rowid LIMIT 1").fetchone()
@@ -68,15 +76,38 @@ class RemoteGraphMemory:
                 # This is idempotent memory extraction, never a world action. Keep the episode durable.
                 await asyncio.sleep(15)
 
-    async def search(self, group_id: str, query: str, limit=8, at: datetime | None = None):
+    async def _search(self, group_id: str, query: str, limit: int, at: datetime | None):
         check_group(group_id)
         body = {"protocol": "agent-mc-memory-graph/v1", "group_id": group_id, "query": query[:500], "limit": min(limit, 20)}
         if at:
             body["at"] = at.isoformat()
         response = await self.http.post(self.endpoint + "/search", headers=self.headers, json=body, timeout=2)
         response.raise_for_status()
+        result = response.json()
+        rows = result.get("facts") if isinstance(result, dict) else None
+        if not isinstance(rows, list):
+            raise ValueError("graphiti_search_response")
+        return rows[:limit]
+
+    async def search(self, group_id: str, query: str, limit=8, at: datetime | None = None):
         return [Fact(fact=row["fact"], source="graphiti", valid_at=row.get("valid_at"), invalid_at=row.get("invalid_at"))
-                for row in response.json()["facts"][:limit]]
+                for row in await self._search(group_id, query, limit, at)]
+
+    async def search_sources(self, group_id: str, query: str, limit: int = 8) -> tuple[str, ...]:
+        """Collect source node IDs from active edges in the exact requested graph."""
+        ids = []
+        for row in await self._search(group_id, query, limit, None):
+            if (not isinstance(row, dict) or row.get("group_id") != group_id
+                    or row.get("invalid_at") or row.get("expired_at")):
+                continue
+            episodes = row.get("episodes")
+            if not isinstance(episodes, list):
+                continue
+            for value in episodes[:16]:
+                if isinstance(value, str):
+                    with contextlib.suppress(ValueError):
+                        ids.append(str(UUID(value)))
+        return tuple(dict.fromkeys(ids))
 
     async def close(self):
         if self.task:
