@@ -1,10 +1,12 @@
 import asyncio
 from dataclasses import replace
 import json
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 import httpx
 
+from agent_mc_harness.memory.remote import RemoteGraphMemory
+from agent_mc_harness.memory.social_graph import SocialGraph
 from agent_mc_harness.models import BodyEvent
 from agent_mc_harness.npc import ModelClient, NpcPlanner
 from agent_mc_harness.runtime import Intent, PlanContext
@@ -157,6 +159,73 @@ def test_topic_recall_combines_old_chinese_matches_and_validated_ids_without_cro
     assert "暗号" not in str(semantic)
     private = social.lookup(KIRITO, "player", ALICE, public=False, topic="矿井", ranked=(secret["id"], mine["id"]))
     assert "只有我听到" in private["evidence"][0]["summary"]
+
+
+def test_graphiti_ranks_original_relationship_evidence_without_exposing_graph_text_or_other_peers(tmp_path):
+    social, _ = setup_world(tmp_path)
+    public, _ = result(social, KIRITO, ALICE, 200, channel="public", message="旧水车旁边留着探险用的灯笼。")
+    private, _ = result(social, KIRITO, ALICE, 201, channel="nearby", message="和我说过北矿井的私人照明方案。")
+    other, _ = result(social, KIRITO, BOB, 202, channel="public", message="只能和另一位玩家回忆的见面计划。")
+    result(social, YUI, ALICE, 203, channel="public", message="结衣的安排在另一个世界地点。")
+    result(social, KIRITO, ALICE, 204, channel="public", status="failed", message="并未送达的交谈内容。")
+    result(social, KIRITO, ALICE, 205, channel="public", message="你好。")
+    for number in range(206, 216):
+        result(social, KIRITO, ALICE, number, channel="public", message="嗨。")
+    social.refresh()
+    indexed, queries = {}, []
+    online = True
+
+    def node(scope, episode):
+        return str(uuid5(NAMESPACE_URL, f"agent-mc-memory/{scope}/{episode['id']}"))
+
+    def handle(request):
+        assert request.headers["Authorization"] == "Bearer synthetic-test"
+        value = json.loads(request.content)
+        scope = value["group_id"]
+        if request.url.path == "/episodes":
+            item = value["episode"]
+            indexed.setdefault(scope, []).append(item)
+            return httpx.Response(200, json={"episode_uuid": node(scope, item)})
+        queries.append(scope)
+        if not online:
+            return httpx.Response(503)
+        trace = [node(scope, item) for item in indexed[scope]]
+        wrong = [node(group, item) for group, items in indexed.items() if group != scope for item in items]
+        return httpx.Response(200, json={"facts": [
+            {"group_id": "bad_group", "episodes": trace},
+            {"group_id": scope, "episodes": wrong + trace, "fact": "生成的图谱说法只用来排序"},
+            {"group_id": scope, "episodes": trace, "invalid_at": "2026-01-01T00:00:00Z"},
+        ]})
+
+    async def exercise():
+        nonlocal online
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handle))
+        backend = RemoteGraphMemory("http://127.0.0.1:19110", "synthetic-test", tmp_path / "graph.sqlite3", http=http)
+        try:
+            graph = SocialGraph(social, backend)
+            await graph.project()
+            await backend.task
+            await graph.project()
+            assert len(indexed) == sum(map(len, indexed.values())) == 4 and backend.pending_count() == 0
+            pub, own = [graph.scope(KIRITO, "player", ALICE, flag) for flag in (True, False)]
+            assert len({pub, own, graph.scope(KIRITO, "player", BOB, True), graph.scope(YUI, "player", ALICE, True)}) == 4
+            assert "旧水车" in indexed[pub][0]["body"] and "北矿井" in indexed[own][0]["body"]
+            topic = "以前从哪里领照明物资？"
+            ids = await graph.search(KIRITO, "player", ALICE, public=True, topic=topic)
+            assert ids == (public["id"],) and queries == [pub]
+            view = social.lookup(KIRITO, "player", ALICE, public=True, topic=topic, graph_ranked=ids)
+            assert "旧水车" in view["evidence"][0]["summary"] and "图谱说法" not in str(view)
+            ids = await graph.search(KIRITO, "player", ALICE, public=False, topic=topic)
+            assert ids == (private["id"], public["id"]) and other["id"] not in ids
+            online = False
+            assert await graph.search(KIRITO, "player", ALICE, public=True, topic=topic) == ()
+            assert graph.last[KIRITO] == "local_fallback"
+            view = social.lookup(KIRITO, "player", ALICE, public=True, topic="旧水车")
+            assert "旧水车" in view["evidence"][0]["summary"]
+        finally:
+            await backend.close()
+
+    asyncio.run(exercise())
 
 
 def test_planner_requests_use_exact_pair_and_exclude_private_legacy_recall(tmp_path):

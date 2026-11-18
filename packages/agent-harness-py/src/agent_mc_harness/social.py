@@ -113,7 +113,8 @@ def relationship_view(peer_type: str, peer_id: str, events: list[SocialEvent], p
     }
 
 
-def model_view(view: dict, topic: str = "", ranked: tuple[str, ...] = (), history: tuple[dict, ...] | None = None) -> dict:
+def model_view(view: dict, topic: str = "", ranked: tuple[str, ...] = (), history: tuple[dict, ...] | None = None,
+               *, graph_ranked: tuple[str, ...] = ()) -> dict:
     evidence = view["evidence"] if history is None else history
     terms = features(topic)
     relevant = [(len(terms & features(entry["summary"])), entry) for entry in evidence]
@@ -121,9 +122,11 @@ def model_view(view: dict, topic: str = "", ranked: tuple[str, ...] = (), histor
                      key=lambda match: (-match[0], -match[1]["at"], match[1]["id"]))
     keyword_rank = {entry["id"]: rank for rank, (_, entry) in enumerate(lexical)}
     semantic_rank = {source: rank for rank, source in enumerate(ranked)}
+    graph_rank = {source: rank for rank, source in enumerate(graph_ranked)}
 
     def order(entry):
-        positions = (keyword_rank.get(entry["id"]), semantic_rank.get(entry["sourceRequestId"]))
+        source = entry["sourceRequestId"]
+        positions = (keyword_rank.get(entry["id"]), semantic_rank.get(source), graph_rank.get(source))
         score = sum(1 / (8 + pos) for pos in positions if pos is not None)
         return -score, -entry["at"], entry["id"]
 
@@ -279,7 +282,7 @@ class SocialWorld:
         return sorted(requests, key=lambda item: (item[1]["at"], item[1]["id"]))[:4]
 
     def lookup(self, body: str, peer_type: str, peer_id: str, *, public: bool, topic: str = "",
-               ranked: tuple[str, ...] = ()) -> dict | None:
+               ranked: tuple[str, ...] = (), graph_ranked: tuple[str, ...] = ()) -> dict | None:
         role = self.roles.get(body)
         if not role or peer_type not in ("player", "npc") or identifier(peer_id) != peer_id:
             return None
@@ -297,6 +300,7 @@ class SocialWorld:
             view = row["public" if public else "peerOnly"]
             if view["peer"] != {"type": peer_type, "id": peer_id} or view["visibility"] != ("public" if public else "peer_only"):
                 return None
-            return model_view(view, topic, ranked, self.recent_evidence.get((body, peer_type, peer_id, public)))
+            history = self.recent_evidence.get((body, peer_type, peer_id, public))
+            return model_view(view, topic, ranked, history, graph_ranked=graph_ranked)
         except (KeyError, TypeError):
             return None

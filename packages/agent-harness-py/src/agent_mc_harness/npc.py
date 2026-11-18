@@ -415,9 +415,10 @@ class FastSelector:
 
 class NpcHost:
     """Event-driven actor. Unknown writes pause this character across process restarts."""
-    def __init__(self, role: NpcRole, body, planner, memory, journal: ActionJournal, *, social=None):
+    def __init__(self, role: NpcRole, body, planner, memory, journal: ActionJournal, *, social=None, social_graph=None):
         self.role, self.body, self.planner, self.memory, self.journal = role, body, planner, memory, journal
         self.social = social
+        self.social_graph = social_graph
         self.runtime = HarnessRuntime(body=body, planner=self._plan, memory=memory, journal=journal, execute=True)
         self.wake = asyncio.Event()
         self.pending_dialogue: dict[str, BodyEvent] = {}
@@ -444,8 +445,10 @@ class NpcHost:
             pairs = {(contact["peerType"], contact["peerId"]) for contact in contacts if contact}
             if len(pairs) == 1 and all(contacts) and len(dialogue) == len(intent.source_events):
                 peer_type, peer_id = pairs.pop()
+                topic = context.dialogue[-1].text
+                ranked = await self.social_graph.search(body, peer_type, peer_id, public=True, topic=topic) if self.social_graph else ()
                 context.social_relationship = self.social.lookup(
-                    body, peer_type, peer_id, public=True, topic=context.dialogue[-1].text)
+                    body, peer_type, peer_id, public=True, topic=topic, graph_ranked=ranked)
         steps = await self.planner(intent, context)
         if steps is None:
             return None
