@@ -60,7 +60,7 @@ export { familiarStepAction, nativeFamiliarAction } from './familiar-action.ts';
 export { nullLogger } from '../../core/support/runtime.mjs';
 export { preferExistingRoute, type TravelRoutePreference } from '../../core/travel.ts';
 export { createDefensiveWeaponSelector, type DefensiveWeaponFrame } from '../../core/defensive-weapon.ts';
-export { classifyBossBarTitle, readBossBarHud, renderBossBarHud, type BossBarReading } from '../../core/boss-bar.ts';
+export { bossBarChange, classifyBossBarTitle, readBossBarHud, renderBossBarHud, type BossBarChange, type BossBarReading } from '../../core/boss-bar.ts';
 export { displaySlotName, installServerDisplay, readServerDisplay, renderServerDisplayHud, statsFromChatText, statsFromLoreLines, viewerScoreboardState, type ServerDisplaySnapshot, type LabeledStat } from '../../core/server-display.ts';
 export type { RouteProbe } from '../../core/skill-context.ts';
 export { MessageInbox, MESSAGE_TOOL, MESSAGE_PARAMETERS, MESSAGE_LIMIT, MESSAGE_CHANNELS, messageChannel,

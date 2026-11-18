@@ -87,7 +87,7 @@ import { AttentionReader, PERCEPTION_TOOLS, perceptionArgs, validDetection, type
 import { IdleBehaviorController, IdlePresentationContext, type IdleBehaviorScene } from './idle-behavior.ts';
 import { sampleIdleActions, executeIdleAction } from './idle-actions.ts';
 import { idleRoamOwnsPath } from './idle-roam.ts';
-import { bossBarStageTitle, classifyBossBarTitle, readBossBarHud, renderBossBarHud } from './boss-bar.ts';
+import { bossBarChange, classifyBossBarTitle, readBossBar, readBossBarHud, renderBossBarHud, type BossBarReading } from './boss-bar.ts';
 import { readServerDisplay, renderServerDisplayHud, scoreRowText } from './server-display.ts';
 import { minecraftTextComponent } from './text-component.ts';
 import { installOpenBookObserver } from './window-protocol.ts';
@@ -7963,8 +7963,6 @@ export class MinecraftWorld implements World {
     if (this.hookedBots.has(bot)) return;
     this.hookedBots.add(bot);
 
-    this.bossQuarter.clear();
-    this.bossTitles.clear();
     observeStatusEffects(bot);
     this.attachExtension(bot);
     this.hookMessageEvents(bot);
@@ -8243,51 +8241,44 @@ export class MinecraftWorld implements World {
       const what = String(soundName).includes('lightning') ? '雷击声' : '爆炸声';
       this.emit('minecraft.event', `[Minecraft] 听见${what}${dir ? ',在' + DIRECTION_ZH[dir] + '边' : ''}。`, true);
     });
+    // Mineflayer can report add, title and progress in separate packets. Store
+    // immutable readings per connection; the packet's BossBar object is mutable.
+    const hudBars = new Map<string | object, BossBarReading>();
+    const updateBar = (bar: { entityUUID?: string; title?: unknown; health?: number }) => {
+      if (this.bridge?.bot && this.bridge.bot !== bot) return;
+      const key = bar.entityUUID ?? bar, current = readBossBar(bar);
+      if (!current) {
+        if (minecraftTextComponent(bar.title).trim()) hudBars.delete(key);
+        return;
+      }
+      const reason = bossBarChange(hudBars.get(key), current);
+      hudBars.set(key, current);
+      if (!reason) return;
+      const name = current.kind === 'boss' ? 'Boss 血条' : '顶部状态条';
+      const level = current.kind === 'boss' ? '血量剩' : '状态条进度为';
+      const text = reason === 'appeared' ? `出现了${name}:${current.title}。`
+        : `${current.title}${current.progress === null ? '' : ' ' + level + ' ' + Math.round(current.progress * 100) + '%'}。`;
+      this.emit('minecraft.event', '[Minecraft] ' + text, reason === 'appeared', {
+        meta: { bossBar: { id: current.id, kind: current.kind, reason } },
+      });
+    };
     bot.on('bossBarCreated', (bar: { entityUUID?: string; title?: unknown; health?: number }) => {
-      const title = minecraftTextComponent(bar?.title);
-      const kind = classifyBossBarTitle(title);
-      if (kind === 'skillExperience') {
-        // Transient XP ticks belong in the viewer HUD, not the language-model event stream.
+      const title = minecraftTextComponent(bar.title);
+      if (classifyBossBarTitle(title) === 'skillExperience') {
         this.diag.write({ lane: 'world', event: 'skill-experience-hud', msg: title });
-        return;
       }
-      const key = bar.entityUUID ?? bar;
-      this.bossTitles.set(key, title);
-      this.bossQuarter.set(key, Math.ceil((typeof bar.health === 'number' ? bar.health : 1) * 4));
-      this.emit('minecraft.event', `[Minecraft] 出现了${kind === 'boss' ? ' Boss 血条' : '顶部状态条'}:${title}。`, true);
+      hudBars.delete(bar.entityUUID ?? bar);
+      updateBar(bar);
     });
-    bot.on('bossBarUpdated', (bar: { entityUUID?: string; title?: unknown; health?: number }) => {
-      const title = minecraftTextComponent(bar?.title);
-      const kind = classifyBossBarTitle(title);
-      if (kind === 'skillExperience') {
-        this.bossTitles.delete(bar.entityUUID ?? bar); this.bossQuarter.delete(bar.entityUUID ?? bar);
-        return;
-      }
-      const health = typeof bar?.health === 'number' ? bar.health : 1;
-      // 每跌破一个 25% 档报一次,逐点进度变化不吵。
-      const quarter = Math.ceil(health * 4);
-      const key = bar.entityUUID ?? bar;
-      const prev = this.bossQuarter.get(key) ?? 4;
-      const previousTitle = this.bossTitles.get(key);
-      this.bossTitles.set(key, title);
-      this.bossQuarter.set(key, quarter);
-      // Status bars may advance, reset or change phase with unchanged progress.
-      // Boss health keeps its existing damage threshold; identical updates stay quiet.
-      const titleChanged = kind === 'boss' ? title !== previousTitle
-        : previousTitle === undefined || bossBarStageTitle(title) !== bossBarStageTitle(previousTitle);
-      if (titleChanged || (kind === 'boss' ? quarter < prev : quarter !== prev)) {
-        this.emit('minecraft.event', `[Minecraft] ${title} ${kind === 'boss' ? '血量剩' : '状态条进度为'} ${Math.round(health * 100)}%。`, false);
-      }
+    bot.on('bossBarUpdated', updateBar);
+    bot.on('bossBarDeleted', (bar: { entityUUID?: string }) => {
+      const key = bar.entityUUID ?? bar, prior = hudBars.get(key);
+      hudBars.delete(key);
+      if (!prior || (this.bridge?.bot && this.bridge.bot !== bot)) return;
+      this.emit('minecraft.event', `[Minecraft] ${prior.title} 的${prior.kind === 'boss' ? '血条' : '顶部状态条'}已移除。`, false,
+        { meta: { bossBar: { id: prior.id, kind: prior.kind, reason: 'removed' } } });
     });
-    bot.on('bossBarDeleted', (bar: { entityUUID?: string; title?: unknown }) => {
-      const title = minecraftTextComponent(bar?.title);
-      this.bossQuarter.delete(bar.entityUUID ?? bar);
-      this.bossTitles.delete(bar.entityUUID ?? bar);
-      const kind = classifyBossBarTitle(title);
-      if (kind !== 'skillExperience') {
-        this.emit('minecraft.event', `[Minecraft] ${title} 的${kind === 'boss' ? '血条' : '顶部状态条'}已移除。`, false);
-      }
-    });
+    bot.on('respawn', () => hudBars.clear());
     bot.on('death', () => {
       // death 是 terminal 边界：先撤掉旧技能、冻结任务、队列与 path goal，再记录/播报。
       const lifecycle = (bot as Bot & { deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle }).deathLifecycle;
@@ -8749,8 +8740,6 @@ export class MinecraftWorld implements World {
   protected lastDimension: string | null = null;
   protected lastLevel: number | null = null;
   /** 顶部状态条已报过的 25% 档位(按标题) */
-  protected readonly bossQuarter = new Map<string | object, number>();
-  protected readonly bossTitles = new Map<string | object, string>();
   protected lastBoomAt = 0;
   /** mineflayer 聊天模式已派发成 chat/whisper 的消息对象 */
   protected readonly chatClaimed = new WeakSet<object>();

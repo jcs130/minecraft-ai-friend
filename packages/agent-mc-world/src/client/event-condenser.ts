@@ -126,7 +126,7 @@ export class EventCondenser {
    */
   since(cursor: number, tail = 2): EventEnvelope[] {
     const fresh = this.events.filter(e => e.cursor > cursor);
-    const old = this.events.filter(e => e.cursor <= cursor).slice(-tail);
+    const old = tail > 0 ? this.events.filter(e => e.cursor <= cursor).slice(-tail) : [];
     return [...old, ...fresh];
   }
 
@@ -136,6 +136,9 @@ export class EventCondenser {
     let rule: CondenseRule | undefined, match: RegExpMatchArray | null = null;
     for (const candidate of this.rules) {
       if (DEFAULT_CONDENSE_RULES.includes(candidate) && !acceptsDefaultRule(event)) continue;
+      // Current native bars already contain one event per meaningful change.
+      // The title-only compatibility rule cannot distinguish two bars or phases.
+      if (candidate.id === 'bossbar' && DEFAULT_CONDENSE_RULES.includes(candidate) && event.meta?.bossBar) continue;
       match = subject.match(candidate.match); if (match) { rule = candidate; break; }
     }
     if (!rule || rule.action === 'keep') return this.append(event, null);
