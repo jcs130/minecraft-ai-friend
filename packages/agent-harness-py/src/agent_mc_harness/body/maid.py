@@ -361,6 +361,10 @@ class MaidBody(BaseBody):
             if action.verb == "transfer":
                 obj(action.args, "direction", str)
                 obj(action.args, "slot", int)
+        if args["action"] == "make":
+            inventory = args.setdefault("inventory", "chest")
+            if inventory not in ("chest", "backpack"):
+                raise ArgumentError("inventory must be 'chest' (workshop supply chest) or 'backpack' (maid backpack)")
         write = not maid_read_only(args)
         if write:
             args["requestId"] = request_id

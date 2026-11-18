@@ -74,6 +74,8 @@ class NativeServer:
                 data["historicalDeath"] = {"at": "2026-01-01T00:00:00Z"}
         elif action == "inventory":
             data["slots"] = [{"slot": 0, "itemId": "minecraft:iron_sword", "count": 1}]
+        elif action == "workshop":
+            data["workshops"] = []
         elif action == "inbox":
             data["messages"] = self.messages
         elif action == "receipt":
@@ -106,6 +108,25 @@ def make(server: NativeServer, *, controller_id: str = CONTROLLER) -> MaidBody:
     bridge = NativeMaidBridge(ENDPOINT, TOKEN, owner_id=OWNER, maid_id=MAID, controller_id=controller_id, http=http)
     return MaidBody(bridge, scope=SCOPE, owner_id=OWNER, maid_id=MAID, server_id="qa-server", world_key="qa-world",
                     poll_seconds=0, result_poll_seconds=0, context_poll_seconds=0)
+
+
+def test_workshop_inventory_has_an_explicit_default_and_rejects_a_guessed_name(run: Any) -> None:
+    async def scenario():
+        server = NativeServer()
+        server.actions.extend(["workshop", "make"])
+        body = make(server)
+        await body.spawn()
+        try:
+            order = {"workshopId": "fixture", "recipeId": "minecraft:torch", "quantity": 4}
+            bad = await body.act(BodyAction(verb="craft", args={**order, "inventory": "supply"}, request_id="bad_inventory"))
+            assert bad.status == "rejected" and "chest" in bad.text and "backpack" in bad.text
+            assert not server.writes
+            await body.act(BodyAction(verb="craft", args=order, request_id="default_inventory"))
+            assert [write["inventory"] for write in server.writes] == ["chest"]
+        finally:
+            await body.destroy()
+
+    run(scenario())
 
 
 def test_native_argument_catalogue_preserves_action_specific_server_contract():
