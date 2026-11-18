@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.98
+
+- Idle navigation checks its starting cell when sampling, reusing and starting a route. A supported shallow-water start can take a single verified step onto a dry bank.
+
 ## 0.5.7-rc.160-preview.97
 
 - Exclude unloaded blocks during idle path searches and live replanning. A missing block position leaves the game connection and existing movement constraints intact.

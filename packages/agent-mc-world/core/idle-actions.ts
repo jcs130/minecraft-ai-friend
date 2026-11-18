@@ -3,7 +3,7 @@ import { Vec3 } from 'vec3';
 import { canSeeBlockAt, canSeeEntity } from './terrain.ts';
 import type { IdleBehaviorCandidate } from './idle-behavior.ts';
 import { spatialBody } from './spatial-site.ts';
-import { sampleIdleRoam, executeIdleRoam, type IdleRoam } from './idle-roam.ts';
+import { sampleIdleRoam, executeIdleRoam, idleRoamCanStart, type IdleRoam } from './idle-roam.ts';
 
 /** Protocol poses and local viewer previews available while the caller owns the body. */
 export const IDLE_ACTIONS = [
@@ -195,7 +195,7 @@ export function sampleIdleActions(bot: Bot, options: {
     && !(['forward', 'back', 'left', 'right', 'jump', 'sprint'] as ControlState[]).some(key => bot.getControlState(key))) {
     const origin = state.origin;
     const prior=options.reuseStroll;
-    const stroll=prior && distance(prior.origin,origin)<.3
+    const stroll=prior && idleRoamCanStart(bot,prior)
       && distance(prior.anchor,options.movementAnchor ?? origin)<.01
       ? prior : sampleIdleRoam(bot,options.movementAnchor ?? origin,options.random);
     if(stroll){state.stroll=stroll;allowed.add('stroll');}

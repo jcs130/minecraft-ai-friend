@@ -12,7 +12,10 @@ and observation remain possible.
 
 The search is bounded to 60 ms, the uninterrupted idle area to 12 blocks, and a
 walk to 12 seconds. Unloaded terrain, water, portals, damaging blocks, pressure
-plates, mining, placing and parkour are excluded. Existing collision and server
+plates, mining, placing and parkour are excluded. From a supported foot cell
+already in shallow water with clear air above, a stroll may step directly onto
+an adjacent dry bank. It never selects an intermediate water cell. A flooded
+origin invalidates cached inland walks. Existing collision and server
 boundaries are preserved. Current terrain is rechecked during execution; a
 stalled or invalidated path is recorded as stopped, not reached. New body tasks,
 combat, damage, connection changes and hazard reflexes cancel the idle lease.

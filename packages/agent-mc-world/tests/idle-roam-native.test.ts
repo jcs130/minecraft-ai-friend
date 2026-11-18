@@ -92,6 +92,33 @@ it('stops before a new hazard on the chosen route and bounds a stalled walk',asy
   const since=Date.now();await run(h,new Vec3(5,64,0),'no-progress');expect(Date.now()-since).toBeLessThan(2200);
  }finally{h.close();}
 });
+it.each([0,1])('walks out of one shallow water cell onto an adjacent bank raised %i blocks',async rise=>{
+ const h=fixture();try{
+  const origin=h.b.entity.position.clone();
+  for(let x=-1;x<=1;x++)for(let z=-1;z<=1;z++)h.set(x,64,z,'water');
+  h.set(0,64,-1,rise?'stone':'air');
+  let route=sampleIdleRoam(h.b,origin,()=>0);
+  for(let i=0;i<4&&!route;i++)route=sampleIdleRoam(h.b,origin,()=>0);
+  expect(route).not.toBeNull();
+  const destination=new Vec3(route!.destination.x,route!.destination.y,route!.destination.z);
+  expect(destination).toEqual(new Vec3(0,64+rise,-1));
+  await run(h,destination,undefined,true);
+  expect(h.b.entity.position.floored()).toEqual(destination);
+  expect(h.b.blockAt(h.b.entity.position)?.name).toBe('air');
+  expect(idleRoamOwnsPath(h.b)).toBe(false);
+ }finally{h.close();}
+});
+it('excludes inland strolls across water and rejects stale dry routes when the feet flood',async()=>{
+ const h=fixture();try{
+  const origin=h.b.entity.position.clone();
+  const stale={origin,destination:new Vec3(0,64,-5),anchor:origin};
+  for(let x=-1;x<=1;x++)for(let z=-1;z<=1;z++)h.set(x,64,z,'water');
+  expect(sampleIdleRoam(h.b,origin,()=>0)).toBeNull();
+  expect(sampleIdleActions(h.b,{allowMovement:true,reuseStroll:stale}).candidates.some(c=>c.id==='stroll')).toBe(false);
+  await run(h,stale.destination);
+  expect(h.b.entity.position.distanceTo(origin)).toBeLessThan(.1);
+ }finally{h.close();}
+});
 it('rejects missing chunks, a cliff and routes outside the idle anchor',async()=>{
  const h=fixture();try{
   const start=h.b.entity.position.clone(),read=h.b.blockAt.bind(h.b);
