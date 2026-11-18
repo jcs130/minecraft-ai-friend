@@ -1,5 +1,5 @@
 name: QiandengVoice
-version: 0.1.8
+version: 0.1.9
 main: dev.god.godvoice.PaperVoicePlugin
 api-version: '1.21'
 depend: [voicechat]
@@ -8,6 +8,9 @@ commands:
   voice:
     description: Nearby voice and Agent speech
     usage: /voice
+  npcsocial:
+    description: 查看自己的居民关系或与居民交谈
+    usage: /npcsocial <居民名或UUID> [json|tell <消息>|public <消息>|receipt <请求ID>]
 permissions:
   qiandeng.voice.use:
     default: true

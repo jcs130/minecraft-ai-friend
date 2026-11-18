@@ -11,7 +11,7 @@ import net.minecraft.world.phys.Vec3;
 
 /** Called only after a current conversation accepts the verified speaker's invitation. */
 final class ResidentTravel {
-    record Plan(UUID maid,ServerLevel world,BlockPos landing,String fromDimension,Vec3 from,long preparedAt,String reason) {
+    record Plan(UUID maid,ServerLevel world,BlockPos landing,String fromDimension,Vec3 from,long preparedAt,String reason,UUID partner) {
         Map<String,Object> evidence(){return Map.of("maidId",maid.toString(),"fromDimension",fromDimension,"dimension",world.dimension().location().toString(),
             "from",Map.of("x",from.x,"y",from.y,"z",from.z),"landing",ResidentActions.point(landing),"manaCost",5,"cooldownMs",60000);}
     }
@@ -50,7 +50,8 @@ final class ResidentTravel {
             }
         }
         if(landing==null)throw new IllegalArgumentException("travel_no_permitted_safe_landing");
-        return new Plan(maid.getUUID(),world,landing,maid.level().dimension().location().toString(),maid.position(),now,reason);
+        return new Plan(maid.getUUID(),world,landing,maid.level().dimension().location().toString(),maid.position(),now,reason,
+                partner==null?null:partner.getUUID());
     }
     static Map<String,Object> execute(EntityMaid maid,Plan plan) {
         long now=System.currentTimeMillis();

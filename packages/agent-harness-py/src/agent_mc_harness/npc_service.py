@@ -17,6 +17,7 @@ from .memory.local import LocalMemory
 from .memory.remote import RemoteGraphMemory
 from .memory.router import MemoryRouter
 from .npc import FastSelector, ModelClient, NpcHost, NpcPlanner, load_roles
+from .social import SocialWorld, publish_json
 
 
 def read(path):
@@ -43,6 +44,13 @@ async def serve(path: Path):
         import fcntl
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     clients, hosts, tasks = [], [], []
+    social_tasks = []
+    social = None
+    if settings.get("relationshipDataPath"):
+        world_data = Path(settings["relationshipDataPath"])
+        if not world_data.is_absolute() or not world_data.is_dir():
+            raise ValueError("relationship_world_data_unavailable")
+        social = SocialWorld(world_data, settings["serverId"], roles)
     provider = {}
     for name, file in settings["providers"].items():
         private = read(file)
@@ -53,6 +61,40 @@ async def serve(path: Path):
     async def delayed(host):
         await asyncio.sleep(15)
         await host.run()
+
+    def maintenance():
+        return bool(settings.get("pauseFile") and Path(settings["pauseFile"]).exists())
+
+    async def project_social():
+        while True:
+            if not maintenance():
+                try:
+                    await asyncio.to_thread(social.refresh)
+                except (OSError, ValueError) as failure:
+                    print(f"NPC relationship projection unavailable: {type(failure).__name__}", flush=True)
+            await asyncio.sleep(10)
+
+    async def answer_social(role, planner):
+        body = str(role.body_id)
+        while True:
+            if not maintenance():
+                for answer, row in await asyncio.to_thread(social.dialogue_requests, role):
+                    speaker = row["speakerId"]
+                    peer = social.registered.get(speaker, speaker)
+                    public = row["channel"] == "public"
+                    try:
+                        relationship = social.lookup(body, "npc" if speaker in social.registered else "player", peer,
+                                                     public=public, topic=row["message"])
+                        reply = await planner.answer_dialogue(row["message"], relationship, public=public)
+                        response = {"status": "prepared", "reply": reply}
+                    except Exception:
+                        response = {"status": "failed", "reason": "dialogue_reply_unavailable"}
+                    try:
+                        await asyncio.to_thread(publish_json, answer, response | {
+                            "schemaVersion": 1, "id": row["id"], "maidId": body, "speakerId": speaker, "channel": row["channel"]})
+                    except OSError as failure:
+                        print(f"NPC dialogue result unavailable: {type(failure).__name__}", flush=True)
+            await asyncio.sleep(2)
 
     def build(role):
         transport = settings["bodies"][role.id]
@@ -70,14 +112,18 @@ async def serve(path: Path):
         memory = MemoryRouter(LocalMemory(state / role.id / "memory.sqlite3"), RemoteGraphMemory(settings["graphiti"]["endpoint"],
                                 Path(settings["graphiti"]["tokenFile"]).read_text().strip(), state / role.id / "graph-outbox.sqlite3"))
         return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1),
-                       memory, ActionJournal(state / role.id / "actions.sqlite3"))
+                       memory, ActionJournal(state / role.id / "actions.sqlite3"), social=social)
     try:
         for role in roles:
             host = build(role)
             hosts.append(host)
             tasks.append(asyncio.create_task(host.run(), name="npc-" + role.id))
+        if social:
+            social_tasks.append(asyncio.create_task(project_social(), name="npc-relationships"))
+            social_tasks.extend(asyncio.create_task(answer_social(host.role, host.planner), name="npc-dialogue-" + host.role.id)
+                                for host in hosts if host.role.social_memory)
         while True:
-            pausing = bool(settings.get("pauseFile") and Path(settings["pauseFile"]).exists())
+            pausing = maintenance()
             for host in hosts:
                 host.pausing = pausing
             status = {"schema": 1, "pid": os.getpid(), "pausing": pausing, "roles": []}
@@ -103,9 +149,9 @@ async def serve(path: Path):
                         tasks[index]=asyncio.create_task(delayed(hosts[index]),name="npc-"+roles[index].id)
             await asyncio.sleep(2)
     finally:
-        for task in tasks:
+        for task in [*tasks, *social_tasks]:
             task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.gather(*tasks, *social_tasks, return_exceptions=True)
         for host in hosts:
             await host.close()
         for client in clients:

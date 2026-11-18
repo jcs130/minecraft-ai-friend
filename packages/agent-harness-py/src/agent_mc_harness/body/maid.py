@@ -498,7 +498,8 @@ class MaidBody(BaseBody):
                     speaker = row.get("speakerId") or row.get("senderUuid")
                     prefix = "qdvoice:" + str(speaker) + ":"
                     relay = str(row["eventId"])[len(prefix):] if str(row["eventId"]).startswith(prefix) else ""
-                    channel = ("voice" if relay.startswith("voice_") else "npc_chat" if relay.startswith("npc_") else "chat")
+                    channel = ("public" if relay.startswith("public_") else "voice" if relay.startswith("voice_")
+                               else "npc_chat" if relay.startswith("npc_") else "chat")
                     self.emit("dialogue", str(row.get("text") or "")[:1000], severity=2,
                               data={"eventId": row["eventId"], "maidId": self.maid_id, "ownerId": self.owner_id,
                                     "speaker": row.get("speaker") or row.get("senderName"),
@@ -507,6 +508,7 @@ class MaidBody(BaseBody):
                                     **({"deliveryScope": "nearby"} if relay else {}),
                                     "receivedAt": row.get("receivedAt"), "source": row.get("source") or "untrusted_game_dialogue",
                                     "trusted": False,
+                                    "serverAttributed": isinstance(self.bridge, NativeMaidBridge),
                                     "memoryNamespace": row.get("memoryNamespace") or data.get("memoryNamespace") or context.get("memoryNamespace"),
                                     "sessionKey": row.get("sessionKey") or data.get("sessionKey") or context.get("sessionKey")}, raw=row)
                     count += 1

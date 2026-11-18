@@ -22,15 +22,35 @@ public final class ResidentBodyAccess {
     public static void speak(UUID id,String text){
         var maid=body(id);maid.getChatBubbleManager().addTextChatBubble(text);
     }
-    static java.util.Map<String,Object> conversation(UUID id,net.minecraft.world.entity.LivingEntity speaker,String text)throws Exception{
+    static java.util.Map<String,Object> conversation(UUID id,net.minecraft.world.entity.LivingEntity speaker,String text,String channel)throws Exception{
         if(!external(id))throw new IllegalArgumentException("unified_controller_not_selected");
         Object pm=Class.forName("org.bukkit.Bukkit").getMethod("getPluginManager").invoke(null);
+        if ("private".equals(channel)) {
+            Object voice = Class.forName("org.bukkit.plugin.PluginManager").getMethod("getPlugin",String.class).invoke(pm,"QiandengVoice");
+            if (voice == null || !(speaker instanceof net.minecraft.server.level.ServerPlayer))
+                throw new IllegalArgumentException("npc_private_dialogue_unavailable");
+            String request = (String) voice.getClass().getMethod("queueNpcPrivateConversation",UUID.class,UUID.class,String.class)
+                    .invoke(voice,id,speaker.getUUID(),text);
+            return java.util.Map.of("status","accepted","action","conversation","eventId",request,"channel","private","completed",false);
+        }
         Object plugin=Class.forName("org.bukkit.plugin.PluginManager").getMethod("getPlugin",String.class).invoke(pm,"QiandengjiMaidBridge");
         if(plugin==null)throw new IllegalStateException("native_body_port_unavailable");
         String event=java.util.UUID.randomUUID().toString();
         plugin.getClass().getMethod("queueResidentConversation",UUID.class,UUID.class,String.class,String.class,String.class)
             .invoke(plugin,id,speaker.getUUID(),speaker.getName().getString(),text,event);
         return java.util.Map.of("status","accepted","action","conversation","eventId",event,"controller","unified","completed",false);
+    }
+    static Object relationship(UUID body, UUID speaker, boolean privateView) {
+        try {
+            Object pm = Class.forName("org.bukkit.Bukkit").getMethod("getPluginManager").invoke(null);
+            Object voice = Class.forName("org.bukkit.plugin.PluginManager").getMethod("getPlugin", String.class).invoke(pm,"QiandengVoice");
+            if (voice == null) return null;
+            String result = (String) voice.getClass().getMethod("npcRelationship",UUID.class,UUID.class,boolean.class)
+                    .invoke(voice,body,speaker,privateView);
+            return result == null ? null : com.google.gson.JsonParser.parseString(result);
+        } catch (ReflectiveOperationException | RuntimeException unavailable) {
+            return null;
+        }
     }
     public static final String DOWNED="tlm_resident_trial_downed";
     public static void downed(UUID id,boolean hold){

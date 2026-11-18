@@ -70,7 +70,7 @@ final class CompanionJournal {
                             return (Map<String,Object>)JSON.fromJson(Files.readString(p, StandardCharsets.UTF_8), Map.class);
                         } catch (IOException ex) { throw new java.io.UncheckedIOException(ex); }
                     }).filter(row -> maid.toString().equals(row.get("maidId")) && speaker.toString().equals(row.get("speakerId")))
-                    .filter(row -> includePrivate || !"private".equals(row.get("channel")))
+                    .filter(row -> includePrivate || "public".equals(row.get("channel")))
                     .limit(6).map(CompanionJournal::context).toList();
         }
     }
