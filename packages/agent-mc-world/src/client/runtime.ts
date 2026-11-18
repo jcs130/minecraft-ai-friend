@@ -27,6 +27,7 @@ import { CurrentFacts, prepareContext } from './context.ts';
 import { RequestLedger } from './request-ledger.ts';
 import { GameMemoryBook } from '../../core/game-memory.ts';
 import { GameMemoryService } from '../../core/game-memory-service.ts';
+import { TrajectoryScoreError } from '../../core/jitrl-trajectory.ts';
 import { KNOWLEDGE_TOOL, queryMinecraftKnowledge } from '../../core/knowledge.ts';
 import { worldIdentityOf } from '../../core/server-config.ts';
 import { readRealmMarker } from '../../core/server.ts';
@@ -716,6 +717,7 @@ export class MinecraftAgentClient {
       return { text: JSON.stringify(result), meta: { gameMemory: result } };
     } catch (error) {
       signal.throwIfAborted();
+      if(error instanceof TrajectoryScoreError)return error.toolOutcome();
       // A failed evidence read has no action outcome to reconcile. Preserve its
       // contract error through the request ledger/MCP instead of hiding it as
       // request_outcome_unknown. Mutating and remote-service uncertainty stays.

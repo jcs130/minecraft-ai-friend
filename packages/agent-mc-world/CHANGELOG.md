@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.99
+
+- Validate trajectory reward pages against original outcomes before storing them. Scorers can identify the exact step, retain accepted pages and repair a draft created by an earlier release.
+
 ## 0.5.7-rc.160-preview.98
 
 - Idle navigation checks its starting cell when sampling, reusing and starting a route. A supported shallow-water start can take a single verified step onto a dry bank.
