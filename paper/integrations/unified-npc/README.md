@@ -51,6 +51,75 @@ dialogue. A canned greeting therefore cannot repeatedly wake another NPC.
 The native context reports the active unified inference and conversation owner.
 The old TLM selection is retained in the read-only configuration for history.
 
+## Body activities
+
+The original player's follow, stay and sit requests can use the same executor as
+an active unified maid. They have their own original receipts and keep the
+controller generation. Looking up a workshop or opening the ordinary inventory
+menu keeps the lease. The owner can transfer or equip real items through the
+existing inventory path while the body has no pending movement, fishing or
+workshop job. The original inventory receipt and slot rules still apply. The
+explicitly selected brain menu can hand off control. A fenced controller waits
+for that handoff before planning again.
+
+- For a maid role that allows `body:native:workshop` and `body:craft`, the server
+  exposes the original authorized sites and recipes. The real owner must be
+  present and allowed to use the containers. A completed order includes the
+  original request ID, actual item and count, and which inventory changed.
+  Lease changes interrupt orders that have yet to commit. An unresolved order
+  blocks another host write.
+- A maid role that allows `body:native:fish` can make one catch while otherwise
+  guarding, with the corresponding work schedule, equipped rod, native seat
+  and suitable loaded water. The registered companion must be nearby and safe.
+  Receipt completion requires an original fishing event with loot. The body
+  resumes guard after the catch or an interruption when the previous mode can
+  be restored safely.
+- A hosted Numen role that allows `body:native:nourish` eats an ordinary food
+  from its own backpack when hunger is at most 14 and the observed body is idle
+  and safe. Held food is consumed by the native player-body job. Completion
+  carries measured item and hunger deltas.
+- Maid guard selects the installed TLM attack task for the weapon. Native bow,
+  crossbow, gohei and trident behavior stays with TLM. An add-on's task can
+  run with an equipped item when it accepts the weapon, its own prerequisites
+  pass and it accepts the target. The role's normal protection rules apply.
+  A historical companion contract with no active registration stays in the
+  ledger. The resident loop waits for the registration before using it.
+- With `body:inventory`, a hosted Numen role sees real namespaced items and
+  the hands at the time of the read. `body:equip` can use `hand: "auto"` so
+  the native wardrobe chooses an eligible wearable slot. To permit a
+  specific item use, add its registered ID to `native_items` and grant that
+  role `body:use_item`. The item must already be in the main hand.
+  This performs a short native right click. The receipt carries the original
+  request ID, item count before and after and the number of changes the native
+  click observed. Use the world or mod state to confirm the intended outcome.
+
+The next plan receives recent original receipts, including work still in
+progress. The dialogue journal keeps a work attempt tied to its source event
+across restart so a new planning turn cannot repeat an identical order for the
+same input.
+
+### Maid starter equipment and favorability
+
+A registered unified maid gets her starter kit on the original entity when it
+first loads. An empty backpack slot receives the native 36-slot large backpack.
+The ordinary totem of undying and fire and fall protection baubles go into
+free native bauble slots. Existing backpacks and equipment are kept, including
+an existing native extra-life bauble. A saved equipment marker prevents any
+restock when an item is used, removed or the game restarts. TLM handles the
+lethal effect and durability. The already configured partner respawn can still
+run after a lethal hit the baubles do not stop.
+
+The existing inventory menu displays the original favorability level and points.
+Normal meals, maid beds, reading and board games use TLM's own effects and
+cooldowns. At 64, 192 and 384 points, the native level increases. The host uses
+the sampled level for the tone of replies to the registered partner. Other
+speakers keep the role's regular tone and conversation rules apply at all levels.
+
+The joint server candidate also includes reviewed native hosted bridge 0.1.3
+from PR #307. This bridge adds Better Combat playback for accepted ordinary
+melee hits on compatible observers. See the
+[crossplay validation](../../probe/better-combat-crossplay/README.md).
+
 `attention_probe.py --provider-dir <private-directory> --output <report>` tests
 synthetic conversations against the configured real providers without executing
 game actions. This is prompt acceptance, not proof of production crowd behaviour.
@@ -89,6 +158,10 @@ host. An OS lock prevents duplicate supervisors/hosts; native controller leases
 fence old generations. Loss of the game port or a maintenance marker pauses the
 host after its current request. Numen re-admission requires a separate proof of
 the exact original UUID, owner and name. It never creates replacement bodies.
+
+Status snapshots remain atomic when readers hold an older copy on Windows. A
+sharing conflict may delay the reported heartbeat until the reader closes its
+handle. The managed processes continue, and sustained conflicts are logged.
 
 The supervisor must be installed through an independent OS lifecycle. Running it
 inside an interactive chat command is a test, not a persistent deployment. Store

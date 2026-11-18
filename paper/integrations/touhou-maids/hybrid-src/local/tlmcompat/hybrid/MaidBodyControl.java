@@ -10,19 +10,20 @@ import java.util.*;
 final class MaidBodyControl {
     static final String PROTOCOL="qiandengji-maid-body/v1";
     static final long LEASE_MILLIS=120_000;
-    static final Set<String> READS=Set.of("list","context","inventory","tasks","brain","receipt","inbox","spells");
-    static final Set<String> WRITES=Set.of("walk","stop","stay","sit","follow","guard","companion","cast","task","equip","pickup","schedule","speak","ack","dismount");
+    static final Set<String> READS=Set.of("list","context","inventory","tasks","brain","receipt","inbox","spells","workshop");
+    static final Set<String> WRITES=Set.of("walk","stop","stay","sit","follow","guard","companion","cast","task","equip","pickup","schedule","speak","ack","dismount","make","fish");
     static Set<String> fields(String action){
         var keys=new HashSet<>(Set.of("action","maidId","requestId"));
         keys.addAll(switch(action){case "walk"->Set.of("x","y","z","dimension");case "receipt"->Set.of("operationId","operationAction");
             case "task"->Set.of("taskId");case "equip"->Set.of("hand","slot");case "schedule"->Set.of("schedule");
-            case "cast"->Set.of("spellId");case "pickup"->Set.of("enabled");case "speak"->Set.of("text");case "ack"->Set.of("eventId");default->Set.of();});return keys;
+            case "cast"->Set.of("spellId");case "pickup"->Set.of("enabled");case "speak"->Set.of("text");case "ack"->Set.of("eventId");
+            case "make"->Set.of("workshopId","recipeId","quantity","inventory");default->Set.of();});return keys;
     }
-    static Set<String> requiredFields(String action){var fields=new HashSet<>(fields(action));fields.removeAll(Set.of("maidId","dimension","operationAction"));if(!WRITES.contains(action))fields.remove("requestId");return fields;}
+    static Set<String> requiredFields(String action){var fields=new HashSet<>(fields(action));fields.removeAll(Set.of("maidId","dimension","operationAction","quantity"));if(!WRITES.contains(action))fields.remove("requestId");return fields;}
     static void validateShape(JsonObject input){String action=string(input,"action");
         if(!READS.contains(action)&&!WRITES.contains(action))throw new Fault(400,"UNSUPPORTED_ACTION");keys(input,fields(action));
         for(String field:new TreeSet<>(requiredFields(action)))if(!input.has(field))throw new Fault(400,"INVALID_"+field);
-        for(String field:List.of("maidId","requestId","operationId","operationAction","taskId","hand","schedule","text","dimension","eventId","spellId"))if(input.has(field))string(input,field);
+        for(String field:List.of("maidId","requestId","operationId","operationAction","taskId","hand","schedule","text","dimension","eventId","spellId","workshopId","recipeId","inventory"))if(input.has(field))string(input,field);
     }
     static final class Fault extends RuntimeException {
         final int http; final String code;
@@ -93,7 +94,9 @@ final class MaidBodyControl {
     JsonObject finish(UUID maid,String request,String status,JsonObject observation)throws IOException {
         var row=read(maid,request);if(row==null)throw new Fault(503,"RECEIPT_UNAVAILABLE");
         row.addProperty("status",status);row.addProperty("terminal",!Set.of("accepted","running","unknown").contains(status));
-        row.addProperty("goalCompleted",status.equals("completed")&&observation.has("arrived")&&observation.get("arrived").getAsBoolean());
+        String action = row.get("action").getAsString();
+        var proof = observation.get(action.equals("fish") ? "verifiedCatch" : "arrived");
+        row.addProperty("goalCompleted", status.equals("completed") && proof != null && proof.getAsBoolean());
         if(observation.has("actualPosition"))row.add("actualPosition",observation.get("actualPosition").deepCopy());
         row.addProperty("observedAt",java.time.Instant.now().toString());row.add("observation",observation);write(file(maid,request),row);return row;
     }
@@ -111,7 +114,8 @@ final class MaidBodyControl {
         var schema=new JsonObject();schema.addProperty("type","object");schema.addProperty("additionalProperties",false);
         var p=new JsonObject();var action=new JsonObject();action.addProperty("type","string");var values=new JsonArray();
         new TreeSet<>(READS).forEach(values::add);new TreeSet<>(WRITES).forEach(values::add);action.add("enum",values);p.add("action",action);
-        for(String k:List.of("maidId","requestId","operationId","operationAction","taskId","hand","schedule","text","dimension","eventId","spellId")){var field=new JsonObject();field.addProperty("type","string");p.add(k,field);}
+        for(String k:List.of("maidId","requestId","operationId","operationAction","taskId","hand","schedule","text","dimension","eventId","spellId","workshopId","recipeId","inventory")){var field=new JsonObject();field.addProperty("type","string");p.add(k,field);}
+        var quantity = new JsonObject();quantity.addProperty("type","integer");quantity.addProperty("minimum",1);quantity.addProperty("description","Number of finished items. Omit for one batch.");p.add("quantity",quantity);
         for(String k:List.of("x","y","z")){var field=new JsonObject();field.addProperty("type","number");field.addProperty("description","Absolute world coordinate in blocks; all x,y,z required for walk. Loaded destination within 96 blocks, no digging or teleporting.");p.add(k,field);}
         var slot=new JsonObject();slot.addProperty("type","integer");slot.addProperty("minimum",0);p.add("slot",slot);
         var enabled=new JsonObject();enabled.addProperty("type","boolean");p.add("enabled",enabled);
@@ -121,6 +125,6 @@ final class MaidBodyControl {
             var needed=new JsonArray();requiredFields(name).stream().sorted().forEach(needed::add);branch.add("required",needed);
             var names=new JsonObject();var allowed=new JsonArray();fields(name).stream().sorted().forEach(allowed::add);names.add("enum",allowed);branch.add("propertyNames",names);branches.add(branch);}
         schema.add("oneOf",branches);
-        var out=new JsonObject();out.addProperty("name","mc_maids");out.addProperty("description","Original owned maid body, lease scoped. Reads need no online owner. Writes require original requestId; query receipt after timeout, never replay. companion delegates follow/guard/dialogue to the original selected brain and history; explicit movement suspends it. spells lists the original private companion spell pool; cast requires the real online partner and current eligibility. walk lasts at most 30s; settings and applied effects are not goal completion. Owner transfer/craft not available on this port.");out.add("inputSchema",schema);return out;
+        var out=new JsonObject();out.addProperty("name","mc_maids");out.addProperty("description","Original owned maid body, lease scoped. Reads need no online owner. Writes require original requestId; query receipt after timeout. Workshop make uses only an authorized site, recipe and inventory with the real nearby owner. A pending job is not a finished item. spells lists learned spells; walk lasts at most 30s.");out.add("inputSchema",schema);return out;
     }
 }

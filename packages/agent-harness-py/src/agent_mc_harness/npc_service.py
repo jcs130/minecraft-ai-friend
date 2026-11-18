@@ -21,6 +21,7 @@ from .memory.router import MemoryRouter
 from .memory.social_graph import SocialGraph
 from .npc import FastSelector, ModelClient, NpcHost, NpcPlanner, load_roles
 from .social import SocialWorld, publish_json
+from .status_file import StatusFile
 
 
 def read(path):
@@ -49,6 +50,7 @@ async def serve(path: Path):
     roles = load_roles(Path(settings["rolesFile"]))
     state = Path(settings["stateDirectory"])
     state.mkdir(parents=True, exist_ok=True)
+    health_file = StatusFile(state / "health.json")
     # OS-held lock prevents a task restart or another chat from adding a second
     # control loop. Server leases additionally fence stale controller generations.
     lock = (state / "service.lock").open("a+b")
@@ -147,7 +149,8 @@ async def serve(path: Path):
             port = HostedMcpPort({**transport, "name": transport["name"], "bodyId":str(role.body_id),
                                   "ownerId":str(role.owner_id), "serverId":settings["serverId"],
                                   "journalDirectory":str(state / role.id / "numen")})
-            body = NumenBody(port, scope=scope, server_id=settings["serverId"], name=role.name, owner_id=str(role.owner_id))
+            body = NumenBody(port, scope=scope, server_id=settings["serverId"], name=role.name, owner_id=str(role.owner_id),
+                             item_use_ids=tuple(role.native_items))
         memory = open_role_memory(state / role.id, connection)
         return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1),
                        memory, ActionJournal(state / role.id / "actions.sqlite3"), social=social, social_graph=social_graph)
@@ -177,9 +180,7 @@ async def serve(path: Path):
                                         "socialGraphiti": social_graph.last.get(str(host.role.body_id)) if social_graph else None,
                                         "unknownRequests": len(host.journal.unresolved(str(host.role.body_id))),
                                         "intents": [{"id": i.id, "state": i.state, "reason": i.reason} for i in list(host.runtime.intents.values())[-8:]]})
-            temp = state / "health.tmp"
-            temp.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf8")
-            temp.replace(state / "health.json")
+            await asyncio.to_thread(health_file.publish, status)
             if all(task.done() for task in tasks) and pausing:
                 return
             if not pausing:

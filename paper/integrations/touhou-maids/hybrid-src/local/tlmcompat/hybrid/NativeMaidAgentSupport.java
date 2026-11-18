@@ -48,11 +48,16 @@ public final class NativeMaidAgentSupport implements Listener {
         });};
         fishingListener=event->{
             EntityMaid maid=event.getMaid();
-            if(maid==null||!plugin.sharedDialogueEnabled(maid))return;
+            if(maid==null||(!plugin.sharedDialogueEnabled(maid)&&!plugin.unifiedBody(maid.getUUID())))return;
             long observed=System.currentTimeMillis();
             Bukkit.getScheduler().runTask(plugin,()->{
-                if(!event.isCanceled()&&event.getHook().isRemoved()&&maid.isAlive()&&!maid.isRemoved()&&registeredOwner(maid)!=null)
+                if(!event.isCanceled()&&event.getHook().isRemoved()&&maid.isAlive()&&!maid.isRemoved()&&registeredOwner(maid)!=null) {
                     maid.getPersistentData().putLong(MaidCompanionActions.FISHED_AT,observed);
+                    var loot = new JsonArray();
+                    event.getDrops().stream().filter(stack -> !stack.isEmpty()).limit(12)
+                            .map(HybridMaidPlugin::item).forEach(loot::add);
+                    plugin.nativeCaught(maid,loot);
+                }
             });
         };
         Bukkit.getPluginManager().registerEvents(this,plugin);

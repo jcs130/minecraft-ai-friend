@@ -85,6 +85,7 @@ class PlanContext(BaseModel):
     social_relationship: dict[str, Any] | None = None
     decision: Decision | None = None  # route level, requested/effective thinking tier, output budget profile
     snapshot: BodySnapshot | None = None
+    body_results: list[dict[str, Any]] = Field(default_factory=list, max_length=6)
     lessons: list[str] = Field(default_factory=list)  # active versioned lessons (self-iteration store), trial or adopted
 
 
@@ -485,6 +486,9 @@ class HarnessRuntime:
                 await asyncio.wait({future}, timeout=0.25)
             if future.done():
                 event = future.result()
+                final = await self.body.result(rid)
+                if final.terminal and final.request_id == rid:
+                    return record(final)
                 return record(receipt.model_copy(update={"status": event.status or "unknown", "terminal": event.status not in (None, "accepted", "unknown"), "text": event.text}))
             return record(await self.body.result(rid))
         finally:

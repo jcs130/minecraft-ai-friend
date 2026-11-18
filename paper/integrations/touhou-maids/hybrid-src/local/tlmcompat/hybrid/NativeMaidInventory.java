@@ -136,6 +136,12 @@ public final class NativeMaidInventory implements Listener {
     private static org.bukkit.inventory.ItemStack button(Material type,String text){var stack=new org.bukkit.inventory.ItemStack(type);var meta=stack.getItemMeta();meta.displayName(Component.text(text));stack.setItemMeta(meta);return stack;}
     private void refresh(View view,EntityMaid maid){
         for(int i=0;i<45;i++)view.inventory.setItem(i,i<capacity(maid)?visible(maid.getMaidInv().getStackInSlot(i)):button(Material.GRAY_STAINED_GLASS_PANE,"未解锁的原生背包槽位"));
+        var bond = button(Material.BOOK, "伙伴好感 Lv." + maid.getFavorabilityManager().getLevel() + " · " + maid.getFavorability() + "/384");
+        var info = bond.getItemMeta();
+        info.lore(List.of(Component.text("准备食物和女仆床，或安排读书、下棋。"),
+                Component.text("好感度变化沿用模组的活动与冷却规则。")));
+        bond.setItemMeta(info);
+        view.inventory.setItem(44, bond);
         view.inventory.setItem(45,button(Material.LIME_DYE,"跟随"));view.inventory.setItem(46,button(Material.RED_DYE,"停留"));
         view.inventory.setItem(47,button(Material.CLOCK,"日程："+maid.getSchedule()));view.inventory.setItem(48,button(Material.HOPPER,"拾取："+maid.isPickup()));
         view.inventory.setItem(49,button(Material.IRON_SWORD,"选择原生工作模式"));view.inventory.setItem(53,button(Material.ARMOR_STAND,"武器与护甲管理（先存进女仆背包）"));

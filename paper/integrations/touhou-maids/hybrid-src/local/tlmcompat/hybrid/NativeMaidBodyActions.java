@@ -2,6 +2,7 @@ package local.tlmcompat.hybrid;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskFishing;
 import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule;
 import com.google.gson.*;
 import java.util.*;
@@ -17,10 +18,13 @@ import org.bukkit.Bukkit;
 /** Native world operations, main thread only. No fake players, OP, commands or fabricated inventory. */
 final class NativeMaidBodyActions {
     private static final String ANCHOR="qiandengji_native_body_walk";
+    private static final String FISH_REQUEST="qiandengji_native_body_fish";
     private record Walk(UUID owner,String request,Vec3 target,Vec3 start,String dimension,long until){}
+    private record Fishing(UUID owner, String request, String dimension, long until, long revision, boolean guard) {}
     private final HybridMaidPlugin plugin;
     private final MaidBodyControl control;
     private final Map<UUID,Walk> walks=new HashMap<>();
+    private final Map<UUID,Fishing> fishing=new HashMap<>();
     private final Set<UUID> follows=new HashSet<>();
     private final Set<UUID> companions=new HashSet<>();
     private final Set<UUID> guards=new HashSet<>();
@@ -30,6 +34,7 @@ final class NativeMaidBodyActions {
     boolean following(UUID id){return follows.contains(id);}
     boolean companion(UUID id){return companions.contains(id);}
     boolean guarding(UUID id){return guards.contains(id);}
+    boolean busy(UUID id){return walks.containsKey(id)||resumeGuards.containsKey(id)||fishing.containsKey(id);}
     JsonObject call(UUID owner,UUID id,JsonObject input)throws Exception {
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main_thread_required");
         String action=MaidBodyControl.string(input,"action");MaidBodyControl.validateShape(input);
@@ -37,16 +42,36 @@ final class NativeMaidBodyActions {
         String request=MaidBodyControl.request(input,"requestId");
         var previous=control.read(id,request);
         if(previous!=null){control.reserve(owner,id,request,input);return reply(true,receipt(owner,id,request),null);}
+        if (action.equals(NativeMaidWorkshop.ACTION)) {
+            var order = new JsonObject();
+            order.add("workshop", input.get("workshopId"));
+            order.add("recipe", input.get("recipeId"));
+            order.add("inventory", input.get("inventory"));
+            if (input.has("quantity")) order.add("quantity", input.get("quantity"));
+            final String value;
+            try { value = NativeMaidWorkshop.modelOrder(order); }
+            catch (CompatibilityException invalid) { throw new MaidBodyControl.Fault(400, "INVALID_WORKSHOP_ORDER"); }
+            final JsonObject result;
+            try { result = plugin.workshopOrder(owner, id, request, value, control.epoch(id), busy(id)); }
+            catch (CompatibilityException error) {
+                if ("request_conflict".equals(error.code())) throw new MaidBodyControl.Fault(409, "REQUEST_CONFLICT");
+                throw error;
+            }
+            var status = result.get("status").getAsString();
+            var detail = result.getAsJsonObject("observation");
+            var error = detail == null || !detail.has("error") ? null : detail.get("error").getAsString();
+            return reply(Set.of("pending","completed").contains(status), result, error);
+        }
         if(plugin.nativeLegacyReceipt(owner,id,request)!=null)throw new MaidBodyControl.Fault(409,"REQUEST_CONFLICT_LEGACY_QUERY_ORIGINAL");
         EntityMaid maid;
         try{maid=plugin.ownedLoaded(owner,id);}catch(CompatibilityException unavailable){return blocked(owner,id,input,unavailable.code());}
         // Validate the whole action before reserving or changing the world.
         Vec3 target=null;String value=null;
         boolean physical=!Set.of("ack","speak").contains(action);
-        if(physical&&walks.containsKey(id)&&!Set.of("stop","stay").contains(action))return blocked(owner,id,input,"maid_busy");
+        if(physical&&(walks.containsKey(id)||fishing.containsKey(id))&&!Set.of("stop","stay","sit","follow").contains(action))return blocked(owner,id,input,"maid_busy");
         if(physical&&!Set.of("stop","stay").contains(action)){
             if(plugin.editingMaidInventory(maid)||plugin.workshops().busy(id)||maid.isNoAi()||maid.isVehicle())return blocked(owner,id,input,"maid_busy");
-            if(maid.isPassenger()&&!action.equals("dismount"))return blocked(owner,id,input,"dismount_required");
+            if(maid.isPassenger()&&!action.equals("dismount")&&!(MaidCompanionActions.fishingSeat(maid)&&Set.of("fish","follow","sit").contains(action)))return blocked(owner,id,input,"dismount_required");
         }
         switch(action){
             case "companion"->{if(!plugin.sharedDialogueEnabled(maid))return blocked(owner,id,input,"original_brain_not_configured");}
@@ -61,6 +86,11 @@ final class NativeMaidBodyActions {
             }
             case "equip"->{int slot=integer(input,"slot");String hand=MaidBodyControl.string(input,"hand");if(!Set.of("main","off","head","chest","legs","feet").contains(hand))throw new MaidBodyControl.Fault(400,"INVALID_hand");value=hand+" "+slot;
                 try{plugin.nativeEquipmentValidate(maid,value);}catch(CompatibilityException refused){return blocked(owner,id,input,refused.code());}}
+            case "fish"->{
+                String reason = fishingContextBlock(maid, owner);
+                if (reason == null) reason = MaidCompanionActions.boundedFishingBlock(maid);
+                if (reason != null) return blocked(owner,id,input,reason);
+            }
             case "task"->{value=MaidBodyControl.string(input,"taskId");var key=ResourceLocation.tryParse(value);if(key==null)throw new MaidBodyControl.Fault(400,"INVALID_taskId");
                 var task=TaskManager.getTaskMap().get(key);if(task==null||!task.isEnable(maid))return blocked(owner,id,input,"task_requirements");}
             case "schedule"->{value=MaidBodyControl.string(input,"schedule");try{MaidSchedule.valueOf(value);}catch(IllegalArgumentException e){throw new MaidBodyControl.Fault(400,"INVALID_schedule");}}
@@ -71,7 +101,8 @@ final class NativeMaidBodyActions {
         // The delegated native brain keeps its original history. External physical writes
         // must wait for that turn, then fence all older callbacks before touching the body.
         boolean resumeCompanion=companions.contains(id)&&Set.of("cast","equip","schedule","pickup","dismount").contains(action);
-        boolean resumeGuard=guards.contains(id)&&Set.of("cast","equip","schedule","pickup","dismount").contains(action);
+        boolean resumeGuard=guards.contains(id)&&Set.of("cast","equip","schedule","pickup","dismount","follow").contains(action);
+        boolean beforeFishingGuard = guards.contains(id);
         if(physical&&companions.contains(id)&&!Set.of("stop","stay","sit").contains(action))try{plugin.nativeReady(owner,id);}catch(CompatibilityException busy){return blocked(owner,id,input,busy.code());}
         control.reserve(owner,id,request,input);
         try{
@@ -82,7 +113,11 @@ final class NativeMaidBodyActions {
                 unchanged.add("actualPosition",position(maid));
                 return reply(true,control.finish(id,request,"applied",unchanged),null);
             }
-            if(physical){plugin.nativeQuiesce(maid);companions.remove(id);guards.remove(id);resumeGuards.remove(id);control.invalidateCallbacks(id);}
+            if(physical){
+                if(fishing.containsKey(id))finishFishing(maid,id,"cancelled","mode_changed",null,false);
+                if(walks.containsKey(id)&&action.equals("follow"))finishWalk(id,maid,"cancelled","mode_changed",false);
+                plugin.nativeQuiesce(maid);companions.remove(id);guards.remove(id);resumeGuards.remove(id);control.invalidateCallbacks(id);
+            }
             var observed=new JsonObject();observed.addProperty("effectsApplied",false);
             switch(action){
                 case "dismount"->{
@@ -105,6 +140,15 @@ final class NativeMaidBodyActions {
                     if(local.qdj.maids.brain.ResidentBodyAccess.external(id))local.qdj.maids.brain.ResidentBodyAccess.externalGuard(id,true);
                     else{MaidCompanionActions.follow(maid);follows.add(id);}
                     observed.addProperty("meaning","native defensive execution enabled; dialogue remains with the unified controller; hits require observation");}
+                case "fish"->{
+                    maid.getPersistentData().putString(FISH_REQUEST,request);
+                    maid.setTask(TaskManager.getTaskMap().get(TaskFishing.UID));
+                    follows.remove(id);
+                    fishing.put(id,new Fishing(owner,request,maid.level().dimension().location().toString(),
+                            System.currentTimeMillis()+75_000,MaidCompanionActions.revision(maid),beforeFishingGuard));
+                    observed.addProperty("phase","waiting_for_native_catch");
+                    return reply(true,control.finish(id,request,"running",observed),null);
+                }
                 case "companion"->{restore(maid);MaidCompanionActions.follow(maid);follows.add(id);companions.add(id);observed.addProperty("meaning","Original native follow/guard and selected dialogue brain delegated under this controller; no goal completion or new memory scope");}
                 case "cast"->{observed=plugin.nativeCast(maid,value,request);observed.add("actualPosition",position(maid));boolean applied=observed.has("effectsApplied")&&observed.get("effectsApplied").getAsBoolean();String state=observed.has("status")?observed.get("status").getAsString():"unknown";boolean pending=Set.of("accepted","pending","running").contains(state);boolean uncertain=state.equals("unknown");var result=reply(applied||pending,control.finish(id,request,pending?"running":uncertain?"unknown":applied?"applied":"rejected",observed),applied||pending?null:uncertain?"spell_result_unknown_query_original":"spell_not_applied");if(resumeCompanion)companions.add(id);if(resumeGuard){if(pending||uncertain)resumeGuards.put(id,request);else resumeGuard(maid);}return result;}
                 case "task"->{restore(maid);maid.setTask(TaskManager.getTaskMap().get(ResourceLocation.parse(value)));maid.setInSittingPose(false);follows.remove(id);observed.addProperty("meaning","native task selected; work result requires observation");}
@@ -133,6 +177,7 @@ final class NativeMaidBodyActions {
             case "tasks"->data=plugin.catalog(owner,id);
             case "brain"->{var context=plugin.context(owner,null,id);data=context.has("brain")?context.getAsJsonObject("brain"):new JsonObject();}
             case "inbox"->data=plugin.nativeInbox(owner,id);
+            case "workshop"->{plugin.owned(owner,id);data=plugin.workshops().describe(id,owner);}
             case "spells"->{if(local.qdj.maids.brain.ResidentBodyAccess.external(id)){data=JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.rpg(id)).getAsJsonObject();data.addProperty("stateSource","native_resident_vortex");data.addProperty("residentRpgAccount",true);}
                 else{var scene=plugin.companionScene(plugin.ownedLoaded(owner,id));data=scene.has("rpg")?scene.getAsJsonObject("rpg").deepCopy():new JsonObject();data.addProperty("stateSource","original_private_companion_magic");data.addProperty("residentRpgAccount",false);}}
             case "receipt"->data=receipt(owner,id,MaidBodyControl.request(input,"operationId"));
@@ -143,11 +188,21 @@ final class NativeMaidBodyActions {
             var loaded=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
             if(loaded!=null){data.addProperty("passenger",loaded.isPassenger());if(loaded.getVehicle()!=null)data.addProperty("vehicleType",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(loaded.getVehicle().getType()).toString());}
             if(local.qdj.maids.brain.ResidentBodyAccess.external(id))data.add("resident",JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.status(id)));
-            else data.add("scene",plugin.companionScene(plugin.ownedLoaded(owner,id)));}
+            else if(data.get("loaded").getAsBoolean())data.add("scene",plugin.companionScene(loaded));}
         if(action.equals("context")){
             data.addProperty("physicalController","native_body");
             data.addProperty("nativeCompanionDelegated",companion(id));
             if(plugin.unifiedBody(id))data.addProperty("inferenceOwner","unified_npc_host");
+            var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
+            if(maid!=null){
+                var fishingState=data.has("fishing") ? data.getAsJsonObject("fishing") : MaidCompanionActions.fishing(maid);
+                String block = busy(id) || plugin.workshops().busy(id) || plugin.editingMaidInventory(maid)
+                        ? "maid_busy" : fishingContextBlock(maid,owner);
+                if(block==null)block=MaidCompanionActions.boundedFishingBlock(maid);
+                fishingState.addProperty("canStartNativeCatch",block==null);
+                if(block!=null)fishingState.addProperty("nextCondition",block);
+                data.add("fishing",fishingState);
+            }
             var caps=new JsonArray();
             MaidBodyControl.READS.stream().sorted().forEach(caps::add);
             MaidBodyControl.WRITES.stream().sorted().forEach(caps::add);
@@ -166,10 +221,11 @@ final class NativeMaidBodyActions {
         if(unified)brain.addProperty("conversationOwner","unified_npc_host");
         brain.addProperty("meaning",unified?"Unified NPC controller owns decisions and character memory. Original native history is retained read-only for migration; native task execution is separate from a model loop.":companion(id)?"Original selected brain/history and native companion behaviours are delegated by this lease. No shadow dialogue model or new memory scope.":"Original configured brain selection is retained; dialogue queues in inbox while exclusive control is active. Brain choice cannot be changed on this port.");
     }
-    private JsonObject receipt(UUID owner,UUID id,String request)throws Exception {
+    JsonObject receipt(UUID owner,UUID id,String request)throws Exception {
         var value=control.read(id,request);
         if(value==null){value=plugin.nativeLegacyReceipt(owner,id,request);if(value==null)throw new CompatibilityException("receipt_missing","Query the original namespace; never replay");
-            value=value.deepCopy();value.addProperty("namespace","legacy");value.addProperty("operationId",request);return value;}
+            if(NativeMaidWorkshop.ACTION.equals(value.get("action").getAsString()))value=plugin.workshops().reconcile(value);
+            value=value.deepCopy();value.addProperty("namespace","legacy");value.addProperty("operationId",request);value.addProperty("ownerId",owner.toString());return value;}
         if("cast".equals(value.get("action").getAsString())&&Set.of("accepted","running","unknown").contains(value.get("status").getAsString())&&local.qdj.maids.brain.ResidentBodyAccess.external(id)){
             var original=JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.castReceipt(id,request)).getAsJsonObject();
             String state=original.has("status")?original.get("status").getAsString():"unknown";
@@ -179,12 +235,15 @@ final class NativeMaidBodyActions {
             }
             if(Set.of("accepted","pending","running").contains(state))return control.finish(id,request,"running",original);
         }
-        if(Set.of("accepted","running").contains(value.get("status").getAsString())&&(!walks.containsKey(id)||!walks.get(id).request.equals(request))){
+        boolean inProgress = walks.containsKey(id)&&walks.get(id).request.equals(request)
+                || fishing.containsKey(id)&&fishing.get(id).request.equals(request);
+        if(Set.of("accepted","running").contains(value.get("status").getAsString())&&!inProgress){
             var reason=new JsonObject();reason.addProperty("reason","restart_or_execution_interrupted_query_original_request");value=control.finish(id,request,"unknown",reason);
         }
         return value;
     }
     void tick(){
+        tickFishing();
         if(++receiptTick%10==0)for(var id:new ArrayList<>(resumeGuards.keySet()))try{var body=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));if(body!=null&&control.active(id))receipt(body.getOwnerUUID(),id,resumeGuards.get(id));}catch(Exception ignored){/* Original request remains unresolved; do not resume work. */}
         for(var id:new ArrayList<>(walks.keySet())){
             var walk=walks.get(id);EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));String failure=null;
@@ -203,8 +262,82 @@ final class NativeMaidBodyActions {
         // Recover only our temporary navigation anchor after a normal or abnormal server restart.
         for(var id:control.ids())if(!walks.containsKey(id)){var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));if(maid!=null&&maid.getPersistentData().contains(ANCHOR)){stop(maid);restore(maid);}}
     }
+
+    private String fishingContextBlock(EntityMaid maid, UUID owner) {
+        var partner = Bukkit.getPlayer(owner);
+        if (partner == null || !partner.isOnline() || partner.isDead()
+                || !partner.getWorld().equals(maid.getBukkitEntity().getWorld())) return "fishing_partner_unavailable";
+        double radius = NativeMaidFollowSupport.limits(maid).walkBeyond();
+        if (partner.getLocation().distanceSquared(maid.getBukkitEntity().getLocation()) > radius * radius)
+            return "fishing_partner_leaving";
+        if (plugin.companionVisibleThreat(maid, partner) != null || plugin.companionPartnerThreat(maid, partner))
+            return "fishing_threat_nearby";
+        return null;
+    }
+
+    void caught(EntityMaid maid, JsonArray loot) {
+        UUID id = maid.getUUID();
+        if (loot.isEmpty() || !fishing.containsKey(id)) return;
+        try { finishFishing(maid,id,"completed","native_catch",loot,true); }
+        catch (Exception error) { plugin.getLogger().warning("Native catch receipt uncertain; query the original request"); }
+    }
+
+    private void tickFishing() {
+        if (receiptTick % 10 != 0) return;
+        for (UUID id : control.ids()) {
+            var job = fishing.get(id);
+            var maid = HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
+            if (job == null) {
+                if (maid != null && maid.getPersistentData().contains(FISH_REQUEST)) clearFishing(maid);
+                continue;
+            }
+            String reason = null;
+            if (maid == null || !maid.isAlive() || maid.isRemoved()) reason = "body_unavailable";
+            else if (!control.active(id) || !job.owner.equals(maid.getOwnerUUID())) reason = "control_changed";
+            else if (!job.dimension.equals(maid.level().dimension().location().toString())) reason = "dimension_changed";
+            else if (MaidCompanionActions.revision(maid) != job.revision || !(maid.getTask() instanceof TaskFishing)
+                    || plugin.editingMaidInventory(maid) || !MaidCompanionActions.fishingRod(maid)) reason = "fishing_context_changed";
+            else if (System.currentTimeMillis() > job.until) reason = "catch_timeout";
+            else reason = fishingContextBlock(maid, job.owner);
+            if (reason != null) {
+                try { finishFishing(maid,id,"cancelled",reason,null,true); }
+                catch (Exception error) { plugin.getLogger().warning("Native fishing stop receipt uncertain; query the original request"); }
+            }
+        }
+    }
+
+    private void finishFishing(EntityMaid maid, UUID id, String status, String reason, JsonArray loot, boolean resume)
+            throws Exception {
+        Fishing job = fishing.remove(id);
+        if (job == null) return;
+        var observed = new JsonObject();
+        observed.addProperty("reason", reason);
+        observed.addProperty("verifiedCatch", loot != null);
+        if (loot != null) {
+            observed.addProperty("effectsApplied", true);
+            observed.add("nativeLoot", loot);
+        }
+        if (maid != null && maid.getPersistentData().getString(FISH_REQUEST).equals(job.request)) {
+            boolean originalTask = MaidCompanionActions.revision(maid) == job.revision
+                    && maid.isAlive() && maid.getTask() instanceof TaskFishing;
+            if (originalTask) {
+                clearFishing(maid);
+                if (resume && job.guard) resumeGuard(maid);
+                if (resume && control.active(id)) follows.add(id);
+            } else maid.getPersistentData().remove(FISH_REQUEST);
+            observed.add("actualPosition", position(maid));
+        }
+        control.finish(id, job.request, status, observed);
+    }
+
+    private static void clearFishing(EntityMaid maid) {
+        maid.getPersistentData().remove(FISH_REQUEST);
+        if (!(maid.getTask() instanceof TaskFishing)) return;
+        if (maid.fishing != null && maid.fishing.getMaidOwner() == maid) maid.fishing.discard();
+        MaidCompanionActions.follow(maid);
+    }
     private void resumeGuard(EntityMaid maid){var id=maid.getUUID();resumeGuards.remove(id);if(!control.active(id)||!maid.isAlive())return;guards.add(id);if(local.qdj.maids.brain.ResidentBodyAccess.external(id))local.qdj.maids.brain.ResidentBodyAccess.externalGuard(id,true);else{MaidCompanionActions.follow(maid);follows.add(id);}}
-    void cancel(UUID id,String reason)throws Exception {var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));companions.remove(id);guards.remove(id);resumeGuards.remove(id);if(maid!=null)plugin.nativeQuiesce(maid);if(walks.containsKey(id))finishWalk(id,maid,"cancelled",reason,false);else if(maid!=null){stop(maid);restore(maid);}follows.remove(id);}
+    void cancel(UUID id,String reason)throws Exception {var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));companions.remove(id);guards.remove(id);resumeGuards.remove(id);if(fishing.containsKey(id))finishFishing(maid,id,"cancelled",reason,null,false);if(maid!=null)plugin.nativeQuiesce(maid);if(walks.containsKey(id))finishWalk(id,maid,"cancelled",reason,false);else if(maid!=null){stop(maid);restore(maid);}follows.remove(id);}
     private void finishWalk(UUID id,EntityMaid maid,String status,String reason,boolean arrived)throws Exception {
         var walk=walks.remove(id);var observed=new JsonObject();observed.addProperty("reason",reason);observed.addProperty("arrived",arrived);
         if(maid!=null){stop(maid);restore(maid);observed.add("actualPosition",position(maid));observed.addProperty("distanceMoved",maid.position().distanceTo(walk.start));observed.addProperty("remainingDistance",maid.position().distanceTo(walk.target));}

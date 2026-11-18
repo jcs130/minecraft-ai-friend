@@ -100,6 +100,27 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if (Bukkit.isPrimaryThread() && ownerTravel!=null) ownerTravel.followTrialTransfer(partner,from,stage);
     }
     NativeMaidWorkshop workshops(){return workshops;}
+    void nativeCaught(EntityMaid maid, JsonArray loot) { if (bodyPort != null) bodyPort.caught(maid, loot); }
+    JsonObject workshopOrder(UUID owner, UUID id, String request, String value, Long controllerEpoch, boolean busy) throws Exception {
+        owned(owner, id);
+        var previous = receipts.reserve(id, owner, request, NativeMaidWorkshop.ACTION, Objects.requireNonNullElse(value, ""));
+        if (previous != null) {
+            var replay = workshops.reconcile(previous);
+            replay.addProperty("replayed", true);
+            return replay;
+        }
+        try {
+            Player actor = Bukkit.getPlayer(owner);
+            if (actor == null || !actor.isOnline() || actor.isDead())
+                throw new CompatibilityException("workshop_owner_unavailable", "工位需要在场的原伙伴。");
+            var maid = ownedLoaded(owner, id);
+            requireNearby(actor, maid, 32);
+            if (busy) throw new CompatibilityException("maid_busy", "请等当前身体动作结束，再安排工单。");
+            return workshops.start(actor, maid, request, value, controllerEpoch);
+        } catch (CompatibilityException error) {
+            return receipts.finish(id, request, "rejected", NativeMaidWorkshop.reason(error, false));
+        }
+    }
     boolean editingMaidInventory(EntityMaid maid){return maid.guiOpening||menus!=null&&menus.editing(maid);}
     boolean guardWeaponReady(EntityMaid maid){return companion!=null&&companion.guardWeaponReady(maid);}
     JsonObject lastResidenceLocation(UUID owner,UUID maid){return agentSupport.lastResidenceLocation(owner,maid);}
@@ -271,7 +292,16 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     }
     @Override public void onDisable(){if(bodyPort!=null)bodyPort.close();if(respawns!=null)respawns.close();if(residence!=null)residence.close();if(workshops!=null)workshops.close();if(companion!=null)companion.close();if(speech!=null)speech.close();if(brains!=null)brains.close();if(agentSupport!=null)agentSupport.close();net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(adopted);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(joined);if(legacyTransport!=null)legacyTransport.close();if(nativeTransport!=null)nativeTransport.close();if(pluginPayloads!=null)pluginPayloads.close();if(worldPermissions!=null)worldPermissions.close();if(projection!=null)projection.close();if(menus!=null)menus.closeAll();if(cosmeticsMenu!=null)cosmeticsMenu.closeAll();if(cosmetics!=null)cosmetics.close();}
     private void bindOnMain(EntityMaid maid){
-        Bukkit.getScheduler().runTask(this,()->{try{if(maid.isAlive()&&owner(maid)!=null){bind(maid);if(agentSupport!=null)agentSupport.observeLoaded(maid);}}catch(Exception error){getLogger().warning("Native NPC binding preserved: "+error.getMessage());}});
+        Bukkit.getScheduler().runTask(this, () -> {
+            if (!maid.isAlive() || maid.isRemoved() || owner(maid) == null) return;
+            try {
+                bind(maid);
+                if (bodyPort != null && unifiedBody(maid.getUUID())) NativeMaidKit.initialize(maid);
+                if (agentSupport != null) agentSupport.observeLoaded(maid);
+            } catch (Exception error) {
+                getLogger().warning("Native NPC binding preserved: " + error.getMessage());
+            }
+        });
     }
     public static EntityMaid nativeMaid(org.bukkit.entity.Entity entity){
         if(entity==null)return null;
@@ -281,7 +311,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private void saveRegistry()throws Exception{ReceiptJournal.write(registryFile,registry,Files.exists(registryFile));}
     private static String fresh(){return UUID.randomUUID().toString();}
     private static UUID owner(EntityMaid maid){return ((TamableAnimal)maid).getOwnerUUID();}
-    private JsonObject owned(UUID actor,UUID id){
+    JsonObject owned(UUID actor,UUID id){
         JsonObject row=records().getAsJsonObject(id.toString());
         if(row==null||!row.get("ownerId").getAsString().equals(actor.toString()))throw new CompatibilityException("not_owned","No NPC bound to this connection");
         EntityMaid current=nativeMaid(Bukkit.getEntity(id));
@@ -326,6 +356,8 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             data.addProperty("modelId",maid.getModelId());data.addProperty("health",maid.getHealth());data.addProperty("maxHealth",maid.getMaxHealth());
             JsonObject appearance=new JsonObject();appearance.addProperty("type",maid.isYsmModel()?"ysm":"native_maid");appearance.addProperty("modelId",maid.isYsmModel()?maid.getYsmModelId():maid.getModelId());appearance.addProperty("texture",maid.isYsmModel()?maid.getYsmModelTexture():"");appearance.addProperty("fallbackModelId",maid.getModelId());data.add("appearance",appearance);
             data.addProperty("damageProtected",maid.isInvulnerable());
+            data.add("favorability", NativeMaidKit.favorability(maid));
+            data.addProperty("nativeLifeProtectionReady", NativeMaidKit.hasLifeProtection(maid));
             data.addProperty("name",maid.getName().getString());data.addProperty("soundPackId",maid.getSoundPackId());data.addProperty("silent",maid.isSilent());data.addProperty("voiceAssetsReady",actor!=null&&(VanillaMaidProjection.nativeClient(actor)||local.tlmcompat.numen.MaidVoiceTransport.ready(actor.getUniqueId())));
             data.addProperty("soundFrequency",maid.getConfigManager().getSoundFreq());
             data.addProperty("workRadius",maid.getRestrictRadius());data.addProperty("canMove",maid.canBrainMoving());
@@ -372,7 +404,9 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     JsonObject inventory(UUID owner,UUID id){
         EntityMaid maid=ownedLoaded(owner,id);JsonObject data=new JsonObject();data.addProperty("maidId",id.toString());JsonArray slots=new JsonArray();
         for(int i=0;i<maid.getMaidInv().getSlots();i++){var stack=maid.getMaidInv().getStackInSlot(i);if(!stack.isEmpty()){JsonObject row=item(stack);row.addProperty("slot",i);slots.add(row);}}
-        data.add("slots",slots);NativeMaidInventory.layout(maid).entrySet().forEach(e->data.add(e.getKey(),e.getValue()));data.add("mainHand",item(maid.getMainHandItem()));data.add("offHand",item(maid.getOffhandItem()));data.add("equipment",NativeMaidInventory.equipment(maid));data.addProperty("nextStep","只用 usableSlotIndexes 中的槽；freeSlotIndexes 才是空槽，锁定槽不是空位。先 transfer put 把物品放进女仆背包，再 equip main|off|head|chest|legs|feet <maidSlot>；空背包槽可卸下对应装备。");return data;
+        data.add("slots",slots);NativeMaidInventory.layout(maid).entrySet().forEach(e->data.add(e.getKey(),e.getValue()));data.add("mainHand",item(maid.getMainHandItem()));data.add("offHand",item(maid.getOffhandItem()));data.add("equipment",NativeMaidInventory.equipment(maid));data.addProperty("nextStep","只用 usableSlotIndexes 中的槽；freeSlotIndexes 才是空槽，锁定槽不是空位。先 transfer put 把物品放进女仆背包，再 equip main|off|head|chest|legs|feet <maidSlot>；空背包槽可卸下对应装备。");
+        data.add("baubles", NativeMaidKit.accessories(maid));
+        return data;
     }
     public static JsonObject item(net.minecraft.world.item.ItemStack stack){
         JsonObject row=new JsonObject();row.addProperty("id",net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());row.addProperty("count",stack.getCount());row.addProperty("damage",stack.getDamageValue());row.addProperty("name",stack.getHoverName().getString());return row;
@@ -380,6 +414,10 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private JsonObject receipt(UUID actor,UUID id,String operation)throws Exception{
         JsonObject record=records().getAsJsonObject(id.toString()),receipt=receipts.read(id,operation);
         if(record==null||(!record.get("ownerId").getAsString().equals(actor.toString())&&(receipt==null||!receipt.get("actorId").getAsString().equals(actor.toString()))))throw new CompatibilityException("not_owned","No receipt belongs to this connection");
+        if(receipt==null&&bodyPort!=null&&unifiedBody(id)){
+            var nativeReceipt=bodyPort.ownerReceipt(actor,id,operation);
+            if(nativeReceipt!=null)return nativeReceipt;
+        }
         if(receipt==null)throw new CompatibilityException("receipt_missing","No original receipt");return reconcile(receipt);
     }
     private JsonObject reconcile(JsonObject receipt)throws Exception{
@@ -459,15 +497,26 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(action.equals("receipt"))return receipt(actor.getUniqueId(),id,operation);
         if(action.equals("workshop")){owned(actor.getUniqueId(),id);return workshops.describe(id,actor.getUniqueId());}
         if(action.equals("inbox")){JsonObject record=owned(actor.getUniqueId(),id);JsonObject data=inbox.snapshot(id);data.addProperty("sessionKey",record.get("sessionKey").getAsString());return data;}
-        if(nativeExclusive(id)&&!Set.of("chat","talk").contains(action))throw new CompatibilityException("control_changed","Body is owned by the native controller; use the original owner UI to take control");
+        if (companionMode == null && unifiedBody(id) && Set.of("follow", "stay", "sit").contains(action)) {
+            owned(actor.getUniqueId(), id);
+            if (receipts.read(id, operation) != null) {
+                receipt(actor.getUniqueId(), id, operation);
+                var old = reconcile(receipts.reserve(id, actor.getUniqueId(), operation, action, Objects.requireNonNullElse(value, "")));
+                old.addProperty("replayed", true);
+                return old;
+            }
+            return bodyPort.ownerMode(actor, id, action, operation, value);
+        }
+        if (NativeMaidWorkshop.ACTION.equals(action) && (!nativeExclusive(id) || unifiedBody(id))) {
+            if (unifiedBody(id)) bodyPort.requireUnusedNativeRequest(actor.getUniqueId(), id, operation);
+            return workshopOrder(actor.getUniqueId(), id, operation, value, null, unifiedBody(id) && bodyPort.busy(id));
+        }
+        boolean inventoryAction = Set.of("transfer", "equip").contains(action);
+        boolean sharedInventory = inventoryAction && unifiedBody(id);
+        if(nativeExclusive(id)&&!sharedInventory&&!Set.of("chat","talk").contains(action))throw new CompatibilityException("control_changed","Body is owned by the native controller; use the original owner UI to take control");
         // A replay must read the original result even if the entity has since died/unloaded.
         if(receipts.read(id,operation)!=null){receipt(actor.getUniqueId(),id,operation);JsonObject old=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));old=reconcile(old);old.addProperty("replayed",true);return old;}
-        if(NativeMaidWorkshop.ACTION.equals(action)){
-            EntityMaid maid=ownedLoaded(actor,id);
-            requireNearby(actor,maid,32);
-            receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));
-            return workshops.start(actor,maid,operation,value);
-        }
+        if (sharedInventory) bodyPort.requireUnusedNativeRequest(actor.getUniqueId(), id, operation);
         if (action.equals("cast")) {
             EntityMaid maid = ownedLoaded(actor, id);
             requireNearby(actor, maid, 32);
@@ -489,12 +538,15 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         EntityMaid maid;
         boolean visitor=action.equals("chat")&&!actor.getUniqueId().toString().equals(records().has(id.toString())?records().getAsJsonObject(id.toString()).get("ownerId").getAsString():"");
         if(action.equals("talk")||visitor){maid=nearbyMaid(actor,id);}
-        else if(Set.of("transfer","equip").contains(action)){
+        else if(inventoryAction){
             // Authenticate before allocating a receipt. Only this preflight is known
             // to have no item effects; exceptions after mutation must remain unknown.
             owned(actor.getUniqueId(),id);
             try{
                 maid=ownedLoaded(actor,id);requireNearby(actor,maid,32);
+                if (sharedInventory && (bodyPort.busy(id) || workshops.busy(id))) {
+                    throw new CompatibilityException("maid_busy", "女仆正在执行动作或工单。请先等原动作结束，再按最新的背包状态操作。");
+                }
                 if(action.equals("transfer"))menus.validateTransfer(actor,maid,value);else menus.validateEquip(actor,maid,value);
             }catch(CompatibilityException error){return rejectedInventory(actor,action,id,operation,value,error);}
         }else{maid=ownedLoaded(actor,id);requireNearby(actor,maid,32);}
@@ -706,11 +758,11 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             if(action.equals("result")){
                 correlation=request(args,2);humanConversation(actor,correlation);action="receipt";reply(actor,action,correlation,receipt(actor.getUniqueId(),id,correlation),null);return true;
             }
-            if(action.equals("menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);nativeTakeover(actor,id);menus.open(actor,maid);return true;}
+            if(action.equals("menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);if(!unifiedBody(id))nativeTakeover(actor,id);menus.open(actor,maid);return true;}
             if(action.equals("brain-menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);nativeTakeover(actor,id);brains.open(actor,maid);return true;}
-            if(action.equals("native-menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);if(!VanillaMaidProjection.nativeClient(actor))throw new CompatibilityException("native_client_required","Use the common menu on this client");nativeTakeover(actor,id);maid.openMaidGui(((CraftPlayer)actor).getHandle());return true;}
+            if(action.equals("native-menu")){EntityMaid maid=ownedLoaded(actor,id);requireNearby(actor,maid,8);if(!VanillaMaidProjection.nativeClient(actor))throw new CompatibilityException("native_client_required","Use the common menu on this client");if(!unifiedBody(id))nativeTakeover(actor,id);maid.openMaidGui(((CraftPlayer)actor).getHandle());return true;}
             if(action.equals("brain")&&args.length>3)nativeTakeover(actor,id);
-            if(!Set.of("context","brain","list","inventory","tasks","receipt","inbox","chat","talk").contains(action))nativeTakeover(actor,id);
+            if(!unifiedBody(id)&&!Set.of("context","brain","list","inventory","tasks","receipt","inbox","chat","talk","workshop").contains(action))nativeTakeover(actor,id);
             correlation=request(args,action.equals("receipt")?3:2);String operation=action.equals("receipt")?request(args,2):correlation;
             String value=args.length>3?String.join(" ",Arrays.copyOfRange(args,3,args.length)):null;
             reply(actor,action,correlation,dispatch(actor,action,id,operation,value),null);
@@ -734,7 +786,8 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(actor.getListeningPluginChannels().contains(CHANNEL))actor.sendPluginMessage(this,CHANNEL,bytes);else actor.sendMessage(Component.text(MaidChatReply.text(result),error==null?NamedTextColor.AQUA:NamedTextColor.RED));
     }
     @EventHandler(ignoreCancelled=true,priority=EventPriority.HIGH)public void interact(PlayerInteractEntityEvent event){
-        if(bodyPort!=null)bodyPort.ownerTakeover(event.getPlayer().getUniqueId(),event.getRightClicked().getUniqueId());
+        var id=event.getRightClicked().getUniqueId();
+        if(bodyPort!=null&&!unifiedBody(id))bodyPort.ownerTakeover(event.getPlayer().getUniqueId(),id);
         EntityMaid maid=nativeMaid(event.getRightClicked());if(maid==null||!records().has(maid.getUUID().toString()))return;
         if(!VanillaMaidProjection.nativeClient(event.getPlayer())){event.setCancelled(true);if(event.getHand()!=org.bukkit.inventory.EquipmentSlot.HAND)return;if(event.getPlayer().getUniqueId().equals(owner(maid))){
             var hand=((CraftPlayer)event.getPlayer()).getHandle().getMainHandItem();

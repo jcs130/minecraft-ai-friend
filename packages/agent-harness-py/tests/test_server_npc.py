@@ -37,6 +37,15 @@ def test_model_cannot_expand_body_authority(step):
         reviewed_steps(role(), PlanContext(capabilities=SimBody().capabilities()), [step])
 
 
+def test_numen_item_use_is_limited_to_the_reviewed_id_and_parameters():
+    configured = role(allowed_tools=["body:use_item"], native_items=["test_mod:charm"])
+    step = {"tool": "body:use_item", "args": {"item": "test_mod:charm"}}
+    assert reviewed_steps(configured, PlanContext(), [step])[0].args == step["args"]
+    for args in ({"item": "test_mod:other"}, {"item": "test_mod:charm", "hold": 30}):
+        with pytest.raises(ValueError, match="item_not_in_reviewed_native_catalogue"):
+            reviewed_steps(configured, PlanContext(), [{**step, "args": args}])
+
+
 def test_slow_model_gets_current_scene_and_empty_plan_rests():
     async def run():
         received = []

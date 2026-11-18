@@ -11,6 +11,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import local.tlmcompat.core.CompatibilityException;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 
 /** Optional authenticated loopback transport. Every body decision is rechecked on the game thread. */
 final class NativeMaidBodyPort implements AutoCloseable {
@@ -59,6 +60,37 @@ final class NativeMaidBodyPort implements AutoCloseable {
     long epoch(UUID maid){return control.epoch(maid);}
     boolean travelAllowed(UUID maid){return !active(maid)||actions.following(maid);}
     void ownerTakeover(UUID owner,UUID maid){var lease=control.lease(maid);if(lease!=null&&lease.owner().equals(owner))release(maid,"owner_takeover");}
+    JsonObject ownerMode(Player actor, UUID maid, String action, String request, String value) throws Exception {
+        if (value != null && !value.isBlank()) throw new CompatibilityException("bad_arguments", "Use the maid ID and original request ID");
+        UUID owner = actor.getUniqueId();
+        control.authorize(owner, maid);
+        if (control.read(maid, request) == null) plugin.requireNearby(actor, plugin.ownedLoaded(actor, maid), 32);
+        var args = new JsonObject();
+        args.addProperty("action", action);
+        args.addProperty("requestId", request);
+        var response = actions.call(owner, maid, args);
+        var body = JsonParser.parseString(response.getAsJsonArray("content").get(0).getAsJsonObject().get("text").getAsString()).getAsJsonObject();
+        var data = body.getAsJsonObject("data");
+        if (!body.get("ok").getAsBoolean() && body.has("reason") && data.has("observation")) {
+            var observation = data.getAsJsonObject("observation");
+            observation.add("error", body.get("reason"));
+            observation.add("message", body.get("reason"));
+        }
+        return data;
+    }
+    JsonObject ownerReceipt(UUID owner, UUID maid, String request) throws Exception {
+        control.authorize(owner, maid);
+        return control.read(maid, request) == null ? null : actions.receipt(owner, maid, request);
+    }
+    boolean busy(UUID maid) { return actions.busy(maid); }
+    void caught(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid, JsonArray loot) {
+        actions.caught(maid, loot);
+    }
+    void requireUnusedNativeRequest(UUID owner, UUID maid, String request) throws Exception {
+        plugin.owned(owner, maid);
+        if (control.read(maid, request) != null)
+            throw new CompatibilityException("request_conflict", "请查询这次身体动作的原回执。");
+    }
     private void release(UUID maid,String reason){
         try{actions.cancel(maid,reason);}catch(Exception e){plugin.getLogger().warning("Native body stop receipt uncertain; query original request");}
         finally{control.release(maid);}

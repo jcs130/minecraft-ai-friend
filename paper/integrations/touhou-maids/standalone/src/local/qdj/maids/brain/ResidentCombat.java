@@ -1,6 +1,7 @@
 package local.qdj.maids.brain;
 
 import com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask;
+import com.github.tartaricacid.touhoulittlemaid.api.task.IRangedAttackTask;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.*;
 import com.github.tartaricacid.touhoulittlemaid.init.InitEntities;
@@ -18,11 +19,11 @@ import net.minecraft.world.item.*;
 /** Per-body, server-tick reflexes. Native TLM performs navigation, attacks and ammunition consumption. */
 final class ResidentCombat {
     private static final String BACKUP="tlm_resident_combat_task";
-    private static final List<ResourceLocation> TASKS=List.of(TaskBowAttack.UID,TaskCrossBowAttack.UID,TaskAttack.UID);
     private record Weapon(IAttackTask task,int slot,ItemStack stack,boolean ranged){}
     private static final class State {
         UUID target; long acquired,lastHit,lastSkill,switched; int hits,swaps;
         String mode="idle",reason="no_visible_hostile";
+        String weaponId, attackTaskId;
         Map<String,Object> hit=Map.of(),skill=Map.of();
         final Map<UUID,Long> stalled=new HashMap<>();
     }
@@ -33,6 +34,7 @@ final class ResidentCombat {
     Map<String,Object> observe(UUID id){var s=states.computeIfAbsent(id,k->new State());var row=new LinkedHashMap<String,Object>();
         row.put("enabled",residents.role(id).combat());row.put("mode",s.mode);row.put("reason",s.reason);
         row.put("targetId",s.target==null?null:s.target.toString());row.put("actualHits",s.hits);row.put("weaponSwaps",s.swaps);
+        row.put("weaponId",s.weaponId);row.put("attackTaskId",s.attackTaskId);
         row.put("lastHit",s.hit);row.put("lastSkill",s.skill);row.put("decisionIntervalMs",250);
         row.put("attackExecutor","native_tlm");row.put("modelCallsPerAttack",0);return row;
     }
@@ -61,11 +63,11 @@ final class ResidentCombat {
     }
     private static Weapon weapon(EntityMaid maid,ItemStack stack,int slot){
         if(stack.isEmpty()||stack.getCount()!=1)return null;
-        for(var id:TASKS)if(TaskManager.getTaskMap().get(id) instanceof IAttackTask task&&task.isEnable(maid)&&task.isWeapon(maid,stack)){
-            boolean ranged=!id.equals(TaskAttack.UID);if(ranged&&!ammunition(maid,stack))return null;
-            return new Weapon(task,slot,stack,ranged);
-        }
-        return null;
+        var task=NativeCombatTasks.forWeapon(maid,stack,slot<0);
+        if(task==null)return null;
+        boolean ranged=task instanceof IRangedAttackTask;
+        if((task.getUid().equals(TaskBowAttack.UID)||task.getUid().equals(TaskCrossBowAttack.UID))&&!ammunition(maid,stack))return null;
+        return new Weapon(task,slot,stack,ranged);
     }
     private static List<Weapon> weapons(EntityMaid maid){var out=new ArrayList<Weapon>();
         var current=weapon(maid,maid.getMainHandItem(),-1);if(current!=null)out.add(current);
@@ -83,6 +85,7 @@ final class ResidentCombat {
     }
     void stop(EntityMaid maid,String reason){
         var s=states.computeIfAbsent(maid.getUUID(),k->new State());s.target=null;s.mode="idle";s.reason=reason;
+        s.weaponId=null;s.attackTaskId=null;
         var p=maid.getPersistentData();if(!p.contains(BACKUP))return;
         String original=p.getString(BACKUP),applied=p.getString(BACKUP+"_applied");
         maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);maid.setTarget(null);maid.stopUsingItem();
@@ -109,11 +112,13 @@ final class ResidentCombat {
         boolean newlyActive=!active(id);
         if(newlyActive)residents.combatStarted(id);
         if(!target.getUUID().equals(s.target)){s.target=target.getUUID();s.acquired=now;}
-        var loadout=weapons(maid);double distance=maid.distanceToSqr(target);
-        boolean ranged=distance>(s.mode.equals("ranged")?9:25)&&clearShot(maid,target);
-        var choice=loadout.stream().filter(w->w.ranged()==ranged).findFirst().orElseGet(()->loadout.stream().filter(w->!w.ranged()||clearShot(maid,findTarget(maid,s.target))).findFirst().orElse(null));
+        LivingEntity enemy=target;
+        boolean clear=clearShot(maid,enemy);
+        boolean ranged=maid.distanceToSqr(enemy)>(s.mode.equals("ranged")?9:25)&&clear;
+        var loadout=weapons(maid).stream().filter(w->(!w.ranged()||clear)&&w.task().canAttack(maid,enemy)).toList();
+        var choice=loadout.stream().filter(w->w.ranged()==ranged).findFirst().orElse(loadout.isEmpty()?null:loadout.getFirst());
         support(maid,s,role,now,true);
-        if(choice==null){s.mode="unarmed";s.reason="no_usable_weapon_or_ammunition";maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);maid.setTarget(null);return;}
+        if(choice==null){s.mode="unarmed";s.reason="no_usable_weapon_or_ammunition";s.weaponId=null;s.attackTaskId=null;maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);maid.setTarget(null);return;}
         try{
             if(choice.slot()>=0){MaidAgent.equip(maid,"mainhand",choice.slot(),BuiltInRegistries.ITEM.getKey(choice.stack().getItem()));s.swaps++;s.switched=now;}
             var p=maid.getPersistentData();if(!p.contains(BACKUP))p.putString(BACKUP,maid.getTask().getUid().toString());
@@ -122,6 +127,8 @@ final class ResidentCombat {
             maid.getBrain().setSchedule(InitEntities.MAID_ALL_DAY_SCHEDULES.get());maid.getBrain().setActiveActivityIfPossible(Activity.WORK);
             maid.getBrain().setMemory(MemoryModuleType.ATTACK_TARGET,target);
             s.mode=choice.ranged()?"ranged":"melee";s.reason="native_attack_pending_actual_damage";
+            s.weaponId=BuiltInRegistries.ITEM.getKey(maid.getMainHandItem().getItem()).toString();
+            s.attackTaskId=choice.task().getUid().toString();
         }catch(IllegalArgumentException blocked){stop(maid,"equipment_refused:"+blocked.getMessage());}
     }
     private static LivingEntity findTarget(EntityMaid maid,UUID id){return (LivingEntity)((net.minecraft.server.level.ServerLevel)maid.level()).getEntity(id);}

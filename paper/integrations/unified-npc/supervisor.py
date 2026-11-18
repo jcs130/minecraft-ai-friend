@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import socket
 import subprocess
+import sys
 import time
 from uuid import UUID
 
@@ -85,6 +86,9 @@ def serve(config):
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
     children={};cooldown={};logs=[];error=None
     root=Path(settings["repositoryRoot"]).resolve()
+    sys.path.insert(0, str(root / "packages/agent-harness-py/src"))
+    from agent_mc_harness.status_file import StatusFile
+    status_file = StatusFile(state / "supervisor.json")
     env=dict(os.environ,PYTHONUTF8="1",PYTHONPATH=os.pathsep.join([str(root/"packages/agent-harness-py/src"),str(root/"packages/agent-memory/graphiti-sidecar")]),AGENT_HARNESS_PY_REPO_ROOT=str(root))
     def start(kind):
         stamp=time.strftime("%Y%m%d-%H%M%S")
@@ -114,7 +118,7 @@ def serve(config):
                     start(kind);error=None
                 except Exception as failed:
                     error=type(failed).__name__;cooldown[kind]=time.monotonic()+30
-            write(state/"supervisor.json",{"schema":1,"pid":os.getpid(),"time":time.time(),"gameAvailable":ready,"maintenance":pause.exists(),"error":error,
+            status_file.publish({"schema":1,"pid":os.getpid(),"time":time.time(),"gameAvailable":ready,"maintenance":pause.exists(),"error":error,
                   "children":{kind:{"pid":p.pid,"running":p.poll()is None}for kind,p in children.items()}})
             time.sleep(2)
     finally:

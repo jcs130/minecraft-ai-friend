@@ -335,11 +335,12 @@ final class MaidCompanions {
     }
 
     void died(UUID id) {
+        var agent = agents.agent(id);
         var e = ledger.get(id);
-        if (e == null || !reserved(id)) return;
+        if (agent == null || e == null || !reserved(id)) return;
         try {
             ledger.put(e.change(null, "dead", e.work(), 0, System.currentTimeMillis(), "died"));
-            agents.agent(id).invalidateActions();
+            agent.invalidateActions();
         } catch (IOException failure) { errors.put(id, "storage_unavailable"); }
     }
 

@@ -68,6 +68,13 @@ STATUS_LUA = ("local me=numen.status.self() "
               "',\"distance\":'..(e.distance or 0)..'}') end "
               "return {nearby=nearby,inventory=numen.inv.items()}")
 INVENTORY_LUA = "return numen.inv.items()"
+HOSTED_INVENTORY_LUA = (
+    "local n=numen_hosted; local me=n.status.self(); "
+    "for _,s in ipairs(n.inv.items()) do print('QD_NUMEN_ITEM '..s.item..' '..s.count) end; "
+    "for _,hand in ipairs({'mainhand','offhand'}) do local s=me.hands[hand]; "
+    "if s then print('QD_NUMEN_HAND '..hand..' '..s.item..' '..s.count) end end; "
+    "print('QD_NUMEN_INVENTORY_END');"
+)
 LUA_DIALECTS: dict[str, dict[str, str]] = {
     "numen-0.1.5": {"move": "numen.move.walk({{x={x},y={y},z={z}}})", "stop": STOP_LUA, "observe": STATUS_LUA, "inventory": INVENTORY_LUA},
     "numen-paper": {"move": "numen.move.to({{x={x},y={y},z={z}}})", "stop": "numen.move.walk(0,0,0)", "observe": STATUS_LINE,
@@ -90,6 +97,20 @@ BUSY = re.compile(r"a call is already running for this companion|another program
 CUT_OFF = re.compile(r"this turn was cut off", re.I)
 ITEM = re.compile(r"^[a-z0-9_.-]+(?::[a-z0-9_./-]+)?$")
 SCAN_KINDS = ("hostile", "passive", "player", "all", "item")
+NPC_MEAL_FOODS = (
+    "minecraft:cooked_beef", "minecraft:cooked_porkchop", "minecraft:cooked_mutton",
+    "minecraft:cooked_salmon", "minecraft:cooked_chicken", "minecraft:cooked_cod",
+    "minecraft:bread", "minecraft:baked_potato", "minecraft:apple", "minecraft:carrot",
+)
+# The native job holds use until a real item is consumed. Measurements bracket it.
+NPC_MEAL_LUA = (
+    "local n = numen_hosted; local before = n.status.self().hunger; "
+    "if before > 14 then print('QD_NPC_MEAL already_fed'); return end; "
+    "for _, id in ipairs({" + ",".join(json.dumps(item) for item in NPC_MEAL_FOODS) + "}) do "
+    "local count = n.inv.count(id); if count > 0 then n.inv.eat(id); "
+    "print('QD_NPC_MEAL '..id..' '..count..' '..n.inv.count(id)..' '..before..' '..n.status.self().hunger); "
+    "return end end; print('QD_NPC_MEAL no_ordinary_food')"
+)
 
 
 def _field(model: Any, camel: str, snake: str) -> Any:
@@ -103,6 +124,76 @@ class PortResult:
     text: str = ""
     data: Any = None
     execution_id: str | None = None
+
+
+def measured_inventory(result: PortResult) -> PortResult:
+    if result.status == "unknown":
+        return PortResult("failed", "Native backpack read unavailable. Query inventory again when the body is ready.",
+                          result.data, result.execution_id)
+    if result.status != "completed":
+        return result
+    lines = result.text.splitlines()
+    if "QD_NUMEN_INVENTORY_END" not in lines:
+        return PortResult("failed", "Native backpack sample incomplete. Query inventory again.",
+                          result.data, result.execution_id)
+    inventory, hands = [], {}
+    for line in lines:
+        parts = line.split()
+        if len(parts) == 3 and parts[0] == "QD_NUMEN_ITEM" and ITEM.fullmatch(parts[1]) and parts[2].isdigit():
+            inventory.append({"itemId": parts[1], "count": int(parts[2])})
+        if (len(parts) == 4 and parts[0] == "QD_NUMEN_HAND" and parts[1] in {"mainhand", "offhand"}
+                and ITEM.fullmatch(parts[2]) and parts[3].isdigit()):
+            hands[parts[1]] = {"itemId": parts[2], "count": int(parts[3])}
+    return PortResult("completed", "Read the native backpack and hands", {"inventory": inventory, "hands": hands}, result.execution_id)
+
+
+def measured_attack(result: PortResult) -> PortResult:
+    if result.status == "completed" and "QD_NUMEN_ATTACK no_target" in result.text.splitlines():
+        return PortResult("failed", "No matching enemy in the current scan", {"effectsApplied": False}, result.execution_id)
+    return result
+
+
+def item_use_lua(item: str) -> str:
+    return (
+        f"local n=numen_hosted; local id={lua_str(item)}; local held=n.status.self().hands.mainhand; "
+        "if not held or held.item~=id then print('QD_NUMEN_USE wrong_mainhand'); return end; "
+        "local before=n.inv.count(id); local click=n.use.item({item=id}); "
+        "print('QD_NUMEN_USE '..id..' '..before..' '..n.inv.count(id)..' '..#(click.changes or {}));"
+    )
+
+
+def measured_item_use(result: PortResult, item: str) -> PortResult:
+    if result.status != "completed":
+        return result
+    lines = result.text.splitlines()
+    if "QD_NUMEN_USE wrong_mainhand" in lines:
+        return PortResult("failed", "Equip the requested item in the main hand first", {"effectsApplied": False}, result.execution_id)
+    sample = re.search(r"^QD_NUMEN_USE " + re.escape(item) + r" (\d+) (\d+) (\d+)$", "\n".join(lines), re.MULTILINE)
+    if sample:
+        before, after, changes = map(int, sample.groups())
+        observed = {"itemId": item, "countBefore": before, "countAfter": after, "nativeChangeCount": changes}
+        if before != after or changes:
+            return PortResult("completed", "Native click produced an observed change", {"itemUse": observed}, result.execution_id)
+        return PortResult("failed", "Native click had no observed effect", {"itemUse": observed}, result.execution_id)
+    return PortResult("unknown", "native item outcome unverified; query the original request", result.data, result.execution_id)
+
+
+def measured_meal(result: PortResult) -> PortResult:
+    if result.status != "completed":
+        return result
+    sample = re.search(r"QD_NPC_MEAL (\S+) (\d+) (\d+) (\d+) (\d+)\b", result.text)
+    data = result.data if isinstance(result.data, dict) else {}
+    if sample and sample[1] in NPC_MEAL_FOODS:
+        count_before, count_after, food_before, food_after = map(int, sample.groups()[1:])
+        if count_before == count_after + 1 and 0 <= food_before < food_after <= 20:
+            facts = {"itemId": sample[1], "countBefore": count_before, "countAfter": count_after,
+                     "hungerBefore": food_before, "hungerAfter": food_after, "effectsApplied": True}
+            return PortResult("completed", "native meal consumed one item and restored hunger",
+                              {**data, "meal": facts}, result.execution_id)
+    absence = re.search(r"QD_NPC_MEAL (already_fed|no_ordinary_food)\b", result.text)
+    if absence:
+        return PortResult("failed", absence[1], {**data, "effectsApplied": False}, result.execution_id)
+    return PortResult("unknown", "meal outcome unverified; query the original request", result.data, result.execution_id)
 
 
 @dataclass
@@ -449,7 +540,8 @@ class NumenBody(BaseBody):
     kind = "numen"
 
     def __init__(self, port: NumenPort, *, scope: Scope, server_id: str | None = None, world_key: str | None = None,
-                 name: str | None = None, owner_id: str | None = None, poll_seconds: float = 2.0, result_poll_seconds: float = 3.0) -> None:
+                 name: str | None = None, owner_id: str | None = None, poll_seconds: float = 2.0,
+                 result_poll_seconds: float = 3.0, item_use_ids: tuple[str, ...] = ()) -> None:
         super().__init__()
         self.port, self.scope, self.server_id, self.world_key = port, scope, server_id, world_key
         self.name, self.owner_id = name, owner_id
@@ -458,6 +550,11 @@ class NumenBody(BaseBody):
         self._tasks: list[asyncio.Task[None]] = []
         self._life = "unknown"
         self._last: dict[str, Any] = {}
+        self._meals: OrderedDict[str, None] = OrderedDict()
+        self._item_uses: OrderedDict[str, str] = OrderedDict()
+        self.item_use_ids = tuple(dict.fromkeys(item_use_ids))
+        if any(not ITEM.fullmatch(item) or ":" not in item for item in self.item_use_ids):
+            raise ValueError("item_use_ids must be namespaced item IDs")
 
     # ---- identity / capabilities -----------------------------------------------------------------
     def identity(self) -> BodyIdentity | None:
@@ -469,6 +566,7 @@ class NumenBody(BaseBody):
     def capabilities(self) -> Capabilities:
         tools = self._tools()
         lua, native = "lua" in tools, self.port.transport == "numen-mcp"
+        hosted = self.port.transport == "numen-hosted-mcp"
         dialect = LUA_DIALECTS[getattr(self.port, "dialect", "numen-paper")]
 
         def via(source: str) -> str:
@@ -479,7 +577,8 @@ class NumenBody(BaseBody):
         if lua:
             if self.port.dialect.endswith("0.1.5"):
                 acts["equip"] = ActionSupport(native="lua numen.gear.hold/wear", args=["item", "hand"],
-                                               notes="Existing inventory item ID; hand is main|off|head|chest|legs|feet. Never creates equipment.")
+                                               notes="Existing item ID; hand is main|off|head|chest|legs|feet."
+                                               + (" Use auto for the native wardrobe to choose a wearable slot." if hosted else ""))
             acts["move"] = ActionSupport(native="lua " + dialect["move"].split("(")[0], args=["x", "y", "z"], async_=not native)
             acts["stop"] = ActionSupport(native="lua " + ("numen.task.stop" if dialect["stop"] == STOP_LUA else dialect["stop"]),
                                          notes="lands between programs: Numen runs one program per companion" if native else
@@ -490,10 +589,18 @@ class NumenBody(BaseBody):
             acts["command"] = ActionSupport(native="command (numen.mc.run)" if native else "lua numen.mc.run", args=["line"],
                                             notes="the body's own /mycli commands; normal player permissions")
             acts["inventory"] = ActionSupport(native=via(dialect["inventory"]))
-        hosted = self.port.transport == "numen-hosted-mcp"
+            if hosted and self.item_use_ids:
+                acts["use_item"] = ActionSupport(native="numen_hosted.use.item", args=["item"],
+                    notes="Short right-click with the reviewed item already in the main hand. Allowed item IDs: "
+                    + ", ".join(self.item_use_ids) + ". Check the actual effect after the original receipt.")
+        native_actions = self.port.catalog()
+        if hosted and lua:
+            native_actions = [*native_actions, NativeAction(name="nourish",
+                description="Eat one ordinary food carried in your backpack when hunger is at most 14. Observe the actual consumed item and hunger.",
+                input_schema={"type": "object", "properties": {}, "additionalProperties": False})]
         return Capabilities(
             kind="numen", transport=self.port.transport, actions=acts,
-            native_actions=self.port.catalog(),
+            native_actions=native_actions,
             events=["chat", "system_message", "death", "respawn", "hunger", "inventory", "combat", "dimension", "status", "lifecycle",
                     "dialogue", "action_result", "connection", "other", "safety"] if native else
                    ["chat", "whisper", "system_message", "player_join", "player_leave", "death", "respawn", "combat", "action_progress",
@@ -554,9 +661,39 @@ class NumenBody(BaseBody):
         await asyncio.gather(*tasks, return_exceptions=True)
 
     # ---- actions ----------------------------------------------------------------------------------
+    def _remember_meal(self, request_id: str) -> None:
+        self._meals[request_id] = None
+        self._meals.move_to_end(request_id)
+        while len(self._meals) > self.LEDGER:
+            self._meals.popitem(last=False)
+
+    def _remember_item_use(self, request_id: str, item: str) -> None:
+        self._item_uses[request_id] = item
+        self._item_uses.move_to_end(request_id)
+        while len(self._item_uses) > self.LEDGER:
+            self._item_uses.popitem(last=False)
+
+    def restore_request(self, action: BodyAction) -> None:
+        super().restore_request(action)
+        if action.verb == "native" and action.name == "nourish":
+            self._remember_meal(action.request_id)
+        if action.verb == "use_item" and isinstance(action.args.get("item"), str):
+            self._remember_item_use(action.request_id, action.args["item"])
+
     async def _do_act(self, action: BodyAction, request_id: str) -> ActionReceipt:
         verb, args = action.verb, action.args
-        if verb == "native":
+        if verb == "native" and action.name == "nourish":
+            if args or self.port.transport != "numen-hosted-mcp":
+                raise ArgumentError("nourish takes no arguments and requires the hosted body")
+            self._remember_meal(request_id)
+            mapped = measured_meal(await self.port.call("lua", {"code": NPC_MEAL_LUA}, request_id))
+        elif verb == "use_item":
+            item = obj(args, "item", str)
+            if set(args) != {"item"} or item not in self.item_use_ids:
+                raise ArgumentError("Choose one reviewed item offered by this body's use_item catalogue")
+            self._remember_item_use(request_id, item)
+            mapped = measured_item_use(await self.port.call("lua", {"code": item_use_lua(item)}, request_id), item)
+        elif verb == "native":
             mapped = await self.port.call(str(action.name), args, request_id)
         elif verb == "chat":
             text = obj(args, "text", str)
@@ -574,14 +711,20 @@ class NumenBody(BaseBody):
                 raise ArgumentError("target must be hostile|passive|player|all and radius 1..32")
             root = namespace(self.port)
             code = (f"local e={root}.scan.entities({lua_str(target)},{{radius={radius}}})[1]; "
-                    f"if not e then print('no target') return end; {root}.fight.attack(e)")
-            mapped = await self.port.call("lua", {"code": code}, request_id)
+                    f"if not e then print('QD_NUMEN_ATTACK no_target') return end; {root}.fight.attack(e)")
+            mapped = measured_attack(await self.port.call("lua", {"code": code}, request_id))
         elif verb == "equip":
             item, hand = obj(args, "item", str), obj(args, "hand", str)
-            if not ITEM.fullmatch(item) or hand not in {"main", "off", "head", "chest", "legs", "feet"}:
-                raise ArgumentError("equip requires an existing item ID and main|off|head|chest|legs|feet")
-            method, key = ("hold", "hand") if hand in {"main", "off"} else ("wear", "slot")
-            mapped = await self.port.call("lua", {"code":f"return {namespace(self.port)}.gear.{method}({lua_str(item)},{{{key}={lua_str(hand)}}})"}, request_id)
+            if not ITEM.fullmatch(item):
+                raise ArgumentError("equip requires an existing item ID")
+            if hand == "auto" and self.port.transport == "numen-hosted-mcp":
+                code = f"return {namespace(self.port)}.gear.wear({lua_str(item)})"
+            else:
+                if hand not in {"main", "off", "head", "chest", "legs", "feet"}:
+                    raise ArgumentError("equip requires main|off|head|chest|legs|feet or an advertised automatic wardrobe")
+                method, key = ("hold", "hand") if hand in {"main", "off"} else ("wear", "slot")
+                code = f"return {namespace(self.port)}.gear.{method}({lua_str(item)},{{{key}={lua_str(hand)}}})"
+            mapped = await self.port.call("lua", {"code": code}, request_id)
         elif verb == "drop":
             item = obj(args, "item", str)
             count = obj(args, "count", int, required=False, default=1)
@@ -591,9 +734,12 @@ class NumenBody(BaseBody):
         elif verb == "command":
             mapped = await self.port.command(obj(args, "line", str), request_id)
         elif verb == "inventory":
-            source = LUA_DIALECTS[getattr(self.port, "dialect", "numen-paper")]["inventory"]
-            mapped = await (self.port.command(source, request_id) if source.startswith("/") else
-                            self.port.call("lua", {"code": source}, request_id))
+            if self.port.transport == "numen-hosted-mcp":
+                mapped = measured_inventory(await self.port.call("lua", {"code": HOSTED_INVENTORY_LUA}, request_id))
+            else:
+                source = LUA_DIALECTS[getattr(self.port, "dialect", "numen-paper")]["inventory"]
+                mapped = await (self.port.command(source, request_id) if source.startswith("/") else
+                                self.port.call("lua", {"code": source}, request_id))
         elif verb == "observe":
             mapped = await self.port.observe()
         elif verb == "stop":
@@ -614,6 +760,14 @@ class NumenBody(BaseBody):
 
     async def _do_result(self, request_id: str, previous: ActionReceipt) -> ActionReceipt:
         mapped = await self.port.result(request_id)
+        if mapped is not None and request_id in self._meals:
+            mapped = measured_meal(mapped)
+        if mapped is not None and request_id in self._item_uses:
+            mapped = measured_item_use(mapped, self._item_uses[request_id])
+        if mapped is not None and previous.verb == "attack":
+            mapped = measured_attack(mapped)
+        if mapped is not None and previous.verb == "inventory" and self.port.transport == "numen-hosted-mcp":
+            mapped = measured_inventory(mapped)
         if mapped is None or mapped.status in ("accepted",) or (mapped.status == "unknown" and previous.status == "unknown"):
             return previous
         return self.settle(request_id, mapped.status, mapped.text[:4000], mapped.data) or previous
