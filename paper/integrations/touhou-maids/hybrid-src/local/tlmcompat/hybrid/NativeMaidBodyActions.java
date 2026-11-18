@@ -188,7 +188,7 @@ final class NativeMaidBodyActions {
             var loaded=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
             if(loaded!=null){data.addProperty("passenger",loaded.isPassenger());if(loaded.getVehicle()!=null)data.addProperty("vehicleType",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(loaded.getVehicle().getType()).toString());}
             if(local.qdj.maids.brain.ResidentBodyAccess.external(id))data.add("resident",JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.status(id)));
-            else data.add("scene",plugin.companionScene(plugin.ownedLoaded(owner,id)));}
+            else if(data.get("loaded").getAsBoolean())data.add("scene",plugin.companionScene(loaded));}
         if(action.equals("context")){
             data.addProperty("physicalController","native_body");
             data.addProperty("nativeCompanionDelegated",companion(id));

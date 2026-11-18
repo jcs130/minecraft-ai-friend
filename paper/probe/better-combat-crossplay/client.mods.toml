@@ -1,0 +1,14 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="LGPL-3.0-only"
+[[mods]]
+modId="better_combat_crossplay_probe"
+version="1"
+displayName="Better Combat Crossplay Probe"
+displayTest="IGNORE_SERVER_VERSION"
+[[dependencies.better_combat_crossplay_probe]]
+modId="bettercombat"
+type="required"
+versionRange="[2.4.0,2.4.1)"
+ordering="AFTER"
+side="CLIENT"

@@ -42,7 +42,7 @@ Windows 托管服务连接新 Numen 的签名准入 `127.0.0.1:19085`、作用�
 
 1. `native/base.json` 固定 Minecraft 1.21.1 的 Numen 0.1.5 源码。原版 Numen 使用这份源码直接构建，托管版在独立工作区应用 `native/upstream.patch`。补丁沿用作用域令牌、用户模型和动作回执，在首次接管时初始化对应角色的执行循环。保留 LGPL 的 `native/LICENSE`。
 2. 使用 Java 21 先执行 `:numen-api:neoforge:runData :numen:neoforge:runData` 生成 Paper 也需要的语言文件和方块标签，再单独执行 `:numen-api:paper:jar :numen:paper:jar`。使用 `native/assemble.py` 与 ASM 9.10.1 的 `asm`、`asm-commons` 隔离托管包。安装时记录并核验四个产物的 SHA256。
-3. Youer 的服务端桥见 `native-bridge/`，用同版本 NeoForge 编译类路径运行 `compile.init.gradle` 的 `compileHostedBridge`，再用 `package.py` 打包；它只保留托管玩家的重生类型，不修改原身体和客户端协议。
+3. Youer 的服务端桥见 `native-bridge/`。用同版本 NeoForge 编译类路径运行 `compile.init.gradle` 的 `compileHostedBridge`，再用 `package.py` 打包。启用 Better Combat 2.4.0 时，原版 Java、Mineflayer 和 Geyser 的普通近战在受击确认后会向支持该频道且正在追踪攻击者的观众补发武器动作。隔离联调见 [Better Combat 跨端回归](../../probe/better-combat-crossplay/README.md)。
 4. `hub/base.json` 固定 Hub 镜像，`hub/hosted-byok.patch` 只用于一份新实例。开启 `HR_HOSTED_BYOK_ONLY=1`、独立 `HARNESS_INTERNAL_KEY` 和 `HR_SECRET_KEY`，使用新数据卷；HTTP Gateway 只映射宿主回环。不要覆盖旧 Hub 的镜像或数据卷。
 5. MC 核心须包含公开 `NumenBodyPort`/`NumenClientWorld`；autonomy 须包含 `mc_numen` 工具目录。独立安装各自依赖，不能让运行服务依赖研究目录或其他工程的 `node_modules`。托管服务复用门户的加密工具，因此其相邻 `agent-portal/src` 和门户生产依赖也须提供。
 6. `assembly.mjs` 和 `portal-assembly.mjs` 是可信运维组合。为私有配置设置 `QDJ_HOSTING_CONFIG`，官网设置绝对 `PORTAL_HOSTING_ADAPTER`；后者从只读 `/run/qd-hosting.json` 读取新的传输和签名 Key。参照 `config.example.json` 生成各自独立的随机 Key，不能复制生产值。

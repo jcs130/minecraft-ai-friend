@@ -6,6 +6,7 @@ import { nativeBodyBlockedReason, nativeBodyReadiness } from './body-readiness.t
 import { methodLearningCall } from '../src/learning/method-capability.ts';
 import {RecordedSceneStore,type RecordedScene} from '../src/learning/recorded-scene.ts';
 import { operationInventory } from './operation-experience.ts';
+import { TrajectoryScoreError } from './jitrl-trajectory.ts';
 import { withFactState } from './fact-state.ts';
 import { readWorldIdentity, worldScopedRealm } from './world-scope.ts';
 import { identityObservations } from './identity-observation.ts';
@@ -5024,7 +5025,13 @@ export class MinecraftWorld implements World {
             },
           }, this.cfg.memory, ctx.signal);
           return { text: this.toolLog('mc_memory', args, JSON.stringify(result)), meta: { gameMemory: result } };
-        } catch (error) { return { text: this.toolLog('mc_memory', args, `[mc_memory] ${String(error)}`), failed: true }; }
+        } catch (error) {
+          if(error instanceof TrajectoryScoreError){
+            const outcome=error.toolOutcome();
+            return {...outcome,text:this.toolLog('mc_memory',args,outcome.text)};
+          }
+          return { text: this.toolLog('mc_memory', args, `[mc_memory] ${String(error)}`), failed: true };
+        }
       },
       mc_goal: async (args) => {
         const op = parseGoal(args);

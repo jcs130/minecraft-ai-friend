@@ -82,6 +82,37 @@ function nativeOutcome(e:Episode):Score['nativeOutcome'] {
 const physical=(r:OperationExperience)=>experienceHash([r.scopeKey,r.run,r.execution?.kind??'dispatch',r.execution?.id??r.id]);
 const terminal=(r:OperationExperience)=>r.dispatch==='rejected'||r.dispatch==='returned'&&r.execution?.terminal===true;
 const trusted=(r:OperationExperience)=>r.dispatch==='returned'&&r.execution?.terminal===true&&['completed','partial','blocked'].includes(r.execution.phase);
+function needsNullReward(e:Episode,step:Step) {
+  return e.ending?.outcome==='unknown'||e.ending?.outcome==='cancelled'||!step.snapshot||!trusted(step.snapshot);
+}
+type ScoreIssue='null_reward_required'|'step_order'|'missing_step';
+const issueMessages:Record<ScoreIssue,string>={
+  null_reward_required:'Unknown, rejected or cancelled effects must retain null reward',
+  step_order:'Evaluation must cover every original step in order',
+  missing_step:'Scoring draft has missing steps; complete coverage before finalizing',
+};
+export class TrajectoryScoreError extends Error {
+  readonly feedback;
+  constructor(e:Episode,issue:ScoreIssue,index:number,retryOffset:number){
+    super(issueMessages[issue]);
+    this.feedback={error:'trajectory_score_rejected',issue,message:this.message,index,
+      experienceId:e.steps[index]?.experienceId??null,...(issue==='null_reward_required'?{
+        expectedValue:null,nullOnlySteps:e.steps.flatMap((step,i)=>needsNullReward(e,step)?[i]:[])}:{}),
+      missing:e.steps.flatMap((_,i)=>e.scoringDraft?.rewards[i]==null?[i]:[]),
+      next:{operation:'trajectory_score',episodeId:e.id,expectedScoreRevision:e.scores.length,offset:retryOffset,finalize:false}};
+  }
+  toolOutcome() {
+    return {text:JSON.stringify(this.feedback),failed:true as const,meta:{gameMemory:this.feedback}};
+  }
+}
+function checkRewards(e:Episode,rewards:Score['rewards'],offset:number,fromDraft:boolean) {
+  for(const [i,reward] of rewards.entries()){
+    const index=offset+i,step=e.steps[index];
+    const retryOffset=fromDraft?index:offset;
+    if(step?.experienceId!==reward.experienceId)throw new TrajectoryScoreError(e,'step_order',index,retryOffset);
+    if(reward.value!==null&&needsNullReward(e,step))throw new TrajectoryScoreError(e,'null_reward_required',index,retryOffset);
+  }
+}
 function comparable(x:OperationObservation|null,y:OperationObservation|null) {
   if(!x||!y||!x.dimension||x.dimension!==y.dimension)return false;
   return x.health!==null&&y.health!==null&&Math.abs(x.health-y.health)<=4&&x.food!==null&&y.food!==null&&Math.abs(x.food-y.food)<=4
@@ -120,7 +151,7 @@ export class JitRlTrajectoryBook {
     trajectory_append:'input:{episodeId,expectedRevision,experienceIds:[exact operation IDs]}. Up to 128 steps. Original physical task counted once; pending is not complete.',
     trajectory_close:'input:{episodeId,expectedRevision,outcome:completed|blocked|cancelled|unknown,note}. Freeze full native trajectory; waits for original terminals. No action replay.',
     trajectory_get:'input:{episodeId,offset?:0,limit?:8}. Paginated complete steps and latest score; follow nextOffset. Provenance and native outcomes are evidence; score is interpretation.',
-    trajectory_score:'input:{episodeId,expectedScoreRevision,evaluator:{id,model:null|string,version},critique,rewards:[{experienceId,value:-1..1|null,reason}],offset?:0,finalize?:true}. Score EVERY step against the original goal and whole timeline. Long trajectories: submit pages with offset and finalize:false; finish with rewards:[],finalize:true. Only complete coverage creates a revision. Keep reasons concise. Unknown stays null; a draft is never reused.',
+    trajectory_score:'input:{episodeId,expectedScoreRevision,evaluator:{id,model:null|string,version},critique,rewards:[{experienceId,value:-1..1|null,reason}],offset?:0,finalize?:true}. Score every step in order. trajectory_get marks steps requiring null. Submit pages with finalize:false, then rewards:[],finalize:true. A rejected call saves nothing: correct the identified step and resubmit its page using next.offset. Only complete coverage creates a revision.',
     trajectory_review:'input:{episodeId,expectedScoreRevision,select:revision|null,reason}. Explicitly adopt a complete reviewed score, or null to withdraw. Old revisions never multiply samples. No automatic body/code/skill promotion.',
     trajectory_rank:'requestId + input:{taskKey,phase,goalId,goalRevision,criterion?,conditions?,candidates:[{id,prior,ready,tool,args}],beta?:0..2}. Uses adopted multi-step returns in comparable scenes, not immediate rewards. Persisted decision links exact score revisions and original execution IDs. Replayed/expired advice must not drive a new action.',
     trajectory_recall:'input:{taskKey,goalId,goalRevision,limit?:3}. Compact historical episode/net-return summaries for the exact objective identity and revision. No complete history in the stable prefix.',
@@ -154,6 +185,7 @@ export class JitRlTrajectoryBook {
     if(op==='trajectory_get'){
       const q=evaluationSchemas.trajectory_get.parse(input);
       const rows=e.steps.slice(q.offset,q.offset+q.limit).map((s,i)=>({index:q.offset+i,experienceId:s.experienceId,
+        ...(e.state==='closed'&&needsNullReward(e,s)?{requiredRewardValue:null}:{}),
         evidence:s.snapshot??this.getExperience(ctx.scope,s.experienceId)}));
       const latest=e.scores.at(-1);
       return {...this.brief(e),contract:e.contract,contractHash:e.contractHash,steps:rows,nextOffset:q.offset+q.limit<e.steps.length?q.offset+q.limit:null,
@@ -198,26 +230,26 @@ export class JitRlTrajectoryBook {
       const paged=!q.finalize||q.offset>0||q.rewards.length===0||e.scoringDraft!==undefined;
       if(paged){
         if(q.expectedScoreRevision!==e.scores.length)throw Error('Score revision conflict; read previous evaluation');
-        const draft=e.scoringDraft??{baseRevision:e.scores.length,evaluator:q.evaluator,critique:q.critique,rewards:e.steps.map(()=>null)};
+        const old=e.scoringDraft;
+        const draft=old?{...old,rewards:[...old.rewards]}:{baseRevision:e.scores.length,evaluator:q.evaluator,critique:q.critique,rewards:e.steps.map(()=>null)};
         if(draft.baseRevision!==e.scores.length||experienceHash(draft.evaluator)!==experienceHash(q.evaluator))throw Error('Scoring draft belongs to another evaluator/version');
+        checkRewards(e,q.rewards,q.offset,false);
         for(let i=0;i<q.rewards.length;i++){
-          const at=q.offset+i,r=q.rewards[i]!;
-          if(r.experienceId!==e.steps[at]?.experienceId)throw Error('Evaluation must cover every original step in order');
-          draft.rewards[at]=r;
+          draft.rewards[q.offset+i]=q.rewards[i]!;
         }
         draft.critique=q.critique;
         if(!q.finalize){e.scoringDraft=draft;this.save(ctx.scope,e);return {...this.brief(e),draft:true,
           covered:draft.rewards.filter(r=>r!==null).length,missing:draft.rewards.flatMap((r,i)=>r===null?[i]:[]),adopted:false};}
-        if(draft.rewards.some(r=>r===null))throw Error('Scoring draft has missing steps; read and complete coverage');
+        const missing=draft.rewards.findIndex(r=>r===null);
+        if(missing>=0)throw new TrajectoryScoreError(e,'missing_step',missing,q.rewards.length?q.offset:missing);
         rewards=draft.rewards as Score['rewards'];
       }
       const digest=experienceHash([q.evaluator,q.critique,rewards,e.contractHash]);
       if(e.scores.at(-1)?.digest===digest)return {...this.brief(e),deduplicated:true};
       if(q.expectedScoreRevision!==e.scores.length)throw Error('Score revision conflict; read previous evaluation');
       if(e.scores.length>=16)throw Error('Scoring revision budget reached; retain counterexample and new execution evidence');
-      if(rewards.length!==e.steps.length||rewards.some((r,i)=>r.experienceId!==e.steps[i]?.experienceId))throw Error('Evaluation must cover every original step in order');
-      for(let i=0;i<rewards.length;i++)if((!trusted(e.steps[i]!.snapshot!)||['unknown','cancelled'].includes(e.ending!.outcome))&&rewards[i]!.value!==null)
-        throw Error('Unknown, rejected or cancelled effects must retain null reward');
+      checkRewards(e,rewards,0,paged);
+      if(rewards.length<e.steps.length)throw new TrajectoryScoreError(e,'missing_step',rewards.length,0);
       const returns=discountedTrajectoryReturns(rewards.map(r=>r.value),e.contract.gamma).map((r,i)=>({experienceId:e.steps[i]!.experienceId,...r}));
       const score:Score={revision:e.scores.length+1,parentRevision:e.scores.at(-1)?.revision??null,digest,at:new Date().toISOString(),evaluator:q.evaluator,
         critique:q.critique,rewards,returns,nativeOutcome:nativeOutcome(e),source:'reflective-estimate'};

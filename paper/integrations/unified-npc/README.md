@@ -84,6 +84,28 @@ progress. The dialogue journal keeps a work attempt tied to its source event
 across restart so a new planning turn cannot repeat an identical order for the
 same input.
 
+### Maid starter equipment and favorability
+
+A registered unified maid gets her starter kit on the original entity when it
+first loads. An empty backpack slot receives the native 36-slot large backpack.
+The ordinary totem of undying and fire and fall protection baubles go into
+free native bauble slots. Existing backpacks and equipment are kept, including
+an existing native extra-life bauble. A saved equipment marker prevents any
+restock when an item is used, removed or the game restarts. TLM handles the
+lethal effect and durability. The already configured partner respawn can still
+run after a lethal hit the baubles do not stop.
+
+The existing inventory menu displays the original favorability level and points.
+Normal meals, maid beds, reading and board games use TLM's own effects and
+cooldowns. At 64, 192 and 384 points, the native level increases. The host uses
+the sampled level for the tone of replies to the registered partner. Other
+speakers keep the role's regular tone and conversation rules apply at all levels.
+
+The joint server candidate also includes reviewed native hosted bridge 0.1.3
+from PR #307. This bridge adds Better Combat playback for accepted ordinary
+melee hits on compatible observers. See the
+[crossplay validation](../../probe/better-combat-crossplay/README.md).
+
 `attention_probe.py --provider-dir <private-directory> --output <report>` tests
 synthetic conversations against the configured real providers without executing
 game actions. This is prompt acceptance, not proof of production crowd behaviour.

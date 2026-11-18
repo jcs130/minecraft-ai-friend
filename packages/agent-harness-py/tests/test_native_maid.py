@@ -129,6 +129,22 @@ def test_workshop_inventory_has_an_explicit_default_and_rejects_a_guessed_name(r
     run(scenario())
 
 
+def test_unloaded_maid_snapshot_does_not_treat_inventory_as_available(run: Any) -> None:
+    async def scenario():
+        server = NativeServer()
+        server.life = "unloaded_or_unavailable"
+        body = make(server)
+        await body.spawn()
+        try:
+            snapshot = await body.snapshot()
+            assert snapshot.life_state == "unloaded" and snapshot.inventory is None
+            assert not any(call.get("arguments", {}).get("action") == "inventory" for call in server.calls)
+        finally:
+            await body.destroy()
+
+    run(scenario())
+
+
 def test_native_argument_catalogue_preserves_action_specific_server_contract():
     body = make(NativeServer())
     body._actions = ["guard", "pickup", "walk", "dismount"]

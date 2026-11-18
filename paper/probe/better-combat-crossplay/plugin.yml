@@ -1,0 +1,4 @@
+name: BetterCombatCrossplayProbe
+main: local.qa.combat.CombatProbe
+version: '1'
+api-version: '1.21'

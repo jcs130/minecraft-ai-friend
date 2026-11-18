@@ -9,11 +9,12 @@ import tempfile
 
 
 BASE_SHA256 = "ad0d377745e2c681d3044d6f068535d96ffa179ce8811724b7ab935418f27e91"
-VERSION = "0.1.49-body-activities"
+VERSION = "0.1.50-native-kit"
 PACKAGE = "local/tlmcompat/hybrid/"
 SOURCES = (
     "HybridMaidPlugin", "MaidBodyControl", "MaidCompanionActions",
-    "NativeMaidAgentSupport", "NativeMaidBodyActions", "NativeMaidBodyPort", "NativeMaidWorkshop",
+    "NativeMaidAgentSupport", "NativeMaidBodyActions", "NativeMaidBodyPort",
+    "NativeMaidInventory", "NativeMaidKit", "NativeMaidWorkshop",
 )
 
 

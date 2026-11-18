@@ -502,7 +502,9 @@ class MaidBody(BaseBody):
 
     async def snapshot(self) -> BodySnapshot:
         await self._read_context(emit=True)
-        inv, _ = await self._maids({"action": "inventory", "maidId": self.maid_id})
+        inv = None
+        if self._life == "alive":
+            inv, _ = await self._maids({"action": "inventory", "maidId": self.maid_id})
         pos = self._context.get("position")
         if isinstance(pos, list) and len(pos) == 3:
             pos = dict(zip("xyz", pos, strict=True))

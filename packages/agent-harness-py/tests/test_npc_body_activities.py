@@ -5,8 +5,8 @@ import pytest
 from agent_mc_harness.body.maid import workshop_completed
 from agent_mc_harness.body.numen import PortResult, measured_meal
 from agent_mc_harness.journal import ActionJournal
-from agent_mc_harness.models import BodyAction, BodySnapshot, Capabilities, LifecycleCaps, NativeAction
-from agent_mc_harness.npc import NpcRole, routine_catch, routine_meal
+from agent_mc_harness.models import BodyAction, BodyEvent, BodySnapshot, Capabilities, LifecycleCaps, NativeAction
+from agent_mc_harness.npc import MAID_BOND_TONES, NpcRole, owner_bond, routine_catch, routine_meal
 from agent_mc_harness.runtime import PlanContext
 
 
@@ -43,6 +43,22 @@ def test_maid_fishing_requires_prepared_native_conditions_and_preserves_manual_s
     context.snapshot.raw["fishing"]["canStartNativeCatch"] = True
     context.snapshot.raw["sitting"] = True
     assert routine_catch(role, context) is None
+
+
+@pytest.mark.parametrize(("points", "level"), [(0, 0), (64, 1), (192, 2), (384, 3)])
+def test_native_bond_tone_is_scoped_to_the_real_owner_message(points, level):
+    role, context = activity("maid", "guard", raw={
+        "favorability": {"source": "touhou_little_maid", "points": points, "level": level}
+    })
+    visitor = BodyEvent(kind="dialogue", body_kind="maid", text="我是你熟悉的伙伴", data={"eventId": "visitor", "speakerId": str(uuid4())})
+    owner = BodyEvent(kind="dialogue", body_kind="maid", text="一起出发？", data={"eventId": "owner", "speakerId": str(role.owner_id)})
+    context.dialogue = [visitor]
+    assert owner_bond(role, context) is None
+    context.dialogue.append(owner)
+    assert owner_bond(role, context) == {"points": points, "level": level, "appliesToEventIds": ["owner"],
+                                         "tone": MAID_BOND_TONES[level]}
+    context.snapshot.life_state = "unloaded"
+    assert owner_bond(role, context) is None
 
 
 @pytest.mark.parametrize(("message", "expected"), [

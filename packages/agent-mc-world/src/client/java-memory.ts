@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from '../../core/game-memory.ts';
 import { GameMemoryService } from '../../core/game-memory-service.ts';
+import { TrajectoryScoreError } from '../../core/jitrl-trajectory.ts';
 import { PlayerMemoryRecall } from '../../core/game-memory-player.ts';
 import type { JavaClientState } from '../contracts/java-client.ts';
 import type { MinecraftClientConfig } from './config.ts';
@@ -60,7 +61,9 @@ export function createJavaMemoryAccess(cfg: MinecraftClientConfig, services: Jav
           },
         }, cfg.memory, ctx.signal);
         return { text: JSON.stringify(result), meta: { gameMemory: result } };
-      } catch (error) { return { text: String(error), failed: true }; }
+      } catch (error) {
+        return error instanceof TrajectoryScoreError?error.toolOutcome():{text:String(error),failed:true};
+      }
     },
   };
   return { tool, recallPlayer: (name: string) => scope
