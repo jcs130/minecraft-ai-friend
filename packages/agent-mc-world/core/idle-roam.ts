@@ -17,13 +17,15 @@ export function idleRoamOwnsPath(bot: Bot): boolean {
   return active.get(bot) === bot.pathfinder?.goal && active.has(bot);
 }
 
+function dryBlock(block: ReturnType<Bot['blockAt']>): boolean {
+  const wet = block?.getProperties?.()?.waterlogged;
+  return Boolean(block && !hazards.has(block.name) && !block.name.endsWith('_pressure_plate')
+    && wet !== true && wet !== 'true');
+}
+
 function dryCell(bot: Bot, p: Point): boolean {
   const at = new Vec3(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
-  return [-1,0,1].every(dy => {
-    const b = bot.blockAt(at.offset(0,dy,0), false), props=b?.getProperties?.();
-    return b && !hazards.has(b.name) && !b.name.endsWith('_pressure_plate')
-      && props?.waterlogged !== true && props?.waterlogged !== 'true';
-  });
+  return [-1,0,1].every(dy => dryBlock(bot.blockAt(at.offset(0,dy,0), false)));
 }
 
 /** Copy the existing profile so server boundaries and collision repairs remain in force. */
@@ -59,22 +61,47 @@ function supported(bot: Bot, p: Point): boolean {
     && p.z-cell.z>=s[2] && p.z-cell.z<=s[5] && Math.abs(cell.y+s[4]-p.y)<.11));
 }
 
+function shallowStart(bot: Bot, p: Point): boolean {
+  const cell=new Vec3(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
+  const head=bot.blockAt(cell.offset(0,1,0),false);
+  return bot.blockAt(cell,false)?.name==='water' && dryBlock(head) && head?.shapes?.length===0
+    && dryBlock(bot.blockAt(cell.offset(0,-1,0),false)) && supported(bot,p);
+}
+
+function adjacentBank(origin: Point, destination: Point): boolean {
+  const dy=destination.y-Math.floor(origin.y);
+  return Math.abs(destination.x-Math.floor(origin.x))+Math.abs(destination.z-Math.floor(origin.z))===1
+    && (dy===0 || dy===1);
+}
+
+/** Recheck a sampled route before reusing it after body or terrain changes. */
+export function idleRoamCanStart(bot: Bot, route: IdleRoam): boolean {
+  const feet=bot.entity.position;
+  return bot.entity.onGround && distance(feet,route.origin)<=.3 && distance(route.destination,route.anchor)<=12
+    && dryCell(bot,route.destination)
+    && (dryCell(bot,feet) || (adjacentBank(feet,route.destination) && shallowStart(bot,feet)));
+}
+
 /** Read-only, bounded search. A reachable walk target replaces a guessed forward vector. */
 export function sampleIdleRoam(bot: Bot, anchor: Point, random = Math.random): IdleRoam | null {
   if (!bot.entity.onGround || !bot.pathfinder?.getPathTo || !bot.pathfinder.movements) return null;
-  const origin=bot.entity.position, moves=profile(bot,anchor,true), start=Math.floor(random()*8)%8;
+  const origin=bot.entity.position, wet=!dryCell(bot,origin);
+  if(wet&&!shallowStart(bot,origin))return null;
+  const directions=wet?4:8;
+  const moves=profile(bot,anchor,true), start=Math.floor(random()*directions)%directions;
   const deadline=performance.now()+60;
-  for(let i=0;i<8 && performance.now()<deadline;i++) {
-    const a=bot.entity.yaw+((start+i)%8)*Math.PI/4;
-    const x=Math.floor(origin.x-Math.sin(a)*5), z=Math.floor(origin.z-Math.cos(a)*5);
-    for(const dy of [0,1,-1,2,-2]) {
+  for(let i=0;i<directions && performance.now()<deadline;i++) {
+    const a=(wet?0:bot.entity.yaw)+((start+i)%directions)*2*Math.PI/directions;
+    const x=wet?Math.floor(origin.x)-Math.round(Math.sin(a)):Math.floor(origin.x-Math.sin(a)*5);
+    const z=wet?Math.floor(origin.z)-Math.round(Math.cos(a)):Math.floor(origin.z-Math.cos(a)*5);
+    for(const dy of wet?[0,1]:[0,1,-1,2,-2]) {
       if(performance.now()>=deadline) break;
       const destination={x,y:Math.floor(origin.y)+dy,z};
       if(distance(destination,anchor)>11 || !dryCell(bot,destination)) continue;
       const below=bot.blockAt(new Vec3(x,destination.y-1,z),false);
       if(!below?.shapes?.length)continue;
       const result=bot.pathfinder.getPathTo(moves,new pathfinderPkg.goals.GoalBlock(x,destination.y,z),Math.min(35,Math.max(1,deadline-performance.now())));
-      if(result.status==='success' && safeRoute(bot,result.path,anchor))
+      if(result.status==='success' && (!wet||result.path.length===1) && safeRoute(bot,result.path,anchor))
         return {origin:plain(origin),destination,anchor:plain(anchor)};
     }
   }
@@ -84,12 +111,13 @@ export function sampleIdleRoam(bot: Bot, anchor: Point, random = Math.random): I
 /** One low-priority navigation lease; abort cleanup finishes before a new body owner runs. */
 export async function executeIdleRoam(bot: Bot, route: IdleRoam, signal: AbortSignal,
   available: () => boolean): Promise<void> {
-  if(signal.aborted || !available() || distance(bot.entity.position,route.origin)>.3) return;
-  if(distance(route.destination,route.anchor)>12 || !dryCell(bot,route.destination))return;
+  if(signal.aborted || !available() || !idleRoamCanStart(bot,route)) return;
+  const origin=bot.entity.position.clone();
+  let departingWater=!dryCell(bot,origin);
   const finder=bot.pathfinder, original=finder.movements, isolated=profile(bot,route.anchor);
   const goal=new pathfinderPkg.goals.GoalBlock(route.destination.x,route.destination.y,route.destination.z);
   const check=finder.getPathTo(isolated,goal,40);
-  if(check.status!=='success' || !safeRoute(bot,check.path,route.anchor)) return;
+  if(check.status!=='success' || (departingWater&&check.path.length!==1) || !safeRoute(bot,check.path,route.anchor)) return;
   const keys=['canDig','scafoldingBlocks','allow1by1towers','allowParkour','allowSprinting',
     'allowFreeMotion','canOpenDoors','maxDropDown','infiniteLiquidDropdownDistance','exclusionAreasStep'] as const;
   const before=new Map(keys.map(k=>[k,(original as any)[k]]));
@@ -108,16 +136,23 @@ export async function executeIdleRoam(bot: Bot, route: IdleRoam, signal: AbortSi
   const update=(result:{status:string;path:Move[]})=>{
     if(finder.goal!==goal)return;
     remaining=result.path;
-    if(result.path.length && !safeRoute(bot,result.path,route.anchor)){stoppedReason='route-changed';cleanup();}
+    if(result.path.length && (!safeRoute(bot,result.path,route.anchor) || (departingWater&&result.path.length!==1))){stoppedReason='route-changed';cleanup();}
   };
   const start=Date.now(); let last=bot.entity.position.clone(), progressAt=start;
   active.set(bot,goal); signal.addEventListener('abort',cleanup,{once:true}); bot.on('path_update',update);
   timer=setInterval(()=>{
     if(distance(bot.entity.position,last)>.2){last=bot.entity.position.clone();progressAt=Date.now();}
     if(signal.aborted || !available() || finder.goal!==goal){cleanup();return;}
+    const feet=bot.entity.position;
+    const dry=dryCell(bot,feet);
+    if(Math.floor(feet.x)!==Math.floor(origin.x) || Math.floor(feet.z)!==Math.floor(origin.z))departingWater=false;
+    // Permit only the originally checked shallow cell, until first reaching dry ground.
+    const leaving=departingWater && Math.floor(feet.y)>=Math.floor(origin.y)
+      && Math.floor(feet.y)<=Math.floor(origin.y)+1
+      && shallowStart(bot,origin) && dryBlock(bot.blockAt(feet.offset(0,1,0),false));
     if(Date.now()-start>12000)stoppedReason='time-limit';
     else if(Date.now()-progressAt>1800)stoppedReason='no-progress';
-    else if(distance(bot.entity.position,route.anchor)>12 || !dryCell(bot,bot.entity.position)
+    else if(distance(feet,route.anchor)>12 || (!dry && !leaving)
       || remaining.some(n=>!dryCell(bot,n)||!supported(bot,n)))stoppedReason='route-changed';
     if(stoppedReason)cleanup();
   },50);
