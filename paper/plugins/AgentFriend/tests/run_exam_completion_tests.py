@@ -73,15 +73,17 @@ public class ExamCompletionProbe {
   String getString(String k){return values.get(k);}void set(String k,Object v){values.put(k,String.valueOf(v));}
   void createSection(String k,Map<String,Object> v){receipts.put(k,v);writes++;}
  }
- static class Native {boolean selected(){return true;}void siteCompleted(Player p,String site,String run){}}
- static class Plugin {Config config=new Config();Exam exams=new Exam(),skillAssessments=exams;Native nativeRpg=new Native();Config getConfig(){return config;}Exam skillAssessments(){return exams;}boolean nativeRpgSelected(){return true;} __NATIVE__ }
+ static class Native {boolean circleEnabled;boolean selected(){return true;}boolean healingCircleEnabled(){return circleEnabled;}void siteCompleted(Player p,String site,String run){}}
+ static class Plugin {Config config=new Config();Exam exams=new Exam(),skillAssessments=exams;Native nativeRpg=new Native();Config getConfig(){return config;}Exam skillAssessments(){return exams;}Native nativeRpg(){return nativeRpg;}boolean nativeRpgSelected(){return true;} __NATIVE__ }
  static class Site {String id="synthetic_crypt",name="Synthetic";List<String> rooms=List.of("one","two","three");int conquestFloor=0,emeralds=8,bonusCount=1;Bonus bonus=new Bonus();}
  static class Bonus {String name(){return "STONE";}}
  static class Mode {int reward=1;}
- static class Run {String id=UUID.randomUUID().toString();Site site=new Site();long started=200;int stage=3;Mode mode=new Mode();Map<UUID,Integer> attendance=new LinkedHashMap<>();Map<Integer,Set<UUID>> roomAttendance=new HashMap<>();}
+ static class Run {String id=UUID.randomUUID().toString();Site site=new Site();long started=200;int stage=3;boolean altarTactics;Mode mode=new Mode();Map<UUID,Integer> attendance=new LinkedHashMap<>();Map<Integer,Set<UUID>> roomAttendance=new HashMap<>();}
  static class Manager {
-  static final String ROOT="site-dungeons";Plugin plugin=new Plugin();int ends,applications;
+  static final String ROOT="site-dungeons";Plugin plugin=new Plugin();int ends,applications,announcements;
   String day(){return "2030-01-01";}Object receipt(UUID id,String site){return plugin.config.receipts.get(ROOT+".receipts."+id+"."+site);}
+  static String circleProof(UUID id){return ROOT+".healing-circle-proofs."+id;}boolean circleReward(UUID id){return plugin.config.values.containsKey(circleProof(id));}
+  void announceCircleReward(Player p,Run r){check(circleReward(p.getUniqueId())&&ends>0);announcements++;}
   void atomic(Runnable work){work.run();}void applyCompletion(Player p,String id,Object saved){applications++;plugin.nativeSiteCompleted(p,id,(String)((Map<?,?>)saved).get("run"));}
   void end(Run run,String reason){check(reason.equals("completed"));ends++;}
   List<String> missingRooms(Run r,UUID id){List<String> out=new ArrayList<>();for(int i=0;i<r.stage;i++)if(r.roomAttendance.containsKey(i)&&!r.roomAttendance.get(i).contains(id))out.add("missing");return out;}
@@ -95,6 +97,12 @@ public class ExamCompletionProbe {
  public static void main(String[] ignored){
   test("native resident completion uses own identity without a Bukkit player connection",()->{Player p=new Player();Manager m=manager(p);Bukkit.players.remove(p.id);ResidentCli.residents.put(p.id,p);Run r=run(p);m.complete(r);check(m.plugin.exams.count==1&&m.plugin.config.writes==1&&m.applications==1&&Bukkit.getPlayer(p.id)==null);m.complete(r);check(m.plugin.config.writes==1);ResidentCli.residents.remove(p.id);});
   test("daily reward cap does not swallow fresh full-clear evidence",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);m.plugin.config.values.put(Manager.ROOT+".claimed."+p.id+"."+r.site.id,m.day());m.complete(r);check(m.plugin.exams.count==1&&m.plugin.config.writes==0&&m.applications==0&&m.ends==1);});
+  if(__HAS_CIRCLE__)test("altar learning proof survives the daily loot cap and is issued once",()->{
+   Player p=new Player();Manager m=manager(p);Run r=run(p);r.altarTactics=true;m.plugin.nativeRpg.circleEnabled=true;
+   m.plugin.config.values.put(Manager.ROOT+".claimed."+p.id+"."+r.site.id,m.day());
+   m.complete(r);m.complete(r);
+   check(r.id.equals(m.plugin.config.values.get(Manager.circleProof(p.id)))&&m.announcements==1&&m.plugin.config.writes==0&&m.applications==0);
+  });
   test("first clear creates one reward and evidence",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);m.complete(r);check(m.plugin.config.writes==1&&m.applications==1&&m.plugin.exams.count==1);m.complete(r);check(m.plugin.config.writes==1&&m.plugin.exams.count==1);});
   test("pending older reward does not swallow new examination",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);m.plugin.config.receipts.put(Manager.ROOT+".receipts."+p.id+"."+r.site.id,Map.of("run","older"));m.complete(r);check(m.plugin.config.writes==0&&m.plugin.exams.count==1);});
   test("claiming an older reward cannot certify a new exam",()->{Player p=new Player();Manager m=manager(p);m.applyCompletion(p,"synthetic_crypt",Map.of("run","previous"));check(m.plugin.exams.count==0);});
@@ -130,6 +138,7 @@ public class ExamCompletionProbe {
 }
 '''
     generated = template.replace("__COMPLETE__", complete).replace("__DURABLE__", durable).replace("__PROOF__", proof).replace("__NATIVE__", native).replace("__LIFECYCLE__", lifecycle).replace("__GUIDANCE__", guidance)
+    generated = generated.replace("__HAS_CIRCLE__", str("grantCircle" in complete).lower())
     args.output.mkdir(parents=True, exist_ok=False)
     source = args.output / "ExamCompletionProbe.java"
     source.write_text(generated, encoding="utf-8")

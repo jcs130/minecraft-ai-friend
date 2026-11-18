@@ -35,4 +35,6 @@ enchanted-combat-spells:
 
 真人用轮盘瞄准放环，Agent 从本人状态读取当前建议的落点和现有施法指令。`/mycli cast healing_circle` 会根据可见伤员择地，`--json` 只改变回执格式。服务端先报告放置或蓄势，再分别记录实际回血、读条取消、追击伤害和箭矢控制。隔离探针位于 `paper/probe/healing-circle`，只接受环回端口、明确测试标记和合成角色。正常停启后复核技能、原有奖励与轮盘；关掉开关时保留已学技能和刻印，重新启用后恢复可用。
 
+现有 `mc_qiandengji state` 可读本人 `mcagent:state`。`abilities` 列出技能与装备来源，`profession.healingCircle.suggestion` 给出当前落点与 `invocation`。施放后从 `profession.healingCircle.effects` 查询同一 `requestId` 的实际回血。缺少可用落点时，先观察站位或用现有单体回复技能。
+
 治愈之环参考了 [Iron’s Spells ’n Spellbooks 的治疗法术](https://github.com/iron431/irons-spells-n-spellbooks/blob/1.21/src/main/java/io/redspace/ironsspellbooks/api/registry/SpellRegistry.java)。千灯纪的施法、职业档案与资源结算由 Vortex 负责。

@@ -1047,13 +1047,14 @@ final class SiteDungeonManager implements Listener {
             }
         }
         end(r,"completed");
-        for(Player p:newlyEligible){
-            var circle=plugin.nativeRpg().state(p).getAsJsonObject("healingCircle");
-            if(circle==null||circle.get("learned").getAsBoolean())continue;
-            p.sendMessage("§a【翠藤古神祭坛】已取得治愈之环学习资格。打开本处结算菜单可免费学习并装入轮盘。");
-            if(!ResidentCli.isResident(p.getUniqueId())&&p.isOnline()&&r.party.contains(p.getUniqueId())
-                    &&p.getOpenInventory().getTopInventory().getType()==org.bukkit.event.inventory.InventoryType.CRAFTING)open(p,r.site.id);
-        }
+        for(Player p:newlyEligible)announceCircleReward(p,r);
+    }
+    private void announceCircleReward(Player p,Run r){
+        var circle=plugin.nativeRpg().state(p).getAsJsonObject("healingCircle");
+        if(circle==null||circle.get("learned").getAsBoolean())return;
+        p.sendMessage("§a【翠藤古神祭坛】已取得治愈之环学习资格。打开本处结算菜单可免费学习并装入轮盘。");
+        if(!ResidentCli.isResident(p.getUniqueId())&&p.isOnline()&&r.party.contains(p.getUniqueId())
+                &&p.getOpenInventory().getTopInventory().getType()==org.bukkit.event.inventory.InventoryType.CRAFTING)open(p,r.site.id);
     }
     private void applyCompletion(Player p,String id,ConfigurationSection saved){
         Site s=sites.get(id);if(saved==null||s==null)return;String run=saved.getString("run");
