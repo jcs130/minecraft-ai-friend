@@ -16,6 +16,7 @@ public final class ResidentCli {
     private static final Map<String,String> commands=new HashMap<>();
     private static final Set<UUID> dispatching=new HashSet<>();
     private static String key(UUID id,UUID request){return id+"/"+request;}
+    static UUID currentRequest(UUID id){return dispatching.contains(id)?requests.get(id):null;}
     private static final Set<String> ARCHIVE=Set.of("status","list","mine","info","read","create","restore");
     private static final Set<String> PHOTO=Set.of("take","status","cancel","album","info","title","story","exhibit","withdraw");
     private static boolean supported(String[] a){

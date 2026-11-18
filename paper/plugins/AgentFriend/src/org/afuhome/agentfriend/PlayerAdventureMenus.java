@@ -15,7 +15,7 @@ import static org.afuhome.agentfriend.AdventureMenuModel.*;
 
 /** A view over existing RPG authorities. Browsing never starts, trades, casts or selects a class. */
 final class PlayerAdventureMenus implements Listener {
-    private record Session(Ticket ticket,View view,Inventory inventory) { }
+    private record Session(Ticket ticket,View view,Inventory inventory,org.bukkit.Location aim) { }
     private record WheelSkill(Action action, String id, String icon, String name, List<String> lore) { }
     private final AgentFriendPlugin owner;
     private final BedrockMenuForms forms;
@@ -34,10 +34,11 @@ final class PlayerAdventureMenus implements Listener {
         if(previous!=null&&previous.inventory!=null&&p.getOpenInventory().getTopInventory()==previous.inventory)p.closeInventory();
         forget(p.getUniqueId());
         View view=view(p,page,detail);
+        var aim=page==Page.WHEEL?p.getEyeLocation():null;
         if(forms!=null&&forms.isPlayer(p.getUniqueId())){
             // Close a real container before sending a form; it must not outlive another screen.
             p.closeInventory();
-            Session s=new Session(new Ticket(p.getUniqueId(),System.currentTimeMillis()),view,null);
+            Session s=new Session(new Ticket(p.getUniqueId(),System.currentTimeMillis()),view,null,aim);
             sessions.put(p.getUniqueId(),s);
             if(forms.show(p.getUniqueId(),view,index->onForm(p.getUniqueId(),s,index),()->onFormClosed(p.getUniqueId(),s)))return;
             forget(p.getUniqueId()); // a late response cannot activate the chest fallback
@@ -52,7 +53,7 @@ final class PlayerAdventureMenus implements Listener {
         // openInventory closes the previous screen synchronously; install this session afterwards.
         p.openInventory(inv);
         if(p.getOpenInventory().getTopInventory()==inv){
-            Session s=new Session(new Ticket(p.getUniqueId(),System.currentTimeMillis()),view,inv);
+            Session s=new Session(new Ticket(p.getUniqueId(),System.currentTimeMillis()),view,inv,aim);
             sessions.put(p.getUniqueId(),s);inventories.put(inv,s);
         }
     }
@@ -94,7 +95,7 @@ final class PlayerAdventureMenus implements Listener {
             buttons.add(new Button(22,Action.COMMON_USE,detail,"LIME_DYE",use,List.of(e.costLine(),e.command(),"关闭本页后按当前状态检查；失败不自动重试")));
         }else if(page==Page.WHEEL){
             content=wheel(p,detail,buttons);
-        }else if(page==Page.WHEEL_EDIT){content=wheelEdit(p,buttons);
+        }else if(page==Page.WHEEL_EDIT){content=wheelEdit(p,detail,buttons);
         }else if(page==Page.WHEEL_PICK){content=wheelPick(p,detail,buttons);
         }else if(page==Page.CHARACTER){
             JsonObject state=owner.nativeRpg().state(p);boolean available=state.has("available")&&state.get("available").getAsBoolean();
@@ -161,9 +162,14 @@ final class PlayerAdventureMenus implements Listener {
     private List<WheelSkill> wheelSkills(Player player, boolean profession) {
         List<WheelSkill> skills = new ArrayList<>();
         if (profession) {
-            for (var spell : owner.nativeRpg().classSpells(owner.nativeRpg().state(player)))
-                skills.add(new WheelSkill(Action.WHEEL_CAST, spell.id(), "ENCHANTED_BOOK", spell.name(),
-                        List.of("魔力 " + spell.mana() + " · " + cooldown(spell.cooldownRemainingMs()), "点击施放职业技能")));
+            for (var spell : owner.nativeRpg().classSpells(owner.nativeRpg().state(player))) {
+                boolean circle=spell.id().equals(NativeRpg.HEALING_CIRCLE);
+                skills.add(new WheelSkill(Action.WHEEL_CAST,spell.id(),circle?"GLISTERING_MELON_SLICE":"ENCHANTED_BOOK",spell.name(),
+                        List.of("魔力 "+spell.mana()+" · "+cooldown(spell.cooldownRemainingMs()),
+                            circle?"目标：12格内可见地面。站在环内持续回血。"
+                                :spell.targetHint().isBlank()?"点击施放职业技能":spell.targetHint(),
+                            spell.source().equals("weapon")?"来源：主手武器刻印，换下武器即不可用":"来源：职业所学")));
+            }
         } else {
             for (String id : NativeRpg.COMMON_IDS) {
                 var spell = guide(id);
@@ -224,17 +230,21 @@ final class PlayerAdventureMenus implements Listener {
         buttons.add(button(33,Action.WHEEL_EDIT,"REPEATER","配置轮盘","选择槽位，再选技能；保存后再次打开即用"));
         return message;
     }
-    private String wheelEdit(Player p,List<Button> buttons) {
+    private String wheelEdit(Player p,String detail,List<Button> buttons) {
         var learned=wheelSkills(p,true);var catalogue=wheelCatalogue(p,learned);List<String> slots;
+        boolean equipCircle=detail.equals(NativeRpg.HEALING_CIRCLE)&&catalogue.containsKey(detail);
         String message="选一个槽位，更换或清空。可混排通用技和已学职业技，保存后跨设备、重登及重启保留。";
         try{slots=wheelSlots(p,learned);}catch(IllegalArgumentException invalid){slots=Collections.nCopies(8,"");message="配置资料暂不可读；可点恢复推荐，或保留资料并联系服主。";}
+        if(equipCircle)message="治愈之环已学会。选择一个替换位置，或关闭以保留现有搭配。";
         buttons.add(button(4,Action.NONE,"REPEATER","选择要调整的槽位",message));
         for(int index=0;index<8;index++) {
             String id=slots.get(index);WheelSkill spell=catalogue.get(id);
-            buttons.add(new Button(WHEEL_CELLS[index],Action.WHEEL_SLOT,Integer.toString(index),spell==null?"LIGHT_GRAY_DYE":spell.icon(),
-                    "槽位 "+(index+1)+" · "+(id.isEmpty()?"空":spell==null?id:spell.name()),List.of("点击更换或清空","只调整快捷位置，不施法、不学习")));
+            buttons.add(new Button(WHEEL_CELLS[index],equipCircle?Action.WHEEL_ASSIGN:Action.WHEEL_SLOT,
+                    equipCircle?index+"|"+detail:Integer.toString(index),spell==null?"LIGHT_GRAY_DYE":spell.icon(),
+                    "槽位 "+(index+1)+" · "+(id.isEmpty()?"空":spell==null?id:spell.name()),
+                    List.of(equipCircle?"点击将治愈之环装入这里":"点击更换或清空","只调整快捷位置，不施法、不学习")));
         }
-        buttons.add(button(22,Action.WHEEL_DEFAULTS,"CLOCK","恢复推荐布局","优先本人已学职业技，再加入治疗、控制与位移","这是恢复快捷位置，不会遗忘技能"));
+        if(!equipCircle)buttons.add(button(22,Action.WHEEL_DEFAULTS,"CLOCK","恢复推荐布局","优先本人已学职业技，再加入治疗、控制与位移","这是恢复快捷位置，不会遗忘技能"));
         buttons.add(button(33,Action.WHEEL,"END_CRYSTAL","完成 · 打开轮盘","配置即时保存，无需再点保存"));
         return message;
     }
@@ -260,7 +270,23 @@ final class PlayerAdventureMenus implements Listener {
         buttons.add(new Button(33,Action.WHEEL_PICK_PAGE,slot+"|"+(profession?"common:0":"profession:0"),"BOOK",profession?"选择通用技":"选择职业技",List.of("切换候选目录，不修改槽位")));
         return "配置槽位 "+(slot+1)+" · "+(profession?"已学职业技":"通用技能")+" · "+(page+1)+"/"+pages+"。点击技能后即时保存，战斗时在轮盘释放。";
     }
-    private void changeWheel(Player p,Button b) {
+    void equipHealingCircle(Player p) {
+        var learned=wheelSkills(p,true);
+        if(learned.stream().noneMatch(spell->spell.id().equals(NativeRpg.HEALING_CIRCLE))){
+            p.sendMessage("§e技能还未读回，请稍后从遗迹结算页再次装入。");
+            return;
+        }
+        List<String> slots;
+        try { slots=wheelSlots(p,learned); }
+        catch (IllegalArgumentException invalid) { open(p,Page.WHEEL_EDIT,"");return; }
+        int existing=slots.indexOf(NativeRpg.HEALING_CIRCLE);
+        int slot=existing>=0?existing:slots.indexOf("");
+        if(slot<0){open(p,Page.WHEEL_EDIT,NativeRpg.HEALING_CIRCLE);return;}
+        changeWheel(p,new Button(WHEEL_CELLS[slot],Action.WHEEL_ASSIGN,slot+"|"+NativeRpg.HEALING_CIRCLE,
+            "GLISTERING_MELON_SLICE","治愈之环",List.of()),Page.WHEEL);
+    }
+
+    private void changeWheel(Player p,Button b,Page returnTo) {
         String key=wheelKey(p);Object before=owner.getConfig().get(key);Object after=null;
         try {
             if(b.action()!=Action.WHEEL_DEFAULTS) {
@@ -281,7 +307,7 @@ final class PlayerAdventureMenus implements Listener {
             p.sendMessage("§e轮盘保存未确认，本次未施法。请重新打开查看；不要反复点击，必要时联系服主。");return;
         }
         p.sendMessage("§a快捷轮盘已保存；再次打开即用。技能学习、魔力与冷却没有改变。");
-        open(p,Page.WHEEL_EDIT,"");
+        open(p,returnTo,"");
     }
 
     private static Button wheelPage(int slot, String next, String icon, String title) {
@@ -310,14 +336,15 @@ final class PlayerAdventureMenus implements Listener {
             if(!s.ticket.consume(player,index,s.view.actions().size(),System.currentTimeMillis())){
                 if(System.currentTimeMillis()>s.ticket.expires){forget(player);p.sendMessage("§e菜单已过期，本次未执行；请重新右键罗盘打开。");}return;
             }
-            sessions.remove(player,s);run(p,s.view,s.view.actions().get(index));
+            sessions.remove(player,s);run(p,s,s.view.actions().get(index));
         });
     }
     private void onFormClosed(UUID player,Session s){
         s.ticket.close();if(stopped||!owner.isEnabled())return;
         Bukkit.getScheduler().runTask(owner,()->sessions.remove(player,s));
     }
-    private void run(Player p,View view,Button b){
+    private void run(Player p,Session session,Button b){
+        View view=session.view;
         Page target=destination(b.action());
         if(target!=null){open(p,target,"");return;}
         if(b.action()==Action.BACK){open(p,parent(view.page()),"");return;}
@@ -326,7 +353,11 @@ final class PlayerAdventureMenus implements Listener {
         if(b.action()==Action.WHEEL_SLOT){open(p,Page.WHEEL_PICK,b.payload()+"|common:0");return;}
         if(b.action()==Action.WHEEL_PICK_PAGE){open(p,Page.WHEEL_PICK,b.payload());return;}
         if(b.action()==Action.WHEEL_ASSIGN||b.action()==Action.WHEEL_CLEAR||b.action()==Action.WHEEL_DEFAULTS){
-            changeWheel(p,b);return;
+            changeWheel(p,b,view.detail().equals(NativeRpg.HEALING_CIRCLE)?Page.WHEEL:Page.WHEEL_EDIT);return;
+        }
+        if(b.action()==Action.WHEEL_CAST&&b.payload().equals(NativeRpg.HEALING_CIRCLE)){
+            owner.nativeRpg().castHealingCircle(p,session.aim);
+            return;
         }
         if(b.action()==Action.COMMON_DETAIL){open(p,Page.COMMON_DETAIL,b.payload());return;}
         if(b.action()==Action.PARTY_CONFIRM){open(p,Page.PARTY_CONFIRM,b.payload());return;}
@@ -354,7 +385,7 @@ final class PlayerAdventureMenus implements Listener {
         // Next tick avoids opening/closing inventories from inside a Bukkit click callback.
         Bukkit.getScheduler().runTask(owner,()->{
             if(stopped||!p.isOnline()||sessions.get(p.getUniqueId())!=s||p.getOpenInventory().getTopInventory()!=s.inventory)return;
-            forget(p.getUniqueId());p.closeInventory();run(p,s.view,b);
+            forget(p.getUniqueId());p.closeInventory();run(p,s,b);
         });
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=false) public void drag(InventoryDragEvent event){

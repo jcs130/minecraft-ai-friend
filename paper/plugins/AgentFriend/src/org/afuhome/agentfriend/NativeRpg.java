@@ -3,11 +3,13 @@ package org.afuhome.agentfriend;
 import com.google.gson.*;
 import java.util.*;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
 /** Optional Vortex front door. Legacy storage stays read-only; no second RPG engine. */
 final class NativeRpg {
+    static final String HEALING_CIRCLE = "healing_circle";
     static final List<String> COMMON_IDS = List.of("home","selfheal","food","blink","starbolt","frostnova","give","travel","team","support","prospect","night","feather","leap","fireworks","starlight");
     static final Set<String> COMMON = Set.copyOf(COMMON_IDS);
     private final AgentFriendPlugin owner;
@@ -19,6 +21,23 @@ final class NativeRpg {
         market=selected?new PlayerMarket(owner,this):null;
     }
     boolean selected(){return selected;}
+    boolean healingCircleEnabled() {
+        if (!selected) return false;
+        try { return Boolean.TRUE.equals(call("healingCircleAvailable", new Class<?>[]{})); }
+        catch (IllegalStateException unavailable) { return false; }
+    }
+    boolean equipmentTechniquesEnabled(){
+        if(!selected)return false;
+        try{return Boolean.TRUE.equals(call("equipmentTechniquesAvailable",new Class<?>[]{}));}
+        catch(IllegalStateException unavailable){return false;}
+    }
+    void castHealingCircle(Player p, Location eye) {
+        call("castHealingCircleFromWheel", new Class<?>[]{Player.class, Location.class}, p, eye);
+    }
+    @SuppressWarnings("unchecked")
+    java.util.concurrent.CompletableFuture<Boolean> learnHealingCircle(Player p) {
+        return (java.util.concurrent.CompletableFuture<Boolean>) call("learnHealingCircleReward", new Class<?>[]{Player.class}, p);
+    }
     boolean blockPendingTrade(Player p){return market!=null&&market.blockPending(p);}
     List<AgentCliRecovery.Card> adviceCards(){
         if(!selected)return List.of();
@@ -100,7 +119,7 @@ final class NativeRpg {
     JsonArray abilities(Player p){
         return abilities(p,state(p));
     }
-    record ActiveSpell(String id, String name, String mana, Long cooldownRemainingMs) { }
+    record ActiveSpell(String id, String name, String mana, Long cooldownRemainingMs, String source, String targetHint) { }
     /** Currently usable native abilities, as reported by the original loaded RPG profile. */
     List<ActiveSpell> classSpells(JsonObject state) {
         if (!state.has("abilities") || !state.get("abilities").isJsonArray()) return List.of();
@@ -116,7 +135,7 @@ final class NativeRpg {
             var remaining = row.get("cooldownRemainingMs");
             spells.add(new ActiveSpell(id, text(row, "name", id), text(row, "manaCost", "待查询"),
                     remaining != null && remaining.isJsonPrimitive() && remaining.getAsJsonPrimitive().isNumber()
-                            ? remaining.getAsLong() : null));
+                            ? remaining.getAsLong() : null,text(row,"source","profession"),text(row,"targetHint","")));
         }
         return List.copyOf(spells);
     }

@@ -89,4 +89,18 @@ describe('MC core combat-effect choices and the original physical record',() => 
     const core = createCombatEffectPolicy({directory,timeoutMs:30,port:{request:() => new Promise(() => {})}});
     await expect(core.choose(frame(),'timeout')).resolves.toMatchObject({choice:'lance',source:'rule',evidenceIds:[]});
   });
+
+  it('accepts measured healing without mislabeling a placed field as a result', async () => {
+    const {core,system,book} = setup();
+    const input = frame({goal:'heal', injuredAllies:2, baseline:'healing_circle'});
+    input.candidates.push({id:'healing_circle',revision:'6'.repeat(64),expectedTargets:0,expectedAllies:2,
+      cost:10,priority:3,effect:'group_heal'});
+    system.request.mockResolvedValue({model:'fixture-fast-model',answers:{effect:{type:'choice',choice:'healing_circle',
+      confidence:.7,probabilities:{healing_circle:.7,lance:.2,bolt:.1}}}});
+    await expect(core.choose(input,'circle')).resolves.toMatchObject({choice:'healing_circle',source:'system1'});
+    const placed = {...feedback(input,'circle'),candidateId:'healing_circle',status:'applied',resourceSpent:10};
+    expect(() => core.observe(placed)).toThrow('Unverified combat effect');
+    const saved = core.observe({...placed,healing:6});
+    expect(book.get(scope,saved.experienceId)).toMatchObject({combatEffect:{damage:0,healing:6,resourceSpent:10}});
+  });
 });

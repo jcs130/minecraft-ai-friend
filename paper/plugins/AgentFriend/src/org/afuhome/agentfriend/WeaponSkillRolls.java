@@ -11,7 +11,10 @@ final class WeaponSkillRolls {
     static final List<String> ON_HIT = List.of("selfheal", "food", "night");
     static final List<String> ACTIVE = List.of("starbolt", "frostnova", "blink", "selfheal", "food",
             "leap", "feather", "night", "prospect", "starlight", "fireworks");
+    private static final List<String> ARCANE_RIGHT = List.of("echoing_strikes", "starbolt", "frostnova");
+    private static final List<String> ARCANE_SNEAK = List.of("counterspell", "blink", "frostnova", "feather");
     private static final Set<String> MENU_OR_LONG_TRAVEL = Set.of("give", "team", "travel", "home", "support");
+    private static final List<Binding> ARCANE = arcanePool();
 
     record Binding(String hit, String use, String sneakUse) {
         Binding {
@@ -40,6 +43,26 @@ final class WeaponSkillRolls {
         String use = active.remove(random.nextInt(active.size()));
         if (previous != null && hit.equals(previous.hit()) && use.equals(previous.use())) active.remove(previous.sneakUse());
         return new Binding(hit, use, active.get(random.nextInt(active.size())));
+    }
+
+    private static List<Binding> arcanePool() {
+        List<Binding> result = new ArrayList<>();
+        for (String hit : ON_HIT) {
+            for (String use : ARCANE_RIGHT) {
+                for (String sneak : ARCANE_SNEAK) {
+                    if (use.equals(sneak) || !(use.equals("echoing_strikes") || sneak.equals("counterspell"))) continue;
+                    result.add(new Binding(hit, use, sneak));
+                }
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    static Binding rollArcane(Binding previous, RandomGenerator random) {
+        int previousIndex = previous == null ? -1 : ARCANE.indexOf(previous);
+        if (previousIndex < 0) return ARCANE.get(random.nextInt(ARCANE.size()));
+        int choice = random.nextInt(ARCANE.size() - 1);
+        return ARCANE.get(choice < previousIndex ? choice : choice + 1);
     }
 
     static int rewardChance(int floor, String tier) {

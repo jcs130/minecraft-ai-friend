@@ -1,0 +1,8 @@
+name: HealingCircleQA
+version: 1
+main: local.healingcircleqa.HealingCircleQa
+api-version: '1.21.1'
+depend: [AgentFriend, QiandengjiRpg, VortexRPG]
+commands:
+  circleqa:
+    description: Isolated healing circle fixture

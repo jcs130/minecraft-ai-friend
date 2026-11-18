@@ -245,6 +245,7 @@ final class DungeonManager implements Listener {
     private boolean active;
     private boolean spawned;
     private boolean cleared;
+    private boolean enemyMoves;
     private int floor;
     private Difficulty difficulty = Difficulty.NORMAL;
     private long runStartedAt;
@@ -379,6 +380,7 @@ final class DungeonManager implements Listener {
             config.set(RUN_STATE + ".floor", floor);
             config.set(RUN_STATE + ".difficulty", difficulty.id);
             config.set(RUN_STATE + ".wave", activeWave.stream().map(DungeonWaveCatalog.Enemy::saved).toList());
+            config.set(RUN_STATE + ".enemy-moves", enemyMoves ? true : null);
             config.set(RUN_STATE + ".participants", participants.stream().map(UUID::toString).toList());
             config.set(RUN_STATE + ".run-started-at", runStartedAt);
             config.set(RUN_STATE + ".id", runId);
@@ -441,6 +443,7 @@ final class DungeonManager implements Listener {
         List<?> savedWave = plugin.getConfig().getList(RUN_STATE + ".wave");
         activeWave = savedFloor == REST_FLOOR ? List.of() : difficulty == Difficulty.NORMAL || savedWave == null || savedWave.isEmpty()
                 ? waveCatalog.wave(savedFloor, THEMES.get(savedFloor - 1).mobs(), difficulty != Difficulty.NORMAL) : DungeonWaveCatalog.parse(savedWave);
+        enemyMoves = plugin.getConfig().getBoolean(RUN_STATE + ".enemy-moves", false);
         runStartedAt = plugin.getConfig().getLong(RUN_STATE + ".run-started-at", now);
         runId = plugin.getConfig().getString(RUN_STATE + ".id", Long.toString(runStartedAt));
         floorStartedAt = plugin.getConfig().getLong(RUN_STATE + ".floor-started-at", now);
@@ -713,6 +716,7 @@ final class DungeonManager implements Listener {
         if (participant && committedCurrentRun()) {
             out.addProperty("run", runId);
             out.addProperty("revision", runRevision);
+            if(enemyMoves){var moves=plugin.dungeonEnemyMoves().hazards(player);if(!moves.isEmpty())out.add("enemyMoves",JSON.toJsonTree(moves));}
         }
         var outcome = ownOutcome(player);
         if (outcome != null) out.add("lastOutcome", outcome);
@@ -947,6 +951,7 @@ final class DungeonManager implements Listener {
         active = true;
         runStartedAt = now;
         runId = UUID.randomUUID().toString();
+        enemyMoves = plugin.dungeonEnemyMoves().enabled();
         persistRun();
         reportAssembly(starter, assembly, true, 1, true);
         for (UUID id : participants) {
@@ -990,6 +995,7 @@ final class DungeonManager implements Listener {
         active = true;
         runStartedAt = now;
         runId = UUID.randomUUID().toString();
+        enemyMoves = plugin.dungeonEnemyMoves().enabled();
         persistRun();
         reportAssembly(starter, assembly, true, REST_FLOOR, true);
         for (UUID id : participants) {
@@ -1385,6 +1391,8 @@ final class DungeonManager implements Listener {
                 applyDifficulty(mob);
             }
             mobs.add(e.getUniqueId());
+            if(enemyMoves&&floor==3&&difficulty!=Difficulty.NORMAL&&e instanceof Mob mob
+                    &&configured.type()==EntityType.VINDICATOR&&configured.name().equals("霜墓执斧者"))registerFrostLine(mob);
             lastMobPosition.put(e.getUniqueId(), e.getLocation().clone());
             lastMobMovedAt.put(e.getUniqueId(), System.currentTimeMillis());
             plugin.getLogger().info("Dungeon mob spawned: floor=" + floor + ", id=" + e.getUniqueId()
@@ -1392,6 +1400,17 @@ final class DungeonManager implements Listener {
         }
         announce(ChatColor.RED + "第 " + floor + "/" + maxFloor() + " 层〔" + difficulty.label + "〕：" + theme.name()
                 + "，" + activeWave.size() + " 只怪物！女巫与远程怪需优先处理。");
+    }
+
+    private void registerFrostLine(Mob mob){
+        String registeredRun=runId;
+        int registeredFloor=floor;
+        var scope=new DungeonEnemyMoves.Scope(
+            ()->active&&spawned&&!cleared&&pausedAt==0&&runId.equals(registeredRun)&&floor==registeredFloor
+                &&mobs.contains(mob.getUniqueId())&&committedCurrentRun(),
+            ()->participants.stream().map(ResidentCli::find).filter(this::validParticipantTarget).toList(),
+            location->inFloor(location,registeredFloor));
+        plugin.dungeonEnemyMoves().register(mob,DungeonEnemyMoves.Move.FROST_LINE,scope);
     }
 
     private void applyDifficulty(Mob mob) {
@@ -2018,6 +2037,11 @@ final class DungeonManager implements Listener {
 
     private String rescueKey() { return "tower:" + runId; }
     String challengeContext(UUID id) { return active&&participants.contains(id)?rescueKey()+":"+floor:""; }
+    boolean circleRoom(Player player, Location ground) {
+        return isParticipant(player) && pausedAt == 0 && spawned && !cleared
+            && floorAt(player.getLocation()) == floor && floorAt(ground) == floor;
+    }
+    boolean activeCircleRoom(Location ground) { return active && floorAt(ground) == floor; }
     private boolean waveCleared() {
         return cleared || spawned && mobs.stream().noneMatch(uuid -> {
             Entity e = Bukkit.getEntity(uuid); return e instanceof LivingEntity l && e.isValid() && !l.isDead();

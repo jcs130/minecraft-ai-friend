@@ -19,7 +19,7 @@ before=entries.copy()
 for base in ([classes] if a.baseline else [classes,root/'resources']):
  for f in base.rglob('*'):
   if f.is_file():entries[f.relative_to(base).as_posix()]=f.read_bytes()
-descriptor,count=re.subn(r'(?m)^version:.*$', 'version: 0.2.31-unified-npc', entries['plugin.yml'].decode('utf8'));assert count==1
+descriptor,count=re.subn(r'(?m)^version:.*$', 'version: 0.2.32-altar-spells', entries['plugin.yml'].decode('utf8'));assert count==1
 entries['plugin.yml']=descriptor.encode('utf8')
 assert all(n in entries for n in before)
 assert all(entries[n]==v for n,v in before.items()if not n.endswith('.class') and n!='plugin.yml')

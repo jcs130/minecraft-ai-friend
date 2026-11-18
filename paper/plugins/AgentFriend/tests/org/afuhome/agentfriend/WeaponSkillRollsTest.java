@@ -30,6 +30,16 @@ public final class WeaponSkillRollsTest {
         expect(observed.containsAll(learned.subList(0, 4)), "learned class spells are reachable");
         expect(learned.subList(4, 7).stream().noneMatch(observed::contains), "no command text or menu effects");
 
+        var arcane = new HashSet<WeaponSkillRolls.Binding>();
+        var legacy = new WeaponSkillRolls.Binding("night", "echoing_strikes", "counterspell");
+        for (int i=0;i<2000;i++) arcane.add(WeaponSkillRolls.rollArcane(null,rng));
+        expect(arcane.size()==18 && arcane.contains(legacy), "all eighteen arcane combinations are available");
+        for (var binding : arcane) {
+            expect(binding.use().equals("echoing_strikes") || binding.sneakUse().equals("counterspell"), "a signature technique is guaranteed");
+            expect(!binding.equals(WeaponSkillRolls.rollArcane(binding,rng)), "paid reroll never repeats the old combination");
+            expect(binding.equals(WeaponSkillRolls.decode(binding.encode())), "legacy and new bindings round-trip");
+        }
+
         for (String malformed : List.of("", "home:starbolt:frostnova", "food:travel:starbolt", "food:starbolt:starbolt",
                 "night:starbolt:/op Alex", "night:feather:blink:extra"))
             expect(WeaponSkillRolls.decode(malformed) == null, "bad binding rejected");
@@ -38,6 +48,6 @@ public final class WeaponSkillRollsTest {
         expect(WeaponSkillRolls.rewardChance(6, "rare") == 20, "rare weapon conditional roll");
         expect(WeaponSkillRolls.rewardChance(8, "excellent") == 50, "excellent weapon conditional roll");
         expect(WeaponSkillRolls.rewardChance(12, "legendary") == 100, "legendary weapon always carries spells");
-        System.out.println("PASS 270 common combinations, class pool, duplicate rejection, storage and reward odds");
+        System.out.println("PASS 270 common and 18 arcane combinations, class pool, duplicate rejection, storage and reward odds");
     }
 }

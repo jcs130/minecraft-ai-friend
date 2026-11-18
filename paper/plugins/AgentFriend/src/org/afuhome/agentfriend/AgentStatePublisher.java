@@ -1,5 +1,6 @@
 package org.afuhome.agentfriend;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import dev.aurelium.auraskills.api.AuraSkillsApi;
@@ -23,6 +24,7 @@ import org.bukkit.scheduler.BukkitTask;
 /** Private, change-only mana and castable-ability snapshots for Agent clients. */
 final class AgentStatePublisher implements Listener {
     static final String CHANNEL = "mcagent:state";
+    private static final Gson JSON = new Gson();
     private static final int MAX_BYTES = 16_384;
     private static final long RECOVERY_INTERVAL_MS = 1_000L;
     private final AgentFriendPlugin plugin;
@@ -114,6 +116,8 @@ final class AgentStatePublisher implements Listener {
         if(plugin.nativeRpg().selected())root.add("mana",plugin.nativeRpg().mana(player));
         root.add("abilities", abilities.build(player));
         root.add("equipmentEffects", DungeonGearAura.effects(player));
+        var moves = plugin.dungeonEnemyMoves().hazards(player);
+        if (!moves.isEmpty()) root.add("enemyMoves", JSON.toJsonTree(moves));
         if (plugin.trialRescue() != null) root.add("trialRescue", plugin.trialRescue().state(player));
         if (plugin.professions() != null) root.add("profession", plugin.professions().state(player));
         if (plugin.skillAssessments() != null) root.add("academy",plugin.skillAssessments().summary(player));

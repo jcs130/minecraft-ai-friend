@@ -40,12 +40,13 @@ final class ResidentRpgApi {
         if(!ready.contains(id))return new Gson().toJson(Map.of("available",false,"backend","vortex","reason",writes.containsKey(id)&&writes.get(id).isCompletedExceptionally()?"profile_save_unconfirmed":"profile_loading","abilities",List.of(),"skills",List.of()));
         var value=JsonParser.parseString(bridge.selfState(actor(id))).getAsJsonObject();
         value.addProperty("profession",value.get("combat").getAsString());value.addProperty("title",value.get("className").getAsString());value.addProperty("progressionSystem","VortexRPG");
-        value.add("skills",new Gson().toJsonTree(vortex.spellbookService().availableSpells(vortex.playerProfileService().profile(id).orElseThrow())));
+        value.add("skills",new Gson().toJsonTree(bridge.availableSpells(actor(id),vortex.playerProfileService().profile(id).orElseThrow())));
         return value.toString();
     }
     String reflex(UUID id,boolean fighting){
         if(!ready.contains(id))return "";var p=actor(id);var state=vortex.playerProfileService().profile(id).orElseThrow();
-        var allowed=vortex.spellbookService().availableSpells(state);
+        if(fighting&&bridge.healingCircleSuggested(p,state))return HealingCircle.ID;
+        var allowed=bridge.availableSpells(p,state);
         for(var spell:vortex.spellbookService().editorSpellSnapshots().stream().sorted(Comparator.comparing(s->s.id())).toList()){
             if(!allowed.contains(spell.id())||vortex.spellbookService().qiandengjiCooldown(id,spell.id())>0
                 ||!vortex.qiandengjiMana().hasMana(id,io.vortexcore.combat.ManaGate.cost(vortex,spell.id())))continue;

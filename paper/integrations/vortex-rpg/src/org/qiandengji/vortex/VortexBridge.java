@@ -27,6 +27,8 @@ public final class VortexBridge extends JavaPlugin {
     private QuestService quests;
     private ManaManager mana;
     private ResidentRpgApi residents;
+    private HealingCircle healingCircle;
+    private MartialSpells martialSpells;
     public void residentTick(UUID id,String role){if(residents==null)residents=new ResidentRpgApi(vortex,this);residents.tick(id,role);}
     public String residentState(UUID id){if(residents==null)return "{\"available\":false,\"backend\":\"vortex\",\"reason\":\"profile_loading\"}";return residents.state(id);}
     public String residentReflex(UUID id,boolean fighting){return residents==null?"":residents.reflex(id,fighting);}
@@ -77,6 +79,19 @@ public final class VortexBridge extends JavaPlugin {
                 }
             },this);
             auctionSafety.install(vortex);
+            healingCircle = new HealingCircle(this, vortex);
+            try {
+                healingCircle.install();
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError incompatible) {
+                healingCircle.stop();
+                getLogger().log(java.util.logging.Level.WARNING, "Could not enable the healing circle on this Vortex build", incompatible);
+            }
+            martialSpells=new MartialSpells(this,vortex);
+            try{martialSpells.install();}
+            catch(ReflectiveOperationException|RuntimeException|LinkageError incompatible){
+                martialSpells.stop();
+                getLogger().log(java.util.logging.Level.WARNING,"Could not enable equipment techniques",incompatible);
+            }
             getLogger().info("Vortex精炼CLI就绪；原生职业/技能/经验/魔力为唯一权威。原生拍卖交付故障已阻止新增操作。");
         }catch(Exception|LinkageError error){
             getLogger().severe("Vortex适配不可用："+error.getClass().getSimpleName());
@@ -84,7 +99,55 @@ public final class VortexBridge extends JavaPlugin {
             Bukkit.getPluginManager().disablePlugin(this);
         }
     }
-    @Override public void onDisable(){auctionSafety.restore();}
+    @Override public void onDisable(){if(healingCircle!=null)healingCircle.stop();if(martialSpells!=null)martialSpells.stop();auctionSafety.restore();}
+    public boolean healingCircleAvailable(){return healingCircle!=null&&healingCircle.enabled();}
+    public boolean equipmentTechniquesAvailable(){return martialSpells!=null&&martialSpells.enabled();}
+    Collection<String> availableSpells(Player p,UnifiedPlayer state){
+        return vortex.spellbookService().availableSpells(state).stream()
+            .filter(id->!id.equals(HealingCircle.ID)||healingCircleAvailable())
+            .filter(id->martialSpells==null||!martialSpells.owns(id)||!martialSpells.source(p,state,id).isEmpty()).toList();
+    }
+    private Map<String,Object> ability(Player p,UnifiedPlayer state,io.vortexcore.rpg.SpellbookService.EditorSpellSnapshot s){
+        var row=new LinkedHashMap<String,Object>(Map.of("id","mycli:"+s.id(),"name",s.displayName(),"level",1,"learned",true,
+            "cooldownRemainingMs",vortex.spellbookService().qiandengjiCooldown(p.getUniqueId(),s.id()),
+            "cooldownMs",s.cooldownMillis(),"manaCost",io.vortexcore.combat.ManaGate.cost(vortex,s.id())));
+        if(martialSpells!=null&&martialSpells.owns(s.id())){
+            String source=martialSpells.source(p,state,s.id());
+            row.put("source",source);
+            row.put("learned",source.equals("profession"));
+            row.put("targetHint",MartialSpells.Art.of(s.id()).description);
+        }
+        return row;
+    }
+    boolean healingCircleSuggested(Player p,UnifiedPlayer state){
+        return healingCircleAvailable()&&healingCircle.suggested(p,state);
+    }
+    public CompletableFuture<Boolean> learnHealingCircleReward(Player p){
+        if(!healingCircleAvailable()||!pending.add(p.getUniqueId()))
+            return CompletableFuture.failedFuture(new IllegalStateException("circle_learning_unavailable"));
+        try{
+            return healingCircle.learnFromReward(p,profile(p)).thenApply(saved->true)
+                .whenComplete((saved,error)->pending.remove(p.getUniqueId()));
+        }catch(RuntimeException failure){
+            pending.remove(p.getUniqueId());
+            return CompletableFuture.failedFuture(failure);
+        }
+    }
+    public void castHealingCircleFromWheel(Player p,Location eye){
+        var request=new BridgeRules.Request("cast","cast",List.of(HealingCircle.ID),false,false);
+        try{castCircle(p,profile(p),request,eye,false);}catch(RuntimeException denied){failure(p,request,denied);}
+    }
+    private void castCircle(Player p,UnifiedPlayer state,BridgeRules.Request r,Location eye,boolean assist){
+        if(!healingCircleAvailable())throw new IllegalArgumentException("[skill_locked] 治愈之环暂不可用。");
+        if(!pending.add(p.getUniqueId()))throw new IllegalStateException("上一操作仍在确认，请查原结果。");
+        try{
+            var result=healingCircle.cast(p,state,eye,assist);
+            async(p,r,result.whenComplete((value,error)->pending.remove(p.getUniqueId())),"治愈之环已放置；实际治疗在随后数秒内发生。");
+        }catch(RuntimeException failure){
+            pending.remove(p.getUniqueId());
+            throw failure;
+        }
+    }
     private void notifyAgentFriend(String name,Class<?>[] types,Object...args){
         var af=Bukkit.getPluginManager().getPlugin("AgentFriend");if(af==null||!af.isEnabled())return;
         try{af.getClass().getMethod(name,types).invoke(af,args);}catch(Exception error){getLogger().warning("冒险证明未能确认："+name+"；不伪造考试完成。");}
@@ -183,15 +246,21 @@ public final class VortexBridge extends JavaPlugin {
     public String selfState(Player p){
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main thread required");
         var state=profile(p);String id=vortex.classSkillService().selectedClassDefinition(state).map(c->c.id()).orElse("");
+        var known=Set.copyOf(availableSpells(p,state));
         var result=new LinkedHashMap<String,Object>(Map.of("available",true,"backend","vortex","combat",id,"level",state.level(),"xp",state.experience(),
             "skillPoints",vortex.classSkillService().unspentSkillPoints(state),"activeSkill",vortex.spellbookService().activeSpellId(state).orElse(""),
             "mana",Map.of("current",mana.getMana(p.getUniqueId()),"max",mana.getMaxMana(p)),
             "economy",Map.of("available",vortex.qiandengjiVault().isAvailable(),"balance",vortex.qiandengjiVault().balance(p)),
-            "abilities",vortex.spellbookService().editorSpellSnapshots().stream().filter(s->vortex.spellbookService().availableSpells(state).contains(s.id())).limit(48).map(s->Map.of(
-                "id","mycli:"+s.id(),"name",vortex.spellbookService().spellLabel(s.id()),"level",1,"learned",true,
-                "cooldownRemainingMs",vortex.spellbookService().qiandengjiCooldown(p.getUniqueId(),s.id()),
-                "cooldownMs",s.cooldownMillis(),"manaCost",io.vortexcore.combat.ManaGate.cost(vortex,s.id()))).toList()));
+            "abilities",vortex.spellbookService().editorSpellSnapshots().stream().filter(s->known.contains(s.id())).limit(48).map(s->ability(p,state,s)).toList()));
         result.put("className",BridgeRules.className(id));
+        if(healingCircleAvailable()&&healingCircle.cleric(state))result.put("healingCircle",healingCircle.describe(p,state));
+        if(equipmentTechniquesAvailable()){
+            var effect=martialSpells.evidence(p.getUniqueId());
+            if(!effect.isEmpty())result.put("lastTechniqueEffect",effect);
+            if(martialSpells.readyCounter(p,state)&&vortex.spellbookService().qiandengjiCooldown(p.getUniqueId(),MartialSpells.Art.COUNTER.id)<=0
+                    &&mana.hasMana(p.getUniqueId(),io.vortexcore.combat.ManaGate.cost(vortex,MartialSpells.Art.COUNTER.id)))
+                result.put("interruptOpportunity",Map.of("id",MartialSpells.Art.COUNTER.id,"target","毒藤祭仪师","ready",true));
+        }
         result.putAll(io.vortexcore.rpg.ExperienceProgress.of(state,vortex.playerProfileService().experienceCurve()).fields());
         return gson.toJson(result);
     }
@@ -335,7 +404,11 @@ public final class VortexBridge extends JavaPlugin {
                 case "status"->status(p,state,r);
                 case "class"->classes(p,state,r);
                 case "skills"->skills(p,state,r);
-                case "cast"->{String id=BridgeRules.id(r);write(p,r,()->vortex.spellbookService().cast(p,state,id),false,"技能已执行；效果以现场和 status 为准。");}
+                case "cast"->{
+                    String id=BridgeRules.id(r);
+                    if(id.equals(HealingCircle.ID))castCircle(p,state,r,null,true);
+                    else write(p,r,()->vortex.spellbookService().cast(p,state,id),false,"技能已执行；效果以现场和 status 为准。");
+                }
                 case "quests"->quests(p,r);
                 case "shop"->shop(p,r);
                 case "town"->town(p,r);
@@ -420,7 +493,12 @@ public final class VortexBridge extends JavaPlugin {
             ||vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).flatMap(t->t.find(id)).isPresent();
         boolean executing=r.group().equals("cast")||Set.of("prepare","equip").contains(r.action());
         if(executing&&node&&!spell){emit(p,r,Map.of("success",false,"reason","skill_node_not_castable","skill",id,"nextCommand","/mycli skills info "+id,"changed",false),"[skill_node_not_castable] "+id+" 是学习/天赋节点，不能当作施法ID；不扣魔力。查看对应主动技能：/mycli skills info "+id);return true;}
-        if(executing&&spell&&!vortex.spellbookService().availableSpells(state).contains(id)){
+        if(executing&&spell&&!availableSpells(p,state).contains(id)){
+            if(martialSpells!=null&&martialSpells.owns(id)){
+                emit(p,r,Map.of("success",false,"reason","weapon_skill_unavailable","changed",false,"nextCommand","/mycli skills info "+id),
+                    "先学会本职业技能，或在Lv.3以后主手装备含该刻印的武器。");
+                return true;
+            }
             boolean chosen=vortex.classSkillService().hasClass(state);String next=chosen?"/mycli skills info "+id:"/mycli profession list";
             emit(p,r,Map.of("success",false,"reason",chosen?"skill_locked":"class_required","skill",id,"nextCommand",next,"changed",false),"["+(chosen?"skill_locked":"class_required")+"] "+id+(chosen?" 尚未满足本职/等级/学习条件；":" 需要先选择职业；")+"未施法、不扣魔力。下一步："+next);return true;
         }
@@ -443,12 +521,27 @@ public final class VortexBridge extends JavaPlugin {
             case "tree"->{noArgs(r);var tree=vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).orElseThrow(()->new IllegalArgumentException("先选择职业；/mycli profession list"));
                 async(p,r,vortex.qiandengjiTalents().talentData(p.getUniqueId()).thenApply(data->Map.<String,Object>of("talentPoints",data.talentPoints(),"allocated",data.allocatedNodes(),"nodes",tree.nodes(),"summary","天赋点 "+data.talentPoints()+"；"+String.join("、",tree.nodes().values().stream().map(n->n.id()+" "+n.displayName()+"("+n.cost()+"点)").toList())+"。查看条件：/mycli skills info <ID>")),"天赋资料暂不可用");}
             case "menu"->{noArgs(r);vortex.classSkillService().openSkillMenu(p,state);if(r.json())emit(p,r,Map.of("requestedMenu","skills","learningConfirmed",false,"nextCommand","/mycli skills status"),"已请求打开技能菜单；尚未学习。");}
-            case "list", "status", "mine", "points"->{noArgs(r);var ids=vortex.spellbookService().availableSpells(state);var learnable=vortex.classSkillService().skillsFor(state).stream().filter(k->!vortex.classSkillService().unlockedSkillIds(state).contains(k.id())).toList();
+            case "list", "status", "mine", "points"->{noArgs(r);var ids=availableSpells(p,state);var learnable=vortex.classSkillService().skillsFor(state).stream().filter(k->!vortex.classSkillService().unlockedSkillIds(state).contains(k.id())).toList();
                 String active=vortex.spellbookService().activeSpellId(state).orElse("");
                 emit(p,r,Map.of("available",ids,"common",io.vortexcore.rpg.ResidentActors.registered(p.getUniqueId())?List.of():SkillTransition.COMMON,"learnable",learnable,"skillPoints",vortex.classSkillService().unspentSkillPoints(state),"activeSpell",active),
                     "基础：home/selfheal/food/blink/starbolt/frostnova/give；其他通用：travel/prospect/night/feather；职业可用："+String.join("、",ids)+"；当前点击技 "+(active.isEmpty()?"未设置":active)+"；学习点 "+vortex.classSkillService().unspentSkillPoints(state)+"；可学："+String.join("、",learnable.stream().map(k->k.id()+"("+k.cost()+"点,Lv"+k.requiredLevel()+")").toList())+"。详情：/mycli skills info <ID>");}
             case "prepare", "equip"->{String id=BridgeRules.id(r);if(SkillTransition.COMMON.contains(id)){emit(p,r,Map.of("success",false,"reason","common_direct_cast","changed",false,"nextCommand","/mycli skills info "+id),"基础通用技直接施放或用原法杖绑定；无需学习，也不占职业点击技。下一步：/mycli skills info "+id);return;}write(p,r,()->{vortex.spellbookService().setActiveSpell(state,id);return CompletableFuture.completedFuture(null);},true,"已设置点击技能并保存；施放：/mycli cast "+id);}
             case "info"->{String id=BridgeRules.id(r);
+                if(martialSpells!=null&&martialSpells.owns(id)){
+                    var art=MartialSpells.Art.of(id);
+                    String source=martialSpells.source(p,state,id);
+                    String role=BridgeRules.className(art.role.name().toLowerCase(Locale.ROOT));
+                    String tip=art.description+" 永久学习需要"+role+" Lv."+art.level+"、"+art.points+"学习点。";
+                    if(art.equipmentAccess())tip+="已选职业且Lv.3后，可用主手对应刻印。";
+                    var out=new LinkedHashMap<String,Object>(Map.of("id",id,"name",art.name,"skill",art.definition(),"available",!source.isEmpty(),"source",source,
+                        "learned",source.equals("profession"),"mana",io.vortexcore.combat.ManaGate.cost(vortex,id),"cooldownMs",art.cooldown,
+                        "requirements",tip,"queryOnly",true));
+                    out.put("equipmentAccess",art.equipmentAccess());
+                    out.put("nextCommand",!source.isEmpty()?"/mycli cast "+id:vortex.classSkillService().selectedClass(state).orElse(null)==art.role
+                        ?"/mycli skills learn "+id:"/mycli skills list");
+                    emit(p,r,out,art.name+" · "+tip);
+                    return;
+                }
                 var node=vortex.classSkillService().skillsFor(state).stream().filter(k->k.id().equals(id)).findFirst();
                 if(node.isPresent()){
                     var k=node.get();boolean learned=vortex.classSkillService().unlockedSkillIds(state).contains(id);String granted=k.grantedSpellId();
@@ -458,8 +551,9 @@ public final class VortexBridge extends JavaPlugin {
                     String text=k.displayName()+"；"+(learned?"已学会":"需要Lv"+k.requiredLevel()+"、"+k.cost()+"学习点；当前Lv"+state.level()+"、"+points+"点")+"；"+k.description();
                     if(granted!=null&&!granted.isBlank()){
                         var spell=vortex.spellbookService().editorSpellSnapshots().stream().filter(s->s.id().equals(granted)).findFirst();
-                        out.put("grantedSpellId",granted);out.put("available",vortex.spellbookService().availableSpells(state).contains(granted));
+                        out.put("grantedSpellId",granted);out.put("available",availableSpells(p,state).contains(granted));
                         if(spell.isPresent()){var s=spell.get();out.put("definition",s);text+="；主动技 "+granted+"，消耗 "+io.vortexcore.combat.ManaGate.cost(vortex,granted)+"魔力，冷却 "+s.cooldownMillis()/1000.0+"秒；目标："+SkillTransition.targets(s.targeters())+"；效果："+SkillTransition.effects(s.mechanics());}
+                        if(id.equals(HealingCircle.ID)&&healingCircleAvailable())out.put("healingCircle",healingCircle.describe(p,state));
                         if(learned)next="/mycli cast "+granted;
                     }else text+="；被动常驻，学会后自动生效，无需prepare或cast";
                     out.put("nextCommand",next);emit(p,r,out,text+"。下一步："+next);return;
@@ -468,7 +562,7 @@ public final class VortexBridge extends JavaPlugin {
                 var talent=vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).flatMap(tree->tree.find(id));
                 if(talent.isPresent()){var n=talent.get();String classId=vortex.classSkillService().selectedClassDefinition(state).orElseThrow().id();async(p,r,vortex.qiandengjiTalents().talentData(p.getUniqueId()).thenApply(data->{boolean learned=data.allocatedNodes().entrySet().stream().anyMatch(e->e.getKey().toString().equalsIgnoreCase(classId)&&e.getValue().contains(id));String next=learned?"/mycli skills tree":"/mycli skills learn "+id;return Map.<String,Object>of("talent",n,"queryOnly",true,"learned",learned,"talentPoints",data.talentPoints(),"nextCommand",next,"summary",n.displayName()+"；"+(learned?"已学会，自动生效":"消耗 "+n.cost()+"天赋点，当前 "+data.talentPoints())+"；前置 "+(n.prerequisites().isEmpty()?"无":String.join("、",n.prerequisites()))+"；"+n.description()+"。被动天赋无需施放。下一步："+next);}),"天赋资料暂不可用");return;}
                 var spell=vortex.spellbookService().editorSpellSnapshots().stream().filter(s->s.id().equals(id)).findFirst().orElseThrow(()->new IllegalArgumentException("未知技能"));
-                boolean available=vortex.spellbookService().availableSpells(state).contains(id);String next="/mycli cast "+id,condition="已可用";
+                boolean available=availableSpells(p,state).contains(id);String next="/mycli cast "+id,condition="已可用";
                 if(!available){
                     if(!vortex.classSkillService().hasClass(state)){condition="尚未选择职业";next="/mycli profession list";}
                     else if(!spell.requiredClasses().isEmpty()&&!spell.requiredClasses().contains(vortex.classSkillService().selectedClass(state).orElseThrow().commandId())){condition="不属于本人职业，需要 "+String.join("/",spell.requiredClasses());next="/mycli skills list";}
