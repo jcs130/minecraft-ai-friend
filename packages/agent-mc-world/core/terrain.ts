@@ -111,7 +111,7 @@ interface EntityInfo {
   visible: boolean;
   observation?: EntityAwareness;
   /** 掉落物实体上读到的物品;没有元数据时缺省 */
-  item?: ItemStack;
+  item?: ObservedDrop;
   /** 可见实体的身份与当前元数据读数。 */
   note?: string;
 }
@@ -125,6 +125,13 @@ export interface ItemStack {
   enchantments?: ItemEnchant[];
   /** 药水、喷溅药水、滞留药水、药箭装的是什么(readPotionName);别的物品不填 */
   potion?: string;
+}
+
+/** Snapshot metadata for a dropped stack. A loaded entity alone does not establish a quantity. */
+interface ObservedDrop {
+  name: string;
+  count: number | null;
+  displayName?: string;
 }
 
 export function narrateCursor(s: Pick<WorldSnapshot, 'cursorItem'>): string {
@@ -516,7 +523,7 @@ export function narrateWorldSegments(
     `省略:${s.entitiesOmitted}`,
     ...seenMobs.map((e) => `见:${e.identity?.label ?? e.name}${e.note ? `(${e.note})` : ''}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
     ...seenDrops.map((e) =>
-      `落:${e.item?.name ?? 'item'}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}|${e.item?.count ?? 1}`,
+      `落:${e.item?.name ?? 'item'}|${e.item?.displayName ?? ''}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}|${e.item?.count ?? '?'}`,
     ).sort(),
   ].join(';');
   segs.push({ key: 'life', text: lifeLines.join('\n'), cmp: lifeCmp });
@@ -595,9 +602,11 @@ function isDroppedItem(e: EntityInfo): boolean {
   return e.name === 'item' || e.name === 'Item' || e.name === 'item_stack' || e.item != null;
 }
 
-function dropLabel(stack: ItemStack | undefined): string {
-  const name = stack?.displayName ?? (stack?.name && stack.name !== 'item' ? zhName(stack.name) : zhEntity('item'));
-  return `${name}×${stack?.count ?? 1}`;
+function dropLabel(stack: ObservedDrop): string {
+  const knownId = stack.name !== 'item';
+  const name = stack.displayName ?? (knownId ? zhName(stack.name) : '未识别掉落物');
+  const quantity = stack.count === null ? '（数量未知）' : `×${stack.count}`;
+  return `${name}${quantity}${knownId && name !== stack.name ? ` [${stack.name}]` : ''}`;
 }
 
 function dropWhere(e: EntityInfo): string {
@@ -618,17 +627,18 @@ function narrateDrops(drops: EntityInfo[]): string[] {
   return [...groups.values()]
     .map((group) => {
       const nearest = group.reduce((a, b) => (a.distance <= b.distance ? a : b));
-      const merged = new Map<string, ItemStack>();
+      const merged = new Map<string, ObservedDrop>();
       for (const e of group) {
         const name = e.item?.name ?? 'item';
         const displayName = e.item?.displayName;
-        const key = JSON.stringify([name, displayName]);
+        const count = e.item?.count ?? null;
+        const key = JSON.stringify([name, displayName, count === null]);
         const previous = merged.get(key);
         merged.set(key, { name, ...(displayName ? { displayName } : {}),
-          count: (previous?.count ?? 0) + (e.item?.count ?? 1) });
+          count: count === null ? null : (previous?.count ?? 0) + count });
       }
       const list = [...merged.values()]
-        .sort((a, b) => b.count - a.count)
+        .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))
         .map(dropLabel)
         .join('、');
       return { d: nearest.distance, text: `${dropWhere(nearest)}：${list}。` };
@@ -1620,20 +1630,19 @@ type DroppedItemData = Parameters<typeof itemCustomName>[0] & {
   name?: string; count?: number; itemId?: number; itemCount?: number;
 };
 
-/**
- * 掉落物实体上的物品。优先 `getDroppedItem()`(prismarine-entity 的口径);
- * 没有元数据时记成不明掉落物,不猜。
- */
-export function droppedStackOf(
-  e: {
-    name?: string;
-    getDroppedItem?: () => DroppedItemData | null;
-    heldItem?: DroppedItemData;
-    item?: DroppedItemData;
-    metadata?: unknown;
-  },
+type DropEntity = {
+  name?: string;
+  getDroppedItem?: () => DroppedItemData | null;
+  heldItem?: DroppedItemData;
+  item?: DroppedItemData;
+  metadata?: unknown;
+};
+
+/** Read native stack metadata separately from tracking the presence of its entity. */
+function observedDroppedStack(
+  e: DropEntity,
   items?: Record<number, { name: string }>,
-): ItemStack | null {
+): ObservedDrop | null {
   const n = e.name;
   if (n !== 'item' && n !== 'Item' && n !== 'item_stack') return null;
   let raw: DroppedItemData | null = null;
@@ -1647,15 +1656,21 @@ export function droppedStackOf(
     );
     if (hit && typeof hit === 'object') raw = hit as typeof raw;
   }
-  if (!raw) return { name: 'item', count: 1 };
+  if (!raw) return null;
   let name = typeof raw.name === 'string' ? raw.name.replace(/^minecraft:/, '') : '';
   if (!name && typeof raw.itemId === 'number' && items?.[raw.itemId]) name = items[raw.itemId].name;
   if (!name) name = 'item';
-  const count = typeof raw.count === 'number' ? raw.count
-    : typeof raw.itemCount === 'number' ? raw.itemCount
-    : 1;
+  const quantity = raw.count ?? raw.itemCount;
+  const count = typeof quantity === 'number' && Number.isSafeInteger(quantity) && quantity > 0 ? quantity : null;
   const displayName = itemCustomName(raw);
   return { name, count, ...(displayName ? { displayName } : {}) };
+}
+
+/** Legacy action consumers use a one-unit placeholder until the server supplies the stack count. */
+export function droppedStackOf(e: DropEntity, items?: Record<number, { name: string }>): ItemStack | null {
+  if (e.name !== 'item' && e.name !== 'Item' && e.name !== 'item_stack') return null;
+  const stack = observedDroppedStack(e, items);
+  return stack ? { ...stack, count: stack.count ?? 1 } : { name: 'item', count: 1 };
 }
 
 /**
@@ -1823,7 +1838,7 @@ export function snapshotFromBot(
     const observation = entityAwareness(bot, e);
     if (!observation) continue;
     const visible = observation.visibility === 'visible';
-    const stack = visible ? droppedStackOf(e, bot.registry?.items) : null;
+    const stack = visible ? observedDroppedStack(e, bot.registry?.items) : null;
     const customName = visible ? entityCustomName(bot, e) : null;
     // A previously attested UUID may label nearby tracking, without exposing
     // hidden metadata or claiming visual/aural contact.

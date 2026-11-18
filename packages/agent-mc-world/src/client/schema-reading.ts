@@ -30,7 +30,13 @@ function skillSignatures(schema: Record<string, unknown>): string | null {
       if (fields.some(field=>field===null)) return null;
       forms.push(`${name}(${fields.join(',')})`);
     }
-    lines.push([...new Set(forms)].join(' | '));
+    const signatures = [...new Set(forms)].join(' | ');
+    const description = variants[0].description;
+    // A compact line can describe the action only if it applies to every legal form.
+    const commonHint = typeof description === 'string' && description.trim().length > 0
+      && description.length <= 160 && !/[\r\n]/.test(description)
+      && variants.every(variant => variant.description === description);
+    lines.push(commonHint ? signatures + ' — ' + description.trim() : signatures);
   }
   return lines.length ? '[技能字段索引：*为该形态必填，?为可选或条件字段；执行条件仍查完整帮助，needs/expect沿用原契约]\n'+lines.join('\n') : null;
 }

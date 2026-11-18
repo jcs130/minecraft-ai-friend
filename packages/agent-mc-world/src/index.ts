@@ -1,5 +1,6 @@
 export * from './client/index.ts';
 export * from './contracts/protocol.ts';
+export { getResourceActionContract } from './collect-contract.ts';
 export type { WorldIdentityObservation } from './contracts/world-scope.ts';
 export { installNavigationBoundaryGuard, navigationBoundaryFailureOf } from '../core/navigation-boundary.ts';
 export type { NavigationBoundaryFailure } from '../core/navigation-boundary.ts';

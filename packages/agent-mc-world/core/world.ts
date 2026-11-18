@@ -55,6 +55,7 @@ import { ServerQueryLane, SERVER_QUERY_TOOL, serverQueryTool, serverQueryContext
 import { supervisorEventView } from '../src/client/event-context.ts';
 import { executionFeedbackContext } from '../src/client/execution-context.ts';
 import type { Bot } from 'mineflayer';
+import { readMaterialBudget } from './material-budget.ts';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
 import { Bridge } from './bridge.ts';
@@ -2687,7 +2688,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_bag',
     tags: ['read', 'snapshot'],
     description:
-      'Read your inventory right now: how many of the 36 slots are used, what is in them, '
+      'Read inventory now, or compare requirements (required = total needed, keep = amount you choose to retain) to current stock. Shows how many of the 36 slots are used, what is in them, '
       + 'what is in your hand, and what armour you are wearing. Read-only and instant — '
       + 'it never moves you, never touches the world and never touches the work queue. '
       + 'Set item to a material ID, Chinese material name, or exact custom display name to locate it in your inventory, the currently open container, and last observed chest records; '
@@ -2698,6 +2699,12 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     parameters: { type: 'object', properties: {
       item: { type: 'string', description: 'Optional focused stock lookup by material ID, Chinese material name, or exact custom display name.' },
       detail: { type: 'string', enum: ['summary', 'slots'], description: 'Default summary; slots reads only the current self inventory slot table (9–44), not chest slot numbers.' },
+      requirements: { type: 'array', minItems: 1, description: 'Targeted planning read, instead of item/detail. Material IDs count all stack variants. Keep amounts are your assumptions for this query.',
+        items: { type: 'object', additionalProperties: false, required: ['item', 'required'], properties: {
+          item: { type: 'string', description: 'Exact registered material ID.' },
+          required: { type: 'integer', minimum: 0, description: 'Total input needed for this task, before subtracting stock.' },
+          keep: { type: 'integer', minimum: 0, description: 'Amount of this material to leave untouched; defaults to zero.' },
+        } } },
     }, required: [] },
   },
   {
@@ -5054,6 +5061,17 @@ export class MinecraftWorld implements World {
       },
       mc_check: async (args) => this.toolLog('mc_check', args, this.runCheck(args)),
       mc_bag: async (args, ctx) => {
+        if (args.requirements !== undefined) {
+          if (args.item !== undefined || args.detail === 'slots') return { failed: true, text: 'requirements 是独立的材料核算查询；槽号或单件定位请用另一次查询。' };
+          try {
+            const data = readMaterialBudget(this.bridge?.bot ?? undefined, this.bridge?.invSynced === true, args.requirements);
+            const text = JSON.stringify(data);
+            const answer = this.readOnce('mc_bag', ctx, () => ({ stamp: text, text }));
+            return { text: typeof answer === 'string' ? answer : answer.text, data };
+          } catch (err) {
+            return { failed: true, text: String(err instanceof Error ? err.message : err) };
+          }
+        }
         const readout=this.bagReadout(typeof args.item === 'string' ? args.item : undefined,args.detail==='slots');
         const result=this.readOnce('mc_bag',ctx,()=>readout);
         return readout.data ? {text:typeof result==='string'?result:result.text,data:readout.data} : result;

@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.100
+
+- Distinguish visible item drops from harvestable blocks in action contracts. Project current material budgets and expose a versioned resource-acquisition practice with independent outcomes.
+
 ## 0.5.7-rc.160-preview.99
 
 - Validate trajectory reward pages against original outcomes before storing them. Scorers can identify the exact step, retain accepted pages and repair a draft created by an earlier release.

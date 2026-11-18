@@ -23,6 +23,15 @@ function rig(blocked = false, version = '1.20.6') {
   return { bot, clock, count: (n: number) => { count = n; } };
 }
 describe('toss receipt and aim', () => {
+  it('recognizes the same 1.21.1 wire item ID during named pickup and does not claim inventory gain', async () => {
+    vi.useFakeTimers();
+    const { bot } = rig(false, '1.21.1');
+    bot.entities[3] = { id: 3, name: 'item', position: new Vec3(.5,64,.5),
+      metadata: [{ itemId: bot.registry.itemsByName.cobblestone.id, itemCount: 2 }] };
+    const checked = expect(skillPickup(bot, ctx, 'cobblestone')).rejects.toThrow('一样都没进包');
+    await vi.advanceTimersByTimeAsync(1000);
+    await checked;
+  });
   it.each(['1.21.1', '1.20.6'])('uses positive pitch but permits deliberate discard in an enclosed %s scene', async version => {
     vi.useFakeTimers();
     expect(TOSS_PITCH).toBeGreaterThan(0); expect(planTossThrow(rig().bot)?.pitch).toBe(TOSS_PITCH);

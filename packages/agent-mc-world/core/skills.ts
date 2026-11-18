@@ -14,7 +14,7 @@ import {
   type Anchor, type BlockFace, type BoxFill, type ShapeName,
 } from './geometry.ts';
 import { DIRECTIONS, type Direction } from './terrain.ts';
-import { collectTargetError } from '../src/collect-contract.ts';
+import { collectTargetError, getResourceActionContract } from '../src/collect-contract.ts';
 import { normalizeDimension } from './escape.ts';
 import type { PositionXYZ } from './blueprint.ts';
 import { PROBE_SLICE_CELL_CAP, SPATIAL_SLICE_AXES, type SpatialSliceAxis } from './spatial-slices.ts';
@@ -441,6 +441,8 @@ interface SkillSpec {
   doc: string;
   /** 常见形态的短约束；签名、schema 与错误纠正共用，不常驻展开完整手册。 */
   inputHint?: string;
+  /** Compact target semantics retained even when a provider folds skill alternatives. */
+  target?: ReturnType<typeof getResourceActionContract>;
   fields: FieldSpec[];
   /** 横向规则钩子:接管整步校验与规范化;没给钩子的技能走表驱动 */
   parse?: (c: Record<string, unknown>, at: string, marks?: MarkLookup) => ParseResult;
@@ -1354,7 +1356,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
 {"skill":"cleanup"} 从当前安全站位尝试拆除这些垫脚；不走路、不搭新块、不拆永久建筑。实体脚下、承重/依附、液体邻接、卸载或重连后无法确认来源的方块均保留。拆除与捡回分开回报；未全部清理不算工地收尾完成。`,
     fields: [{ key: 'dryRun', kind: 'flag' }] },
   {
-    name: 'collect',
+    name: 'collect', target: getResourceActionContract('block'),
     doc: `{"skill":"collect","block":"oak_log","count":3}  采集方块,只挖看得见的——埋在石头里的看不见,得先挖开或者找暴露的。
                                                  加 "buried":true = 看得见但走不过去时,允许挖条路过去(最多 4 次)。
                                                  作物默认只收 age 到顶的,没长成的留着；mature:true 也可显式写出。
@@ -1362,7 +1364,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  collect 不支持 at，带指定坐标时整单拒绝；精确挖掘用 excavate 或 mymc_script 的原生 bot.dig。
                                                  tool 不写=节约耐久;"fastest"=本步最快;物品 id=本步精确指定,都不改长期设置`,
     fields: [
-      { key: 'block', kind: 'string', required: true, hint: '方块英文 id' },
+      { key: 'block', kind: 'string', required: true, hint: getResourceActionContract('block').hint },
       { key: 'count', kind: 'int', lo: 1, hi: 64, def: 1 },
       { key: 'buried', kind: 'flag' },
       { key: 'mature', kind: 'flag' },
@@ -1859,7 +1861,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     ],
   },
   {
-    name: 'pickup',
+    name: 'pickup', target: getResourceActionContract('dropped-item'),
     doc: '{"skill":"pickup","item":"cobblestone"}          拾取附近掉落物;item 可选,不写就近扫;按目标物品实际入包验收,靠近后零入包报受阻',
     fields: [{ key: 'item', kind: 'string', doc: '不写就近扫并避开2分钟内刚主动丢弃的已识别掉落物；明确写物品可取回' }],
   },
@@ -2043,7 +2045,7 @@ count 一律 1-64;distance:flee 1-128,find 1-1024(不给 direction 时站着扫,
 (「该步按『背包内原木 ≥5』核验:达成(实测 7)」)。`;
 
 function skillDocOf(skills: readonly SkillSpec[], lead: string): string {
-  return [lead, ...skills.map((s) => [s.inputHint, s.doc].filter(Boolean).join('\n')), SKILL_DOC_TAIL].join('\n');
+  return [lead, ...skills.map((s) => [s.target?.hint ?? s.inputHint, s.doc].filter(Boolean).join('\n')), SKILL_DOC_TAIL].join('\n');
 }
 
 /** 全部技能的完整说明；按需帮助与注册表共用原文。 */
@@ -2052,7 +2054,8 @@ export const SKILL_DOC = skillDocOf(SKILLS, '一步一个对象,按顺序执行:
 function skillSignature(skill: SkillSpec): string {
   const fields = skill.fields.map((field) => field.key
     + ('required' in field && field.required ? '*' : '?'));
-  return `${skill.name}(${fields.join(',')})${skill.inputHint ? ' — ' + skill.inputHint : ''}`;
+  const hint = skill.target?.hint ?? skill.inputHint;
+  return `${skill.name}(${fields.join(',')})${hint ? ' — ' + hint : ''}`;
 }
 
 /** 常驻目录保留字段签名；完整示例与执行条件按技能查询。 */
@@ -2162,6 +2165,7 @@ function skillGenerationContracts(skills: readonly SkillSpec[]): Record<string, 
     }]));
     const variant = (keys: string[], required: string[], overrides: Record<string, unknown> = {}) => ({
       type: 'object',
+      ...(spec.target ? { description: spec.target.hint } : {}),
       properties: {
         skill: { type: 'string', const: spec.name },
         ...Object.fromEntries(keys.map(key => [key, fields[key]])),
@@ -2430,7 +2434,7 @@ export function describeSkillInputCorrection(raw: unknown, error: string): {
   const item = Array.isArray(value) && index >= 0 ? value[index] : null;
   const spec = item && typeof item === 'object' && !Array.isArray(item)
     ? SKILL_INDEX.get(String(item.skill)) : undefined;
-  const hint = spec ? spec.inputHint ?? skillSignature(spec)
+  const hint = spec ? spec.target?.hint ?? spec.inputHint ?? skillSignature(spec)
     : 'steps 写成真正的 JSON 数组；只可完整解码一次，损坏的 JSON 不补括号、不截取前缀。保留原来全部步骤的顺序和依赖，再纠正参数。';
   const supplied = JSON.stringify(raw) ?? String(raw);
   const base = index >= 0 ? `/steps/${index}` : '/steps';
