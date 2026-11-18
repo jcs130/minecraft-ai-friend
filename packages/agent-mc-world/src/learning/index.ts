@@ -17,6 +17,7 @@ export * from './practice-memory.ts';
 export * from './physics-practice.ts';
 export * from './recorded-scene.ts';
 export * from './crafting-practice.ts';
+export * from './resource-practice.ts';
 export * from './client-practice.ts';
 export * from './harness2-service.ts';
 export * from './method-capability.ts';

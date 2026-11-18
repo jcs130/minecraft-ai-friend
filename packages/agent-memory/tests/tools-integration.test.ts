@@ -25,6 +25,25 @@ describe('memory tools and opt-in wiring', () => {
     await r.integration!.close();
   });
 
+  it('captures back-to-back changes of scope and clears an unknown identity', async () => {
+    const m = new AgentMemory({ dataDir: ':memory:' });
+    const i = createMinecraftMemory({ memory: m, self: 'helper' });
+    const other = { ...SCOPE, realm: 'other-realm' };
+    let active: typeof facts | null = facts;
+    const lazy = () => active;
+    const event = (cursor: number) => ({ type: 'minecraft.enter', ts: '2026-11-16T12:00:00Z', cursor, text: 'Pilot joined', meta: { uname: 'Pilot' } });
+    i.observer(event(1), lazy);
+    active = { experience: { scope: other }, world: { key: 'other:world', revision: 2 } };
+    i.observer(event(2), lazy);
+    active = null;
+    i.observer(event(3), lazy);
+    await i.idle();
+    expect(m.scope(SCOPE).recentEpisodes().map(e => e.source.ref)).toEqual(['cursor:1']);
+    expect(m.scope(other).recentEpisodes().map(e => [e.source.ref, e.world?.key])).toEqual([['cursor:2', 'other:world']]);
+    expect((await tool(i, 'memory_recent').handler({})).failed).toBe(true);
+    await i.close();
+  });
+
   it('observer ingests host events under the observed scope; tools read and write', async () => {
     const i = createMinecraftMemory({ memory: new AgentMemory({ dataDir: ':memory:' }), self: 'Komi' });
     expect((await tool(i, 'memory_query').handler({})).failed).toBe(true); // no scope yet
@@ -35,7 +54,7 @@ describe('memory tools and opt-in wiring', () => {
     i.observer({ type: 'minecraft.world.snapshot', ts: '2026-11-01T00:00:00Z', text: 'snapshot' }, lazy);
     i.observer({ type: 'minecraft.leave', ts: '2026-11-01T01:00:00Z', text: 'Steve left', meta: { uname: 'Steve' } }, lazy);
     i.observer({ type: 'minecraft.enter', ts: '2026-11-01T02:00:00Z', text: 'Steve joined', meta: { uname: 'Steve' } }, lazy);
-    expect(reads).toBe(1); // irrelevant events never read facts; relevant ones are cached briefly
+    expect(reads).toBe(2); // the snapshot is skipped; each stored event resolves its scope once
     await i.idle();
     expect(i.current()!.memory.episodeCount()).toBe(3);
     const q = await tool(i, 'memory_query').handler({ entity: 'Steve' });

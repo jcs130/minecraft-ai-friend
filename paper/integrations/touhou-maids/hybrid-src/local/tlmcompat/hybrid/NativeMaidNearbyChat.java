@@ -95,6 +95,11 @@ final class NativeMaidNearbyChat implements Listener {
         for(var viewer:event.viewers())if(viewer instanceof Player p)recipients.add(p.getUniqueId());
         Bukkit.getScheduler().runTask(plugin,()->{
             if(Bukkit.getPlayer(original.getUniqueId())!=original||!localChannel(original,originalText))return;
+            var voice=Bukkit.getPluginManager().getPlugin("QiandengVoice");
+            if(voice!=null&&voice.isEnabled())try{
+                if(Boolean.TRUE.equals(voice.getClass().getMethod("acceptNaturalMaidChat",Player.class,String.class,Set.class)
+                    .invoke(voice,original,text,recipients)))return;
+            }catch(ReflectiveOperationException unavailable){/* Older voice plugin keeps the native chat path. */}
             receive(original,text,recipients);
         });
     }

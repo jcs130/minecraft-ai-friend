@@ -8,8 +8,8 @@ from pathlib import Path
 import tempfile
 
 
-BASE_SHA256 = "ad0d377745e2c681d3044d6f068535d96ffa179ce8811724b7ab935418f27e91"
-VERSION = "0.1.51-mod-combat"
+BASE_SHA256 = "a97a029916dbbb973482f5506d87e6642342233b19652796ddc3955223fa519c"
+VERSION = "0.1.52-mod-combat"
 PACKAGE = "local/tlmcompat/hybrid/"
 SOURCES = (
     "HybridMaidPlugin", "MaidBodyControl", "MaidCompanionActions", "MaidGuardLoadout",
@@ -29,7 +29,7 @@ def main():
     build = module_from_spec(spec)
     spec.loader.exec_module(build)
     if build.digest(args.baseline) != BASE_SHA256:
-        parser.error("Expected the reviewed .48 native continuity bridge")
+        parser.error("Expected the reviewed 0.1.49 natural dialogue bridge")
     if args.output.exists() or args.output.resolve().is_relative_to(args.server.resolve()):
         parser.error("Choose a new output outside the server directory")
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -15,7 +15,7 @@ import { gridText, zhErrorText } from './receipt.ts';
 import {
   CRAFT_SETTLE_MS, INVENTORY_SLOTS, awaitCraftGain, invCount, invCountById, invGains,
   invItemNamed, invSnapshot, invVariantGains, invVariantSnapshot,
-  itemsInReach, namedLike, noSuchItem, offHandItem,
+  itemsInReach, namedLike, noSuchItem, offHandItem, playerInvIn,
 } from './inventory.ts';
 import { CRAFTING_STATION, ensureStation, type Station } from './placement.ts';
 import {
@@ -118,24 +118,25 @@ export async function skillCraft(
     if (smithing) return smithNetherite(bot, def.name, smithing, call.count, ctx);
     // 配方表里同一样东西可能有好几种摆法(木棍:竹子/木板)。挑手上材料齐的那一种;
     // 都不齐就把配方要的直接材料照实说出来 —— 不再往下递归找"材料的材料"。
-    const tagged = taggedCraftChoice(bot, def.name);
+    const tagged = taggedCraftChoice(bot, def.name, call.count);
     if (tagged?.recipe) {
       recipe = tagged.recipe;
     } else if (tagged) {
       const stock = invCountById(bot, def.id);
+      const needed = `${label}的官方配方需要 ${tagged.needs};包里凑不齐${tagged.shortfall ? '；' + tagged.shortfall : ''}`;
       if (stock >= call.count) {
         // Existing output is not evidence that this requested crafting action ran.
         throw new SkillBlocked(
-          `${label}的官方配方需要 ${tagged.needs};包里凑不齐;`
+          needed + ';'
           + `包里虽有 ${stock} 个成品，但未现场合成。持有≠任务制作进度，请凑齐材料后重试 craft`,
         );
       }
-      throw new SkillBlocked(`${label}的官方配方需要 ${tagged.needs};包里凑不齐`);
+      throw new SkillBlocked(needed);
     } else {
       const all = bot.recipesAll(def.id, null, true as never) as unknown as CraftRecipeLike[];
       if (all.length === 0) throw new SkillBlocked(missingCraftRecipeText(def.name));
       const have = new Map<number, number>();
-      for (const it of bot.inventory.items()) have.set(it.type, (have.get(it.type) ?? 0) + it.count);
+      for (const it of playerInvIn(bot, bot.currentWindow).items()) have.set(it.type, (have.get(it.type) ?? 0) + it.count);
       const ready = all.find((r) => [...craftNeeds(r)].every(([id, n]) => (have.get(id) ?? 0) >= n));
       if (!ready) {
         const options = all.map((r) => [...craftNeeds(r)]

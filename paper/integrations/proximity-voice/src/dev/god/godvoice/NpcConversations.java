@@ -9,6 +9,9 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.*;
 import org.bukkit.entity.*;
 import org.bukkit.event.*;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.inventory.EquipmentSlot;
 
 /** Scoped text/ASR input for registered NPCs. No model, controller or new player connection. */
 final class NpcConversations implements Listener {
@@ -19,6 +22,7 @@ final class NpcConversations implements Listener {
     private final Map<UUID,Binding> hosted=new HashMap<>();
     private final Map<UUID,Generation> generations=new HashMap<>();
     private final NpcDialoguePolicy.Seen delivered=new NpcDialoguePolicy.Seen();
+    private static final Set<String> CLOSINGS=Set.of("好","好的","嗯","嗯嗯","收到","明白了","知道了","谢谢","谢谢你","辛苦了","再见","拜拜","回头聊");
     private long lastWarning;
     NpcConversations(PaperVoicePlugin plugin,Path file)throws Exception {
         this.plugin=plugin;profiles=Files.exists(file)?NpcDialoguePolicy.profiles(JsonParser.parseString(Files.readString(file)).getAsJsonObject()):Map.of();
@@ -27,6 +31,21 @@ final class NpcConversations implements Listener {
     boolean configured(UUID id){return profiles.containsKey(id);}
     boolean enabled(){return !profiles.isEmpty();}
     NpcDialoguePolicy.Profile profile(UUID id){return profiles.get(id);}
+    Collection<NpcDialoguePolicy.Profile> profiles(){return profiles.values();}
+    NpcDialoguePolicy.Profile find(String key) {
+        try { return profiles.get(UUID.fromString(key)); }
+        catch (IllegalArgumentException name) {
+            var matches = profiles.values().stream().filter(profile -> profile.hasName(key)).toList();
+            return matches.size() == 1 ? matches.getFirst() : null;
+        }
+    }
+    boolean hears(Player player, Entity entity, NpcDialoguePolicy.Profile profile) {
+        return entity != null && player.isOnline() && !player.isDead() && !player.isInvisible()
+                && player.getGameMode() != GameMode.SPECTATOR && player.getWorld().equals(entity.getWorld())
+                && player.canSee(entity)
+                && NpcDialoguePolicy.nearby(player.getUniqueId(), entity.getUniqueId(), player.getWorld().getUID(),
+                    entity.getWorld().getUID(), player.getLocation().distanceSquared(entity.getLocation()), profile.range());
+    }
     Entity live(UUID id){
         var profile=profiles.get(id);if(profile==null)return null;
         Entity entity=Bukkit.getEntity(id);if(!(entity instanceof LivingEntity living)||living.isDead()||!living.isValid())return null;
@@ -70,37 +89,82 @@ final class NpcConversations implements Listener {
         Player source=Bukkit.getPlayer(actor);
         if(source==null||source.isDead()||source.isInvisible()||source.getGameMode()==GameMode.SPECTATOR||!source.getWorld().getUID().equals(world))return;
         if(System.currentTimeMillis()-occurredAt>120_000||occurredAt>System.currentTimeMillis())return;
+        var address=address(source,text,NpcDialoguePolicy.fresh(occurredAt,System.currentTimeMillis()));
+        if(address!=null&&audience.contains(address.profile().id())&&
+            natural(source,address,"nearby",audience,"voice_"+utterance))return;
         for(UUID target:audience)deliver(source,target,"voice_"+utterance,text,"voice",occurredAt);
+    }
+
+    private NpcDialoguePolicy.Address address(Player player,String text,boolean allowLook){
+        var named=NpcDialoguePolicy.addressed(profiles.values(),text);
+        if(named!=null||!allowLook)return named;
+        String line=text.strip();
+        if(line.isEmpty()||line.startsWith("@")||line.startsWith("/")||line.startsWith("!"))return null;
+        var facing=player.getTargetEntity(5);
+        var profile=facing==null?null:profiles.get(facing.getUniqueId());
+        return profile==null?null:new NpcDialoguePolicy.Address(profile,line);
+    }
+
+    private boolean natural(Player player,NpcDialoguePolicy.Address address,String scope,Set<UUID> audience,String input){
+        var profile=address.profile();
+        var body=live(profile.id());
+        if(configured(player.getUniqueId())||!hears(player,body,profile)||!player.hasLineOfSight(body))return false;
+        if(profile.kind().equals("maid")&&profile.owner().equals(player.getUniqueId()))return false;
+        if(profile.kind().equals("maid")&&player.getLocation().distanceSquared(body.getLocation())>64)return false;
+        var words=address.text().replaceAll("[\\p{P}\\s]+","");
+        if(CLOSINGS.contains(words))return true;
+        if(!delivered.add(profile.id(),player.getUniqueId(),"natural_"+input,System.currentTimeMillis()))return true;
+        return plugin.naturalNpcDialogue(profile,player,address.text(),scope,audience);
+    }
+
+    boolean naturalMaidChat(Player actor,String text,Set<UUID> recipients){
+        if(!Bukkit.isPrimaryThread()||Bukkit.getPlayer(actor.getUniqueId())!=actor)return false;
+        var address=address(actor,text,true);
+        return address!=null&&address.profile().kind().equals("maid")&&
+            natural(actor,address,"public",recipients,"chat_"+UUID.randomUUID());
+    }
+
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
+    public void greetAt(PlayerInteractAtEntityEvent event){greet(event);}
+
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
+    public void greet(PlayerInteractEntityEvent event){
+        Player player=event.getPlayer();
+        if(event.getHand()!=EquipmentSlot.HAND||player.isSneaking()||!player.getInventory().getItemInMainHand().getType().isAir())return;
+        var profile=profiles.get(event.getRightClicked().getUniqueId());
+        if(profile==null||!profile.kind().equals("numen")||player.getLocation().distanceSquared(event.getRightClicked().getLocation())>25)return;
+        natural(player,new NpcDialoguePolicy.Address(profile,"你好。"),"private",Set.of(),"greeting");
     }
     void said(UUID actor,String operation,String text,long occurredAt){
         Entity source=live(actor);if(source==null||!NpcDialoguePolicy.fresh(occurredAt,System.currentTimeMillis()))return;
         NpcDialoguePolicy.text(text);String event="npc_"+NpcDialoguePolicy.speechId(actor,operation);
         for(UUID target:profiles.keySet())deliver(source,target,event,text,"npc_chat",occurredAt);
     }
-    private void deliver(Entity source,UUID target,String event,String text,String channel,long occurredAt){
+    private boolean deliver(Entity source,UUID target,String event,String text,String channel,long occurredAt){
         var profile=profiles.get(target);Entity entity=live(target);
-        if(profile==null||entity==null||!source.getWorld().equals(entity.getWorld())||!NpcDialoguePolicy.nearby(source.getUniqueId(),target,source.getWorld().getUID(),entity.getWorld().getUID(),source.getLocation().distanceSquared(entity.getLocation()),profile.range()))return;
+        if(profile==null||entity==null||!source.getWorld().equals(entity.getWorld())||!NpcDialoguePolicy.nearby(source.getUniqueId(),target,source.getWorld().getUID(),entity.getWorld().getUID(),source.getLocation().distanceSquared(entity.getLocation()),profile.range()))return false;
         // Preserve existing maid partner (24) / visitor (8) speech boundaries.
-        if(channel.equals("voice")&&profile.kind().equals("maid")&&!source.getUniqueId().equals(profile.owner())&&source.getLocation().distanceSquared(entity.getLocation())>64)return;
-        if(source instanceof Player player&&!player.canSee(entity))return;
-        try{NpcDialoguePolicy.text(text);}catch(IllegalArgumentException invalid){return;}
-        if(!delivered.add(target,source.getUniqueId(),event,System.currentTimeMillis()))return;
+        if(channel.equals("voice")&&profile.kind().equals("maid")&&!source.getUniqueId().equals(profile.owner())&&source.getLocation().distanceSquared(entity.getLocation())>64)return false;
+        if(source instanceof Player player&&!player.canSee(entity))return false;
+        try{NpcDialoguePolicy.text(text);}catch(IllegalArgumentException invalid){return false;}
+        if(!delivered.add(target,source.getUniqueId(),event,System.currentTimeMillis()))return false;
         String id="qdvoice:"+source.getUniqueId()+":"+event;
         try{
             if(profile.kind().equals("maid")){
-                var bridge=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");if(bridge==null||!bridge.isEnabled())return;
-                bridge.getClass().getMethod("acceptUnifiedNpcDialogue",UUID.class,UUID.class,UUID.class,String.class,String.class,String.class)
-                    .invoke(bridge,target,profile.owner(),source.getUniqueId(),source.getName(),text,id);
+                var bridge=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");if(bridge==null||!bridge.isEnabled())return false;
+                return Boolean.TRUE.equals(bridge.getClass().getMethod("acceptUnifiedNpcDialogue",UUID.class,UUID.class,UUID.class,String.class,String.class,String.class)
+                    .invoke(bridge,target,profile.owner(),source.getUniqueId(),source.getName(),text,id));
             }else{
-                var binding=hosted.get(target);if(binding==null||binding.entity()!=entity)return;
+                var binding=hosted.get(target);if(binding==null||binding.entity()!=entity)return false;
                 var payload=new JsonObject();payload.addProperty("schema",1);payload.addProperty("eventId",id);payload.addProperty("listenerId",target.toString());
                 payload.addProperty("speakerId",source.getUniqueId().toString());payload.addProperty("speaker",source.getName());payload.addProperty("text",text);
                 payload.addProperty("channel",channel);payload.addProperty("occurredAt",occurredAt);payload.addProperty("receivedAt",System.currentTimeMillis());
                 payload.addProperty("deliveryScope","nearby");
                 payload.addProperty("speakerKind",profiles.containsKey(source.getUniqueId())?"npc":"player");payload.addProperty("trusted",false);
-                if(!Boolean.TRUE.equals(binding.input().apply(payload.toString())))warn();
+                if(Boolean.TRUE.equals(binding.input().apply(payload.toString())))return true;
+                warn();return false;
             }
-        }catch(Exception failed){warn();}
+        }catch(Exception failed){warn();return false;}
     }
     private void warn(){long now=System.nanoTime();if(now-lastWarning>30_000_000_000L){lastWarning=now;plugin.getLogger().warning("NPC dialogue could not be delivered; no action or automatic replay was attempted");}}
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
@@ -111,6 +175,8 @@ final class NpcConversations implements Listener {
         UUID input=UUID.randomUUID();long at=System.currentTimeMillis();
         Bukkit.getScheduler().runTask(plugin,()->{
             if(Bukkit.getPlayer(actor.getUniqueId())!=actor||actor.isDead()||actor.isInvisible()||actor.getGameMode()==GameMode.SPECTATOR||!local(actor,original))return;
+            var address=address(actor,text,true);
+            if(address!=null&&(address.profile().kind().equals("maid")||natural(actor,address,"public",recipients,"chat_"+input)))return;
             // Maids already receive their native local-chat path; do not duplicate it.
             for(var p:profiles.values())if(p.kind().equals("numen")&&recipients.contains(p.id()))deliver(actor,p.id(),"chat_"+input,text,"chat",at);
         });

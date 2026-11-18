@@ -5,6 +5,16 @@ import { skillProbe } from '../core/skills-gather.ts';
 import type { SkillContext } from '../core/skill-context.ts';
 import type { Bot } from 'mineflayer';
 import { readSkillHelp } from '../core/skills.ts';
+import { getResourceActionContract } from '../src/collect-contract.ts';
+
+it('returns the dropped-item alternative without rewriting an ambiguous resource operation', () => {
+  const request = [{ skill: 'collect', radius: 12, timeoutMs: 5000 }];
+  const result = parseSteps(request);
+  expect(result).toHaveProperty('error');
+  expect('error' in result && result.error).toContain(getResourceActionContract('block').hint);
+  expect(parseSteps([{ skill: 'pickup', item: 'spruce_log' }])).toMatchObject({ steps: [{ skill: 'pickup', item: 'spruce_log' }] });
+  expect(parseSteps([{ skill: 'collect', block: 'spruce_log' }])).toMatchObject({ steps: [{ skill: 'collect', block: 'spruce_log' }] });
+});
 
 it.each([
   { skill: 'use', item: '大背包', open: true },
@@ -106,6 +116,58 @@ describe('probe filter bounds follow the query, not the until stop-list', () => 
 });
 
 describe('failed input supplies usable correction before touching current work', () => {
+  it.each(['slot', 'windowSlot'])('rejects an unsupported toss %s before dispatching a mixed batch', async key => {
+    const r = methodHarness('1.21.1');
+    try {
+      r.exec.submitDetailed([{ skill: 'goto', at: [8, 64, 0] }], 'append');
+      const before = r.exec.status(), submit = vi.spyOn(r.exec, 'submitDetailed');
+      const result = await r.world.tools().find(t => t.name === 'mc_do')!.handler({
+        queue: 'replace', steps: [{ skill: 'chat', text: 'valid' }, { skill: 'toss', item: 'iron_sword', [key]: 14 }],
+      }, { role: 'test', log: r.host.log });
+      expect(result).toMatchObject({ failed: true, data: { executed: false, completed: 0,
+        errors: [{ path: '/steps/1/' + key, actual: 14 }] }, meta: { admission: { dispatched: false } } });
+      expect(submit).not.toHaveBeenCalled();
+      expect(r.said).toEqual([]);
+      expect(r.exec.status().running?.id).toBe(before.running?.id);
+      expect(r.exec.status().waiting.map(t => t.id)).toEqual(before.waiting.map(t => t.id));
+      expect(parseSteps([{ skill: 'toss', item: 'iron_sword', pick: 'Worn', [key]: null }]))
+        .toMatchObject({ steps: [{ skill: 'toss', item: 'iron_sword', pick: 'Worn' }] });
+    } finally { r.close(); }
+  });
+  it('returns independent corrections in one text and structured receipt without replacing current work', async () => {
+    const r = methodHarness('1.21.1');
+    try {
+      r.exec.submitDetailed([{ skill: 'goto', at: [8, 64, 0] }], 'append');
+      const before = r.exec.status(), submit = vi.spyOn(r.exec, 'submitDetailed');
+      const result = await r.world.tools().find(t => t.name === 'mc_do')!.handler({
+        queue: 'replace', steps: JSON.stringify([
+          { skill: 'chat', command: '/example' }, { skill: 'eat' },
+          { skill: 'chat', text: 'valid', needs: [1, 2] }, { skill: 'goto', to: [1, 2, 3] },
+        ]),
+      }, { role: 'test', log: r.host.log });
+      expect(result).toMatchObject({ failed: true, data: { executed: false, completed: 0, errors: [
+        { path: '/steps/0/text', actual: null }, { path: '/steps/1/item', actual: null }, { path: '/steps/3/to' },
+      ] }, meta: { admission: { accepted: false, dispatched: false, fieldPath: '/steps/0/text' } } });
+      for (const path of ['/steps/0/text', '/steps/1/item', '/steps/3/to']) {
+        expect((result as { text: string }).text).toContain(path);
+      }
+      expect(submit).not.toHaveBeenCalled();
+      expect(r.said).toEqual([]);
+      expect(r.exec.status().running?.id).toBe(before.running?.id);
+      expect(r.exec.status().waiting.map(t => t.id)).toEqual(before.waiting.map(t => t.id));
+    } finally { r.close(); }
+  });
+
+  it('bounds secondary diagnostics and lookahead, while fully parsing valid arrays', () => {
+    const bad = { skill: 'eat' }, good = { skill: 'chat', text: 'test' };
+    const manyErrors = parseSteps(Array(40).fill(bad));
+    expect(manyErrors).toMatchObject({ uncheckedSteps: 32 });
+    expect('error' in manyErrors && manyErrors.additionalErrors).toHaveLength(7);
+    expect(parseSteps([bad, ...Array(39).fill(good)])).toMatchObject({ uncheckedSteps: 7 });
+    const valid = parseSteps(Array(40).fill(good));
+    expect('steps' in valid && valid.steps).toHaveLength(40);
+  });
+
   it('names the failing skill in readable text and machine recovery, with no queue replacement or navigation', async () => {
     const r = methodHarness('1.21.1');
     try {

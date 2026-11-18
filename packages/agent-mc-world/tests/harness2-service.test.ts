@@ -3,12 +3,13 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {afterEach,describe,expect,it} from 'vitest';
-import {Harness2PracticeService,parseHarness2ModelReply} from '../src/learning/harness2-service.ts';
+import {Harness2PracticeService,harness2CognitionBrief,parseHarness2ModelReply} from '../src/learning/harness2-service.ts';
 import {physicsPractice,STEP_CODE} from './harness2-fixture.ts';
 import {procedureHash,PROCEDURE_SCHEMA} from '../core/support/procedure.ts';
 import {GameMemoryBook} from '../core/game-memory.ts';
 import {createPracticeGameMemory} from '../src/learning/practice-memory.ts';
 import {PracticeStagingError} from '../src/learning/practice-staging.ts';
+import {createResourceMethodPractice,resourcePracticeCapability} from '../src/learning/resource-practice.ts';
 const directories:string[]=[];
 afterEach(()=>{for(const d of directories.splice(0))rmSync(d,{recursive:true,force:true});});
 function rig(reflect=false) {
@@ -36,6 +37,54 @@ send({type:'done',result:{upstreamRevision:v.revision,candidate,selectedRunId:'l
   return {directory,p,options,args,source,settled,changeScope:()=>scope={...scope,account:'another-player'},calls:()=>calls};
 }
 describe('explicit host method practice service',()=>{
+  it('provides the same stage-specific RPC contract for independent host model integrations',()=>{
+    const mission='Inspect the previous action.', files={'trajectory.json':'{"gained":0}'};
+    const brief=(stage:string)=>harness2CognitionBrief({id:'request',stage,mission,files});
+    expect(brief('inv1.a1')).toContain('"files":{"skills/minecraft-method/scripts/run.js"');
+    expect(brief('agg1')).toContain('omit unchanged files');
+    expect(brief('select.final')).toContain('"choice"');
+    expect(brief('experience.agg1')).toContain('"experience"');
+    expect(brief('inv1.a1')).toContain(JSON.stringify(files));
+  });
+  it('probes a corrected script on a drop and a held-out block through the named resource environment',async()=>{
+    const r=rig();
+    const acquisition=createResourceMethodPractice({directory:join(r.directory,'resources'),binding:{
+      instanceId:'stock',realm:'stock',account:'isolated',agent:'isolated',isolated:true,
+    }});
+    const script=`const s=(await mc.state()).snapshot;
+      if(s.entities.some(e=>e.visible && e.item?.name==='oak_log'))
+        return mc.do([{skill:'pickup',item:'oak_log'}]);
+      const block=await bot.blockAt({x:1,y:64,z:0});
+      if(block?.name==='oak_log')return mc.do([{skill:'collect',block:block.name,count:1}]);`;
+    let prepared=0;
+    const {sourceHash:_previousHash,revision:_previousRevision,...original}=r.source;
+    const code="return mc.do([{skill:'collect',radius:0.12,timeoutMs:5000}]);";
+    const payload={...original,code,sourceHash:createHash('sha256').update(code).digest('hex')};
+    const source={...payload,revision:procedureHash(payload)};
+    const service=new Harness2PracticeService({...r.options,
+      readMethod:async()=>source,
+      environments:{'resource-acquisition':{capability:resourcePracticeCapability(),prepare:()=>{prepared++;return acquisition;}}},
+      model:{id:'fixture-proposal',generate:async()=>({files:{'skills/minecraft-method/scripts/run.js':script}})}});
+    try {
+      expect(await service.call({op:'help'})).toMatchObject({environments:[{id:'resource-acquisition'}]});
+      expect(prepared).toBe(0);
+      await expect(service.call({...r.args,environment:'missing'})).rejects.toThrow('Unknown practice environment');
+      await expect(service.call({...r.args,environment:'resource-acquisition',caseIds:['a','b']})).rejects.toThrow();
+      const admission=await service.tool().handler({...r.args,revision:source.revision,environment:'resource-acquisition'},{} as any);
+      expect(admission).toMatchObject({execution:{phase:'accepted',terminal:false,goalCompleted:false}});
+      await r.settled;
+      const expanded=await service.call({op:'result',id:r.args.id}) as any;
+      expect(expanded.result).toMatchObject({train:{baseline:{achieved:false,measurements:{gained:0}},candidate:{achieved:true,measurements:{gained:1}}},
+        holdout:[{caseId:'acquire-block',baseline:{achieved:false},candidate:{achieved:true,measurements:{gained:1}}}],
+        gate:{eligible:true,adopted:false}});
+      expect(expanded.applicability).toContain('Only local pickup');
+      const journal=JSON.parse(readFileSync(join(r.options.directory,r.args.id,'journal.json'),'utf8'));
+      const originalTrial=(Object.values(journal.rpc) as any[]).find(rpc=>rpc.group==='train'&&rpc.role==='baseline').value.trial;
+      expect(originalTrial.feedback).toMatchObject({failedActions:1,failures:[{outcome:'rejected',why:expect.stringContaining('block')}]});
+      expect(await service.call({op:'compare',ids:[r.args.id]})).toHaveProperty('frontier');
+      expect(r.p.stats().resets).toBe(0);
+    } finally {await service.close();}
+  },20000);
   it('routes explicit recorded cases to their executor and keeps the selected capability with the durable result',async()=>{
     const r=rig(),chosen=physicsPractice(join(r.directory,'selected-methods'));
     const fixtures=chosen.fixtures.map(f=>({...f,id:'recorded-'+f.id,snapshotId:'recorded-'+f.snapshotId}));

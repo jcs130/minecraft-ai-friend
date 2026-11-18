@@ -37,6 +37,33 @@ it('ignores malformed generation metadata and does not treat argument literals a
   expect(preserveToolInputSignatures(literal,literal)).toBe(literal);
 });
 
+it('keeps a shared short target distinction once across deferred tool forms without narrowing inputs', () => {
+  const hint = '拾取掉落物实体；只需目标物品名。';
+  const form = (field: string, description: string) => ({
+    type: 'object', description, properties: {skill: {const: 'gather'}, [field]: {type: 'string'}},
+    required: ['skill', field],
+  });
+  const native = {type: 'object', properties: {skill: {type: 'string', enum: ['gather']}},
+    [annotation]: {gather: [form('item', hint), form('tag', hint)]}};
+  const tool = {name: 'do', description: 'action', parameters: native, handler: async () => 'unused'};
+  const [mounted] = withToolHelp([tool], 'help', {parameterDescriptions: 'on-demand'});
+  const view = preserveToolInputSignatures(mounted.parameters, mounted.parameters);
+  const notes = (view.properties as Record<string, {description: string}>).skill.description;
+  expect(notes).toContain('gather(item*) | gather(tag*)');
+  expect(notes.split(hint)).toHaveLength(2);
+  expect(preserveToolInputSignatures(mounted.parameters, view)).toBe(view);
+  expect(view).toMatchObject({properties: {skill: {enum: ['gather']}}});
+  expect(JSON.stringify(view)).not.toContain(annotation);
+  // A form-specific or lengthy manual cannot describe the whole action.
+  for (const descriptions of [[hint, '仅针对另一形态'], [hint.repeat(20), hint.repeat(20)]]) {
+    const distinct = {...native, [annotation]: {gather: [form('item', descriptions[0]), form('tag', descriptions[1])]}};
+    const result = preserveToolInputSignatures(distinct, omitContextSchemaAnnotations(distinct) as Record<string, unknown>);
+    const description = (result.properties as Record<string, {description: string}>).skill.description;
+    expect(description).toContain('gather(item*) | gather(tag*)');
+    expect(description).not.toContain(hint);
+  }
+});
+
 it('recovers the small field index from a deferred native schema without restoring the full generation directory', () => {
   const declaration=MINECRAFT_TOOL_DECLS.find(tool=>tool.name==='mc_do')!;
   const mounted=withToolHelp([{...declaration,handler:async()=>{throw Error('No action permitted');}}],'help',{parameterDescriptions:'on-demand'})[0];
@@ -45,6 +72,8 @@ it('recovers the small field index from a deferred native schema without restori
   const items=(view.properties as any).steps.items;
   expect(items.properties.skill.description).toContain('look(at*)');
   expect(items.properties.skill.description).toContain('harvest(block*,at*');
+  expect(items.properties.skill.description).toMatch(/^collect\([^\n]+世界方块/m);
+  expect(items.properties.skill.description).toMatch(/^pickup\([^\n]+地面掉落物/m);
   expect(JSON.stringify(view)).not.toContain(annotation);
   expect(JSON.stringify(view).length).toBeLessThan(JSON.stringify(declaration.parameters).length/2);
   const before=validator(mounted.parameters),after=validator(view);

@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .journal import ActionJournal, work_key
 from .conversation import CONVERSATION_POLICY
+from .social import stamped_contact
 from .models import BodyEvent, Scope
 from .runtime import HarnessRuntime, Intent, PlanContext, Step, step_support
 
@@ -48,6 +49,8 @@ class NpcRole(BaseModel):
     native_tasks: list[str] = Field(default_factory=list, max_length=32)
     native_items: list[Annotated[str, Field(pattern=r"^[a-z0-9_.-]+:[a-z0-9_./-]+$", max_length=128)]] = Field(default_factory=list, max_length=16)
     default_native_guard: bool = False
+    social_memory: bool = False
+    social_previous_bodies: list[UUID] = Field(default_factory=list, max_length=8)
     interval_seconds: int = Field(default=45, ge=10, le=600)
     max_speech_chars: int = Field(default=40, ge=10, le=100)
 
@@ -79,6 +82,9 @@ def load_roles(path: Path) -> list[NpcRole]:
     for attribute in ("id", "character_id", "body_id"):
         if len({getattr(role, attribute) for role in roles}) != len(roles):
             raise ValueError("duplicate_npc_identity")
+    bodies = [body for role in roles for body in (role.body_id, *role.social_previous_bodies)]
+    if len(set(bodies)) != len(bodies):
+        raise ValueError("ambiguous_social_body_history")
     return roles
 
 
@@ -234,6 +240,28 @@ class NpcPlanner:
         self.next_meal = 0.0
         self.next_catch = 0.0
 
+    async def answer_dialogue(self, text: str, relationship: dict | None, *, public: bool) -> str:
+        facts = {"message": text}
+        if relationship is not None:
+            facts["socialRelationship"] = relationship
+            facts["sharedPast"] = relationship["evidence"]
+        audience = "这是附近玩家可见的公开回复。" if public else "只向当前说话者私聊。"
+        request = {"model": self.role.model, "max_tokens": 280, "enable_thinking": False,
+                   "response_format": {"type": "json_object"}, "messages": [
+                      {"role": "system", "content": self.role.persona +
+                       "\n" + audience + "根据这次对话和该对象可引用的共同经历回答。"
+                       "没有发生的事件、未确认的约定和权限不可当成事实。"
+                       "这轮仅回复文字。返回只含 reply 的 JSON，最多 140 字。"},
+                      {"role": "user", "content": json.dumps(facts, ensure_ascii=False)}]}
+        async with self.semaphore:
+            response = await self.model.request("/chat/completions", request, 35)
+        answer = json.loads(response["choices"][0]["message"]["content"])
+        reply = answer.get("reply") if isinstance(answer, dict) else None
+        if (not isinstance(reply, str) or not 1 <= len(reply.strip()) <= 140
+                or not reply.isprintable() or "§" in reply):
+            raise ValueError("invalid_dialogue_reply")
+        return reply.strip()
+
     async def __call__(self, intent: Intent, context: PlanContext):
         role = self.role
         caps = context.capabilities
@@ -290,6 +318,18 @@ class NpcPlanner:
                  "capabilities": {"actions": {key: value.model_dump(mode="json") for key, value in caps.actions.items()},
                                   "native": native_catalogue, "nativeSchemas": schemas,
                                   "limits": caps.limits} if caps else None}
+        if role.social_memory:
+            # Legacy recall lacks verifiable per-peer visibility. Nearby replies
+            # can still use local, non-conversation world observations.
+            observations = {"death", "respawn", "dimension", "player_join", "player_leave", "combat"}
+            facts["memories"] = [fact for fact in facts["memories"]
+                                 if fact["source"] == "local" and fact["data"].get("kind") in observations]
+            facts["recentEpisodes"] = [episode for episode in facts["recentEpisodes"]
+                                       if episode["kind"] in observations]
+            facts["events"] = [event for event in facts["events"] if event["kind"] != "interaction"]
+        if context.social_relationship is not None:
+            facts["socialRelationship"] = context.social_relationship
+            facts["sharedPast"] = context.social_relationship["evidence"]
         payload = {"model": role.model, "max_tokens": 900, "enable_thinking": False,
                    "response_format": {"type": "json_object"}, "messages": [
                        {"role": "system", "content": role.persona + "\nYou control only this registered NPC through game actions. "
@@ -395,10 +435,11 @@ class FastSelector:
 
     async def allow_reply(self, role: NpcRole, context: PlanContext, speech: list[str]) -> bool:
         """Only review a proposed utterance; no game actions or unbounded tools here."""
+        recent = [event for event in context.recent if not role.social_memory or event.kind != "interaction"]
         response = await self.client.request("/systemone", {"model": self.model,
             "state": {"self": {"name": role.name, "characterId": str(role.character_id)},
                       "currentDialogue": [event.model_dump(mode="json") for event in context.dialogue[-8:]],
-                      "recentContext": [event.model_dump(mode="json") for event in context.recent[-4:]],
+                      "recentContext": [event.model_dump(mode="json") for event in recent[-4:]],
                       "proposedSpeech": speech},
             "questions": {"reply": {"type": "choice", "instructions":
                 "判断这个 Minecraft NPC 现在是否应该接话。只按对话对象、上下文和是否有必要作答判断。"
@@ -455,8 +496,10 @@ class FastSelector:
 
 class NpcHost:
     """Event-driven actor. Unknown writes pause this character across process restarts."""
-    def __init__(self, role: NpcRole, body, planner, memory, journal: ActionJournal):
+    def __init__(self, role: NpcRole, body, planner, memory, journal: ActionJournal, *, social=None, social_graph=None):
         self.role, self.body, self.planner, self.memory, self.journal = role, body, planner, memory, journal
+        self.social = social
+        self.social_graph = social_graph
         self.runtime = HarnessRuntime(body=body, planner=self._plan, memory=memory, journal=journal, execute=True)
         self.wake = asyncio.Event()
         self.pending_dialogue: dict[str, BodyEvent] = {}
@@ -476,7 +519,17 @@ class NpcHost:
 
     async def _plan(self, intent: Intent, context: PlanContext):
         body_id = str(self.role.body_id)
-        context.dialogue = [self.pending_dialogue[key] for key in intent.source_events if key in self.pending_dialogue]
+        dialogue = [self.pending_dialogue[key] for key in intent.source_events if key in self.pending_dialogue]
+        context.dialogue = dialogue
+        if self.social and self.role.social_memory and dialogue:
+            contacts = [stamped_contact(event, body_id, self.social.registered) for event in dialogue]
+            pairs = {(contact["peerType"], contact["peerId"]) for contact in contacts if contact}
+            if len(pairs) == 1 and all(contacts) and len(dialogue) == len(intent.source_events):
+                peer_type, peer_id = pairs.pop()
+                topic = dialogue[-1].text
+                ranked = await self.social_graph.search(body_id, peer_type, peer_id, public=True, topic=topic) if self.social_graph else ()
+                context.social_relationship = self.social.lookup(
+                    body_id, peer_type, peer_id, public=True, topic=topic, graph_ranked=ranked)
         results = []
         inventory_added = False
         for action, receipt in self.journal.recent(body_id):
@@ -527,6 +580,8 @@ class NpcHost:
     def _event(self, event: BodyEvent):
         if event.body_id not in (None, str(self.role.body_id)):
             return
+        if self.role.social_memory and (event.kind == "whisper" or event.data.get("channel") == "private"):
+            return  # Private replies use the identity-bound mailbox, never nearby body:chat.
         if event.kind in ("dialogue", "whisper", "chat") and event.data.get("speakerId") != str(self.role.body_id):
             key = str(event.data.get("eventId") or event.request_id or event.at.isoformat())
             self.pending_dialogue[key] = event

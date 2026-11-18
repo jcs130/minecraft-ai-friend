@@ -9,6 +9,13 @@ Lightweight **Python** harness runtime for server-hosted Minecraft bodies (activ
 * Runtime (`runtime.py`): intents, single body lease, System 0 → 1 → 2 scheduling (`fastslow.py`, `typed_choice.py`,
   `scheduler.py`), message gateway (`protocol.py`).
 * Memory (`memory/`): hot ring · Graphiti (in-process sidecar service) · local SQLite fallback, `group_id` isolation.
+
+For the hosted NPC service, omitting `graphiti` or setting `"graphiti": {"mode": "local"}`
+uses each role's existing `memory.sqlite3` without a graph token or graph server. An existing
+`graphiti` object with `endpoint` and `tokenFile` retains authenticated remote mode. Switching
+back reuses that role's archive and its existing remote outbox in the same state directory.
+Episodes recorded during explicit local-only operation remain in the local archive. The server-npc
+client uses HTTP; only the graph service needs the graph engine and its model dependencies.
 * Learning (`learning/`): resident reflection, versioned self-iteration store, JitRL with goal-conditioned reward
   shaping, Harness² optimizer (pinned upstream via the existing bridge).
 

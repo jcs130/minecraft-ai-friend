@@ -192,11 +192,12 @@ class HostedMcpPort:
                     if (dialogue.get("schema") != 1 or dialogue.get("listenerId") != self.body
                             or not isinstance(dialogue.get("speakerId"), str)
                             or not str(dialogue.get("eventId", "")).startswith("qdvoice:" + dialogue["speakerId"] + ":")
-                            or dialogue.get("channel") not in ("chat", "voice", "npc_chat")
+                            or dialogue.get("channel") not in ("chat", "voice", "npc_chat", "public")
                             or not isinstance(dialogue.get("text"), str)):
                         continue
                     result.append(RawEvent(key, dialogue["text"][:1200], "chat",
-                        {**dialogue, "trusted": False, "nativeKind": kind, "source": "untrusted_game_dialogue"}))
+                        {**dialogue, "trusted": False, "nativeKind": kind, "source": "untrusted_game_dialogue",
+                         "serverAttributed": True}))
                 except (ValueError, TypeError, AttributeError):
                     pass
                 continue

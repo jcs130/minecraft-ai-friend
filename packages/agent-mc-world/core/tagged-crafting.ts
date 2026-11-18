@@ -8,6 +8,7 @@ import legacy from './data/crafting-tags-1.20.6.json' with { type: 'json' };
 import current from './data/crafting-tags-1.21.1.json' with { type: 'json' };
 import type { CraftRecipeLike } from './skills-craft.ts';
 import { zhName } from './names.ts';
+import { playerInvIn } from './inventory.ts';
 
 type Ingredient = { item?: string; tag?: string } | Array<{ item?: string; tag?: string }>;
 type TaggedRecipe = {
@@ -43,33 +44,37 @@ export interface TaggedCraftChoice {
   recipe: CraftRecipeLike | null;
   /** 配方表中要求的直接材料，失败时供 Agent 改计划，不把标签错写成橡木。 */
   needs: string;
+  shortfall?: string;
 }
 
 /** null:此版本/物品没有带标签的官方配方，应使用通常的 recipesAll。 */
-export function taggedCraftChoice(bot: Bot, item: string): TaggedCraftChoice | null {
+export function taggedCraftChoice(bot: Bot, item: string, requestedOutput = 1): TaggedCraftChoice | null {
   const version = (bot.registry.version as { minecraftVersion?: string } | undefined)?.minecraftVersion;
   const vanilla = version ? versions[version] : undefined;
   if (!vanilla) return null;
   const recipes = vanilla.recipes[item];
   if (!recipes?.length) return null;
   const have = new Map<number, number>();
-  for (const stack of bot.inventory.items()) have.set(stack.type, (have.get(stack.type) ?? 0) + stack.count);
+  for (const stack of playerInvIn(bot, bot.currentWindow).items()) have.set(stack.type, (have.get(stack.type) ?? 0) + stack.count);
   const itemDefs = bot.registry.itemsByName as Record<string, { id: number } | undefined>;
   let fallbackNeeds = '';
+  let shortfall: string | undefined;
   for (const source of recipes) {
     const { rows, shaped } = cellsOf(source);
     const width = Math.max(0, ...rows.map((row) => row.length));
     const options = rows.flat().map((spec) => spec === null ? [null] : expand(spec, vanilla.tags)
       .map((name) => itemDefs[name]?.id).filter((id): id is number => id !== undefined));
-    const required = new Map<string, number>();
-    for (const spec of rows.flat()) {
+    const required = new Map<string, { count: number; ids: ReadonlyArray<number | null> }>();
+    for (const [index, spec] of rows.flat().entries()) {
       if (!spec) continue;
       const parts = Array.isArray(spec) ? spec : [spec];
       const label = parts.map((part) => part.tag === 'minecraft:planks'
         ? '任意木板' : part.tag ? `#${part.tag}` : zhName(unnamespace(part.item ?? ''))).join(' 或 ');
-      required.set(label, (required.get(label) ?? 0) + 1);
+      const group = required.get(label);
+      if (group) group.count++;
+      else required.set(label, { count: 1, ids: options[index]! });
     }
-    fallbackNeeds = [...required].map(([name, count]) => `${name}×${count}`).join(' + ');
+    fallbackNeeds = [...required].map(([name, group]) => `${name}×${group.count}`).join(' + ');
     const selected: Array<number | null> = [];
     const choose = (index: number): boolean => {
       if (index === options.length) return true;
@@ -84,7 +89,18 @@ export function taggedCraftChoice(bot: Bot, item: string): TaggedCraftChoice | n
       }
       return false;
     };
-    if (!choose(0)) continue;
+    if (!choose(0)) {
+      const batches = Math.ceil(requestedOutput / source.result.count);
+      // A tag can overlap another ingredient. Per-group shortfalls are lower bounds,
+      // never a claim that independently counted groups can all spend the same stack.
+      const missing = [...required].flatMap(([label, group]) => {
+        const held = group.ids.reduce<number>((sum, id) => sum + (id === null ? 0 : have.get(id) ?? 0), 0);
+        const need = group.count * batches;
+        return held < need ? [`${label}需${need}、随身${held}、至少差${need - held}`] : [];
+      });
+      shortfall = missing.length ? `${recipes.length > 1 ? '本配方示例，' : ''}目标产物×${requestedOutput}：${missing.join('；')}` : undefined;
+      continue;
+    }
     const needsTable = shaped ? rows.length > 2 || width > 2 : selected.length > 4;
     const recipe: CraftRecipeLike = {
       result: { id: bot.registry.itemsByName[item]?.id ?? null, count: source.result.count },
@@ -98,5 +114,5 @@ export function taggedCraftChoice(bot: Bot, item: string): TaggedCraftChoice | n
     };
     return { recipe, needs: fallbackNeeds };
   }
-  return { recipe: null, needs: fallbackNeeds };
+  return { recipe: null, needs: fallbackNeeds, shortfall };
 }

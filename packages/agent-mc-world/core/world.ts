@@ -55,6 +55,7 @@ import { ServerQueryLane, SERVER_QUERY_TOOL, serverQueryTool, serverQueryContext
 import { supervisorEventView } from '../src/client/event-context.ts';
 import { executionFeedbackContext } from '../src/client/execution-context.ts';
 import type { Bot } from 'mineflayer';
+import { readMaterialBudget } from './material-budget.ts';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { observeStatusEffects } from './status-effects.ts';
 import { Bridge } from './bridge.ts';
@@ -137,7 +138,7 @@ import {
   QUEUE_SCHEMA, renderQueue, goalOwnerKind,
   SCOUT_SKILL_DOC, SCOUT_STEP_SCHEMA, SKILL_STEP_SCHEMA,
   type BlueprintDesk, type BlueprintSurvey, type MarkDesk, type MarkLookup,
-  type ParseNote, type QueueHoldToken, type ResourcePlacementPermit, type SkillCall, type TaskAdmissionDecision, type TaskAdmissionRejection, type TaskQueueTail, type TaskReport,
+  type QueueHoldToken, type ResourcePlacementPermit, type SkillCall, type TaskAdmissionDecision, type TaskAdmissionRejection, type TaskQueueTail, type TaskReport,
 } from './executor.ts';
 import { Aborted, SkillBlocked, sleep, type BlueprintPlacementIntent } from './skill-context.ts';
 import { worldStateAt } from './skills-build.ts';
@@ -2687,7 +2688,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_bag',
     tags: ['read', 'snapshot'],
     description:
-      'Read your inventory right now: how many of the 36 slots are used, what is in them, '
+      'Read inventory now, or compare requirements (required = total needed, keep = amount you choose to retain) to current stock. Shows how many of the 36 slots are used, what is in them, '
       + 'what is in your hand, and what armour you are wearing. Read-only and instant — '
       + 'it never moves you, never touches the world and never touches the work queue. '
       + 'Set item to a material ID, Chinese material name, or exact custom display name to locate it in your inventory, the currently open container, and last observed chest records; '
@@ -2698,6 +2699,12 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     parameters: { type: 'object', properties: {
       item: { type: 'string', description: 'Optional focused stock lookup by material ID, Chinese material name, or exact custom display name.' },
       detail: { type: 'string', enum: ['summary', 'slots'], description: 'Default summary; slots reads only the current self inventory slot table (9–44), not chest slot numbers.' },
+      requirements: { type: 'array', minItems: 1, description: 'Targeted planning read, instead of item/detail. Material IDs count all stack variants. Keep amounts are your assumptions for this query.',
+        items: { type: 'object', additionalProperties: false, required: ['item', 'required'], properties: {
+          item: { type: 'string', description: 'Exact registered material ID.' },
+          required: { type: 'integer', minimum: 0, description: 'Total input needed for this task, before subtracting stock.' },
+          keep: { type: 'integer', minimum: 0, description: 'Amount of this material to leave untouched; defaults to zero.' },
+        } } },
     }, required: [] },
   },
   {
@@ -5054,6 +5061,17 @@ export class MinecraftWorld implements World {
       },
       mc_check: async (args) => this.toolLog('mc_check', args, this.runCheck(args)),
       mc_bag: async (args, ctx) => {
+        if (args.requirements !== undefined) {
+          if (args.item !== undefined || args.detail === 'slots') return { failed: true, text: 'requirements 是独立的材料核算查询；槽号或单件定位请用另一次查询。' };
+          try {
+            const data = readMaterialBudget(this.bridge?.bot ?? undefined, this.bridge?.invSynced === true, args.requirements);
+            const text = JSON.stringify(data);
+            const answer = this.readOnce('mc_bag', ctx, () => ({ stamp: text, text }));
+            return { text: typeof answer === 'string' ? answer : answer.text, data };
+          } catch (err) {
+            return { failed: true, text: String(err instanceof Error ? err.message : err) };
+          }
+        }
         const readout=this.bagReadout(typeof args.item === 'string' ? args.item : undefined,args.detail==='slots');
         const result=this.readOnce('mc_bag',ctx,()=>readout);
         return readout.data ? {text:typeof result==='string'?result:result.text,data:readout.data} : result;
@@ -6930,7 +6948,7 @@ export class MinecraftWorld implements World {
   protected enqueueTool(
     name: 'mc_do' | 'mc_scout',
     args: Record<string, unknown>,
-    parse: (raw: unknown) => { steps: SkillCall[]; notes?: ParseNote[] } | { error: string },
+    parse: (raw: unknown) => ReturnType<typeof parseSteps>,
     methodAdmission?: (decision: TaskAdmissionDecision) => void,
     role?: string,
     controller?: 'system1' | 'system2' | 'human' | 'unknown',
@@ -6943,6 +6961,7 @@ export class MinecraftWorld implements World {
       data: { status: 'invalid_arguments', reason: rule, completed: 0, remaining: null,
         retryable: false, retry_after: null, next_safe_read: null, executed: false,
         errors: correction?.errors ?? [{ path: '/queue', expected: QUEUE_SCHEMA, problem: text, actual: args.queue ?? null }],
+        ...(correction?.uncheckedSteps ? { uncheckedSteps: correction.uncheckedSteps } : {}),
         minimal_legal_example: correction?.minimal_legal_example ?? { steps: [{ skill: 'observe', mode: 'voxels' }] } },
       meta: { admission: { accepted: false, dispatched: false, kind: 'correction', rule,
         ...(correction ? { fieldPath: correction.path, inputSchema: correction.inputSchema } : {}),
@@ -6953,7 +6972,7 @@ export class MinecraftWorld implements World {
     if ('error' in mode) return invalidArguments('arguments.queue', mode.error);
     const parsed = parse(args.steps);
     if ('error' in parsed) {
-      const correction = describeSkillInputCorrection(args.steps, parsed.error);
+      const correction = describeSkillInputCorrection(args.steps, parsed.error, parsed.additionalErrors, parsed.uncheckedSteps);
       // Text-only hosts otherwise lose the structured correction in data/meta
       // and force another model round just to discover the missing fields.
       // A scoped worker may have mc_do without mc_help. Give it the exact
@@ -6963,6 +6982,7 @@ export class MinecraftWorld implements World {
       const help = typeof skill === 'string' ? readSkillHelp({ skill }) : null;
       const actionContract = help && 'text' in help && help.text.length <= 6000 ? { skill, text: help.text } : null;
       const visible = { errors: correction.errors.map(({ path, expected, problem }) => ({ path, expected, problem })),
+        ...(correction.uncheckedSteps ? { uncheckedSteps: correction.uncheckedSteps } : {}),
         minimal_legal_example: correction.minimal_legal_example, ...(actionContract ? { actionContract } : {}) };
       return invalidArguments('arguments.steps', `${parsed.error}\n[参数修正；示例仅演示格式，不是建议目标或自动重试]\n${JSON.stringify(visible)}\nmc_help ${JSON.stringify(correction.helpArguments)}\n整批未提交，当前任务和待办保留。`, correction);
     }

@@ -82,6 +82,7 @@ class PlanContext(BaseModel):
     hot: list[MemoryEpisode] = Field(default_factory=list)  # hot tier: latest episodes of this body's group
     recent: list[HarnessEvent] = Field(default_factory=list)
     dialogue: list[BodyEvent] = Field(default_factory=list, max_length=32)  # current host-selected input, including ordinary chat
+    social_relationship: dict[str, Any] | None = None
     decision: Decision | None = None  # route level, requested/effective thinking tier, output budget profile
     snapshot: BodySnapshot | None = None
     body_results: list[dict[str, Any]] = Field(default_factory=list, max_length=6)

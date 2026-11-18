@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
+import sqlite3
 from uuid import UUID
 
 from .body.maid import MaidBody
@@ -13,15 +14,33 @@ from .body.numen import NumenBody
 from .body.hosted_mcp import HostedMcpPort
 from .bridges import NativeMaidBridge
 from .journal import ActionJournal
+from .memory.companion import CompanionRecall
 from .memory.local import LocalMemory
 from .memory.remote import RemoteGraphMemory
 from .memory.router import MemoryRouter
+from .memory.social_graph import SocialGraph
 from .npc import FastSelector, ModelClient, NpcHost, NpcPlanner, load_roles
+from .social import SocialWorld, publish_json
 from .status_file import StatusFile
 
 
 def read(path):
     return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+
+
+def graph_connection(graphiti: dict | None) -> tuple[str, str] | None:
+    mode = "local" if graphiti is None else graphiti.get("mode", "graphiti")
+    if mode == "local":
+        return None
+    if graphiti is None or mode != "graphiti":
+        raise ValueError("npc_memory_mode")
+    return graphiti["endpoint"], Path(graphiti["tokenFile"]).read_text().strip()
+
+
+def open_role_memory(directory: Path, connection: tuple[str, str] | None) -> MemoryRouter:
+    """Both modes keep the same local journal. A sidecar uses its own durable role outbox."""
+    graph = RemoteGraphMemory(*connection, directory / "graph-outbox.sqlite3") if connection else None
+    return MemoryRouter(LocalMemory(directory / "memory.sqlite3"), graph)
 
 
 async def serve(path: Path):
@@ -45,6 +64,21 @@ async def serve(path: Path):
         import fcntl
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     clients, hosts, tasks = [], [], []
+    social_tasks = []
+    social = None
+    social_graph = None
+    recall = None
+    recall_modes = {}
+    connection = graph_connection(settings.get("graphiti"))
+    if settings.get("relationshipDataPath"):
+        world_data = Path(settings["relationshipDataPath"])
+        if not world_data.is_absolute() or not world_data.is_dir():
+            raise ValueError("relationship_world_data_unavailable")
+        social = SocialWorld(world_data, settings["serverId"], roles)
+        if connection:
+            social_graph = SocialGraph(social, RemoteGraphMemory(*connection, state / "social-graph-outbox.sqlite3"))
+        if settings.get("dialogueMemory"):
+            recall = CompanionRecall(settings["dialogueMemory"], world_data / "tlm-companion-memory", settings["serverId"])
     provider = {}
     for name, file in settings["providers"].items():
         private = read(file)
@@ -55,6 +89,53 @@ async def serve(path: Path):
     async def delayed(host):
         await asyncio.sleep(15)
         await host.run()
+
+    def maintenance():
+        return bool(settings.get("pauseFile") and Path(settings["pauseFile"]).exists())
+
+    async def project_social():
+        while True:
+            if not maintenance():
+                try:
+                    await asyncio.to_thread(social.refresh)
+                    if social_graph:
+                        await social_graph.project()
+                except (OSError, ValueError, sqlite3.Error) as failure:
+                    print(f"NPC relationship projection unavailable: {type(failure).__name__}", flush=True)
+            await asyncio.sleep(10)
+
+    async def power_recall(body, request):
+        return await recall.search(body, request) if recall else ((), "local")
+
+    async def answer_social(role, planner):
+        body = str(role.body_id)
+        while True:
+            if not maintenance():
+                for answer, row in await asyncio.to_thread(social.dialogue_requests, role):
+                    speaker = row["speakerId"]
+                    peer = social.registered.get(speaker, speaker)
+                    peer_type = "npc" if speaker in social.registered else "player"
+                    public = row["channel"] != "private"
+                    try:
+                        if social_graph:
+                            (ranked, mode), graph_ranked = await asyncio.gather(
+                                power_recall(body, row["id"]), social_graph.search(body, peer_type, peer, public=public, topic=row["message"]))
+                        else:
+                            ranked, mode = await power_recall(body, row["id"])
+                            graph_ranked = ()
+                        recall_modes[role.id] = mode
+                        relationship = await asyncio.to_thread(social.lookup, body, peer_type, peer, public=public,
+                                                               topic=row["message"], ranked=ranked, graph_ranked=graph_ranked)
+                        reply = await planner.answer_dialogue(row["message"], relationship, public=public)
+                        response = {"status": "prepared", "reply": reply}
+                    except Exception:
+                        response = {"status": "failed", "reason": "dialogue_reply_unavailable"}
+                    try:
+                        await asyncio.to_thread(publish_json, answer, response | {
+                            "schemaVersion": 1, "id": row["id"], "maidId": body, "speakerId": speaker, "channel": row["channel"]})
+                    except OSError as failure:
+                        print(f"NPC dialogue result unavailable: {type(failure).__name__}", flush=True)
+            await asyncio.sleep(2)
 
     def build(role):
         transport = settings["bodies"][role.id]
@@ -70,17 +151,22 @@ async def serve(path: Path):
                                   "journalDirectory":str(state / role.id / "numen")})
             body = NumenBody(port, scope=scope, server_id=settings["serverId"], name=role.name, owner_id=str(role.owner_id),
                              item_use_ids=tuple(role.native_items))
-        memory = MemoryRouter(LocalMemory(state / role.id / "memory.sqlite3"), RemoteGraphMemory(settings["graphiti"]["endpoint"],
-                                Path(settings["graphiti"]["tokenFile"]).read_text().strip(), state / role.id / "graph-outbox.sqlite3"))
+        memory = open_role_memory(state / role.id, connection)
         return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1),
-                       memory, ActionJournal(state / role.id / "actions.sqlite3"))
+                       memory, ActionJournal(state / role.id / "actions.sqlite3"), social=social, social_graph=social_graph)
     try:
         for role in roles:
             host = build(role)
             hosts.append(host)
             tasks.append(asyncio.create_task(host.run(), name="npc-" + role.id))
+        if social:
+            if social_graph:
+                social_graph.graph.start()
+            social_tasks.append(asyncio.create_task(project_social(), name="npc-relationships"))
+            social_tasks.extend(asyncio.create_task(answer_social(host.role, host.planner), name="npc-dialogue-" + host.role.id)
+                                for host in hosts if host.role.social_memory)
         while True:
-            pausing = bool(settings.get("pauseFile") and Path(settings["pauseFile"]).exists())
+            pausing = maintenance()
             for host in hosts:
                 host.pausing = pausing
             status = {"schema": 1, "pid": os.getpid(), "pausing": pausing, "roles": []}
@@ -89,6 +175,9 @@ async def serve(path: Path):
                 status["roles"].append({"id": host.role.id, "bodyKind": host.role.body_kind, "bodyId": str(host.role.body_id),
                                         "model": host.role.model, "provider": host.role.provider, "running": not task.done(), "error": error,
                                         "health": host.body.health().model_dump(mode="json"), "route": host.planner.last_route,
+                                        "memory": host.memory.status,
+                                        "dialogueMemory": recall_modes.get(host.role.id),
+                                        "socialGraphiti": social_graph.last.get(str(host.role.body_id)) if social_graph else None,
                                         "unknownRequests": len(host.journal.unresolved(str(host.role.body_id))),
                                         "intents": [{"id": i.id, "state": i.state, "reason": i.reason} for i in list(host.runtime.intents.values())[-8:]]})
             await asyncio.to_thread(health_file.publish, status)
@@ -104,11 +193,13 @@ async def serve(path: Path):
                         tasks[index]=asyncio.create_task(delayed(hosts[index]),name="npc-"+roles[index].id)
             await asyncio.sleep(2)
     finally:
-        for task in tasks:
+        for task in [*tasks, *social_tasks]:
             task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.gather(*tasks, *social_tasks, return_exceptions=True)
         for host in hosts:
             await host.close()
+        if social_graph:
+            await social_graph.graph.close()
         for client in clients:
             await client.close()
         lock.close()

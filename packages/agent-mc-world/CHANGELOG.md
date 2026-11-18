@@ -1,3 +1,15 @@
+## 0.5.7-rc.160-preview.102
+
+Toss now reports a focused inventory lookup for unmatched selectors. It suggests a registry ID and pick only when the action would select one matching stack. Explicit unsupported slot selectors reject the entire batch before execution.
+
+## 0.5.7-rc.160-preview.101
+
+Action batches report the first invalid input in each of up to eight steps in the same structured and text receipt. Validation keeps dependency numbering, leaves the body queue untouched, and identifies any unchecked tail.
+
+## 0.5.7-rc.160-preview.100
+
+- Distinguish visible item drops from harvestable blocks in action contracts. Project current material budgets and expose a versioned resource-acquisition practice with independent outcomes.
+
 ## 0.5.7-rc.160-preview.99
 
 - Validate trajectory reward pages against original outcomes before storing them. Scorers can identify the exact step, retain accepted pages and repair a draft created by an earlier release.

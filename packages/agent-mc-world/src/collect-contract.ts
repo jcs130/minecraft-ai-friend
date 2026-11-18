@@ -1,3 +1,15 @@
+const resourceTargets = {
+  'dropped-item': { kind: 'dropped-item', skill: 'pickup', targetField: 'item',
+    hint: '地面掉落物用 pickup；item 可填物品注册名，省略则就近拾取。按入包增量验收。' },
+  block: { kind: 'block', skill: 'collect', targetField: 'block',
+    hint: '世界方块用 collect，block 填方块注册名；count 统计采集的方块。地面掉落物用 pickup。' },
+} as const;
+
+/** Describe how each observed target is named in a skill call; this never dispatches it. */
+export function getResourceActionContract<K extends keyof typeof resourceTargets>(kind: K): (typeof resourceTargets)[K] {
+  return { ...resourceTargets[kind] };
+}
+
 /** Coordinate intent cannot be normalized into an unlocated resource search. */
 export function collectTargetError(raw: unknown): string | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;

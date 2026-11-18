@@ -44,28 +44,29 @@ export function fromEvent(event: McEventLike, ctx: SourceContext): EpisodeDraft 
   const uname = typeof meta.uname === 'string' ? meta.uname : null;
   const src: EpisodeSourceRef = { type: 'minecraft-event', eventType: event.type,
     ...(event.cursor !== undefined ? { ref: `cursor:${event.cursor}` } : {}) };
-  const base = { occurredAt: at, text: event.text, world: ctx.world, source: src };
+  // Only selected episodes need to resolve the host's current world.
+  const base = () => ({ occurredAt: at, text: event.text, world: ctx.world, source: src });
 
   if (event.type === 'minecraft.enter' && uname) {
-    return { ...base, kind: 'player_join', actors: [uname], data: { player: uname }, importance: 0.4,
+    return { ...base(), kind: 'player_join', actors: [uname], data: { player: uname }, importance: 0.4,
       facts: [{ subject: player(uname), relation: 'IS_ONLINE', object: null, value: true, text: `${uname} is online`, validAt: at }] };
   }
   if (event.type === 'minecraft.leave' && uname) {
-    return { ...base, kind: 'player_leave', actors: [uname], data: { player: uname }, importance: 0.3,
+    return { ...base(), kind: 'player_leave', actors: [uname], data: { player: uname }, importance: 0.3,
       facts: [{ subject: player(uname), relation: 'IS_ONLINE', object: null, value: false, text: `${uname} is offline`, validAt: at }] };
   }
   if (event.type === 'minecraft.chat' && uname && meta.channel !== 'system' && meta.deliver !== false) {
     const whisper = /^\[MC 私聊\]/.test(event.text);
     const outgoing = /^\[MC 私聊发出\]/.test(event.text) || uname === ctx.self;
     const message = event.text.replace(/^\[[^\]]*\]\s*/, '').replace(new RegExp(`^${escapeRe(uname)}\\s*[:：]\\s*`), '');
-    if (outgoing) return { ...base, kind: whisper ? 'whisper' : 'chat', actors: [ctx.self], data: { speaker: ctx.self, message, outgoing: true },
+    if (outgoing) return { ...base(), kind: whisper ? 'whisper' : 'chat', actors: [ctx.self], data: { speaker: ctx.self, message, outgoing: true },
       importance: 0.2, facts: [] };
     const direct = whisper || message.toLowerCase().includes(ctx.self.toLowerCase());
     const facts: FactInput[] = direct
       ? [{ subject: agent(ctx.self), relation: 'KNOWS', object: player(uname), text: `${ctx.self} has talked with ${uname}`, validAt: at }]
       : [];
     facts.push(...preferenceFacts(uname, message, at));
-    return { ...base, kind: whisper ? 'whisper' : 'chat', actors: [uname], data: { speaker: uname, message, direct },
+    return { ...base(), kind: whisper ? 'whisper' : 'chat', actors: [uname], data: { speaker: uname, message, direct },
       importance: facts.length ? 0.6 : direct ? 0.5 : 0.2, facts };
   }
   const death = meta.death as { id?: string; position?: (BlockPos & { dimension?: string }) | null; cause?: { text?: string } | null } | undefined;
@@ -73,22 +74,22 @@ export function fromEvent(event: McEventLike, ctx: SourceContext): EpisodeDraft 
     const pos = death.position ?? null;
     const place = pos ? locationRef(ctx.world, formatPos(pos)) : null;
     const cause = death.cause?.text ?? null;
-    return { ...base, kind: 'death', actors: [ctx.self], data: { deathId: death.id ?? null, position: pos, cause }, importance: 0.9,
+    return { ...base(), kind: 'death', actors: [ctx.self], data: { deathId: death.id ?? null, position: pos, cause }, importance: 0.9,
       facts: place ? [{ subject: agent(ctx.self), relation: 'DIED_AT', object: place, value: cause,
         text: `${ctx.self} died at ${place.name}${cause ? ` (${cause})` : ''}`, validAt: at }] : [] };
   }
   if (event.type === 'minecraft.event' && /已收到重生后的生命读数/.test(event.text)) {
-    return { ...base, kind: 'respawn', actors: [ctx.self], data: {}, importance: 0.3, facts: [] };
+    return { ...base(), kind: 'respawn', actors: [ctx.self], data: {}, importance: 0.3, facts: [] };
   }
   const level = /(?:升到|当前)\s*(\d{1,5})\s*级/.exec(event.text);
   if (event.type === 'minecraft.event' && level) {
     const n = Number(level[1]);
-    return { ...base, kind: 'skill', actors: [ctx.self], data: { skill: 'experience', level: n }, importance: 0.4,
+    return { ...base(), kind: 'skill', actors: [ctx.self], data: { skill: 'experience', level: n }, importance: 0.4,
       facts: [skillFact(ctx.self, 'Agent', 'experience', n, at)] };
   }
   const exec = event.execution;
   if (exec && exec.kind === 'task' && (exec.terminal || exec.phase === 'accepted')) {
-    return { ...base, kind: 'task', actors: [ctx.self], data: { taskId: exec.id, phase: exec.phase, terminal: exec.terminal },
+    return { ...base(), kind: 'task', actors: [ctx.self], data: { taskId: exec.id, phase: exec.phase, terminal: exec.terminal },
       importance: exec.terminal ? 0.5 : 0.3, facts: taskFacts(ctx.self, exec.id, exec.phase, at) };
   }
   return null;

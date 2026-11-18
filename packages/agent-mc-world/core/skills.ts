@@ -14,7 +14,7 @@ import {
   type Anchor, type BlockFace, type BoxFill, type ShapeName,
 } from './geometry.ts';
 import { DIRECTIONS, type Direction } from './terrain.ts';
-import { collectTargetError } from '../src/collect-contract.ts';
+import { collectTargetError, getResourceActionContract } from '../src/collect-contract.ts';
 import { normalizeDimension } from './escape.ts';
 import type { PositionXYZ } from './blueprint.ts';
 import { PROBE_SLICE_CELL_CAP, SPATIAL_SLICE_AXES, type SpatialSliceAxis } from './spatial-slices.ts';
@@ -441,6 +441,8 @@ interface SkillSpec {
   doc: string;
   /** 常见形态的短约束；签名、schema 与错误纠正共用，不常驻展开完整手册。 */
   inputHint?: string;
+  /** Compact target semantics retained even when a provider folds skill alternatives. */
+  target?: ReturnType<typeof getResourceActionContract>;
   fields: FieldSpec[];
   /** 横向规则钩子:接管整步校验与规范化;没给钩子的技能走表驱动 */
   parse?: (c: Record<string, unknown>, at: string, marks?: MarkLookup) => ParseResult;
@@ -1354,7 +1356,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
 {"skill":"cleanup"} 从当前安全站位尝试拆除这些垫脚；不走路、不搭新块、不拆永久建筑。实体脚下、承重/依附、液体邻接、卸载或重连后无法确认来源的方块均保留。拆除与捡回分开回报；未全部清理不算工地收尾完成。`,
     fields: [{ key: 'dryRun', kind: 'flag' }] },
   {
-    name: 'collect',
+    name: 'collect', target: getResourceActionContract('block'),
     doc: `{"skill":"collect","block":"oak_log","count":3}  采集方块,只挖看得见的——埋在石头里的看不见,得先挖开或者找暴露的。
                                                  加 "buried":true = 看得见但走不过去时,允许挖条路过去(最多 4 次)。
                                                  作物默认只收 age 到顶的,没长成的留着；mature:true 也可显式写出。
@@ -1362,7 +1364,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  collect 不支持 at，带指定坐标时整单拒绝；精确挖掘用 excavate 或 mymc_script 的原生 bot.dig。
                                                  tool 不写=节约耐久;"fastest"=本步最快;物品 id=本步精确指定,都不改长期设置`,
     fields: [
-      { key: 'block', kind: 'string', required: true, hint: '方块英文 id' },
+      { key: 'block', kind: 'string', required: true, hint: getResourceActionContract('block').hint },
       { key: 'count', kind: 'int', lo: 1, hi: 64, def: 1 },
       { key: 'buried', kind: 'flag' },
       { key: 'mature', kind: 'flag' },
@@ -1859,7 +1861,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     ],
   },
   {
-    name: 'pickup',
+    name: 'pickup', target: getResourceActionContract('dropped-item'),
     doc: '{"skill":"pickup","item":"cobblestone"}          拾取附近掉落物;item 可选,不写就近扫;按目标物品实际入包验收,靠近后零入包报受阻',
     fields: [{ key: 'item', kind: 'string', doc: '不写就近扫并避开2分钟内刚主动丢弃的已识别掉落物；明确写物品可取回' }],
   },
@@ -1869,6 +1871,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  由你判断保留、储存或丢弃哪些物品；可连续丢弃多类不再需要的物品，不必先存箱子。
                                                  实际落点由服务端计算;走近仍可能自动捡回。用库存净减少与空槽变化核验腾格，不把抛出当销毁。
                                                  未点名玩家的主动抛物会暂时排除于未指定物品的 pickup；明确点名物品可取回。
+                                                 定向抛物先用 mc_bag {"detail":"slots","item":"显示名"} 查槽；item 填注册 ID，pick 筛选变体。不接受 slot/windowSlot。
 {"skill":"toss","item":"gold_ingot","at":[12,32,10]}
                                                  **朝那一格扔**:以物易物把金锭扔到猪灵脚边、
                                                  把东西放到指定的地方。最远约 8 格,远了先走近。
@@ -1884,7 +1887,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
         key: 'at', kind: 'anchor', error: `toss 的 at 要 [x,y,z](${RELATIVE_HINT})`,
         doc: '朝那一格扔；不写优先选已测较开阔方向，没有已测空隙则按当前朝向丢弃并报告未知',
       },
-      { key: 'pick', kind: 'string' },
+      { key: 'pick', kind: 'string', doc: '按显示名、耐久或附魔子串筛选同 ID 的物品' },
       { key: 'target', kind: 'string', doc: '可见玩家的完整名字；与at互斥' },
     ],
   },
@@ -2043,7 +2046,7 @@ count 一律 1-64;distance:flee 1-128,find 1-1024(不给 direction 时站着扫,
 (「该步按『背包内原木 ≥5』核验:达成(实测 7)」)。`;
 
 function skillDocOf(skills: readonly SkillSpec[], lead: string): string {
-  return [lead, ...skills.map((s) => [s.inputHint, s.doc].filter(Boolean).join('\n')), SKILL_DOC_TAIL].join('\n');
+  return [lead, ...skills.map((s) => [s.target?.hint ?? s.inputHint, s.doc].filter(Boolean).join('\n')), SKILL_DOC_TAIL].join('\n');
 }
 
 /** 全部技能的完整说明；按需帮助与注册表共用原文。 */
@@ -2052,7 +2055,8 @@ export const SKILL_DOC = skillDocOf(SKILLS, '一步一个对象,按顺序执行:
 function skillSignature(skill: SkillSpec): string {
   const fields = skill.fields.map((field) => field.key
     + ('required' in field && field.required ? '*' : '?'));
-  return `${skill.name}(${fields.join(',')})${skill.inputHint ? ' — ' + skill.inputHint : ''}`;
+  const hint = skill.target?.hint ?? skill.inputHint;
+  return `${skill.name}(${fields.join(',')})${hint ? ' — ' + hint : ''}`;
 }
 
 /** 常驻目录保留字段签名；完整示例与执行条件按技能查询。 */
@@ -2162,6 +2166,7 @@ function skillGenerationContracts(skills: readonly SkillSpec[]): Record<string, 
     }]));
     const variant = (keys: string[], required: string[], overrides: Record<string, unknown> = {}) => ({
       type: 'object',
+      ...(spec.target ? { description: spec.target.hint } : {}),
       properties: {
         skill: { type: 'string', const: spec.name },
         ...Object.fromEntries(keys.map(key => [key, fields[key]])),
@@ -2341,6 +2346,73 @@ function strayKeys(spec: SkillSpec, c: Record<string, unknown>): StepNote[] {
     }));
 }
 
+type StepParseResult = { steps: SkillCall[]; notes?: ParseNote[] }
+  | { error: string; additionalErrors?: string[]; uncheckedSteps?: number };
+
+// Once an invalid step is found the whole batch is unschedulable. Bound the extra
+// diagnosis, including a long tail of valid steps; successful batches have no new cap.
+const MAX_STEP_ERRORS = 8;
+const MAX_DIAGNOSTIC_LOOKAHEAD = 32;
+
+function parseStep(item: unknown, i: number, marks: MarkLookup | undefined, notes: ParseNote[]): { step: SkillCall } | { error: string } {
+  const at = `第 ${i + 1} 步`;
+  if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+    return { error: `${at}不是一个对象` };
+  }
+  const c = item as Record<string, unknown>;
+  const name = str(c.skill);
+  const spec = name ? SKILL_INDEX.get(name) : undefined;
+  if (!spec) {
+    return { error: `${at}的 skill「${String(c.skill)}」不是技能表里的动作` };
+  }
+  // Typed control/target fields cannot disappear into defaults. In particular,
+  // dryRun:"true" must never become a real write, or count:1.9 become count:1.
+  for (const f of spec.fields) {
+    const v = c[f.key];
+    if (v === undefined || v === null) continue; // Existing nullable placeholder compatibility.
+    if (f.kind === 'flag' && typeof v !== 'boolean') return { error: `${at} ${f.key} 要布尔值 true/false；没有猜测或派发` };
+    if (f.kind === 'int' && (typeof v !== 'number' || !Number.isSafeInteger(v))) return { error: `${at} ${f.key} 要 ${f.lo}-${f.hi} 的整数；没有取整或派发` };
+    if (f.kind === 'string' && (typeof v !== 'string' || !v.trim())) return { error: `${at} ${f.key} 要非空字符串；没有忽略目标或派发` };
+  }
+  if (spec.name === 'chat' || spec.name === 'server_travel') {
+    const text = spec.name === 'chat' ? c.text : c.command;
+    if (typeof text === 'string') {
+      const error = chatInputError(text);
+      if (error) return { error: `${at} ${error}` };
+    }
+  }
+  if (c.to !== undefined && !spec.fields.some(f => f.key === 'to')) return { error: `${at} /to 不受 ${spec.name} 支持；没有将 to 改成 at，也未选择目标` };
+  if (spec.name === 'toss') {
+    const slotKey = ['slot', 'windowSlot'].find(key => c[key] != null);
+    if (slotKey) return { error: `${at} /${slotKey} 不受 toss 支持；整批未执行。先用 mc_bag {"detail":"slots"} 核对注册 ID 与名称，再用 item 和 pick 指定物品。` };
+  }
+  const targetError = collectTargetError(c);
+  if (targetError) return { error: `${at} ${targetError}` };
+  const parsed = spec.parse ? spec.parse(c, at, marks) : parseByFields(spec, c, at, marks);
+  if ('error' in parsed) return parsed;
+  const step = parsed.step;
+  if (name !== c.skill) notes.push({step:i+1,field:'skill',given:c.skill,kind:'rewritten',as:JSON.stringify(name)});
+  for (const f of spec.fields) {
+    const v=c[f.key];
+    if ((f.kind === 'string' || f.kind === 'enum') && typeof v === 'string' && v !== v.trim()
+      && (step as unknown as Record<string,unknown>)[f.key] === v.trim())
+      notes.push({step:i+1,field:f.key,given:v,kind:'rewritten',as:JSON.stringify(v.trim())});
+  }
+  for (const n of [...(parsed.notes ?? []), ...strayKeys(spec, c)]) notes.push({ ...n, step: i + 1 });
+  // 边界声明骑在规范步骤上;结构非法同样整批退回
+  if (c.needs !== undefined) {
+    const needs = needsOf(c.needs, i, at);
+    if ('error' in needs) return needs;
+    step.needs = needs.needs;
+  }
+  if (c.expect !== undefined) {
+    const expect = expectOf(c.expect, at);
+    if ('error' in expect) return expect;
+    step.expect = expect.expect;
+  }
+  return { step };
+}
+
 /**
  * mc_do 的边界校验采用整批原子语义;任一步非法时返回步骤索引和原因。
  * 有效步骤重建为规范对象,额外字段不进入技能实现。
@@ -2351,7 +2423,7 @@ function strayKeys(spec: SkillSpec, c: Record<string, unknown>): StepNote[] {
 export function parseSteps(
   raw: unknown,
   marks?: MarkLookup,
-): { steps: SkillCall[]; notes?: ParseNote[] } | { error: string } {
+): StepParseResult {
   const serialized = typeof raw === 'string' ? raw : null;
   if (serialized !== null) {
     try { raw = JSON.parse(serialized); }
@@ -2360,84 +2432,59 @@ export function parseSteps(
   if (!Array.isArray(raw) || raw.length === 0) return { error: 'steps 要是一个非空的技能数组' };
   const steps: SkillCall[] = [];
   const notes: ParseNote[] = serialized === null ? [] : [{ field: 'steps', given: serialized, kind: 'decoded' }];
+  const errors: string[] = [];
+  let firstInvalidIndex = -1;
+  let uncheckedSteps = 0;
   for (const [i, item] of raw.entries()) {
-    const at = `第 ${i + 1} 步`;
-    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-      return { error: `${at}不是一个对象` };
+    const result = parseStep(item, i, marks, notes);
+    if ('error' in result) {
+      if (!errors.length) firstInvalidIndex = i;
+      errors.push(result.error);
+    } else if (!errors.length) {
+      steps.push(result.step);
     }
-    const c = item as Record<string, unknown>;
-    const name = str(c.skill);
-    const spec = name ? SKILL_INDEX.get(name) : undefined;
-    if (!spec) {
-      return { error: `${at}的 skill「${String(c.skill)}」不是技能表里的动作` };
+    if (errors.length === MAX_STEP_ERRORS || (firstInvalidIndex >= 0 && i - firstInvalidIndex >= MAX_DIAGNOSTIC_LOOKAHEAD)) {
+      uncheckedSteps = raw.length - i - 1;
+      break;
     }
-    // Typed control/target fields cannot disappear into defaults. In particular,
-    // dryRun:"true" must never become a real write, or count:1.9 become count:1.
-    for (const f of spec.fields) {
-      const v = c[f.key];
-      if (v === undefined || v === null) continue; // Existing nullable placeholder compatibility.
-      if (f.kind === 'flag' && typeof v !== 'boolean') return { error: `${at} ${f.key} 要布尔值 true/false；没有猜测或派发` };
-      if (f.kind === 'int' && (typeof v !== 'number' || !Number.isSafeInteger(v))) return { error: `${at} ${f.key} 要 ${f.lo}-${f.hi} 的整数；没有取整或派发` };
-      if (f.kind === 'string' && (typeof v !== 'string' || !v.trim())) return { error: `${at} ${f.key} 要非空字符串；没有忽略目标或派发` };
-    }
-    if (spec.name === 'chat' || spec.name === 'server_travel') {
-      const text = spec.name === 'chat' ? c.text : c.command;
-      if (typeof text === 'string') {
-        const error = chatInputError(text);
-        if (error) return { error: `${at} ${error}` };
-      }
-    }
-    if (c.to !== undefined && !spec.fields.some(f => f.key === 'to')) return { error: `${at} /to 不受 ${spec.name} 支持；没有将 to 改成 at，也未选择目标` };
-    const targetError = collectTargetError(c);
-    if (targetError) return { error: `${at} ${targetError}` };
-    const parsed = spec.parse ? spec.parse(c, at, marks) : parseByFields(spec, c, at, marks);
-    if ('error' in parsed) return parsed;
-    const step = parsed.step;
-    if (name !== c.skill) notes.push({step:i+1,field:'skill',given:c.skill,kind:'rewritten',as:JSON.stringify(name)});
-    for (const f of spec.fields) {
-      const v=c[f.key];
-      if ((f.kind === 'string' || f.kind === 'enum') && typeof v === 'string' && v !== v.trim()
-        && (step as unknown as Record<string,unknown>)[f.key] === v.trim())
-        notes.push({step:i+1,field:f.key,given:v,kind:'rewritten',as:JSON.stringify(v.trim())});
-    }
-    for (const n of [...(parsed.notes ?? []), ...strayKeys(spec, c)]) notes.push({ ...n, step: i + 1 });
-    // 边界声明骑在规范步骤上;结构非法同样整批退回
-    if (c.needs !== undefined) {
-      const needs = needsOf(c.needs, i, at);
-      if ('error' in needs) return needs;
-      step.needs = needs.needs;
-    }
-    if (c.expect !== undefined) {
-      const expect = expectOf(c.expect, at);
-      if ('error' in expect) return expect;
-      step.expect = expect.expect;
-    }
-    steps.push(step);
   }
+  if (errors.length) return {
+    error: errors[0], ...(errors.length > 1 ? { additionalErrors: errors.slice(1) } : {}),
+    ...(uncheckedSteps > 0 ? { uncheckedSteps } : {}),
+  };
   return notes.length > 0 ? { steps, notes } : { steps };
 }
 
-/** Read-only diagnosis from the same registry; never edits, submits or retries an action. */
-export function describeSkillInputCorrection(raw: unknown, error: string): {
-  path: string; hint: string; helpArguments: { skill?: SkillCall['skill'] }; suppliedExcerpt: string;
-  inputSchema?: Record<string, unknown>;
-  errors: Array<{ path: string; expected: unknown; problem: string; actual: unknown }>;
-  minimal_legal_example: unknown;
-} {
-  let value = raw;
-  if (typeof value === 'string') { try { value = JSON.parse(value); } catch { /* Keep malformed input opaque. */ } }
+function locateStepProblem(value: unknown, error: string) {
   const match = /^第 (\d+) 步/.exec(error), index = match ? Number(match[1]) - 1 : -1;
   const item = Array.isArray(value) && index >= 0 ? value[index] : null;
   const spec = item && typeof item === 'object' && !Array.isArray(item)
     ? SKILL_INDEX.get(String(item.skill)) : undefined;
-  const hint = spec ? spec.inputHint ?? skillSignature(spec)
+  const hint = spec ? spec.target?.hint ?? spec.inputHint ?? skillSignature(spec)
     : 'steps 写成真正的 JSON 数组；只可完整解码一次，损坏的 JSON 不补括号、不截取前缀。保留原来全部步骤的顺序和依赖，再纠正参数。';
-  const supplied = JSON.stringify(raw) ?? String(raw);
   const base = index >= 0 ? `/steps/${index}` : '/steps';
-  const field = error.includes('/to') ? 'to' : spec?.fields.find(f => error.includes(f.key))?.key
+  const field = /^第 \d+ 步 \/(to|slot|windowSlot) 不受 /.exec(error)?.[1] ?? spec?.fields.find(f => error.includes(f.key))?.key
     ?? (item && !spec ? 'skill' : undefined);
   const path = field ? `${base}/${field}` : base;
   const declaration = spec?.fields.find(f => f.key === field);
+  return { item, spec, path, hint, problem: {
+    path, expected: declaration ? fieldSchema(declaration) : hint, problem: error,
+    actual: field ? item?.[field] ?? null : index >= 0 ? item : value ?? null,
+  } };
+}
+
+/** Read-only diagnosis from the same registry; never edits, submits or retries an action. */
+export function describeSkillInputCorrection(raw: unknown, error: string, additionalErrors: readonly string[] = [], uncheckedSteps = 0): {
+  path: string; hint: string; helpArguments: { skill?: SkillCall['skill'] }; suppliedExcerpt: string;
+  inputSchema?: Record<string, unknown>;
+  errors: Array<{ path: string; expected: unknown; problem: string; actual: unknown }>;
+  uncheckedSteps?: number;
+  minimal_legal_example: unknown;
+} {
+  let value = raw;
+  if (typeof value === 'string') { try { value = JSON.parse(value); } catch { /* Keep malformed input opaque. */ } }
+  const { item, spec, path, hint, problem } = locateStepProblem(value, error);
+  const supplied = JSON.stringify(raw) ?? String(raw);
   let example: unknown = null;
   try {
     const encoded = spec?.doc.match(/^\{[^\n]+\}/m)?.[0];
@@ -2446,9 +2493,16 @@ export function describeSkillInputCorrection(raw: unknown, error: string): {
       ? { skill: 'observe', mode: 'voxels', bounds: [0,0,0,0,0,0] } : first;
     if (chosen && !('error' in parseSteps([chosen]))) example = { steps: [chosen] };
   } catch { /* No invented example when the registry has none. */ }
-  return { path, hint,
-    errors: [{ path, expected: declaration ? fieldSchema(declaration) : hint, problem: error,
-      actual: field ? item?.[field] ?? null : item ?? raw ?? null }], minimal_legal_example: example,
+  const errors = [problem];
+  for (const message of additionalErrors.slice(0, MAX_STEP_ERRORS - 1)) {
+    const additional = locateStepProblem(value, message).problem;
+    const actual = JSON.stringify(additional.actual) ?? '';
+    if (actual.length > 240) additional.actual = { truncated: true, characters: actual.length };
+    if (additional.problem.length > 360) additional.problem = additional.problem.slice(0, 360) + '…';
+    errors.push(additional);
+  }
+  return { path, hint, errors, ...(uncheckedSteps > 0 ? { uncheckedSteps } : {}),
+    minimal_legal_example: example,
     ...(spec ? { inputSchema: { anyOf: skillGenerationContracts([spec])[spec.name] } } : {}),
     helpArguments: spec ? { skill: spec.name } : {},
     suppliedExcerpt: supplied.length <= 180 ? supplied
@@ -2477,7 +2531,7 @@ function asScoutStep(step: SkillCall): SkillCall {
 export function parseScoutSteps(
   raw: unknown,
   marks?: MarkLookup,
-): { steps: SkillCall[]; notes?: ParseNote[] } | { error: string } {
+): StepParseResult {
   const parsed = parseSteps(raw, marks);
   if ('error' in parsed) return parsed;
   const scout = new Set<string>(SCOUT_SKILL_NAMES);

@@ -6,10 +6,15 @@ import java.util.*;
 
 /** Explicit NPC voice identities, never inferred from names or chat text. */
 final class NpcDialoguePolicy {
-    record Profile(UUID id,UUID owner,String kind,String name,String voice,double range) {}
+    record Profile(UUID id,UUID owner,String kind,String name,String voice,double range,List<String> aliases) {
+        boolean hasName(String value){return name.equalsIgnoreCase(value)||aliases.stream().anyMatch(value::equalsIgnoreCase);}
+        String display(){return aliases.isEmpty()?name:aliases.getFirst();}
+    }
+    record Address(Profile profile,String text) {}
     static Map<UUID,Profile> profiles(JsonObject config) {
         if(!config.has("schema")||config.get("schema").getAsInt()!=1||!config.has("roles"))throw new IllegalArgumentException("NPC_VOICE_CONFIG_INVALID");
         var result=new LinkedHashMap<UUID,Profile>();
+        var names=new HashMap<String,UUID>();
         var roles=config.getAsJsonArray("roles");if(roles.size()>32)throw new IllegalArgumentException("NPC_VOICE_LIMIT");
         for(var value:roles){
             var row=value.getAsJsonObject();UUID id=UUID.fromString(row.get("id").getAsString()),owner=UUID.fromString(row.get("ownerId").getAsString());
@@ -17,9 +22,51 @@ final class NpcDialoguePolicy {
             double range=row.has("range")?row.get("range").getAsDouble():24;
             if(id.equals(owner)||!Set.of("maid","numen").contains(kind)||name.isBlank()||name.length()>48
                 ||!voice.matches("[A-Za-z0-9_.-]{1,96}")||!Double.isFinite(range)||range<1||range>48)throw new IllegalArgumentException("NPC_VOICE_PROFILE_INVALID");
-            if(result.putIfAbsent(id,new Profile(id,owner,kind,name,voice,range))!=null)throw new IllegalArgumentException("NPC_VOICE_DUPLICATE_ID");
+            var aliases=new ArrayList<String>();
+            if(row.has("aliases")){
+                if(!row.get("aliases").isJsonArray())throw new IllegalArgumentException("NPC_VOICE_ALIAS_INVALID");
+                var configured=row.getAsJsonArray("aliases");
+                if(configured.size()>8)throw new IllegalArgumentException("NPC_VOICE_ALIAS_LIMIT");
+                for(var item:configured){
+                    if(!item.isJsonPrimitive()||!item.getAsJsonPrimitive().isString())throw new IllegalArgumentException("NPC_VOICE_ALIAS_INVALID");
+                    String alias=item.getAsString();
+                    if(alias.isBlank()||alias.length()>48||!alias.equals(alias.strip())||
+                        alias.codePoints().anyMatch(cp->Character.isISOControl(cp)||cp==0xA7||cp=='@'||cp=='/'||cp=='!'))
+                        throw new IllegalArgumentException("NPC_VOICE_ALIAS_INVALID");
+                    aliases.add(alias);
+                }
+            }
+            var profile=new Profile(id,owner,kind,name,voice,range,List.copyOf(aliases));
+            if(result.putIfAbsent(id,profile)!=null)throw new IllegalArgumentException("NPC_VOICE_DUPLICATE_ID");
+            for(String label:labels(profile)){
+                UUID other=names.putIfAbsent(label.toLowerCase(Locale.ROOT),id);
+                if(other!=null&&!other.equals(id))throw new IllegalArgumentException("NPC_VOICE_AMBIGUOUS_ALIAS");
+            }
         }
         return Collections.unmodifiableMap(result);
+    }
+    private static List<String> labels(Profile profile){
+        var labels=new ArrayList<>(profile.aliases());
+        labels.add(profile.name());
+        return labels;
+    }
+    static Address addressed(Collection<Profile> profiles,String text){
+        String line=text.strip();
+        if(line.startsWith("@"))line=line.substring(1);
+        Address matched=null;
+        int longest=0;
+        for(var profile:profiles)for(String label:labels(profile)){
+            if(label.length()<=longest||line.length()<=label.length()||!line.regionMatches(true,0,label,0,label.length()))continue;
+            String rest=line.substring(label.length());
+            int first=rest.codePointAt(0);
+            if(!Character.isWhitespace(first)&&"，,:：!！?？、。".indexOf(first)<0&&first!='你'&&first!='咱')continue;
+            rest=rest.replaceFirst("^[\\s，,:：!！?？、。]+","").strip();
+            if(!rest.isEmpty()){
+                matched=new Address(profile,rest);
+                longest=label.length();
+            }
+        }
+        return matched;
     }
     static UUID speechId(UUID source,String original){
         if(original==null||original.isBlank()||original.length()>160||original.codePoints().anyMatch(Character::isISOControl))throw new IllegalArgumentException("NPC_SPEECH_ID_INVALID");

@@ -35,6 +35,21 @@ Relation policies (`src/relations.ts`) decide what contradicts what: `LOCATED_AT
 
 ## Use
 
+For a standalone Node agent, run `pnpm install --frozen-lockfile` and `pnpm run pack:portable` in this
+package on the build machine. In the consumer project install the resulting local `.tgz`.
+It contains JavaScript and TypeScript declarations, uses Node 22.13+ built-in SQLite and has zero runtime
+npm dependencies. The workspace entry still supports TypeScript source consumers. The local tarball
+contains no Python sidecar, database, model credentials or registry publication.
+
+For a local fallback keep the same persistent `AGENT_MEMORY_DIR` and the same realm/account/agent.
+`AGENT_MEMORY_ENABLED=1 AGENT_MEMORY_BACKEND=local` records episodes and structured temporal facts
+without a Graphiti endpoint. Setting `AGENT_MEMORY_ENABLED=0` detaches the observer and tools.
+Use `scope.currentFacts(query, { graphiti: false })` for foreground reads with a local latency budget.
+After restoring a hybrid service, call `scope.retryPendingGraphiti(20)` and `await memory.flush()`
+to submit a bounded batch of unacknowledged episodes for that scope. A failed write or a full in-memory
+queue leaves the original and its extraction hints on disk. Retrying uses the original episode ID. Ordinary
+startup never schedules a bulk re-extraction. Local-only and pre-journal history remains locally readable.
+
 > Integration into a running agent now goes through **`agent-mc-harness`** (`packages/agent-harness`,
 > `withAgentHarness`), which owns the glue and exposes memory to the host via `harness_get_summary`.
 > `withAgentMemory` below remains as a lower-level, memory-only option.
