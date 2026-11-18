@@ -21,7 +21,7 @@ import { RISKY_FOODS, foodRiskReference, nativeFoodId } from './nutrition.ts';
 import { FOOD_COOKING } from './vanilla-food.ts';
 import { itemMatchesPick, pickMissText, pickTargetOf } from './item-pick.ts';
 import { zhDimension, zhEntity, zhName } from './names.ts';
-import { invItemNamed, noSuchItem } from './inventory.ts';
+import { invItemNamed, missingTossItem, noSuchItem } from './inventory.ts';
 import { itemCustomName } from './item-display.ts';
 import { bestRangedWeapon, hasRangedLos, hasUsableArrows, type RangedTarget } from './ranged.ts';
 import { attackTargetRadius, bestWeapon } from './melee.ts';
@@ -320,7 +320,8 @@ function precheckHasItem(
 /** 五个「从包里拿东西下手」的技能:判据同一条,只有动词不同 */
 function precheckItemStep(bot: Bot, call: SkillCall, verb: string): PrecheckNote | null {
   const c = call as { item?: string; pick?: string };
-  return precheckHasItem(bot, c.item ?? '', verb, `${call.skill}.noStock`, c.pick, call.skill === 'equip');
+  const note = precheckHasItem(bot, c.item ?? '', verb, `${call.skill}.noStock`, c.pick, call.skill === 'equip');
+  return note && call.skill === 'toss' ? { ...note, text: missingTossItem(bot, call.item, call.pick).message } : note;
 }
 
 /** An empty hand cannot activate nearby air or liquid; item-directed uses remain uncovered. */

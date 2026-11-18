@@ -1871,6 +1871,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  由你判断保留、储存或丢弃哪些物品；可连续丢弃多类不再需要的物品，不必先存箱子。
                                                  实际落点由服务端计算;走近仍可能自动捡回。用库存净减少与空槽变化核验腾格，不把抛出当销毁。
                                                  未点名玩家的主动抛物会暂时排除于未指定物品的 pickup；明确点名物品可取回。
+                                                 定向抛物先用 mc_bag {"detail":"slots","item":"显示名"} 查槽；item 填注册 ID，pick 筛选变体。不接受 slot/windowSlot。
 {"skill":"toss","item":"gold_ingot","at":[12,32,10]}
                                                  **朝那一格扔**:以物易物把金锭扔到猪灵脚边、
                                                  把东西放到指定的地方。最远约 8 格,远了先走近。
@@ -1886,7 +1887,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
         key: 'at', kind: 'anchor', error: `toss 的 at 要 [x,y,z](${RELATIVE_HINT})`,
         doc: '朝那一格扔；不写优先选已测较开阔方向，没有已测空隙则按当前朝向丢弃并报告未知',
       },
-      { key: 'pick', kind: 'string' },
+      { key: 'pick', kind: 'string', doc: '按显示名、耐久或附魔子串筛选同 ID 的物品' },
       { key: 'target', kind: 'string', doc: '可见玩家的完整名字；与at互斥' },
     ],
   },
@@ -2381,6 +2382,10 @@ function parseStep(item: unknown, i: number, marks: MarkLookup | undefined, note
     }
   }
   if (c.to !== undefined && !spec.fields.some(f => f.key === 'to')) return { error: `${at} /to 不受 ${spec.name} 支持；没有将 to 改成 at，也未选择目标` };
+  if (spec.name === 'toss') {
+    const slotKey = ['slot', 'windowSlot'].find(key => c[key] != null);
+    if (slotKey) return { error: `${at} /${slotKey} 不受 toss 支持；整批未执行。先用 mc_bag {"detail":"slots"} 核对注册 ID 与名称，再用 item 和 pick 指定物品。` };
+  }
   const targetError = collectTargetError(c);
   if (targetError) return { error: `${at} ${targetError}` };
   const parsed = spec.parse ? spec.parse(c, at, marks) : parseByFields(spec, c, at, marks);
@@ -2458,7 +2463,7 @@ function locateStepProblem(value: unknown, error: string) {
   const hint = spec ? spec.target?.hint ?? spec.inputHint ?? skillSignature(spec)
     : 'steps 写成真正的 JSON 数组；只可完整解码一次，损坏的 JSON 不补括号、不截取前缀。保留原来全部步骤的顺序和依赖，再纠正参数。';
   const base = index >= 0 ? `/steps/${index}` : '/steps';
-  const field = error.includes('/to') ? 'to' : spec?.fields.find(f => error.includes(f.key))?.key
+  const field = /^第 \d+ 步 \/(to|slot|windowSlot) 不受 /.exec(error)?.[1] ?? spec?.fields.find(f => error.includes(f.key))?.key
     ?? (item && !spec ? 'skill' : undefined);
   const path = field ? `${base}/${field}` : base;
   const declaration = spec?.fields.find(f => f.key === field);

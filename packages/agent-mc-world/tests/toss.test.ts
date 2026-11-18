@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import { Vec3 } from 'vec3';
+import { precheckStep } from '../core/precheck.ts';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { planTossThrow, skillToss, skillPickup, isRecentDiscard, reacquiredTossNote, protectedTossItem, TOSS_PITCH } from '../core/skills-container.ts';
 const req = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
@@ -23,6 +24,30 @@ function rig(blocked = false, version = '1.20.6') {
   return { bot, clock, count: (n: number) => { count = n; } };
 }
 describe('toss receipt and aim', () => {
+  it.each([
+    { query: 'Worn blade', names: ['Worn blade', 'Spare blade'], suggest: true },
+    { query: 'Worn blade', names: ['Worn blade', 'Worn blade'], suggest: false },
+    { query: 'Worn blade', names: ['Worn blade', 'Worn blade II'], suggest: false },
+    { query: 'Missing blade', names: ['Worn blade', 'Spare blade'], suggest: false },
+    { query: 'Worn blade', names: ['Worn blade', 'Spare blade'], pick: 'Spare blade', suggest: false },
+  ])('offers a slot read for $query and suggests only an equivalent unique action selector: $names', async row => {
+    const { bot } = rig(false, '1.21.1');
+    const stock = row.names.map((customName, i) => ({
+      name: 'iron_sword', customName, type: bot.registry.itemsByName.iron_sword.id, count: 1, metadata: 0, slot: 9 + i,
+    }));
+    bot.inventory.items = () => stock;
+    bot.tossStack = vi.fn();
+    const err = await skillToss(bot, { skill: 'toss', item: row.query, pick: row.pick, count: 1 }, ctx)
+      .then(() => { throw Error('expected toss to reject'); }, (error: Error) => error);
+    expect(err.message).toContain('mc_bag ' + JSON.stringify({ detail: 'slots', item: row.query }));
+    expect(err.message.includes('"pick":')).toBe(row.suggest);
+    if (row.suggest) expect(err.message).toContain(JSON.stringify({ item: 'iron_sword', pick: row.query }));
+    expect(precheckStep(bot, { skill: 'toss', item: row.query, pick: row.pick, count: 1 }, {} as never))
+      .toMatchObject({ text: err.message, rule: 'toss.noStock' });
+    expect(bot.look).not.toHaveBeenCalled();
+    expect(bot.toss).not.toHaveBeenCalled();
+    expect(bot.tossStack).not.toHaveBeenCalled();
+  });
   it('recognizes the same 1.21.1 wire item ID during named pickup and does not claim inventory gain', async () => {
     vi.useFakeTimers();
     const { bot } = rig(false, '1.21.1');
@@ -168,15 +193,15 @@ describe('toss receipt and aim', () => {
     expect(plan).not.toBeNull(); expect(Math.sin(plan.yaw)).toBeLessThan(0);
     expect(Math.cos(plan.yaw)).toBeLessThan(0);
   });
-  it('allows a caller to discard a named full stack through its selected slot', async () => {
-    vi.useFakeTimers(); const { bot } = rig();
-    const keep = { name: 'cobblestone', customName: 'Retained variant', count: 1, type: registry.itemsByName.cobblestone.id, metadata: 0, slot: 9 };
+  it.each(['cobblestone', 'iron_sword'])('discards the named %s through only its selected slot', async name => {
+    vi.useFakeTimers(); const { bot } = rig(false, '1.21.1');
+    const keep = { name, customName: 'Retained variant', count: 1, type: bot.registry.itemsByName[name].id, metadata: 0, slot: 9 };
     const discard = { ...keep, customName: 'Discarded variant', slot: 10 };
     let stock = [keep, discard];
     bot.inventory.items = () => stock;
     bot.tossStack = async stack => { stock = stock.filter(candidate => candidate !== stack); };
-    expect(protectedTossItem(bot, 'cobblestone', 'Discarded variant', 1)).toBeNull();
-    const task = skillToss(bot, { skill: 'toss', item: 'cobblestone', pick: 'Discarded variant', count: 1 }, ctx);
+    expect(protectedTossItem(bot, name, 'Discarded variant', 1)).toBeNull();
+    const task = skillToss(bot, { skill: 'toss', item: name, pick: 'Discarded variant', count: 1 }, ctx);
     const checked = expect(task).resolves.toContain('净少1');
     await vi.advanceTimersByTimeAsync(4100);
     await checked;

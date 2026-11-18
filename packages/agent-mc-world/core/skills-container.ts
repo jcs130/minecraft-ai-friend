@@ -10,7 +10,7 @@ import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
 import {
   INVENTORY_SLOTS, awaitInvConfirm, invCount, invCountIn, invGains, invGainsSplit, invSnapshot,
-  itemAsked, itemIdHint, itemPredOf, lootNote, moveExactSlot, noSuchItem, playerInvIn, type InvItem,
+  itemAsked, itemIdHint, itemPredOf, lootNote, missingTossItem, moveExactSlot, noSuchItem, playerInvIn, type InvItem,
   type InvPred,
 } from './inventory.ts';
 import { isSpawnAnchorBlock } from './policy.ts';
@@ -217,7 +217,7 @@ export async function skillToss(
   const pred = itemPredOf(bot, item, pick);
   const registryName = bot.inventory.items().find((stack) => pred(stack.name, stack))?.name ?? item;
   const have = invCount(bot, pred);
-  if (have === 0) throw noSuchItem(bot, item, pick);
+  if (have === 0) throw missingTossItem(bot, item, pick);
   const want = Math.min(count, have);
   if (call.target && call.at !== undefined) throw new SkillBlocked('toss 的 target 与 at 只能选一个');
   const recipient = call.target ? Object.values(bot.entities).find(entity =>

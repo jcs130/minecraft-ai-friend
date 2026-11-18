@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.102
+
+Toss now reports a focused inventory lookup for unmatched selectors. It suggests a registry ID and pick only when the action would select one matching stack. Explicit unsupported slot selectors reject the entire batch before execution.
+
 ## 0.5.7-rc.160-preview.101
 
 Action batches report the first invalid input in each of up to eight steps in the same structured and text receipt. Validation keeps dependency numbering, leaves the body queue untouched, and identifies any unchecked tail.

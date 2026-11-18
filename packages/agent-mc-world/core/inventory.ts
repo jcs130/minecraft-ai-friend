@@ -117,6 +117,30 @@ export function itemIdHint(bot: Bot, query: string, candidates: readonly { name:
     : '';
 }
 
+/** A failed discard never broadens its selector or retries. Query only the slots eligible for toss. */
+export function missingTossItem(bot: Bot, item: string, pick?: string): SkillBlocked {
+  const read = 'mc_bag ' + JSON.stringify({ detail: 'slots', item });
+  if (!inventoryReadConfirmed(bot)) return new SkillBlocked(`背包玩家槽未同步；同步后查询 ${read}。`);
+  const stock = bot.inventory.items();
+  const label = item.trim().toLowerCase();
+  const named = stock.filter(stack => itemCustomName(stack)?.trim().toLowerCase() === label);
+  if (!named.length) {
+    const same = pick && stock.filter(stack => matchItemName(item, stack.name, bot.registry));
+    const reason = same && same.length ? noSuchItem(bot, item, pick, same).message : `抛物选择器「${item}」未命中当前背包`;
+    return new SkillBlocked(`先查 ${read}。${reason}。`);
+  }
+  const prefix = `抛物选择器未命中；同名显示物品有 ${named.length} 个槽。先查 ${read}。`;
+  if (named.length !== 1) return new SkillBlocked(prefix);
+  const candidate = named[0];
+  const selector = { item: candidate.name, pick: pick || item };
+  // The action uses substring matching for pick. An exact display-name lookup
+  // alone cannot ensure that the action would choose only this same stack.
+  const matchesSelector = itemPredOf(bot, selector.item, selector.pick);
+  const matches = stock.filter(stack => matchesSelector(stack.name, stack));
+  return new SkillBlocked(matches.length === 1 && matches[0] === candidate
+    ? `${prefix} 当前仅此槽符合 ${JSON.stringify(selector)}；请核对后再决定。` : prefix);
+}
+
 /**
  * 包里没有这一步要的东西。两句话分开:连 id 都没有,还是有 id 而挑选词一件都没命中 ——
  * 后者要把同 id 的那几件各自是什么摆出来,她下一步要么改挑选词要么改主意。
