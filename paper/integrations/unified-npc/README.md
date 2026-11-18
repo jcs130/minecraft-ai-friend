@@ -56,8 +56,11 @@ The old TLM selection is retained in the read-only configuration for history.
 The original player's follow, stay and sit requests can use the same executor as
 an active unified maid. They have their own original receipts and keep the
 controller generation. Looking up a workshop or opening the ordinary inventory
-menu keeps the lease. The explicitly selected brain menu can still hand off
-control. A fenced controller waits for that handoff before planning again.
+menu keeps the lease. The owner can transfer or equip real items through the
+existing inventory path while the body has no pending movement, fishing or
+workshop job. The original inventory receipt and slot rules still apply. The
+explicitly selected brain menu can hand off control. A fenced controller waits
+for that handoff before planning again.
 
 - For a maid role that allows `body:native:workshop` and `body:craft`, the server
   exposes the original authorized sites and recipes. The real owner must be

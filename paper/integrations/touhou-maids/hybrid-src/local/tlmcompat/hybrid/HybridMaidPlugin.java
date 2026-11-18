@@ -498,9 +498,12 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             if (unifiedBody(id)) bodyPort.requireUnusedNativeRequest(actor.getUniqueId(), id, operation);
             return workshopOrder(actor.getUniqueId(), id, operation, value, null, unifiedBody(id) && bodyPort.busy(id));
         }
-        if(nativeExclusive(id)&&!Set.of("chat","talk").contains(action))throw new CompatibilityException("control_changed","Body is owned by the native controller; use the original owner UI to take control");
+        boolean inventoryAction = Set.of("transfer", "equip").contains(action);
+        boolean sharedInventory = inventoryAction && unifiedBody(id);
+        if(nativeExclusive(id)&&!sharedInventory&&!Set.of("chat","talk").contains(action))throw new CompatibilityException("control_changed","Body is owned by the native controller; use the original owner UI to take control");
         // A replay must read the original result even if the entity has since died/unloaded.
         if(receipts.read(id,operation)!=null){receipt(actor.getUniqueId(),id,operation);JsonObject old=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));old=reconcile(old);old.addProperty("replayed",true);return old;}
+        if (sharedInventory) bodyPort.requireUnusedNativeRequest(actor.getUniqueId(), id, operation);
         if (action.equals("cast")) {
             EntityMaid maid = ownedLoaded(actor, id);
             requireNearby(actor, maid, 32);
@@ -522,12 +525,15 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         EntityMaid maid;
         boolean visitor=action.equals("chat")&&!actor.getUniqueId().toString().equals(records().has(id.toString())?records().getAsJsonObject(id.toString()).get("ownerId").getAsString():"");
         if(action.equals("talk")||visitor){maid=nearbyMaid(actor,id);}
-        else if(Set.of("transfer","equip").contains(action)){
+        else if(inventoryAction){
             // Authenticate before allocating a receipt. Only this preflight is known
             // to have no item effects; exceptions after mutation must remain unknown.
             owned(actor.getUniqueId(),id);
             try{
                 maid=ownedLoaded(actor,id);requireNearby(actor,maid,32);
+                if (sharedInventory && (bodyPort.busy(id) || workshops.busy(id))) {
+                    throw new CompatibilityException("maid_busy", "女仆正在执行动作或工单。请先等原动作结束，再按最新的背包状态操作。");
+                }
                 if(action.equals("transfer"))menus.validateTransfer(actor,maid,value);else menus.validateEquip(actor,maid,value);
             }catch(CompatibilityException error){return rejectedInventory(actor,action,id,operation,value,error);}
         }else{maid=ownedLoaded(actor,id);requireNearby(actor,maid,32);}
