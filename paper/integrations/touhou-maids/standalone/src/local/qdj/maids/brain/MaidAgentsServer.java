@@ -67,6 +67,7 @@ final class MaidAgentsServer implements AutoCloseable {
     boolean reserved(UUID id) { return companions != null && companions.reserved(id); }
 
     EntityMaid loaded(MaidAgent agent) {
+        if (agent == null) return null;
         for (var level : server.getAllLevels()) {
             if (level.getEntity(agent.binding().maidId()) instanceof EntityMaid maid && agent.matches(maid)) return maid;
         }

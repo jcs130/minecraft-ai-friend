@@ -82,6 +82,8 @@ for that handoff before planning again.
   crossbow, gohei and trident behavior stays with TLM. An add-on's task can
   run with an equipped item when it accepts the weapon, its own prerequisites
   pass and it accepts the target. The role's normal protection rules apply.
+  A historical companion contract with no active registration stays in the
+  ledger. The resident loop waits for the registration before using it.
 - With `body:inventory`, a hosted Numen role sees real namespaced items and
   the hands at the time of the read. `body:equip` can use `hand: "auto"` so
   the native wardrobe chooses an eligible wearable slot. To permit a
