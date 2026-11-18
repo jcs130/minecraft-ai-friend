@@ -354,6 +354,16 @@ Identical normalized `mc_memory remember` notes in the same realm/account/agent 
 
 Food risk is available through the shared [food-risk contract](docs/food-risk-contract.md): concrete vanilla-reference cautions accompany current food and explicit meal preflight, including when no safe alternative is carried. Explicit requests remain allowed and actual side effects remain visible; the reference never certifies custom server components.
 
+### Optional resident memory for hosts
+
+The core exports `projectGameMemoryEvent` from `agent-mc-world/context` for portable game evidence.
+Hosts own the persona, the current decision and which historical excerpts enter a request. For a local
+episode archive with temporal facts, use the optional `agent-mc-memory` build. Its observer and tools
+attach through the core's existing SDK and MCP interfaces. The included SQLite backend runs without
+a model. Graphiti enrichment can be added separately to selected identities.
+[Node installation and recovery](https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-memory)
+and [server-hosted Numen and maid integration](https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-harness-py).
+
 ### Optional nearby voice
 
 [Game voice, audience voice, routing and evidence](docs/PROXIMITY_VOICE.md): one authenticated player connection, one audio artifact, independent game/broadcast receipts and explicit output mode.

@@ -16,7 +16,6 @@ export type MemoryEventObserver = (event: McEventLike, facts: ObservedFacts | nu
 
 /** Event types that can yield an episode; anything else is skipped without reading facts. */
 const RELEVANT = /^minecraft\.(enter|leave|chat|event|task)$/;
-const FACTS_TTL_MS = 2_000;
 
 export interface MinecraftMemoryIntegration {
   memory: AgentMemory;
@@ -41,31 +40,28 @@ export interface MinecraftMemoryOptions {
 
 export function createMinecraftMemory(options: MinecraftMemoryOptions): MinecraftMemoryIntegration {
   const connection = randomUUID();
-  let scope: MemoryScope | null = options.fallbackScope ?? null;
-  let world: WorldRef | null = null;
-  let scoped: ScopedMemory | null = scope ? options.memory.scope(scope) : null;
+  let factSource: Parameters<MemoryEventObserver>[1] = null;
   let chain: Promise<void> = Promise.resolve();
-  let factsReadAt = -Infinity;
 
-  const update = (facts: ObservedFacts | null) => {
-    const s = facts?.experience?.scope;
-    if (s && typeof s.realm === 'string' && typeof s.account === 'string' && typeof s.agent === 'string'
-      && (!scope || s.realm !== scope.realm || s.account !== scope.account || s.agent !== scope.agent)) {
-      scope = { realm: s.realm, account: s.account, agent: s.agent };
-      scoped = options.memory.scope(scope);
-    }
-    if (facts?.world) world = { key: facts.world.key, dimensionType: facts.world.dimensionType ?? null,
-      revision: facts.world.revision ?? 0, connection };
+  const current = () => {
+    const facts = typeof factSource === 'function' ? factSource() : factSource;
+    const scope = facts?.experience?.scope ?? options.fallbackScope;
+    if (!scope || typeof scope.realm !== 'string' || typeof scope.account !== 'string' || typeof scope.agent !== 'string') return null;
+    const world: WorldRef | null = facts?.world ? { key: facts.world.key, dimensionType: facts.world.dimensionType ?? null,
+      revision: facts.world.revision ?? 0, connection } : null;
+    return { memory: options.memory.scope(scope), context: { self: options.self, world } };
   };
-  const current = () => scoped ? { memory: scoped, context: { self: options.self, world } } : null;
 
   const observer: MemoryEventObserver = (event, facts) => {
     try {
+      factSource = facts;
       if (!RELEVANT.test(event.type) && !event.execution) return;
-      if (typeof facts !== 'function') update(facts);
-      else if (!scoped || Date.now() - factsReadAt > FACTS_TTL_MS) { factsReadAt = Date.now(); update(facts()); }
-      const target = current(); if (!target) return;
-      const draft = fromEvent(event, target.context); if (!draft) return;
+      // Capture the verified scope before scheduling the write, even if two realms change in one tick.
+      let resolved: ReturnType<typeof current> | undefined;
+      const targetForEvent = () => resolved === undefined ? (resolved = current()) : resolved;
+      const draft = fromEvent(event, { self: options.self, get world() { return targetForEvent()?.context.world ?? null; } });
+      if (!draft) return;
+      const target = targetForEvent(); if (!target) return;
       chain = chain.then(() => target.memory.ingest(draft).then(() => undefined))
         .catch(error => options.onWarning?.('memory ingest failed', { type: event.type, error: String(error).slice(0, 300) }));
     } catch (error) {

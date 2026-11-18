@@ -14,6 +14,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "pack:portable": "tsc -p tsconfig.build.json && node scripts/prepare-dist.mjs && npm pack ./dist",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "smoke:local": "tsx scripts/smoke.ts --backend local",
