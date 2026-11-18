@@ -1,4 +1,5 @@
 import { skillMirrorUrl } from './download-mirror.mjs';
+import saoClient from './sao-client.json' with { type: 'json' };
 import offlineDownloads from './offline-downloads.json' with { type: 'json' };
 import maidClientDownloads from './maid-client-downloads.json' with { type: 'json' };
 import androidClientDownloads from './android-client-downloads.json' with { type: 'json' };
@@ -40,6 +41,7 @@ export const packageReleases = Object.freeze([
   ...desktopClientDownloads.map(row => Object.freeze(row)),
   ...androidClientDownloads.map(row => Object.freeze(row)),
   ...maidClientDownloads.map(row => Object.freeze(row)),
+  Object.freeze(saoClient),
   ...offlineDownloads.map(row => Object.freeze(row)),
   ...originalReleases.map(row => Object.freeze({ category: 'advanced', ...row })),
 ]);
