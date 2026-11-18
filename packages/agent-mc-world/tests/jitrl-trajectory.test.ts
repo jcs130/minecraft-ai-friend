@@ -1,5 +1,5 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
-import {mkdtempSync,rmSync,readFileSync,readdirSync} from 'node:fs';
+import {mkdtempSync,rmSync,readFileSync,readdirSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {GameMemoryBook,GAME_MEMORY_TOOL,type GameMemoryContext} from '../core/game-memory.ts';
@@ -128,6 +128,31 @@ describe('evidence and lifecycle boundaries',()=>{
     await call('trajectory_score',{...common,offset:1,finalize:false,rewards:[{experienceId:e.ids[1],value:1,reason:'Delayed gain'}]});
     await call('trajectory_score',{...common,rewards:[],finalize:true});await adopt(e.id);
     expect(await call('trajectory_get',{episodeId:e.id})).toMatchObject({scoringRevision:1,activeScore:1,scoringDraft:null});
+  });
+  it('rejects an invalid page before saving it, identifies its exact step and preserves prior pages across restart',async()=>{
+    const begin=await call('trajectory_begin',contract,'page-repair'),episodeId=begin.episodeId;
+    const ids=[op('first'),op('second'),op('cancel',0,0,candidates[1],'cancelled')];
+    await call('trajectory_append',{episodeId,expectedRevision:0,experienceIds:ids});
+    await call('trajectory_close',{episodeId,expectedRevision:1,outcome:'completed',note:'One cancelled effect in the run'});
+    const common={episodeId,expectedScoreRevision:0,evaluator:{id:'critic',model:null,version:'v1'},critique:'Raw outcomes checked'};
+    const reward=(index:number,value:number|null)=>({experienceId:ids[index],value,reason:'Reviewed original outcome'});
+    const page=(offset:number,rewards:unknown[])=>call('trajectory_score',{...common,offset,finalize:false,rewards});
+    await page(0,[reward(0,1)]);
+    await expect(page(1,[reward(1,0),reward(2,1)])).rejects.toMatchObject({feedback:{
+      issue:'null_reward_required',index:2,experienceId:ids[2],expectedValue:null,missing:[1,2],
+      next:{operation:'trajectory_score',offset:1,finalize:false}}});
+    service=new GameMemoryService(new GameMemoryBook(dir),dir);
+    expect(await call('trajectory_get',{episodeId,offset:2})).toMatchObject({steps:[{experienceId:ids[2],requiredRewardValue:null}],
+      scoringDraft:{covered:1,missing:[1,2]}});
+    await page(1,[reward(1,0),reward(2,null)]);
+    // Re-open a real stored draft with a value that the previous version accepted.
+    const file=join(dir,'jitrl-trajectories',readdirSync(join(dir,'jitrl-trajectories'))[0]!,episodeId+'.json');
+    const legacy=JSON.parse(readFileSync(file,'utf8'));legacy.scoringDraft.rewards[2].value=1;
+    writeFileSync(file,JSON.stringify(legacy));
+    const finalize=()=>call('trajectory_score',{...common,rewards:[],finalize:true});
+    await expect(finalize()).rejects.toMatchObject({feedback:{index:2,experienceId:ids[2],next:{offset:2},missing:[]}});
+    await page(2,[reward(2,null)]);
+    expect(await finalize()).toMatchObject({scoringRevision:1,adopted:false});
   });
   it('does not close acceptance as success; native completion can reconcile the same episode',async()=>{
     const b=await call('trajectory_begin',contract,'pending'),ids=[op('p',0,32,candidates[0],'accepted'),op('p2')];
