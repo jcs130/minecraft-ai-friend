@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.101
+
+Action batches report the first invalid input in each of up to eight steps in the same structured and text receipt. Validation keeps dependency numbering, leaves the body queue untouched, and identifies any unchecked tail.
+
 ## 0.5.7-rc.160-preview.100
 
 - Distinguish visible item drops from harvestable blocks in action contracts. Project current material budgets and expose a versioned resource-acquisition practice with independent outcomes.

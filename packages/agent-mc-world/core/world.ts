@@ -138,7 +138,7 @@ import {
   QUEUE_SCHEMA, renderQueue, goalOwnerKind,
   SCOUT_SKILL_DOC, SCOUT_STEP_SCHEMA, SKILL_STEP_SCHEMA,
   type BlueprintDesk, type BlueprintSurvey, type MarkDesk, type MarkLookup,
-  type ParseNote, type QueueHoldToken, type ResourcePlacementPermit, type SkillCall, type TaskAdmissionDecision, type TaskAdmissionRejection, type TaskQueueTail, type TaskReport,
+  type QueueHoldToken, type ResourcePlacementPermit, type SkillCall, type TaskAdmissionDecision, type TaskAdmissionRejection, type TaskQueueTail, type TaskReport,
 } from './executor.ts';
 import { Aborted, SkillBlocked, sleep, type BlueprintPlacementIntent } from './skill-context.ts';
 import { worldStateAt } from './skills-build.ts';
@@ -6948,7 +6948,7 @@ export class MinecraftWorld implements World {
   protected enqueueTool(
     name: 'mc_do' | 'mc_scout',
     args: Record<string, unknown>,
-    parse: (raw: unknown) => { steps: SkillCall[]; notes?: ParseNote[] } | { error: string },
+    parse: (raw: unknown) => ReturnType<typeof parseSteps>,
     methodAdmission?: (decision: TaskAdmissionDecision) => void,
     role?: string,
     controller?: 'system1' | 'system2' | 'human' | 'unknown',
@@ -6961,6 +6961,7 @@ export class MinecraftWorld implements World {
       data: { status: 'invalid_arguments', reason: rule, completed: 0, remaining: null,
         retryable: false, retry_after: null, next_safe_read: null, executed: false,
         errors: correction?.errors ?? [{ path: '/queue', expected: QUEUE_SCHEMA, problem: text, actual: args.queue ?? null }],
+        ...(correction?.uncheckedSteps ? { uncheckedSteps: correction.uncheckedSteps } : {}),
         minimal_legal_example: correction?.minimal_legal_example ?? { steps: [{ skill: 'observe', mode: 'voxels' }] } },
       meta: { admission: { accepted: false, dispatched: false, kind: 'correction', rule,
         ...(correction ? { fieldPath: correction.path, inputSchema: correction.inputSchema } : {}),
@@ -6971,7 +6972,7 @@ export class MinecraftWorld implements World {
     if ('error' in mode) return invalidArguments('arguments.queue', mode.error);
     const parsed = parse(args.steps);
     if ('error' in parsed) {
-      const correction = describeSkillInputCorrection(args.steps, parsed.error);
+      const correction = describeSkillInputCorrection(args.steps, parsed.error, parsed.additionalErrors, parsed.uncheckedSteps);
       // Text-only hosts otherwise lose the structured correction in data/meta
       // and force another model round just to discover the missing fields.
       // A scoped worker may have mc_do without mc_help. Give it the exact
@@ -6981,6 +6982,7 @@ export class MinecraftWorld implements World {
       const help = typeof skill === 'string' ? readSkillHelp({ skill }) : null;
       const actionContract = help && 'text' in help && help.text.length <= 6000 ? { skill, text: help.text } : null;
       const visible = { errors: correction.errors.map(({ path, expected, problem }) => ({ path, expected, problem })),
+        ...(correction.uncheckedSteps ? { uncheckedSteps: correction.uncheckedSteps } : {}),
         minimal_legal_example: correction.minimal_legal_example, ...(actionContract ? { actionContract } : {}) };
       return invalidArguments('arguments.steps', `${parsed.error}\n[参数修正；示例仅演示格式，不是建议目标或自动重试]\n${JSON.stringify(visible)}\nmc_help ${JSON.stringify(correction.helpArguments)}\n整批未提交，当前任务和待办保留。`, correction);
     }
