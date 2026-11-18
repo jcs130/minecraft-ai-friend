@@ -116,6 +116,24 @@ describe('probe filter bounds follow the query, not the until stop-list', () => 
 });
 
 describe('failed input supplies usable correction before touching current work', () => {
+  it.each(['slot', 'windowSlot'])('rejects an unsupported toss %s before dispatching a mixed batch', async key => {
+    const r = methodHarness('1.21.1');
+    try {
+      r.exec.submitDetailed([{ skill: 'goto', at: [8, 64, 0] }], 'append');
+      const before = r.exec.status(), submit = vi.spyOn(r.exec, 'submitDetailed');
+      const result = await r.world.tools().find(t => t.name === 'mc_do')!.handler({
+        queue: 'replace', steps: [{ skill: 'chat', text: 'valid' }, { skill: 'toss', item: 'iron_sword', [key]: 14 }],
+      }, { role: 'test', log: r.host.log });
+      expect(result).toMatchObject({ failed: true, data: { executed: false, completed: 0,
+        errors: [{ path: '/steps/1/' + key, actual: 14 }] }, meta: { admission: { dispatched: false } } });
+      expect(submit).not.toHaveBeenCalled();
+      expect(r.said).toEqual([]);
+      expect(r.exec.status().running?.id).toBe(before.running?.id);
+      expect(r.exec.status().waiting.map(t => t.id)).toEqual(before.waiting.map(t => t.id));
+      expect(parseSteps([{ skill: 'toss', item: 'iron_sword', pick: 'Worn', [key]: null }]))
+        .toMatchObject({ steps: [{ skill: 'toss', item: 'iron_sword', pick: 'Worn' }] });
+    } finally { r.close(); }
+  });
   it('returns independent corrections in one text and structured receipt without replacing current work', async () => {
     const r = methodHarness('1.21.1');
     try {
