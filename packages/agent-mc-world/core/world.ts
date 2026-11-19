@@ -202,6 +202,7 @@ import { DeathBook } from './deaths.ts';
 import { isOwnDeathTranslation } from './death-cause.ts';
 import { ExploreBook } from './explored.ts';
 import { ServerActionWait } from './server-action-wait.ts';
+import { CommandInventoryArrival, type InventoryArrivalMatcher } from './command-inventory-arrival.ts';
 import { zhDimension, zhEntity, zhName } from './names.ts';
 import { offlineUuid } from './client-launch.ts';
 import {
@@ -4362,6 +4363,10 @@ export class MinecraftWorld implements World {
     this.executor = new Executor({
       getBot: () => this.bridge?.bot ?? null,
       chatDispatch: (text, send, context) => this.dispatchServerChat(text, send, context),
+      inventoryCommand: (bot, command, send, signal) => {
+        const match = this.extensionInventoryArrival(command);
+        if (match) return this.commandInventoryArrival.send(bot, match, this.serverQueryMessageSequence, send, signal);
+      },
       admissionCheck: steps => this.extensionAdmission(steps),
       report: (r) => this.onTaskReport(r),
       log,
@@ -4849,6 +4854,8 @@ export class MinecraftWorld implements World {
   protected extensionMessage(_text: string): boolean { return false; }
   /** Server-position feedback after player/private chat provenance exclusions. */
   protected extensionServerFeedback(_text: string): void {}
+  /** A server pack can opt exact transfer commands into receipt and inventory verification. */
+  protected extensionInventoryArrival(_command: string): InventoryArrivalMatcher | undefined { return undefined; }
   /** Optional routing evidence; the common core does not assume a server's chat radius or prefixes. */
   protected extensionChatAudience(_text: string, _serverRenderedText?: string, _direction: 'incoming'|'outgoing'='outgoing'): import('../src/contracts/chat-delivery.ts').ChatAudienceEvidence | undefined { return undefined; }
   private chatAudienceMeta(audience: import('../src/contracts/chat-delivery.ts').ChatAudienceEvidence | undefined): Record<string, unknown> {
@@ -7879,6 +7886,7 @@ export class MinecraftWorld implements World {
               independentQueryReply = this.serverQueries.receive(reply, queryGeneration, bot.username || this.chatName(), querySequence);
               if (!independentQueryReply && !extensionConsumed) unchangedQueryFeedback = this.serverActionWait.noteFeedback(reply);
               this.extensionServerFeedback(reply);
+              this.commandInventoryArrival.observe(bot, querySequence, reply);
             }
             // A correlated read result belongs to its query receipt, not to the
             // unrelated body task that happened to be running at arrival.
@@ -8787,6 +8795,7 @@ export class MinecraftWorld implements World {
   protected lastSetSpawnAt = 0;
   protected lastServerFeedback: { text: string; at: number } | null = null;
   protected readonly serverActionWait = new ServerActionWait();
+  private readonly commandInventoryArrival = new CommandInventoryArrival();
   /** 个人重生点(床/重生锚)。重连后未核实为 undefined，spawnReset 确认失效为 null。 */
   protected personalSpawn: SpawnTarget | null | undefined = undefined;
   /** 自己发起的传送:这段时间里 forcedMove 不急报,反射也不抢寻路。 */

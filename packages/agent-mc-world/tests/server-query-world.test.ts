@@ -152,12 +152,15 @@ describe('independent server query through the public World tool',()=>{
   },7000);
   it('rejects player quotes and wrong sender packets even with matching reply text',async()=>{
     const r=rig(),sent=await call(r,{query:'self'}),requestId=(sent.data as any).requestId;
+    const inventoryFeedback = vi.spyOn((r.world as any).commandInventoryArrival, 'observe');
     r.bot.players={Jojo:{username:'Jojo',uuid:'uuid-player'}} as never;
     const quote={toString:()=> 'STATE Fixture'};
     r.bot.emit('message',quote,'system');r.bot.emit('chat','Jojo','STATE Fixture','',quote);
     r.bot.emit('message',{toString:()=> 'STATE Fixture'},'system','uuid-player');
     await Promise.resolve();expect((await call(r,{requestId})).data).toMatchObject({phase:'sent'});
+    expect(inventoryFeedback).not.toHaveBeenCalled();
     r.bot.emit('message',{toString:()=> 'STATE Fixture'},'system');await Promise.resolve();
+    expect(inventoryFeedback).toHaveBeenCalledWith(r.bot, expect.any(Number), 'STATE Fixture');
     expect((await call(r,{requestId})).data).toMatchObject({phase:'replied'});
   });
   it('does not send unsupported or mutating commands; disconnected calls keep current tasks',async()=>{

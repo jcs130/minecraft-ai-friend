@@ -3,6 +3,7 @@ export { metaOf, entityCustomName, entityIdentityNote } from '../core/animal-sta
 export { bindEntityIdentityResolver, observedEntityIdentity, observedEntityLabel,
   type EntityIdentity, type EntityIdentityResolver } from '../core/entity-identity.ts';
 export { chatDeliveryMessage } from '../core/chat-delivery.ts';
+export type { InventoryArrivalMatcher } from '../core/command-inventory-arrival.ts';
 export type { ChatDeliveryReceipt, ChatDeliveryRejection, ChatAudienceEvidence } from './contracts/chat-delivery.ts';
 export { publishViewerCastCommand, observeViewerCastCommands } from '../core/command-events.ts';
 export { BREAK_ACL_CHANNEL } from '../core/break-permissions.ts';

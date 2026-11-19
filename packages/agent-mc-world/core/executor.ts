@@ -676,7 +676,8 @@ function gotoArrivalNote(call: Extract<SkillCall, { skill: 'goto' }>, target: Ce
     ? `;本次满足目标 ${cellText(target)} 的 1 格邻域条件，未精确站上目标格；精确站位用 exact:true` : '';
 }
 
-async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispatch?: ChatDispatch): Promise<string> {
+async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispatch?: ChatDispatch,
+  inventoryCommand?: import('./command-inventory-arrival.ts').InventoryCommandDispatch): Promise<string> {
   const bodyBlocked = nativeBodyBlockedReason(bot, call.skill);
   if (bodyBlocked) throw new SkillBlocked(bodyBlocked);
   // A dispatched travel can change worlds within one task. Freeze each operation, not the whole task.
@@ -1081,7 +1082,10 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       const next = ctx.batch?.steps[(ctx.batch.index ?? 0) + 1];
       const needsWindow = call.text.startsWith('/') && consumesOpenWindow(next);
       const beforeWindow = bot.currentWindow;
-      sendChat(bot, call.text, chatDispatch, ctx.batch ? { taskId: ctx.batch.taskId, stepIndex: ctx.batch.index } : undefined);
+      const send = () => sendChat(bot, call.text, chatDispatch, ctx.batch ? { taskId: ctx.batch.taskId, stepIndex: ctx.batch.index } : undefined);
+      const arrival = call.text.startsWith('/') ? inventoryCommand?.(bot, call.text, send, ctx.signal) : undefined;
+      if (arrival) return await arrival;
+      send();
       publishViewerCastCommand(bot, call.text);
       if (needsWindow && bot.currentWindow !== beforeWindow && storageWindow(bot.currentWindow)) {
         ctx.holdWindow?.(bot.currentWindow!);
@@ -2004,6 +2008,7 @@ interface ExecutorOptions {
   serverFeedbackSince?: SkillContext['serverFeedbackSince'];
   /** Called only at actual chat transport dispatch, never while merely queued. */
   chatDispatch?: ChatDispatch;
+  inventoryCommand?: import('./command-inventory-arrival.ts').InventoryCommandDispatch;
   /** 个人重生点那一格(World 持有);受理刻的重生锚闸与技能回执共读一份 */
   spawnAnchor?: SkillContext['spawnAnchor'];
   /** 蓝图施工面(World 持有);build 的蓝图形态、两道受理刻的闸与采集搭车共读一份 */
@@ -5824,7 +5829,7 @@ export class Executor {
             || ['chat', 'observe', 'probe', 'look', 'wait'].includes(call.skill) ? null : sampleEffect(bot, effectCell);
           let skillResult: string;
           try {
-            skillResult = await runSkill(bot, run, ctx, this.opts.chatDispatch).finally(() => releaseTread?.());
+            skillResult = await runSkill(bot, run, ctx, this.opts.chatDispatch, this.opts.inventoryCommand).finally(() => releaseTread?.());
             if (run.skill === 'observe') observations.set(i, JSON.parse(skillResult));
           }
           finally {

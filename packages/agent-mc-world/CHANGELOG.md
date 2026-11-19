@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.110
+
+Server extensions can match an inventory transfer command to its system receipt. The next body step starts after the reported items appear in the player's inventory. An unconfirmed transfer reports the missing evidence and is never resubmitted automatically.
+
 ## 0.5.7-rc.160-preview.109
 
 Game memory, waypoint notes, photography, the message inbox and isolated practice declare their scheduling requirements independently of write permissions. Reading navigation settings leaves the running path and persisted settings intact. Queued scouting preserves pending travel, held inputs and active scripts. A server command refusal leaves real containers, books and dialogs open.
