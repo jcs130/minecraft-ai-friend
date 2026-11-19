@@ -2261,6 +2261,12 @@ const MAP_ICON_ZH: Record<string, string> = {
   jungle_temple: '丛林神庙', swamp_hut: '女巫小屋',
 };
 
+const SCOUT_QUEUE_SCHEMA = {
+  type: 'string', enum: ['append'], default: 'append',
+  description: '侦察只按提交顺序排到队尾（可省略 queue）。立即观察可用 mc_observe。'
+    + '需要显式调整动作队列时，由身体控制者使用 mc_do 的 queue；以试算代替执行时，为支持的技能显式设置 dryRun:true。',
+};
+
 export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   TOOL_HELP_TOOL,
   PHOTO_TOOL,
@@ -2404,8 +2410,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
           description: SCOUT_SKILL_DOC,
           items: SCOUT_STEP_SCHEMA,
         },
-        // 同一条队列就是同一套三态:试算不该另有一份排队语义要记
-        queue: QUEUE_SCHEMA,
+        queue: SCOUT_QUEUE_SCHEMA,
       },
       examples: [{ steps: [{ skill: 'observe', ...SPATIAL_QUERY_EXAMPLE }] }],
       required: ['steps'],
@@ -6973,7 +6978,7 @@ export class MinecraftWorld implements World {
       text: this.toolLog(name, args, `[${name} 失败] ${text}`), failed: true,
       data: { status: 'invalid_arguments', reason: rule, completed: 0, remaining: null,
         retryable: false, retry_after: null, next_safe_read: null, executed: false,
-        errors: correction?.errors ?? [{ path: '/queue', expected: QUEUE_SCHEMA, problem: text, actual: args.queue ?? null }],
+        errors: correction?.errors ?? [{ path: '/queue', expected: name === 'mc_scout' ? SCOUT_QUEUE_SCHEMA : QUEUE_SCHEMA, problem: text, actual: args.queue ?? null }],
         ...(correction?.uncheckedSteps ? { uncheckedSteps: correction.uncheckedSteps } : {}),
         minimal_legal_example: correction?.minimal_legal_example ?? { steps: [{ skill: 'observe', mode: 'voxels' }] } },
       meta: { admission: { accepted: false, dispatched: false, kind: 'correction', rule,
@@ -6981,7 +6986,10 @@ export class MinecraftWorld implements World {
         recovery: [{ tool: 'mc_help', arguments: correction?.helpArguments ?? {},
           text: correction?.hint ?? '按工具签名纠正参数；整批未提交，前面的步骤也未执行。' }] } },
     });
-    const mode = parseQueueMode(args.queue);
+    if (name === 'mc_scout' && args.queue != null && args.queue !== 'append') {
+      return invalidArguments('arguments.queue', SCOUT_QUEUE_SCHEMA.description);
+    }
+    const mode = parseQueueMode(name === 'mc_scout' ? 'append' : args.queue);
     if ('error' in mode) return invalidArguments('arguments.queue', mode.error);
     const parsed = parse(args.steps);
     if ('error' in parsed) {
@@ -7082,10 +7090,10 @@ export class MinecraftWorld implements World {
       rejection = rejected;
       methodAdmission?.({ accepted: value, receipt: '', retryAfterMs, completedImmediately: completed,
         rejection: rejected, taskId });
-    }, () => {
+    }, name === 'mc_scout' ? undefined : () => {
       if (!methodAdmission && this.methodOwnsBody()) this.methods.stop('新的身体任务已受理，原身体方法取消');
       this.interruptIdle('task');
-    });
+    }, name);
     // 受理回执附当前队列状态，与结局回执和世界快照共用渲染。
     const queue = renderQueue(this.executor.status());
     const receipt = this.toolLog(

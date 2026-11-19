@@ -1223,10 +1223,16 @@ interface TaskObservation {
   targetBlock: string | null;
 }
 
+function isObservationStep(step: SkillCall): boolean {
+  return step.skill === 'probe' || step.skill === 'observe' || ('dryRun' in step && step.dryRun === true);
+}
+
 /** 排着队还没轮到的一件事 */
 interface QueuedTask {
   id: number;
   steps: SkillCall[];
+  /** A queued mc_scout job can observe while another controller owns game input. */
+  scout?: true;
   program?: ExecutorProgram;
   /** 受理时的维度、站位和完整参数；失败回顾不能借用另一地点或方法的原因。 */
   priorContext?: string;
@@ -2288,8 +2294,9 @@ export class Executor {
    */
   submit(steps: SkillCall[], mode: QueueMode = 'replace', wrote?: unknown,
     onDecision?: (accepted: boolean, retryAfterMs?: number, completedImmediately?: true,
-      rejection?: TaskAdmissionRejection, taskId?: number) => void, beforeEnqueue?: () => void): string {
-    const decision = this.submitDetailed(steps, mode, wrote, beforeEnqueue);
+      rejection?: TaskAdmissionRejection, taskId?: number) => void, beforeEnqueue?: () => void,
+    source: 'mc_do' | 'mc_scout' = 'mc_do'): string {
+    const decision = this.submitDetailed(steps, mode, wrote, beforeEnqueue, source);
     onDecision?.(decision.accepted, decision.retryAfterMs, decision.completedImmediately, decision.rejection, decision.taskId);
     return decision.receipt;
   }
@@ -2305,9 +2312,14 @@ export class Executor {
   }
 
   submitDetailed(steps: SkillCall[], mode: QueueMode = 'replace', wrote?: unknown,
-    beforeEnqueue?: () => void): TaskAdmissionDecision {
+    beforeEnqueue?: () => void, source: 'mc_do' | 'mc_scout' = 'mc_do'): TaskAdmissionDecision {
     if (this.stopped) return { receipt: '[mc_do 失败] World 未启动', accepted: false,
       rejection: { kind: 'wait', rule: 'world.stopped' } };
+    const scout = source === 'mc_scout';
+    if (scout && (mode !== 'append' || !steps.every(isObservationStep))) {
+      return { receipt: 'mc_scout 仅接受加入队尾的观察或试算。', accepted: false,
+        rejection: { kind: 'correction', rule: 'scout.observations' } };
+    }
     const at = Date.now();
     // 首步的相对锚点按受理位置冻结；后续步骤仍按各自执行时的位置解析。
     const p = this.opts.getBot()?.entity?.position;
@@ -2336,7 +2348,7 @@ export class Executor {
       return { receipt: `[${this.clock(at)}] ${satisfiedGoto}`, accepted: true, completedImmediately: true };
     }
     const id = this.opts.nextId();
-    const task: QueuedTask = { id, steps: [...calls], enqueuedAt: at,
+    const task: QueuedTask = { id, steps: [...calls], enqueuedAt: at, ...(scout ? {scout: true} : {}),
       priorContext: this.priorOutcomeContext(calls) ?? undefined };
     const emptyFindHold = this.emptyFindNote(task.steps, at);
     const directionalSweep = this.directionalSweepNote(task.steps, at);
@@ -4362,7 +4374,7 @@ export class Executor {
       this.queue.splice(last + 1, 0, continuation);
       const body = this.opts.bodyState?.();
       const goalOwner = goalOwnerKind(drain.bot);
-      if (!this.opts.busyWith?.() && this.holdReason() === null && !this.escaping && !task.escape.active
+      if (!task.scout && !this.opts.busyWith?.() && this.holdReason() === null && !this.escaping && !task.escape.active
         && !body?.combatActive && !body?.environmentOwnerKind && (goalOwner === null || goalOwner === 'task')) {
         releaseBody(drain.bot, '检查点收尾完成', this.opts.diag);
       }
@@ -4444,7 +4456,9 @@ export class Executor {
     if (!next) return;
     // 反射自保时会在没有任务的情况下下寻路目标;新任务一律接管,否则一边合成
     // 一边被上一轮的逃跑路线带着走
-    dropGoal(this.opts.getBot(), 'task', `新任务#${next.id}接管身体`, this.opts.diag);
+    if (!next.scout) {
+      dropGoal(this.opts.getBot(), 'task', `新任务#${next.id}接管身体`, this.opts.diag);
+    }
     const flag: AbortFlag = { controller: new AbortController(), aborted: false, by: null, epoch: this.executionEpoch };
     const now = Date.now();
     // 打转账只记第一次开跑:断点续做是同一单接着跑,不是又下了一单
@@ -4493,7 +4507,7 @@ export class Executor {
     if (t.program) { this.reportCancelled(t, by, null); return; }
     const idem = reRunnable(t.steps[t.stepIndex]);
     this.frozen = {
-      id: t.id, steps: t.steps, enqueuedAt: t.enqueuedAt, startedAt: t.startedAt,
+      id: t.id, steps: t.steps, scout: t.scout, enqueuedAt: t.enqueuedAt, startedAt: t.startedAt,
       resumeFrom: boundary ?? (idem ? t.stepIndex : t.stepIndex + 1),
       interrupted: boundary !== null || idem ? null : t.stepIndex,
       progress: boundary !== null ? t.progress : { step: t.stepIndex + 1, count: t.count },
@@ -4529,7 +4543,7 @@ export class Executor {
     // 断点只有一个槽。已经被别人(战斗)占着时不抢,照旧往下跑 —— 抢了等于把那一单丢掉
     if (this.stopped || this.frozen) return false;
     this.frozen = {
-      id: t.id, steps: t.steps, enqueuedAt: t.enqueuedAt, startedAt: t.startedAt,
+      id: t.id, steps: t.steps, scout: t.scout, enqueuedAt: t.enqueuedAt, startedAt: t.startedAt,
       resumeFrom: i, interrupted: null,
       queueTailNotified: t.queueTailNotified,
       absorbed: t.absorbed, stepLog: t.stepLog, intended: t.intended,
@@ -4667,8 +4681,8 @@ export class Executor {
     this.opts.diag?.write({ lane: 'task', event: 'blocked', taskId: task.id, msg: text,
       data: { reason, step }, incident: true });
     this.opts.report({ kind: 'blocked', text, taskId: task.id, ...(repeatFailure ? { repeatFailure } : {}) });
+    this.cleanupDrainedBody(task);
     this.pump();
-    if (!this.task && this.queue.length === 0) this.opts.onDrain?.();
     return true;
   }
 
@@ -5211,10 +5225,12 @@ export class Executor {
     t.flag.aborted = true;
     t.flag.by = by;
     t.flag.controller.abort();
-    this.cancelActiveAttack();
     if (this.checkpointDrain?.task === t) this.checkpointDrain.continuation = null;
     this.task = null;
-    releaseBody(this.opts.getBot(), `中止任务#${t.id}(${by})`, this.opts.diag);
+    if (!t.scout) {
+      this.cancelActiveAttack();
+      releaseBody(this.opts.getBot(), `中止任务#${t.id}(${by})`, this.opts.diag);
+    }
     t.program?.cancel(by);
   }
 
@@ -5798,7 +5814,7 @@ export class Executor {
             if (history) this.opts.diag?.write({ lane: 'skill', event: 'collect-history-advice', taskId: id,
               msg: history, data: { call: run } });
           }
-          const tread = stepTargetCell(bot, call);
+          const tread = task.scout ? null : stepTargetCell(bot, call);
           const releaseTread = tread ? holdTreadWater(bot, tread) : null;
           // Keep readback separate from the skill verdict. A right-click may complete while
           // its target stays unchanged; invisible server effects and missing reads stay unknown.
@@ -6087,7 +6103,7 @@ export class Executor {
     // 终态四分。没做成 > 做了一部分 > 完成:一单里最重的那个结局说了算。
     // 无事可做不影响终态——一单全是「附近没有掉落物」,那一单就是做完了。
     const hasTrials = steps.some(step => 'dryRun' in step && step.dryRun === true);
-    const onlyTrials = hasTrials && steps.every(step => step.skill === 'probe' || step.skill === 'observe' || 'dryRun' in step && step.dryRun === true);
+    const onlyTrials = hasTrials && steps.every(isObservationStep);
     if (blockedSteps.length === 0 && partialSteps.length === 0) {
       this.finish(flag, {
         kind: 'done',
@@ -6371,9 +6387,16 @@ export class Executor {
       ...(report.kind === 'done' && t && lastLanding
         && (lastLanding.outcome === 'ok' || lastLanding.outcome === 'noop')
         ? { lastSkill: t.steps[lastLanding.step - 1]?.skill } : {}) });
+    this.cleanupDrainedBody(t);
     this.pump();
-    // pump 没接到新任务 = 队列空了:兜底关掉忘关的容器窗口(窗口卫生)
-    if (!this.task && !this.checkpointDrain && this.queue.length === 0) this.opts.onDrain?.();
+  }
+
+  private cleanupDrainedBody(completed: QueuedTask | null): void {
+    // Finish body-owned window cleanup at the last body task. A later scout must
+    // not close a window opened by another controller during observation.
+    if (completed && !completed.scout && !this.task && !this.checkpointDrain && this.queue.every(next => next.scout)) {
+      this.opts.onDrain?.();
+    }
   }
 }
 
