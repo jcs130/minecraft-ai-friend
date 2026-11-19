@@ -109,7 +109,7 @@ try {
         [IO.Compression.ZipFileExtensions]::ExtractToFile($archiveEntry,$archiveTarget,$true)
     }
 } finally { $archiveZip.Dispose() }
-$out = Join-Path $root 'AgentFriend-0.4.50-party-outings.jar'
+$out = Join-Path $root 'AgentFriend-0.4.51-trial-party-confirm.jar'
 & $jar --create --file $out -C $build .
 if ($LASTEXITCODE -ne 0) { throw 'jar failed' }
 Get-FileHash -LiteralPath $out -Algorithm SHA256 | Select-Object Path,Hash

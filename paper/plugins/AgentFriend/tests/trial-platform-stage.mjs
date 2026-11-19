@@ -48,10 +48,28 @@ try {
    await qa('menu');await until(()=>host.currentWindow,'trial menu');
    check('native menu exposes the actual start button',host.currentWindow.slots[16]?.name==='lime_concrete');
    await host.clickWindow(16,0,0);
+  }else if(phase==='candidate' && scenario==='starter-missing'){
+   await qa('menu');await until(()=>host.currentWindow,'initial menu');await host.clickWindow(16,0,0);
   }else host.chat('/mycli arena start');
+  if(phase==='candidate' && ['missing','starter-missing','creative'].includes(scenario)){
+   const pending=await until(()=>host.lines.slice(start).find(l=>l.startsWith('MC_TRIAL_ASSEMBLY ')),'entry preview');
+   const preview=JSON.parse(pending.slice('MC_TRIAL_ASSEMBLY '.length));
+   check(scenario+' first warning leaves everyone and their items in place',!preview.runStarted&&preview.phase==='confirmation_required'
+     && JSON.stringify(await qa('status'))===JSON.stringify(before));
+   check(scenario+' names the actual member and reason',preview.members.some(m=>m.name===(scenario==='starter-missing'?'PlatformHostQA':'PlatformMateQA')
+     && (scenario==='creative'?!m.canEnterOnConfirmation:m.reason==='equipment_missing'&&m.missingEquipment.length>0&&m.canEnterOnConfirmation)));
+   if(scenario==='starter-missing'){
+    await until(()=>host.currentWindow?.slots[16]?.name==='orange_concrete','controller-accessible confirmation');
+    await host.clickWindow(16,0,0);
+   }else{
+    host.chat('/mycli arena start');await wait(300);
+    check(scenario+' repeated unconfirmed command is read-only',!(await qa('status')).active);
+    host.chat(preview.nextCommand);
+   }
+  }
   await wait(1100);const after=await qa('status'),lines=host.lines.slice(start);report.cases.push({scenario,before,after,lines});
   const [a,b,c]=after.players;
-  if(['far','near'].includes(scenario))check(scenario+' both platform players really join floor one',a.participant&&b.participant&&a.y===69&&b.y===69);
+  if(['far','near'].includes(scenario)||phase==='candidate'&&['missing','starter-missing'].includes(scenario))check(scenario+' both platform players really join floor one',a.participant&&b.participant&&a.y===69&&b.y===69);
   else if(['starter-missing','all-cancel','bridge'].includes(scenario))check(scenario+' does not start or pull companions',!after.active&&!a.participant&&!b.participant);
   else check(scenario+' rejected or excluded companion is not enrolled',a.participant&&!b.participant&&b.y===before.players[1].y);
   check(scenario+' bridge passerby stays outside',!c.participant&&c.y===before.players[2].y);
@@ -60,13 +78,30 @@ try {
   if(scenario==='bridge')check('arrival bridge guidance asks to walk inside, not repeatedly teleport',lines.some(l=>l.includes('穿过入口门')&&l.includes('-590,91,-313')&&!l.includes('/mycli goto arena')));
   if(['cancel','redirect','all-cancel'].includes(scenario))check('initiator receives named transfer failure',lines.some(l=>l.includes('PlatformMateQA')&&l.includes('传送未成功')));
   if(phase!=='baseline'&&['far','near','missing','cancel','redirect','all-cancel'].includes(scenario)){
-   const receipt=lines.find(l=>l.startsWith('MC_TRIAL_ASSEMBLY '));check('structured assembly outcome returned for '+scenario,!!receipt);
+   const receipt=lines.findLast(l=>l.startsWith('MC_TRIAL_ASSEMBLY '));check('structured assembly outcome returned for '+scenario,!!receipt);
    const parsed=JSON.parse(receipt.slice('MC_TRIAL_ASSEMBLY '.length));check('receipt counts actual arrivals for '+scenario,parsed.enteredCount===after.players.filter(p=>p.participant).length);
   }
   if(scenario==='near'){
    host.chat('/mycli arena start');await wait(350);const again=await qa('status');
    check('repeated start neither moves nor duplicates participants',JSON.stringify(again)===JSON.stringify(after));
   }
+ }
+ if(phase==='candidate'){
+  await qa('missing');
+  async function preview(player,cmd){
+   const at=player.lines.length;player.chat(cmd);
+   const s=await until(()=>player.lines.slice(at).find(l=>l.startsWith('MC_TRIAL_ASSEMBLY ')),'additional preflight');
+   return JSON.parse(s.slice('MC_TRIAL_ASSEMBLY '.length));
+  }
+  const original=await preview(host,'/mycli arena start');
+  const outsider=await preview(bots[1],original.nextCommand);
+  check('another teammate cannot consume the initiator confirmation',!outsider.runStarted&&outsider.confirmationId!==original.confirmationId);
+  await qa('outside');
+  const revised=await preview(host,original.nextCommand);
+  check('changed party gets fresh confirmation and no teleport',!revised.runStarted&&original.confirmationId!==revised.confirmationId
+     &&!revised.members.some(m=>m.name==='PlatformMateQA')&&!(await qa('status')).active);
+  const finish=await preview(host,revised.nextCommand);
+  check('revised roster admits only players still on the platform',finish.runStarted&&finish.enteredCount===1&&(await qa('status')).players[0].participant);
  }
  }
 } finally {
