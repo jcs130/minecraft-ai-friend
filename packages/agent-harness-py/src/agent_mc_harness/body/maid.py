@@ -56,6 +56,11 @@ VERBS: dict[str, tuple[str, tuple[str, ...], bool]] = {
 }
 PENDING = {"pending", "reserved", "accepted", "queued", "running", "dispatched", "sent"}
 FAILED = {"rejected", "failed", "refused", "blocked", "cancelled", "expired"}
+DIRECT_CAST_REFUSALS = frozenset({
+    "paused_by_owner_or_world", "rpg_unavailable", "rpg_guard_unavailable", "rpg_staff_required", "rpg_protected_area",
+    "rpg_spell_unavailable", "rpg_spell_level_required", "rpg_spell_cooldown", "rpg_mana_low", "rpg_no_clear_target",
+    "rpg_equipment_changed", "rpg_hit_blocked",
+})
 
 
 def native_argument_schema(schema: dict[str, Any], action: str) -> dict[str, Any]:
@@ -111,6 +116,39 @@ def fishing_completed(receipt: dict) -> bool:
     return (receipt.get("status") == "completed" and receipt.get("goalCompleted") is True
             and isinstance(detail, dict) and detail.get("verifiedCatch") is True
             and isinstance(detail.get("nativeLoot"), list) and bool(detail["nativeLoot"]))
+
+
+def legacy_cast_outcome(receipt: Any, *, owner: str, maid: str, request: str, spell: Any) -> ActionStatus | None:
+    """Older direct-cast receipts stored the observed effect under a nonterminal status."""
+    if not isinstance(receipt, dict) or not isinstance(spell, str) or not spell:
+        return None
+    expected = {"namespace": "native-body", "maidId": maid, "ownerId": owner, "action": "cast",
+                "requestId": request, "operationId": request, "status": "unknown"}
+    if (type(receipt.get("schema")) is not int or receipt["schema"] != 1
+            or any(receipt.get(key) != value for key, value in expected.items())
+            or receipt.get("terminal") is not False or receipt.get("retryAllowed") is not False):
+        return None
+    detail = receipt.get("observation")
+    if not isinstance(detail, dict) or "status" in detail or detail.get("spellId") != spell:
+        return None
+    try:
+        args = json.loads(receipt.get("arguments", ""))
+    except (TypeError, ValueError):
+        return None
+    if args != {"action": "cast", "maidId": maid, "requestId": request, "spellId": spell}:
+        return None
+    state = detail.get("state")
+    hits, healed = detail.get("hitTargetIds"), detail.get("healedTargetIds")
+    if (isinstance(state, str) and state in DIRECT_CAST_REFUSALS and detail.get("error") == state
+            and detail.get("effectsApplied") is False and hits in (None, []) and healed in (None, [])):
+        return "failed"
+    targets = hits if state == "rpg_cast_hit" else healed if state == "rpg_cast_healed" else None
+    mana = detail.get("manaRemaining")
+    if (detail.get("effectsApplied") is True and isinstance(targets, list) and targets
+            and all(isinstance(target, str) and UUID.fullmatch(target) for target in targets)
+            and type(mana) in (int, float) and 0 <= mana < math.inf):
+        return "completed"
+    return None
 
 
 class MaidBody(BaseBody):
@@ -382,6 +420,11 @@ class MaidBody(BaseBody):
                     or data.get("maidId", self.maid_id) != self.maid_id or data.get("ownerId", self.owner_id) != self.owner_id):
                 reply = {"ok": False, "status": "unknown", "reason": "action_reply_mismatch_query_original_request"}
         status = reply_status(reply, bool(result.get("isError")))
+        verified_cast = None
+        if self._native and args["action"] == "cast" and status == "unknown" and not result.get("isError"):
+            verified_cast = legacy_cast_outcome((reply or {}).get("data"), owner=self.owner_id, maid=self.maid_id,
+                                                request=request_id, spell=args.get("spellId"))
+            status = verified_cast or status
         if self._native and args["action"] == "walk" and status == "completed":
             data = reply.get("data") or {}
             if data.get("status") != "completed" or data.get("goalCompleted") is not True:
@@ -395,6 +438,8 @@ class MaidBody(BaseBody):
         if not write and status == "unknown":
             return self._failed_read(request_id, action.verb, args["action"])
         text = str((reply or {}).get("reason") or (reply or {}).get("error") or (reply or {}).get("text") or f"{args['action']} {status}")
+        if verified_cast:
+            text = reply["data"]["observation"]["state"]
         if args["action"] == "context" and isinstance(reply, dict) and reply.get("ok"):
             self._apply_context(reply.get("data") or {}, emit=True)
         if args["action"] == "workshop" and status == "completed":
@@ -443,6 +488,11 @@ class MaidBody(BaseBody):
             return previous
         if self._native and (not isinstance(data.get("action"), str) or not data.get("action")):
             return previous
+        if self._native and maid_action == "cast" and original is not None and not result.get("isError"):
+            verified = legacy_cast_outcome(data, owner=self.owner_id, maid=self.maid_id, request=request_id,
+                                           spell=original.args.get("spellId"))
+            if verified:
+                return self.settle(request_id, verified, data["observation"]["state"], {"maidAction": "cast", "reply": reply}) or previous
         status = reply_status(data, bool(result.get("isError")))
         if data.get("action") == "make" and status == "completed" and not workshop_completed(data, request_id):
             return previous
