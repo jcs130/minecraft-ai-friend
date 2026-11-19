@@ -37,7 +37,7 @@ async function spawn(id,owner,name,initialPack,x){
  assert((await rc('minecraft:data get entity '+id+' UUID')).includes('[I;'),'synthetic spawn');
  await rc('minecraft:data modify entity '+id+' NoAI set value 1b');
  await rc('minecraft:data modify entity '+id+' Sitting set value 1b');
- await rc('minecraft:execute in minecraft:overworld run tp '+id+' '+x+' 90 103.5');
+ await rc('minecraft:execute in minecraft:overworld run minecraft:tp '+id+' '+x+' 90 103.5');
  await pack(id,initialPack);
 }
 async function pack(id,value){await rc('minecraft:data modify entity '+id+' SoundPackId set value "'+value+'"');}
@@ -107,20 +107,20 @@ try{
  n=marks();await rc('packqa chat '+f.maidId);
  await until('native chat uses selected LLM and TTS',()=>tts(n,f.maidId,shamare).length,120000);
  check('native chat manager reaches both server providers',events().slice(n).some(e=>e.path==='/v1/chat/completions'&&e.status===200)&&tts(n,f.maidId,shamare).length===1);
- const worldHas=async(who,dim)=>(await rc('minecraft:execute in minecraft:'+dim+' if entity @e[distance=0..,nbt={UUID:'+ints(who)+'},limit=1] run time query daytime')).match(/\d+/);
- await rc('minecraft:execute in minecraft:the_nether run forceload add 100 100');
- await rc('minecraft:execute in minecraft:the_nether run fill 96 89 96 106 89 106 minecraft:stone');
- await rc('minecraft:execute in minecraft:the_nether run fill 96 90 96 106 92 106 minecraft:air');
- await rc('minecraft:execute in minecraft:the_nether run tp '+owner.username+' 101.5 90 101.5');
+ const worldHas=async(who,dim)=>(await rc('minecraft:execute as '+who+' at @s if dimension minecraft:'+dim+' run minecraft:data get entity @s UUID')).includes('[I;');
+ await rc('minecraft:execute in minecraft:the_nether run minecraft:forceload add 100 100');
+ await rc('minecraft:execute in minecraft:the_nether run minecraft:fill 96 89 96 106 89 106 minecraft:stone');
+ await rc('minecraft:execute in minecraft:the_nether run minecraft:fill 96 90 96 106 92 106 minecraft:air');
+ await rc('minecraft:execute in minecraft:the_nether run minecraft:tp '+owner.username+' 101.5 90 101.5');
  await sleep(800);
- check('a sitting maid stays behind',await worldHas(f.maidId,'overworld'));
- owner.quit('Synthetic reconnect');await until('old owner left',async()=>!(await rc('list')).includes(owner.username));
+ check('a sitting maid stays behind when her owner reaches the Nether',await worldHas(f.ownerId,'the_nether')&&await worldHas(f.maidId,'overworld'));
+ owner.quit('Synthetic reconnect');await until('old owner left',async()=>!(await rc('minecraft:list')).includes(owner.username));
  await rc('minecraft:data modify entity '+f.maidId+' NoAI set value 0b');
  await rc('minecraft:data modify entity '+f.maidId+' Sitting set value 0b');
  const returned=await login(f.owner);
  await until('original following maid catches up after a cross-world reconnect',()=>worldHas(f.maidId,'the_nether'),18000);
  check('reconnect keeps the original owner and chosen pack',(await state(f.maidId,'SoundPackId')).includes('shamare_pack')&&returned._client.uuid===f.ownerId);
- await rc('minecraft:execute in minecraft:overworld run tp '+returned.username+' 101.5 90 101.5');
+ await rc('minecraft:execute in minecraft:overworld run minecraft:tp '+returned.username+' 101.5 90 101.5');
  await until('original body follows back',()=>worldHas(f.maidId,'overworld'),18000);
  check('other owner and maid remained in their world',await worldHas(f.secondId,'overworld'));
  const log=fs.readFileSync(path.join(lab,'logs/latest.log'),'utf8');
