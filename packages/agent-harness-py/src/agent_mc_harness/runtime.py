@@ -86,6 +86,7 @@ class PlanContext(BaseModel):
     decision: Decision | None = None  # route level, requested/effective thinking tier, output budget profile
     snapshot: BodySnapshot | None = None
     body_results: list[dict[str, Any]] = Field(default_factory=list, max_length=6)
+    recent_companion_speech: list[str] = Field(default_factory=list, max_length=8)
     party_context: dict[str, Any] | None = None
     lessons: list[str] = Field(default_factory=list)  # active versioned lessons (self-iteration store), trial or adopted
 

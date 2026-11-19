@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import httpx
@@ -7,8 +8,9 @@ import pytest
 
 from agent_mc_harness.body.maid import workshop_completed
 from agent_mc_harness.body.numen import PortResult, measured_attack, measured_inventory, measured_item_use, measured_meal
+from agent_mc_harness.conversation import repeats_companion_speech
 from agent_mc_harness.journal import ActionJournal
-from agent_mc_harness.models import ActionSupport, BodyAction, BodyEvent, BodySnapshot, Capabilities, LifecycleCaps, NativeAction
+from agent_mc_harness.models import ActionReceipt, ActionSupport, BodyAction, BodyEvent, BodySnapshot, Capabilities, LifecycleCaps, NativeAction
 from agent_mc_harness.npc import IDLE_GOAL, MAID_BOND_TONES, ModelClient, NpcPlanner, NpcRole, owner_bond, routine_catch, routine_meal
 from agent_mc_harness.runtime import Intent, PlanContext
 
@@ -73,19 +75,50 @@ def test_companion_can_speak_when_settled_near_owner_without_repeating_every_idl
         idle = Intent(id="qa-idle", agent="fixture", goal=IDLE_GOAL)
         try:
             assert [step.tool for step in await planner(idle, context)] == ["body:chat"]
+            context.recent_companion_speech = ["等你准备好，我们再出发！"]
             context.snapshot.position["x"] += 16
             assert await planner(idle, context) == []  # Different position still respects the global interval.
             planner.next_companion_check_in = 0
             raw["companion"]["state"] = "native_defence"
             assert await planner(idle, context) == []
             raw["companion"]["state"] = "following_ready"
+            assert await planner(idle, context) == []
+            context.snapshot.position["x"] += 16
+            context.recent_companion_speech = ["魔力快见底了，我先歇一下。"]
+            planner.next_companion_check_in = 0
             assert [step.tool for step in await planner(idle, context)] == ["body:chat"]
             planner.next_companion_check_in = 0
             assert await planner(idle, context) == []
-            assert opportunities == ["near_partner", None, None, "settled_after_travel", None]
+            assert opportunities == ["near_partner", None, None, "settled_after_travel", "settled_after_travel", None]
         finally:
             await client.close()
     asyncio.run(run())
+
+
+def test_companion_check_in_can_change_subject_but_does_not_paraphrase_the_same_mana_warning():
+    past = ["可米，魔力快见底了，先缓一缓。"]
+    assert repeats_companion_speech("可米，我躲一会儿回蓝。", past)
+    assert repeats_companion_speech("可米，法力不够了。", past)
+    assert not repeats_companion_speech("魔力补满了，刚好继续赶路。", past)
+    assert not repeats_companion_speech("这一路有树荫，走起来舒服多啦。", past)
+
+
+def test_companion_discussion_window_uses_delivered_public_speech_in_its_own_scope(tmp_path):
+    journal = ActionJournal(tmp_path / "dialogue.sqlite3")
+    now = datetime.now(UTC)
+    try:
+        for number, (body, age, listeners, status) in enumerate([
+            ("maid", 1, 1, "completed"), ("maid", 0, 0, "completed"), ("maid", 21, 1, "completed"),
+            ("other", 0, 1, "completed"), ("maid", 0, 1, "failed"),
+        ]):
+            action = BodyAction(verb="chat", args={"text": f"line {number}"}, request_id=f"speech-{number}")
+            journal.begin(body, action, [])
+            data = {"reply": {"data": {"observation": {"deliveredPlayers": listeners},
+                                       "observedAt": (now - timedelta(minutes=age)).isoformat()}}}
+            journal.settle(body, ActionReceipt(request_id=action.request_id, verb="chat", status=status, terminal=True, data=data))
+        assert journal.recent_companion_speech("maid") == ["line 0"]
+    finally:
+        journal.close()
 
 
 @pytest.mark.parametrize(("points", "level"), [(0, 0), (64, 1), (192, 2), (384, 3)])

@@ -21,6 +21,8 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sound.sampled.*;
 import local.tlmcompat.qiandengji.ReceiptJournal;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.entity.Mob;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -100,7 +102,9 @@ final class NativeMaidSpeech implements AutoCloseable {
         out.addProperty("voiceGainDb",gainDb);
         out.addProperty("partnerRangeBlocks",MaidConversationRange.PARTNER);out.addProperty("visitorRangeBlocks",MaidConversationRange.VISITOR);
         out.addProperty("ambientSource",originalClips==null?"native_event_chinese_tts":"original_chinese_recordings");
-        out.addProperty("combatTrigger","confirmed_damage");out.addProperty("combatMinimumGapSeconds",30);out.addProperty("combatMaximumAgeSeconds",12);
+        out.addProperty("combatTrigger","confirmed_damage_with_scene_change");
+        out.addProperty("combatMinimumGapSeconds",MaidCombatSpeech.GAP/1_000_000_000L);
+        out.addProperty("combatMaximumAgeSeconds",MaidCombatSpeech.MAX_AGE/1_000_000_000L);
         out.addProperty("ambientIdleEnabled",false);out.addProperty("ambientMinimumGapSeconds",90);
         out.addProperty("replyCharacterLimit",MaidShortReply.LIMIT);out.addProperty("waitingReply",waiting.peek()!=null);out.addProperty("maximumReplyWaitSeconds",10);
         if(originalClips!=null)out.addProperty("ambientPack",originalClips.pack());
@@ -201,14 +205,21 @@ final class NativeMaidSpeech implements AutoCloseable {
     }
     private void finish(Job job,String state,String reason){if(job.finished)return;job.finished=true;try{finishRecord(job,state,reason);}catch(Exception error){if(active==job||active==null){lastState="unknown";lastReason="speech_receipt_unavailable_no_replay";}}if(active==job)active=null;}
     private void cancel(String reason){Job job=active;if(job==null)return;job.cancelled=true;job.audible=Set.of();if(job.media!=null)job.media.cancel(true);if(job.player!=null)job.player.stopPlaying();finish(job,"cancelled",reason);}
-    void combat(EntityMaid maid, String mode, float damage) {
-        if (!Bukkit.isPrimaryThread() || !valid(maid)) return;
+    void combat(EntityMaid maid, Mob target, String mode, float damage) {
+        if (!Bukkit.isPrimaryThread() || !valid(maid) || maid.level()!=target.level()) return;
         long now = System.nanoTime();
         List<Player> audience = maid.getBukkitEntity().getLocation().getNearbyPlayers(MaidConversationRange.PARTNER).stream()
             .filter(p -> p.isOnline() && !p.isDead() && p.canSee(maid.getBukkitEntity()) && MaidConversationRange.hears(maid,p)).toList();
         boolean busy = active != null || waiting.peek() != null || lastSpeech != Long.MIN_VALUE && now-lastSpeech < 10_000_000_000L;
-        String text = combatPolicy.hit(now,damage,mode,!audience.isEmpty(),busy);
+        Player partner = audience.stream().filter(p -> ownerId.equals(p.getUniqueId())).findFirst().orElse(null);
+        double partnerHealth = partner != null ? fraction(partner.getHealth(),partner.getMaxHealth()) : Double.NaN;
+        var hit = new MaidCombatSpeech.Hit(maid.level().dimension().location().toString(),
+            BuiltInRegistries.ENTITY_TYPE.getKey(target.getType()).toString(),mode,damage,
+            fraction(target.getHealth(),target.getMaxHealth()),partnerHealth,
+            fraction(maid.getHealth(),maid.getMaxHealth()),maid.distanceToSqr(target)<=9);
+        String text = combatPolicy.hit(now,hit,!audience.isEmpty(),busy);
         if (text == null) return;
+        text = MaidShortReply.text(text);
         lastSpeech = now;
         nextAmbient = now + MaidAmbientPolicy.GLOBAL_GAP;
         String operation = "c_" + UUID.randomUUID();
@@ -216,6 +227,9 @@ final class NativeMaidSpeech implements AutoCloseable {
         plugin.publishSceneSpeech(maid,operation,text,audience.size());
         plugin.conversationSpoken();
         submit(maid,operation,text,"combat",null);
+    }
+    private static double fraction(double health,double maxHealth) {
+        return Double.isFinite(health)&&Double.isFinite(maxHealth)&&health>=0&&maxHealth>0 ? health/maxHealth : Double.NaN;
     }
     private void ambient(EntityMaid maid,String sound){
         if(!Bukkit.isPrimaryThread()||!valid(maid)||System.nanoTime()<nextAmbient||active!=null||waiting.peek()!=null)return;

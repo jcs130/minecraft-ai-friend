@@ -17,7 +17,7 @@ from uuid import UUID
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .conversation import CONVERSATION_POLICY
+from .conversation import COMPANION_SPEECH_POLICY, CONVERSATION_POLICY, repeats_companion_speech
 from .body import adventure
 from .journal import ActionJournal, work_key
 from .models import BodyEvent, Scope
@@ -369,9 +369,13 @@ class NpcPlanner:
                                   "limits": caps.limits} if caps else None}
         if check_in:
             facts["companionOpportunity"] = check_in
-            facts["goal"] = ("You are beside your active companion in a quiet moment. Offer one brief, natural check-in or a useful "
-                             "next step based only on the current scene. This is an initiative from you, not a reply to old chat. "
-                             "Do not repeat a generic readiness message or claim to have performed work. Return [] if there is nothing to add.")
+            facts["goal"] = ("You are beside your companion in a quiet moment. Speak briefly about one fresh change or observation. "
+                             "A small reaction is welcome if it follows from the scene. Use recentCompanionSpeech to choose a different "
+                             "subject. Prefer silence to another readiness check, mana update or invitation with the same meaning.")
+        companion_style = (role.default_native_guard and isinstance(native_context, dict)
+                           and isinstance(native_context.get("conversation"), dict))
+        if companion_style:
+            facts["recentCompanionSpeech"] = context.recent_companion_speech
         if role.adventure_partner:
             facts["adventuring"] = {"partnerAccount": role.adventure_partner,
                 "purpose": "You are an independent adventurer. Choose a concrete, feasible next activity whenever healthy and idle. "
@@ -429,7 +433,7 @@ class NpcPlanner:
                         "Keep the usual attention rules and permissions at every bond level. "
                         f"Speak at most {role.max_speech_chars} characters, only when relevant. "
                         "Unknown actions may only be queried under their original request IDs. Native tasks: " + json.dumps(role.native_tasks)
-                        + "\n" + CONVERSATION_POLICY},
+                        + "\n" + CONVERSATION_POLICY + ("\n" + COMPANION_SPEECH_POLICY if companion_style else "")},
                        {"role": "user", "content": json.dumps(facts, ensure_ascii=False, default=str)}]}
         if len(payload["messages"][1]["content"]) > 60000:
             raise ValueError("npc_observation_budget_exceeded")
@@ -453,7 +457,8 @@ class NpcPlanner:
             raise ValueError("npc_plan_schema")
         steps = reviewed_steps(role, context, plan["steps"])
         if check_in:
-            steps = [step for step in steps if step.tool == "body:chat"][:1]
+            steps = [step for step in steps if step.tool == "body:chat"
+                     and not repeats_companion_speech(step.args["text"], context.recent_companion_speech)][:1]
         elif intent.goal == IDLE_GOAL and not context.dialogue and not (context.party_context or {}).get("message"):
             inactive = set() if adventure.partner_nearby(role.adventure_partner, context) else {"body:chat"}
             if already_guarding(current_native_state(context)):
@@ -652,6 +657,8 @@ class NpcHost:
         body_id = str(self.role.body_id)
         dialogue = [self.pending_dialogue[key] for key in intent.source_events if key in self.pending_dialogue]
         context.dialogue = dialogue
+        if self.role.default_native_guard:
+            context.recent_companion_speech = self.journal.recent_companion_speech(body_id)
         if self.social and self.role.social_memory and dialogue:
             contacts = [stamped_contact(event, body_id, self.social.registered) for event in dialogue]
             pairs = {(contact["peerType"], contact["peerId"]) for contact in contacts if contact}

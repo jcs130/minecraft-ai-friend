@@ -117,6 +117,18 @@ class ActionJournal:
         )
         return [(BodyAction.model_validate_json(action), ActionReceipt.model_validate_json(receipt)) for action, receipt in rows]
 
+    def recent_companion_speech(self, body: str) -> list[str]:
+        # Private replies do not use this public, native body speech receipt.
+        rows = self.db.execute("""
+            SELECT json_extract(action,'$.args.text') FROM dispatch
+            WHERE body=? AND json_extract(action,'$.verb')='chat'
+              AND json_extract(receipt,'$.status')='completed'
+              AND json_extract(receipt,'$.data.reply.data.observation.deliveredPlayers')>0
+              AND julianday(json_extract(receipt,'$.data.reply.data.observedAt'))>=julianday('now','-20 minutes')
+            ORDER BY rowid DESC LIMIT 8
+        """, (body,))
+        return [text[:100] for (text,) in rows if isinstance(text, str) and text.strip()]
+
     def last_adventure(self, body: str, kind: str) -> dict:
         row = self.db.execute("SELECT receipt FROM dispatch WHERE body=? AND receipt IS NOT NULL "
                               "AND json_extract(action,'$.name') IN ('adventure_query','adventure_action') "

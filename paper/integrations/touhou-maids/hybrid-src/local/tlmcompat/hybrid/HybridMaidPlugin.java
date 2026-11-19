@@ -165,7 +165,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     }
     void companionHit(EntityMaid maid,net.minecraft.world.entity.Mob target,String mode,float damage){
         if(social!=null)social.combatObserved(maid,target,mode,damage);
-        if(speech!=null)speech.combat(maid,mode,damage);
+        if(speech!=null)speech.combat(maid,target,mode,damage);
     }
     void speakPublicReply(EntityMaid maid,String operation,String text,Set<UUID> audience){if(speech!=null)speech.reply(maid,operation,text,audience);}
     JsonObject nativeSpeechState(EntityMaid maid){if(speech!=null)return speech.describe(maid);var state=new JsonObject();state.addProperty("enabled",false);state.addProperty("reason","voice_not_configured");return state;}
