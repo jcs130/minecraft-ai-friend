@@ -589,12 +589,17 @@ class MaidBody(BaseBody):
                     relay = str(row["eventId"])[len(prefix):] if str(row["eventId"]).startswith(prefix) else ""
                     channel = ("public" if relay.startswith("public_") else "voice" if relay.startswith("voice_")
                                else "npc_chat" if relay.startswith("npc_") else "chat")
+                    # Native inbox operations use sender UUID + operation ID for addressed chat/talk.
+                    # The qdvoice relay instead supplies observations that may have merely been overheard.
+                    direct = (self._native and isinstance(speaker, str) and UUID.fullmatch(speaker)
+                              and re.fullmatch(re.escape(speaker) + r":[A-Za-z0-9_-]{1,64}", str(row["eventId"])))
                     self.emit("dialogue", str(row.get("text") or "")[:1000], severity=2,
                               data={"eventId": row["eventId"], "maidId": self.maid_id, "ownerId": self.owner_id,
                                     "speaker": row.get("speaker") or row.get("senderName"),
-                                    "speakerId": row.get("speakerId") or row.get("senderUuid"),
+                                    "speakerId": speaker,
                                     "channel": channel, "listenerId": self.maid_id,
-                                    **({"deliveryScope": "nearby"} if relay else {}),
+                                    **({"deliveryScope": "addressed", "recipientId": self.maid_id} if direct
+                                       else {"deliveryScope": "nearby"} if relay else {}),
                                     "receivedAt": row.get("receivedAt"), "source": row.get("source") or "untrusted_game_dialogue",
                                     "trusted": False,
                                     "serverAttributed": isinstance(self.bridge, NativeMaidBridge),

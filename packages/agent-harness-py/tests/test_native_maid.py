@@ -127,6 +127,31 @@ def old_cast_receipt(args, observation):
             "observation": {"spellId": args["spellId"], **observation}}
 
 
+def test_native_inbox_distinguishes_legacy_addressed_chat_from_overheard_voice(run):
+    async def scenario():
+        server = NativeServer()
+        server.actions += ["inbox"]
+        client = make(server)
+        events = []
+        unsubscribe = client.subscribe(events.append)
+        try:
+            await client.spawn()
+            server.messages = [
+                {"eventId": f"{OWNER}:near_test", "senderUuid": OWNER, "text": "能一起过来吗？"},
+                {"eventId": f"qdvoice:{OWNER}:voice_test", "senderUuid": OWNER, "text": "可米，等一下。"},
+                {"eventId": f"{OTHER}:near_test", "senderUuid": OWNER, "text": "我在这。"},
+            ]
+            await client.poll_once()
+            direct, ambient, mismatch = [event.data for event in events if event.kind == "dialogue"]
+            assert direct["recipientId"] == MAID and direct["deliveryScope"] == "addressed"
+            assert "recipientId" not in ambient and ambient["deliveryScope"] == "nearby"
+            assert "recipientId" not in mismatch
+        finally:
+            unsubscribe()
+            await client.destroy()
+    run(scenario())
+
+
 @pytest.mark.parametrize(("observation", "expected"), [
     ({"state": "rpg_cast_hit", "effectsApplied": True, "hitTargetIds": [OTHER], "manaRemaining": 2.3}, "completed"),
     ({"state": "rpg_cast_healed", "effectsApplied": True, "healedTargetIds": [OWNER], "manaRemaining": 0}, "completed"),

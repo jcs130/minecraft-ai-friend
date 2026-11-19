@@ -1,13 +1,16 @@
+import asyncio
+import json
 from uuid import uuid4
 
+import httpx
 import pytest
 
 from agent_mc_harness.body.maid import workshop_completed
 from agent_mc_harness.body.numen import PortResult, measured_attack, measured_inventory, measured_item_use, measured_meal
 from agent_mc_harness.journal import ActionJournal
-from agent_mc_harness.models import BodyAction, BodyEvent, BodySnapshot, Capabilities, LifecycleCaps, NativeAction
-from agent_mc_harness.npc import MAID_BOND_TONES, NpcRole, owner_bond, routine_catch, routine_meal
-from agent_mc_harness.runtime import PlanContext
+from agent_mc_harness.models import ActionSupport, BodyAction, BodyEvent, BodySnapshot, Capabilities, LifecycleCaps, NativeAction
+from agent_mc_harness.npc import IDLE_GOAL, MAID_BOND_TONES, ModelClient, NpcPlanner, NpcRole, owner_bond, routine_catch, routine_meal
+from agent_mc_harness.runtime import Intent, PlanContext
 
 
 def activity(kind, name, *, raw, food=None, entities=None):
@@ -43,6 +46,46 @@ def test_maid_fishing_requires_prepared_native_conditions_and_preserves_manual_s
     context.snapshot.raw["fishing"]["canStartNativeCatch"] = True
     context.snapshot.raw["sitting"] = True
     assert routine_catch(role, context) is None
+
+
+def test_companion_can_speak_when_settled_near_owner_without_repeating_every_idle_turn():
+    async def run():
+        raw = {"nativeGuardDelegated": True, "canMove": True, "passenger": False, "sitting": False, "homeMode": False,
+               "taskId": "touhou_little_maid:idle", "ownerDistance": 3, "companion": {"state": "following_ready"},
+               "follow": {"active": True, "temporaryWait": False}, "conversation": {"partnerRange": 24}}
+        op, context = activity("maid", "guard", raw=raw)
+        op = NpcRole.model_validate(dict(op.model_dump(), default_native_guard=True, allowed_tools=["body:native:guard", "body:chat"]))
+        context.capabilities.actions["chat"] = ActionSupport(native="speak")
+        context.snapshot.position = {"x": 1.5, "y": 70.0, "z": -2.5}
+        context.snapshot.dimension = "minecraft:overworld"
+        opportunities = []
+
+        def answer(request):
+            payload = json.loads(request.content)
+            facts = json.loads(payload["messages"][1]["content"])
+            opportunities.append(facts.get("companionOpportunity"))
+            speech = '{"steps":[{"tool":"body:chat","args":{"text":"等你准备好，我们再出发。"}}]}'
+            return httpx.Response(200, json={"choices": [{"message": {"content": speech}}]})
+
+        client = ModelClient("http://127.0.0.1:4000/v1", "test", http=httpx.AsyncClient(transport=httpx.MockTransport(answer)))
+        planner = NpcPlanner(op, client)
+        planner.next_companion_check_in = 0
+        idle = Intent(id="qa-idle", agent="fixture", goal=IDLE_GOAL)
+        try:
+            assert [step.tool for step in await planner(idle, context)] == ["body:chat"]
+            context.snapshot.position["x"] += 16
+            assert await planner(idle, context) == []  # Different position still respects the global interval.
+            planner.next_companion_check_in = 0
+            raw["companion"]["state"] = "native_defence"
+            assert await planner(idle, context) == []
+            raw["companion"]["state"] = "following_ready"
+            assert [step.tool for step in await planner(idle, context)] == ["body:chat"]
+            planner.next_companion_check_in = 0
+            assert await planner(idle, context) == []
+            assert opportunities == ["near_partner", None, None, "settled_after_travel", None]
+        finally:
+            await client.close()
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize(("points", "level"), [(0, 0), (64, 1), (192, 2), (384, 3)])
