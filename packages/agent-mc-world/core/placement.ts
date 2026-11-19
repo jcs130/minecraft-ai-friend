@@ -129,8 +129,7 @@ export function usableReference(bot: Bot, cell: Cell, face: BlockFace): ReturnTy
 /**
  * 六个面里第一个能当参照的;一个都没有时 null。
  *
- * 归因用:`placeIntoCell` 的 null 混着两件事 —— 一包都没发出去(没有参照面)与
- * 发了三包被服务端拒。两者她要换的招不一样,回执不许都写成「服务端不认」。
+ * 此读数只描述此刻的邻格，不能用于推断此前的放置是否发起。
  */
 export function placeReferenceFace(bot: Bot, cell: Cell, face?: BlockFace): BlockFace | null {
   return (face ? [face] : FACE_TRY_ORDER).find((f) => usableReference(bot, cell, f) !== null) ?? null;
@@ -148,6 +147,17 @@ export async function placeIntoCell(
   bot: Bot, cell: Cell, material: string, ctx: SkillContext, face?: BlockFace,
   onDeferred?: (error: PlacementRetryDeferred) => void,
 ): Promise<BlockFace | null> {
+  const outcome = await tryPlaceIntoCell(bot, cell, material, ctx, face);
+  if (outcome.kind === 'deferred') onDeferred?.(outcome.error);
+  return outcome.kind === 'placed' ? outcome.face : null;
+}
+
+type CellPlacement = { kind: 'placed'; face: BlockFace } | { kind: 'no-reference' | 'unconfirmed' }
+  | { kind: 'deferred'; error: PlacementRetryDeferred };
+
+async function tryPlaceIntoCell(
+  bot: Bot, cell: Cell, material: string, ctx: SkillContext, face?: BlockFace,
+): Promise<CellPlacement> {
   const became = (): boolean => {
     const b = blockAtCell(bot, cell);
     return b != null && matchPlacedMaterialName(bot, material, b.name);
@@ -179,13 +189,14 @@ export async function placeIntoCell(
         continue;
       }
       await sleep(150);
-      if (became()) return f;
+      if (became()) return { kind: 'placed', face: f };
     }
   } finally {
     bot.setControlState('sneak', false);
   }
-  if (deferred && !attempted) onDeferred?.(deferred);
-  return null;
+  if (attempted) return { kind: 'unconfirmed' };
+  if (deferred) return { kind: 'deferred', error: deferred };
+  return { kind: 'no-reference' };
 }
 
 /**
@@ -329,7 +340,7 @@ export class Upkeep {
 
   constructor(private readonly bot: Bot, private readonly ctx: SkillContext) {}
 
-  /** 脚下没底 → 把那一格垫上。垫成了才 true;没料/服务端不认/落在工地里都进 `why` */
+  /** 垫脚格只有在回读确认为所用材料后才计入完成。 */
   async footing(cell: Cell): Promise<boolean> {
     // 身体占据的放置格会被服务端拒绝，须在发包前检查 occupiedByMe。
     if (occupiedByMe(this.bot, cell)) {
@@ -351,17 +362,18 @@ export class Upkeep {
       this.missed.set('footing', stock.why);
       return false;
     }
-    let placed = false;
+    let outcome: CellPlacement | undefined;
     try {
       await this.bot.equip(stock.item, 'hand');
-      placed = (await placeIntoCell(this.bot, cell, stock.item.name, this.ctx)) !== null;
+      outcome = await tryPlaceIntoCell(this.bot, cell, stock.item.name, this.ctx);
     } finally {
-      await stock.permit.finish(placed);
+      await stock.permit.finish(outcome?.kind === 'placed');
     }
-    if (!placed) {
-      this.missed.set('footing', placeReferenceFace(this.bot, cell) === null
-        ? `${cellText(cell)} 六个面都没有能贴着放的实心方块,这一包没发出去`
-        : `拿${zhName(stock.item.name)}放了,服务端不认`);
+    if (outcome.kind !== 'placed') {
+      const reason = outcome.kind === 'deferred' ? outcome.error.message
+        : outcome.kind === 'no-reference' ? `${cellText(cell)} 放置时没有可贴的实心面，本次未发包；可另选参照或路线`
+        : `尝试用${zhName(stock.item.name)}填充 ${cellText(cell)}，未确认放置成功；回读：${blockAtCell(this.bot, cell)?.name ?? '区块未加载'}。可另选实心参照或路线`;
+      this.missed.set('footing', reason);
       return false;
     }
     this.padded++;
