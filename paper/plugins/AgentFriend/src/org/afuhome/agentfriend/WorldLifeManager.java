@@ -11,6 +11,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
@@ -75,6 +76,49 @@ final class WorldLifeManager implements Listener {
     }
     private boolean enabled(String name) { return Bukkit.getPluginManager().isPluginEnabled(name); }
     RpgCampaign story() { return story; }
+    private static final Set<String> GATHERINGS =
+            Set.of("qd-trial-gather", "qd-ruins-gather", "qd-explorers-gather");
+    record WorldEvent(String id, String name, long endsAt) {
+        String receiptId() { return id + ":" + endsAt; }
+        long remainingSeconds(long now) { return Math.max(0, (endsAt - now + 999) / 1000); }
+        boolean gathering() { return GATHERINGS.contains(id); }
+        String command() {
+            return switch (id) {
+                case "qd-trial-gather" -> "/mycli arena status";
+                case "qd-ruins-gather", "qd-clear-sight" -> "/mycli dungeon list";
+                case "qd-explorers-gather", "qd-traveler" -> "/mycli waypoint list";
+                default -> "/mycli world list";
+            };
+        }
+
+        JsonObject state(long now) {
+            JsonObject row = new JsonObject();
+            row.addProperty("id", id);
+            row.addProperty("name", name);
+            row.addProperty("eventId", receiptId());
+            row.addProperty("expiresAt", endsAt);
+            row.addProperty("remainingSeconds", remainingSeconds(now));
+            row.addProperty("progressMeaning", "event_time_remaining");
+            row.addProperty("isTaskProgress", false);
+            row.addProperty("participationAutomatic", false);
+            row.addProperty("nextCommand", command());
+            return row;
+        }
+    }
+    private long nextGatheringRead;
+    private List<WorldEvent> gatheringSnapshot = List.of();
+
+    List<WorldEvent> gatherings(long now) {
+        if (now < nextGatheringRead) return gatheringSnapshot;
+        nextGatheringRead = now + 5000;
+        try {
+            gatheringSnapshot = enabled("WorldEvents")
+                    ? activeEvents(now).stream().filter(WorldEvent::gathering).toList() : List.of();
+        } catch (ReflectiveOperationException | RuntimeException unavailable) {
+            gatheringSnapshot = List.of();
+        }
+        return gatheringSnapshot;
+    }
     private void emit(Player p, String type, JsonObject data) {
         data.addProperty("type", type);
         if (data.toString().length() > 3200)
@@ -142,6 +186,7 @@ final class WorldLifeManager implements Listener {
         out.addProperty("practiceCommand", "/mycli world practice start");
         out.addProperty("npcCommand", "/mycli world npcs");
         out.addProperty("eventsCommand", "/mycli world events");
+        if (plugin.agentCoach() != null) out.add("latestRelease", plugin.agentCoach().releaseNotice());
         out.addProperty("photosCommand", "/mycli world photos");
         boolean cameraReady = plugin.photoCamera() != null && plugin.photoCamera().ready();
         out.addProperty("automaticPhotoCapture", cameraReady);
@@ -163,21 +208,39 @@ final class WorldLifeManager implements Listener {
         for(var row:rows)p.sendMessage("§e"+row.name()+"§f："+row.command()+"；"+row.note());
         if(query.page()*6<entries.size())p.sendMessage("§7下一页："+next);
     }
-    private void events(Player p,boolean json)throws ReflectiveOperationException{
+    private List<WorldEvent> activeEvents(long now) throws ReflectiveOperationException {
         Plugin provider=Bukkit.getPluginManager().getPlugin("WorldEvents");
         Object manager=property(provider,"getEventManager");Object observed=property(manager,"getActiveEventsMap");
         if(!(observed instanceof Map<?,?> active))throw new IllegalStateException("WorldEvents active state unavailable");
-        JsonObject out=new JsonObject();out.addProperty("status",active.isEmpty()?"idle":"active");out.addProperty("queryOnly",true);
-        JsonArray rows=new JsonArray();long now=System.currentTimeMillis();int count=0;
-        for(Object value:active.values()){
-            if(count++>=4)break;Object event=property(value,"getEvent");String id=String.valueOf(property(event,"getName"));
-            JsonObject row=new JsonObject();row.addProperty("id",id);row.addProperty("name",String.valueOf(property(event,"getDisplayName")));
-            row.addProperty("remainingSeconds",Math.max(0,(((Number)property(value,"getEndTime")).longValue()-now+999)/1000));
-            row.addProperty("progressMeaning","event_time_remaining");row.addProperty("isTaskProgress",false);
-            row.addProperty("participationAutomatic",false);
-            String command=id.equals("qd-trial-gather")?"/mycli arena status":id.equals("qd-ruins-gather")?"/mycli dungeon list":id.equals("qd-explorers-gather")||id.equals("qd-traveler")?"/mycli waypoint list":"/mycli world list";
-            row.addProperty("nextCommand",command);rows.add(row);
-            if(!json)p.sendMessage("§e[活动] "+row.get("name").getAsString()+"；剩"+row.get("remainingSeconds").getAsLong()+"秒。命令："+command);
+        var result = new java.util.ArrayList<WorldEvent>();
+        for (Object value : active.values()) {
+            long endsAt = ((Number) property(value, "getEndTime")).longValue();
+            if (endsAt <= now) continue;
+            Object event = property(value, "getEvent");
+            result.add(new WorldEvent(String.valueOf(property(event, "getName")),
+                    String.valueOf(property(event, "getDisplayName")), endsAt));
+            if (result.size() == 4) break;
+        }
+        return result;
+    }
+
+    private void events(Player p,boolean json)throws ReflectiveOperationException{
+        long now = System.currentTimeMillis();
+        List<WorldEvent> active = activeEvents(now);
+        JsonObject out = new JsonObject();
+        out.addProperty("status", active.isEmpty() ? "idle" : "active");
+        out.addProperty("queryOnly", true);
+        out.addProperty("dungeonStartPolicy", "player_initiated");
+        JsonArray rows = new JsonArray();
+        for (WorldEvent event : active) {
+            rows.add(event.state(now));
+            if (!json) p.sendMessage("§e[活动] " + event.name() + " · 剩" + event.remainingSeconds(now) + "秒。查看 " + event.command());
+        }
+        if (plugin.agentCoach() != null) {
+            JsonObject release = plugin.agentCoach().releaseNotice();
+            out.add("latestRelease", release);
+            if (!json && release.has("lines")) for (var line : release.getAsJsonArray("lines"))
+                p.sendMessage("§7" + line.getAsString());
         }
         out.add("events",rows);out.addProperty("instruction","集结自愿参加；公告不会报名、传送或推进任务。集结结束不终止已开始的副本。");
         if(json)emit(p,"events",out);

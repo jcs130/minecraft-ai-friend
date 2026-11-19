@@ -69,6 +69,8 @@ final class AgentCoach implements Listener {
         onboarding = new OnboardingGuide(plugin);
     }
 
+    JsonObject releaseNotice() { return onboarding.releaseNotice(); }
+
     void start() {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         long now = System.currentTimeMillis();
@@ -272,6 +274,7 @@ final class AgentCoach implements Listener {
                 continue;
             }
             if (onboarding.poll(player, now, state.quietUntil)) continue;
+            if (pollGathering(player, state, now)) continue;
             if (pollAdventure(player, state, now)) continue;
             if (!state.idleSent && now - state.lastActivity >= seconds("idle-seconds", 900)) {
                 if (send(player, now, "idle", 0,
@@ -355,6 +358,29 @@ final class AgentCoach implements Listener {
         sendAdventure(player, now, rotation.hint());
         data.set(adventureIndexKey, PersistentDataType.INTEGER, rotation.nextIndex());
         return true;
+    }
+
+    private boolean pollGathering(Player player, Session session, long now) {
+        if (!plugin.getConfig().getBoolean("coach.adventure-enabled", true)
+                || !plugin.isRegisteredAgent(player) || !onboarding.safe(player, now, session.quietUntil)
+                || !onboarding.gapReady(player, now) || plugin.skillAssessments().busy(player)) return false;
+        var data = player.getPersistentDataContainer();
+        for (var event : plugin.worldLife().gatherings(now)) {
+            if (event.remainingSeconds(now) < 30) continue;
+            var key = new NamespacedKey(plugin, "coach_gathering_" + event.id().replace('-', '_'));
+            if (event.endsAt() <= data.getOrDefault(key, PersistentDataType.LONG, 0L)) continue;
+            JsonObject notice = event.state(now);
+            notice.addProperty("type", "adventure_gathering");
+            notice.addProperty("recipient", player.getUniqueId().toString());
+            notice.addProperty("requiresDecision", true);
+            player.sendMessage("§a[当前集结] " + event.name() + " · 剩" + event.remainingSeconds(now)
+                    + "秒。自愿前往，可先查 " + event.command());
+            player.sendMessage("MC_COACH " + notice);
+            data.set(key, PersistentDataType.LONG, event.endsAt());
+            onboarding.delivered(player, now);
+            return true;
+        }
+        return false;
     }
 
     private void sendAdventure(Player player, long now, GuildAdventureGuide.Hint hint) {

@@ -130,6 +130,21 @@ final class OnboardingGuide implements Listener {
                 && !plugin.dungeonParticipant(p) && !plugin.pvpParticipant(p) && now >= quietUntil
                 && p.getOpenInventory().getTopInventory().getType() == InventoryType.CRAFTING;
     }
+    JsonObject releaseNotice() {
+        int revision = settings.getInt("release-revision", 0);
+        JsonObject notice = new JsonObject();
+        notice.addProperty("revision", revision);
+        if (revision > 0) {
+            notice.addProperty("eventId", "adventure-release-" + revision);
+            var lines = new JsonArray();
+            settings.getStringList("release-notice").forEach(lines::add);
+            notice.add("lines", lines);
+        }
+        notice.addProperty("nextCommand", "/mycli world events --json");
+        notice.addProperty("requiresDecision", true);
+        return notice;
+    }
+
     boolean pollRelease(Player p,long now,long quietUntil){
         int release=settings.getInt("release-revision",0);
         if(release<=p.getPersistentDataContainer().getOrDefault(releaseRevision,PersistentDataType.INTEGER,0)||!target(p)
@@ -141,6 +156,12 @@ final class OnboardingGuide implements Listener {
             if(!current.has("available")||!current.get("available").getAsBoolean())return false;
         }
         for(String line:settings.getStringList("release-notice"))p.sendMessage(line);
+        if (plugin.isRegisteredAgent(p)) {
+            JsonObject notice = releaseNotice();
+            notice.addProperty("type", "adventure_release");
+            notice.addProperty("recipient", p.getUniqueId().toString());
+            p.sendMessage("MC_COACH " + notice);
+        }
         p.getPersistentDataContainer().set(releaseRevision,PersistentDataType.INTEGER,release);delivered(p,now);
         session.nextCheck=now+ms("poll-seconds");return true;
     }

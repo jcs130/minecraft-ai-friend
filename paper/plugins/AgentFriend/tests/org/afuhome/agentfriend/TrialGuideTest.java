@@ -9,6 +9,12 @@ public final class TrialGuideTest {
         for(var row:cases.entrySet()){var result=TrialGuide.next(facts(row.getKey()));check(result.get("reason").equals(row.getValue()),row.getKey());check(Boolean.TRUE.equals(result.get("queryOnly")),"read only "+row.getKey());}
         var ready=TrialGuide.next(facts("ready"));check(ready.get("entryMana").equals(0),"actual normal entry is free");check(ready.get("travelMana").equals(6)&&ready.get("checkpointMana").equals(8),"travel costs distinct");
         check(ready.get("nextCommand").equals("/mycli arena start")&&Boolean.TRUE.equals(ready.get("canStart")),"one exact action");
+        check(ready.get("startAvailability").equals("open")&&ready.get("startPolicy").equals("player_initiated"),"an idle tower can be started by players");
+        check(ready.get("startDescription").toString().contains("可主动开场"),"readable idle message tells the player how to open a run");
+        check(TrialGuide.next(facts("cooldown")).get("startAvailability").equals("cooldown"),"cooldown distinct from a ready idle tower");
+        check(TrialGuide.next(facts("unbuilt")).get("startAvailability").equals("unavailable"),"unbuilt tower remains unavailable");
+        check(TrialGuide.next(facts("busy")).get("startAvailability").equals("in_progress"),"other teams still hold the live run");
+        check(TrialGuide.next(facts("far_ready")).get("startAvailability").equals("open")&&!Boolean.TRUE.equals(TrialGuide.next(facts("far_ready")).get("canStart")),"global opening independent of personal eligibility");
         check(ready.get("groupRule").equals("lobby_platform")&&!ready.containsKey("radius"),"whole platform instead of a misleading button radius");
         check(TrialGuide.route().contains("缺条件者点名提示")&&TrialGuide.route().contains("桥上不计入"),"grouping boundary and rejection feedback explained");
         check(TrialGuide.next(facts("far_ready")).get("nextCommand").equals(TrialGuide.TRAVEL),"no crypt routing");
