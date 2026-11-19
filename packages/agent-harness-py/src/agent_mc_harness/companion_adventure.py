@@ -33,6 +33,11 @@ def label(value, limit=80):
     return value if isinstance(value, str) and 0 < len(value) <= limit and value.isprintable() else None
 
 
+def mentions_activity(name: str, speech: str) -> bool:
+    short = name.partition("·")[0].removeprefix("原版").removeprefix("模组")
+    return name in speech or (len(short) >= 4 and short in speech)
+
+
 def saved_activity(run, *, until, now):
     if run:
         if run.get("fault") or run.get("storageFault") is True:
@@ -167,31 +172,35 @@ class CompanionAdventure:
         if active:
             return result
         if fresh:
-            result["choices"] = self._suggestions(landmarks, dungeons, tower, outcomes, active_task, completed, dimension, recent_speech)
-            # A new recorded ending can open a conversation without another walk.
-            endings = [{"name": "试炼塔", "endedAt": unsigned(recent_trial.get("endedAt")),
+            endings = [{"id": tower["id"], "name": tower["name"], "endedAt": unsigned(recent_trial.get("endedAt")),
                         "reason": label(recent_trial.get("reason"))}]
-            endings.extend({"name": row["name"], "endedAt": unsigned(row.get("endedAt")), "reason": label(row.get("reason"))}
-                           for row in recent_dungeons)
+            endings.extend({"id": row["id"], "name": row["name"], "endedAt": unsigned(row.get("endedAt")),
+                            "reason": label(row.get("reason"))} for row in recent_dungeons)
             latest = max(endings, key=lambda row: row["endedAt"])
+            avoid = None
             if 0 <= now - latest["endedAt"] <= MAX_CHECKPOINT_AGE_MS:
+                # New endings can open a conversation at the same position, with a different destination.
                 result["lastActivityEndedAt"] = latest["endedAt"]
                 result["recentEnding"] = latest
+                avoid = latest["id"]
+            result["choices"] = self._suggestions(landmarks, dungeons, tower, outcomes, active_task,
+                                                 completed, dimension, recent_speech, avoid)
         else:
             result["choices"] = landmarks
         return result
 
-    def _suggestions(self, landmarks, dungeons, tower, outcomes, active_task, completed, dimension, recent_speech):
+    def _suggestions(self, landmarks, dungeons, tower, outcomes, active_task, completed, dimension, recent_speech, avoid):
         def mentioned(place):
-            return any(place["name"] in speech for speech in recent_speech)
+            return any(mentions_activity(place["name"], speech) for speech in recent_speech)
 
         def priority(site):
             last = mapping(outcomes.get(site["id"]))
             return last.get("reason") == "completed", site["world"] != dimension, unsigned(last.get("endedAt")), site["id"]
 
         choices = list(landmarks)
-        choices += sorted((site for site in dungeons if site["status"] == "verify_entry" and not mentioned(site)), key=priority)[:2]
-        if tower["status"] == "verify_entry" and not mentioned(tower):
+        choices += sorted((site for site in dungeons if site["status"] == "verify_entry" and site["id"] != avoid
+                           and not mentioned(site)), key=priority)[:2]
+        if tower["status"] == "verify_entry" and tower["id"] != avoid and not mentioned(tower):
             choices.append(tower)
         tasks = self.catalogue["tasks"]
         published = rows(self.catalogue["season"].get("contracts"))
@@ -214,7 +223,7 @@ class CompanionAdventure:
             if (not name or not key or not ID.fullmatch(key) or row.get("world") not in WORLDS.values()
                     or row.get("precision") != "horizontal_structure_reference" or row.get("entranceVerified") is not False
                     or not all(type(row.get(axis)) is int and abs(row[axis]) < 29999000 for axis in ("x", "z"))
-                    or any(name in speech for speech in recent_speech)):
+                    or any(mentions_activity(name, speech) for speech in recent_speech)):
                 continue
             places.append({"kind": "landmark", "id": key, "name": name, "world": row["world"],
                            "x": row["x"], "z": row["z"], "verifiedAt": verified_at,

@@ -52,7 +52,7 @@ def source(path, **changes):
     }})
     (path / "exploration-landmarks.json").write_text(json.dumps({
         "schemaVersion": 1, "source": "formal_anvil_structure_and_block_records", "verifiedAt": "2026-11-18T12:00:00Z",
-        "places": [{"id": "shipwreck", "name": "原版沉船", "world": "minecraft:overworld",
+        "places": [{"id": "shipwreck", "name": "原版珊瑚沉船", "world": "minecraft:overworld",
                     "x": -101, "z": 290, "entranceVerified": False, "precision": "horizontal_structure_reference"}],
     }), encoding="utf-8")
     return CompanionAdventure(*adventure_source({"directory": str(path), "stateReader": str(READER)}), OWNER)
@@ -99,7 +99,7 @@ def test_owner_run_suppresses_destinations_and_public_turn_does_not_reveal_it(tm
 
 def test_recent_speech_and_failed_checkpoint_do_not_make_invalid_offers(tmp_path):
     adviser = source(tmp_path)
-    result = view(adviser, speech=["去原版沉船转一圈？", "想不想看看潮汐圣所？"])
+    result = view(adviser, speech=["去珊瑚沉船转一圈？", "想不想看看潮汐圣所？"])
     assert {choice["id"] for choice in result["choices"]} == {"tm_photo"}
     adviser.saved_at -= 16 * 60_000
     result = view(adviser)
@@ -109,6 +109,14 @@ def test_recent_speech_and_failed_checkpoint_do_not_make_invalid_offers(tmp_path
     result = view(adviser)
     assert result["state"] == "unavailable" and result["partnerProgress"]["guildCompleted"] is None
     assert {choice["kind"] for choice in result["choices"]} == {"landmark"}
+
+
+def test_recently_ended_activity_is_not_its_own_recommendation(tmp_path):
+    adviser = source(tmp_path, **{"dungeon-active-run": {}})
+    result = view(adviser, "nearby_partner")
+    assert result["trial"]["status"] == "verify_entry"
+    assert result["recentEnding"]["id"] == "trial_tower"
+    assert "trial_tower" not in {choice["id"] for choice in result["choices"]}
 
 
 def guarded():
@@ -135,7 +143,7 @@ def test_quiet_delegation_keeps_thought_for_useful_occasion_and_only_allows_spee
             facts = json.loads(payload["messages"][1]["content"])
             requests.append(facts)
             assert list(facts["capabilities"]["actions"]) == ["chat"]
-            text = "想去潮汐圣所探一探吗？我们先看看入口条件。" if len(requests) == 1 else "去没有记录的秘密关卡吧。"
+            text = "想去珊瑚沉船看看吗？先找找入口。" if len(requests) == 1 else "去没有记录的秘密关卡吧。"
             return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(
                 {"steps": [{"tool": "body:chat", "args": {"text": text}}]}, ensure_ascii=False)}}]})
 

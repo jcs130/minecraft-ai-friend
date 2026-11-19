@@ -17,6 +17,7 @@ from uuid import UUID
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .companion_adventure import mentions_activity
 from .conversation import COMPANION_SPEECH_POLICY, CONVERSATION_POLICY, repeats_companion_speech
 from .body import adventure
 from .journal import ActionJournal, work_key
@@ -391,6 +392,8 @@ class NpcPlanner:
         if context.companion_adventure is not None:
             facts["companionAdventure"] = context.companion_adventure
             if check_in:
+                # The unsolicited turn needs the current activity and safe choices, not the whole directory.
+                facts["companionAdventure"] = {key: value for key, value in context.companion_adventure.items() if key != "dungeons"}
                 facts["goal"] = ("Share one fresh, scene-appropriate idea with your nearby partner. "
                                  "If an active activity is recorded, help with that outing. Otherwise suggest one exact named "
                                  "choice and why it fits now. Speak Chinese, short and naturally. You can stay quiet if it would "
@@ -437,7 +440,7 @@ class NpcPlanner:
             "When that is present, address the same outing first. A paused, faulted or unconfirmed run calls for checking status. "
             "An ended run's terminal floor is not a floor cleared. An absent completion record does not prove a place is unvisited. "
             "Choose from choices for a new outing; verify_entry means check the supplied readCommand before leaving. "
-            "Use the exact choice name and its supplied details. Dungeons are protected challenges. Describe their rooms or theme from "
+            "Use the choice name and its supplied details. Dungeons are protected challenges. Describe their rooms or theme from "
             "the hint, with no suggested mining, building or invented mechanics based on the site's name. "
             "A landmark is a horizontal structure reference, never a confirmed entrance. Use exact world and X/Z when asked. "
             "Use progress to make a relevant recommendation. In nearby speech skip unsolicited stats and personal details. "
@@ -495,8 +498,8 @@ class NpcPlanner:
             steps = [step for step in steps if step.tool == "body:chat"
                      and not repeats_companion_speech(step.args["text"], context.recent_companion_speech)][:1]
             if context.companion_adventure and not context.companion_adventure["activeWithPartner"]:
-                choices = context.companion_adventure["choices"]
-                steps = [step for step in steps if any(choice["name"] in step.args["text"] for choice in choices)]
+                names = {choice["name"] for choice in context.companion_adventure["choices"]}
+                steps = [step for step in steps if any(mentions_activity(name, step.args["text"]) for name in names)]
         elif intent.goal == IDLE_GOAL and not context.dialogue and not (context.party_context or {}).get("message"):
             inactive = set() if adventure.partner_nearby(role.adventure_partner, context) else {"body:chat"}
             if already_guarding(current_native_state(context)):
