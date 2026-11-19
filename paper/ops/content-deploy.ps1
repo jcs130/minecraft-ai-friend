@@ -28,6 +28,10 @@ function Content-ProximityVoiceTarget([string]$relative) {
         'plugins/voicechat/voicechat-server.properties')
 }
 
+function Content-MaidBridgeTarget([string]$relative) {
+    return $relative -ceq 'qiandengji-maid-native-0.1.12-conversation.jar'
+}
+
 function Content-NearbyChatTarget([string]$relative) {
     # One official companion module and two reviewed static files only.
     return $relative -cin @('EssentialsXChat-2.22.0.jar',
@@ -138,7 +142,8 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     if ($plan.schema -ne 1 -or $plan.id -notmatch '^[a-z0-9-]{8,80}$') { throw 'Invalid content deployment plan' }
     $voiceChange = @($plan.files | Where-Object { Content-ProximityVoiceTarget ([string]$_.target) }).Count -gt 0 -or
         @($plan.removeJars | Where-Object { Content-ProximityVoiceJar ([string]$_.name) }).Count -gt 0
-    if ($voiceChange -or $plan.unifyEconomy) {
+    $maidBridgeChange = @($plan.files | Where-Object { Content-MaidBridgeTarget ([string]$_.target) }).Count -gt 0
+    if ($voiceChange -or $maidBridgeChange -or $plan.unifyEconomy) {
         if (-not $coldBackup -or -not (Test-Path -LiteralPath (Join-Path $coldBackup '.complete'))) {
             throw 'This deployment requires a complete cold backup'
         }
@@ -164,7 +169,10 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     $entries = @(); $seen = @{}
     foreach ($file in @($plan.files)) {
         $relative = [string]$file.target
-        if ($relative -match '^[A-Za-z0-9][A-Za-z0-9_.-]*\.jar$') {
+        if (Content-MaidBridgeTarget $relative) {
+            if ($file.beforeSha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Maid bridge replacement requires its current digest' }
+            $target = Join-Path (Join-Path $serverDir 'plugins') $relative
+        } elseif ($relative -match '^[A-Za-z0-9][A-Za-z0-9_.-]*\.jar$') {
             if ($relative -notmatch '^(AgentFriend|CortiEyeMirror|BetonQuest|FancyNpcs|Citizens|Denizen|ConditionalEvents|WorldEvents|MythicMobs|Shopkeepers|NPCSpeak|ImageFrame|WorldVariety|VillagerLife|Sentinel|OlEncounters|CommandAPI|FastAsyncWorldEdit|WorldObserver)-' -and -not (Content-NumenPaperJar $relative) -and -not (Content-AgentVisionJar $relative) -and -not (Content-ConquestScoreboardTarget $relative) -and -not (Content-AgentAntiCheatTarget $relative) -and -not (Content-MultiverseJar $relative) -and -not (Content-NativeRpgJar $relative) -and -not (Content-McbotJar $relative) -and -not (Content-ProximityVoiceJar $relative) -and -not (Content-NearbyChatTarget $relative)) { throw 'Unexpected plugin JAR' }
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
         } elseif ($relative -match '^world/datapacks/(world-expansion--(?<slug>[a-z0-9-]+)|zz-qiandengji-world-variety)\.zip$') {
