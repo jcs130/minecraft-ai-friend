@@ -33,7 +33,13 @@ describe('public collision ray contract', () => {
       blockAt: () => ({ name: 'air', stateId: 0, shapes: [], getProperties: () => ({}) }) } as unknown as Bot;
     const result = observeSpatial(bot, { mode: 'rays', rays: [[0, 0, 1], [0, 90, 1], [30, 0, 1]] });
     if (result.kind !== 'rays') throw new Error('Missing ray observation');
+    expect(result.rays.map(ray => ray.worldBearing)).toEqual(['west', 'south', 'west']);
     [[-0.866025, 0.5, 0], [0, 0.5, 0.866025], [-0.5, 0.866025, 0]].forEach((expected, index) =>
       expected.forEach((value, axis) => expect(result.rays[index].direction[axis]).toBeCloseTo(value, 6)));
+    bot.entity.yaw = 38.55 * Math.PI / 180;
+    bot.entity.pitch = 0;
+    const rotated = observeSpatial(bot, { mode: 'rays', rays: [[0, -90, 1], [90, 0, 1]] });
+    if (rotated.kind !== 'rays') throw new Error('Missing ray observation');
+    expect(rotated.rays.map(ray => ray.worldBearing)).toEqual(['northeast', null]);
   });
 });

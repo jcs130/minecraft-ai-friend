@@ -1413,7 +1413,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     fields: [
       { key: 'at', kind: 'anchor', required: true, error: `tunnel 要 at:[x,y,z](通道终点;${RELATIVE_HINT})`, doc: '通道终点' },
       { key: 'spiral', kind: 'flag', doc: '正上/正下时改挖 2×2 螺旋楼梯(上下都能走)' },
-      { key: 'dryRun', kind: 'flag' },
+      { key: 'dryRun', kind: 'flag', doc: '试算施工材料。水平和斜向通道同时检查预定脚格的支撑、液体和未知格，有缺口时报告背包垫材。' },
       { key: 'tool', kind: 'string', hint: '物品英文 id 或 fastest', doc: '只覆盖本步;不写时节约耐久' },
       {
         key: 'until', kind: 'names', hint: `方块英文 id 或类别 ${UNTIL_CATEGORY_DOC}`,

@@ -26,6 +26,7 @@ import { CONTAINER_FIND, FURNACE_KINDS } from './chests.ts';
 import { chooseTool, equipToolFor, miningToolPlan, nearBreak } from './tools.ts';
 import { UNTIL_DIG_RADIUS, type UntilHit, untilBlockIds, untilHit, untilUnknownNote } from './until.ts';
 import { spiralAlignmentError } from './tunnel-alignment.ts';
+import { observationView } from './perception-sight.ts';
 
 const { goals } = pathfinderPkg;
 
@@ -353,6 +354,44 @@ function connectedTunnelFloor(line: Cell[]): Cell[] {
   return floor;
 }
 
+/** Inspect the same support cells the corridor will check, including its cardinal turns. */
+function previewTunnelFooting(bot: Bot, floor: readonly Cell[], ctx: SkillContext): string {
+  const view = observationView(bot);
+  let gaps = 0, liquids = 0, unknown = 0;
+  let firstGap = '', firstLiquid = '', firstUnknown = '';
+  for (let i = 1; i < floor.length; i++) {
+    const foot = floor[i];
+    const under = { ...foot, y: foot.y - 1 };
+    const support = blockAtCell(view, under);
+    if (!support) {
+      unknown++;
+      if (!firstUnknown) firstUnknown = `第${i}步 ${cellText(under)}`;
+    } else if (LIQUIDS.has(support.name)) {
+      liquids++;
+      if (!firstLiquid) firstLiquid = `第${i}步 ${cellText(under)} 是${zhName(support.name)}`;
+    } else if (support.boundingBox !== 'block') {
+      gaps++;
+      if (!firstGap) {
+        const lower = { ...under, y: under.y - 1 };
+        const below = blockAtCell(view, lower);
+        firstGap = `第${i}步预定脚格 ${cellText(foot)}，支撑格 ${cellText(under)} 是${zhName(support.name)}`
+          + `，再下一格 ${cellText(lower)} ${below ? '是' + zhName(below.name) : '未读到'}`;
+      }
+    }
+  }
+  const steps = floor.length - 1;
+  const parts = [`原计划 ${steps} 个落脚点中，${steps - gaps - liquids - unknown} 处脚下已有支撑`];
+  if (gaps) {
+    parts.push(`${gaps} 处缺支撑，首处在${firstGap}`);
+    const stock = permittedStockFor(bot, scaffoldNames(ctx, bot), '垫脚', ctx, true);
+    parts.push('why' in stock ? stock.why
+      : `当前可选垫材${zhName(stock.item.name)}，背包有 ${invCount(bot, n => n === stock.item.name)} 块，实际放置待确认`);
+  }
+  if (liquids) parts.push(`${liquids} 处脚下为液体，首处在${firstLiquid}，按当前读数不能落脚`);
+  if (unknown) parts.push(`${unknown} 处支撑格未读到，首处在${firstUnknown}，能否落脚未知`);
+  return parts.join('。') + '。';
+}
+
 export async function skillTunnel(bot: Bot, call: Extract<SkillCall, { skill: 'tunnel' }>, ctx: SkillContext): Promise<string> {
   const start = feetOf(bot);
   const target = resolveAt(bot, call.at);
@@ -390,7 +429,7 @@ export async function skillTunnel(bot: Bot, call: Extract<SkillCall, { skill: 't
       const zs = shaft.map((c) => c.z);
       const lines = [`试算螺旋楼梯(${rise > 0 ? '升' : '降'} ${planned} 格,` +
         `绕 (${Math.min(...xs)}..${Math.max(...xs)}, ${Math.min(...zs)}..${Math.max(...zs)}) 的 2×2 井筒转,` +
-        `要挖 ${carve.length} 格)` +
+        `终点 ${cellText(target)}，要挖 ${carve.length} 格)` +
         `: ${compositionText(reading)}。`];
       const permission = firstProtectedBreak(bot, carve);
       if (permission) lines.push(`${permission}。`);
@@ -410,7 +449,8 @@ export async function skillTunnel(bot: Bot, call: Extract<SkillCall, { skill: 't
     const head = vertical
       ? `试算${kind}(${planned} 格,要挖 ${carve.length} 格)`
       : `试算通道(${planned} 步,连头顶共 ${carve.length} 格)`;
-    const lines = [`${head}: ${compositionText(reading)}。`];
+    const lines = [`${head}，终点 ${cellText(target)}: ${compositionText(reading)}。`];
+    if (!vertical) lines.push(previewTunnelFooting(bot, floor, ctx));
     const permission = firstProtectedBreak(bot, carve);
     if (permission) lines.push(`${permission}。`);
     if (rise > 0 && vertical) {

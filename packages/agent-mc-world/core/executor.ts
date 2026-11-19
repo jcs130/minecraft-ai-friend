@@ -828,6 +828,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
             ] : [])],
           sceneTarget !== target ? levelTravelGoal(sceneTarget.x, sceneTarget.z)
             : call.groundY || call.exact ? finalGoal : undefined,
+          call,
         );
       }
       const water = headInWater(bot) || bodyInWater(bot);

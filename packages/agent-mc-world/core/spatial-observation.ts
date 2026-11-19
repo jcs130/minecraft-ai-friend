@@ -14,6 +14,7 @@ import { openVoxelQuery, voxelPage, visibleVoxelCells, voxelContinuation, type V
 import { spatialReadout, SPATIAL_READOUT_TEXT_RESERVE } from './spatial-readout.ts';
 import { readWorldIdentity } from './world-scope.ts';
 import { nativeBodyReadiness } from './body-readiness.ts';
+import { bearing } from './terrain.ts';
 
 type Point = [number, number, number];
 type Box = [number, number, number, number, number, number];
@@ -384,11 +385,11 @@ function readSpatialObservation(bot: Bot, input: SpatialObserveInput) {
     const entityBeforeTerrain = entity ? (entity.distance < terrain.distance || terrain.kind === 'clear' && entity.distance <= range
       ? true : terrain.kind === 'unknown' ? null : false) : null;
     const first = entityBeforeTerrain ? 'entity' : terrain.kind;
-    return { pitchDeg, yawDeg, range, direction: direction.map(round), terrain, entity,
+    return { pitchDeg, yawDeg, range, worldBearing: bearing(direction[0], direction[2]), direction: direction.map(round), terrain, entity,
       entityBeforeTerrain, first };
   });
   return { ...common, kind: 'rays' as const, rays, blockReads: cache.size, unreadEntityIds,
-    geometry: 'eye-origin collision rays; yaw 0=north, positive yaw=left, positive pitch=up; offsets are degrees; one-cell shape collar; unknown collar stops verification; liquids and textures do not occlude; entity boxes from this connection, not rendered meshes' };
+    geometry: 'Eye-origin collision rays. yawDeg and pitchDeg are offsets from the current view (positive left/up). worldBearing is the horizontal world compass (north=-Z, east=+X, vertical=null). Clearance along a ray does not verify footing. The one-cell shape collar stops verification at unknown cells; liquids and textures do not occlude; entities use connection-side boxes.' };
 }
 
 /** Put coverage interpretation before dense geometry; keep the full native data. */

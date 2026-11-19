@@ -57,6 +57,7 @@ describe('long travel diagnostic scope', () => {
     expect(reports[0].text).toContain('长途最终目标 (250, 104, 0)');
     expect(reports[0].text).toContain('尚未核实最终目标的落脚条件');
     expect(reports[0].text).not.toContain('站不进人');
+    expect(reports[0].text).not.toContain('tunnel');
     expect(probeTarget).not.toHaveBeenCalled();
 
     // A fresh departure must not inherit an occupancy diagnosis from the failed leg.
@@ -72,8 +73,21 @@ describe('long travel diagnostic scope', () => {
     expect(reports[0].kind).toBe('blocked');
     expect(reports[0].text).toContain('目标那一格站不进人');
     expect(reports[0].text).toContain('规划落差≤2格、跑酷关闭、挖掘开启、垫脚料0块');
+    expect(reports[0].text).toContain('另选落脚点或观测点');
+    expect(reports[0].text.match(/tunnel 的 dryRun:true/g)).toHaveLength(1);
     expect(reports[0].text).toContain('未确定具体受阻原因');
     expect(reports[0].text).not.toContain('尚未核实最终目标');
+  });
+
+  it('offers observed alternative landings for an occupied walk-only target', async () => {
+    const { bot, exec, reports } = routeRig();
+    const before = bot.entity.position.clone();
+    exec.submitDetailed([{skill:'goto',at:[10,64,0],walkOnly:true}]);
+    await untilReport(reports, 1);
+    expect(reports[0].kind).toBe('blocked');
+    expect(reports[0].text).toContain('另选落脚点或观测点');
+    expect(reports[0].text).not.toContain('tunnel');
+    expect(bot.entity.position).toEqual(before);
   });
 
   it('rejects a measured occupied exact feet cell before starting a futile navigation wait', async () => {
