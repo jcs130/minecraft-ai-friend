@@ -55,6 +55,11 @@ def test_hosted_partial_envelope_is_not_automatic_success(tmp_path):
         pending='The script stopped at line 1 (numen_hosted.fight.attack) because of an event; t7 keeps running.'
         receipt=p.mapped(dict(id='x',state='partial',message=json.dumps(dict(success=False,message=pending))),'x','lua')
         assert receipt.status=='accepted' and receipt.execution_id=='t7'
+        combat = "The script stopped at line 1 (numen_hosted.fight.attack) after 2 calls: an urgent targeted event arrived; t8 keeps running. Nothing after that ran."
+        for message, status in [(combat, "accepted"), ("denied by permission", "rejected")]:
+            returned = p.mapped(dict(id='x', state='blocked', message=json.dumps(dict(success=False, message=message))), 'x', 'lua')
+            assert returned.status == status
+        assert p.mapped(dict(id='x', state='cancelled', message=combat), 'x', 'lua').status == "rejected"
         with pytest.raises(ValueError):p.mapped(dict(id='another',state='completed'),'x')
     finally:p.ledger.close()
 

@@ -150,7 +150,7 @@ async def serve(path: Path):
                                   "ownerId":str(role.owner_id), "serverId":settings["serverId"],
                                   "journalDirectory":str(state / role.id / "numen")})
             body = NumenBody(port, scope=scope, server_id=settings["serverId"], name=role.name, owner_id=str(role.owner_id),
-                             item_use_ids=tuple(role.native_items))
+                             item_use_ids=tuple(role.native_items), adventure_partner=role.adventure_partner)
         memory = open_role_memory(state / role.id, connection)
         return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1),
                        memory, ActionJournal(state / role.id / "actions.sqlite3"), social=social, social_graph=social_graph)

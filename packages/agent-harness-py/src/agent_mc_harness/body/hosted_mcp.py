@@ -109,6 +109,10 @@ class HostedMcpPort:
     def catalog(self): return self.tools
     def generation(self): return self.boot + ":" + str(self.epoch)
 
+    def recorded(self, request_id):
+        """A call is committed locally before any RPC can leave this process."""
+        return self.ledger.get(request_id, self.boot) is not None
+
     def mapped(self, value, request, tool=None):
         if value.get("id") != request:
             raise ValueError("hosted_original_request_mismatch")
@@ -119,6 +123,12 @@ class HostedMcpPort:
             if isinstance(decoded,dict) and isinstance(decoded.get("success"),bool) and isinstance(decoded.get("message"),str):
                 outcome = decoded["success"]
                 text = decoded["message"]
+        # An urgent world event can stop Lua while its already-dispatched native
+        # attack keeps running. The task ID will receive its own finish event.
+        if state == "blocked" and outcome is False:
+            running = background_task(text)
+            if running:
+                return PortResult("accepted", text, value, running)
         if state in ("failed", "blocked", "cancelled"):
             return PortResult("rejected", text, value)
         if state == "unknown":
