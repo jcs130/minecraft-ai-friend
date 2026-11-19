@@ -4804,13 +4804,18 @@ export class Executor {
     attack.lastSwingTargetId = -1;
   }
 
-  noteCombatTargetDead(target: number | { id?: number; uuid?: string }): void {
+  noteCombatTargetDead(target: number | { id?: number; uuid?: string }, fatalDamage?: TaskAttackLease['fatalDamage']): void {
     const attack = this.activeAttack;
     const selected = this.activeAttackTarget;
     if (!attack || !selected || attack.disconnected) return;
     // Keep the selected entity/UUID identity through despawn and asynchronous
     // preparation. A new entity reusing the numeric ID is not this target's death.
     if (!matchesDeathTarget(this.opts.getBot()?.entities, selected, target)) return;
+    if (fatalDamage) {
+      if (fatalDamage.victim.entityId !== selected.entity.id || fatalDamage.victim.uuid !== selected.uuid?.toLowerCase()) return;
+      attack.fatalDamage = fatalDamage;
+    }
+    if (attack.dead) return;
     attack.dead = true;
     attack.deathObservedAt ??= Date.now();
     this.opts.ranged?.abort();

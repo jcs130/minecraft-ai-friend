@@ -505,6 +505,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         agentStatePublisher.start();
         skillEventPublisher = new SkillEventPublisher(this);
         skillEventPublisher.start();
+        new MobDeathPublisher(this);
         if (arenaBuilt) cleanupMobs();
         Bukkit.getScheduler().runTaskTimer(this, this::tickArena, 20L, 20L);
         Bukkit.getScheduler().runTaskTimer(this, this::tickPlayerTracking, 10L, 10L);

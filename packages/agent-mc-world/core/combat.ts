@@ -25,6 +25,8 @@
 import type { Bot } from 'mineflayer';
 import { nativeBodyBlockedReason } from './body-readiness.ts';
 import { captureDeathTarget, matchesDeathTarget, type DeathTargetIdentity } from './entity-death-identity.ts';
+import type { MobDeathReceipt } from '../src/contracts/mob-death.ts';
+import { ownKillCredit } from './mob-death.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
 import type { Logger } from './support/host-contract.ts';
@@ -328,6 +330,7 @@ export class CombatSession {
   /** Seen during this engagement; disappearance is not a death receipt. */
   private readonly unresolvedSeen = new Map<number, DeathTargetIdentity>();
   private targetDeaths = new Map<string, number>();
+  private readonly engagedDeaths = new Map<string, { id: number; name: string; own: boolean | null }>();
   private targetDeathsPending = new Map<string, number>();
   private lastKillEmitAt = 0;
   private lastStatusAt = 0;
@@ -836,6 +839,7 @@ export class CombatSession {
     this.stallSince = 0;
     this.stallMode = '';
     this.targetDeaths = new Map();
+    this.engagedDeaths.clear();
     this.targetDeathsPending = new Map();
     this.struck.clear();
     this.deadIds.clear();
@@ -919,7 +923,37 @@ export class CombatSession {
     if (entity) this.struck.set(id, captureDeathTarget(entity));
   }
 
-  private noteDead(e: { id?: number; uuid?: string; name?: string }): void {
+  noteServerDeath(receipt: MobDeathReceipt): void {
+    if (!this.bot || this.state === 'idle') return;
+    const { entityId: id, uuid, type } = receipt.victim;
+    const observed = this.engagedDeaths.get(uuid);
+    if (observed?.id === id) {
+      observed.own = ownKillCredit(this.bot, receipt);
+    } else if (this.struck.get(id)?.uuid?.toLowerCase() === uuid) {
+      this.noteDead({ id, uuid, name: type?.replace(/^minecraft:/, '') }, ownKillCredit(this.bot, receipt));
+    }
+  }
+
+  private killTotals() {
+    const total = [...this.targetDeaths.values()].reduce((sum, count) => sum + count, 0);
+    const known = [...this.engagedDeaths.values()].filter(d => d.own !== null);
+    const counts = new Map<string, number>();
+    for (const death of known) if (death.own) counts.set(death.name, (counts.get(death.name) ?? 0) + 1);
+    const confirmedOwnKills = Object.fromEntries(counts);
+    const killAttribution: NonNullable<CombatResult['killAttribution']> = !known.length ? 'unavailable'
+      : known.length === total ? 'server-confirmed' : 'partial';
+    return { kills: killAttribution === 'server-confirmed' ? confirmedOwnKills : null, killAttribution,
+      ...(known.length ? { confirmedOwnKills, attributedDeaths: known.length } : {}) };
+  }
+
+  private attributionText(): string {
+    const totals = this.killTotals();
+    if (!totals.attributedDeaths) return '未确认本人击杀归属';
+    const own = Object.values(totals.confirmedOwnKills ?? {}).reduce((a, b) => a + b, 0);
+    return '服务端已核实其中' + totals.attributedDeaths + '只的来源，本人击杀' + own + '只';
+  }
+
+  private noteDead(e: { id?: number; uuid?: string; name?: string }, own: boolean | null = null): void {
     if (this.state === 'idle' || typeof e.id !== 'number') return;
     const seen = this.unresolvedSeen.get(e.id);
     if (seen && !matchesDeathTarget(this.bot?.entities, seen, e)) return;
@@ -931,6 +965,7 @@ export class CombatSession {
     this.struck.delete(e.id);
     const name = e.name ?? 'unknown';
     this.targetDeaths.set(name, (this.targetDeaths.get(name) ?? 0) + 1);
+    if (selected.uuid) this.engagedDeaths.set(selected.uuid.toLowerCase(), { id: e.id, name, own });
     this.targetDeathsPending.set(name, (this.targetDeathsPending.get(name) ?? 0) + 1);
     const now = Date.now();
     if (now - this.lastKillEmitAt < KILL_MERGE_MS) return;
@@ -944,7 +979,7 @@ export class CombatSession {
         ).filter((f) => f.visible).length
       : 0;
     this.opts.emit(
-      `观察到${parts.join('、')}死亡，未确认本人击杀归属。${left > 0 ? `还有 ${left} 只在。` : '周围没别的了。'}`,
+      `观察到${parts.join('、')}死亡，${this.attributionText()}。${left > 0 ? `还有 ${left} 只在。` : '周围没别的了。'}`,
       true, false,
     );
   }
@@ -2026,6 +2061,7 @@ export class CombatSession {
       this.sessionStartedAt = this.startedAt;
       this.deadIds.clear();
       this.targetDeaths.clear();
+      this.engagedDeaths.clear();
       this.targetDeathsPending.clear();
       this.swings = this.landed = this.arrows = this.rangedLanded = 0;
     }
@@ -2329,7 +2365,7 @@ export class CombatSession {
     if (this.bot && this.bodyEnded(this.bot)) { this.end('death'); return; }
     const totalDeaths = [...this.targetDeaths.values()].reduce((a, b) => a + b, 0);
     const what = totalDeaths > 0
-      ? `打完了,观察到 ${[...this.targetDeaths].map(([n, c]) => `${zhEntity(n)}${c > 1 ? `×${c}` : ''}`).join('、')}死亡，未确认本人击杀归属。`
+      ? `打完了,观察到 ${[...this.targetDeaths].map(([n, c]) => `${zhEntity(n)}${c > 1 ? `×${c}` : ''}`).join('、')}死亡，${this.attributionText()}。`
       : '当前已无可见交战目标，未确认目标死亡。';
     this.opts.emit(
       `${what}刀 ${this.swings} 次命中 ${this.meleeLanded()} 次,` +
@@ -2395,11 +2431,11 @@ export class CombatSession {
     this.opts.diag?.write({
       lane: 'combat', event: 'end',
       msg: `收工(${reason}),${Math.round((Date.now() - this.startedAt) / 1000)}s,` +
-        `观察到交战目标死亡 ${[...this.targetDeaths.values()].reduce((a, b) => a + b, 0)}，本人击杀归属未知,` +
+        `观察到交战目标死亡 ${[...this.targetDeaths.values()].reduce((a, b) => a + b, 0)}，${this.attributionText()},` +
         `挥刀 ${this.swings} 次命中 ${this.meleeLanded()} 次,` +
         `放箭 ${this.arrows} 支命中 ${this.rangedLanded} 次,生命 ${reason === 'death' ? 0 : this.hp()}/20`,
       data: {
-        reason, ms: Date.now() - this.startedAt, kills: null, killAttribution: 'unavailable', targetDeaths: Object.fromEntries(this.targetDeaths),
+        reason, ms: Date.now() - this.startedAt, ...this.killTotals(), targetDeaths: Object.fromEntries(this.targetDeaths),
         swings: this.swings, arrows: this.arrows, meleeLanded: this.meleeLanded(),
         rangedLanded: this.rangedLanded, landed: this.landed,
       },
@@ -2408,7 +2444,7 @@ export class CombatSession {
       endedAt: new Date(Date.now()).toISOString(), reason,
       healthBefore: this.healthBefore, healthAfter: reason === 'death' ? 0 : bot?.health ?? null,
       sceneBefore: this.sceneBefore, controlSummary, ...(deathEpisodeId ? { deathEpisodeId } : {}),
-      kills: null, killAttribution: 'unavailable', targetDeaths: Object.fromEntries(this.targetDeaths), swings: this.swings,
+      ...this.killTotals(), targetDeaths: Object.fromEntries(this.targetDeaths), swings: this.swings,
       meleeLanded: this.meleeLanded(), arrows: this.arrows, rangedLanded: this.rangedLanded });
     // 只有正常战斗收尾解冻断点。断线、环境夺权、外部抢占与死亡各自由其终态边界
     // 处理冻结队列；在这里泵回会让任务进入已断线或正在交权的执行器。

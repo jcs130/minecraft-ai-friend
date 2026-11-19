@@ -4,6 +4,7 @@
  * attack 技能与自保反射共用这一层;谁占着身体不在这里决定。
  */
 import { piglinIsHostile } from './piglin.ts';
+import { fatalDamageText, ownKillCredit } from './mob-death.ts';
 import { sleep, type TaskAttackLease } from './skill-context.ts';
 import { canSeeEntity, headInWater } from './terrain.ts';
 import {
@@ -639,7 +640,9 @@ export async function skillAttack(
     const evidence: AttackEvidence = { schema: 'agent-mc-attack-evidence/v1', sampledAt: new Date().toISOString(),
       target: { entityId: entity.id, uuid: selectedUuid ?? null, name: entity.name ?? target }, targetState,
       deathObservedAt: typeof stats.deathObservedAt === 'number' ? new Date(stats.deathObservedAt).toISOString() : null,
-      ownKillCredit: null, attempts: { meleeSwings: stats.swings, arrowsReleased: stats.arrows },
+      ownKillCredit: stats.fatalDamage ? ownKillCredit(bot, stats.fatalDamage) : null,
+      ...(stats.fatalDamage ? { fatalDamage: stats.fatalDamage } : {}),
+      attempts: { meleeSwings: stats.swings, arrowsReleased: stats.arrows },
       observedHits: { melee: stats.meleeHits, ranged: stats.rangedHits }, goalVerified: false };
     try { ctx.recordObservation?.({ ...evidence }); } catch { /* A failed evidence sink never changes the native verdict. */ }
   }
@@ -655,6 +658,7 @@ export async function skillAttack(
     );
   }
   if (stats.dead) {
+    if (stats.fatalDamage) return fatalDamageText(stats.fatalDamage) + '（' + attackStats(stats) + '）';
     return `确认${zhEntity(target)}死亡，未确认本人击杀归属(${attackStats(stats)})${retreatFailed ? ';撤退期间观察到目标死亡' : ''}${underwaterOxygenNote(bot)}`;
   }
   if (!entity.isValid) {

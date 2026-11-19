@@ -15,6 +15,8 @@ export interface CombatControlSummary {
 
 const keys = (value: unknown, expected: string[]) => value !== null && typeof value === 'object'
   && Object.keys(value).length === expected.length && expected.every(k => k in value);
+const counts = (v: unknown): v is Record<string, number> => !!v && typeof v === 'object' && !Array.isArray(v)
+  && Object.values(v).every(n => Number.isSafeInteger(n) && n >= 0);
 
 /** Invalid additive diagnostics never invalidate the original combat observation. */
 export function validControlSummary(value: unknown): value is CombatControlSummary {
@@ -35,10 +37,23 @@ export function validControlSummary(value: unknown): value is CombatControlSumma
 
 export function sanitizeCombatResult<T extends CombatResult>(result: T): T {
   const clean = structuredClone(result);
-  if (!['unavailable', 'legacy-unverified'].includes(clean.killAttribution ?? ''))
+  if (!['unavailable', 'legacy-unverified', 'server-confirmed', 'partial'].includes(clean.killAttribution ?? ''))
     clean.killAttribution = clean.kills === null ? 'unavailable' : 'legacy-unverified';
-  if (clean.targetDeaths !== undefined && (!clean.targetDeaths || typeof clean.targetDeaths !== 'object'
-    || Array.isArray(clean.targetDeaths) || Object.values(clean.targetDeaths).some(n => !Number.isSafeInteger(n) || n < 0))) delete clean.targetDeaths;
+  if (clean.targetDeaths !== undefined && !counts(clean.targetDeaths)) delete clean.targetDeaths;
+  if (clean.killAttribution === 'server-confirmed' || clean.killAttribution === 'partial') {
+    const observed = clean.targetDeaths ?? {};
+    const total = Object.values(observed).reduce((a, b) => a + b, 0);
+    const verified = clean.attributedDeaths;
+    if (counts(clean.confirmedOwnKills) && typeof verified === 'number' && Number.isSafeInteger(verified) && verified > 0 && verified <= total
+      && Object.entries(clean.confirmedOwnKills).every(([name,n]) => n <= (observed[name] ?? 0))
+      && Object.values(clean.confirmedOwnKills).reduce((a,b) => a+b, 0) <= verified
+      && (clean.killAttribution === 'server-confirmed') === (verified === total)) {
+      clean.kills = verified === total ? { ...clean.confirmedOwnKills } : null;
+    } else {
+      clean.killAttribution = 'unavailable'; clean.kills = null;
+      delete clean.confirmedOwnKills; delete clean.attributedDeaths;
+    }
+  }
   if (!validControlSummary(clean.controlSummary)) delete clean.controlSummary;
   if (clean.reason !== 'death' || typeof clean.deathEpisodeId !== 'string' || !clean.deathEpisodeId.length || clean.deathEpisodeId.length > 80) delete clean.deathEpisodeId;
   if (!clean.scope || Object.keys(clean.scope).length !== 3 || !['realm', 'account', 'agent'].every(k => {
@@ -68,7 +83,9 @@ export interface CombatResult {
   healthAfter: number | null;
   /** Own kill credit; null when native entityDead supplies no killer. Historical maps need attribution. */
   kills: Record<string, number> | null;
-  killAttribution?: 'unavailable' | 'legacy-unverified';
+  killAttribution?: 'unavailable' | 'legacy-unverified' | 'server-confirmed' | 'partial';
+  confirmedOwnKills?: Record<string, number>;
+  attributedDeaths?: number;
   /** Observed deaths of engaged targets; neither damage nor final kill ownership. */
   targetDeaths?: Record<string, number>;
   swings: number;

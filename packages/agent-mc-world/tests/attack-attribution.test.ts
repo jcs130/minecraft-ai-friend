@@ -28,6 +28,26 @@ function fixture(distance = 2) {
 }
 
 describe('native target death versus own combat credit', () => {
+  it.each([true, false])('retains the server-identified shooter when the death status comes first (own=%s)', async own => {
+    const f = fixture();
+    try {
+      const victim = { entityId: 7, uuid: f.enemy.uuid, name: null, type: 'minecraft:skeleton' };
+      const source = { entityId: 8, uuid: 'attacker-uuid', name: 'Archer', type: 'minecraft:player' };
+      const arrow = { entityId: 9, uuid: 'arrow-uuid', name: null, type: 'minecraft:arrow' };
+      const receipt = { schemaVersion: 1 as const, eventId: 'event-1', world: 'minecraft:overworld', occurredAt: Date.now(),
+        victim, causingEntity: source, directEntity: arrow, damageType: 'minecraft:arrow', indirect: true };
+      Object.assign(f.r.bot.entity, { uuid: own ? source.uuid : 'observer-uuid' });
+      f.r.bot.lookAt.mockImplementation(async () => {
+        f.died();
+        f.exec.noteCombatTargetDead(f.enemy, receipt);
+      });
+      f.exec.submit([{ skill: 'attack', target: 'skeleton', entityId: 7, mode: 'melee' }]);
+      await vi.advanceTimersByTimeAsync(1000);
+      const result=f.reports.find(x=>x.kind==='done')!;
+      expect(result.text).toContain('Archer');
+      expect(result.steps?.[0].observation).toMatchObject({ ownKillCredit: own, fatalDamage: receipt, goalVerified: false });
+    } finally { f.close(); }
+  });
   it('keeps a zero-attempt target death successful without claiming our kill, with structured step evidence', async () => {
     const f = fixture();
     try {

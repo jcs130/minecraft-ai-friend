@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.107
+
+Mob deaths can carry the server's final damage type, responsible entity and direct entity. Nearby observations and matching attack receipts retain those identities. Ordinary servers continue to report uncredited native deaths.
+
 ## 0.5.7-rc.160-preview.106
 
 Collision rays report their world compass bearing alongside view-relative angles. Tunnel previews report footing along the proposed corridor and available scaffold materials. When a waypoint is occupied, navigation diagnostics point to nearby landing checks and optional excavation previews.
