@@ -63,6 +63,7 @@ class Intent(BaseModel):
     strategy_refs: list[tuple[str, int]] = Field(default_factory=list)  # (key, version) of lessons the planner was given
     receipts: list[ActionReceipt] = Field(default_factory=list)
     source_events: list[str] = Field(default_factory=list, max_length=32)  # host-observed inbox IDs, never model-generated
+    recall_query: str | None = Field(default=None, max_length=500)
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
@@ -88,6 +89,7 @@ class PlanContext(BaseModel):
     body_results: list[dict[str, Any]] = Field(default_factory=list, max_length=6)
     recent_companion_speech: list[str] = Field(default_factory=list, max_length=8)
     party_context: dict[str, Any] | None = None
+    companion_adventure: dict[str, Any] | None = None
     lessons: list[str] = Field(default_factory=list)  # active versioned lessons (self-iteration store), trial or adopted
 
 
@@ -331,7 +333,8 @@ class HarnessRuntime:
         hot = self.memory.hot(identity.group_id(), 8) if self.memory is not None and identity is not None else []
         lessons = self.active_lessons()
         intent.strategy_refs = [(k, v) for k, v, _ in lessons]
-        return PlanContext(capabilities=self.body.capabilities() if self.body else None, memories=await self.recall(intent.goal, 5), hot=hot,
+        return PlanContext(capabilities=self.body.capabilities() if self.body else None,
+                           memories=await self.recall(intent.recall_query or intent.goal, 5), hot=hot,
                            lessons=[t for _, _, t in lessons],
                            recent=[e for e in self.events if e.severity >= 2][-10:])
 

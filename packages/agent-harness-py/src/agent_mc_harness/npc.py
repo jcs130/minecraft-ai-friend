@@ -54,6 +54,7 @@ class NpcRole(BaseModel):
     native_items: list[Annotated[str, Field(pattern=r"^[a-z0-9_.-]+:[a-z0-9_./-]+$", max_length=128)]] = Field(default_factory=list, max_length=16)
     adventure_partner: str | None = Field(default=None, pattern=r"^[\w.]{1,16}$")
     default_native_guard: bool = False
+    adventure_advice: bool = False
     social_memory: bool = False
     social_previous_bodies: list[UUID] = Field(default_factory=list, max_length=8)
     interval_seconds: int = Field(default=45, ge=10, le=600)
@@ -71,6 +72,8 @@ class NpcRole(BaseModel):
             raise ValueError("independent_owner_identity_required")
         if self.default_native_guard and (self.body_kind != "maid" or "body:native:guard" not in self.allowed_tools):
             raise ValueError("default_guard_requires_native_maid_capability")
+        if self.adventure_advice and (not self.default_native_guard or "body:chat" not in self.allowed_tools):
+            raise ValueError("adventure_advice_requires_a_delegated_companion")
         if self.native_items and (self.body_kind != "numen" or "body:use_item" not in self.allowed_tools):
             raise ValueError("reviewed_item_ids_require_numen_use_item")
         if self.adventure_partner and (self.body_kind != "numen" or "body:native:survey" not in self.allowed_tools):
@@ -275,6 +278,7 @@ class NpcPlanner:
         self.next_catch = 0.0
         self.next_companion_check_in = time.monotonic() + 25
         self.companion_anchor: tuple[str, tuple[float, float, float]] | None = None
+        self.last_adventure_ending = 0
 
     async def answer_dialogue(self, text: str, relationship: dict | None, *, public: bool) -> str:
         facts = {"message": text}
@@ -321,12 +325,20 @@ class NpcPlanner:
                 self.next_catch = now + 300.0
                 self.last_route = {"layer": "native-policy", "reason": "prepared_native_fishing"}
                 return [catch]
-            if now >= self.next_companion_check_in and (position := companion_check_in(role, context)):
+            if position := companion_check_in(role, context):
+                ending = (context.companion_adventure or {}).get("lastActivityEndedAt", 0)
+                fresh_ending = self.last_adventure_ending < ending and 0 <= time.time() * 1000 - ending <= 15 * 60_000
                 anchor = self.companion_anchor
-                if anchor is None or anchor[0] != position[0] or math.dist(anchor[1], position[1]) >= COMPANION_TRAVEL_BLOCKS:
-                    check_in = "near_partner" if anchor is None else "settled_after_travel"
+                moved = anchor is None or anchor[0] != position[0] or math.dist(anchor[1], position[1]) >= COMPANION_TRAVEL_BLOCKS
+                if now >= self.next_companion_check_in and (moved or fresh_ending):
+                    check_in = "activity_ended" if fresh_ending else "near_partner" if anchor is None else "settled_after_travel"
                     self.companion_anchor = position
+                    self.last_adventure_ending = max(self.last_adventure_ending, ending)
                     self.next_companion_check_in = now + COMPANION_CHECK_IN_SECONDS
+                elif context.companion_adventure is not None:
+                    self.last_route = {"layer": "native-policy", "reason": "guard_continuing",
+                                       "adventureState": context.companion_adventure["state"]}
+                    return []
         tools = [tool for tool in role.allowed_tools if not step_support(Step(tool=tool), caps)]
         if check_in:
             tools = ["body:chat"]
@@ -376,6 +388,13 @@ class NpcPlanner:
                            and isinstance(native_context.get("conversation"), dict))
         if companion_style:
             facts["recentCompanionSpeech"] = context.recent_companion_speech
+        if context.companion_adventure is not None:
+            facts["companionAdventure"] = context.companion_adventure
+            if check_in:
+                facts["goal"] = ("Share one fresh, scene-appropriate idea with your nearby partner. "
+                                 "If an active activity is recorded, help with that outing. Otherwise suggest one exact named "
+                                 "choice and why it fits now. Speak Chinese, short and naturally. You can stay quiet if it would "
+                                 "interrupt or repeat the same idea.")
         if role.adventure_partner:
             facts["adventuring"] = {"partnerAccount": role.adventure_partner,
                 "purpose": "You are an independent adventurer. Choose a concrete, feasible next activity whenever healthy and idle. "
@@ -411,6 +430,18 @@ class NpcPlanner:
         if context.social_relationship is not None:
             facts["socialRelationship"] = context.social_relationship
             facts["sharedPast"] = context.social_relationship["evidence"]
+        advice_policy = (
+            "\nFor adventure questions use companionAdventure as server evidence and memory as context for shared experiences. "
+            "Treat its activity facts as the last committed checkpoint, not a live read or proof the entry requirements are met. "
+            "dungeons and trial include global bookings. Only activeWithPartner is the partner's own current run. "
+            "When that is present, address the same outing first. A paused, faulted or unconfirmed run calls for checking status. "
+            "An ended run's terminal floor is not a floor cleared. An absent completion record does not prove a place is unvisited. "
+            "Choose from choices for a new outing; verify_entry means check the supplied readCommand before leaving. "
+            "A landmark is a horizontal structure reference, never a confirmed entrance. Use exact world and X/Z when asked. "
+            "Use progress to make a relevant recommendation. In nearby speech skip unsolicited stats and personal details. "
+            "Keep invitations conversational. A conversation about adventure does not grant authority to enroll, move or change modes."
+            if context.companion_adventure is not None else ""
+        )
         payload = {"model": role.model, "max_tokens": 900, "enable_thinking": False,
                    "response_format": {"type": "json_object"}, "messages": [
                        {"role": "system", "content": role.persona + "\nYou control only this registered NPC through game actions. "
@@ -433,7 +464,7 @@ class NpcPlanner:
                         "Keep the usual attention rules and permissions at every bond level. "
                         f"Speak at most {role.max_speech_chars} characters, only when relevant. "
                         "Unknown actions may only be queried under their original request IDs. Native tasks: " + json.dumps(role.native_tasks)
-                        + "\n" + CONVERSATION_POLICY + ("\n" + COMPANION_SPEECH_POLICY if companion_style else "")},
+                        + "\n" + CONVERSATION_POLICY + ("\n" + COMPANION_SPEECH_POLICY if companion_style else "") + advice_policy},
                        {"role": "user", "content": json.dumps(facts, ensure_ascii=False, default=str)}]}
         if len(payload["messages"][1]["content"]) > 60000:
             raise ValueError("npc_observation_budget_exceeded")
@@ -444,6 +475,8 @@ class NpcPlanner:
                            "seconds": round(time.monotonic() - started, 3)}
         if check_in:
             self.last_route["reason"] = check_in
+        if context.companion_adventure is not None:
+            self.last_route["adventureState"] = context.companion_adventure["state"]
         text = response["choices"][0]["message"]["content"]
         plan = json.loads(text)
         # Some JSON-mode providers use {} for an empty answer. It grants no
@@ -459,6 +492,9 @@ class NpcPlanner:
         if check_in:
             steps = [step for step in steps if step.tool == "body:chat"
                      and not repeats_companion_speech(step.args["text"], context.recent_companion_speech)][:1]
+            if context.companion_adventure and not context.companion_adventure["activeWithPartner"]:
+                choices = context.companion_adventure["choices"]
+                steps = [step for step in steps if any(choice["name"] in step.args["text"] for choice in choices)]
         elif intent.goal == IDLE_GOAL and not context.dialogue and not (context.party_context or {}).get("message"):
             inactive = set() if adventure.partner_nearby(role.adventure_partner, context) else {"body:chat"}
             if already_guarding(current_native_state(context)):
@@ -582,10 +618,12 @@ class FastSelector:
 
 class NpcHost:
     """Event-driven actor. Unknown writes pause this character across process restarts."""
-    def __init__(self, role: NpcRole, body, planner, memory, journal: ActionJournal, *, social=None, social_graph=None):
+    def __init__(self, role: NpcRole, body, planner, memory, journal: ActionJournal, *, social=None, social_graph=None,
+                 companion_adventure=None):
         self.role, self.body, self.planner, self.memory, self.journal = role, body, planner, memory, journal
         self.social = social
         self.social_graph = social_graph
+        self.companion_adventure = companion_adventure
         self.runtime = HarnessRuntime(body=body, planner=self._plan, memory=memory, journal=journal, execute=True)
         self.wake = asyncio.Event()
         self.pending_dialogue: dict[str, BodyEvent] = {}
@@ -659,6 +697,14 @@ class NpcHost:
         context.dialogue = dialogue
         if self.role.default_native_guard:
             context.recent_companion_speech = self.journal.recent_companion_speech(body_id)
+        if self.companion_adventure and context.snapshot and context.snapshot.life_state == "alive":
+            direct = next((event for event in dialogue if addressed_dialogue(event, body_id)), None)
+            if direct or (intent.goal == IDLE_GOAL and companion_check_in(self.role, context)):
+                audience = "nearby_partner" if direct is None else (
+                    "addressed_partner" if direct.data.get("speakerId") == str(self.role.owner_id) else "public"
+                )
+                context.companion_adventure = await self.companion_adventure.view(
+                    audience=audience, dimension=context.snapshot.dimension, recent_speech=context.recent_companion_speech)
         if self.social and self.role.social_memory and dialogue:
             contacts = [stamped_contact(event, body_id, self.social.registered) for event in dialogue]
             pairs = {(contact["peerType"], contact["peerId"]) for contact in contacts if contact}
@@ -843,6 +889,12 @@ class NpcHost:
                     goal = DIALOGUE_GOAL if events else DANGER_GOAL if threatened else IDLE_GOAL
                     intent = self.runtime.submit_intent(goal, agent=self.role.id)
                     intent.source_events = events
+                    if self.role.adventure_advice:
+                        message = self.pending_dialogue.get(direct) if direct else None
+                        if message and message.data.get("speakerId") == str(self.role.owner_id):
+                            intent.recall_query = message.text[:500] or None
+                        elif not events and goal == IDLE_GOAL:
+                            intent.recall_query = "一起完成的委托、副本、探险和之前商量过的目的地"
                     self.next_plan = now + self.role.interval_seconds
                 self.last_danger = threatened
             # Completed history is bounded in memory; durable receipts and memories remain on disk.

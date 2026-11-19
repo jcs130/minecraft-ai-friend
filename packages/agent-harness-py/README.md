@@ -16,6 +16,22 @@ uses each role's existing `memory.sqlite3` without a graph token or graph server
 back reuses that role's archive and its existing remote outbox in the same state directory.
 Episodes recorded during explicit local-only operation remain in the local archive. The server-npc
 client uses HTTP; only the graph service needs the graph engine and its model dependencies.
+
+For a delegated companion such as 肥鱼, set `"adventure_advice": true` in the role and add
+`companionAdventure` to the NPC service settings. Install the `server-npc` extra. Point `directory`
+to the live AgentFriend data directory and `stateReader` to the local, operator-reviewed
+`paper/ops/agentfriend_state.py` used by the Paper activity exporter.
+
+The planner uses the latest committed trial and ruin checkpoints, the bound partner's
+recorded progress, and the public season and landmarks. The snapshot includes observation
+and save times. Advisory destinations require in-game entry checks; confirmed landmarks
+provide a horizontal reference with an unverified entrance. When data is missing or older
+than 15 minutes, the companion can still use the public landmark catalogue.
+Direct questions from the authenticated partner can use their saved history. Unsolicited
+suggestions and replies to other players omit the partner's personal record. A quiet
+companion may offer one idea after traveling or ending an activity, with native guarding
+and following left in charge of the body. Suggestions never dispatch travel or enrollment.
+
 * Learning (`learning/`): resident reflection, versioned self-iteration store, JitRL with goal-conditioned reward
   shaping, Harness² optimizer (pinned upstream via the existing bridge).
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ from .body.maid import MaidBody
 from .body.numen import NumenBody
 from .body.hosted_mcp import HostedMcpPort
 from .bridges import NativeMaidBridge
+from .companion_adventure import CompanionAdventure
 from .journal import ActionJournal
 from .memory.companion import CompanionRecall
 from .memory.local import LocalMemory
@@ -43,11 +45,34 @@ def open_role_memory(directory: Path, connection: tuple[str, str] | None) -> Mem
     return MemoryRouter(LocalMemory(directory / "memory.sqlite3"), graph)
 
 
+def adventure_source(settings):
+    """Load the same trusted, local checkpoint reader used by Paper's activity exporter."""
+    from yaml import YAMLError
+
+    directory, reader_file = (Path(settings[key]) for key in ("directory", "stateReader"))
+    if not directory.is_absolute() or not directory.is_dir() or not reader_file.is_absolute() or not reader_file.is_file():
+        raise ValueError("companion_adventure_source_unavailable")
+    spec = importlib.util.spec_from_file_location("paper_agentfriend_state", reader_file)
+    if spec is None or spec.loader is None:
+        raise ValueError("companion_adventure_reader_unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    def read_checkpoint(path, limit):
+        try:
+            return module.read_yaml_snapshot(path, limit)
+        except YAMLError as failure:
+            raise ValueError("invalid_agentfriend_checkpoint") from failure
+
+    return directory, read_checkpoint
+
+
 async def serve(path: Path):
     settings = read(path)
     if settings.get("schema") != 1:
         raise ValueError("npc_service_schema")
     roles = load_roles(Path(settings["rolesFile"]))
+    source = adventure_source(settings["companionAdventure"]) if any(role.adventure_advice for role in roles) else None
     state = Path(settings["stateDirectory"])
     state.mkdir(parents=True, exist_ok=True)
     health_file = StatusFile(state / "health.json")
@@ -153,7 +178,8 @@ async def serve(path: Path):
                              item_use_ids=tuple(role.native_items), adventure_partner=role.adventure_partner)
         memory = open_role_memory(state / role.id, connection)
         return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1),
-                       memory, ActionJournal(state / role.id / "actions.sqlite3"), social=social, social_graph=social_graph)
+                       memory, ActionJournal(state / role.id / "actions.sqlite3"), social=social, social_graph=social_graph,
+                       companion_adventure=CompanionAdventure(*source, role.owner_id) if role.adventure_advice and source else None)
     try:
         for role in roles:
             host = build(role)
