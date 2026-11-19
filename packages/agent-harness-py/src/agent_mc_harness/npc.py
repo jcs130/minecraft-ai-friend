@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import time
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -16,17 +17,18 @@ from uuid import UUID
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .journal import ActionJournal, work_key
 from .conversation import CONVERSATION_POLICY
-from .social import stamped_contact, timestamp
+from .journal import ActionJournal, work_key
 from .models import BodyEvent, Scope
 from .runtime import HarnessRuntime, Intent, PlanContext, Step, step_support
-
+from .social import stamped_contact, timestamp
 
 IDLE_GOAL = "Choose one useful activity grounded in the current scene; rest silently when none is needed."
 DANGER_GOAL = "React to a fresh danger observation."
 DIALOGUE_GOAL = "Decide whether current dialogue is addressed to you and needs a reply; listening silently is valid. Continue useful activity."
 NATIVE_DIALOGUE_TTL_MS = 120_000
+COMPANION_CHECK_IN_SECONDS = 180
+COMPANION_TRAVEL_BLOCKS = 16
 MAID_BOND_TONES = (
     "Friendly and practical, as companions just getting to know each other.",
     "Familiar and relaxed. Suggest a helpful next step when it fits.",
@@ -117,6 +119,33 @@ def owner_bond(role: NpcRole, context: PlanContext) -> dict[str, Any] | None:
 
 def already_guarding(native: dict[str, Any]) -> bool:
     return native.get("nativeGuardDelegated") is True and native.get("sitting") is not True
+
+
+def addressed_dialogue(event: BodyEvent, body_id: str) -> bool:
+    data = event.data
+    return (event.kind == "dialogue" and event.body_kind == "maid" and event.body_id == body_id
+            and data.get("serverAttributed") is True and data.get("maidId") == body_id
+            and data.get("deliveryScope") == "addressed" and data.get("recipientId") == body_id
+            and isinstance(data.get("eventId"), str))
+
+
+def companion_check_in(role: NpcRole, context: PlanContext) -> tuple[str, tuple[float, float, float]] | None:
+    native = current_native_state(context)
+    follow, companion = native.get("follow"), native.get("companion")
+    distance = native.get("ownerDistance")
+    snapshot = context.snapshot
+    if (not role.default_native_guard or "body:chat" not in role.allowed_tools or context.dialogue
+            or context.capabilities is None or step_support(Step(tool="body:chat"), context.capabilities)
+            or not native or not isinstance(native.get("conversation"), dict) or not already_guarding(native)
+            or native.get("taskId") != "touhou_little_maid:idle" or native.get("canMove") is not True
+            or any(native.get(flag) is not False for flag in ("passenger", "sitting", "homeMode"))
+            or not isinstance(follow, dict) or follow.get("active") is not True or follow.get("temporaryWait") is not False
+            or not isinstance(companion, dict) or companion.get("state") != "following_ready"
+            or not isinstance(distance, (int, float)) or isinstance(distance, bool) or not 0 <= distance <= 8 or danger(snapshot)
+            or snapshot is None or not snapshot.dimension or snapshot.position is None
+            or not all(axis in snapshot.position and math.isfinite(snapshot.position[axis]) for axis in "xyz")):
+        return None
+    return snapshot.dimension, (snapshot.position["x"], snapshot.position["y"], snapshot.position["z"])
 
 
 def routine_meal(role: NpcRole, context: PlanContext) -> Step | None:
@@ -240,6 +269,8 @@ class NpcPlanner:
         self.fast = fast
         self.next_meal = 0.0
         self.next_catch = 0.0
+        self.next_companion_check_in = time.monotonic() + 25
+        self.companion_anchor: tuple[str, tuple[float, float, float]] | None = None
 
     async def answer_dialogue(self, text: str, relationship: dict | None, *, public: bool) -> str:
         facts = {"message": text}
@@ -267,6 +298,10 @@ class NpcPlanner:
         role = self.role
         caps = context.capabilities
         now = time.monotonic()
+        addressed = [event for event in context.dialogue if addressed_dialogue(event, str(role.body_id))]
+        if addressed:
+            self.next_companion_check_in = max(self.next_companion_check_in, now + COMPANION_CHECK_IN_SECONDS)
+        check_in: str | None = None
         if intent.goal in (IDLE_GOAL, DANGER_GOAL) and now >= self.next_meal:
             meal = routine_meal(role, context)
             if meal:
@@ -282,7 +317,15 @@ class NpcPlanner:
                 self.next_catch = now + 300.0
                 self.last_route = {"layer": "native-policy", "reason": "prepared_native_fishing"}
                 return [catch]
+            if now >= self.next_companion_check_in and (position := companion_check_in(role, context)):
+                anchor = self.companion_anchor
+                if anchor is None or anchor[0] != position[0] or math.dist(anchor[1], position[1]) >= COMPANION_TRAVEL_BLOCKS:
+                    check_in = "near_partner" if anchor is None else "settled_after_travel"
+                    self.companion_anchor = position
+                    self.next_companion_check_in = now + COMPANION_CHECK_IN_SECONDS
         tools = [tool for tool in role.allowed_tools if not step_support(Step(tool=tool), caps)]
+        if check_in:
+            tools = ["body:chat"]
         schemas, native_catalogue = {}, []
         for action in caps.native_actions if caps else []:
             if "body:native:" + action.name not in tools:
@@ -309,6 +352,7 @@ class NpcPlanner:
             native_context = {key: value for key, value in native_context.items() if key != "favorability"}
         facts = {"goal": intent.goal, "self": {"name": role.name, "characterId": str(role.character_id)},
                  "currentDialogue": [event.model_dump(mode="json") for event in context.dialogue],
+                 "addressedEventIds": [event.data["eventId"] for event in addressed],
                  "observed": context.snapshot.model_dump(mode="json", exclude={"raw"}) if context.snapshot else None,
                  "nativeContext": native_context,
                  "ownerBond": owner_bond(role, context),
@@ -319,6 +363,11 @@ class NpcPlanner:
                  "capabilities": {"actions": {key: value.model_dump(mode="json") for key, value in caps.actions.items()},
                                   "native": native_catalogue, "nativeSchemas": schemas,
                                   "limits": caps.limits} if caps else None}
+        if check_in:
+            facts["companionOpportunity"] = check_in
+            facts["goal"] = ("You are beside your active companion in a quiet moment. Offer one brief, natural check-in or a useful "
+                             "next step based only on the current scene. This is an initiative from you, not a reply to old chat. "
+                             "Do not repeat a generic readiness message or claim to have performed work. Return [] if there is nothing to add.")
         if role.social_memory:
             # Legacy recall lacks verifiable per-peer visibility. Nearby replies
             # can still use local, non-conversation world observations.
@@ -362,6 +411,8 @@ class NpcPlanner:
             response = await self.model.request("/chat/completions", payload, 40)
         self.last_route = {"provider": role.provider, "model": role.model, "responseId": response.get("id"),
                            "seconds": round(time.monotonic() - started, 3)}
+        if check_in:
+            self.last_route["reason"] = check_in
         text = response["choices"][0]["message"]["content"]
         plan = json.loads(text)
         # Some JSON-mode providers use {} for an empty answer. It grants no
@@ -374,13 +425,15 @@ class NpcPlanner:
         if not isinstance(plan, dict) or set(plan) != {"steps"}:
             raise ValueError("npc_plan_schema")
         steps = reviewed_steps(role, context, plan["steps"])
-        if intent.goal == IDLE_GOAL and not context.dialogue:
+        if check_in:
+            steps = [step for step in steps if step.tool == "body:chat"][:1]
+        elif intent.goal == IDLE_GOAL and not context.dialogue:
             inactive = {"body:chat"}
             if already_guarding(current_native_state(context)):
                 inactive.update({"body:stay", "body:stop", "body:native:sit"})
             steps = [step for step in steps if step.tool not in inactive]
         speech = [step.args["text"] for step in steps if step.tool == "body:chat"]
-        if speech and context.dialogue and self.fast is not None:
+        if speech and context.dialogue and not addressed and self.fast is not None:
             allowed = await self.fast.allow_reply(role, context, speech)
             self.last_route["attention"] = self.fast.last_attention
             if not allowed:
@@ -644,6 +697,11 @@ class NpcHost:
                     threatened = False
                 now = time.monotonic()
                 events = list(self.pending_dialogue)[:8]
+                # A named speaker gets one turn and a receipt of their own, even with ambient chatter queued.
+                direct = next((key for key, event in self.pending_dialogue.items()
+                               if addressed_dialogue(event, identity.body_id)), None)
+                if direct:
+                    events = [direct]
                 self._expire_dialogue(identity.body_id, events)
                 acknowledged = [event for event in events if self.journal.handled(identity.body_id, event)]
                 if self.role.body_kind == "numen":

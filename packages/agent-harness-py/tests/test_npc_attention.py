@@ -3,12 +3,12 @@ import json
 
 import httpx
 import pytest
+from simbody import SimBody
+from test_server_npc import role
 
 from agent_mc_harness.journal import ActionJournal
 from agent_mc_harness.models import BodyEvent, BodyIdentity, NativeAction, WorldRef
 from agent_mc_harness.npc import FastSelector, ModelClient, NpcHost, NpcPlanner
-from simbody import SimBody
-from test_server_npc import role
 from agent_mc_harness.runtime import Intent, PlanContext
 
 
@@ -148,5 +148,44 @@ def test_attention_checks_proposed_speech_without_executing_actions(choice, conf
             assert any(step.tool == "body:chat" for step in steps) == expected
             assert paths == ["/v1/chat/completions", "/v1/systemone"]
         finally:
+            await client.close()
+    asyncio.run(run())
+
+
+def test_addressed_maid_turn_is_prioritized_and_receipted_without_ambient_attention(tmp_path):
+    async def run():
+        actor = role(body_kind="maid", name="肥鱼")
+        body_id = str(actor.body_id)
+        requests = []
+
+        def answer(request):
+            assert request.url.path.endswith("chat/completions")
+            payload = json.loads(request.content)
+            facts = json.loads(payload["messages"][1]["content"])
+            requests.append(facts)
+            speech = [{"tool": "body:chat", "args": {"text": "我在你旁边。"}}] if facts["addressedEventIds"] else []
+            return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps({"steps": speech})}}]})
+
+        client = ModelClient("http://127.0.0.1:4000/v1", "test", http=httpx.AsyncClient(transport=httpx.MockTransport(answer)))
+        body = body_for(actor)
+        journal = ActionJournal(tmp_path / "attention.sqlite")
+        host = NpcHost(actor, body, NpcPlanner(actor, client, fast=FastSelector(client)), None, journal)
+        metadata = {"maidId": body_id, "speakerId": str(actor.owner_id), "serverAttributed": True}
+        host._event(BodyEvent(kind="dialogue", body_kind="maid", body_id=body_id, text="可米，等一下。",
+                              data={**metadata, "eventId": "ambient", "deliveryScope": "nearby", "recipientId": body_id}))
+        host._event(BodyEvent(kind="dialogue", body_kind="maid", body_id=body_id, text="你在吗？",
+                              data={**metadata, "eventId": "addressed", "deliveryScope": "addressed", "recipientId": body_id}))
+
+        task = asyncio.create_task(host.run())
+        try:
+            await wait_until(lambda: journal.acknowledged(body_id, "addressed"))
+            assert requests[0]["addressedEventIds"] == ["addressed"]
+            assert [e["text"] for e in requests[0]["currentDialogue"]] == ["你在吗？"]
+            assert journal.replied(body_id, "addressed") and not journal.replied(body_id, "ambient")
+            assert sum(a.verb == "chat" for a in body.acts) == 1
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            await host.close()
             await client.close()
     asyncio.run(run())

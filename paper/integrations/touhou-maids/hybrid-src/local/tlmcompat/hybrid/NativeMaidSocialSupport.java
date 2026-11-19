@@ -398,7 +398,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
     private void initiate(long now){
         for(String id:plugin.registeredMaids().keySet()){
             EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(UUID.fromString(id)));
-            if(maid==null||!enabled(maid))continue;
+            if(maid==null||!enabled(maid)||plugin.unifiedBody(maid.getUUID()))continue;
             Player partner=Bukkit.getPlayer(maid.getOwnerUUID());
             if(decide(maid,partner,now)){initiative.opportunity(now,false,"",0,0);continue;}
             boolean together=partner!=null&&partner.isOnline()&&!partner.isDead()&&!partner.isSleeping()&&!partner.isInvisible()
