@@ -162,6 +162,14 @@ async function main() {
 
     await setup('sword', agentName, 'iron_sword');
     const sword = await check('sword', agentName, botAttack);
+    if (mode === 'candidate') {
+      const next = await check('sword', agentName, botAttack);
+      assert.notEqual(next.animation, sword.animation, 'Consecutive ordinary sword hits should use successive main-hand animations');
+      assert.equal(next.hand, 'MAIN_HAND');
+      await sleep(Math.ceil(sword.ticks * 3 * 50) + 300);
+      const rested = await check('sword', agentName, botAttack);
+      assert.equal(rested.animation, sword.animation, 'An idle fighter starts a fresh visual sequence');
+    }
     await setup('air', agentName, 'iron_sword');
     await check('air', agentName, () => bot.swingArm('right'), { damage: 0, animation: 0 });
     await setup('unarmed', agentName, 'air', 'iron_sword');
