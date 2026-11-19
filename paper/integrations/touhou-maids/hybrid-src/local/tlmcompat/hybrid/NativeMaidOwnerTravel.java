@@ -56,17 +56,24 @@ final class NativeMaidOwnerTravel implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void catchUpOnJoin(org.bukkit.event.player.PlayerJoinEvent event) {
         Player owner = event.getPlayer();
+        UUID ownerId = owner.getUniqueId();
         var binding = plugin.personal;
-        if (binding == null || !binding.owner().equals(owner.getUniqueId())) return;
+        if (binding == null || !binding.allOwned() && !ownerId.equals(binding.owner())) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (Bukkit.getPlayer(binding.owner()) != owner || !canTravel(owner) || pending.containsKey(binding.owner())
-                    || !plugin.personalTravel(binding.maid()) || !plugin.registeredMaids().has(binding.maid().toString())) return;
-            var body = Bukkit.getEntity(binding.maid());
-            Location last = body == null ? NativeMaidLocation.indexed(binding.owner(), binding.maid()) : body.getLocation();
-            if (last == null || last.getWorld().equals(owner.getWorld()) || arriving.containsKey(binding.owner())) return;
-            Trip trip = new Trip(owner, last.getWorld(), owner.getLocation(), false, 0,
-                List.of(new Candidate(binding.maid(), last)));
-            pending.put(binding.owner(), trip);
+            if (Bukkit.getPlayer(ownerId) != owner || !canTravel(owner)
+                    || pending.containsKey(ownerId) || arriving.containsKey(ownerId)) return;
+            List<Candidate> companions = new ArrayList<>();
+            for (var entry : plugin.registeredMaids().entrySet()) {
+                if (!ownerId.toString().equals(entry.getValue().getAsJsonObject().get("ownerId").getAsString())) continue;
+                UUID id = UUID.fromString(entry.getKey());
+                if ((!binding.allOwned() && !id.equals(binding.maid())) || !plugin.personalTravel(id) || plugin.unifiedBody(id)) continue;
+                var body = Bukkit.getEntity(id);
+                Location last = body == null ? NativeMaidLocation.indexed(ownerId, id) : body.getLocation();
+                if (last != null && !last.getWorld().equals(owner.getWorld())) companions.add(new Candidate(id, last));
+            }
+            if (companions.isEmpty()) return;
+            Trip trip = new Trip(owner, companions.getFirst().sourceHint().getWorld(), owner.getLocation(), false, 0, List.copyOf(companions));
+            pending.put(ownerId, trip);
             arrive(trip, trip.destination());
         }, 40);
     }
@@ -268,8 +275,9 @@ final class NativeMaidOwnerTravel implements Listener {
             for (var candidate : trip.companions()) {
                 UUID id = candidate.id();
                 if (leftArrival && !plugin.personalTravel(id)) continue;
-                EntityMaid maid = followingMaid(id, ownerId, trip.source());
-                if (maid == null || (trip.source().equals(owner.getWorld())
+                World source = candidate.sourceHint() == null ? trip.source() : candidate.sourceHint().getWorld();
+                EntityMaid maid = followingMaid(id, ownerId, source);
+                if (maid == null || (source.equals(owner.getWorld())
                         && maid.getBukkitEntity().getLocation().distanceSquared(current) < 16)) continue;
                 Location landing = trip.trialStage() > 0
                     ? safe(current, spot -> trialArrival(owner, trip.trialStage(), spot), true) : safe(current, spot -> true, plugin.personalTravel(id));

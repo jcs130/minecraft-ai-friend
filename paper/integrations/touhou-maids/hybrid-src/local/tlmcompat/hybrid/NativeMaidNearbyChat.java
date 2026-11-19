@@ -51,13 +51,25 @@ final class NativeMaidNearbyChat implements Listener {
         if(plugin.ownerDialogue(actor,maid)){
             if (addressesSomeoneElse(actor, maid, text)) return null;
             String vocative=MaidAddressing.partnerAddressed("女仆",text);
-            if(vocative!=null)return new Address(vocative,true);
+            if(vocative!=null){
+                if(facing||onlyNearbyPersonalMaid(actor,maid))return new Address(vocative,true);
+                return null;
+            }
             if(facing && text!=null && !text.isBlank()
                 && text.length()<=140 && !text.stripLeading().matches("[/!@].*")
                 && text.codePoints().noneMatch(c->Character.isISOControl(c)||c==0xA7))return new Address(text.strip(),true);
         }
         String followup=conversation.followup(actor.getUniqueId(),maid.getUUID(),actor.getWorld().getUID(),actor,text,System.nanoTime());
         return followup==null?null:new Address(followup,false);
+    }
+    private boolean onlyNearbyPersonalMaid(Player owner,EntityMaid maid){
+        int range=MaidConversationRange.PARTNER;
+        for(var other:owner.getNearbyEntities(range,range,range)){
+            if(other.getUniqueId().equals(maid.getUUID())||!owner.canSee(other))continue;
+            var body=HybridMaidPlugin.nativeMaid(other);
+            if(plugin.ownerDialogue(owner,body)&&MaidConversationRange.within(body,owner,range))return false;
+        }
+        return true;
     }
     private boolean addressesSomeoneElse(Player actor, EntityMaid maid, String text) {
         int radius = MaidConversationRange.speaker(maid, actor);
@@ -77,11 +89,13 @@ final class NativeMaidNearbyChat implements Listener {
     }
     private void sample(){
         long now=System.currentTimeMillis();
+        positions.values().removeIf(history->history.isEmpty()||history.peekLast().time<now-180_000);
         for(String key:plugin.registeredMaids().keySet()){
             UUID id=UUID.fromString(key);EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
             if(maid==null||!plugin.sharedDialogueEnabled(maid)&&!plugin.personalDialogue(maid))continue;
-            var history=positions.computeIfAbsent(id,k->new ArrayDeque<>());
             Player owner=plugin.personalDialogue(maid)?Bukkit.getPlayer(maid.getOwnerUUID()):null;
+            if(plugin.personalDialogue(maid)&&(owner==null||!MaidConversationRange.within(maid,owner,MaidConversationRange.PARTNER)))continue;
+            var history=positions.computeIfAbsent(id,k->new ArrayDeque<>());
             boolean facing=owner!=null&&MaidConversationRange.within(maid,owner,5)&&owner.getTargetEntity(5)==maid.getBukkitEntity();
             history.addLast(new Pose(now,maid.getBukkitEntity().getWorld().getUID(),maid.getX(),maid.getY(),maid.getZ(),facing));
             while(history.size()>800||!history.isEmpty()&&history.peekFirst().time<now-180_000)history.removeFirst();

@@ -208,10 +208,10 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         while(humanDialogue.size()>512)humanDialogue.remove(humanDialogue.keySet().iterator().next());
     }
     boolean personalDialogue(EntityMaid maid){
-        return personal!=null && personal.matches(maid) && personalTravel(maid.getUUID());
+        return personal!=null && personal.matches(maid) && personalTravel(maid.getUUID()) && !unifiedBody(maid.getUUID());
     }
     boolean ownerDialogue(Player actor,EntityMaid maid){
-        return actor!=null && personalDialogue(maid) && personal.owner().equals(actor.getUniqueId());
+        return actor!=null && personalDialogue(maid) && actor.getUniqueId().equals(maid.getOwnerUUID());
     }
     boolean nearbyDialogue(Player actor,EntityMaid maid){return sharedDialogueEnabled(maid)||ownerDialogue(actor,maid);}
     boolean personalModelReady(){return brains!=null&&brains.personalSite()!=null;}
@@ -256,7 +256,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(Bukkit.isPrimaryThread()&&nearbyChat!=null)nearbyChat.voice(actor,world,utterance,start,end,bounds,range,text,audience,false);
     }
     public void acceptPersonalNearbyVoice(UUID actor,UUID world,UUID utterance,long start,long end,double[] bounds,double range,String text,Set<UUID> audience){
-        if(Bukkit.isPrimaryThread()&&nearbyChat!=null&&personal!=null&&personal.owner().equals(actor))nearbyChat.voice(actor,world,utterance,start,end,bounds,range,text,audience,true);
+        if(Bukkit.isPrimaryThread()&&nearbyChat!=null&&personal!=null&&(personal.allOwned()||personal.owner().equals(actor)))nearbyChat.voice(actor,world,utterance,start,end,bounds,range,text,audience,true);
     }
     void validatePublicIdle(EntityMaid maid){if(social!=null)social.validateIdle(maid);}
     void validateCompanionChat(Player actor,EntityMaid maid){agentSupport.validateChat(actor,maid);}
@@ -289,6 +289,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             agentSupport=new NativeMaidAgentSupport(this,receipts);
             brains=NativeMaidBrainSupport.create(this);
             personal=PersonalMaidDialogue.load(this);
+            if(personal!=null)personal.watchCatalog(this);
             companion=new NativeMaidCompanionSupport(this);
             NativeMaidOwnerTravel travel=new NativeMaidOwnerTravel(this);
             ownerTravel=travel;
@@ -319,6 +320,10 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             if (!maid.isAlive() || maid.isRemoved() || owner(maid) == null) return;
             try {
                 bind(maid);
+                if (personalDialogue(maid) && personal.allOwned()) {
+                    brains.applyPersonalDefaults(maid);
+                    if (speech != null) speech.applyNativeDefault(maid);
+                }
                 if (bodyPort != null && unifiedBody(maid.getUUID())) NativeMaidKit.initialize(maid);
                 if (agentSupport != null) agentSupport.observeLoaded(maid);
             } catch (Exception error) {
