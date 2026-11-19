@@ -1219,9 +1219,10 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   {
     name: 'look',
     doc: `{"skill":"look","at":[100,68,-20]} 原地转头看向目标格中心，不移动、不右键或挖掘。换观察方向后可用 mc_visual 拍摄。
+                                                 按角度转头用 control，keys:[]、durationMs:50。世界方位用 orientation:"absolute"，相对当前朝向转动用 "relative"，yawDeg/pitchDeg 单位为度。定向施法前核对转头回执。
                                                  朝向目标不证明目标可见；墙和遮挡仍须由实际画面核对。若目标是当前可见告示牌，回执附已收到的正反面原文，null 是未收到，不是空白；读字不要 use 打开编辑框。`,
     fields: [{ key: 'at', kind: 'anchor', required: true,
-      error: `look 要 at:[x,y,z](${RELATIVE_HINT}),或一个 mc_map 路标名`,
+      error: `look 要 at:[x,y,z](${RELATIVE_HINT}),或一个 mc_map 路标名。按角度原地转头请用 control，keys:[]、durationMs:50、yawDeg/pitchDeg；orientation:"absolute" 指世界方位，"relative" 指相对当前朝向。`,
       doc: '要面向的目标格，支持相对坐标和已登记路标。' }],
   },
   {

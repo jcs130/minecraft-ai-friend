@@ -72,6 +72,7 @@ try {
     if (typeof program !== 'function') throw new Error('code必须是异步函数体');
     result = workerData.validate ? { valid: true } : await program();
   }
+  if (workerData.validate) result = { ...result, scope: 'syntax-only', executed: false };
   parentPort.postMessage({ kind: 'done', value: result === undefined ? null : result });
 } catch (error) {
   parentPort.postMessage({ kind: 'error', error: String(error).slice(0, 1600) });

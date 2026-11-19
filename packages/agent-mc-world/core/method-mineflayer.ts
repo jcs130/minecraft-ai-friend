@@ -43,7 +43,7 @@ export const NATIVE_API = Object.freeze({
   lookAt: 'lookAt(point,force?): Promise<void>. Use Vec3 coordinates.',
   setControlState: 'setControlState(control,state): native key input. Keys remain held across awaited calls in this program; all are released on completion or revocation. Normal collision physics applies; flight uses existing flight/control tools.',
   clearControlStates: 'clearControlStates(): release all native movement keys held by this program.',
-  waitForTicks: 'waitForTicks(ticks): native physics ticks, 1..200. Await serially; cancellation revokes the entire program.',
+  waitForTicks: 'await bot.waitForTicks(ticks) waits for 1..200 native physics ticks. The method sandbox has no global setTimeout. Await serially. Cancellation revokes the program. Previously sent actions or commands can still have effects. Read the original run and current position before continuing.',
   'pathfinder.goto': 'await bot.pathfinder.goto(new goals.GoalBlock(x,y,z)) or new goals.GoalNear(x,y,z,integerRange0..16). One awaited SDK call owns the walk until measured arrival or failure. Uses existing walking routes without digging or scaffolding. Goal coordinates are floored like Mineflayer. Cancellation/death/GUI/disconnect revoke the originating program; an accepted route is not arrival.',
   dig: 'dig(block,forceLook=true,digFace="auto"): native dig with current tool and measured reach; no navigation or automatic tool selection. digFace is auto/raycast or a Vec3 face. Protected, unknown-permission or changed blocks are rejected.',
   stopDigging: 'stopDigging(): interrupt current native digging.',

@@ -181,7 +181,16 @@ export class MethodRunner {
     worker.on('exit', (code) => { if (!finished) finish('failed', `脚本线程退出(${code})`); });
     worker.on('message', (message) => {
       if (finished) return;
-      if (message.kind === 'error') { finish('failed', String(message.error)); return; }
+      if (message.kind === 'error') {
+        let error = String(message.error);
+        if (error === 'TypeError: setTimeout is not a function') {
+          error += '。方法沙箱不提供全局 setTimeout。';
+          if (this.host.nativeMethods?.includes('waitForTicks')) error += '等待物理刻可用 await bot.waitForTicks(ticks)，ticks 为 1..200 的整数。';
+          if (run.trace.length) error += `先读 {runId:${run.id}} 的调用回执和当前身体位置；已发出的动作或施法命令不会随脚本失败回滚。`;
+        }
+        finish('failed', error);
+        return;
+      }
       if (message.kind === 'procedure') {
         const invocation = run.procedure?.invocations.find(i => i.invocation === message.invocation);
         if (!run.procedure || request.validate || !request.procedure?.graph.versions[message.revision]

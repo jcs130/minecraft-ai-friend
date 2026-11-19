@@ -7,6 +7,8 @@ import { Executor, type TaskReport } from '../core/executor.ts';
 import type { SkillCall } from '../core/skills.ts';
 import { SkillBlocked, type SkillContext } from '../core/skill-context.ts';
 import { skillTunnel } from '../core/skills-dig.ts';
+import { Upkeep } from '../core/placement.ts';
+import { PlacementRetryDeferred } from '../core/placement-miss-state.ts';
 
 // Keep the executor, dependency gates and tunnel's physical checks real. Only
 // replace placement/movement transport so the test controls server confirmation.
@@ -59,6 +61,38 @@ function rig(mode: 'confirmed' | 'failed' | 'unconfirmed' = 'confirmed') {
   Object.assign(exec, { tunnelSupportStops: stops });
   return { exec, bot, cells, reports, stops };
 }
+
+it.each(['unconfirmed', 'reference-disappears', 'no-reference', 'deferred', 'denied'] as const)(
+  'reports the actual support placement path: %s', async mode => {
+    const r = rig();
+    const cell = { x: -63, y: 81, z: -78 };
+    const support = '-63,80,-78';
+    if (mode !== 'no-reference') r.cells.set(support, 'stone');
+    const placement = vi.mocked(r.bot.placeBlock).mockImplementation(async () => {
+      if (mode === 'denied') throw new SkillBlocked('服务端保护预检 deny', [], 'server');
+      if (mode === 'deferred') throw new PlacementRetryDeferred(cell, 100, 900);
+      if (mode === 'reference-disappears') r.cells.delete(support);
+      throw new Error('Timed out waiting for block update');
+    });
+    const finish = vi.fn();
+    const ctx = { aborted: () => false, escape: { active: false }, policy: { get: () => ({ scaffold: ['netherrack'] }) },
+      permitResourcePlacement: () => ({ ok: true, finish }) } as unknown as SkillContext;
+    const upkeep = new Upkeep(r.bot, ctx);
+    try {
+      if (mode === 'denied') {
+        await expect(upkeep.footing(cell)).rejects.toThrow('服务端保护预检 deny');
+      } else {
+        expect(await upkeep.footing(cell)).toBe(false);
+        const reason = upkeep.why('footing');
+        if (mode === 'no-reference') expect(reason).toMatch(/放置时没有可贴的实心面，本次未发包/);
+        else if (mode === 'deferred') expect(reason).toContain('同场景失败缓存');
+        else expect(reason).toMatch(/填充 \(-63, 81, -78\).*未确认放置成功.*回读：air/);
+      }
+      expect(placement).toHaveBeenCalledTimes(mode === 'no-reference' ? 0 : 1);
+      expect(finish).toHaveBeenCalledWith(false);
+    } finally { r.exec.shutdown(); }
+  },
+);
 
 afterEach(() => vi.useRealTimers());
 

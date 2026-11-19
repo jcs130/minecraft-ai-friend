@@ -7,6 +7,18 @@ import type { Bot } from 'mineflayer';
 import { readSkillHelp } from '../core/skills.ts';
 import { getResourceActionContract } from '../src/collect-contract.ts';
 
+it('points an angular look request to the supported rotation without dispatching later steps', () => {
+  const turn = { yawDeg: -135, pitchDeg: 15, orientation: 'relative' };
+  const rejected = parseSteps([{ skill: 'look', ...turn }, { skill: 'chat', text: 'after turning' }]);
+  expect(rejected).toMatchObject({ error: expect.stringContaining('control') });
+  expect(rejected).not.toHaveProperty('steps');
+  for (const orientation of ['relative', 'absolute']) {
+    const step = { skill: 'control', keys: [], durationMs: 50, ...turn, orientation };
+    expect(parseSteps([step])).toMatchObject({ steps: [step] });
+  }
+  expect(parseSteps([{ skill: 'look', at: [1, 75, -8] }])).toMatchObject({ steps: [{ skill: 'look', at: [1, 75, -8] }] });
+});
+
 it('returns the dropped-item alternative without rewriting an ambiguous resource operation', () => {
   const request = [{ skill: 'collect', radius: 12, timeoutMs: 5000 }];
   const result = parseSteps(request);

@@ -2311,7 +2311,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'bot and Vec3 expose a bounded asynchronous transport for Mineflayer public primitives; use {api:"index"} then {api:"blockAt"}, {api:"activateItem"}, etc. for native signatures and differences. '
       + 'Native calls preserve the current hand and do not navigate or select tools. bot.blockAt returns Block|null with getProperties() for your own JavaScript result checks. '
       + 'The first native body call queues a body lease held until program end; after it, mc.do is unavailable in that program. Read calls do not acquire the body. '
-      + 'No imports, process, filesystem, network or protected raw bot access. Calls must be awaited serially. '
+      + 'No imports, process, filesystem, network or protected raw bot access. Calls must be awaited serially. For a delay use await bot.waitForTicks(ticks) with an integer from 1 to 200. The sandbox has no global setTimeout. '
       + `Limits: ${METHOD_LIMITS.sourceChars} source chars, ${METHOD_LIMITS.calls} SDK calls, ${METHOD_LIMITS.actions} action groups, default ${METHOD_LIMITS.durationMs}ms including queue waits, maximum ${METHOD_LIMITS.maxDurationMs}ms. `
       + 'One body program and one offline syntax validation may run concurrently. New admitted body work, stop, death, disconnect, World stop or timeout revoke body execution and its own pending task; validation has no body lease. '
       + 'Returns a run id immediately; {runId} reads result and call summaries, {runId,call} expands one complete SDK call; {} lists the last eight run summaries, {stop:true} cancels the current run. '

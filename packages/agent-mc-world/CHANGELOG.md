@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.108
+
+Script validation identifies syntax-only checks. If a method calls an unavailable timer, the failure receipt points to the original run and the supported physics-tick wait. Directional look errors identify the appropriate control input. Footing placement distinguishes a missing attachment face from an attempted placement whose result is still unconfirmed.
+
 ## 0.5.7-rc.160-preview.107
 
 Mob deaths can carry the server's final damage type, responsible entity and direct entity. Nearby observations and matching attack receipts retain those identities. Ordinary servers continue to report uncredited native deaths.
