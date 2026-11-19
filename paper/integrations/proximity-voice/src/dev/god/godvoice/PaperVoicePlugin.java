@@ -69,11 +69,14 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private final class Job implements SpeechLane.Item {
         final UUID actor,session,request;final String fingerprint,text,voice;final byte[] audio;final long created=System.currentTimeMillis();
         final PrivateRecipient recipient;
+        final Map<UUID,Player> audience;
+        final double range;
         AudioPlayer player;SpeechFrames frames;OpusEncoder encoder;boolean cancelled;String cancelReason="PLAYBACK_INTERRUPTED";
         UUID channel;VoiceDelivery delivery;
         boolean waitingForTurn;
-        Job(UUID a,UUID s,UUID r,String f,String t,String v,byte[] b,PrivateRecipient recipient){
+        Job(UUID a,UUID s,UUID r,String f,String t,String v,byte[] b,PrivateRecipient recipient,Map<UUID,Player> audience,double range){
             actor=a;session=s;request=r;fingerprint=f;text=t;voice=v;audio=b;this.recipient=recipient;
+            this.audience=audience;this.range=range;
         }
         public String id(){return request.toString();}public long createdAt(){return created;}
     }
@@ -128,7 +131,9 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     }
     private void main(Runnable action){if(!stopping)Bukkit.getScheduler().runTask(this,action);}
     private void syncPresence(Player player){
-        if(api!=null&&bridgePeers.contains(player.getUniqueId())&&player.getListeningPluginChannels().contains(CHANNEL)&&player.hasPermission("qiandeng.voice.use"))presence.attach(player.getUniqueId());
+        boolean client=bridgePeers.contains(player.getUniqueId()) && player.getListeningPluginChannels().contains(CHANNEL);
+        boolean hosted=npcs!=null && npcs.hostedReady(player) && player.hasPermission("voicechat.listen");
+        if(api!=null && (client||hosted) && player.hasPermission("qiandeng.voice.use"))presence.attach(player.getUniqueId());
         else presence.detach(player.getUniqueId());
     }
     @EventHandler public void registered(PlayerRegisterChannelEvent event){
@@ -137,7 +142,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     }
     @EventHandler public void unregistered(PlayerUnregisterChannelEvent event){
         if(!event.getChannel().equals(CHANNEL))return;
-        UUID actor=event.getPlayer().getUniqueId();bridgePeers.remove(actor);presence.detach(actor);eventCaptions.remove(actor);
+        UUID actor=event.getPlayer().getUniqueId();bridgePeers.remove(actor);syncPresence(event.getPlayer());eventCaptions.remove(actor);
     }
     private void snapshot(){
         Map<UUID,VoiceAudience.Actor> all=new HashMap<>();
@@ -146,11 +151,18 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             all.put(p.getUniqueId(),new VoiceAudience.Actor(p.getUniqueId(),session,at.getWorld().getUID(),at.getX(),at.getY(),at.getZ(),p.getName(),profiles.getBoolean(p.getUniqueId()+".captions",getConfig().getBoolean("captions-default",true))));
         }
         if(npcs!=null)npcs.sample(all);
+        if(npcs!=null && Bukkit.getCurrentTick()%20==0){
+            for(var profile:npcs.profiles())if(profile.kind().equals("numen")){
+                Player player=Bukkit.getPlayer(profile.id());
+                if(player!=null)syncPresence(player);
+            }
+        }
         snapshot=new VoiceAudience.Snapshot(System.currentTimeMillis(),all);
         turns.update(snapshot, System.currentTimeMillis());
         uploads.expire(System.currentTimeMillis());
     }
     @EventHandler public void quit(PlayerQuitEvent event){
+        if(npcs!=null)npcs.disconnected(event.getPlayer());
         UUID actor=event.getPlayer().getUniqueId();bridgePeers.remove(actor);presence.forget(actor);sessions.remove(actor);eventCaptions.remove(actor);uploads.disconnect(actor);dropCapture(actor);sequences.remove(actor);
         cancelSpeech(actor,"ACTOR_DISCONNECTED");
         turns.forget(actor);
@@ -259,7 +271,13 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         boolean isolated=connection!=null&&connection.isInGroup()&&connection.getGroup()!=null&&connection.getGroup().getType()==Group.Type.ISOLATED;
         boolean canListen=receiver.hasPermission("voicechat.listen");
         String code=presence.isConnected(receiver.getUniqueId())?"VOICE_BRIDGE_CONNECTED":VoiceDiagnostics.connection(current!=null,installed,connected,disabled,canListen,isolated);
+        if(!installed && npcs!=null && npcs.profile(receiver.getUniqueId())!=null && npcs.live(receiver.getUniqueId())==receiver){
+            code=current==null?"VOICE_SERVER_STARTING":!canListen?"VOICE_LISTEN_PERMISSION_MISSING":isolated?"VOICE_ISOLATED_GROUP":
+                 npcs.hostedReady(receiver)&&presence.isConnected(receiver.getUniqueId())?"VOICE_HOSTED_NPC_READY":"VOICE_HOSTED_NPC_NOT_READY";
+        }
         double range=current==null?distanceCap:Math.min(distanceCap,current.getVoiceChatDistance());
+        var profile=npcs==null?null:npcs.profile(receiver.getUniqueId());
+        if(profile!=null)range=Math.min(range,profile.range());
         recipient.sendMessage("[语音] "+receiver.getName()+" "+code+"；installed="+installed+", connected="+connected+", disabled="+disabled+", listen="+canListen+", isolatedGroup="+isolated+"；附近距离="+range+"。"+VoiceDiagnostics.hint(code));
         if(speaker!=null){
             boolean same=receiver.getWorld().equals(speaker.getWorld());
@@ -316,8 +334,12 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         if(!NpcDialoguePolicy.fresh(occurredAt,System.currentTimeMillis()))return "{\"state\":\"skipped\",\"reason\":\"stale_speech\"}";
         NpcDialoguePolicy.text(text);
         npcs.said(actor,original,text,occurredAt);
-        submitText(player,request,text,profile.voice());
+        npcs.nearbySpokenText(player,profile,request,text);
+        submitText(player,request,text,profile.voice(),profile.range());
         return "{\"state\":\"submitted\",\"requestId\":\""+request+"\",\"actualHearingVerified\":false}";
+    }
+    boolean wantsCaptions(Player player){
+        return profiles.getBoolean(player.getUniqueId()+".captions",getConfig().getBoolean("captions-default",true));
     }
     public String npcSpeechStatus(UUID actor,String original){
         UUID request=NpcDialoguePolicy.speechId(actor,original);var row=ledger.get(actor,request);
@@ -326,20 +348,37 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         if(row!=null&&row.delivery()!=null)result.add("delivery",gson.toJsonTree(row.delivery()));return result.toString();
     }
     private void submitText(Player p,UUID id,String text,String voice){
+        submitText(p,id,text,voice,distanceCap);
+    }
+    private void submitText(Player p,UUID id,String text,String voice,double range){
         if(text==null||text.isBlank()||text.length()>200)throw new IllegalArgumentException("TEXT_REQUIRED_MAX_200");
         if(!validVoice(voice))throw new IllegalArgumentException("VOICE_NOT_SELECTED");
-        submit(p,id,hash("tts\0"+voice+"\0"+text),text,voice,null);
+        submit(p,id,hash("tts\0"+voice+"\0"+text),text,voice,null,null,null,range);
     }
     private void submit(Player p,UUID id,String fingerprint,String text,String voice,byte[] audio){
         submit(p,id,fingerprint,text,voice,audio,null);
     }
     private void submit(Player p,UUID id,String fingerprint,String text,String voice,byte[] audio,PrivateRecipient recipient){
+        submit(p,id,fingerprint,text,voice,audio,recipient,null,distanceCap);
+    }
+    void speakHostedReply(NpcDialoguePolicy.Profile profile,UUID conversation,String reply,Player requester,
+                          boolean privateDialogue,Map<UUID,Player> textAudience){
+        if(!(npcs.live(profile.id()) instanceof Player speaker) || !npcs.hostedReady(speaker))return;
+        var listener=new PrivateRecipient(requester,sessions.get(requester.getUniqueId()));
+        if(privateDialogue && (listener.session()==null || privateConnection(listener)==null))return;
+        // The social request is single-use. A private reply can never fall back to a nearby channel.
+        var id=NpcDialoguePolicy.speechId(profile.id(),"social_"+conversation);
+        var fingerprint=hash("social-tts\0"+conversation+"\0"+privateDialogue+"\0"+requester.getUniqueId()+"\0"+profile.voice()+"\0"+reply);
+        submit(speaker,id,fingerprint,reply,profile.voice(),null,privateDialogue?listener:null,Map.copyOf(textAudience),profile.range());
+    }
+    private void submit(Player p,UUID id,String fingerprint,String text,String voice,byte[] audio,PrivateRecipient recipient,
+                        Map<UUID,Player> audience,double range){
         VoiceLedger.Entry existing=ledger.get(p.getUniqueId(),id);
         if(existing!=null){if(!existing.fingerprint().equals(fingerprint))throw new IllegalArgumentException("REQUEST_ID_REUSED");reply(p,id,existing.state(),existing.reason());return;}
         if(api==null)throw new IllegalArgumentException("VOICE_SERVER_STARTING");
         if(outstanding.incrementAndGet()>maximumSpeech){outstanding.decrementAndGet();throw new IllegalArgumentException("VOICE_QUEUE_FULL");}
         UUID actor=p.getUniqueId(),session=sessions.computeIfAbsent(actor,k->UUID.randomUUID());
-        Job job=new Job(actor,session,id,fingerprint,text,voice,audio,recipient);
+        Job job=new Job(actor,session,id,fingerprint,text,voice,audio,recipient,audience,range);
         io.execute(()->{
             try{
                 boolean fresh=ledger.reserve(actor,id,fingerprint);
@@ -389,7 +428,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     }
     private boolean takeTurnOrWait(Job job,short[] pcm) {
         Player source=Bukkit.getPlayer(job.actor);
-        if (job.recipient==null && !publicSpeechTurn(source,job.request,Math.min(distanceCap,api.getVoiceChatDistance()),true)) {
+        if (job.recipient==null && !publicSpeechTurn(source,job.request,Math.min(job.range,Math.min(distanceCap,api.getVoiceChatDistance())),true)) {
             if (!job.waitingForTurn) {
                 job.waitingForTurn=true;
                 reply(source,job.request,"queued","WAITING_FOR_NEARBY_SPEAKER");
@@ -413,7 +452,15 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             if(job.recipient==null){
                 var nearby=api.createEntityAudioChannel(job.channel,api.fromEntity(source));
                 if(nearby==null)throw new IllegalStateException("No entity audio channel");
-                nearby.setDistance((float)Math.min(distanceCap,api.getVoiceChatDistance()));
+                nearby.setDistance((float)Math.min(job.range,Math.min(distanceCap,api.getVoiceChatDistance())));
+                if(npcs!=null && npcs.configured(job.actor))nearby.setFilter(listener->{
+                    if(job.audience!=null && job.audience.get(listener.getUuid())!=listener.getPlayer())return false;
+                    var actors=snapshot.actors();
+                    var speaker=actors.get(job.actor);var observer=actors.get(listener.getUuid());
+                    if(speaker==null || observer==null || !speaker.world().equals(observer.world()))return false;
+                    double dx=speaker.x()-observer.x(),dy=speaker.y()-observer.y(),dz=speaker.z()-observer.z();
+                    return dx*dx+dy*dy+dz*dz<=job.range*job.range;
+                });
                 channel=nearby;
             }else{
                 var connection=privateConnection(job.recipient);

@@ -275,13 +275,22 @@ final class NpcSocial {
                 String line=(privateDialogue && !source.automatic() ? "[私聊] " : "[居民] ")
                     +(source.automatic()?profile.display():profile.name())+"："+reply;
                 source.player().sendMessage(line);
+                Map<UUID,Player> heard=new HashMap<>();
+                heard.put(source.player().getUniqueId(),source.player());
                 if(!privateDialogue) for (Player nearby : body.getWorld().getPlayers()) {
                     if (nearby!=source.player() && (source.audience()==null||source.audience().stream().anyMatch(captured->captured==nearby))
-                            && residents.hears(nearby, body, profile)) nearby.sendMessage(line);
+                            && residents.hears(nearby, body, profile)){
+                        nearby.sendMessage(line);
+                        heard.put(nearby.getUniqueId(),nearby);
+                    }
                 }
                 submitted.addProperty("status", "answered");
                 submitted.addProperty("reply", reply);
                 submitted.addProperty("completedAt", System.currentTimeMillis());
+                if(profile.kind().equals("numen")){
+                    try{plugin.speakHostedReply(profile,request,reply,source.player(),privateDialogue,heard);}
+                    catch(RuntimeException unavailable){plugin.getLogger().warning("Hosted social reply audio unavailable for request "+request);}
+                }
             } else if(!source.automatic()) source.player().sendMessage(profile.name() + "暂时无法回复。");
         }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {

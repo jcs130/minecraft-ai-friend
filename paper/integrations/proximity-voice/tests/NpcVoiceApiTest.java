@@ -10,6 +10,12 @@ public final class NpcVoiceApiTest {
         plugin.getMethod("publishNpcSpeech",UUID.class,String.class,String.class,long.class);
         plugin.getMethod("speakHostedNpc",UUID.class,UUID.class,String.class,String.class,long.class);
         plugin.getMethod("npcSpeechStatus",UUID.class,String.class);
-        System.out.println("NPC voice runtime ABI: 5 checks passed");
+        var original=(org.bukkit.entity.Entity)java.lang.reflect.Proxy.newProxyInstance(plugin.getClassLoader(),
+            new Class<?>[]{org.bukkit.entity.Entity.class},(o,m,a)->null);
+        var binding=new NpcConversations.Binding(original,text->true,100L);
+        if(!binding.current(original,100L+NpcConversations.BINDING_NANOS-1))throw new AssertionError("quiet live binding");
+        if(binding.current(null,101L))throw new AssertionError("stale body generation");
+        if(binding.current(original,100L+NpcConversations.BINDING_NANOS))throw new AssertionError("lost heartbeat");
+        System.out.println("NPC voice runtime ABI and liveness: 8 checks passed");
     }
 }
