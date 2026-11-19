@@ -27,6 +27,15 @@ public final class StashGuidanceCatalogTest {
         check(help("arena stash").getAsJsonArray("commands").get(0).getAsJsonObject().get("name").getAsString().equals("summary"),"overview is first in stash help");
         check(!PersonalStashOverview.matchesCommand(new String[]{"arena","stash","take","1"}),"overview cannot intercept item transfers");
         check(tidy.get("resultQuery").getAsString().contains("不重放"),"unknown save results cannot be retried as completion");
+        for (String action : List.of("clean", "store")) {
+            var batch = help("inventory " + action);
+            String result = batch.get("resultQuery").getAsString();
+            check(result.contains("MC_INVENTORY_BATCH") && !result.contains("MC_INVENTORY_TIDY"), action + " uses the batch receipt");
+            check(result.contains("plannedFreedSlots") && result.contains("freedSlots=0"), action + " distinguishes preview from freed slots");
+            check(action.equals("clean") ? result.contains("discarded")
+                    : result.contains("plannedItems") && result.contains("moved=0") && result.contains("leftForCapacity"), action + " lists its item outcome fields");
+            check(String.join("\n", AgentCliText.help(batch)).contains(result), action + " exposes the same receipt in plain help");
+        }
         System.out.println("PASS "+checks+" stash guidance catalog assertions");
     }
 }

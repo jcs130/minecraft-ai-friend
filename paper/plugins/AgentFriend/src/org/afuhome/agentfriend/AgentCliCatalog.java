@@ -276,8 +276,8 @@ final class AgentCliCatalog {
         add(specs,"arena.stash.list","storage","read","/mycli arena stash list [1–10页码]","只查已装入箱格，默认第一页；待入箱奖励另用arena rewards list，开箱后装入","在线玩家","MC_STASH、MC_STASH_SUMMARY");
         add(specs,"arena.stash.put","storage","item","/mycli arena stash put <英文物品ID> <1–64>","按物品类型从背包存入个人箱","背包有该物品；箱有空位；远程成功存入 2 魔力","MC_STASH_PUT moved>0才完成；不先开界面、不传送，空槽或箱满不移动物品");
         add(specs,"arena.stash.putslot","storage","item","/mycli arena stash putslot <背包槽位0–35> <1–64>","按背包0–35槽直接远程存入；非绑定装备保留附魔和外观","背包槽有物品；箱有空位或兼容堆叠余量；远程成功存入 2 魔力","MC_STASH_PUT moved>0才完成；stash_full时停止重复，查trade recycle list或inventory tidy --dry-run；不会自动出售或销毁");
-        add(specs,"inventory.clean","storage","write","/mycli inventory clean [--dry-run] [--json]","自动清理随身背包，合并堆叠并销毁普通石土、腐肉等白名单杂物","预览用 --dry-run；保留快捷栏、穿戴、带标记物品","MC_INVENTORY_TIDY freedSlots、discarded");
-        add(specs,"inventory.store","storage","item","/mycli inventory store [--dry-run] [--json]","自动把随身普通余物转移到本人十页远程个人箱，不用选格","保留快捷栏、穿戴、特殊物品和常用补给；成功远程一批2魔力","MC_INVENTORY_BATCH moved、freedSlots、leftForCapacity");
+        add(specs,"inventory.clean","storage","write","/mycli inventory clean [--dry-run] [--json]","自动清理随身背包，合并堆叠并销毁普通石土、腐肉等白名单杂物","预览用 --dry-run；保留快捷栏、穿戴、带标记物品","MC_INVENTORY_BATCH 预览看 plannedFreedSlots 和拟销毁清单 discarded，此时 freedSlots=0。执行后看 freedSlots 和实际销毁清单 discarded");
+        add(specs,"inventory.store","storage","item","/mycli inventory store [--dry-run] [--json]","自动把随身普通余物转移到本人十页远程个人箱，不用选格","保留快捷栏、穿戴、特殊物品和常用补给；成功远程一批2魔力","MC_INVENTORY_BATCH 预览看 plannedItems 和 plannedFreedSlots，此时 moved=0、freedSlots=0。执行后看 moved 和 freedSlots，容量不足留下的件数见 leftForCapacity");
         add(specs,"inventory.donate","storage","item","/mycli inventory donate [--dry-run] [--json]","自动把随身富余普通武器、护甲、补给和材料捐进分类公会共享箱","只从自己背包转出，保留常用补给及特色装备；可先预览","MC_INVENTORY_BATCH moved、items、leftForUnavailableChest");
         add(specs,"inventory.tidy","storage","write","/mycli inventory tidy [--dry-run] [--discard-common] [--json]","合并主背包普通堆叠；显式discard-common才销毁普通石头、泥土、黏土等杂物","保留快捷栏、装备、特殊元数据及背包之外所有物品；先关GUI和光标物品，PvP/恢复中禁止；默认不销毁","MC_INVENTORY_TIDY；dry-run只预览；报告释放槽位和逐类销毁数量，不出售、不发钱");
         add(specs,"inventory.tidy.stash","storage","write","/mycli inventory tidy stash [--dry-run] [--discard-common] [--json]","把10页个人箱的装备排前、普通杂物放后，并合并同类堆叠","默认保留物品；带 --discard-common 可直接销毁白名单普通杂物。先用 --dry-run 查看逐类数量；整理后重新查槽位","MC_INVENTORY_TIDY；返回释放格数、待入箱奖励和下一步");
@@ -666,6 +666,7 @@ final class AgentCliCatalog {
         if(Set.of("inventory.clean","inventory.store","inventory.donate").contains(id))query="/mycli arena stash inventory；/mycli arena stash summary；状态未知时请服主查原回执";
         else if(id.startsWith("inventory.tidy.stash"))query="/mycli arena stash list [页码]；/mycli inventory tidy stash auto status；存盘未确认时联系服主核对原requestId";
         else if(id.startsWith("inventory.tidy"))query="/mycli inventory；/mycli inventory tidy auto status；存盘未确认时联系服主核对原requestId，不重放整理";
+        if (id.equals("inventory.clean") || id.equals("inventory.store")) query = spec.returns() + "。" + query;
         if(id.startsWith("challenge"))query="/mycli challenge status；/mycli challenge result [场次UUID]";
         if(id.equals("arena.stash.summary"))query=PersonalStashOverview.QUERY;
         if(id.startsWith("admin.blockaccess."))query="mycli admin blockaccess status --json";
