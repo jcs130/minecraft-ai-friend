@@ -12,7 +12,7 @@ import {evaluatePracticeVariants,type PracticeVariant} from './harness-evaluatio
 import {PracticeStagingError,type PracticeStageRequest} from './practice-staging.ts';
 
 export const HARNESS2_PRACTICE_TOOL: Omit<ToolDef,'handler'>={
-  name:'mc_practice',tags:['read','write'],
+  name:'mc_practice',tags:['read','write'],bodyControl:'independent',
   readOnlyCall:args=>['help','cases','status','result','compare'].includes(String(args.op)),
   learningCall:args=>['help','cases','start','status','result','compare','stage','cancel'].includes(String(args.op)),
   description:'Improve an explicitly selected saved Minecraft method through Harness² in a separate practice environment. '

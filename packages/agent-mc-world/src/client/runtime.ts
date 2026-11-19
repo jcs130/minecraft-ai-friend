@@ -241,7 +241,6 @@ export class MinecraftAgentClient {
     const practiceName=`${this.toolPrefix}_practice`;
     if(choices.some(t=>t.name===practiceName))return choices;
     return [...choices,{...HARNESS2_PRACTICE_TOOL,name:practiceName,
-      readOnlyCall:(args:Record<string,unknown>)=>['help','status','result','compare'].includes(String(args.op)),
       handler:async(args:Record<string,unknown>,context:import('./contracts.ts').ToolCallContext)=>{
         if(this.practiceService)return this.practiceService.tool(practiceName).handler(args,context);
         const unavailable={available:false,reason:'Host has not configured a practice model, worker and dedicated execution port.',

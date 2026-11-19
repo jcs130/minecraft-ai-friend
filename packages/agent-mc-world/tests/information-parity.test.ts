@@ -4,15 +4,32 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { MessageInbox, MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger } from '../src/client/index.ts';
+import { JavaClientWorld, MESSAGE_TOOL, MessageInbox, MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger } from '../src/client/index.ts';
 import { MinecraftClientWorld } from '../src/extension.ts';
 import { createMinecraftMcpServer } from '../src/mcp/server.ts';
-import type { WorldHost } from '../src/contracts/index.ts';
+import { inspectToolCall, toolRequiresBodyControl, type WorldHost } from '../src/contracts/index.ts';
 
 const dirs: string[] = [];
 const directory = () => { const dir = mkdtempSync(join(tmpdir(), 'mc-information-')); dirs.push(dir); return dir; };
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
 const event = (text: string) => ({ ts: '2026-10-17T01:02:03Z', source: 'minecraft', type: 'minecraft.chat', text, senderKey: 'Alex' });
+
+it('keeps retained inbox reads and review off both body backends while reserving review for writers', () => {
+  const cfg = structuredClone(MINECRAFT_CLIENT_DEFAULTS);
+  const dataDir = directory();
+  const worlds = [new MinecraftClientWorld({ cfg, dataDir }), new JavaClientWorld(cfg, undefined, { dataDir })];
+  expect(toolRequiresBodyControl(MESSAGE_TOOL)).toBe(false);
+  for (const world of worlds) {
+    const inbox = world.tools().find(tool => tool.name === 'mc_messages')!;
+    expect(toolRequiresBodyControl(inbox)).toBe(false);
+    for (const args of [{}, { action: 'list' }, { action: 'search', query: 'map' }, { id: 'message_1' }, { action: 'read', ids: ['message_1'] }]) {
+      expect(inspectToolCall(inbox, inbox.name, args)).toMatchObject({ valid: true, readOnly: true, requiresBody: false });
+    }
+    expect(inspectToolCall(inbox, inbox.name, { action: 'review', ids: ['message_1'] })).toMatchObject({
+      valid: true, readOnly: false, backgroundLearning: false, requiresBody: false, dispatched: false,
+    });
+  }
+});
 
 it('shares native metadata and canonical chat without promoting quoted system text or indexing outgoing HUD', () => {
   const inbox = new MessageInbox('fixture/agent');
