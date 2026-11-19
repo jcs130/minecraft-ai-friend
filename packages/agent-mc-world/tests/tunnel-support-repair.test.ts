@@ -5,7 +5,8 @@ import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { Executor, type TaskReport } from '../core/executor.ts';
 import type { SkillCall } from '../core/skills.ts';
-import { SkillBlocked } from '../core/skill-context.ts';
+import { SkillBlocked, type SkillContext } from '../core/skill-context.ts';
+import { skillTunnel } from '../core/skills-dig.ts';
 
 // Keep the executor, dependency gates and tunnel's physical checks real. Only
 // replace placement/movement transport so the test controls server confirmation.
@@ -60,6 +61,66 @@ function rig(mode: 'confirmed' | 'failed' | 'unconfirmed' = 'confirmed') {
 }
 
 afterEach(() => vi.useRealTimers());
+
+it('previews the actual rising diagonal step and its lower floor before taking a step', async () => {
+  const r = rig();
+  const ctx = { aborted: () => false, escape: { active: false } } as SkillContext;
+  const call = { skill: 'tunnel' as const, at: [-2, 65, -2] as [number, number, number] };
+  try {
+    const preview = await skillTunnel(r.bot, { ...call, dryRun: true }, ctx);
+    expect(preview).toContain('终点 (-2, 65, -2)');
+    expect(preview).toContain('4 个落脚点中，1 处脚下已有支撑');
+    expect(preview).toContain('第2步预定脚格 (-1, 65, -1)，支撑格 (-1, 64, -1) 是空气');
+    expect(preview).toContain('再下一格 (-1, 63, -1) 是石头');
+    expect(preview).toContain('垫脚名单里的方块包里都没有');
+    expect(r.bot.moves).toEqual([]);
+    expect(r.bot.dig).not.toHaveBeenCalled();
+    expect(r.bot.placeBlock).not.toHaveBeenCalled();
+
+    await expect(skillTunnel(r.bot, call, ctx)).rejects.toThrow('前面 (-1, 65, -1) 脚下悬空');
+    expect(r.bot.moves).toEqual([[-1, 64, 0]]);
+  } finally { r.exec.shutdown(); }
+});
+
+it('separates liquid and unread support from a material gap and queries only preview permissions', async () => {
+  const r = rig();
+  r.cells.set('2,63,0', 'lava');
+  const read = r.bot.blockAt.bind(r.bot);
+  vi.spyOn(r.bot, 'blockAt').mockImplementation(at => at.equals(new Vec3(3, 63, 0)) ? null : read(at));
+  const items = [{ name: 'dirt', count: 2, type: registry.itemsByName.dirt.id }] as ReturnType<Bot['inventory']['items']>;
+  vi.spyOn(r.bot.inventory, 'items').mockReturnValue(items);
+  const previewResourcePlacement = vi.fn(() => ({ ok: false, reason: '测试材料已预留' }));
+  const permitResourcePlacement = vi.fn();
+  const ctx = { aborted: () => false, previewResourcePlacement, permitResourcePlacement } as unknown as SkillContext;
+  try {
+    const call = { ...tunnel, dryRun: true } as Extract<SkillCall, { skill: 'tunnel' }>;
+    const preview = await skillTunnel(r.bot, call, ctx);
+    expect(preview).toContain('1 处缺支撑');
+    expect(preview).toContain('测试材料已预留');
+    expect(preview).toContain('1 处脚下为液体，首处在第2步 (2, 63, 0)');
+    expect(preview).toContain('1 处支撑格未读到，首处在第3步 (3, 63, 0)');
+    expect(previewResourcePlacement).toHaveBeenCalledOnce();
+    previewResourcePlacement.mockReturnValue({ ok: true, reason: '' });
+    const stocked = await skillTunnel(r.bot, call, ctx);
+    expect(stocked).toContain('当前可选垫材泥土，背包有 2 块');
+    expect(permitResourcePlacement).not.toHaveBeenCalled();
+    expect(r.bot.placeBlock).not.toHaveBeenCalled();
+    expect(r.bot.equip).not.toHaveBeenCalled();
+    expect(r.bot.moves).toEqual([]);
+  } finally { r.exec.shutdown(); }
+});
+
+it('keeps support behind an opaque wall unknown even when the chunk contains lava', async () => {
+  const r = rig();
+  for (let y = 63; y <= 67; y++) for (let z = -1; z <= 1; z++) r.cells.set(`1,${y},${z}`, 'stone');
+  r.cells.set('3,63,0', 'lava');
+  try {
+    const preview = await skillTunnel(r.bot, { skill: 'tunnel', at: [3, 64, 0], dryRun: true },
+      { aborted: () => false } as SkillContext);
+    expect(preview).toContain('支撑格未读到');
+    expect(preview).not.toContain('处脚下为液体');
+  } finally { r.exec.shutdown(); }
+});
 
 it('admits repair then tunnel without declaring a planned support already repaired', async () => {
   vi.useFakeTimers(); const r = rig();

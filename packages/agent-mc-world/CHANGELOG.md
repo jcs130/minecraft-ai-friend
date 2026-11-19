@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.106
+
+Collision rays report their world compass bearing alongside view-relative angles. Tunnel previews report footing along the proposed corridor and available scaffold materials. When a waypoint is occupied, navigation diagnostics point to nearby landing checks and optional excavation previews.
+
 ## 0.5.7-rc.160-preview.105
 
 Exact bag reads include the carried inventory slot and the player-window slot for each stack. Filtered reads retain the total number of free carried slots.

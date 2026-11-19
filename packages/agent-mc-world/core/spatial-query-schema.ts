@@ -19,7 +19,7 @@ export const SPATIAL_QUERY_SCHEMA = { type: 'object', required: ['mode'], additi
     items: { $schema: 'http://json-schema.org/draft-07/schema#', type: 'array', minItems: 3, maxItems: 3,
       items: [{ type: 'number', minimum: -90, maximum: 90 }, { type: 'number', minimum: -180, maximum: 180 },
         { type: 'number', exclusiveMinimum: 0, maximum: SPATIAL_QUERY_LIMITS.range }] },
-    description: 'rays only: [relative pitch degrees,relative yaw degrees,range blocks]; default 3×5 fan at 24 blocks. Collision rays stop at glass even though vision can pass through it.' },
+    description: 'rays only: [relative pitch degrees,relative yaw degrees,range blocks]; [0,0] looks ahead. Each result includes its worldBearing. Default 3×5 fan at 24 blocks. Collision rays stop at glass even though vision can pass through it.' },
 } };
 
 export function spatialArgumentDiagnostic(args: Record<string,unknown>, problem: string) {

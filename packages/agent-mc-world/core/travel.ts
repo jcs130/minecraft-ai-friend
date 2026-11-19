@@ -316,6 +316,7 @@ export function withRouteScene(
   extra: string[] = [],
   /** 这一趟实际下达的目标;水平行军必须递进来,否则试算判的是另一个目标 */
   goal?: InstanceType<typeof goals.Goal>,
+  goto?: { walkOnly?: boolean },
 ): unknown {
   if (!(err instanceof SkillBlocked)) return err;
   const me = bot.entity.position;
@@ -330,6 +331,10 @@ export function withRouteScene(
     ...(waterNote && !extra.some(line => line.includes(waterNote)) ? [waterNote] : []),
     `我在 (${Math.round(me.x)}, ${Math.round(me.y)}, ${Math.round(me.z)}),目标在${whereFromMe(bot, target)}`,
   ];
+  if (goto && (diag?.kind === 'noStand' || diag?.kind === 'occupied')) {
+    scene.push('可用 observe 的 sites 核对近处候选格的脚下支撑与身体净空，另选落脚点或观测点。'
+      + (goto.walkOnly ? '' : '若任务允许改变地形，可选已观察的近点作 at，用 tunnel 的 dryRun:true 只试算这段，再决定是否施工。'));
+  }
   if (probes && probes.length > 0) {
     const startDist = goal instanceof goals.GoalNearXZ
       ? Math.hypot(me.x - target.x, me.z - target.z)
