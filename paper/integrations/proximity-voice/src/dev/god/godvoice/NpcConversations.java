@@ -17,7 +17,11 @@ import org.bukkit.inventory.EquipmentSlot;
 final class NpcConversations implements Listener {
     private final PaperVoicePlugin plugin;
     private final Map<UUID,NpcDialoguePolicy.Profile> profiles;
-    private record Binding(Entity entity,Function<String,Boolean> input){}
+    // The native speech adapter renews every five game ticks, including during silence.
+    static final long BINDING_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+    record Binding(Entity entity,Function<String,Boolean> input,long renewedAt){
+        boolean current(Entity original,long now){return original==entity && now-renewedAt < BINDING_NANOS;}
+    }
     private record Generation(Entity entity,UUID world,UUID session){}
     private final Map<UUID,Binding> hosted=new HashMap<>();
     private final Map<UUID,Generation> generations=new HashMap<>();
@@ -71,7 +75,23 @@ final class NpcConversations implements Listener {
     boolean bind(UUID id,UUID owner,Function<String,Boolean> input){
         var p=profiles.get(id);Entity entity=live(id);
         if(p==null||!p.kind().equals("numen")||!p.owner().equals(owner)||entity==null||input==null)return false;
-        hosted.put(id,new Binding(entity,input));return true;
+        // The adapter also ticks while its controller is starting. Require an actual inbox.
+        try {
+            var handle=entity.getClass().getMethod("getHandle").invoke(entity);
+            var loops=handle.getClass().getClassLoader().loadClass("com.dwinovo.numen.hosted.api.brain.CompanionLoops");
+            if(!((Optional<?>)loops.getMethod("get",UUID.class).invoke(null,id)).isPresent()){
+                hosted.remove(id);return false;
+            }
+        } catch(ReflectiveOperationException unavailable){hosted.remove(id);return false;}
+        hosted.put(id,new Binding(entity,input,System.nanoTime()));return true;
+    }
+    boolean hostedReady(Entity entity){
+        var binding=hosted.get(entity.getUniqueId());
+        return binding!=null && binding.current(entity,System.nanoTime()) && entity.isValid() && !entity.isDead();
+    }
+    void disconnected(Player player){
+        var binding=hosted.get(player.getUniqueId());
+        if(binding!=null && binding.entity()==player)hosted.remove(player.getUniqueId());
     }
     void sample(Map<UUID,VoiceAudience.Actor> all){
         for(var p:profiles.values()){
@@ -164,6 +184,13 @@ final class NpcConversations implements Listener {
         NpcDialoguePolicy.text(text);String event="npc_"+NpcDialoguePolicy.speechId(actor,operation);
         for(UUID target:profiles.keySet())deliver(source,target,event,text,"npc_chat",occurredAt);
     }
+    void nearbySpokenText(Player source,NpcDialoguePolicy.Profile profile,UUID request,String text){
+        for(Player listener:source.getWorld().getPlayers()){
+            if(configured(listener.getUniqueId()) || !hears(listener,source,profile) || !plugin.wantsCaptions(listener))continue;
+            if(delivered.add(listener.getUniqueId(),source.getUniqueId(),"speech_"+request,System.currentTimeMillis()))
+                listener.sendMessage("[附近] "+profile.display()+"："+text);
+        }
+    }
     private boolean deliver(Entity source,UUID target,String event,String text,String channel,long occurredAt){
         var profile=profiles.get(target);Entity entity=live(target);
         if(profile==null||entity==null||!source.getWorld().equals(entity.getWorld())||!NpcDialoguePolicy.nearby(source.getUniqueId(),target,source.getWorld().getUID(),entity.getWorld().getUID(),source.getLocation().distanceSquared(entity.getLocation()),profile.range()))return false;
@@ -179,7 +206,7 @@ final class NpcConversations implements Listener {
                 return Boolean.TRUE.equals(bridge.getClass().getMethod("acceptUnifiedNpcDialogue",UUID.class,UUID.class,UUID.class,String.class,String.class,String.class)
                     .invoke(bridge,target,profile.owner(),source.getUniqueId(),source.getName(),text,id));
             }else{
-                var binding=hosted.get(target);if(binding==null||binding.entity()!=entity)return false;
+                var binding=hosted.get(target);if(!hostedReady(entity))return false;
                 var payload=new JsonObject();payload.addProperty("schema",1);payload.addProperty("eventId",id);payload.addProperty("listenerId",target.toString());
                 payload.addProperty("speakerId",source.getUniqueId().toString());payload.addProperty("speaker",source.getName());payload.addProperty("text",text);
                 payload.addProperty("channel",channel);payload.addProperty("occurredAt",occurredAt);payload.addProperty("receivedAt",System.currentTimeMillis());
