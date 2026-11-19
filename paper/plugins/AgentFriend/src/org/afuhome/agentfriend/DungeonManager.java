@@ -566,6 +566,71 @@ final class DungeonManager implements Listener {
     private record Admission(Player player, String reason, String detail, String nextCommand,
                              List<String> missingEquipment) {
         boolean ready() { return reason.isEmpty(); }
+        boolean mayEnter() { return ready() || reason.equals("equipment_missing"); }
+    }
+
+    private record MemberCheck(UUID id, String reason, List<String> missing) {}
+    private record EntryOffer(UUID token, long until, UUID world, int floor, String difficulty, List<MemberCheck> members) {}
+    private final Map<UUID, EntryOffer> entryOffers = new HashMap<>();
+    private static final long ENTRY_REVIEW_MS = 45_000;
+
+    private static String entryCommand(int floor) { return "/mycli arena " + (floor == 1 ? "start" : "rest"); }
+    private static List<MemberCheck> memberChecks(List<Admission> assembly) {
+        return assembly.stream().map(a -> new MemberCheck(a.player().getUniqueId(), a.reason(), a.missingEquipment())).toList();
+    }
+    private EntryOffer currentOffer(Player starter, int targetFloor, List<Admission> assembly) {
+        EntryOffer offer = entryOffers.get(starter.getUniqueId());
+        return offer != null && offer.until() > System.currentTimeMillis() && offer.floor() == targetFloor
+            && offer.world().equals(starter.getWorld().getUID()) && offer.difficulty().equals(chosenDifficulty(starter).id)
+            && offer.members().equals(memberChecks(assembly)) ? offer : null;
+    }
+    String menuOffer(Player player) {
+        if (active || !onLobbyPlatform(player)) return null;
+        EntryOffer offer = currentOffer(player, 1, platformAssembly());
+        return offer == null ? null : offer.token().toString();
+    }
+
+    // A preview has no game effects. Confirmation rechecks the whole party on the server thread.
+    private List<Player> reviewEntry(Player starter, List<Admission> assembly, int targetFloor, String confirmation) {
+        entryOffers.values().removeIf(o -> o.until() <= System.currentTimeMillis());
+        var self = assembly.stream().filter(a -> a.player().getUniqueId().equals(starter.getUniqueId())).findFirst();
+        if (self.isEmpty() || !self.get().mayEnter()) {
+            entryOffers.remove(starter.getUniqueId());
+            reportAssembly(starter, self.isEmpty() ? List.of(admission(starter)) : assembly, false, targetFloor, false);
+            return List.of();
+        }
+        boolean issues = assembly.stream().anyMatch(a -> !a.ready());
+        EntryOffer offer = currentOffer(starter, targetFloor, assembly);
+        boolean accepted = confirmation != null && offer != null &&
+            (confirmation.isEmpty() || offer.token().toString().equals(confirmation));
+        if (!accepted && (issues || confirmation != null)) {
+            if (offer == null) {
+                offer = new EntryOffer(UUID.randomUUID(), System.currentTimeMillis() + ENTRY_REVIEW_MS,
+                    starter.getWorld().getUID(), targetFloor, chosenDifficulty(starter).id, memberChecks(assembly));
+                entryOffers.put(starter.getUniqueId(), offer);
+            }
+            var receipt = assemblyReceipt(assembly, "confirmation_required", false, targetFloor);
+            addOffer(receipt, offer);
+            String command = receipt.get("nextCommand").getAsString();
+            starter.sendMessage("§e[试炼集结] 尚未传送。请核对" + chosenDifficulty(starter).label + "难度的入场名单：");
+            for (Admission entry : assembly) {
+                String message = "[试炼集结] " + entry.player().getName() + "：" + (entry.ready() ? "准备就绪"
+                    : entry.detail() + (entry.mayEnter() ? "；确认后可带缺装入场" : "；确认后仍留在原地"));
+                starter.sendMessage(message);
+                if (!entry.ready() && !entry.player().getUniqueId().equals(starter.getUniqueId())) entry.player().sendMessage(message);
+            }
+            starter.sendMessage("§e请在 45 秒内点菜单的「确认入场」，或输入 " + command + "。也可以先去补给。");
+            starter.sendMessage("MC_TRIAL_ASSEMBLY " + receipt);
+            return List.of();
+        }
+        entryOffers.clear();
+        return assembly.stream().filter(Admission::mayEnter).map(Admission::player).toList();
+    }
+    private static void addOffer(com.google.gson.JsonObject receipt, EntryOffer offer) {
+        receipt.addProperty("requiresConfirmation", true);
+        receipt.addProperty("confirmationId", offer.token().toString());
+        receipt.addProperty("expiresAt", offer.until());
+        receipt.addProperty("nextCommand", entryCommand(offer.floor()) + " confirm " + offer.token());
     }
 
     private Admission admission(Player player) {
@@ -605,26 +670,31 @@ final class DungeonManager implements Listener {
         out.addProperty("targetFloor", targetFloor); out.addProperty("world", world() == null ? "unknown" : world().getName());
         out.add("bounds", new com.google.gson.Gson().toJsonTree(Map.of("min", List.of(X-11, LOBBY_Y, Z-11),
             "maxBlock", List.of(X+11, LOBBY_Y+8, Z+11))));
-        var rows = new com.google.gson.JsonArray(); int ready = 0, entered = 0;
+        var rows = new com.google.gson.JsonArray(); int ready = 0, admissible = 0, entered = 0;
         for (Admission entry : assembly) {
             Player p = entry.player();
             boolean arrived = started && participants.contains(p.getUniqueId()) && inFloor(p.getLocation(), targetFloor);
-            String status = !entry.ready() ? "rejected" : phase.equals("preview") ? "ready"
-                : phase.equals("blocked") ? "not_started" : arrived ? "entered" : "transfer_failed";
+            boolean reportingTransfer = phase.equals("result") && entry.mayEnter();
+            String status = arrived ? "entered" : reportingTransfer ? "transfer_failed" : !entry.mayEnter() ? "rejected"
+                : !entry.ready() ? "equipment_warning" : phase.equals("blocked") ? "not_started" : "ready";
             var row = new com.google.gson.JsonObject();
             row.addProperty("name", p.getName()); row.addProperty("uuid", p.getUniqueId().toString());
-            row.addProperty("status", status); row.addProperty("reason", status.equals("transfer_failed") ? "teleport_failed" : entry.reason());
+            row.addProperty("status", status); row.addProperty("reason", arrived ? "" : status.equals("transfer_failed") ? "teleport_failed" : entry.reason());
+            if (!entry.missingEquipment().isEmpty()) row.addProperty("warningReason", "equipment_missing");
+            row.addProperty("canEnterOnConfirmation", entry.mayEnter());
             row.addProperty("detail", status.equals("transfer_failed") ? "传送未成功，未加入本场；请核对落点与传送拦截" : entry.detail());
             row.addProperty("nextCommand", entry.nextCommand());
             row.add("missingEquipment", new com.google.gson.Gson().toJsonTree(entry.missingEquipment())); rows.add(row);
-            if (entry.ready()) ready++; if (arrived) entered++;
+            if (entry.ready()) ready++; if (entry.mayEnter()) admissible++; if (arrived) entered++;
         }
-        out.add("members", rows); out.addProperty("eligibleCount", ready); out.addProperty("enteredCount", entered);
+        out.add("members", rows); out.addProperty("eligibleCount", started ? admissible : ready);
+        out.addProperty("fullyReadyCount", ready); out.addProperty("admissibleOnConfirmationCount", admissible);
+        out.addProperty("enteredCount", entered);
         return out;
     }
 
     String[] assemblyMenuLore(Player viewer) {
-        List<String> lines = new ArrayList<>(List.of("整个平台内合格玩家一起进入", "观战角色不参赛；缺条件会点名提示"));
+        List<String> lines = new ArrayList<>(List.of("在围墙内集合，发起人决定全队难度", "装备不齐可二次确认入场；观战角色不参赛"));
         var assembly = platformAssembly();
         for (Admission entry : assembly.stream().limit(8).toList())
             lines.add(entry.player().getName() + "：" + (entry.ready() ? "已就绪" : entry.detail()));
@@ -648,6 +718,7 @@ final class DungeonManager implements Listener {
             if (p != null && !p.equals(starter) && (status.equals("rejected") || status.equals("transfer_failed"))) p.sendMessage(message);
         }
         starter.sendMessage("MC_TRIAL_ASSEMBLY " + receipt);
+        plugin.getLogger().info("Trial assembly " + starter.getName() + " " + receipt);
     }
 
     private void enrollPlayersOnCurrentFloor() {
@@ -735,7 +806,17 @@ final class DungeonManager implements Listener {
         out.addProperty("world",world()==null?"unknown":world().getName());
         if(world()!=null){out.addProperty("worldKey",world().getKey().toString());out.addProperty("worldUuid",world().getUID().toString());}
         out.add("entrance",new com.google.gson.Gson().toJsonTree(Map.of("x",-596,"y",92,"z",-313)));
-        if (onLobbyPlatform(player)) out.add("assembly", assemblyReceipt(platformAssembly(), "preview", false, 1));
+        if (onLobbyPlatform(player)) {
+            var roster = platformAssembly();
+            var receipt = assemblyReceipt(roster, "preview", false, 1);
+            var offer = currentOffer(player, 1, roster);
+            if (!active && offer != null) {
+                addOffer(receipt, offer);
+                out.addProperty("nextCommand", receipt.get("nextCommand").getAsString());
+                out.addProperty("nextAction", "核对点名名单，确认后缺装队员可一起入场。");
+            }
+            out.add("assembly", receipt);
+        }
         return out;
     }
     private void showGuidance(Player player){var guide=guidance(player);player.sendMessage("§e[试炼下一步] "+guide.get("nextAction").getAsString()+"。命令："+guide.get("nextCommand").getAsString());}
@@ -789,7 +870,7 @@ final class DungeonManager implements Listener {
     }
     void command(Player player, String[] args) {
         String sub = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
-        if(Set.of("start","rest","checkpoint","next","leave").contains(sub)&&args.length!=2){player.sendMessage("§e[invalid_argument] 本次未执行；用法：/mycli arena "+sub+"。查询：/mycli arena status");return;}
+        if(Set.of("next","leave").contains(sub)&&args.length!=2){player.sendMessage("§e[invalid_argument] 本次未执行；用法：/mycli arena "+sub+"。查询：/mycli arena status");return;}
         if(sub.equals("status")||sub.equals("entrance")){
             if(java.util.Arrays.stream(args).skip(2).anyMatch(a->!Set.of("--json","--verbose").contains(a))){player.sendMessage("§e[invalid_argument] 此查询只接受 --json 或 --verbose；未执行。命令：/mycli arena "+sub);return;}
         }
@@ -862,10 +943,10 @@ final class DungeonManager implements Listener {
                         + " chestX=" + chestX(floor) + " chestY=" + (Y[floor - 1] + 1)
                         + " chestZ=" + chestZ(floor) + " scope=global participant=" + participant);
             }
-            case "start" -> start(player);
+            case "start" -> requestEntry(player, args, 1);
             case "entrance" -> {plugin.trialButtons().describe(player,java.util.Arrays.asList(args).contains("--json"));showGuidance(player);}
             case "difficulty", "难度" -> chooseDifficulty(player, args);
-            case "rest", "checkpoint", "驿站" -> startAtRest(player);
+            case "rest", "checkpoint", "驿站" -> requestEntry(player, args, REST_FLOOR);
             case "next" -> next(player);
             case "shop", "商人" -> {
                 if (args.length == 2) openShop(player);
@@ -981,7 +1062,18 @@ final class DungeonManager implements Listener {
         return false;
     }
 
-    private void start(Player starter) {
+    private void requestEntry(Player player, String[] args, int targetFloor) {
+        String confirmation = null;
+        if (args.length > 2) {
+            if (args.length > 4 || !args[2].equalsIgnoreCase("confirm") ||
+                    args.length == 4 && !args[3].matches("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}")) {
+                player.sendMessage("§e[invalid_argument] 用法：" + entryCommand(targetFloor) + " [confirm [确认编号]]"); return;
+            }
+            confirmation = args.length == 4 ? args[3] : "";
+        }
+        if (targetFloor == 1) start(player, confirmation); else startAtRest(player, confirmation);
+    }
+    private void start(Player starter, String confirmation) {
         if (!onLobbyPlatform(starter)) {
             showGuidance(starter);return;
         }
@@ -992,11 +1084,7 @@ final class DungeonManager implements Listener {
             return;
         }
         List<Admission> assembly = platformAssembly();
-        if (!admission(starter).ready()) {
-            if (assembly.stream().noneMatch(a -> a.player().equals(starter))) assembly = List.of(admission(starter));
-            reportAssembly(starter, assembly, false, 1, false); return;
-        }
-        List<Player> group = assembly.stream().filter(Admission::ready).map(Admission::player).toList();
+        List<Player> group = reviewEntry(starter, assembly, 1, confirmation);
         if (group.isEmpty()) return;
         participants.clear(); mobs.clear();
         difficulty = chosenDifficulty(starter);
@@ -1022,7 +1110,7 @@ final class DungeonManager implements Listener {
                 + " 人已组队进入。每层清怪立刻恢复生命、魔力并清除负面状态，10 秒后自动下楼；奖励留在个人箱子。");
     }
 
-    private void startAtRest(Player starter) {
+    private void startAtRest(Player starter, String confirmation) {
         if (plugin.siteDungeons() != null && plugin.siteDungeons().isParticipant(starter)) {
             starter.sendMessage(ChatColor.RED + "你正在遗迹地下城中；先完成或 dungeon leave。"); return;
         }
@@ -1040,8 +1128,8 @@ final class DungeonManager implements Listener {
                     + ((COOLDOWN_MS - (now - lastRun) + 999) / 1000) + " 秒。"); return;
         }
         List<Admission> assembly = onLobbyPlatform(starter) ? platformAssembly() : List.of(admission(starter));
-        if (!admission(starter).ready()) { reportAssembly(starter, assembly, false, REST_FLOOR, false); return; }
-        List<Player> group = assembly.stream().filter(Admission::ready).map(Admission::player).toList();
+        List<Player> group = reviewEntry(starter, assembly, REST_FLOOR, confirmation);
+        if (group.isEmpty()) return;
         participants.clear(); mobs.clear();
         difficulty = chosenDifficulty(starter);
         if (enterFloor(REST_FLOOR, group) == 0) {
@@ -1275,6 +1363,8 @@ final class DungeonManager implements Listener {
     }
 
     @EventHandler public void onParticipantQuit(PlayerQuitEvent event) {
+        UUID leaving = event.getPlayer().getUniqueId();
+        entryOffers.values().removeIf(o -> o.members().stream().anyMatch(m -> m.id().equals(leaving)));
         stashOutingAt.remove(event.getPlayer().getUniqueId());
         stashInviteShown.remove(event.getPlayer().getUniqueId());
         Player player = event.getPlayer();

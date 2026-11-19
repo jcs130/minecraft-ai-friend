@@ -2971,6 +2971,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     ? item(Material.BARRIER, "§c已有队伍在挑战", "当前：" + dungeon.activeDifficultyLabel() + "；请等本轮结束")
                     : item(Material.LIME_CONCRETE, "§a开始" + selected + "试炼",
                             dungeon.assemblyMenuLore(p)));
+            String offer = dungeon.menuOffer(p);
+            if (offer != null) {
+                var confirm = item(Material.ORANGE_CONCRETE, "§e确认入场 · " + selected, dungeon.assemblyMenuLore(p));
+                var meta = confirm.getItemMeta();
+                meta.getPersistentDataContainer().set(new org.bukkit.NamespacedKey(this, "trial_entry_offer"),
+                    org.bukkit.persistence.PersistentDataType.STRING, offer);
+                confirm.setItemMeta(meta);
+                inv.setItem(16, confirm);
+            }
             inv.setItem(22, item(Material.ARROW, "§7返回传送罗盘"));
         } else if (page.equals("guild")) {
             guild.fillBoard(p, inv);
@@ -3215,7 +3224,15 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     case 12 -> { dungeon.command(p, new String[]{"arena", "difficulty", "adventure"}); openMenu(p, page); }
                     case 13 -> { dungeon.command(p, new String[]{"arena", "difficulty", "apocalypse"}); openMenu(p, page); }
                     case 15 -> { dungeon.command(p, new String[]{"arena", "difficulty", "list"}); openMenu(p, page); }
-                    case 16 -> { if (!dungeon.hasActiveRun()) dungeon.command(p, new String[]{"arena", "start"}); }
+                    case 16 -> {
+                        if (dungeon.hasActiveRun()) break;
+                        var clicked = event.getCurrentItem();
+                        String offer = clicked == null || !clicked.hasItemMeta() ? null : clicked.getItemMeta()
+                            .getPersistentDataContainer().get(new org.bukkit.NamespacedKey(this, "trial_entry_offer"),
+                                org.bukkit.persistence.PersistentDataType.STRING);
+                        dungeon.command(p, offer == null ? new String[]{"arena","start"} : new String[]{"arena","start","confirm",offer});
+                        if (dungeon.menuOffer(p) != null) openMenu(p, page);
+                    }
                     case 22 -> openMenu(p, "places");
                     default -> { }
                 }
