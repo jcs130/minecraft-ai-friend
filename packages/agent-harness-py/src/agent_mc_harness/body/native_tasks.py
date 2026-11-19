@@ -21,7 +21,7 @@ def background_task(text: str) -> str | None:
     return stopped[2] if attrs.get('id') == stopped[2] and attrs.get('tool') == stopped[1] and attrs.get('state') == 'running' else None
 
 
-def finished_tasks(text: str):
+def finished_task_details(text: str):
     # Parse only direct server event elements. Chat text containing XML is not a receipt.
     match = re.search(r'<events>.*?</events>', text, re.S)
     if not match:
@@ -30,10 +30,14 @@ def finished_tasks(text: str):
         root = ET.fromstring(match[0])
     except ET.ParseError:
         return []
-    return [(node.get('id'), node.get('status'), ''.join(node.itertext())) for node in root
+    return [(node.get('id'), node.get('task'), node.get('status'), ''.join(node.itertext())) for node in root
             if node.tag == 'event' and node.get('kind') == 'task_finished'
             and re.fullmatch(r't\d+', node.get('id', ''))
             and node.get('status') in {'done', 'failed', 'timeout', 'interrupted', 'stopped', 'cancelled'}]
+
+
+def finished_tasks(text: str):
+    return [(task, status, detail) for task, _, status, detail in finished_task_details(text)]
 
 
 class NativeTasks:
@@ -64,14 +68,23 @@ class NativeTasks:
 
     def save(self, request: str, status: str, text: str, task: str | None):
         with self.db:
-            self.db.execute('UPDATE calls SET task=?,status=?,text=? WHERE id=? AND body=?', (task, status, text, request, self.body))
+            self.db.execute("UPDATE calls SET task=?,status=?,text=? WHERE id=? AND body=? AND status IN ('unknown','accepted')",
+                            (task, status, text, request, self.body))
 
-    def finish(self, epoch: str, task: str, status: str, text: str):
-        rows = self.db.execute("SELECT id,fingerprint FROM calls WHERE body=? AND epoch=? AND task=? AND status='accepted'",
+    def pending(self, epoch: str):
+        return [row[0] for row in self.db.execute(
+            "SELECT id FROM calls WHERE body=? AND epoch=? AND status IN ('accepted','unknown')", (self.body, epoch))]
+
+    def finish(self, epoch: str, task: str, status: str, text: str, *, tool=None):
+        rows = self.db.execute("SELECT id,fingerprint,text FROM calls WHERE body=? AND epoch=? AND task=? AND status='accepted'",
                                (self.body, epoch, task)).fetchall()
-        for request, _ in rows:
-            self.save(request, 'completed' if status == 'done' else 'failed', text, task)
-        return [fingerprint for _, fingerprint in rows]
+        if len(rows) != 1:
+            return []
+        request, fingerprint, launch = rows[0]
+        if tool is not None and not re.match(r'The script stopped at line \d+ \(' + re.escape(tool) + r'\)', launch):
+            return []
+        self.save(request, 'completed' if status == 'done' else 'failed', text, task)
+        return [fingerprint]
 
     def close(self):
         self.db.close()
