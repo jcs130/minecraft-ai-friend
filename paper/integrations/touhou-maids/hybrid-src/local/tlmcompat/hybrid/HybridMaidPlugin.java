@@ -155,7 +155,11 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         return companion.castSpell(maid,Bukkit.getPlayer(maid.getOwnerUUID()),spell);
     }
     JsonObject nativeCast(EntityMaid maid,String spell,String request){
-        if(!local.qdj.maids.brain.ResidentBodyAccess.external(maid.getUUID()))return nativeCast(maid,spell);
+        if(!local.qdj.maids.brain.ResidentBodyAccess.external(maid.getUUID())){
+            var result=nativeCast(maid,spell);
+            result.addProperty("status",result.get("effectsApplied").getAsBoolean()?"completed":"rejected");
+            return result;
+        }
         var result=JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.cast(maid.getUUID(),request,spell)).getAsJsonObject();
         result.addProperty("effectsApplied",result.has("completed")&&result.get("completed").getAsBoolean());return result;
     }

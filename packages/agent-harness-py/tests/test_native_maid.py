@@ -3,14 +3,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+from contextlib import suppress
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 import pytest
 
 from agent_mc_harness import BodyAction, Scope
-from agent_mc_harness.body.maid import MaidBody, reply_status
+from agent_mc_harness.body.maid import MaidBody, legacy_cast_outcome, reply_status
 from agent_mc_harness.bridges import ControlChanged, NativeMaidBridge
+from agent_mc_harness.journal import ActionJournal
+from agent_mc_harness.npc import NpcHost, NpcRole
+from agent_mc_harness.runtime import Step
 
 OWNER = "00000000-0000-4000-8000-000000000001"
 MAID = "00000000-0000-4000-8000-000000000002"
@@ -34,6 +39,7 @@ class NativeServer:
         self.life = "alive"
         self.drop_reply = False
         self.reply_override: dict[str, Any] | None = None
+        self.cast_observation: dict[str, Any] | None = None
         self.actions = ["list", "context", "inventory", "tasks", "brain", "receipt", "walk", "follow", "stay", "speak"]
         self.messages: list[dict[str, Any]] = []
 
@@ -89,6 +95,10 @@ class NativeServer:
             if rid not in self.receipts:
                 self.writes.append(args)
                 self.receipts[rid] = {"operationId": rid, "action": action, "status": "applied"}
+                if action == "cast" and self.cast_observation is not None:
+                    self.receipts[rid] = old_cast_receipt(args, self.cast_observation)
+                if action == "ack":
+                    self.messages = [item for item in self.messages if item["eventId"] != args["eventId"]]
                 if action == "walk":
                     self.position = {axis: args[axis] for axis in ("x", "y", "z")}
                     self.receipts[rid].update(status="completed", goalCompleted=True, actualPosition=self.position)
@@ -103,11 +113,123 @@ class NativeServer:
         return httpx.Response(200, json=envelope)
 
 
-def make(server: NativeServer, *, controller_id: str = CONTROLLER) -> MaidBody:
+def make(server: NativeServer, *, controller_id: str = CONTROLLER, scope: Scope = SCOPE) -> MaidBody:
     http = httpx.AsyncClient(transport=httpx.MockTransport(server))
     bridge = NativeMaidBridge(ENDPOINT, TOKEN, owner_id=OWNER, maid_id=MAID, controller_id=controller_id, http=http)
-    return MaidBody(bridge, scope=SCOPE, owner_id=OWNER, maid_id=MAID, server_id="qa-server", world_key="qa-world",
+    return MaidBody(bridge, scope=scope, owner_id=OWNER, maid_id=MAID, server_id="qa-server", world_key="qa-world",
                     poll_seconds=0, result_poll_seconds=0, context_poll_seconds=0)
+
+
+def old_cast_receipt(args, observation):
+    return {"schema": 1, "namespace": "native-body", "maidId": MAID, "ownerId": OWNER,
+            "operationId": args["requestId"], "requestId": args["requestId"], "action": "cast",
+            "arguments": json.dumps(args), "status": "unknown", "terminal": False, "retryAllowed": False,
+            "observation": {"spellId": args["spellId"], **observation}}
+
+
+@pytest.mark.parametrize(("observation", "expected"), [
+    ({"state": "rpg_cast_hit", "effectsApplied": True, "hitTargetIds": [OTHER], "manaRemaining": 2.3}, "completed"),
+    ({"state": "rpg_cast_healed", "effectsApplied": True, "healedTargetIds": [OWNER], "manaRemaining": 0}, "completed"),
+    ({"state": "rpg_mana_low", "error": "rpg_mana_low", "effectsApplied": False}, "failed"),
+    ({"state": "rpg_hit_blocked", "error": "rpg_hit_blocked", "effectsApplied": False,
+      "hitTargetIds": [], "healedTargetIds": [], "manaRemaining": 2.3}, "failed"),
+])
+def test_direct_cast_legacy_observation_has_a_terminal_outcome(run, observation, expected):
+    async def scenario():
+        server = NativeServer()
+        server.actions += ["cast"]
+        server.cast_observation = observation
+        client = make(server)
+        await client.spawn()
+        try:
+            action = BodyAction(verb="cast", args={"spellId": "arcane_bolt"}, request_id="cast-direct")
+            result = await client.act(action)
+            assert result.status == expected and result.terminal and result.text == observation["state"]
+            assert await client.act(action) == result and len(server.writes) == 1
+        finally:
+            await client.destroy()
+
+    run(scenario())
+
+
+def test_drop_cast_response_keeps_one_dispatch_and_read_recovers_reply_lane(run, tmp_path, monkeypatch):
+    async def scenario():
+        server = NativeServer()
+        server.actions += ["cast", "inbox", "ack"]
+        server.cast_observation = {"state": "rpg_cast_hit", "effectsApplied": True,
+                                   "hitTargetIds": [OTHER], "manaRemaining": 2.3}
+        action = BodyAction(verb="cast", args={"spellId": "arcane_bolt"}, request_id="original-cast")
+        journal = ActionJournal(tmp_path / "actions.db")
+        body = make(server)
+        await body.spawn()
+        try:
+            journal.begin(MAID, action)
+            server.drop_reply = True
+            unknown = await body.act(action)
+            assert unknown.status == "unknown"
+            journal.settle(MAID, unknown)
+        finally:
+            await body.destroy()
+        who = NpcRole(id="qa_maid", name="QA resident", owner_id=OWNER, character_id=MAID, body_id=MAID,
+                      body_kind="maid", provider="tokenplan", model="qa", persona="Quiet unless addressed.",
+                      allowed_tools=["body:chat"])
+        replacement = make(server, scope=who.scope("qa-server"))
+        now = datetime.now(UTC)
+        server.messages = [
+            {"eventId": "expired", "text": "yesterday's request", "senderUuid": OWNER,
+             "receivedAt": (now - timedelta(hours=10)).isoformat()},
+            {"eventId": "fresh", "text": "current hello", "senderUuid": OWNER, "receivedAt": now.isoformat()},
+        ]
+        planned = []
+
+        async def planner(intent, context):
+            planned.extend(event.data["eventId"] for event in context.dialogue)
+            return [Step(tool="body:chat", args={"text": "测试回复"})] if context.dialogue else []
+
+        served = asyncio.Event()
+        original_spawn = replacement.spawn
+        original_settle = journal.settle
+
+        async def spawn_with_inbox():
+            await original_spawn()
+            await replacement.poll_once()
+
+        def settle(body_id, receipt):
+            original_settle(body_id, receipt)
+            if journal.acknowledged(MAID, "fresh"):
+                served.set()
+
+        monkeypatch.setattr(replacement, "spawn", spawn_with_inbox)
+        monkeypatch.setattr(journal, "settle", settle)
+        host = NpcHost(who, replacement, planner, None, journal)
+        running = asyncio.create_task(host.run())
+        try:
+            await asyncio.wait_for(served.wait(), 12)
+            assert not journal.unresolved(MAID)
+            assert journal.replied(MAID, "fresh") and not journal.replied(MAID, "expired")
+            assert journal.acknowledged(MAID, "expired") and not server.messages
+            assert planned == ["fresh"]
+            assert [write["action"] for write in server.writes] == ["cast", "ack", "speak", "ack"]
+        finally:
+            running.cancel()
+            with suppress(asyncio.CancelledError):
+                await running
+            await host.close()
+
+    run(scenario())
+
+
+@pytest.mark.parametrize(("record", "extra"), [
+    ({"ownerId": OTHER}, {}), ({"maidId": OTHER}, {}), ({"operationId": "other-request"}, {}),
+    ({"arguments": "{}"}, {}), ({"namespace": "legacy"}, {}), ({"terminal": True}, {}),
+    ({}, {"spellId": "another_spell"}), ({}, {"status": "unknown"}),
+    ({}, {"hitTargetIds": []}), ({}, {"manaRemaining": float("nan")}), ({}, {"effectsApplied": False}),
+])
+def test_wrong_or_unproven_cast_cannot_clear_an_unknown_write(record, extra):
+    args = {"action": "cast", "maidId": MAID, "requestId": "original-cast", "spellId": "arcane_bolt"}
+    proof = old_cast_receipt(args, {"state": "rpg_cast_hit", "effectsApplied": True,
+                                   "hitTargetIds": [OTHER], "manaRemaining": 2.3, **extra}) | record
+    assert legacy_cast_outcome(proof, owner=OWNER, maid=MAID, request="original-cast", spell="arcane_bolt") is None
 
 
 def test_workshop_inventory_has_an_explicit_default_and_rejects_a_guessed_name(run: Any) -> None:

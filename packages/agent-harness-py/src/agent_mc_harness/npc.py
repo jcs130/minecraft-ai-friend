@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .journal import ActionJournal, work_key
 from .conversation import CONVERSATION_POLICY
-from .social import stamped_contact
+from .social import stamped_contact, timestamp
 from .models import BodyEvent, Scope
 from .runtime import HarnessRuntime, Intent, PlanContext, Step, step_support
 
@@ -26,6 +26,7 @@ from .runtime import HarnessRuntime, Intent, PlanContext, Step, step_support
 IDLE_GOAL = "Choose one useful activity grounded in the current scene; rest silently when none is needed."
 DANGER_GOAL = "React to a fresh danger observation."
 DIALOGUE_GOAL = "Decide whether current dialogue is addressed to you and needs a reply; listening silently is valid. Continue useful activity."
+NATIVE_DIALOGUE_TTL_MS = 120_000
 MAID_BOND_TONES = (
     "Friendly and practical, as companions just getting to know each other.",
     "Familiar and relaxed. Suggest a helpful next step when it fits.",
@@ -517,6 +518,20 @@ class NpcHost:
                 and self.pending_dialogue[key].data.get("maidId") == str(self.role.body_id)
                 and not self.journal.acknowledged(str(self.role.body_id), key)]
 
+    def _expire_dialogue(self, body_id: str, events: list[str]) -> None:
+        if self.role.body_kind != "maid":
+            return
+        cutoff = int(time.time() * 1000) - NATIVE_DIALOGUE_TTL_MS
+        expired = []
+        for key in events:
+            data = self.pending_dialogue[key].data
+            received = timestamp(data.get("receivedAt"))
+            if (data.get("serverAttributed") is True and data.get("maidId") == body_id and received is not None
+                    and received < cutoff and not self.journal.handled(body_id, key)):
+                expired.append(key)
+        if expired:
+            self.journal.listen(body_id, expired, "expired-native-dialogue")
+
     async def _plan(self, intent: Intent, context: PlanContext):
         body_id = str(self.role.body_id)
         dialogue = [self.pending_dialogue[key] for key in intent.source_events if key in self.pending_dialogue]
@@ -629,6 +644,7 @@ class NpcHost:
                     threatened = False
                 now = time.monotonic()
                 events = list(self.pending_dialogue)[:8]
+                self._expire_dialogue(identity.body_id, events)
                 acknowledged = [event for event in events if self.journal.handled(identity.body_id, event)]
                 if self.role.body_kind == "numen":
                     # Numen's durable event poll has no separate inbox ack RPC.
