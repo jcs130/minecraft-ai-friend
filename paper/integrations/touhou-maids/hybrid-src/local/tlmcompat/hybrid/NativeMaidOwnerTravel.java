@@ -1,5 +1,6 @@
 package local.tlmcompat.hybrid;
 
+import com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,12 +28,14 @@ import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 
-/** Follow an accepted owner trip using only loaded entities and safe loaded destinations. */
+/** Move original following companions only after the owner's trip reaches a safe destination. */
 final class NativeMaidOwnerTravel implements Listener {
     private static final int LEGACY_RANGE = 16;
     private static final int ARRIVAL_RANGE = 8;
 
-    private record Trip(Player owner, World source, Location destination, boolean portal, int trialStage, List<UUID> companions) {
+    private record Candidate(UUID id, Location sourceHint) {}
+
+    private record Trip(Player owner, World source, Location destination, boolean portal, int trialStage, List<Candidate> companions) {
         boolean changesWorld() {
             return !source.equals(destination.getWorld());
         }
@@ -42,11 +45,30 @@ final class NativeMaidOwnerTravel implements Listener {
 
     private final HybridMaidPlugin plugin;
     private final Map<UUID, Trip> pending = new HashMap<>();
+    private final Map<UUID, Trip> arriving = new HashMap<>();
     private final Map<UUID, Correction> corrections = new HashMap<>();
 
     NativeMaidOwnerTravel(HybridMaidPlugin plugin) {
         this.plugin = plugin;
         Bukkit.getPluginManager().registerEvents(this, plugin);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void catchUpOnJoin(org.bukkit.event.player.PlayerJoinEvent event) {
+        Player owner = event.getPlayer();
+        var binding = plugin.personal;
+        if (binding == null || !binding.owner().equals(owner.getUniqueId())) return;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (Bukkit.getPlayer(binding.owner()) != owner || !canTravel(owner) || pending.containsKey(binding.owner())
+                    || !plugin.personalTravel(binding.maid()) || !plugin.registeredMaids().has(binding.maid().toString())) return;
+            var body = Bukkit.getEntity(binding.maid());
+            Location last = body == null ? NativeMaidLocation.indexed(binding.owner(), binding.maid()) : body.getLocation();
+            if (last == null || last.getWorld().equals(owner.getWorld()) || arriving.containsKey(binding.owner())) return;
+            Trip trip = new Trip(owner, last.getWorld(), owner.getLocation(), false, 0,
+                List.of(new Candidate(binding.maid(), last)));
+            pending.put(binding.owner(), trip);
+            arrive(trip, trip.destination());
+        }, 40);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -95,20 +117,37 @@ final class NativeMaidOwnerTravel implements Listener {
     }
 
     private Trip capture(Player owner, Location from, Location destination, boolean portal, int trialStage) {
+        return capture(owner, from.getWorld(), from, destination, portal, trialStage);
+    }
+
+    private Trip capture(Player owner, World sourceWorld, Location from, Location destination, boolean portal, int trialStage) {
         UUID ownerId = owner.getUniqueId();
-        List<UUID> companions = new ArrayList<>();
-        for (String key : plugin.registeredMaids().keySet()) {
-            EntityMaid maid = followingMaid(UUID.fromString(key), ownerId, from.getWorld());
+        boolean crossWorld = !sourceWorld.equals(destination.getWorld());
+        List<Candidate> companions = new ArrayList<>();
+        for (var entry : plugin.registeredMaids().entrySet()) {
+            var row = entry.getValue().getAsJsonObject();
+            if (!ownerId.toString().equals(row.get("ownerId").getAsString())) continue;
+            UUID id = UUID.fromString(entry.getKey());
+            boolean personal = plugin.personalTravel(id);
+            if (from == null && !personal) continue;
+            if (personal && crossWorld && Bukkit.getEntity(id) == null) {
+                Location indexed = NativeMaidLocation.indexed(ownerId, id);
+                if (indexed != null && sourceWorld.equals(indexed.getWorld())) companions.add(new Candidate(id, indexed));
+                continue;
+            }
+            EntityMaid maid = followingMaid(id, ownerId, sourceWorld);
             if (maid == null) continue;
             int range = departureRange(maid);
-            if (range > 0 && maid.getBukkitEntity().getLocation().distanceSquared(from) <= range * range) {
-                companions.add(maid.getUUID());
+            Location source = maid.getBukkitEntity().getLocation();
+            if (range > 0 && ((personal && crossWorld) || from != null && source.distanceSquared(from) <= range * range)) {
+                companions.add(new Candidate(id, personal ? source : null));
             }
         }
 
         pending.remove(ownerId);
+        arriving.remove(ownerId);
         if (companions.isEmpty()) return null;
-        Trip trip = new Trip(owner, from.getWorld(), destination.clone(), portal, trialStage, List.copyOf(companions));
+        Trip trip = new Trip(owner, sourceWorld, destination.clone(), portal, trialStage, List.copyOf(companions));
         pending.put(ownerId, trip);
         return trip;
     }
@@ -174,11 +213,15 @@ final class NativeMaidOwnerTravel implements Listener {
 
         // A direct Youer teleport can report the old coordinates in the new world.
         // Accept that sample only with this connection's same-tick world change.
-        if (correction == null || correction.owner() != owner || correction.tick() != Bukkit.getCurrentTick()
-                || !correction.to().getWorld().equals(owner.getWorld())) return;
-        Location from = correction.from().clone();
-        from.setWorld(event.getFrom());
-        Trip direct = capture(owner, from, correction.to(), false, 0);
+        Location from = null;
+        if (correction != null && correction.owner() == owner && correction.tick() == Bukkit.getCurrentTick()
+                && correction.to().getWorld().equals(owner.getWorld())) {
+            from = correction.from().clone();
+            from.setWorld(event.getFrom());
+        }
+        // A completed world change can arrive without a coordinate correction (e.g. identical x/y/z).
+        // Only personal bodies can travel without knowing the owner's departure coordinates.
+        Trip direct = capture(owner, event.getFrom(), from, owner.getLocation(), false, 0);
         if (direct != null) scheduleArrival(direct, direct.destination());
     }
 
@@ -189,26 +232,58 @@ final class NativeMaidOwnerTravel implements Listener {
     private void arrive(Trip trip, Location arrival) {
         Player owner = trip.owner();
         UUID ownerId = owner.getUniqueId();
-        if (pending.get(ownerId) != trip) return;
-        pending.remove(ownerId);
+        if (!pending.remove(ownerId, trip)) return;
         if (!canTravel(owner) || Bukkit.getPlayer(ownerId) != owner || !arrival.getWorld().equals(owner.getWorld())) return;
-        Location current = owner.getLocation();
-        if (current.distanceSquared(arrival) > ARRIVAL_RANGE * ARRIVAL_RANGE) return;
-        if (trip.trialStage() > 0 && !trialArrival(owner, trip.trialStage(), current)) return;
+        List<org.bukkit.Chunk> tickets = new ArrayList<>();
+        List<UUID> loading = new ArrayList<>();
+        try {
+            for (var candidate : trip.companions()) {
+                if (candidate.sourceHint() == null || Bukkit.getEntity(candidate.id()) != null || !plugin.personalTravel(candidate.id())) continue;
+                var ticket = NativeMaidLocation.loadExisting(candidate.sourceHint(), plugin);
+                if (ticket != null) tickets.add(ticket);
+                loading.add(candidate.id());
+            }
+            arriving.put(ownerId, trip);
+            // On Youer the NBT may be present before the entity is tracked. Retain the exact source
+            // chunk across ticks; a new departure or connection invalidates this arrival.
+            NativeMaidLocation.whenTracked(plugin, loading,
+                () -> arriving.get(ownerId) == trip && Bukkit.getPlayer(ownerId) == owner && owner.getWorld().equals(arrival.getWorld()),
+                () -> deliver(trip, arrival, tickets));
+        } catch (RuntimeException failed) {
+            arriving.remove(ownerId, trip);
+            for (var ticket : tickets) NativeMaidLocation.release(ticket, plugin);
+            throw failed;
+        }
+    }
 
-        for (UUID id : trip.companions()) {
-            EntityMaid maid = followingMaid(id, ownerId, trip.source());
-            if (maid == null || (trip.source().equals(owner.getWorld())
-                    && maid.getBukkitEntity().getLocation().distanceSquared(current) < 16)) continue;
-            Location landing = trip.trialStage() > 0
-                ? safe(current, candidate -> trialArrival(owner, trip.trialStage(), candidate)) : safe(current);
-            if (landing == null) {
-                owner.sendMessage("[女仆·随行] 附近没有已加载的安全落点，伙伴暂未传送；请先站到有地面、两格净空的地方，再查询女仆位置。");
-                continue;
+    private void deliver(Trip trip, Location arrival, List<org.bukkit.Chunk> tickets) {
+        Player owner = trip.owner();
+        UUID ownerId = owner.getUniqueId();
+        try {
+            if (!arriving.remove(ownerId, trip) || !canTravel(owner) || Bukkit.getPlayer(ownerId) != owner
+                    || !arrival.getWorld().equals(owner.getWorld())) return;
+            Location current = owner.getLocation();
+            boolean leftArrival = current.distanceSquared(arrival) > ARRIVAL_RANGE * ARRIVAL_RANGE;
+            if (trip.trialStage() > 0 && !trialArrival(owner, trip.trialStage(), current)) return;
+            for (var candidate : trip.companions()) {
+                UUID id = candidate.id();
+                if (leftArrival && !plugin.personalTravel(id)) continue;
+                EntityMaid maid = followingMaid(id, ownerId, trip.source());
+                if (maid == null || (trip.source().equals(owner.getWorld())
+                        && maid.getBukkitEntity().getLocation().distanceSquared(current) < 16)) continue;
+                Location landing = trip.trialStage() > 0
+                    ? safe(current, spot -> trialArrival(owner, trip.trialStage(), spot), true) : safe(current, spot -> true, plugin.personalTravel(id));
+                if (landing == null) {
+                    owner.sendMessage("[女仆·随行] 附近没有安全落点。请站到有实心地面和两格净空的地方，再用 /qdmaid recall 召回。");
+                    continue;
+                }
+                if (!transfer(maid, landing)) {
+                    owner.sendMessage("[女仆·随行] 尚未确认伙伴到达。请用 /qdmaid list 查看原女仆，再用 /qdmaid recall 召回。");
+                }
             }
-            if (!transfer(maid, landing)) {
-                owner.sendMessage("[女仆·随行] 未确认伙伴到达。请查询 context 的当前维度和位置。");
-            }
+        } finally {
+            for (var ticket : tickets) NativeMaidLocation.release(ticket, plugin);
+            tickets.clear();
         }
     }
 
@@ -264,9 +339,12 @@ final class NativeMaidOwnerTravel implements Listener {
     private EntityMaid followingMaid(UUID id, UUID ownerId, World source) {
         if(!plugin.nativeTravelAllowed(id))return null;
         EntityMaid maid = HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
+        boolean personal = plugin.personalTravel(id);
         if (maid == null || !ownerId.equals(maid.getOwnerUUID()) || !source.equals(maid.getBukkitEntity().getWorld())
-                || !plugin.sharedDialogueEnabled(maid) || !maid.isAlive() || maid.isRemoved() || maid.isNoAi()
+                || (!personal && !plugin.sharedDialogueEnabled(maid)) || !maid.isAlive() || maid.isRemoved() || maid.isNoAi()
                 || maid.isSleeping()) return null;
+        if (personal && (maid.isPassenger() || maid.isVehicle() || plugin.editingMaidInventory(maid)
+                || plugin.workshops().busy(id))) return null;
         boolean idle = maid.getTask().getUid().toString().equals("touhou_little_maid:idle");
         // Model-selected short waiting is still companionship, not permanent stationing.
         // Keep the lease and original identity across an accepted partner departure.
@@ -274,7 +352,7 @@ final class NativeMaidOwnerTravel implements Listener {
         boolean temporaryWait = idle && MaidCompanionActions.waiting(maid)
                 && maid.isMaidInSittingPose() && maid.isHomeModeEnable() && !maid.isPassenger() && !maid.isVehicle();
         if (!temporaryWait && (maid.isMaidInSittingPose() || maid.isHomeModeEnable() || !maid.canBrainMoving())) return null;
-        return idleOrAutoDefending(maid) ? maid : null;
+        return idleOrAutoDefending(maid) || (personal && maid.getTask() instanceof IAttackTask) ? maid : null;
     }
 
     private static boolean idleOrAutoDefending(EntityMaid maid) {

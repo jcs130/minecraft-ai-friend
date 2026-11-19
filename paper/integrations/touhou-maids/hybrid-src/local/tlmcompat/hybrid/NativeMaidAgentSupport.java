@@ -148,10 +148,11 @@ public final class NativeMaidAgentSupport implements Listener {
         if(context.has("recovery"))context.getAsJsonObject("recovery").addProperty("persisted",lifecycle.durable(context.getAsJsonObject("recovery").get("eventId").getAsString()));
         if(alive) {
             context.add("follow",following.describe(maid));
-            var manager=maid.getAiChatManager();var site=manager.getLLMSite();
-            context.addProperty("dialogueMode",configured(maid)?"native_model":"not_configured");
+            boolean personal=plugin.personalDialogue(maid)&&actor.equals(maid.getOwnerUUID());
+            boolean ready=personal?AIConfig.LLM_ENABLED.get()&&plugin.personalModelReady():configured(maid);
+            context.addProperty("dialogueMode",ready?(personal?"owner_nearby_model":"native_model"):"not_configured");
             context.addProperty("dialogueCommand","/qdmaid chat "+id+" <requestId> <对她说的话>");
-            if(configured(maid))context.addProperty("inferenceOwner","original_tlm");
+            if(ready)context.addProperty("inferenceOwner",personal?"personal_owner_dialogue":"original_tlm");
             context.addProperty("helpCommand","/qdmaid help");
             context.addProperty("equipmentCommand","/qdmaid inventory "+id);
             return;
@@ -184,8 +185,8 @@ public final class NativeMaidAgentSupport implements Listener {
     }
     public void validateChat(Player actor,EntityMaid maid) {
         validateIdle(maid);
-        var manager=maid.getAiChatManager();var site=manager.getLLMSite();
-        if(!configured(maid))throw new CompatibilityException("chat_not_configured","服主尚未启用这位女仆的原生模型；chat 不会退回留言箱或冒充回复。");
+        boolean ready=plugin.ownerDialogue(actor,maid)?AIConfig.LLM_ENABLED.get()&&plugin.personalModelReady():configured(maid);
+        if(!ready)throw new CompatibilityException("chat_not_configured","服主尚未启用这位女仆的原生模型；chat 不会退回留言箱或冒充回复。");
         var tokens=((net.neoforged.neoforge.attachment.IAttachmentHolder)(Object)((CraftPlayer)actor).getHandle()).getData(com.github.tartaricacid.touhoulittlemaid.init.InitDataAttachment.CHAT_TOKENS);
         if(tokens.get()>=AIConfig.MAX_TOKENS_PER_PLAYER.get())throw new CompatibilityException("chat_budget_exhausted","原模组本角色对话额度不足，请联系服主查看模型额度；没有发送请求。");
     }

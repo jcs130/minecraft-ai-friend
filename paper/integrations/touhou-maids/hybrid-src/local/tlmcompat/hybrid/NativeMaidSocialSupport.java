@@ -61,7 +61,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
     void validate(Player actor,EntityMaid maid){
         plugin.requireNearby(actor,maid,MaidConversationRange.speaker(maid,actor));
         if(!maid.isAlive()||maid.isRemoved())throw new CompatibilityException("unavailable","女仆当前不在现场，请重新靠近后查询 nearby。");
-        if(!enabled(maid))throw new CompatibilityException("public_chat_not_enabled","这位女仆未开放公共智能交谈；普通工作仍可由主人管理。共享模型目前只给原肥鱼使用。");
+        if(!plugin.nearbyDialogue(actor,maid))throw new CompatibilityException("public_chat_not_enabled","这位女仆未向你开放附近智能交谈。");
         int wait=chatRate.retryAfterSeconds(actor.getUniqueId(),System.nanoTime());
         if(wait>0)throw new CompatibilityException("chat_cooldown","近30秒已连续交谈6次，请等约"+wait+"秒再说新话。这句未送入模型；此前已发送的内容只查原回执，不要重复发送。");
     }
@@ -95,9 +95,9 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         chatRate.started(actor.getUniqueId(),System.nanoTime(),proactive);
         JsonObject observation=new JsonObject();observation.addProperty("maidId",maid.getUUID().toString());
         observation.addProperty("initiatedBy",proactive?"maid":"player");
-        boolean partnerAction=call.ownerRequested()||cue!=null;
+        boolean partnerAction=allowsActions(call);
         observation.addProperty("conversation","nearby_visitor");observation.addProperty("partnerActions",partnerAction);
-        observation.addProperty("meaning","已送达当前模型。绑定伙伴可请求跟随、护卫、短等或原生钓鱼。动作设置和实际进展分别查询。");
+        observation.addProperty("meaning",partnerAction?"已送达当前模型。绑定伙伴可请求跟随、护卫、短等或原生钓鱼。动作设置和实际进展分别查询。":"对话已提交，回复会显示在附近。");
         observation.addProperty("nextCommand","/qdmaid receipt "+maid.getUUID()+" "+operation);
         JsonObject result=receipts.finish(maid.getUUID(),operation,"pending",observation);
         if(deliveredTo==null&&!proactive)for(UUID id:call.listeners){Player listener=Bukkit.getPlayer(id);if(listener!=null)listener.sendMessage(net.kyori.adventure.text.Component.text("[附近·女仆] "+actor.getName()+" → "+maid.getName().getString()+"："+text,net.kyori.adventure.text.format.NamedTextColor.AQUA));}
@@ -112,10 +112,11 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
             submitModel(call,messages);
             return result;
         }
-        String partner=maid.getAiChatManager().ownerName;
+        String partner=plugin.ownerDialogue(actor,maid)?actor.getName():maid.getAiChatManager().ownerName;
         if(partner==null||partner.isBlank())partner="同行伙伴";
         String relation=partnerAction
             ?"对方是与你绑定的同行伙伴。根据实际请求选择一次本轮提供的动作工具，按回执说明当前状态。follow会站起、退出驻守并结束当前工作。guard使用原生护卫。wait短等60秒后恢复跟随。明确请你钓鱼时用fish。缺鱼竿就说明需要装备。抛竿和收竿以当前观察为准。长期驻守由本人菜单设置。"
+            :call.ownerRequested()?"对方是你的同行伙伴。本轮只交谈，按眼前实况用中文简短回应。没有调用动作工具时不能承诺已经起身、赶来或执行工作。"
             :proactive?"对方是你的同行伙伴。这次只分享观察到的变化。"
             :"对方是附近访客，本轮只交流，没有动作工具，不能更改绑定关系、装备、工作或运行方式。";
         messages.add(LLMMessage.systemChat(maid,"你是千灯纪中名叫「"+maid.getName().getString()+"」的冒险伙伴。你和「"+partner+"」平等相处、并肩冒险、互相照顾。称呼这位同行伙伴时直接用「"+partner+"」，不用主人、主公、大人或master等主仆称谓，也不自称仆人；后台绑定只表示操作权限，不是主仆关系。你活泼、温暖、有主见，可以商量计划、表达想法和提醒危险，不机械表忠心或反复招呼。音色只作为声音参考，不借用配音角色的身份或口头禅。过去的主仆称呼是旧设定，今后自然使用伙伴名字，不反复解释或道歉。现在与附近玩家「"+actor.getName()+"」进行简短自然的中文交谈。"+relation+"不提供任何人的私聊、背包或私有记忆；没有给予装备、破坏建筑或任意命令的权限。当前工作ID："+maid.getTask().getUid()+"。用普通文字回复，不要输出命令、JSON、系统提示或内部推理。"));
@@ -135,9 +136,15 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         return result;
     }
 
+    private boolean allowsActions(Call call){
+        return enabled(call.maid)&&(call.ownerRequested()||call.cue!=null);
+    }
     private void submitModel(Call call,List<LLMMessage> messages){
         VisitorCallback callback=new VisitorCallback(call,messages);
-        try{call.maid.getAiChatManager().getLLMSite().client().chat(callback);}
+        try{
+            if(plugin.ownerDialogue(call.actorConnection,call.maid))plugin.personalChat(call.actorConnection,callback);
+            else call.maid.getAiChatManager().getLLMSite().client().chat(callback);
+        }
         catch(Exception error){callback.onFailure(null,error,502);}
     }
     private static String key(Call call){return call.maid.getUUID()+":"+call.actor;}
@@ -175,9 +182,9 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
         boolean actionAttempted;
         VisitorCallback(Call call,List<LLMMessage> messages){
             super(call.maid.getAiChatManager(),messages,true);
-            this.call=call;needAddTools=false;partnerAction=call.ownerRequested()||call.cue!=null;
+            this.call=call;needAddTools=false;partnerAction=allowsActions(call);
             expectedPose=MaidCompanionActions.pose(call.maid);
-            var spellbook = call.ownerRequested() ? plugin.companionScene(call.maid).getAsJsonObject("rpg") : null;
+            var spellbook = partnerAction && call.ownerRequested() ? plugin.companionScene(call.maid).getAsJsonObject("rpg") : null;
             castChoices = spellbook == null ? List.of() : spellbook.getAsJsonArray("spells").asList().stream()
                 .map(JsonElement::getAsJsonObject).filter(row -> row.get("unlocked").getAsBoolean())
                 .map(row -> row.get("id").getAsString()).toList();
@@ -263,7 +270,7 @@ final class NativeMaidSocialSupport implements org.bukkit.event.Listener {
     }
     private void finish(Call call,String text,String reason){
         UUID id=call.maid.getUUID();if(pending.get(id)!=call)return;
-        if(!call.maid.isAlive()||call.maid.isRemoved()||!Objects.equals(call.owner,call.maid.getOwnerUUID())||!enabled(call.maid))reason="maid_unavailable";
+        if(!call.maid.isAlive()||call.maid.isRemoved()||!Objects.equals(call.owner,call.maid.getOwnerUUID())||!plugin.nearbyDialogue(call.actorConnection,call.maid))reason="maid_unavailable";
         Player actor=Bukkit.getPlayer(call.actor);
         if(actor!=call.actorConnection)actor=null;
         if(reason==null&&!call.world.equals(call.maid.getBukkitEntity().getWorld().getUID()))reason="world_changed";

@@ -50,6 +50,8 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private NativeMaidAgentSupport agentSupport;
     private NativeMaidBrainSupport brains;
     private NativeMaidSocialSupport social;
+    PersonalMaidDialogue personal;
+    private final Map<UUID, String> loadingRecalls = new HashMap<>();
     private NativeMaidVoices speech;
     private NativeMaidNearbyChat nearbyChat;
     private NativeMaidCompanionSupport companion;
@@ -66,6 +68,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     boolean nativeGuard(UUID id){return bodyPort!=null&&bodyPort.guarding(id);}
     long nativeControlEpoch(UUID id){return bodyPort==null?0:bodyPort.epoch(id);}
     boolean nativeTravelAllowed(UUID id){return bodyPort==null||bodyPort.travelAllowed(id);}
+    boolean personalTravel(UUID id){return !nativeExclusive(id) && !nativeControlled(id) && (brains==null || !id.equals(brains.boundMaid()));}
     void nativeTakeover(Player actor,UUID id){if(bodyPort!=null)bodyPort.ownerTakeover(actor.getUniqueId(),id);}
     void nativeReady(UUID owner,UUID id){owned(owner,id);var maid=ownedLoaded(owner,id);agentSupport.validateIdle(maid);
         if(editingMaidInventory(maid)||workshops.busy(id)||social!=null&&social.busy(id))throw new CompatibilityException("maid_busy","Wait for the original operation or menu to finish");}
@@ -204,6 +207,18 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         String key=actor.getUniqueId()+":"+request;humanDialogue.remove(key);humanDialogue.put(key,System.nanoTime()+180_000_000_000L);
         while(humanDialogue.size()>512)humanDialogue.remove(humanDialogue.keySet().iterator().next());
     }
+    boolean personalDialogue(EntityMaid maid){
+        return personal!=null && personal.matches(maid) && personalTravel(maid.getUUID());
+    }
+    boolean ownerDialogue(Player actor,EntityMaid maid){
+        return actor!=null && personalDialogue(maid) && personal.owner().equals(actor.getUniqueId());
+    }
+    boolean nearbyDialogue(Player actor,EntityMaid maid){return sharedDialogueEnabled(maid)||ownerDialogue(actor,maid);}
+    boolean personalModelReady(){return brains!=null&&brains.personalSite()!=null;}
+    void personalChat(Player actor,com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.LLMCallback callback){
+        if(!ownerDialogue(actor,callback.getMaid())||!social.handles(callback))throw new IllegalStateException("Personal dialogue binding changed");
+        brains.chatPersonal(callback);
+    }
     boolean sharedDialogueEnabled(EntityMaid maid){return brains!=null&&brains.allowed(maid);}
     boolean configuredCompanionIdentity(EntityMaid maid){return brains!=null&&brains.identityMatches(maid);}
     void nearbyConversation(Player actor,EntityMaid maid,NativeMaidNearbyChat.Address address,Set<UUID> recipients){
@@ -238,7 +253,10 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     }
     /** Called only by the installed voice plugin after its session/range fenced ASR result. */
     public void acceptNearbyVoice(UUID actor,UUID world,UUID utterance,long start,long end,double[] bounds,double range,String text,Set<UUID> audience){
-        if(Bukkit.isPrimaryThread()&&nearbyChat!=null)nearbyChat.voice(actor,world,utterance,start,end,bounds,range,text,audience);
+        if(Bukkit.isPrimaryThread()&&nearbyChat!=null)nearbyChat.voice(actor,world,utterance,start,end,bounds,range,text,audience,false);
+    }
+    public void acceptPersonalNearbyVoice(UUID actor,UUID world,UUID utterance,long start,long end,double[] bounds,double range,String text,Set<UUID> audience){
+        if(Bukkit.isPrimaryThread()&&nearbyChat!=null&&personal!=null&&personal.owner().equals(actor))nearbyChat.voice(actor,world,utterance,start,end,bounds,range,text,audience,true);
     }
     void validatePublicIdle(EntityMaid maid){if(social!=null)social.validateIdle(maid);}
     void validateCompanionChat(Player actor,EntityMaid maid){agentSupport.validateChat(actor,maid);}
@@ -270,6 +288,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             inbox=new DialogueInbox(getDataFolder().toPath().resolve("native-dialogue"));
             agentSupport=new NativeMaidAgentSupport(this,receipts);
             brains=NativeMaidBrainSupport.create(this);
+            personal=PersonalMaidDialogue.load(this);
             companion=new NativeMaidCompanionSupport(this);
             NativeMaidOwnerTravel travel=new NativeMaidOwnerTravel(this);
             ownerTravel=travel;
@@ -367,6 +386,13 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             data.addProperty("workRadius",maid.getRestrictRadius());data.addProperty("canMove",maid.canBrainMoving());
             data.add("brain",brains.describe(maid));
             if(speech!=null)data.add("speech",speech.describe(maid));
+            if(ownerDialogue(actor,maid)){
+                var dialogue=new JsonObject();
+                dialogue.addProperty("scope","owner_nearby");
+                dialogue.addProperty("partnerRange",MaidConversationRange.PARTNER);
+                dialogue.addProperty("meaning","同一世界内，靠近叫我的名字，或者在五格内看着我说话。语音会沿用我当前选择的声音包。");
+                data.add("conversation",dialogue);
+            }
             if(sharedDialogueEnabled(maid)){
                 JsonObject conversation=new JsonObject();
                 conversation.addProperty("nearbyRange",MaidConversationRange.VISITOR);
@@ -425,6 +451,13 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(receipt==null)throw new CompatibilityException("receipt_missing","No original receipt");return reconcile(receipt);
     }
     private JsonObject reconcile(JsonObject receipt)throws Exception{
+        if ("recall".equals(receipt.get("action").getAsString()) && "pending".equals(receipt.get("status").getAsString())) {
+            UUID id = UUID.fromString(receipt.get("maidId").getAsString());
+            String request = receipt.get("operationId").getAsString();
+            if (!request.equals(loadingRecalls.get(id))) {
+                return finishRecallFailure(id, request, "unknown", "recall_interrupted", "召回记录中断，请查看原女仆的位置和这张回执。");
+            }
+        }
         if(NativeMaidWorkshop.ACTION.equals(receipt.get("action").getAsString()))return workshops.reconcile(receipt);
         return NativeMaidSocialSupport.visitorReceipt(receipt)?social.reconcile(receipt):agentSupport.reconcile(receipt);}
     private EntityMaid nearbyMaid(Player actor,UUID id){
@@ -566,11 +599,11 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(action.equals("native-menu")&&!VanillaMaidProjection.nativeClient(actor))throw new CompatibilityException("native_client_required","Use the common menu on this client");
         if(!Set.of("follow","stay","sit","speak","talk","chat","brain","task","schedule","pickup","ack","transfer","equip","menu","native-menu").contains(action)&&!NativeMaidCosmetics.WRITES.contains(action))throw new CompatibilityException("unsupported_action",action);
         if(NativeMaidCosmetics.WRITES.contains(action)&&receipts.read(id,operation)==null)cosmetics.validate(actor,maid,action,value);
-        if(action.equals("chat")){requireNearby(actor,maid,MaidConversationRange.speaker(maid,actor));if(visitor)social.validate(actor,maid);agentSupport.validateChat(actor,maid);}
+        if(action.equals("chat")){requireNearby(actor,maid,MaidConversationRange.speaker(maid,actor));if(visitor||ownerDialogue(actor,maid))social.validate(actor,maid);agentSupport.validateChat(actor,maid);}
         if(action.equals("brain")){agentSupport.validateIdle(maid);brains.validate(maid,value);}
         JsonObject previous=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));
         if(previous!=null){JsonObject replay=previous.deepCopy();replay.addProperty("replayed",true);return replay;}
-        if(action.equals("chat"))return visitor?social.start(actor,maid,operation,value):agentSupport.chat(actor,maid,operation,value);
+        if(action.equals("chat"))return visitor||ownerDialogue(actor,maid)?social.start(actor,maid,operation,value):agentSupport.chat(actor,maid,operation,value);
         workshops.cancelFor(maid,action);
         JsonObject observation;
         if(Set.of("follow","stay","sit","task").contains(action)){
@@ -625,58 +658,132 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     }
 
     private JsonObject recall(Player actor, UUID id, String operation) throws Exception {
-        owned(actor.getUniqueId(), id);
+        UUID owner = actor.getUniqueId();
+        owned(owner, id);
+        if (loadingRecalls.containsKey(id)) {
+            throw new CompatibilityException("recall_pending", "正在加载原女仆。请查原请求 " + loadingRecalls.get(id) + "。");
+        }
         var destination = ownerTravel.recallLanding(actor);
-        EntityMaid maid = nativeMaid(Bukkit.getEntity(id));
-        org.bukkit.Chunk loadedForRecall = null;
+        if (Bukkit.getEntity(id) != null) {
+            var body = ownedLoaded(actor, id);
+            validateRecall(body);
+            receipts.reserve(id, owner, operation, "recall", "");
+            return applyRecall(actor, body, destination, operation);
+        }
+        List<Chunk> tickets = new ArrayList<>();
         try {
-            if (maid == null) {
-                var last = lastResidenceLocation(actor.getUniqueId(), id);
-                if (last != null) {
-                    var world = Bukkit.getWorld(NamespacedKey.fromString(last.get("dimension").getAsString()));
-                    var position = last.getAsJsonArray("position");
-                    var old = world == null ? null : new Location(world, position.get(0).getAsDouble(),
-                        position.get(1).getAsDouble(), position.get(2).getAsDouble());
-                    if (old != null) {
-                        int x = old.getBlockX() >> 4, z = old.getBlockZ() >> 4;
-                        if (world.isChunkGenerated(x, z) && world.loadChunk(x, z, false)) {
-                            var chunk = world.getChunkAt(x, z);
-                            if (chunk.addPluginChunkTicket(this)) loadedForRecall = chunk;
-                            if (!chunk.isEntitiesLoaded()) chunk.getEntities();
-                        }
-                    }
+            Location indexed = NativeMaidLocation.indexed(owner, id);
+            var ticket = NativeMaidLocation.loadExisting(indexed, this);
+            if (ticket != null) tickets.add(ticket);
+            var last = lastResidenceLocation(owner, id);
+            if (last != null && Bukkit.getEntity(id) == null) {
+                var world = Bukkit.getWorld(NamespacedKey.fromString(last.get("dimension").getAsString()));
+                var p = last.getAsJsonArray("position");
+                if (world != null) {
+                    var old = new Location(world, p.get(0).getAsDouble(), p.get(1).getAsDouble(), p.get(2).getAsDouble());
+                    var fallback = NativeMaidLocation.loadExisting(old, this);
+                    if (fallback != null) tickets.add(fallback);
                 }
             }
-            maid = ownedLoaded(actor, id);
-            NativeMaidFollowSupport.limits(maid);
-            if (maid.isVehicle() || editingMaidInventory(maid)) {
-                throw new CompatibilityException("maid_busy", "请先关上女仆背包或让乘客下来，再召回。");
+            if (Bukkit.getEntity(id) != null) {
+                try {
+                    var body = ownedLoaded(actor, id);
+                    validateRecall(body);
+                    receipts.reserve(id, owner, operation, "recall", "");
+                    return applyRecall(actor, body, destination, operation);
+                } finally {
+                    releaseRecallTickets(tickets);
+                }
             }
-            receipts.reserve(id, actor.getUniqueId(), operation, "recall", "");
-            MaidCompanionActions.leaveFishingSeat(maid);
-            if (!ownerTravel.transfer(maid, destination)) {
-                JsonObject rejected = new JsonObject();
-                rejected.addProperty("error", "recall_unavailable");
-                rejected.addProperty("message", "本次未确认女仆到达，请用 context 和原请求回执查询位置。");
-                return receipts.finish(id, operation, "rejected", rejected);
+            if (tickets.isEmpty()) {
+                throw new CompatibilityException("maid_unavailable", "未在已知区块找到原女仆。请先查看最近一次位置。");
             }
-            EntityMaid arrived = ownedLoaded(actor, id);
-            Location position = arrived.getBukkitEntity().getLocation();
-            if (!destination.getWorld().equals(position.getWorld()) || destination.distanceSquared(position) > 1) {
-                throw new CompatibilityException("recall_unconfirmed", "召回落点未确认。请用 context 查询位置和原请求回执。");
-            }
-            workshops.cancelFor(arrived, "follow");
-            if (residence != null) residence.manual(arrived);
-            if (companion != null) companion.manual(arrived);
-            MaidCompanionActions.manual(arrived);
-            MaidCompanionActions.follow(arrived);
-            rememberResidenceDeparture(arrived);
-            JsonObject state = context(actor, id);
-            state.addProperty("arrived", true);
-            return receipts.finish(id, operation, "applied", state);
-        } finally {
-            if (loadedForRecall != null) loadedForRecall.removePluginChunkTicket(this);
+            receipts.reserve(id, owner, operation, "recall", "");
+            JsonObject state = new JsonObject();
+            state.addProperty("message", "正在加载原女仆，请按原请求查询。");
+            receipts.finish(id, operation, "pending", state);
+            loadingRecalls.put(id, operation);
+            var world = destination.getWorld();
+            NativeMaidLocation.whenTracked(this, List.of(id),
+                () -> Bukkit.getPlayer(owner) == actor && world.equals(actor.getWorld()),
+                () -> completeLoadedRecall(actor, id, operation, world, tickets));
+            return receipts.read(id, operation);
+        } catch (Exception error) {
+            loadingRecalls.remove(id, operation);
+            releaseRecallTickets(tickets);
+            throw error;
         }
+    }
+
+    private void releaseRecallTickets(List<Chunk> tickets) {
+        for (var ticket : tickets) NativeMaidLocation.release(ticket, this);
+        tickets.clear();
+    }
+
+    private void validateRecall(EntityMaid maid) {
+        NativeMaidFollowSupport.limits(maid);
+        if (maid.isVehicle() || editingMaidInventory(maid)) {
+            throw new CompatibilityException("maid_busy", "请先关上女仆背包或让乘客下来，再召回。");
+        }
+    }
+
+    private JsonObject finishRecallFailure(UUID id, String request, String status, String code, String message) throws Exception {
+        JsonObject result = new JsonObject();
+        result.addProperty("error", code);
+        result.addProperty("message", message);
+        if ("rejected".equals(status)) result.addProperty("effectsApplied", false);
+        return receipts.finish(id, request, status, result);
+    }
+
+    private void completeLoadedRecall(Player actor, UUID id, String operation, World world, List<Chunk> tickets) {
+        boolean attempted = false;
+        try {
+            try {
+                if (Bukkit.getPlayer(actor.getUniqueId()) != actor || !world.equals(actor.getWorld()) || nativeExclusive(id)) {
+                    throw new CompatibilityException("actor_unavailable", "召回期间连接、维度或控制权已变，请查原请求。");
+                }
+                var body = ownedLoaded(actor, id);
+                var landing = ownerTravel.recallLanding(actor);
+                validateRecall(body);
+                attempted = true;
+                applyRecall(actor, body, landing, operation);
+            } catch (Exception error) {
+                String code = error instanceof CompatibilityException e ? e.code() : "recall_unconfirmed";
+                finishRecallFailure(id, operation, attempted ? "unknown" : "rejected", code,
+                    attempted ? "召回结果待核对，请查看原女仆的位置和这张回执。" : "此次未移动女仆，请查看原位置和这张回执。");
+            }
+            if (Bukkit.getPlayer(actor.getUniqueId()) == actor) reply(actor, "recall", operation, receipts.read(id, operation), null);
+        } catch (Exception error) {
+            getLogger().warning("Cannot finish original recall receipt " + operation + ": " + error.getClass().getSimpleName());
+        } finally {
+            loadingRecalls.remove(id, operation);
+            releaseRecallTickets(tickets);
+        }
+    }
+
+    private JsonObject applyRecall(Player actor, EntityMaid maid, Location destination, String operation) throws Exception {
+        UUID id = maid.getUUID();
+        MaidCompanionActions.leaveFishingSeat(maid);
+        if (!ownerTravel.transfer(maid, destination)) {
+            JsonObject rejected = new JsonObject();
+            rejected.addProperty("error", "recall_unavailable");
+            rejected.addProperty("message", "本次未确认女仆到达，请用 context 和原请求回执查询位置。");
+            return receipts.finish(id, operation, "rejected", rejected);
+        }
+        EntityMaid arrived = ownedLoaded(actor, id);
+        Location position = arrived.getBukkitEntity().getLocation();
+        if (!destination.getWorld().equals(position.getWorld()) || destination.distanceSquared(position) > 1) {
+            throw new CompatibilityException("recall_unconfirmed", "召回落点未确认。请用 context 查询位置和原请求回执。");
+        }
+        workshops.cancelFor(arrived, "follow");
+        if (residence != null) residence.manual(arrived);
+        if (companion != null) companion.manual(arrived);
+        MaidCompanionActions.manual(arrived);
+        MaidCompanionActions.follow(arrived);
+        rememberResidenceDeparture(arrived);
+        JsonObject state = context(actor, id);
+        state.addProperty("arrived", true);
+        return receipts.finish(id, operation, "applied", state);
     }
     private JsonObject rejectedInventory(Player actor,String action,UUID id,String operation,String value,CompatibilityException error)throws Exception{
         JsonObject details=new JsonObject();details.addProperty("maidId",id.toString());details.addProperty("error",error.code());details.addProperty("message",error.getMessage());
@@ -735,7 +842,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
                 correlation=request(args,1);JsonArray rows=new JsonArray();
                 for(var entity:actor.getNearbyEntities(8,8,8)){
                     EntityMaid maid=nativeMaid(entity);if(maid==null||!maid.isAlive()||!records().has(maid.getUUID().toString())||!actor.canSee(entity)||actor.getLocation().distanceSquared(entity.getLocation())>64)continue;
-                    JsonObject row=new JsonObject();row.addProperty("maidId",maid.getUUID().toString());row.addProperty("name",maid.getName().getString());row.addProperty("owned",actor.getUniqueId().equals(owner(maid)));row.addProperty("publicChatEnabled",social.enabled(maid));row.addProperty("chatCommand","/qdmaid chat "+maid.getUUID()+" <requestId> <话语>");rows.add(row);if(rows.size()>=16)break;
+                    JsonObject row=new JsonObject();row.addProperty("maidId",maid.getUUID().toString());row.addProperty("name",maid.getName().getString());row.addProperty("owned",actor.getUniqueId().equals(owner(maid)));row.addProperty("publicChatEnabled",social.enabled(maid));row.addProperty("ownerNearbyChat",ownerDialogue(actor,maid)&&personalModelReady());row.addProperty("chatCommand","/qdmaid chat "+maid.getUUID()+" <requestId> <话语>");rows.add(row);if(rows.size()>=16)break;
                 }
                 JsonObject result=new JsonObject();result.add("maids",rows);reply(actor,action,correlation,result,null);return true;
             }

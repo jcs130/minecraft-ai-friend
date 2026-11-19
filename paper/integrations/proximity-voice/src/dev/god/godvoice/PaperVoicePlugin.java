@@ -559,12 +559,11 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private void maidHeard(Capture capture,String text,Set<UUID> audience){
         if(!capture.session.equals(sessions.get(capture.actor)))return;
         Player speaker=Bukkit.getPlayer(capture.actor);if(speaker==null||!speaker.getWorld().getUID().equals(capture.originWorld))return;
-        if(npcs!=null&&npcs.enabled()){
-            npcs.voice(capture.actor,capture.originWorld,capture.request,capture.startedAt,text,audience);
-            return;
-        }
+        boolean residents=npcs!=null&&npcs.enabled();
+        if(residents&&npcs.voice(capture.actor,capture.originWorld,capture.request,capture.startedAt,text,audience))return;
         var maid=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");if(maid==null||!maid.isEnabled())return;
-        try{maid.getClass().getMethod("acceptNearbyVoice",UUID.class,UUID.class,UUID.class,long.class,long.class,double[].class,double.class,String.class,Set.class)
+        String method=residents?"acceptPersonalNearbyVoice":"acceptNearbyVoice";
+        try{maid.getClass().getMethod(method,UUID.class,UUID.class,UUID.class,long.class,long.class,double[].class,double.class,String.class,Set.class)
             .invoke(maid,capture.actor,capture.originWorld,capture.request,capture.startedAt,capture.last,capture.speakerBounds.clone(),capture.hearingRange,text,audience);}
         catch(NoSuchMethodException oldBridge){/* Optional integration; ordinary nearby captions remain available. */}
         catch(ReflectiveOperationException failure){getLogger().warning("Maid speech delivery unavailable; original ASR retained without replay");}

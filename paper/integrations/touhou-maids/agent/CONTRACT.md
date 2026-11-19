@@ -28,6 +28,10 @@
 
 用 `/qdmaid recall <maidId> [requestId]` 将本人女仆传送到身边并恢复随行。只有一位女仆时可输入 `/qdmaid recall`。副本内、不同维度和远距离均可召回。女仆未加载时会从最后确认的位置查找原实体，附近找不到安全落点时会返回下一步。带请求 ID 的结果可以用 `/qdmaid receipt <maidId> <requestId>` 查询。`observation.arrived=true` 表示这次已经到达。
 
+区块已加载但原实体还未登记时，召回可先返回 `pending`。用同一请求 ID 查询至 `applied` 且 `arrived=true`；`unknown` 需核对原实体位置。随行可使用原模组记录的位置找到已卸载的女仆；坐下、居家和进行中的工单仍受尊重。
+
+私人女仆对话由服主在女仆桥数据目录的 `personal-dialogue.json` 单独绑定。字段为 `schema`（1）、`ownerId`、`maidId`、存档所选的 `soundPackId` 和对应的 TTS `voice`。主人可以在同一世界的交谈距离内叫原女仆的名字，或近距离看向她说话。服务器从附近聊天和 Simple Voice Chat 接收话语，回复使用女仆当前所选的音色。访客及同主人的其他女仆沿用各自原有的交互方式；改选未登记的音色时保留文字回复。
+
 护卫会跟进正在战斗的伙伴，攻击当前试炼层或遗迹房间内的敌人。把近战武器、带弹药的弓弩或真实的 Vortex 学徒法杖放入女仆已解锁的背包槽。用 `context.companion.rpg.lastHitAt` 和 `lastHitTargetId` 核对最近一次法术命中。手动工作和短暂停等按原安排执行。
 
 ## 学徒法杖与女仆护卫 0.1.32
