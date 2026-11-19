@@ -71,6 +71,22 @@ public final class NativeMaidBrainSupport implements Listener,AutoCloseable {
         }
         return ids;
     }
+    LLMOpenAISite personalSite(){
+        if(closed||binding==null)return null;
+        var row=binding.getAsJsonObject("choices").getAsJsonObject("native");
+        var site=AvailableSites.getLLMSite(row.get("site").getAsString());
+        return site instanceof LLMOpenAISite openai&&openai.enabled()?openai:null;
+    }
+    void chatPersonal(LLMCallback callback){
+        var site=personalSite();
+        if(site==null)throw new IllegalStateException("Personal dialogue site unavailable");
+        String model=binding.getAsJsonObject("choices").getAsJsonObject("native").get("model").getAsString();
+        new LLMOpenAIClient(http,site){
+            @Override protected com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.request.ChatCompletion extraArgs(com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.request.ChatCompletion request){
+                return super.extraArgs(request).model(model);
+            }
+        }.chat(callback);
+    }
     LLMClient client(LLMOpenAISite site){return new ScopedClient(site);}
     private final class ScopedClient extends LLMOpenAIClient {
         final LLMOpenAISite site;

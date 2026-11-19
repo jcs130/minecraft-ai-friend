@@ -136,6 +136,53 @@ function Content-KiritoAppearanceTarget([string]$relative) {
     throw 'Unexpected Kirito appearance target'
 }
 
+function Get-AnnouncedContentPlan([string]$path) {
+    if (-not (Test-Path -LiteralPath $path)) { return }
+    $plan = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (-not $plan.maintenanceWindow) { return }
+    if ($plan.maintenanceWindow -cne 'reviewed-party-checkpoint-v1' -or
+        $plan.id -cnotmatch '^[a-z0-9-]{8,80}$') { throw 'Unknown scheduled content window' }
+    return $plan
+}
+
+function Test-ContentChallengeActive($announced) {
+    if (-not $announced) { return (DungeonActive) }
+    # This verifier also checks the original empty fault checkpoint, PvP escrow and field encounters.
+    $check = Join-Path $opsDir 'repairs/maid-owner-recall-20261114-r1/window.py'
+    $raw = & 'E:/MC/runtime/python-3.12.14/python.exe' -X utf8 -B $check
+    if ($LASTEXITCODE -ne 0) { throw 'Scheduled challenge audit unavailable' }
+    $state = $raw | ConvertFrom-Json
+    if ($state.active -isnot [bool]) { throw 'Scheduled challenge audit incomplete' }
+    return $state.active
+}
+
+function Send-ContentWindowNotice($plan, [string]$phase, [int]$remaining=0) {
+    $notes = Join-Path $opsDir ('repairs/' + $plan.id + '/release-notice.json')
+    & $node (Join-Path $opsDir 'maintenance-notice.mjs') $notes $phase ([string]$remaining) | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot deliver scheduled maintenance notice' }
+}
+
+function Wait-ContentWindow($plan) {
+    $announced = $false
+    $complete = $false
+    try {
+        foreach ($step in @(@(180,120),@(60,50),@(10,10))) {
+            if (@(HumanPlayers).Count -or (Test-ContentChallengeActive $plan)) { return $false }
+            Send-ContentWindowNotice $plan 'before' $step[0]
+            $announced = $true
+            $until = (Get-Date).AddSeconds($step[1])
+            do {
+                Start-Sleep -Seconds 5
+                if (@(HumanPlayers).Count -or (Test-ContentChallengeActive $plan)) { return $false }
+            } while ((Get-Date) -lt $until)
+        }
+        $complete = $true
+        return $true
+    } finally {
+        if ($announced -and -not $complete) { Send-ContentWindowNotice $plan 'cancelled' }
+    }
+}
+
 function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='') {
     $planPath = Join-Path $opsDir 'content-plugins.pending.json'
     if (-not (Test-Path -LiteralPath $planPath)) { return }
@@ -147,6 +194,8 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     $voiceChange = @($plan.files | Where-Object { Content-ProximityVoiceTarget ([string]$_.target) }).Count -gt 0 -or
         @($plan.removeJars | Where-Object { Content-ProximityVoiceJar ([string]$_.name) }).Count -gt 0
     $maidBridgeChange = @($plan.files | Where-Object { Content-MaidBridgeTarget ([string]$_.target) }).Count -gt 0
+    $personalConfig = 'plugins/QiandengjiMaidBridge/personal-dialogue.json'
+    if (@($plan.files | Where-Object { $_.target -ceq $personalConfig }).Count) { $maidBridgeChange = $true }
     $residentChange = @($plan.files | Where-Object { Content-ResidentTarget ([string]$_.target) }).Count -gt 0
     if ($voiceChange -or $maidBridgeChange -or $residentChange -or $plan.unifyEconomy) {
         if (-not $coldBackup -or -not (Test-Path -LiteralPath (Join-Path $coldBackup '.complete'))) {
@@ -174,7 +223,9 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     $entries = @(); $seen = @{}
     foreach ($file in @($plan.files)) {
         $relative = [string]$file.target
-        if (Content-ResidentTarget $relative) {
+        if ($relative -ceq $personalConfig) {
+            $target = Join-Path $serverDir $relative
+        } elseif (Content-ResidentTarget $relative) {
             if ($file.beforeSha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Resident replacement requires its current digest' }
             $target = Join-Path $serverDir $relative
         } elseif (Content-MaidBridgeTarget $relative) {
@@ -274,6 +325,11 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
         $entries += @{Source=$null;Target=$target;Before=$true}
     }
     $rollback = Join-Path $opsDir "repairs\$($plan.id)\deployment-rollback"
+    if ($plan.maintenanceWindow -ceq 'reviewed-party-checkpoint-v1') {
+        if (-not $coldBackup -or [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($coldBackup)) -ine 'F:\' -or
+                -not (Test-Path -LiteralPath (Join-Path $coldBackup '.complete'))) { throw 'Scheduled release requires its F recovery point' }
+        $rollback = Join-Path $coldBackup ('content-release-' + $plan.id)
+    }
     if (Test-Path -LiteralPath $rollback) { throw 'Content rollback directory already exists' }
     New-Item -ItemType Directory -Path $rollback | Out-Null
     $applied = @(); $index = 0; $moneyApplied = $false

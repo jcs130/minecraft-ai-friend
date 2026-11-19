@@ -105,19 +105,20 @@ final class NpcConversations implements Listener {
             all.put(p.id(),new VoiceAudience.Actor(p.id(),existing==null?generation.session():existing.session(),generation.world(),at.getX(),at.getY(),at.getZ(),p.name(),true,p.range(),p.kind().equals("maid")?p.owner():null,Math.min(8,p.range())));
         }
     }
-    void voice(UUID actor,UUID world,UUID utterance,long occurredAt,String text,Set<UUID> audience){
+    boolean voice(UUID actor,UUID world,UUID utterance,long occurredAt,String text,Set<UUID> audience){
         Player source=Bukkit.getPlayer(actor);
-        if(source==null||source.isDead()||source.isInvisible()||source.getGameMode()==GameMode.SPECTATOR||!source.getWorld().getUID().equals(world))return;
-        if(System.currentTimeMillis()-occurredAt>120_000||occurredAt>System.currentTimeMillis())return;
-        if (groupChat(source, text, audience, utterance, "voice", occurredAt)) return;
+        if(source==null||source.isDead()||source.isInvisible()||source.getGameMode()==GameMode.SPECTATOR||!source.getWorld().getUID().equals(world))return true;
+        if(System.currentTimeMillis()-occurredAt>120_000||occurredAt>System.currentTimeMillis())return true;
+        if (groupChat(source, text, audience, utterance, "voice", occurredAt)) return true;
         var named=NpcDialoguePolicy.addressed(profiles.values(),text,true);
         var address=named!=null?named:address(source,text,NpcDialoguePolicy.fresh(occurredAt,System.currentTimeMillis()));
         if(named!=null && named.profile().kind().equals("numen") && NpcDialoguePolicy.asksForAction(named.text())
                 && audience.contains(named.profile().id()) && hears(source,live(named.profile().id()),named.profile())
-                && deliver(source,named.profile().id(),"voice_direct_"+utterance+"_"+named.profile().id(),text,"voice",occurredAt)) return;
+                && deliver(source,named.profile().id(),"voice_direct_"+utterance+"_"+named.profile().id(),text,"voice",occurredAt)) return true;
         if(address!=null&&audience.contains(address.profile().id())&&
-            natural(source,address,"nearby",audience,"voice_"+utterance))return;
+            natural(source,address,"nearby",audience,"voice_"+utterance))return true;
         for(UUID target:audience)deliver(source,target,"voice_"+utterance,text,"voice",occurredAt);
+        return address!=null;
     }
 
     private boolean groupChat(Player speaker, String text, Set<UUID> audience, UUID input, String channel, long at) {

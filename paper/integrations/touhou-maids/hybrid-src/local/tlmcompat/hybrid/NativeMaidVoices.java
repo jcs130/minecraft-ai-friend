@@ -36,6 +36,11 @@ final class NativeMaidVoices implements AutoCloseable {
                 }
             }
             for(var entry:candidates.entrySet())result.voices.put(entry.getKey(),new NativeMaidSpeech(plugin,entry.getValue(),registered.contains(entry.getKey())));
+            var personal=plugin.personal;
+            if(personal!=null&&!candidates.containsKey(personal.maid())){
+                try{result.voices.put(personal.maid(),new NativeMaidSpeech(plugin,personal.speechProfile(base),true));}
+                catch(Exception|LinkageError failed){plugin.getLogger().warning("Personal maid voice unavailable: "+failed.getClass().getSimpleName());}
+            }
         }catch(Exception|LinkageError failed){result.close();plugin.getLogger().warning("NPC maid voices unavailable: "+failed.getClass().getSimpleName()+"; text remains available");}
         return result;
     }

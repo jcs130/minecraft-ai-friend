@@ -31,6 +31,7 @@ final class NativeMaidSpeech implements AutoCloseable {
     private final HybridMaidPlugin plugin;
     private final UUID maidId,ownerId;
     private final String backend,token,voice;
+    private final String requiredSoundPack;
     private final ReceiptJournal receipts;
     private final HttpClient http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).followRedirects(HttpClient.Redirect.NEVER).build();
     private final ExecutorService worker=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(2),r->new Thread(r,"maid-voice-media"),new ThreadPoolExecutor.AbortPolicy());
@@ -74,6 +75,7 @@ final class NativeMaidSpeech implements AutoCloseable {
             JsonObject brain=JsonParser.parseString(Files.readString(plugin.getDataFolder().toPath().resolve("brain-routing.json"))).getAsJsonObject();
             if(!maidId.toString().equals(brain.get("maidId").getAsString())||!ownerId.toString().equals(brain.get("ownerId").getAsString()))throw new IllegalArgumentException("Companion identity mismatch");
         }
+        requiredSoundPack=config.has("requiredSoundPack")?config.get("requiredSoundPack").getAsString():null;
         voice=config.get("voice").getAsString();if(!voice.matches("[A-Za-z0-9_.-]{1,96}"))throw new IllegalArgumentException("Explicit voice required");
         gainDb=config.has("voiceGainDb")?config.get("voiceGainDb").getAsDouble():6;
         volume=new MaidSpeechVolume(gainDb);
@@ -85,7 +87,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         receipts=new ReceiptJournal(plugin.getDataFolder().toPath().resolve("speech-receipts"));
         BukkitVoicechatService service=Bukkit.getServicesManager().load(BukkitVoicechatService.class);
         if(service==null)throw new IllegalStateException("Existing voicechat service required");
-        soundHook=local.qdj.maids.brain.MaidSpeechControl.bind(maidId,ownerId,this::ambient);
+        soundHook=requiredSoundPack!=null?()->{}:local.qdj.maids.brain.MaidSpeechControl.bind(maidId,ownerId,this::ambient);
         service.registerPlugin(new VoicechatPlugin(){
             public String getPluginId(){return "qiandengji_maid_voice_"+maidId.toString().replace("-","");}
             public void registerEvents(EventRegistration events){
@@ -97,10 +99,11 @@ final class NativeMaidSpeech implements AutoCloseable {
         Bukkit.getScheduler().runTaskTimer(plugin,this::tick,5,5);
     }
     private void main(Runnable action){if(!closed&&plugin.isEnabled())Bukkit.getScheduler().runTask(plugin,()->{if(!closed)action.run();});}
-    private boolean valid(EntityMaid maid){return !closed&&maid.isAlive()&&!maid.isRemoved()&&maidId.equals(maid.getUUID())&&ownerId.equals(maid.getOwnerUUID())&&(plugin.sharedDialogueEnabled(maid)||plugin.unifiedBody(maidId))&&!maid.isSilent();}
+    private boolean valid(EntityMaid maid){return !closed&&maid.isAlive()&&!maid.isRemoved()&&maidId.equals(maid.getUUID())&&ownerId.equals(maid.getOwnerUUID())&&(requiredSoundPack!=null?plugin.personalDialogue(maid)&&requiredSoundPack.equals(maid.getSoundPackId()):plugin.sharedDialogueEnabled(maid)||plugin.unifiedBody(maidId))&&!maid.isSilent();}
     JsonObject describe(EntityMaid maid){
         JsonObject out=new JsonObject();out.addProperty("enabled",valid(maid));
         if(!maidId.equals(maid.getUUID())||!ownerId.equals(maid.getOwnerUUID())){out.addProperty("reason","shared_voice_not_enabled_for_this_maid");return out;}
+        if(requiredSoundPack!=null&&!requiredSoundPack.equals(maid.getSoundPackId()))out.addProperty("reason","selected_pack_has_no_matching_voice");
         out.addProperty("voice",voice);out.addProperty("transport","simple_voice_chat_position");
         out.addProperty("voiceGainDb",gainDb);
         out.addProperty("partnerRangeBlocks",MaidConversationRange.PARTNER);out.addProperty("visitorRangeBlocks",MaidConversationRange.VISITOR);
@@ -231,6 +234,7 @@ final class NativeMaidSpeech implements AutoCloseable {
     }
     private void cancel(String reason){Job job=active;if(job==null)return;job.cancelled=true;job.audible=Set.of();if(job.media!=null)job.media.cancel(true);if(job.player!=null)job.player.stopPlaying();finish(job,"cancelled",reason);}
     void combat(EntityMaid maid, Mob target, String mode, float damage) {
+        if(requiredSoundPack!=null)return;
         if (!Bukkit.isPrimaryThread() || !valid(maid) || maid.level()!=target.level()) return;
         long now = System.nanoTime();
         List<Player> audience = maid.getBukkitEntity().getLocation().getNearbyPlayers(MaidConversationRange.PARTNER).stream()
@@ -284,6 +288,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         var next=waiting.peek();
         if(next!=null&&next.expired(System.nanoTime())){waiting.take();finish(next.item(),"skipped","reply_wait_expired");}
         else if(next!=null&&active==null){waiting.take();begin(next.item());}
+        if(requiredSoundPack!=null)return;
         List<LLMMessage> history=new ArrayList<>(maid.getAiChatManager().getHistory().getDeque());Collections.reverse(history);
         if(!historyInitialized){seen.addAll(history);historyInitialized=true;return;}
         seen.retainAll(history);
