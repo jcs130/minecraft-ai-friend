@@ -118,9 +118,9 @@ def fishing_completed(receipt: dict) -> bool:
             and isinstance(detail.get("nativeLoot"), list) and bool(detail["nativeLoot"]))
 
 
-def legacy_cast_outcome(receipt: Any, *, owner: str, maid: str, request: str, spell: Any) -> ActionStatus | None:
+def legacy_cast_outcome(receipt: Any, *, owner: str, maid: str | None, request: str, spell: Any) -> ActionStatus | None:
     """Older direct-cast receipts stored the observed effect under a nonterminal status."""
-    if not isinstance(receipt, dict) or not isinstance(spell, str) or not spell:
+    if maid is None or not isinstance(receipt, dict) or not isinstance(spell, str) or not spell:
         return None
     expected = {"namespace": "native-body", "maidId": maid, "ownerId": owner, "action": "cast",
                 "requestId": request, "operationId": request, "status": "unknown"}
@@ -146,7 +146,7 @@ def legacy_cast_outcome(receipt: Any, *, owner: str, maid: str, request: str, sp
     mana = detail.get("manaRemaining")
     if (detail.get("effectsApplied") is True and isinstance(targets, list) and targets
             and all(isinstance(target, str) and UUID.fullmatch(target) for target in targets)
-            and type(mana) in (int, float) and 0 <= mana < math.inf):
+            and isinstance(mana, (int, float)) and not isinstance(mana, bool) and 0 <= mana < math.inf):
         return "completed"
     return None
 
@@ -438,7 +438,7 @@ class MaidBody(BaseBody):
         if not write and status == "unknown":
             return self._failed_read(request_id, action.verb, args["action"])
         text = str((reply or {}).get("reason") or (reply or {}).get("error") or (reply or {}).get("text") or f"{args['action']} {status}")
-        if verified_cast:
+        if verified_cast and reply is not None:
             text = reply["data"]["observation"]["state"]
         if args["action"] == "context" and isinstance(reply, dict) and reply.get("ok"):
             self._apply_context(reply.get("data") or {}, emit=True)

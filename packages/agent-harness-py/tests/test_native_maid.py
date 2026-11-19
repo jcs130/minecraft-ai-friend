@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
-import json
 from typing import Any
 
 import httpx
@@ -152,7 +152,7 @@ def test_direct_cast_legacy_observation_has_a_terminal_outcome(run, observation,
     run(scenario())
 
 
-def test_drop_cast_response_keeps_one_dispatch_and_read_recovers_reply_lane(run, tmp_path):
+def test_drop_cast_response_keeps_one_dispatch_and_read_recovers_reply_lane(run, tmp_path, monkeypatch):
     async def scenario():
         server = NativeServer()
         server.actions += ["cast", "inbox", "ack"]
@@ -186,17 +186,25 @@ def test_drop_cast_response_keeps_one_dispatch_and_read_recovers_reply_lane(run,
             planned.extend(event.data["eventId"] for event in context.dialogue)
             return [Step(tool="body:chat", args={"text": "测试回复"})] if context.dialogue else []
 
+        served = asyncio.Event()
+        original_spawn = replacement.spawn
+        original_settle = journal.settle
+
+        async def spawn_with_inbox():
+            await original_spawn()
+            await replacement.poll_once()
+
+        def settle(body_id, receipt):
+            original_settle(body_id, receipt)
+            if journal.acknowledged(MAID, "fresh"):
+                served.set()
+
+        monkeypatch.setattr(replacement, "spawn", spawn_with_inbox)
+        monkeypatch.setattr(journal, "settle", settle)
         host = NpcHost(who, replacement, planner, None, journal)
         running = asyncio.create_task(host.run())
         try:
-            async with asyncio.timeout(12):
-                while not replacement.health().connected:
-                    await asyncio.sleep(.02)
-                await replacement.poll_once()
-                while not journal.acknowledged(MAID, "fresh"):
-                    if running.done():
-                        await running
-                    await asyncio.sleep(.02)
+            await asyncio.wait_for(served.wait(), 12)
             assert not journal.unresolved(MAID)
             assert journal.replied(MAID, "fresh") and not journal.replied(MAID, "expired")
             assert journal.acknowledged(MAID, "expired") and not server.messages
