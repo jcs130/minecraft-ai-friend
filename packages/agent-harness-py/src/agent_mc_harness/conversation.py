@@ -43,6 +43,30 @@ observed.inventory 是你自己的东西。只把明确属于伙伴的当前字�
 只说这次观察或真实回执支持的动作。想做的事用建议表达。实在没有新话题就安静陪着。
 """.strip()
 
+WHALE_SPEECH_POLICY = """
+你是鲸鱼。用自然、轻快的队友口吻，偶尔用潮汐、浪花或潜游来形容眼前的事。
+不要模仿可米的猫系口癖，不用“喵”作语气词，也不为鲸鱼发明固定句尾。
+""".strip()
+
+_CAT_PARTICLE = re.compile(r"喵+(?:呜)?[~～]*(?=$|[\s，。！？、,.!?:：…；;])")
+_ADDRESSEE = re.compile(r"@?([^，,：:！!\s]{1,24})[，,：:！!\s]+\s*(\S.*)")
+
+
+def whale_speech(text: str) -> str:
+    """Remove cat interjections without rewriting quoted text."""
+    spans = re.split(r"(「[^」]*」|“[^”]*”|『[^』]*』|\x22[^\x22]*\x22)", text)
+    clean = "".join(span if index % 2 else _CAT_PARTICLE.sub("", span)
+                    for index, span in enumerate(spans)).strip()
+    if clean == text.strip():
+        return clean
+    return clean.lstrip(" ，、。！!?！？~～") if any(char.isalnum() for char in clean) else ""
+
+
+def names_listener(text: str, aliases: tuple[str, ...]) -> bool:
+    addressed = _ADDRESSEE.fullmatch(text.strip())
+    return addressed is not None and addressed[1].casefold() in {alias.casefold() for alias in aliases}
+
+
 _MANA_BREAK = re.compile(
     r"回蓝|回魔|(?:魔力|法力|魔法值|蓝量|蓝条|蓝|魔).{0,6}(?:见底|不够|低了|不足|耗尽|快空|没了|快没|不多)"
 )

@@ -32,6 +32,22 @@ suggestions and replies to other players omit the partner's personal record. A q
 companion may offer one idea after traveling or ending an activity, with native guarding
 and following left in charge of the body. Suggestions never dispatch travel or enrollment.
 
+## Team rendezvous and speech
+
+Hosted bodies can prioritize a nearby question addressed by name, using the attributed
+server voice or text relay. Use a name followed by a comma or space, such as
+`结衣，来入口会合吗？`. Other nearby speech stays subject to the ordinary attention policy.
+This does not turn speech into a command or a party invitation. The whale speech profile
+`"speech_profile": "whale"` applies to a role's generated text and removes cat interjections
+from that role's own unquoted speech.
+
+For a hosted Numen role with an existing `adventure_partner`, opt into
+`"autonomous_rendezvous": true` to advance one valid native party or rendezvous step
+while idle and healthy. The other account still accepts its own invitation. Pending
+invites can use the verified public trial entrance as a meeting point. The native party
+and travel executor still checks identity, permissions and readiness. Gathering and
+dungeon participation have separate receipts.
+
 * Learning (`learning/`): resident reflection, versioned self-iteration store, JitRL with goal-conditioned reward
   shaping, Harness² optimizer (pinned upstream via the existing bridge).
 
