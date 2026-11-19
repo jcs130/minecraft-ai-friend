@@ -164,9 +164,9 @@ final class SiteDungeonManager implements Listener {
     }
     private static void require(boolean yes,String reason){if(!yes)throw new IllegalArgumentException(reason);}
     private String day(){return LocalDate.now(ZoneId.of("Asia/Shanghai")).toString();}
-    private Run own(Player p){return runs.values().stream().filter(r->r.party.contains(p.getUniqueId())).findFirst().orElse(null);}
+    private Run own(Entity p){return runs.values().stream().filter(r->r.party.contains(p.getUniqueId())).findFirst().orElse(null);}
     boolean isParticipant(Player p){return own(p)!=null;}
-    String reinforcementProblem(Player actor,Player target,Location landing){
+    String reinforcementProblem(Player actor,LivingEntity target,Location landing){
         Run targetRun=own(target),actorRun=own(actor);
         if(actorRun!=null&&actorRun!=targetRun)return "[team_leave_dungeon] 你仍在另一处遗迹；先 /mycli dungeon leave 正常离场，再支援。";
         if(targetRun==null){
@@ -190,7 +190,7 @@ final class SiteDungeonManager implements Listener {
         };
         return "["+problem+"] "+advice+"；/mycli dungeon info "+targetRun.site.id;
     }
-    boolean enrollReinforcement(Player actor,Player target){
+    boolean enrollReinforcement(Player actor,LivingEntity target){
         Run r=own(target);
         return r==null?own(actor)==null:reinforcementProblem(actor,target,actor.getLocation()).isEmpty()&&enroll(actor,r);
     }

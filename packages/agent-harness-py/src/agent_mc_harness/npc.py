@@ -150,14 +150,13 @@ def addressed_dialogue(event: BodyEvent, body_id: str, aliases: tuple[str, ...] 
     # A name at the start gives the planner a recipient, never action authority.
     speaker = data.get("speakerId")
     channel = data.get("channel")
-    group_prefix = f"qdvoice:{speaker}:{channel}_group_"
-    group = (channel in ("chat", "voice") and event_id.startswith(group_prefix)
-             and re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}_" + re.escape(body_id),
-                              event_id[len(group_prefix):]) is not None)
+    named_event = (channel in ("chat", "voice") and re.fullmatch(
+        re.escape(f"qdvoice:{speaker}:{channel}_") + ("(?:group|direct)" if channel == "voice" else "group")
+        + r"_[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}_" + re.escape(body_id), event_id) is not None)
     return (event.kind in {"chat", "dialogue"} and data.get("listenerId") == body_id
             and data.get("deliveryScope") == "nearby" and data.get("channel") in {"npc_chat", "chat", "public", "voice"}
             and isinstance(speaker, str) and speaker != body_id
-            and event_id.startswith(f"qdvoice:{speaker}:") and (group or names_listener(event.text, aliases)))
+            and event_id.startswith(f"qdvoice:{speaker}:") and (named_event or names_listener(event.text, aliases)))
 
 
 def companion_check_in(role: NpcRole, context: PlanContext) -> tuple[str, tuple[float, float, float]] | None:

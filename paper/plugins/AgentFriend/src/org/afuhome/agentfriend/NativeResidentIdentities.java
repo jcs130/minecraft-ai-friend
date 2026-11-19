@@ -6,10 +6,12 @@ import java.util.UUID;
 
 /** Optional native residents. Does not make arbitrary never-seen player UUIDs trustable. */
 final class NativeResidentIdentities {
-    static Map<UUID,String> all(){
+    static Map<UUID,String> all(){return names("residentIdentities");}
+    static Map<UUID,String> visible(){return names("visibleResidentIdentities");}
+    private static Map<UUID,String> names(String method){
         var result=new LinkedHashMap<UUID,String>();
         try{
-            Object raw=Class.forName("local.qdj.maids.brain.MaidAgentsMod").getMethod("residentIdentities").invoke(null);
+            Object raw=Class.forName("local.qdj.maids.brain.MaidAgentsMod").getMethod(method).invoke(null);
             if(raw instanceof Map<?,?> rows&&rows.size()<=24)for(var e:rows.entrySet())
                 if(e.getKey() instanceof UUID id&&e.getValue() instanceof String name&&!name.isBlank()&&name.length()<=48&&!name.codePoints().anyMatch(Character::isISOControl))result.put(id,name);
         }catch(ReflectiveOperationException|LinkageError ignored){}
