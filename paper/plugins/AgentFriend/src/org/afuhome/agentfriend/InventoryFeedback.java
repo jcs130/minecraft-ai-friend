@@ -35,8 +35,9 @@ final class InventoryFeedback implements Listener {
             Material.WHEAT_SEEDS,Material.ROTTEN_FLESH);
     private record Gift(UUID giver, ItemStack item, int amount, int beforeCount, EntityPickupItemEvent event) {}
     private record StorageNotice(long sentAt, boolean full) {}
+    private final InventoryBatch batch;
     InventoryFeedback(AgentFriendPlugin plugin) {
-        this.plugin = plugin; identity = new ItemIdentity(plugin);tidy=new InventoryTidy(plugin);
+        this.plugin = plugin; identity = new ItemIdentity(plugin);tidy=new InventoryTidy(plugin);batch=new InventoryBatch(plugin);
         Bukkit.getPluginManager().registerEvents(this, plugin);
         for (Player player : Bukkit.getOnlinePlayers()) scheduleNotice(player, 80L);
     }
@@ -50,12 +51,13 @@ final class InventoryFeedback implements Listener {
         }catch(IllegalArgumentException invalid){sender.sendMessage("[invalid_uuid] 必须使用核对过的原角色UUID，未修改物品。");}
     }
     void command(Player p, String[] args) {
-        if (plugin.isObserver(p)) { p.sendMessage("§e【随身背包】这是观战账号；请在附身角色自己的连接上查询。观战画面展示该角色的物品，不是观战账号的存档。"); return; }
         String action = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
+        if (InventoryBatch.ACTIONS.contains(action)) { batch.command(p, args); return; }
+        if (plugin.isObserver(p)) { p.sendMessage("§e【随身背包】这是观战账号；请在附身角色自己的连接上查询。观战画面展示该角色的物品，不是观战账号的存档。"); return; }
         if(action.equals("tidy")){tidy.command(p,args);return;}
         if (action.equals("item") || action.equals("物品")) { inspect(p, args); return; }
         if (!Set.of("status", "refresh", "状态", "刷新").contains(action)) {
-            p.sendMessage("§e用 /mycli inventory 查随身背包；refresh 同步显示；item <0–35|hand> 查物品用法。54格大背包需另行打开；免费查个人箱余量和分类用 " + PersonalStashOverview.COMMAND + "。"); return;
+            p.sendMessage("§e用 /mycli inventory 查随身背包；clean 清理普通杂物，store 存个人箱，donate 捐共享箱；可加 --dry-run。refresh 同步显示；item <0–35|hand> 查物品用法。54格大背包需另行打开；免费查个人箱余量和分类用 " + PersonalStashOverview.COMMAND + "。"); return;
         }
         if (action.equals("refresh") || action.equals("刷新")) {
             long now = System.currentTimeMillis();
@@ -181,16 +183,16 @@ final class InventoryFeedback implements Listener {
         String deposit = writesBlocked ? null : suggestedDeposit(player, snapshot);
         String next;
         if (deposit != null) {
-            next = deposit + "。成功远程存入 2 魔力。";
+            next = "建议 /mycli inventory store，整批成功远程存入只耗2魔力。若只存一类，"+deposit+"。";
         } else if (writesBlocked) {
             next = "个人箱存盘待核对，可以先查询。";
         } else if (overview.freeSlots() == 0) {
             next = "先用 " + InventoryTidy.STASH_PREVIEW + " 预览能释放的箱格。";
         } else {
-            next = "用 /mycli arena stash inventory 查随身槽位，再用 stash putslot 存备用物品。成功远程存入 2 魔力。";
+            next = "用 /mycli inventory store --dry-run 看哪些物品可存。";
         }
         String warning = pickupBlocked ? "物品未全部装入背包。" : full ? "随身没有空槽。" : "随身背包只剩 " + free + " 格。";
-        player.sendMessage("§e" + (full ? "【inventory_full】" : "【背包快满】") + warning + overview.text() + " " + next);
+        player.sendMessage("§e" + (full ? "【inventory_full】" : "【背包快满】") + warning + overview.text() + " " + next + " 清杂物 /mycli inventory clean，捐余物 /mycli inventory donate；均可加 --dry-run。");
         player.sendMessage(Component.text("【查看个人箱汇总】 " + PersonalStashOverview.COMMAND)
                 .clickEvent(ClickEvent.runCommand(PersonalStashOverview.COMMAND)));
         if (full && deposit == null) {

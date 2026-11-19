@@ -2334,7 +2334,8 @@ final class DungeonManager implements Listener {
             Material.SPIDER_EYE, Material.BONE, Material.MAGMA_CREAM,
             Material.MAP, Material.ITEM_FRAME, Material.GLOW_ITEM_FRAME);
 
-    private int guildDonationCategory(Material type) {
+    static boolean plainGuildDonation(Material type) { return PLAIN_GUILD_DONATIONS.contains(type); }
+    int guildDonationCategory(Material type) {
         if (type == Material.BOW || type == Material.CROSSBOW || type == Material.SHIELD
                 || type == Material.IRON_SWORD || type == Material.IRON_AXE || type == Material.TRIDENT)
             return 0;
@@ -2683,7 +2684,7 @@ final class DungeonManager implements Listener {
         if (json) player.sendMessage("MC_STASH_OVERVIEW " + result.json());
         else player.sendMessage("§b【远程个人箱】" + result.text() + " 下一步 " + result.nextCommand());
     }
-    private boolean nearStash(Player player) {
+    boolean nearStash(Player player) {
         Location at = player.getLocation();
         if (!sameWorld(at)) return false;
         Location lobby = new Location(world(), X - 3.5, LOBBY_Y + 1.5, Z - 7.5);
@@ -2700,14 +2701,14 @@ final class DungeonManager implements Listener {
         player.sendMessage("先预览全箱整理和普通杂物清单："+InventoryTidy.STASH_PREVIEW+"。装备可用 /mycli trade recycle list --json 查报价。");
         player.sendMessage("MC_STASH_BLOCKED reason=stash_full occupied="+used+" capacity=540 remaining="+remaining+" nextCommand=\""+InventoryTidy.STASH_PREVIEW+"\" retrySameAction=false");
     }
-    private boolean remoteStashReady(Player player) {
+    boolean remoteStashReady(Player player) {
         if (plugin.inventoryTidy().stashWritesBlocked(player.getUniqueId())) {
             player.sendMessage("§e[save_unverified] 个人箱整理存盘待核对。请联系服主，现可用 /mycli arena stash list 查询。");
             return false;
         }
         return nearStash(player) || plugin.professions().basicAllowed(player,"travel") && plugin.hasMana(player, 2);
     }
-    private void chargeRemoteStash(Player player) {
+    void chargeRemoteStash(Player player) {
         if (nearStash(player)) return;
         if (plugin.spendMana(player, 2)) {
             player.sendMessage(ChatColor.LIGHT_PURPLE + "远程个人箱操作消耗 2 魔力；到试炼场实体箱旁操作则无需施法。");

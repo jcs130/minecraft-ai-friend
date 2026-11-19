@@ -14,7 +14,9 @@ from ..models import NativeAction
 from .base import ArgumentError
 
 # The body supplies both player names. Only a catalogue ID is model input.
+INVENTORY = {f"inventory_{action}": f"inventory {action}" for action in ("clean", "store", "donate")}
 QUERIES = {
+    **{key: command + " --dry-run" for key, command in INVENTORY.items()},
     "events": "world events", "exploration": "tasks list exploration", "combat_jobs": "tasks list combat",
     "quest_info": "tasks info {id}", "quest_status": "tasks status", "guild_board": "guild board",
     "ruins": "dungeon list", "ruin_info": "dungeon info {id}", "ruin_status": "dungeon status",
@@ -23,6 +25,7 @@ QUERIES = {
     "detail_page": "page {id} {page}",
 }
 ACTIONS = {
+    **INVENTORY,
     "accept_quest": "guild accept {id}", "turn_in_quest": "guild claim",
     "travel_ruin": "dungeon travel {id}", "start_ruin": "dungeon start {id}", "claim_ruin": "dungeon claim {id}",
     "travel_trial": "goto arena", "start_trial": "arena start", "create_party": "guild party create",
@@ -56,8 +59,8 @@ def catalogue(peer: str) -> list[NativeAction]:
     result = [NativeAction(name=SURVEY, read_only=True, description="Survey the nearby ground and players. walkTo positions are sampled destinations for body:move.",
                            input_schema={"type": "object", "properties": {}, "additionalProperties": False})]
     for name, options, description in (
-        (QUERY, QUERIES, "Read this player's live event, quest, ruin, trial or native party. Use returned IDs and requirements."),
-        (ACT, ACTIONS, f"Act as yourself. Party partner is {peer}. Inviting gives the other player a choice. Check the effect afterwards."),
+        (QUERY, QUERIES, "Preview inventory clean/store/donate or read this player's live event, quest, ruin, trial or native party. Use returned IDs and requirements."),
+        (ACT, ACTIONS, f"Act as yourself. When space is tight, store ordinary surplus privately, clean common junk, or donate extra supplies to the guild. Party partner is {peer}. Inviting gives the other player a choice. Check the effect afterwards."),
     ):
         result.append(NativeAction(name=name, description=description, read_only=name == QUERY, input_schema={
             "type": "object", "properties": {"kind": {"type": "string", "enum": list(options)},
@@ -257,6 +260,23 @@ def game_result(result, name: str, args: dict, *, account=None, body_id=None, pe
         elif line:
             messages.append(line[:350])
     kind = args["kind"]
+    if kind in INVENTORY:
+        action = INVENTORY[kind].split()[1]
+        receipts = [row for tag, row in records if tag == "MC_INVENTORY_BATCH" and isinstance(row, dict)
+                    and row.get("action") == action and body_id and row.get("playerUuid") == body_id]
+        row = receipts[0] if len(receipts) == 1 else {}
+        preview = name == QUERY
+        if row.get("outcomeUnknown") or not row or (row.get("success") and row.get("dryRun") is not preview):
+            status, effect = ("failed", "unavailable") if preview else ("unknown", "unverified")
+        elif row.get("success") is False:
+            status, effect = "rejected", "refused"
+        elif row.get("success") is True and row.get("reason") in {
+                "preview", "unchanged", "completed", "partial", "destination_full", "shared_chest_unavailable", "nothing_to_move"}:
+            status, effect = "completed", "read" if preview else row["reason"]
+        else:
+            status, effect = ("failed", "unavailable") if preview else ("unknown", "unverified")
+        return replace(result, status=status, text=f"{kind}: {effect}", data={"adventure": {
+            "kind": kind, "effect": effect, "receipt": row, "at": 0 if recovered else int(time()), "retryWrite": False}})
     refused = any(tag == "MC_QUERY_ERROR" or isinstance(row, dict) and (
         row.get("success") is False or row.get("status") in ("denied", "failed", "error"))
         or tag == "MC_TRAVEL" and isinstance(row, str) and "status=denied" in row for tag, row in records)

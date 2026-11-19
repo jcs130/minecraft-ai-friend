@@ -98,6 +98,18 @@ final class NativeMaidBodyActions {
             case "speak"->{value=MaidBodyControl.string(input,"text");if(value.isBlank()||value.codePointCount(0,value.length())>140||value.codePoints().anyMatch(x->Character.isISOControl(x)||x==0xA7))throw new MaidBodyControl.Fault(400,"INVALID_text");}
             case "ack"->{value=MaidBodyControl.string(input,"eventId");if(!value.matches("[A-Za-z0-9_:-]{1,128}"))throw new MaidBodyControl.Fault(400,"INVALID_eventId");}
         }
+        if (MaidBodyControl.BAG_ACTIONS.contains(action)) {
+            if (!local.qdj.maids.brain.ResidentBodyAccess.external(id)) return blocked(owner,id,input,"resident_account_required");
+            control.reserve(owner,id,request,input);
+            try {
+                var result = bagReceipt(id,request,input,true);
+                boolean ok = result.get("status").getAsString().equals("completed");
+                return reply(ok,result,ok ? null : result.get("observation").getAsJsonObject().get("reason").getAsString());
+            } catch (Exception unknown) {
+                var evidence=new JsonObject();evidence.addProperty("reason","inventory_transfer_unverified");
+                return reply(false,control.finish(id,request,"unknown",evidence),"inventory_transfer_unverified");
+            }
+        }
         // The delegated native brain keeps its original history. External physical writes
         // must wait for that turn, then fence all older callbacks before touching the body.
         boolean resumeCompanion=companions.contains(id)&&Set.of("cast","equip","schedule","pickup","dismount").contains(action);
@@ -173,7 +185,7 @@ final class NativeMaidBodyActions {
         switch(action){
             case "list"->{data=new JsonObject();var maids=new JsonArray();var row=plugin.context(owner,null,id);maids.add(row);data.add("maids",maids);}
             case "context"->data=plugin.context(owner,null,id);
-            case "inventory"->{data=plugin.inventory(owner,id);data.addProperty("nextStep","Use equip hand=main|off|head|chest|legs|feet and slot from usableSlotIndexes. Only items already in this maid's native inventory can be equipped; transfer is not exposed on this port.");}
+            case "inventory"->{data=plugin.inventory(owner,id);data.addProperty("nextStep","Use equip hand=main|off|head|chest|legs|feet and slot from usableSlotIndexes. Only items already in this maid's native inventory can be equipped; Use bag_store, bag_clean or bag_donate for your own surplus; dryRun=true previews.");}
             case "tasks"->data=plugin.catalog(owner,id);
             case "brain"->{var context=plugin.context(owner,null,id);data=context.has("brain")?context.getAsJsonObject("brain"):new JsonObject();}
             case "inbox"->data=plugin.nativeInbox(owner,id);
@@ -221,11 +233,40 @@ final class NativeMaidBodyActions {
         if(unified)brain.addProperty("conversationOwner","unified_npc_host");
         brain.addProperty("meaning",unified?"Unified NPC controller owns decisions and character memory. Original native history is retained read-only for migration; native task execution is separate from a model loop.":companion(id)?"Original selected brain/history and native companion behaviours are delegated by this lease. No shadow dialogue model or new memory scope.":"Original configured brain selection is retained; dialogue queues in inbox while exclusive control is active. Brain choice cannot be changed on this port.");
     }
+    private JsonObject bagReceipt(UUID id,String request,JsonObject args,boolean submit) throws Exception {
+        String action=args.get("action").getAsString().substring("bag_".length());
+        boolean preview=args.has("dryRun")&&args.get("dryRun").getAsBoolean();
+        UUID key=UUID.nameUUIDFromBytes(("unified-bag:"+id+":"+request).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var af=Bukkit.getPluginManager().getPlugin("AgentFriend");
+        if(af==null||!af.isEnabled())throw new IllegalStateException("inventory_service_unavailable");
+        var service=af.getClass().getClassLoader().loadClass("org.afuhome.agentfriend.ResidentCli");
+        var raw=submit ? service.getMethod("run",UUID.class,UUID.class,String.class).invoke(null,id,key,"inventory "+action+(preview?" --dry-run":""))
+                :service.getMethod("query",UUID.class,UUID.class).invoke(null,id,key);
+        var serviceResult=JsonParser.parseString((String)raw).getAsJsonObject();
+        var entry=serviceResult.getAsJsonObject("serviceReceipt");var evidence=new JsonObject();
+        evidence.addProperty("serviceRequestId",key.toString());evidence.addProperty("reason","inventory_transfer_unverified");
+        String status="unknown";
+        if(entry!=null && entry.has("action") && entry.has("playerUuid") && action.equals(entry.get("action").getAsString())
+                && id.toString().equals(entry.get("playerUuid").getAsString())){
+            evidence.add("inventoryReceipt",entry);evidence.addProperty("reason",entry.get("reason").getAsString());
+            if(serviceResult.get("status").getAsString().equals("completed")&&entry.get("success").getAsBoolean()
+                    && entry.has("dryRun")&&entry.get("dryRun").getAsBoolean()==preview){
+                status="completed";
+                evidence.addProperty("allHandled",!preview && Set.of("completed","unchanged","nothing_to_move").contains(entry.get("reason").getAsString()));
+                evidence.addProperty("effectsApplied",!preview && (entry.has("moved")?entry.get("moved").getAsInt()>0:entry.get("changed").getAsBoolean()));
+            } else if(serviceResult.get("status").getAsString().equals("blocked")) status="rejected";
+        }
+        return control.finish(id,request,status,evidence);
+    }
     JsonObject receipt(UUID owner,UUID id,String request)throws Exception {
         var value=control.read(id,request);
         if(value==null){value=plugin.nativeLegacyReceipt(owner,id,request);if(value==null)throw new CompatibilityException("receipt_missing","Query the original namespace; never replay");
             if(NativeMaidWorkshop.ACTION.equals(value.get("action").getAsString()))value=plugin.workshops().reconcile(value);
             value=value.deepCopy();value.addProperty("namespace","legacy");value.addProperty("operationId",request);value.addProperty("ownerId",owner.toString());return value;}
+        if(MaidBodyControl.BAG_ACTIONS.contains(value.get("action").getAsString())&&Set.of("accepted","unknown").contains(value.get("status").getAsString())){
+            var input=JsonParser.parseString(value.get("arguments").getAsString()).getAsJsonObject();
+            return bagReceipt(id,request,input,false);
+        }
         if("cast".equals(value.get("action").getAsString())&&Set.of("accepted","running","unknown").contains(value.get("status").getAsString())&&local.qdj.maids.brain.ResidentBodyAccess.external(id)){
             var original=JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.castReceipt(id,request)).getAsJsonObject();
             String state=original.has("status")?original.get("status").getAsString():"unknown";

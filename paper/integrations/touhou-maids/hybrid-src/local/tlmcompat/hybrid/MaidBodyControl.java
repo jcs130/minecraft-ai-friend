@@ -11,17 +11,20 @@ final class MaidBodyControl {
     static final String PROTOCOL="qiandengji-maid-body/v1";
     static final long LEASE_MILLIS=120_000;
     static final Set<String> READS=Set.of("list","context","inventory","tasks","brain","receipt","inbox","spells","workshop");
-    static final Set<String> WRITES=Set.of("walk","stop","stay","sit","follow","guard","companion","cast","task","equip","pickup","schedule","speak","ack","dismount","make","fish");
+    static final Set<String> WRITES=Set.of("walk","stop","stay","sit","follow","guard","companion","cast","task","equip","pickup","schedule","speak","ack","dismount","make","fish","bag_clean","bag_store","bag_donate");
+    static final Set<String> BAG_ACTIONS=Set.of("bag_clean","bag_store","bag_donate");
     static Set<String> fields(String action){
         var keys=new HashSet<>(Set.of("action","maidId","requestId"));
         keys.addAll(switch(action){case "walk"->Set.of("x","y","z","dimension");case "receipt"->Set.of("operationId","operationAction");
             case "task"->Set.of("taskId");case "equip"->Set.of("hand","slot");case "schedule"->Set.of("schedule");
             case "cast"->Set.of("spellId");case "pickup"->Set.of("enabled");case "speak"->Set.of("text");case "ack"->Set.of("eventId");
+            case "bag_clean","bag_store","bag_donate"->Set.of("dryRun");
             case "make"->Set.of("workshopId","recipeId","quantity","inventory");default->Set.of();});return keys;
     }
-    static Set<String> requiredFields(String action){var fields=new HashSet<>(fields(action));fields.removeAll(Set.of("maidId","dimension","operationAction","quantity"));if(!WRITES.contains(action))fields.remove("requestId");return fields;}
+    static Set<String> requiredFields(String action){var fields=new HashSet<>(fields(action));fields.removeAll(Set.of("maidId","dimension","operationAction","quantity","dryRun"));if(!WRITES.contains(action))fields.remove("requestId");return fields;}
     static void validateShape(JsonObject input){String action=string(input,"action");
         if(!READS.contains(action)&&!WRITES.contains(action))throw new Fault(400,"UNSUPPORTED_ACTION");keys(input,fields(action));
+        if(input.has("dryRun")&&(!input.get("dryRun").isJsonPrimitive()||!input.getAsJsonPrimitive("dryRun").isBoolean()))throw new Fault(400,"INVALID_dryRun");
         for(String field:new TreeSet<>(requiredFields(action)))if(!input.has(field))throw new Fault(400,"INVALID_"+field);
         for(String field:List.of("maidId","requestId","operationId","operationAction","taskId","hand","schedule","text","dimension","eventId","spellId","workshopId","recipeId","inventory"))if(input.has(field))string(input,field);
     }
@@ -95,7 +98,8 @@ final class MaidBodyControl {
         var row=read(maid,request);if(row==null)throw new Fault(503,"RECEIPT_UNAVAILABLE");
         row.addProperty("status",status);row.addProperty("terminal",!Set.of("accepted","running","unknown").contains(status));
         String action = row.get("action").getAsString();
-        var proof = observation.get(action.equals("fish") ? "verifiedCatch" : "arrived");
+        String evidence = BAG_ACTIONS.contains(action) ? "allHandled" : action.equals("fish") ? "verifiedCatch" : "arrived";
+        var proof = observation.get(evidence);
         row.addProperty("goalCompleted", status.equals("completed") && proof != null && proof.getAsBoolean());
         if(observation.has("actualPosition"))row.add("actualPosition",observation.get("actualPosition").deepCopy());
         row.addProperty("observedAt",java.time.Instant.now().toString());row.add("observation",observation);write(file(maid,request),row);return row;
@@ -118,13 +122,13 @@ final class MaidBodyControl {
         var quantity = new JsonObject();quantity.addProperty("type","integer");quantity.addProperty("minimum",1);quantity.addProperty("description","Number of finished items. Omit for one batch.");p.add("quantity",quantity);
         for(String k:List.of("x","y","z")){var field=new JsonObject();field.addProperty("type","number");field.addProperty("description","Absolute world coordinate in blocks; all x,y,z required for walk. Loaded destination within 96 blocks, no digging or teleporting.");p.add(k,field);}
         var slot=new JsonObject();slot.addProperty("type","integer");slot.addProperty("minimum",0);p.add("slot",slot);
-        var enabled=new JsonObject();enabled.addProperty("type","boolean");p.add("enabled",enabled);
+        var enabled=new JsonObject();enabled.addProperty("type","boolean");p.add("enabled",enabled);p.add("dryRun",enabled.deepCopy());
         schema.add("properties",p);var required=new JsonArray();required.add("action");schema.add("required",required);
         // Branch-specific fields and requirements are the same definition used by the executor.
         var branches=new JsonArray();for(var element:values){String name=element.getAsString();var branch=new JsonObject();var properties=new JsonObject();var constant=new JsonObject();constant.addProperty("const",name);properties.add("action",constant);branch.add("properties",properties);
             var needed=new JsonArray();requiredFields(name).stream().sorted().forEach(needed::add);branch.add("required",needed);
             var names=new JsonObject();var allowed=new JsonArray();fields(name).stream().sorted().forEach(allowed::add);names.add("enum",allowed);branch.add("propertyNames",names);branches.add(branch);}
         schema.add("oneOf",branches);
-        var out=new JsonObject();out.addProperty("name","mc_maids");out.addProperty("description","Original owned maid body, lease scoped. Reads need no online owner. Writes require original requestId; query receipt after timeout. Workshop make uses only an authorized site, recipe and inventory with the real nearby owner. A pending job is not a finished item. spells lists learned spells; walk lasts at most 30s.");out.add("inputSchema",schema);return out;
+        var out=new JsonObject();out.addProperty("name","mc_maids");out.addProperty("description","Original owned maid body, lease scoped. Reads need no online owner. Writes require original requestId; query receipt after timeout. Workshop make uses only an authorized site, recipe and inventory with the real nearby owner. A pending job is not a finished item. bag_clean clears plain junk, bag_store sends surplus to the personal box, bag_donate gives surplus to public guild chests. dryRun=true previews. spells lists learned spells; walk lasts at most 30s.");out.add("inputSchema",schema);return out;
     }
 }

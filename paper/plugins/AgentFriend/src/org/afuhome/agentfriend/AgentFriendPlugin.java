@@ -273,6 +273,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     NativeRpg nativeRpg(){return nativeRpg;}
     DungeonEnemyMoves dungeonEnemyMoves(){return dungeonEnemyMoves;}
+    void inventoryBatch(Player p,String[] args){inventoryFeedback.command(p,args);}
     InventoryTidy inventoryTidy(){return inventoryFeedback.tidy();}
     /** Only typed, server-owned buttons reach here; existing commands keep their own authority. */
     void executePlayerMenuAction(Player p,AdventureMenuModel.Action action,String payload){
@@ -1055,7 +1056,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if(!(sender instanceof ConsoleCommandSender)&&!(sender instanceof RemoteConsoleCommandSender)){sender.sendMessage("仅服务器控制台可代本人维护物品；本人用 /mycli inventory tidy。");return true;}
             inventoryFeedback.adminTidy(sender,args);return true;
         }
-        if(sender instanceof Player p&&args.length>=2&&args[0].equalsIgnoreCase("inventory")&&args[1].equalsIgnoreCase("tidy")){
+        if(sender instanceof Player p&&args.length>=2&&(args[0].equalsIgnoreCase("inventory")||args[0].equals("背包"))&&(args[1].equalsIgnoreCase("tidy")||InventoryBatch.ACTIONS.contains(args[1].toLowerCase(java.util.Locale.ROOT)))){
             inventoryFeedback.command(p,args);return true;
         }
         if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("blockaccess")) {

@@ -35,9 +35,9 @@ final class InventoryTidy {
     record Plan(ItemStack[] after,int beforeUsed,int afterUsed,int merged,Map<Material,Integer> discarded) {}
     static Plan plan(ItemStack[] before,boolean discard) {
         if(before.length!=36)throw new IllegalArgumentException("Only the 36 personal storage slots may be tidied");
-        return plan(before,discard,9);
+        return plan(before,discard,9,false);
     }
-    private static Plan plan(ItemStack[] before,boolean discard,int first) {
+    private static Plan plan(ItemStack[] before,boolean discard,int first,boolean sortEquipment) {
         ItemStack[] after=copy(before);int merged=0;Map<Material,Integer> removed=new LinkedHashMap<>();
         // Preserve all custom components and, for the carried bag, hotbar positions.
         Map<Material,List<ItemStack>> partials=new EnumMap<>(Material.class);
@@ -60,7 +60,7 @@ final class InventoryTidy {
         if(discard)for(int slot=first;slot<after.length;slot++)if(common(after[slot])) {
             removed.merge(after[slot].getType(),after[slot].getAmount(),Integer::sum);after[slot]=null;
         }
-        if (first == 0) {
+        if (sortEquipment) {
             var ordered = Arrays.stream(after).filter(item -> item != null && !item.getType().isAir())
                 .sorted(Comparator.comparingInt(InventoryTidy::stashPriority)).toList();
             Arrays.fill(after, null);
@@ -89,13 +89,13 @@ final class InventoryTidy {
     private boolean discard(Player p){return plugin.getConfig().getBoolean(SETTINGS+p.getUniqueId()+".discard-common",false);}
     private String stashAutoPath(Player p){return SETTINGS+p.getUniqueId()+".stash-auto";}
     private boolean stashAuto(Player p){return plugin.getConfig().getBoolean(stashAutoPath(p),false);}
-    private String blocker(Player p) {
+    String blocker(Player p) {
         if(!p.isOnline()||p.isDead()||plugin.isDowned(p))return "player_unavailable";
         if(plugin.isObserver(p)||!Set.of(GameMode.SURVIVAL,GameMode.ADVENTURE).contains(p.getGameMode()))return "survival_required";
         if(plugin.pvpParticipant(p))return "pvp_inventory_locked";
         if(blocked.contains(p.getUniqueId()))return "save_unverified";
-        if(!Set.of(InventoryType.CRAFTING,InventoryType.PLAYER).contains(p.getOpenInventory().getTopInventory().getType())
-                ||p.getItemOnCursor()!=null&&!p.getItemOnCursor().getType().isAir())return "close_container_first";
+        if(!ResidentCli.isResident(p.getUniqueId()) && (!Set.of(InventoryType.CRAFTING,InventoryType.PLAYER).contains(p.getOpenInventory().getTopInventory().getType())
+                ||p.getItemOnCursor()!=null&&!p.getItemOnCursor().getType().isAir()))return "close_container_first";
         return null;
     }
     boolean queueAuto(Player p) {
@@ -179,7 +179,7 @@ final class InventoryTidy {
             if (!automatic) failure(p,"stash_trade_pending","/mycli trade recycle status");
             return;
         }
-        ItemStack[] before=copy(plugin.dungeon().stashSnapshot(p.getUniqueId()).items());Plan plan=plan(before,drop,0);
+        ItemStack[] before=copy(plugin.dungeon().stashSnapshot(p.getUniqueId()).items());Plan plan=plan(before,drop,0,true);
         boolean changed=!Arrays.equals(before,plan.after());
         if (automatic&&!changed) return;
         if(!preview&&changed)try{plugin.dungeon().stageStashContents(p.getUniqueId(),plan.after());plugin.saveConfig();}
@@ -206,22 +206,33 @@ final class InventoryTidy {
             +" 件普通杂物。下一步 "+next+"。");reply(p,out);
     }
     boolean stashWritesBlocked(UUID id) {return blockedStashes.contains(id);}
-    private void run(Player p,boolean preview,boolean drop,boolean automatic) {
+    static int firstCarriedSlot(Player p) { return ResidentCli.isResident(p.getUniqueId()) ? 0 : 9; }
+    void clean(Player p, boolean preview) { run(p,preview,true,false,true); }
+    static void saveBag(AgentFriendPlugin plugin, Player p, String request) throws Exception {
+        NamespacedKey key = new NamespacedKey(plugin,"inventory_tidy_save");
+        p.getPersistentDataContainer().set(key,PersistentDataType.STRING,request);
+        try {
+            p.saveData();
+            if (!ResidentCli.isResident(p.getUniqueId()))
+                PvpEscrowFiles.confirmPlayerSave(Bukkit.getWorlds().getFirst().getWorldFolder().toPath()
+                    .resolve("playerdata").resolve(p.getUniqueId()+".dat"),key.toString(),request);
+        } finally { p.getPersistentDataContainer().remove(key); }
+    }
+    private void run(Player p,boolean preview,boolean drop,boolean automatic) { run(p,preview,drop,automatic,false); }
+    private void run(Player p,boolean preview,boolean drop,boolean automatic,boolean quick) {
         String stop=blocker(p);if(stop!=null){failure(p,stop,stop.equals("close_container_first")?"/mycli inventory tidy":"/mycli inventory");return;}
-        ItemStack[] before=copy(p.getInventory().getStorageContents());Plan plan=plan(before,drop);
+        ItemStack[] before=copy(p.getInventory().getStorageContents());Plan plan=plan(before,drop,firstCarriedSlot(p),false);
         boolean changed=!Arrays.equals(before,plan.after());String request=UUID.randomUUID().toString();
         if(!preview&&changed) {
-            NamespacedKey key=new NamespacedKey(plugin,"inventory_tidy_save");
             try {
-                p.getInventory().setStorageContents(plan.after());p.getPersistentDataContainer().set(key,PersistentDataType.STRING,request);
-                p.saveData();PvpEscrowFiles.confirmPlayerSave(Bukkit.getWorlds().getFirst().getWorldFolder().toPath().resolve("playerdata").resolve(p.getUniqueId()+".dat"),key.toString(),request);
+                p.getInventory().setStorageContents(plan.after()); saveBag(plugin,p,request);
                 p.updateInventory();
             } catch(Exception error) {
                 p.getInventory().setStorageContents(before);p.updateInventory();blocked.add(p.getUniqueId());
                 plugin.getLogger().severe("Inventory tidy persistence unverified for "+p.getUniqueId()+" request="+request+"; automatic tidy paused");
-                JsonObject out=base(p,"tidy",false,"save_unverified");out.addProperty("requestId",request);out.add("changed",JsonNull.INSTANCE);out.addProperty("outcomeUnknown",true);out.addProperty("retrySameAction",false);
-                p.sendMessage("§e[save_unverified] 整理存盘未确认，当前背包已恢复，自动整理暂停；请联系服主核对原请求 "+request+"，不要重复整理。");reply(p,out);return;
-            } finally {p.getPersistentDataContainer().remove(key);}
+                JsonObject out=base(p,quick?"clean":"tidy",false,"save_unverified");out.addProperty("requestId",request);out.add("changed",JsonNull.INSTANCE);out.addProperty("outcomeUnknown",true);out.addProperty("retrySameAction",false);
+                p.sendMessage("§e[save_unverified] 整理存盘未确认，当前背包已恢复，自动整理暂停；请联系服主核对原请求 "+request+"，不要重复整理。");if(quick) InventoryBatch.receipt(p,out); else reply(p,out);return;
+            }
         }
         JsonObject out=base(p,"tidy",true,preview?"preview":changed?"completed":"unchanged");
         out.addProperty("requestId",request);out.addProperty("dryRun",preview);out.addProperty("automatic",automatic);out.addProperty("discardCommon",drop);
@@ -229,7 +240,12 @@ final class InventoryTidy {
         out.addProperty("freedSlots",plan.beforeUsed()-plan.afterUsed());out.addProperty("mergedItems",plan.merged());
         JsonArray removed=new JsonArray();plan.discarded().forEach((m,count)->{JsonObject row=new JsonObject();row.addProperty("id",m.getKey().toString());row.addProperty("count",count);removed.add(row);});out.add("discarded",removed);
         out.addProperty("nextCommand",plan.afterUsed()==36?"/mycli trade recycle list --json":"/mycli inventory");
-        p.sendMessage("§b【背包整理"+(preview?"预览":"")+"】合并 "+plan.merged()+" 件，"+(preview?"将":"已")+"释放 "+(plan.beforeUsed()-plan.afterUsed())+" 格；"+(preview?"将销毁":"销毁")+"普通杂物 "+plan.discarded().values().stream().mapToInt(Integer::intValue).sum()+" 件。"+(!drop?"清理杂物需明确使用 --discard-common。":"")+"仍满时查 /mycli trade recycle list --json。");reply(p,out);
+        p.sendMessage("§b【背包整理"+(preview?"预览":"")+"】合并 "+plan.merged()+" 件，"+(preview?"将":"已")+"释放 "+(plan.beforeUsed()-plan.afterUsed())+" 格；"+(preview?"将销毁":"销毁")+"普通杂物 "+plan.discarded().values().stream().mapToInt(Integer::intValue).sum()+" 件。"+(!drop?"清理杂物需明确使用 --discard-common。":"")+"仍满时查 /mycli trade recycle list --json。");
+        if (quick) {
+            out.addProperty("action","clean"); out.addProperty("plannedFreedSlots",plan.beforeUsed()-plan.afterUsed());
+            if (preview) out.addProperty("freedSlots",0);
+            InventoryBatch.receipt(p,out);
+        } else reply(p,out);
     }
     private JsonObject base(Player p,String action,boolean ok,String reason){JsonObject out=new JsonObject();out.addProperty("schemaVersion",1);out.addProperty("playerUuid",p.getUniqueId().toString());out.addProperty("action",action);out.addProperty("success",ok);out.addProperty("reason",reason);out.addProperty("serverOperator",operator!=null);return out;}
     private void failure(Player p,String reason,String next){
