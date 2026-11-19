@@ -964,6 +964,7 @@ const PATCHES: readonly SourcePatch[] = [
     return attribute.getAttributeValue(a)
   }
   const modernMovementThreshold = !!(mcData.version && typeof mcData.version['>='] === 'function' && mcData.version['>=']('1.21.5'))
+  const usesShapeStepHeights = !!(mcData.version && typeof mcData.version['>='] === 'function' && mcData.version['>=']('1.21'))
 
   physics.simulatePlayer = (entity, world) => {`,
       },
@@ -1212,7 +1213,9 @@ const PATCHES: readonly SourcePatch[] = [
 `,
       },
       {
-        // 26.1 Entity.collide step (as Grim's 1.21+ branch): step candidates are the shape tops between
+        // Entity.collectCandidateStepUpHeights exists from 1.21, independently of the 1.21.5
+        // movement threshold. Low ceilings may admit an actual 1/16 rise but reject a full step probe.
+        // Step candidates are the shape tops between
         // the box after the downward collision and stepHeight above it, tried lowest first from that
         // box. prismarine kept the 1.8 step (up 0.6 from the pre-collision box, across, back down
         // 0.6), so falling next to a slightly higher partial block (snow layers, slabs, paths) landed
@@ -1220,7 +1223,7 @@ const PATCHES: readonly SourcePatch[] = [
         find: `    const stepHeight = attributeOf(entity, 'minecraft:step_height', physics.stepHeight)
     if (stepHeight > 0 &&`,
         replace: `    const stepHeight = attributeOf(entity, 'minecraft:step_height', physics.stepHeight)
-    if (modernMovementThreshold && stepHeight > 0 &&
+    if (usesShapeStepHeights && stepHeight > 0 &&
       (entity.onGround || (dy !== oldVelY && oldVelY < 0)) &&
       (dx !== oldVelX || dz !== oldVelZ)) {
       const collidedDown = dy !== oldVelY && oldVelY < 0
@@ -1258,7 +1261,7 @@ const PATCHES: readonly SourcePatch[] = [
           break
         }
       }
-    } else if (!modernMovementThreshold && stepHeight > 0 &&`,
+    } else if (!usesShapeStepHeights && stepHeight > 0 &&`,
       },
     ],
   },

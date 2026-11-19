@@ -12,6 +12,53 @@ const hazards = new Set(['water', 'lava', 'bubble_column', 'fire', 'soul_fire', 
 const distance = (a: Point, b: Point) => Math.hypot(a.x-b.x, a.y-b.y, a.z-b.z);
 const plain = (p: Point): Point => ({x:p.x,y:p.y,z:p.z});
 
+/** Last live path node when locomotion made no measurable progress. The node and goal
+ * are observations, not proof that an obstacle or destination is impassable. */
+export class IdleRoamBlocked extends Error {
+  constructor(readonly destination: Point, readonly next: Point | null) {
+    super('Idle stroll stopped: no-progress');
+  }
+}
+
+export interface IdleRoamObstruction {
+  schema: 'agent-mc-idle-obstruction/v1';
+  generation: string;
+  attempts: number;
+  firstAtMs: number;
+  lastAtMs: number;
+  firstOrigin: Point;
+  at: Point;
+  destination: Point;
+  next: Point | null;
+}
+
+/** Per-body evidence for the host's next decision. Keep individual attempts in diagnostics. */
+export class IdleRoamAttention {
+  private episode: IdleRoamObstruction | null = null;
+
+  observe(generation: string, at: Point, now: number): void {
+    const e = this.episode;
+    if (e && (e.generation !== generation || distance(e.firstOrigin, at) > .5
+      || now < e.lastAtMs || now - e.lastAtMs > 5 * 60_000)) this.episode = null;
+  }
+
+  blocked(generation: string, from: Point, at: Point, failure: IdleRoamBlocked, now: number): IdleRoamObstruction | null {
+    this.observe(generation, from, now);
+    if (distance(from, at) > .2) {
+      this.episode = null;
+      return null;
+    }
+    this.observe(generation, at, now);
+    const prior = this.episode;
+    this.episode = {
+      schema: 'agent-mc-idle-obstruction/v1', generation, attempts: (prior?.attempts ?? 0) + 1,
+      firstAtMs: prior?.firstAtMs ?? now, lastAtMs: now, firstOrigin: prior?.firstOrigin ?? plain(from),
+      at: plain(at), destination: plain(failure.destination), next: failure.next && plain(failure.next),
+    };
+    return this.episode.attempts === 2 ? this.episode : null;
+  }
+}
+
 /** Only our exact path may bypass the idle gate's moving/airborne checks. */
 export function idleRoamOwnsPath(bot: Bot): boolean {
   return active.get(bot) === bot.pathfinder?.goal && active.has(bot);
@@ -133,6 +180,7 @@ export async function executeIdleRoam(bot: Bot, route: IdleRoam, signal: AbortSi
     if(active.get(bot)===goal)active.delete(bot);
   };
   let remaining=check.path;
+  let blocked: IdleRoamBlocked | undefined;
   const update=(result:{status:string;path:Move[]})=>{
     if(finder.goal!==goal)return;
     remaining=result.path;
@@ -151,13 +199,17 @@ export async function executeIdleRoam(bot: Bot, route: IdleRoam, signal: AbortSi
       && Math.floor(feet.y)<=Math.floor(origin.y)+1
       && shallowStart(bot,origin) && dryBlock(bot.blockAt(feet.offset(0,1,0),false));
     if(Date.now()-start>12000)stoppedReason='time-limit';
-    else if(Date.now()-progressAt>1800)stoppedReason='no-progress';
+    else if(Date.now()-progressAt>1800){
+      stoppedReason='no-progress';
+      blocked=new IdleRoamBlocked(plain(route.destination), remaining[0] ? plain(remaining[0]) : null);
+    }
     else if(distance(feet,route.anchor)>12 || (!dry && !leaving)
       || remaining.some(n=>!dryCell(bot,n)||!supported(bot,n)))stoppedReason='route-changed';
     if(stoppedReason)cleanup();
   },50);
   try { await awaitPathGoal(bot,goal); }
   catch(error) {
+    if(blocked)throw blocked;
     if(stoppedReason)throw new Error(`Idle stroll stopped: ${stoppedReason}`);
     if(!closed && !signal.aborted) throw error;
   }

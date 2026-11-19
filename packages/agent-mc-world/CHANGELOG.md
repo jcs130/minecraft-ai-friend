@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.104
+
+The Java movement simulator uses collision-shape step heights from 1.21. Walking from a path block to level ground under a low ceiling can take a 1/16-block step. Idle movement records the attempted waypoint and delivers a single observation when consecutive walks from the same place make no progress.
+
 ## 0.5.7-rc.160-preview.103
 
 The event stream distinguishes named HUD bars, stage changes, progress bands, countdown restarts, deadlines and removal. Localized countdown samples remain available in current facts. SDK readers can compare a particular bar against a task-specific deadline or request a strictly unread event tail.

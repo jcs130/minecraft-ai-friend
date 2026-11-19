@@ -28,6 +28,10 @@ requires the host's body-availability predicate and abort signal; cancel it befo
 transferring body ownership. `idle-movement-ended` records actual origin, final
 position and displacement, independently of model decisions.
 
+On Java 1.21 and later, the collision solver tests real obstacle heights when stepping up. A gap of two blocks above the upper floor can admit a grounded step of 1/16 of a block. The engine retains the registered step-height attribute and checks the ceiling. The threshold for water and other 1.21.5 movement changes is independent.
+
+Each actual stalled walk records the destination and next path node when available. Two stationary attempts in the same body generation within five minutes deliver one `meta.idleRoamObstruction` observation on the next ordinary model turn. Its evidence includes the first and latest times, the origin, the current position and the latest attempted route. Movement away from the local spot or a generation change starts another episode. SDK users can apply the same policy using `IdleRoamAttention` and `IdleRoamBlocked` from `agent-mc-world/decisions`.
+
 Design references: [Touhou Little Maid's Brain](https://github.com/TartaricAcid/TouhouLittleMaid/blob/8a3ac5e9eacf0c6d63adf8832949f3ce81484fe6/src/main/java/com/github/tartaricacid/touhoulittlemaid/entity/ai/brain/MaidBrain.java)
 separates low-priority random stroll target selection from navigation; its cited
 1.20 source is an architectural reference, not the current server binary.
