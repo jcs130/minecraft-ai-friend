@@ -41,6 +41,7 @@ import { memoryRoute } from './memory-routes.mjs';
 import { LoginThrottle } from './login-throttle.mjs';
 import { PublicArchives } from './public-archives.mjs';
 import {PhotoScenes} from './photo-scenes.mjs';
+import {GalleryMedia} from './gallery-media.mjs';
 import {createSceneObjectStorage} from './scene-object-storage.mjs';
 import { publicDialogueText } from './public-dialogue.mjs';
 import {NekoAuth,NEKO_CALLBACK} from './neko-auth.mjs';
@@ -103,7 +104,9 @@ export function createPortal(config, options = {}) {
   })() : Promise.resolve(null);
   nativeReady.catch(() => {}); // main awaits ready before listening; fixture routes still fail closed.
   const gallery = new Gallery(store, cloud);
-  const photoScenes=new PhotoScenes(store,gallery,options.sceneObjects??createSceneObjectStorage(config.sceneStorage));
+  const photoObjects=options.sceneObjects??createSceneObjectStorage(config.sceneStorage);
+  const photoScenes=new PhotoScenes(store,gallery,photoObjects);
+  const galleryMedia=new GalleryMedia(gallery,photoObjects);
   const photoUploads = new PhotoUploads(gallery, { now: options.now });
   const music = new MusicWorks(store, { enabled: config.music.enabled, objects: options.musicObjects ?? (config.music.enabled ? createMusicObjectStorage(config.sceneStorage) : null), now: options.now });
   const musicOrigin = music.objects?.origin || '';
@@ -250,7 +253,7 @@ export function createPortal(config, options = {}) {
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; " + `media-src 'self'${[mediaOrigin, musicOrigin].filter(Boolean).map(value => ' ' + value).join('')}; connect-src 'self'${musicOrigin ? ' ' + musicOrigin : ''}; ` + "font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:" + (photoObjects?.origin ? " " + new URL(photoObjects.origin).origin : "") + "; " + `media-src 'self'${[mediaOrigin, musicOrigin].filter(Boolean).map(value => ' ' + value).join('')}; connect-src 'self'${musicOrigin ? ' ' + musicOrigin : ''}; ` + "font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     res.setHeader('Cache-Control', 'no-store');
     try {
@@ -600,10 +603,36 @@ export function createPortal(config, options = {}) {
       }
       if (pathname.startsWith('/media/') && await servePublicMedia(req, res, pathname, config)) return;
       if (req.method === 'GET' && pathname === '/api/v1/health') return respond(res, 200, { ok: true, schemaVersion: 1, version: portalVersion });
-      if (req.method === 'GET' && pathname === '/api/v1/gallery') return respond(res, 200, gallery.page({page:Number(url.searchParams.get('page')||1),author:url.searchParams.get('author')||''}));
+      if (req.method === 'GET' && pathname === '/api/v1/gallery') {
+        const page=gallery.page({page:Number(url.searchParams.get('page')||1),author:url.searchParams.get('author')||''});
+        page.photos=page.photos.map(photo=>{
+          const base='/api/v1/gallery/'+photo.id;
+          return {...photo,thumbnailUrl:photo.imageUrl.replace('/image?','/thumbnail?'),displayUrl:photo.imageUrl.replace('/image?','/display?'),
+            ...(photo.scene && photoScenes.ready(photo.id,photo.scene) && photoObjects?.readScene?{scenePreviewUrl:base+'/scene-preview'}:{})};
+        });
+        return respond(res,200,page);
+      }
+      const mediaPreview=/^\/api\/v1\/gallery\/(manage\/)?([a-f0-9-]{36})\/(thumbnail|display|scene-preview)$/.exec(pathname);
+      if(req.method==='GET'&&mediaPreview){
+        const [,manage,id,kind]=mediaPreview;
+        const context=manage?gallery.managementContext(browserAuth(req).owner):null;
+        if(kind==='scene-preview'){
+          const view=await photoScenes.preview(id,context);
+          return respond(res,200,view);
+        }
+        const media=await galleryMedia.read(id,kind==='display'?'original':'thumbnail',context,req.headers['if-none-match']);
+        const headers={'Cache-Control':context||media.url?'private, no-store':'private, no-cache','ETag':'"'+media.digest+'"','Vary':'Cookie','Referrer-Policy':'no-referrer'};
+        if(media.url)headers.Location=media.url;
+        if(media.bytes){headers['Content-Type']=media.type;headers['Content-Length']=media.bytes.length;}
+        res.writeHead(media.status,headers);return res.end(media.bytes);
+      }
       if(req.method==='GET'&&pathname==='/api/v1/gallery/manage'){
         const result=gallery.managed(gallery.managementContext(browserAuth(req).owner),{page:Number(url.searchParams.get('page')||1)});
-        result.photos=result.photos.map(photo=>({...photo,sceneReady:photoScenes.ready(photo.id,photo.scene),...(photoScenes.ready(photo.id,photo.scene)?{sceneUrl:'/api/v1/gallery/manage/'+photo.id+'/scene',sceneResourcesUrl:'/api/v1/gallery/manage/'+photo.id+'/scene/resources'}:{})}));return respond(res,200,result);
+        result.photos=result.photos.map(photo=>{
+          const base='/api/v1/gallery/manage/'+photo.id,sceneReady=photoScenes.ready(photo.id,photo.scene);
+          return {...photo,sceneReady,...(photo.imageUrl?{thumbnailUrl:photo.imageUrl.replace('/image?','/thumbnail?')}:{}),
+            ...(sceneReady?{sceneUrl:base+'/scene',sceneResourcesUrl:base+'/scene/resources',...(photoObjects?.readScene?{scenePreviewUrl:base+'/scene-preview'}:{})}:{})};
+        });return respond(res,200,result);
       }
       if(req.method==='POST'&&pathname==='/api/v1/gallery/upload'){
         const {owner}=browserAuth(req);rate('photo-upload-owner:'+owner.id,12);
@@ -989,5 +1018,5 @@ export function createPortal(config, options = {}) {
   });
   server.maxConnections = 128; server.maxRequestsPerSocket = 300;
   const cleanup = setInterval(() => store.cleanup(), 60000); cleanup.unref();
-  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, photoScenes, photoUploads, music, archives, emailAuth, agentAccess, nekoAuth, nekoLinks, appearance, memories, close: async () => { clearInterval(cleanup); await Promise.allSettled(music.verifying.values()); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); store.close(); } };
+  return { server, store, game, world, challenges, live, worldView, ready: nativeReady, accounts, cloud, gallery, photoScenes, photoUploads, music, archives, emailAuth, agentAccess, nekoAuth, nekoLinks, appearance, memories, close: async () => { clearInterval(cleanup); await Promise.allSettled(music.verifying.values()); emailAuth.close(); await (await nativeReady.catch(() => null))?.close(); await new Promise(resolve => server.close(resolve)); await galleryMedia.drain(); await Promise.allSettled(photoScenes.building.values()); store.close(); } };
 }

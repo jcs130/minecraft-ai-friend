@@ -157,7 +157,7 @@ function landscape() {
 }
 const characterName = name => ({ ag_cormy: '可米', ag_neko: 'NEKO', ag_kirito: '桐人', ag_narutopi: '鸣人' }[name.toLowerCase()] || name.replace(/^ag_/i, ''));
 function photoCards(photos) {
-  return photos.map(photo => `<article class="photo-card photo-post"><header class="photo-post-header"><span class="photo-post-avatar" aria-hidden="true">${e(characterName(photo.author).slice(0,1))}</span><div><a href="#events?player=${encodeURIComponent(photo.author)}">${e(characterName(photo.author))}</a><time datetime="${e(photo.capturedAt)}">${date(photo.capturedAt,true)}</time></div></header><div class="photo-caption">${photo.origin==='uploaded'?'<span class="tag">上传作品</span>':''}<h3>${e(photo.title)}</h3><p class="photo-story">${e(photo.story || '这张照片还没有附上当天的故事。')}</p></div><button type="button" data-action="photo" data-id="${e(photo.id)}" aria-label="查看照片：${e(photo.title)}"><img src="${e(photo.imageUrl)}" width="${photo.width}" height="${photo.height}" loading="lazy" decoding="async" alt="${e(photo.title)}"><span class="photo-open">${icons.eye}查看原片</span></button></article>`).join('');
+  return photos.map(photo => `<article class="photo-card photo-post"><header class="photo-post-header"><span class="photo-post-avatar" aria-hidden="true">${e(characterName(photo.author).slice(0,1))}</span><div><a href="#events?player=${encodeURIComponent(photo.author)}">${e(characterName(photo.author))}</a><time datetime="${e(photo.capturedAt)}">${date(photo.capturedAt,true)}</time></div></header><div class="photo-caption">${photo.origin==='uploaded'?'<span class="tag">上传作品</span>':''}<h3>${e(photo.title)}</h3><p class="photo-story">${e(photo.story || '这张照片还没有附上当天的故事。')}</p></div><button type="button" data-action="photo" data-id="${e(photo.id)}" aria-label="查看照片：${e(photo.title)}"><img src="${e(photo.thumbnailUrl || photo.imageUrl)}" width="${photo.width}" height="${photo.height}" loading="lazy" decoding="async" alt="${e(photo.title)}"><span class="photo-open">${icons.eye}查看原片</span></button></article>`).join('');
 }
 function galleryPage() {
   return heading('把生活，拍成故事。', '游戏实拍和你上传的作品，留在同一本相册里。由角色主人或管理员选择公开。', (owner()?button('photo-upload','上传图片','plus')+button('photos-manage',owner().role==='admin'?'管理全部照片':'我的照片','settings'):'')+routeButton('help', '了解相机玩法', 'book'))
@@ -166,10 +166,27 @@ function galleryPage() {
     + (state.photos.length ? `<section class="photo-grid full-gallery">${photoCards(state.photos)}</section>` : empty('展廊正在等待新作品', '在游戏内公开展出的作品会同步到这里，未发布的私人照片不会展示。', '', 'mountain'))
     + `<div class="pagination">${button('photo-page','上一页','','small',`data-page="${state.photoPage-1}" ${state.photoPage<=1?'disabled':''}`)}<span>${state.photoPage} / ${state.photoPages}</span>${button('photo-page','下一页','','small',`data-page="${state.photoPage+1}" ${state.photoPage>=state.photoPages?'disabled':''}`)}</div>`+photoManagementSection();
 }
+function openPhoto(photo,privateView){
+  const scene=photo.scenePreviewUrl?`<section class="photo-scene"><button type="button" class="btn" data-local-scene>查看局部 3D 场景</button><div data-scene-output aria-live="polite"></div></section>`:'';
+  openModal(e(photo.title),e(photo.author+' · '+date(photo.capturedAt,true)),`<div ${privateView?'data-private-photo-preview':''}><img class="photo-full" src="${e(photo.displayUrl||photo.imageUrl)}" alt="${e(photo.title)}"><p class="photo-story">${e(photo.story||'这张照片还没有附上故事。')}</p>${scene}</div>`);
+  const trigger=modal.querySelector('[data-local-scene]');
+  if(!trigger)return;
+  const panel=modal.querySelector('[data-scene-output]'),controller=new AbortController();
+  let dispose=null;
+  modal.addEventListener('close',()=>{controller.abort();dispose?.();},{once:true});
+  trigger.addEventListener('click',async()=>{
+    trigger.disabled=true;panel.textContent='正在读取拍照时可见的方块…';
+    try{
+      const [data,viewer]=await Promise.all([api(photo.scenePreviewUrl.slice('/api/v1'.length),{signal:controller.signal}),import('/local-scene-view.js')]);
+      if(!panel.isConnected||controller.signal.aborted)return;
+      dispose=viewer.showLocalScene(panel,data);trigger.hidden=true;
+    }catch{if(panel.isConnected&&!controller.signal.aborted){panel.textContent='局部场景暂时无法显示。';trigger.disabled=false;trigger.textContent='重试 3D 预览';}}
+  });
+}
 function photoManagementSection(){
   const data=state.photoManagement;if(!owner()||!data)return '';
   return `<section class="panel gap-top"><div class="panel-header"><div><h2>${e(owner().role==='admin'?'全部照片管理':'我的照片')}</h2><p>共 ${number(data.total)} 张。未公开的原片只供所属账号和管理员预览，公开后进入展廊。</p></div>${button('photos-manage','刷新照片','arrow','small')}</div>
-    <div class="photo-grid">${data.photos.map(photo=>`<article class="photo-card"><button type="button" data-action="photo-private" data-id="${e(photo.id)}" ${photo.imageReady?'':'disabled'}>${photo.imageReady?`<img src="${e(photo.imageUrl)}" width="${photo.width}" height="${photo.height}" alt="${e(photo.title)}" loading="lazy" decoding="async">`:'<span>原片正在同步</span>'}</button><div class="photo-caption"><span class="tag">${photo.published?'已公开':'未公开'} · ${photo.origin==='uploaded'?'上传作品':'游戏实拍'}</span><span class="photo-author">${e(characterName(photo.author))} · ${date(photo.capturedAt)}</span><h3>${e(photo.title)}</h3><p>${e(photo.story||'还没有附上故事。')}</p>${photo.scene?`<p class="tiny">${photo.scene.state==='unavailable'?'场景未能保存，照片原片仍保留':`${photo.sceneReady?'场景已保存':'场景同步中'} · ${number(photo.scene.columns)} 个区块列 · ${number(photo.scene.entities)} 个周围实体${photo.scene.state==='partial'?' · 部分区域缺失':''}`}</p>`:''}<div class="photo-actions">${button('photo-publication',photo.published?'设为不公开':'设为公开','eye','small',`data-id="${e(photo.id)}" data-published="${!photo.published}" ${!photo.imageReady&&!photo.published?'disabled':''}`)}${button('photo-map','制作地图画','box','small',`data-id="${e(photo.id)}" ${photo.imageReady?'':'disabled'}`)}${photo.origin==='uploaded'?button('photo-delete','删除上传作品','','small danger',`data-id="${e(photo.id)}"`):''}${photo.sceneReady?`<a class="btn small" href="/api/v1/gallery/manage/${e(photo.id)}/scene" download>下载场景存档</a>${button('photo-scene-assets','场景素材','box','small',`data-id="${e(photo.id)}"`)}`:''}</div></div></article>`).join('')||'<p>暂无照片。绑定已有角色后，这个角色的照片会出现在这里，也可以上传自己的作品。</p>'}</div>
+    <div class="photo-grid">${data.photos.map(photo=>`<article class="photo-card"><button type="button" data-action="photo-private" data-id="${e(photo.id)}" ${photo.imageReady?'':'disabled'}>${photo.imageReady?`<img src="${e(photo.thumbnailUrl || photo.imageUrl)}" width="${photo.width}" height="${photo.height}" alt="${e(photo.title)}" loading="lazy" decoding="async">`:'<span>原片正在同步</span>'}</button><div class="photo-caption"><span class="tag">${photo.published?'已公开':'未公开'} · ${photo.origin==='uploaded'?'上传作品':'游戏实拍'}</span><span class="photo-author">${e(characterName(photo.author))} · ${date(photo.capturedAt)}</span><h3>${e(photo.title)}</h3><p>${e(photo.story||'还没有附上故事。')}</p>${photo.scene?`<p class="tiny">${photo.scene.state==='unavailable'?'场景未能保存，照片原片仍保留':`${photo.sceneReady?'场景已保存':'场景同步中'} · ${number(photo.scene.columns)} 个区块列 · ${number(photo.scene.entities)} 个周围实体${photo.scene.state==='partial'?' · 部分区域缺失':''}`}</p>`:''}<div class="photo-actions">${button('photo-publication',photo.published?'设为不公开':'设为公开','eye','small',`data-id="${e(photo.id)}" data-published="${!photo.published}" ${!photo.imageReady&&!photo.published?'disabled':''}`)}${button('photo-map','制作地图画','box','small',`data-id="${e(photo.id)}" ${photo.imageReady?'':'disabled'}`)}${photo.origin==='uploaded'?button('photo-delete','删除上传作品','','small danger',`data-id="${e(photo.id)}"`):''}${photo.sceneReady?`<a class="btn small" href="/api/v1/gallery/manage/${e(photo.id)}/scene" download>下载场景存档</a>${button('photo-scene-assets','场景素材','box','small',`data-id="${e(photo.id)}"`)}`:''}</div></div></article>`).join('')||'<p>暂无照片。绑定已有角色后，这个角色的照片会出现在这里，也可以上传自己的作品。</p>'}</div>
     <div class="pagination">${button('photos-manage-page','上一页','','small',`data-page="${data.page-1}" ${data.page<=1?'disabled':''}`)}<span>${data.page} / ${data.pages}</span>${button('photos-manage-page','下一页','','small',`data-page="${data.page+1}" ${data.page>=data.pages?'disabled':''}`)}</div></section>`;
 }
 async function loadPhotoManagement(){
@@ -199,7 +216,18 @@ async function photoUploadBytes(file){
     throw new Error('图片转换后仍超过 4MB，请进一步缩小');
   }finally{URL.revokeObjectURL(local);}
 }
-async function loadArchives(){try{state.archives=await api(`/archives?page=${state.archivePage}&author=${encodeURIComponent(state.archiveAuthor)}`);}catch{state.archives=null;}}
+let archiveKey='',archiveRequest=null,archiveError='',lastArchivePoll=0;
+function loadArchives(){
+  const key=state.archivePage+'|'+state.archiveAuthor;
+  if(archiveRequest && archiveKey===key)return archiveRequest;
+  if(archiveKey!==key)state.archives=null;
+  archiveKey=key;archiveError='';
+  const task=api(`/archives?page=${state.archivePage}&author=${encodeURIComponent(state.archiveAuthor)}`)
+    .then(data=>{if(archiveRequest===task){state.archives=data;archiveError='';}})
+    .catch(()=>{if(archiveRequest===task)archiveError='日记暂时读不到，请重试。';})
+    .finally(()=>{if(archiveRequest===task)archiveRequest=null;});
+  archiveRequest=task;return task;
+}
 function contentFreshness(source) {
   if(!source)return '已收到的公开作品 · 同步时间暂未提供';
   if(!source?.available)return '资料同步暂不可用；已收到的作品继续保留。';
@@ -207,11 +235,12 @@ function contentFreshness(source) {
   return `${fresh?'资料同步正常':'正在等待资料更新'} · 最近核对：${date(source.observedAt,true)}`;
 }
 function archivesPage(){
-  const data=state.archives;
+  const data=archiveKey===state.archivePage+'|'+state.archiveAuthor?state.archives:null;
   return heading('写下来，留在这个世界。','居民的日记、签名书和公告。原作持久保存，实体书丢失后也能找回文字。')
     + (state.archiveAuthor?`<p><a href="#events?player=${encodeURIComponent(state.archiveAuthor)}">${e(characterName(state.archiveAuthor))}的足迹</a> · <a href="#archives">全部作品</a></p>`:'')
     + `<p class="content-freshness">${contentFreshness(data?.source)}</p>`
-    + `<section class="panel">${data?.entries?.length?`<div class="event-list">${data.entries.map(row=>`<article class="world-event"><div class="event-symbol">${icons.book}</div><div class="event-body"><a href="#events?player=${encodeURIComponent(row.author)}">${e(characterName(row.author))}</a><time>${date(row.createdAt,true)}</time><h3>${e(row.title)}</h3>${button('archive-read','翻开阅读','book','small',`data-id="${e(row.id)}"`)}</div></article>`).join('')}</div>`:empty('等待第一份公开作品',data?.source?.available?'还没有公开的日记或公告。在游戏里用 /mycli archive create 标题|正文 写下第一篇公开日记，无需书与笔；作品会同步到这里。':'游戏档案暂不可用；恢复同步后，这里会显示已经公开的作品。','','book')}<div class="pagination">${button('archive-page','上一页','','small',`data-page="${state.archivePage-1}" ${state.archivePage<=1?'disabled':''}`)}<span>${state.archivePage} / ${data?.pages||1}</span>${button('archive-page','下一页','','small',`data-page="${state.archivePage+1}" ${state.archivePage>=(data?.pages||1)?'disabled':''}`)}</div></section>`;
+    + (archiveError && data?.entries?.length ? `<p role="status">最近一次更新失败 · ${button('archive-retry','重新读取','arrow','small')}</p>` : '')
+    + `<section class="panel">${data?.entries?.length?`<div class="event-list">${data.entries.map(row=>`<article class="world-event"><div class="event-symbol">${icons.book}</div><div class="event-body"><a href="#events?player=${encodeURIComponent(row.author)}">${e(characterName(row.author))}</a><time>${date(row.createdAt,true)}</time><h3>${e(row.title)}</h3>${button('archive-read','翻开阅读','book','small',`data-id="${e(row.id)}"`)}</div></article>`).join('')}</div>`:(archiveError||data?.source?.available===false ? '<p role="status">日记同步暂不可用。</p>'+button('archive-retry','重新读取','arrow','small') : !data ? '<p role="status">正在读取日记…</p>' : empty('暂无公开作品',state.archiveAuthor?'这位作者尚未公开作品。':'还没有公开的日记或公告。公开后会显示在这里。','','book'))}<div class="pagination">${button('archive-page','上一页','','small',`data-page="${state.archivePage-1}" ${state.archivePage<=1?'disabled':''}`)}<span>${state.archivePage} / ${data?.pages||1}</span>${button('archive-page','下一页','','small',`data-page="${state.archivePage+1}" ${state.archivePage>=(data?.pages||1)?'disabled':''}`)}</div></section>`;
 }
 function homePage() {
   const s = state.summary;
@@ -559,7 +588,7 @@ async function refreshData(manual = false) {
   state.photoSync = results[8].status === 'fulfilled' ? results[8].value.sync : null;
   state.photoPages=results[8].status==='fulfilled'?(results[8].value.pages||1):1;
   if(results[9].status==='fulfilled'&&results[9].value)state.liveMessages=results[9].value.events;
-  if(state.view==='archives')await loadArchives();
+  if(state.view==='archives'&&(manual||!state.archives||Date.now()-lastArchivePoll>30_000)){lastArchivePoll=Date.now();await loadArchives();}
   if (manual || sessionChanged || state.view !== 'live') await loadPrivate();
   if (manual || state.view !== 'live') await window.QdMemories?.load();
   if(state.view==='challenges')await window.QdChallenges?.load(false);
@@ -781,7 +810,10 @@ document.addEventListener('click', async event => {
     else if (action === 'close-modal') modal.close();
     else if (action === 'close-detail') { detail.close(); state.detail = null; }
     else if (action === 'home-section') document.getElementById(target.dataset.section)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    else if (action === 'photo') { const photo = state.photos.find(row => row.id === target.dataset.id); if (photo) openModal(e(photo.title), e(`${photo.author} · ${date(photo.capturedAt, true)}`), `<img class="photo-full" src="${e(photo.imageUrl)}" alt="${e(photo.title)}"><p class="photo-story">${e(photo.story || '这张照片还没有附上故事。')}</p>`); }
+    else if(action==='photo'||action==='photo-private'){
+      const privateView=action==='photo-private',photo=(privateView?state.photoManagement?.photos:state.photos)?.find(row=>row.id===target.dataset.id);
+      if(photo && (!privateView||photo.imageReady))openPhoto(photo,privateView);
+    }
     else if (action === 'refresh') { target.disabled = true; try { await refresh(true); } finally { if (target.isConnected) target.disabled = false; } }
     else if (action === 'search') { setView('agents'); setTimeout(() => document.querySelector('#roster-search')?.focus(), 100); }
     else if (action === 'filter') { state.filter = target.dataset.filter; render(); }
@@ -803,11 +835,12 @@ document.addEventListener('click', async event => {
     }
     else if(action==='photos-manage-page'){state.photoManagePage=Number(target.dataset.page);await loadPhotoManagement();}
     else if(action==='photo-scene-assets'){const data=await api('/gallery/manage/'+encodeURIComponent(target.dataset.id)+'/scene/resources');openModal('场景素材','与这张照片一同保存的原始客户端和模型资源。场景仅含拍照时已收到的区域，不能替代完整世界备份。',`<div class="panel">${data.resources.map(row=>`<p>${e(row.name)} · ${number(Math.ceil(row.bytes/1024))} KB · ${row.available?`<a href="/api/v1/gallery/manage/${e(data.id)}/scene/assets/${e(row.sha256)}" download>下载原文件</a>`:'同步中'}</p>`).join('')||'<p>没有单独的素材文件。</p>'}</div>`);}
-    else if(action==='photo-private'){const photo=state.photoManagement?.photos.find(row=>row.id===target.dataset.id);if(photo?.imageReady)openModal(e(photo.title),e(`${photo.author} · ${photo.published?'已公开':'未公开'}`),`<div data-private-photo-preview><img class="photo-full" src="${e(photo.imageUrl)}" alt="${e(photo.title)}"><p class="photo-story">${e(photo.story||'这张照片还没有附上故事。')}</p></div>`);}
+
     else if(action==='photo-publication'){
       const published=target.dataset.published==='true';await api(`/gallery/${target.dataset.id}/publication`,{method:'PUT',body:JSON.stringify({published})});
       await refresh();await loadPhotoManagement();toast(published?'照片已公开到展廊':'照片已设为不公开，原片继续保存');
     }
+    else if(action==='archive-retry'){await loadArchives();render();}
     else if(action==='archive-page'){state.archivePage=Number(target.dataset.page);await loadArchives();render();}
     else if(action==='archive-read'){const row=await api('/archives/'+target.dataset.id);openModal(e(row.title),e(row.author+' · '+date(row.createdAt,true)),`<div class="archive-body">${e(row.body)}</div>`);}
     else if(action==='public-bag'){const row=await api('/world/players/'+target.dataset.id+'/bag');openModal(e(row.agent.name)+'的背包','服务器保存于 '+date(row.savedAt,true),inventoryContent(row));}
@@ -1048,7 +1081,7 @@ async function startPortal() {
   if (dependencies.length) await Promise.all(dependencies);
   window.QdMemories?.init({ api, owner, toast, render, requestId: newRequestId, login: () => document.querySelector('[data-action="login"]')?.click() });
   window.QdChallenges?.init({ api, render });
-  render(); refresh();
+  render(); if(state.view==='archives'){const revision=routeRevision;loadArchives().then(()=>{if(revision===routeRevision && state.view==='archives')render();});} refresh();
   setInterval(() => { if (document.visibilityState === 'visible' && !modal.open) refresh(); }, 15000);
   setInterval(pollLiveFrame, 1000);
 }
