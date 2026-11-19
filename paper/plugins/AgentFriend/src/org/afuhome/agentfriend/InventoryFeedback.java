@@ -189,7 +189,7 @@ final class InventoryFeedback implements Listener {
         } else if (overview.freeSlots() == 0) {
             next = "先用 " + InventoryTidy.STASH_PREVIEW + " 预览能释放的箱格。";
         } else {
-            next = "用 /mycli inventory store --dry-run 看哪些物品可存。";
+            next = "用 /mycli inventory store --dry-run 查看可存物资。多个快捷栏放着同类普通材料时，/mycli help inventory store 可查按材料指定随身保留数量的用法。";
         }
         String warning = pickupBlocked ? "物品未全部装入背包。" : full ? "随身没有空槽。" : "随身背包只剩 " + free + " 格。";
         player.sendMessage("§e" + (full ? "【inventory_full】" : "【背包快满】") + warning + overview.text() + " " + next + " 清杂物 /mycli inventory clean，捐余物 /mycli inventory donate；均可加 --dry-run。");

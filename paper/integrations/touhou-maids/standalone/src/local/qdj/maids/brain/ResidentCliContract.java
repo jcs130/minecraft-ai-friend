@@ -31,7 +31,7 @@ final class ResidentCliContract {
         write("arena stash take <stashSlot 1-540> <count 1-64>","transfer_personal_box_to_actual_bag"),
         write("arena stash putslot <nativeBagSlot 0-based> <count 1-64>","transfer_actual_bag_to_personal_box"),
         write("inventory clean [--dry-run]","discard_plain_common_and_merge_own_bag"),
-        write("inventory store [--dry-run]","store_surplus_in_own_personal_box"),
+        write("inventory store [--keep minecraft:<material>=<carriedMinimum> ...] [--include-hotbar] [--dry-run]","store_surplus_in_own_personal_box"),
         write("inventory donate [--dry-run]","donate_plain_surplus_to_public_guild_chests"),
         write("arena stash collect","transfer_existing_reward_queue_to_personal_box"),
         read("dungeon list [--page 1]"),read("dungeon info <ID>"),read("dungeon status [ID]"),

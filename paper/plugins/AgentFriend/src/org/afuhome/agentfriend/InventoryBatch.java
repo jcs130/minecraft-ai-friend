@@ -89,15 +89,66 @@ final class InventoryBatch {
         if (present(item)) kept.merge(item.getType(), item.getAmount(), Integer::sum);
     }
 
-    void command(Player p, String[] args) {
-        String action = args[1].toLowerCase(Locale.ROOT);
-        boolean preview = false;
+    private record Options(boolean preview, boolean includeHotbar, Map<Material,Integer> keep) {
+        boolean selected() { return !keep.isEmpty(); }
+    }
+
+    private static Options options(String[] args) {
+        Map<Material,Integer> keep = new EnumMap<>(Material.class);
+        boolean preview = false, hotbar = false;
         for (int n = 2; n < args.length; n++) {
-            if (args[n].equals("--dry-run")) preview = true;
-            else if (!args[n].equals("--json")) {
-                reject(p, action, "invalid_argument", "/mycli inventory "+action+" [--dry-run] [--json]"); return;
+            switch (args[n]) {
+                case "--dry-run" -> preview = true;
+                case "--json" -> { }
+                case "--include-hotbar" -> {
+                    if (hotbar) return null;
+                    hotbar = true;
+                }
+                case "--keep" -> {
+                    if (++n == args.length) return null;
+                    String rule = args[n];
+                    int split = rule.indexOf('=');
+                    if (split < 1) return null;
+                    String id = rule.substring(0, split), quantity = rule.substring(split + 1);
+                    if (!id.matches("minecraft:[a-z0-9_]+") || !quantity.matches("[0-9]{1,10}")) return null;
+                    Material type = Material.matchMaterial(id);
+                    if (type == null || !type.isItem() || type.isAir() || !id.equals(type.getKey().toString())) return null;
+                    int amount;
+                    try { amount = Integer.parseInt(quantity); }
+                    catch (NumberFormatException invalid) { return null; }
+                    if (keep.putIfAbsent(type, amount) != null) return null;
+                }
+                default -> { return null; }
             }
         }
+        if ((hotbar && keep.isEmpty()) || (!keep.isEmpty() && !args[1].equalsIgnoreCase("store"))) return null;
+        return new Options(preview, hotbar, keep);
+    }
+
+    static boolean supports(String[] args) {
+        return args.length >= 2 && ACTIONS.contains(args[1]) && options(args) != null;
+    }
+
+    private boolean transferable(ItemStack item) {
+        return present(item) && !item.hasItemMeta() && !plugin.isSoulbound(item) && !BackpackShortcutMigration.isShortcut(item);
+    }
+
+    private static JsonObject counts(Map<Material,Integer> counts) {
+        JsonObject result = new JsonObject();
+        counts.forEach((type, amount) -> result.addProperty(type.getKey().toString(), amount));
+        return result;
+    }
+
+    void command(Player p, String[] args) {
+        String action = args[1].toLowerCase(Locale.ROOT);
+        Options options = options(args);
+        if (options == null) {
+            String selection = action.equals("store") ? " [--keep minecraft:<物品>=<保留数量> ...] [--include-hotbar]" : "";
+            reject(p, action, "invalid_argument", "/mycli inventory "+action+selection+" [--dry-run] [--json]"); return;
+        }
+        boolean preview = options.preview();
+        boolean personal = action.equals("store");
+        if (options.selected()) action = "store_selected";
         String blocked = plugin.inventoryTidy().blocker(p);
         if (blocked != null) {
             reject(p, action, blocked, switch (blocked) {
@@ -117,22 +168,34 @@ final class InventoryBatch {
         }
         if (action.equals("clean")) { plugin.inventoryTidy().clean(p, preview); return; }
 
-        boolean personal = action.equals("store");
         ItemStack[] before = copy(p.getInventory().getStorageContents()), after = copy(before);
-        int first = Math.min(InventoryTidy.firstCarriedSlot(p), before.length);
+        int first = options.includeHotbar() ? 0 : Math.min(InventoryTidy.firstCarriedSlot(p), before.length);
         Map<Material,Integer> kept = new EnumMap<>(Material.class), amounts = new EnumMap<>(Material.class);
-        for (int slot = 0; slot < first; slot++) count(kept, before[slot]);
-        for (ItemStack worn : p.getInventory().getArmorContents()) count(kept, worn);
-        count(kept, p.getInventory().getItemInOffHand());
-        if (ResidentCli.isResident(actor)) count(kept, p.getInventory().getItemInMainHand());
+        Map<Material,Integer> carried = new EnumMap<>(Material.class);
+        if (options.selected()) {
+            options.keep().keySet().forEach(type -> carried.put(type, 0));
+            for (int slot = 0; slot < before.length; slot++) {
+                ItemStack item = before[slot];
+                if (!transferable(item) || !carried.containsKey(item.getType())) continue;
+                count(carried, item);
+                if (slot < first) count(kept, item);
+            }
+        } else {
+            for (int slot = 0; slot < first; slot++) count(kept, before[slot]);
+            for (ItemStack worn : p.getInventory().getArmorContents()) count(kept, worn);
+            count(kept, p.getInventory().getItemInOffHand());
+            if (ResidentCli.isResident(actor)) count(kept, p.getInventory().getItemInMainHand());
+        }
         Map<Integer,List<Target>> pools = new LinkedHashMap<>();
         int moved = 0, freed = 0, full = 0, unavailable = 0;
         for (int slot = first; slot < before.length; slot++) {
             ItemStack item = before[slot];
-            if (!present(item) || item.hasItemMeta() || plugin.isSoulbound(item) || BackpackShortcutMigration.isShortcut(item)) continue;
+            if (!transferable(item)) continue;
             Material type = item.getType();
+            if (options.selected() && !options.keep().containsKey(type)) continue;
             if (!personal && !DungeonManager.plainGuildDonation(type)) continue;
-            int keep = Math.min(item.getAmount(), Math.max(0, reserve(type) - kept.getOrDefault(type, 0)));
+            int floor = options.selected() ? options.keep().get(type) : reserve(type);
+            int keep = Math.min(item.getAmount(), Math.max(0, floor - kept.getOrDefault(type, 0)));
             kept.merge(type, keep, Integer::sum);
             int offered = item.getAmount() - keep;
             if (offered == 0) continue;
@@ -191,7 +254,16 @@ final class InventoryBatch {
         out.addProperty("leftForCapacity",full); out.addProperty("leftForUnavailableChest",unavailable);
         out.addProperty("manaSpent",preview ? 0 : cost); out.addProperty("quotedMana",cost);
         if (request != null) out.addProperty("requestId", request);
-        JsonObject items = new JsonObject(); amounts.forEach((m,n) -> items.addProperty(m.getKey().toString(),n)); out.add("items",items);
+        out.add("items",counts(amounts));
+        if (options.selected()) {
+            Map<Material,Integer> projected = new EnumMap<>(carried);
+            amounts.forEach((type, amount) -> projected.merge(type, -amount, Integer::sum));
+            out.add("keep", counts(options.keep()));
+            out.addProperty("includeHotbar", options.includeHotbar());
+            out.add("carriedBefore", counts(carried));
+            out.add("projectedCarried", counts(projected));
+            out.add("carriedAfter", counts(preview ? carried : projected));
+        }
         p.sendMessage("§b【"+(personal?"远程存箱":"公会捐献")+(preview?"预览":"")+"】"+(preview?"可转移 ":"转移 ")+moved+
                 " 件，"+(preview?"预计释放 ":"释放 ")+freed+" 格。"+(full>0?"箱满，随身保留 "+full+" 件。":"")+
                 (unavailable>0?"共享箱暂不可用，随身保留 "+unavailable+" 件。":"")+(cost>0?(preview?"预计消耗 ":"消耗 ")+cost+" 魔力。":""));

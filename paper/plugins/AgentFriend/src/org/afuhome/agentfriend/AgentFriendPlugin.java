@@ -3552,7 +3552,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> economy=EconomyPresentation.complete(args);if(economy!=null)return economy;
-        if (args.length == 2 && args[0].equalsIgnoreCase("inventory")) return List.of("status", "refresh", "item");
+        if (args.length == 2 && args[0].equalsIgnoreCase("inventory")) return List.of("status", "refresh", "item", "tidy", "clean", "store", "donate");
+        if (args.length >= 3 && args[0].equalsIgnoreCase("inventory") && args[1].equalsIgnoreCase("store")
+                && args[args.length - 1].startsWith("--")) {
+            return List.of("--keep", "--include-hotbar", "--dry-run", "--json").stream().filter(option -> option.startsWith(args[args.length - 1])).toList();
+        }
         if (args.length == 2 && args[0].equalsIgnoreCase("dungeon")) return List.of("list", "info", "travel", "start", "join", "status", "resume", "leave", "claim", "menu");
         if (args.length == 3 && args[0].equalsIgnoreCase("dungeon")) return siteDungeons.ids();
         if (args.length == 4 && args[0].equalsIgnoreCase("dungeon") && args[1].equalsIgnoreCase("start")) return List.of("normal", "adventure", "apocalypse");

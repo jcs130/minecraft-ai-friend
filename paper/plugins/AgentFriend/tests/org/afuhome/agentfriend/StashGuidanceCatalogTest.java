@@ -36,6 +36,13 @@ public final class StashGuidanceCatalogTest {
                     : result.contains("plannedItems") && result.contains("moved=0") && result.contains("leftForCapacity"), action + " lists its item outcome fields");
             check(String.join("\n", AgentCliText.help(batch)).contains(result), action + " exposes the same receipt in plain help");
         }
+        var selectedStore = help("inventory store");
+        String usage = selectedStore.get("usage").getAsString();
+        check(usage.contains("--keep") && usage.contains("--include-hotbar"), "targeted store and opting into the hotbar are discoverable");
+        String selectedReceipt = selectedStore.get("resultQuery").getAsString();
+        check(selectedReceipt.contains("store_selected") && selectedReceipt.contains("carriedBefore")
+                && selectedReceipt.contains("projectedCarried") && selectedReceipt.contains("carriedAfter"),
+                "targeted store documents its distinct receipt and projected versus actual quantities");
         System.out.println("PASS "+checks+" stash guidance catalog assertions");
     }
 }
