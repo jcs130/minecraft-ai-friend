@@ -10,12 +10,9 @@ import de.maxhenkel.voicechat.api.audiochannel.LocationalAudioChannel;
 import de.maxhenkel.voicechat.api.events.*;
 import de.maxhenkel.voicechat.api.opus.OpusEncoder;
 import java.io.*;
-import java.net.*;
-import java.net.http.*;
 import java.nio.*;
 import java.nio.file.*;
 import java.security.MessageDigest;
-import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,10 +27,10 @@ import org.bukkit.entity.Player;
 final class NativeMaidSpeech implements AutoCloseable {
     private final HybridMaidPlugin plugin;
     private final UUID maidId,ownerId;
-    private final String backend,token,voice;
+    private final String voice;
+    private final MaidSpeechMedia media;
     private final String requiredSoundPack;
     private final ReceiptJournal receipts;
-    private final HttpClient http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).followRedirects(HttpClient.Redirect.NEVER).build();
     private final ExecutorService worker=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(2),r->new Thread(r,"maid-voice-media"),new ThreadPoolExecutor.AbortPolicy());
     private final Set<LLMMessage> seen=Collections.newSetFromMap(new IdentityHashMap<>());
     private final LinkedHashMap<String,short[]> ambientCache=new LinkedHashMap<>();
@@ -62,13 +59,8 @@ final class NativeMaidSpeech implements AutoCloseable {
         boolean holdingTurn;
         Job(EntityMaid maid,String request,String text,String kind,Map<UUID,Stamp> listeners,MaidVoiceClips.Clip original){this.maid=maid;this.request=request;this.text=text;this.kind=kind;this.listeners=Map.copyOf(listeners);this.original=original;world=maid.getBukkitEntity().getWorld().getUID();}
     }
-    static NativeMaidSpeech create(HybridMaidPlugin plugin){
-        Path path=plugin.getDataFolder().toPath().resolve("companion-speech.json");
-        if(!Files.exists(path))return null;
-        try{return new NativeMaidSpeech(plugin,JsonParser.parseString(Files.readString(path)).getAsJsonObject(),false);}
-        catch(Exception|LinkageError error){plugin.getLogger().warning("Companion speech not enabled: "+error.getClass().getSimpleName()+"; text dialogue remains available");return null;}
-    }
-    NativeMaidSpeech(HybridMaidPlugin plugin,JsonObject config,boolean registeredProfile)throws Exception{
+    NativeMaidSpeech(HybridMaidPlugin plugin,JsonObject config,boolean registeredProfile,MaidSpeechMedia media)throws Exception{
+        this.media=media;
         this.plugin=plugin;if(config.get("schema").getAsInt()!=1)throw new IllegalArgumentException("Unknown voice config");
         maidId=UUID.fromString(config.get("maidId").getAsString());ownerId=UUID.fromString(config.get("ownerId").getAsString());
         if(!registeredProfile){
@@ -80,30 +72,24 @@ final class NativeMaidSpeech implements AutoCloseable {
         gainDb=config.has("voiceGainDb")?config.get("voiceGainDb").getAsDouble():6;
         volume=new MaidSpeechVolume(gainDb);
         originalClips=config.has("ambientPack")?new MaidVoiceClips(config.getAsJsonObject("ambientPack")):null;
-        URI uri=URI.create(config.get("backend").getAsString());
-        if(!"http".equals(uri.getScheme())||!"127.0.0.1".equals(uri.getHost())||uri.getPort()<1||uri.getUserInfo()!=null||uri.getQuery()!=null||uri.getFragment()!=null||!Set.of("","/").contains(uri.getPath()))throw new IllegalArgumentException("Exact loopback media origin required");
-        backend="http://127.0.0.1:"+uri.getPort();token=Files.readString(Path.of(config.get("tokenFile").getAsString())).strip();
-        if(token.length()<32||token.length()>128)throw new IllegalArgumentException("Private media token required");
         receipts=new ReceiptJournal(plugin.getDataFolder().toPath().resolve("speech-receipts"));
-        BukkitVoicechatService service=Bukkit.getServicesManager().load(BukkitVoicechatService.class);
-        if(service==null)throw new IllegalStateException("Existing voicechat service required");
         soundHook=requiredSoundPack!=null?()->{}:local.qdj.maids.brain.MaidSpeechControl.bind(maidId,ownerId,this::ambient);
-        service.registerPlugin(new VoicechatPlugin(){
-            public String getPluginId(){return "qiandengji_maid_voice_"+maidId.toString().replace("-","");}
-            public void registerEvents(EventRegistration events){
-                events.registerEvent(VoicechatServerStartedEvent.class,event->api=event.getVoicechat());
-                events.registerEvent(VoicechatServerStoppedEvent.class,event->{api=null;main(()->cancel("voice_service_stopped"));});
-                events.registerEvent(LocationalSoundPacketEvent.class,event->{Job job=active;if(job!=null&&!event.isCancelled()&&Objects.equals(job.channel,event.getPacket().getChannelId())&&event.getPacket().getOpusEncodedData().length>0&&event.getReceiverConnection()!=null&&event.getReceiverConnection().isConnected()&&!event.getReceiverConnection().isDisabled())job.offers.incrementAndGet();},1000);
-            }
-        });
-        Bukkit.getScheduler().runTaskTimer(plugin,this::tick,5,5);
     }
+    void voiceService(VoicechatServerApi current){api=current;if(current==null)main(()->cancel("voice_service_stopped"));}
+    void offered(LocationalSoundPacketEvent event){
+        Job job=active;
+        if(job!=null&&!event.isCancelled()&&Objects.equals(job.channel,event.getPacket().getChannelId())&&event.getPacket().getOpusEncodedData().length>0&&event.getReceiverConnection()!=null&&event.getReceiverConnection().isConnected()&&!event.getReceiverConnection().isDisabled())job.offers.incrementAndGet();
+    }
+    boolean forSelection(EntityMaid maid){
+        return ownerId.equals(maid.getOwnerUUID()) && Objects.equals(requiredSoundPack,maid.getSoundPackId())
+            && plugin.personal!=null && voice.equals(plugin.personal.selectedVoice(maid));
+    }
+    boolean idle(){return active==null&&waiting.peek()==null;}
     private void main(Runnable action){if(!closed&&plugin.isEnabled())Bukkit.getScheduler().runTask(plugin,()->{if(!closed)action.run();});}
-    private boolean valid(EntityMaid maid){return !closed&&maid.isAlive()&&!maid.isRemoved()&&maidId.equals(maid.getUUID())&&ownerId.equals(maid.getOwnerUUID())&&(requiredSoundPack!=null?plugin.personalDialogue(maid)&&requiredSoundPack.equals(maid.getSoundPackId()):plugin.sharedDialogueEnabled(maid)||plugin.unifiedBody(maidId))&&!maid.isSilent();}
+    private boolean valid(EntityMaid maid){return !closed&&maid.isAlive()&&!maid.isRemoved()&&maidId.equals(maid.getUUID())&&ownerId.equals(maid.getOwnerUUID())&&(requiredSoundPack!=null?plugin.personalDialogue(maid)&&forSelection(maid):plugin.sharedDialogueEnabled(maid)||plugin.unifiedBody(maidId))&&!maid.isSilent();}
     JsonObject describe(EntityMaid maid){
         JsonObject out=new JsonObject();out.addProperty("enabled",valid(maid));
         if(!maidId.equals(maid.getUUID())||!ownerId.equals(maid.getOwnerUUID())){out.addProperty("reason","shared_voice_not_enabled_for_this_maid");return out;}
-        if(requiredSoundPack!=null&&!requiredSoundPack.equals(maid.getSoundPackId()))out.addProperty("reason","selected_pack_has_no_matching_voice");
         out.addProperty("voice",voice);out.addProperty("transport","simple_voice_chat_position");
         out.addProperty("voiceGainDb",gainDb);
         out.addProperty("partnerRangeBlocks",MaidConversationRange.PARTNER);out.addProperty("visitorRangeBlocks",MaidConversationRange.VISITOR);
@@ -133,7 +119,11 @@ final class NativeMaidSpeech implements AutoCloseable {
         String text=MaidShortReply.text(raw);if(text.isEmpty())return;
         if(!MaidCombatSpeech.lowPriority(kind))nextAmbient=System.nanoTime()+MaidAmbientPolicy.GLOBAL_GAP;
         if(!MaidCombatSpeech.lowPriority(kind))plugin.conversationSpoken();
-        if(!maid.getAiChatManager().getTTSModel().isBlank()){lastState="unavailable";lastReason="native_tts_already_configured";return;}
+        // Nearby personal replies have a text-only TLM callback. Only the native GUI calls its TTS site.
+        var settings=maid.getAiChatManager();
+        boolean packSite=requiredSoundPack!=null && PersonalMaidDialogue.SITE.equals(settings.ttsSite);
+        if(requiredSoundPack!=null && com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.MaidAIChatSerializable.isNoTTSSite(settings.ttsSite)){lastState="skipped";lastReason="muted";return;}
+        if(!settings.getTTSModel().isBlank() && !packSite){lastState="unavailable";lastReason="native_tts_already_configured";return;}
         Map<UUID,Stamp> listeners=listeners(maid,allowed);
         // Quiet/unattended areas must not create thousands of ambient receipt files.
         if(MaidCombatSpeech.lowPriority(kind)&&listeners.isEmpty())return;
@@ -169,10 +159,8 @@ final class NativeMaidSpeech implements AutoCloseable {
         }catch(Exception error){finish(job,"failed","speech_preparation_unavailable_no_replay");}
     }
     private short[] synthesize(Job job)throws Exception{
-        JsonObject data=new JsonObject();data.addProperty("actor",maidId.toString());data.addProperty("requestId",UUID.nameUUIDFromBytes(job.request.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString());data.addProperty("voice",voice);data.addProperty("text",job.text);
-        var req=HttpRequest.newBuilder(URI.create(backend+"/v1/tts")).timeout(Duration.ofSeconds(100)).header("Authorization","Bearer "+token).header("Content-Type","application/json").POST(HttpRequest.BodyPublishers.ofString(data.toString())).build();
-        var response=http.send(req,HttpResponse.BodyHandlers.ofInputStream());
-        byte[] bytes;try(var input=response.body()){if(response.statusCode()!=200)throw new IOException("Media preparation refused");bytes=input.readNBytes(2_900_001);if(bytes.length>2_900_000)throw new IOException("Audio too large");}
+        UUID id=UUID.nameUUIDFromBytes(job.request.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        byte[] bytes=media.wav(maidId,id,voice,job.text);
         try(var audio=AudioSystem.getAudioInputStream(new ByteArrayInputStream(bytes))){
             AudioFormat f=audio.getFormat();if(f.getSampleRate()!=48000||f.getChannels()!=1||f.getSampleSizeInBits()!=16||f.isBigEndian()||!f.getEncoding().equals(AudioFormat.Encoding.PCM_SIGNED))throw new IOException("Normalized PCM required");
             byte[] pcm=audio.readNBytes(2_880_001);if(pcm.length==0||pcm.length>2_880_000||pcm.length%2!=0)throw new IOException("Invalid audio duration");short[] result=new short[pcm.length/2];ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(result);return result;
@@ -281,7 +269,7 @@ final class NativeMaidSpeech implements AutoCloseable {
         plugin.publishSceneSpeech(maid,operation,text,delivered);
         submit(maid,operation,text,"ambient",null,original);
     }
-    private void tick(){
+    void tick(){
         EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(maidId));
         if(maid==null||!valid(maid)){cancelWaiting("companion_unavailable");cancel("companion_unavailable");return;}
         if(active!=null){refresh(active);if(active.audible.isEmpty())cancel("audience_left");else if(active.prepared!=null)play(active,active.prepared);}
@@ -298,5 +286,5 @@ final class NativeMaidSpeech implements AutoCloseable {
         }catch(Exception error){lastState="unavailable";lastReason="invalid_native_reply";}
     }
     private void cancelWaiting(String reason){var next=waiting.take();if(next!=null)finish(next.item(),"cancelled",reason);}
-    @Override public void close(){closed=true;cancelWaiting("service_stopped");cancel("service_stopped");try{soundHook.close();}catch(Exception ignored){}worker.shutdownNow();http.shutdownNow();ambientCache.clear();seen.clear();}
+    @Override public void close(){closed=true;cancelWaiting("service_stopped");cancel("service_stopped");try{soundHook.close();}catch(Exception ignored){}worker.shutdownNow();ambientCache.clear();seen.clear();}
 }

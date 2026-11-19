@@ -87,6 +87,14 @@ public final class NativeMaidBrainSupport implements Listener,AutoCloseable {
             }
         }.chat(callback);
     }
+    void applyPersonalDefaults(EntityMaid maid){
+        var site=personalSite();
+        var manager=maid.getAiChatManager();
+        if(site!=null&&manager.llmSite.isBlank()&&manager.llmModel.isBlank()){
+            manager.llmSite=site.id();
+            manager.llmModel=binding.getAsJsonObject("choices").getAsJsonObject("native").get("model").getAsString();
+        }
+    }
     LLMClient client(LLMOpenAISite site){return new ScopedClient(site);}
     private final class ScopedClient extends LLMOpenAIClient {
         final LLMOpenAISite site;
@@ -95,6 +103,14 @@ public final class NativeMaidBrainSupport implements Listener,AutoCloseable {
             // Refresh body facts on the game thread also for native UI/tool continuations.
             if(!Bukkit.isPrimaryThread()){if(plugin.isEnabled()&&!closed)Bukkit.getScheduler().runTask(plugin,()->chat(callback));return;}
             EntityMaid maid=callback.getMaid();
+            if(plugin.personal!=null&&plugin.personal.allOwned()&&plugin.personalDialogue(maid)
+                &&site==personalSite()&&site.id().equals(maid.getAiChatManager().llmSite)
+                &&maid.getOwner() instanceof net.minecraft.server.level.ServerPlayer){
+                // Native SendUserChatPackage verifies the sending owner; the other
+                // registered harness sites remain scoped to their original body.
+                chatPersonal(callback);
+                return;
+            }
             if(plugin.nativeExclusive(maid.getUUID())||!allowed(maid)||!maid.getAiChatManager().getLLMSite().id().equals(site.id())){
                 callback.onFailure(null,new IllegalStateException("SHARED_MAID_MODEL_NOT_ENABLED: only the original configured companion may use this site; query brain choices."),403);plugin.nativeModelFailed(callback,plugin.startingNativeOperation(),"SHARED_MAID_MODEL_NOT_ENABLED");return;
             }
@@ -135,7 +151,8 @@ public final class NativeMaidBrainSupport implements Listener,AutoCloseable {
     void carry(LLMCallback before,LLMCallback after){Selection selection=selections.get(before);if(selection!=null)selections.put(after,selection);}
     public JsonObject describe(EntityMaid maid){
         JsonObject result=new JsonObject();result.addProperty("maidId",maid.getUUID().toString());result.addProperty("conversationOwner","original_tlm");
-        result.addProperty("sharedModelEnabled",allowed(maid));result.addProperty("physicalController","original_maid_ai");
+        boolean ownDialogue=plugin.personalDialogue(maid)&&personalSite()!=null;
+        result.addProperty("sharedModelEnabled",allowed(maid)||ownDialogue);result.addProperty("physicalController","original_maid_ai");
         result.addProperty("nextCommand","/qdmaid brain "+maid.getUUID());
         JsonArray choices=new JsonArray();String selected="external_or_unconfigured";
         if(isScoped(maid)&&ownerId.equals(maid.getOwnerUUID()))for(var entry:binding.getAsJsonObject("choices").entrySet()){
@@ -146,7 +163,8 @@ public final class NativeMaidBrainSupport implements Listener,AutoCloseable {
         }
         result.addProperty("selected",selected);result.add("choices",choices);
         result.addProperty("meaning","运行方式与模型分别显示；配置可选不等于本轮调用成功。动作由原生女仆执行，以真实位置/工作/装备验收。");
-        if(!isScoped(maid))result.addProperty("reason","共享智能服务暂仅对服主指定的原女仆启用；普通原生工作仍可使用。");
+        if(ownDialogue){result.addProperty("dialogueModel",binding.getAsJsonObject("choices").getAsJsonObject("native").get("model").getAsString());result.addProperty("dialogueAudience","owner");}
+        else if(!isScoped(maid))result.addProperty("reason","当前女仆沿用原生交互或已配置的托管身份。");
         return result;
     }
     public void validate(EntityMaid maid,String choice){
