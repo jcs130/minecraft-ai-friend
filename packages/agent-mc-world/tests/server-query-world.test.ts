@@ -6,6 +6,8 @@ import { MINECRAFT_DEFAULTS } from '../core/config.ts';
 import type { ServerQueryDefinition } from '../core/server-query.ts';
 import type { ToolCallContext, ToolOutcome } from '../core/support/host-contract.ts';
 import { methodHarness } from './method-harness.ts';
+import { installOrphanWindowClose, serverWindows } from '../core/orphan-windows.ts';
+import { installServerScreens, serverScreen } from '../core/server-screens.ts';
 import {readWorkerEventView,readSupervisorEventView} from '../src/context.ts';
 
 const accessDenied = 'MC_LAND_ACCESS {"status":"deny","allowed":false,"reason":"land_permission_denied","action":"place","dimension":"minecraft:overworld","x":4,"y":64,"z":0}';
@@ -26,10 +28,11 @@ class QueryWorld extends MinecraftWorld {
 }
 const rigs: ReturnType<typeof methodHarness>[]=[];
 afterEach(()=>{rigs.splice(0).forEach(r=>{(r.world as QueryWorld).clearQueries();r.close();});vi.useRealTimers();});
-function rig() {
+function rig(withBodyEvents = false) {
   const r=methodHarness('1.21.1',()=>new QueryWorld({cfg:structuredClone(MINECRAFT_DEFAULTS)}));rigs.push(r);
   Object.assign(r.bot,{username:'Fixture',supportFeature:(name:string)=>r.bot.registry.supportFeature(name),swingArm(){}});
-  (r.world as any).hookedBots.add(r.bot);(r.world as any).hookMessageEvents(r.bot);
+  if (withBodyEvents) (r.world as any).hookBotEvents(r.bot);
+  else { (r.world as any).hookedBots.add(r.bot); (r.world as any).hookMessageEvents(r.bot); }
   return r;
 }
 async function call(r:ReturnType<typeof rig>,args:Record<string,unknown>) {
@@ -40,6 +43,46 @@ async function until(test:()=>boolean) {
   while(!test()){if(Date.now()>end)throw new Error('fixture timed out');await new Promise(r=>setTimeout(r,10));}
 }
 describe('independent server query through the public World tool',()=>{
+  const refusal = '打开界面时无法执行指令';
+  it.each(['container', 'pending window', 'dialog', 'book'] as const)('keeps the active %s when the server refuses a parallel query',async kind=>{
+    const r = rig(true);
+    const closeWindow = vi.fn();
+    Object.assign(r.bot, { closeWindow });
+    const write = vi.spyOn(r.bot._client, 'write');
+    const detachWindows = installOrphanWindowClose(r.bot);
+    const detachScreens = installServerScreens(r.bot);
+    try {
+      // The menu may become visible *after* the query was sent.
+      const pending = call(r, {query:'self'});
+      expect(r.said).toContain('/fixture state');
+      if (kind === 'container') Object.assign(r.bot, {currentWindow:{id:7}});
+      if (kind === 'pending window') r.bot._client.emit('open_window', {windowId:7, inventoryType:0});
+      if (kind === 'dialog') r.bot._client.emit('show_dialog', {dialog:{title:'Exchange'}});
+      if (kind === 'book') r.bot._client.emit('open_book', {});
+      r.bot.emit('messagestr', refusal, 'system', {text:refusal});
+      expect(closeWindow).not.toHaveBeenCalled();
+      expect(write).not.toHaveBeenCalledWith('close_window', expect.anything());
+      if (kind === 'container' || kind === 'pending window') expect(serverWindows(r.bot)?.current()?.id).toBe(7);
+      else expect(serverScreen(r.bot)?.kind).toBe(kind);
+      // A generic refusal carries no query identity and must not settle this read.
+      expect((await pending).data).toMatchObject({phase:'sent', outcomeUnknown:true});
+    } finally { detachScreens(); detachWindows(); }
+  });
+
+  it('sends one Escape for a server-confirmed untracked window, and ignores player text',()=>{
+    const r = rig(true);
+    const write = vi.spyOn(r.bot._client, 'write');
+    const detach = installOrphanWindowClose(r.bot);
+    try {
+      r.bot.emit('messagestr', refusal, 'chat', {text:refusal}, 'player-uuid');
+      r.bot.emit('messagestr', '<Fixture> '+refusal, 'system', {text:refusal});
+      expect(write).not.toHaveBeenCalled();
+      r.bot.emit('messagestr', refusal, 'system', {text:refusal});
+      r.bot.emit('messagestr', refusal, 'system', {text:refusal});
+      expect(write.mock.calls).toEqual([['close_window', {windowId:0}]]);
+      expect(r.said).toEqual([]);
+    } finally { detach(); }
+  });
   it('returns a fast native reply in the original invocation while real navigation keeps progressing',async()=>{
     const r=rig();pathfinderPkg.pathfinder(r.bot as unknown as Bot);
     const run=r.runner.start({name:'fast-query-while-walking',code:'await bot.pathfinder.goto(new goals.GoalBlock(30,64,0));'});

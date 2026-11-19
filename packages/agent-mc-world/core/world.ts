@@ -1,6 +1,6 @@
 import { installMovementPace, MOVEMENT_PACE_DEFAULTS, resolveMovementPace } from './movement-pace.ts';
 import { installMiningLimiter, MINING_LIMIT_DEFAULTS, resolveMiningLimits } from './mining-limiter.ts';
-import { onServerScreen, renderScreen, serverScreen, closeLocalScreen } from './server-screens.ts';
+import { onServerScreen, renderScreen, serverScreen } from './server-screens.ts';
 import { compactWorkExecutionEvidence } from '../src/contracts/continuation-evidence.ts';
 import { nativeBodyBlockedReason, nativeBodyReadiness } from './body-readiness.ts';
 import { methodLearningCall } from '../src/learning/method-capability.ts';
@@ -8096,19 +8096,27 @@ export class MinecraftWorld implements World {
       bot.once('end', () => { bot._client.off('scoreboard_display_objective', onSidebar); if (sidebarTimer) clearTimeout(sidebarTimer); });
     }
     {
-      // Server refuses commands while it thinks a menu is open that this client never modeled
-      // (the ghost screen). Do what a player does: press Escape once, then tell the agent.
-      let lastEsc = 0;
+      // The server does not identify the refused command. An independent read
+      // may overlap a real interaction, or its reply may arrive after a new menu opens.
+      let lastEsc = -Infinity;
+      let lastKnownNotice = -Infinity;
       const onRefusal = (message: string, position: string, component: unknown, sender?: string) => {
+        if (this.bridge?.bot !== bot) return;
         if (!isServerNotice(component, position, sender) || /^\s*</.test(String(message))) return;
         if (!/打开界面时无法执行指令/.test(String(message))) return;
         const now = Date.now();
+        const windows = serverWindows(bot);
+        if (serverScreen(bot) || (bot.currentWindow && bot.currentWindow.id !== 0) || windows?.current()) {
+          if (now - lastKnownNotice < 8_000) return;
+          lastKnownNotice = now;
+          this.emit('minecraft.event', '[Minecraft] 服务端因界面打开拒绝了指令。当前界面已保留；用 mc_window 查看，待当前交互结束后再决定是否重试。', true);
+          return;
+        }
+        if (!windows) return;
         if (now - lastEsc < 8_000) return;
         lastEsc = now;
-        const screen = serverScreen(bot);
-        if (screen?.kind === 'dialog' && screen.canCloseWithEscape !== false) closeLocalScreen(bot, ['dialog']);
-        const id = serverWindows(bot)?.escape();
-        this.emit('minecraft.event', `[Minecraft] 服务端说有界面开着、拒绝了指令；已像玩家按 Esc 一样发送关闭${id !== undefined ? `（窗口 #${id}）` : ''}。稍等一下再重发那条指令；若仍被拒，先 mc_window 读当前界面。`, true);
+        const id = windows.escape();
+        this.emit('minecraft.event', `[Minecraft] 服务端因界面打开拒绝了指令，本地没有对应界面；已发送关闭窗口 #${id} 的请求。用 mc_window 检查后再决定是否重试。`, true);
       };
       bot.on('messagestr', onRefusal);
       bot.once('end', () => bot.off('messagestr', onRefusal));
