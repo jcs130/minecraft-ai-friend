@@ -272,7 +272,7 @@ final class NpcSocial {
                     && reply.codePoints().noneMatch(cp -> Character.isISOControl(cp) || cp == 0xA7);
             var body = residents.live(profile.id());
             if (valid && (privateDialogue && !source.automatic() || residents.hears(source.player(), body, profile))) {
-                String line=(privateDialogue && !source.automatic() ? "[私聊] " : "[居民] ")
+                String line=(privateDialogue ? "[私聊] " : "[附近] ")
                     +(source.automatic()?profile.display():profile.name())+"："+reply;
                 source.player().sendMessage(line);
                 Map<UUID,Player> heard=new HashMap<>();

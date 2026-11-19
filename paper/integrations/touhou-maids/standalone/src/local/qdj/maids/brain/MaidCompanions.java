@@ -725,6 +725,9 @@ final class MaidCompanions {
                 heard.put("maidId", partner.getUUID().toString()); heard.put("speakerId", id.toString());
                 journal.append(partner.getUUID(), conversationId, "result", heard);
             }
+            var line=Component.literal(switch(turn.channel()) {
+                case "private" -> "[私聊] "; case "public" -> "[公屏] "; default -> "[附近] ";
+            }+maid.getName().getString()+"："+decision.reply());
             if (!turn.channel().equals("private")) {
                 boolean speaking=false;
                 try {
@@ -741,11 +744,11 @@ final class MaidCompanions {
                 for(var listener:server.getPlayerList().getPlayers()) {
                     if(listener==speaker)continue;
                     if(turn.channel().equals("public")||listener.level()==maid.level()&&listener.distanceToSqr(maid)<=24*24)
-                        listener.sendSystemMessage(Component.literal("[居民] "+maid.getName().getString()+"："+decision.reply()));
+                        listener.sendSystemMessage(line);
                 }
             }
             if (speaker instanceof ServerPlayer player) {
-                player.sendSystemMessage(Component.literal((turn.channel().equals("private")?"[私聊] ":"")+maid.getName().getString() + "：" + decision.reply()));
+                player.sendSystemMessage(line);
                 if (result.get("receipt") instanceof Map<?,?> receipt && !List.of("ok", "accepted").contains(receipt.get("status")))
                     player.sendSystemMessage(Component.literal("本次动作未执行：" + receipt.get("reason")));
             }

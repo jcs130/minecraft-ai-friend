@@ -299,8 +299,9 @@ final class DungeonManager implements Listener {
     }
 
     boolean isBuilt() { return built; }
-    boolean isParticipant(Player player) { return active && participants.contains(player.getUniqueId()); }
-    String reinforcementProblem(Player actor, Player target, Location landing) {
+    boolean isParticipant(Player player) { return isParticipant((Entity)player); }
+    private boolean isParticipant(Entity player) { return active && participants.contains(player.getUniqueId()); }
+    String reinforcementProblem(Player actor, LivingEntity target, Location landing) {
         boolean same = isParticipant(target);
         if (isParticipant(actor) && !same) return "[team_leave_trial] 你仍在另一场试炼；先 /mycli arena leave 正常离场，再支援。";
         if (inLobby(landing)) return isParticipant(actor) ? "[team_leave_trial] 你仍在试炼中；先 /mycli arena leave 正常离场，再到入口集合。" : "";
@@ -315,7 +316,7 @@ final class DungeonManager implements Listener {
             return "[equipment_required] 增援需补齐："+String.join("、",DungeonLoadout.missing(actor))+"；/mycli shop menu 购买或 /mycli stash 打开个人箱。";
         return "";
     }
-    boolean enrollReinforcement(Player actor, Player target) {
+    boolean enrollReinforcement(Player actor, LivingEntity target) {
         if (inLobby(actor.getLocation()) || !isParticipant(target)) return !isParticipant(actor);
         if (!reinforcementProblem(actor,target,actor.getLocation()).isEmpty()) return false;
         if (isParticipant(actor)) return true;

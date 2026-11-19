@@ -127,9 +127,12 @@ final class MaidResidents {
         row.put("homeDoor",r.home().door());row.put("homeDimension",r.home().dimension());
         return row;
     }
+    boolean mapVisible(UUID id, EntityMaid maid) {
+        return maid!=null && maid.isAlive() && !maid.isInvisible() && settings.flag(id,"mapVisible");
+    }
     Map<String,Object> mapPositions() {
         var out=new ArrayList<Map<String,Object>>();
-        for(var id:ids()) {var maid=body(id);if(maid==null||!maid.isAlive()||maid.isInvisible()||!settings.flag(id,"mapVisible"))continue;
+        for(var id:ids()) {var maid=body(id);if(!mapVisible(id,maid))continue;
             out.add(Map.of("uuid",id.toString(),"name",maid.getName().getString(),"kind","npc","profession",role(id).profession(),
                 "dimension",maid.level().dimension().location().toString(),"x",maid.getX(),"y",maid.getY(),"z",maid.getZ(),"yaw",maid.getYRot(),"pitch",maid.getXRot()));}
         return Map.of("schemaVersion",1,"observedAt",java.time.Instant.now().toString(),"npcs",out);
@@ -349,7 +352,7 @@ final class MaidResidents {
                 case "say"->{String text=job.input().get("text").getAsString();String channel=job.input().has("channel")?job.input().get("channel").getAsString():"nearby";
                     if(!ResidentConfig.text(text,140)||!List.of("nearby","public").contains(channel))throw new IllegalArgumentException("invalid_speech");
                     if(now-lastPublic.getOrDefault(r.maidId(),0L)<60_000)throw new IllegalArgumentException("speech_cooldown");
-                    var line=Component.literal("[居民] "+r.name()+"："+text);
+                    var line=Component.literal((channel.equals("public")?"[公屏] ":"[附近] ")+r.name()+"："+text);
                     for(var p:server.getPlayerList().getPlayers())if(channel.equals("public")||p.level()==maid.level()&&p.distanceToSqr(maid)<=24*24)p.sendSystemMessage(line);
                     maid.getChatBubbleManager().addTextChatBubble(text);lastPublic.put(r.maidId(),now);yield Map.of("status","completed","completed",true,"reason","speech_sent","channel",channel);}
                 default->throw new IllegalArgumentException("unsupported_action");

@@ -300,6 +300,14 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     }
     private static boolean validVoice(String voice){return voice!=null&&voice.matches("[A-Za-z0-9_.-]{1,96}");}
     /** Server-only bridge: exact registered body and owner, never a client-selected voice identity. */
+    /** Publicly named companion bodies. Identity and original ownership are verified at lookup. */
+    public Map<UUID,String> publicCompanionNames(){
+        var result=new LinkedHashMap<UUID,String>();
+        if(npcs!=null)for(var profile:npcs.profiles())if(profile.kind().equals("maid")
+                && npcs.live(profile.id()) instanceof org.bukkit.entity.LivingEntity body && !body.isInvisible())
+            result.put(profile.id(),profile.display());
+        return Map.copyOf(result);
+    }
     public String npcVoiceProfiles(){return npcs==null?"[]":npcs.catalogue().toString();}
     boolean naturalNpcDialogue(NpcDialoguePolicy.Profile profile,Player speaker,String text,String scope,Set<UUID> recipients){
         return social!=null&&social.natural(profile,speaker,text,scope,recipients);

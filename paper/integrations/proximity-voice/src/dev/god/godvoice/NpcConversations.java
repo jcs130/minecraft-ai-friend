@@ -110,7 +110,11 @@ final class NpcConversations implements Listener {
         if(source==null||source.isDead()||source.isInvisible()||source.getGameMode()==GameMode.SPECTATOR||!source.getWorld().getUID().equals(world))return true;
         if(System.currentTimeMillis()-occurredAt>120_000||occurredAt>System.currentTimeMillis())return true;
         if (groupChat(source, text, audience, utterance, "voice", occurredAt)) return true;
-        var address=address(source,text,NpcDialoguePolicy.fresh(occurredAt,System.currentTimeMillis()));
+        var named=NpcDialoguePolicy.addressed(profiles.values(),text,true);
+        var address=named!=null?named:address(source,text,NpcDialoguePolicy.fresh(occurredAt,System.currentTimeMillis()));
+        if(named!=null && named.profile().kind().equals("numen") && NpcDialoguePolicy.asksForAction(named.text())
+                && audience.contains(named.profile().id()) && hears(source,live(named.profile().id()),named.profile())
+                && deliver(source,named.profile().id(),"voice_direct_"+utterance+"_"+named.profile().id(),text,"voice",occurredAt)) return true;
         if(address!=null&&audience.contains(address.profile().id())&&
             natural(source,address,"nearby",audience,"voice_"+utterance))return true;
         for(UUID target:audience)deliver(source,target,"voice_"+utterance,text,"voice",occurredAt);

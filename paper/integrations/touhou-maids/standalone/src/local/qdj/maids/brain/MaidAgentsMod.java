@@ -19,6 +19,15 @@ public final class MaidAgentsMod {
         if(current!=null&&current.residents()!=null)for(var id:current.residents().ids())out.put(id,current.residents().settings.name(id));
         return java.util.Map.copyOf(out);
     }
+    public static java.util.Map<java.util.UUID,String> visibleResidentIdentities(){
+        var current=residents();
+        var visible=new java.util.LinkedHashMap<java.util.UUID,String>();
+        if(current!=null) for(var id:current.ids()){
+            var body=current.body(id);
+            if(current.mapVisible(id,body))visible.put(id,current.settings.name(id));
+        }
+        return java.util.Map.copyOf(visible);
+    }
     static MaidResidents residents(){return running==null?null:running.residents();}
     public static boolean hasExpeditionLeader(java.util.UUID id) {
         var residents = residents();

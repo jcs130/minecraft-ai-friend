@@ -16,7 +16,7 @@ from uuid import uuid4
 
 from .._reuse import numen_controller
 from ..models import NativeAction
-from .native_tasks import NativeTasks, background_task, finished_tasks
+from .native_tasks import NativeTasks, background_task, finished_task_details
 from .numen import PortResult, RawEvent, command_lua, _field
 
 
@@ -31,6 +31,7 @@ class HostedMcpPort:
             raise ValueError("hosted_mcp_must_be_reviewed_loopback")
         self.body = config["bodyId"]
         self.boot, self.epoch = str(uuid4()), 1
+        self.task_connection = self.boot
         self.session = session
         self.stack = None
         self.connection_task = None
@@ -39,6 +40,8 @@ class HostedMcpPort:
         self.heartbeat = None
         self.tools = []
         self.seen = set()
+        self.task_floor = None
+        self.finished_ids = set()
         self.lost = False
         self.ledger = NativeTasks(Path(config["journalDirectory"]) / "hosted-tasks.sqlite3", self.body)
 
@@ -73,6 +76,7 @@ class HostedMcpPort:
         attached = await self.rpc("attach")
         if attached.get("fenced") is not True or attached.get("mode") != "paused":
             raise RuntimeError("original_body_not_paused")
+        await self._start_task_window()
         self.epoch += 1
         started = await self.rpc("transition", mode="harness")
         if started.get("fenced") is not True or started.get("mode") != "harness" or started.get("epoch") != self.epoch:
@@ -111,7 +115,7 @@ class HostedMcpPort:
 
     def recorded(self, request_id):
         """A call is committed locally before any RPC can leave this process."""
-        return self.ledger.get(request_id, self.boot) is not None
+        return self.ledger.get(request_id, self.task_connection) is not None
 
     def mapped(self, value, request, tool=None):
         if value.get("id") != request:
@@ -148,12 +152,12 @@ class HostedMcpPort:
 
     async def call(self, tool, args, request_id):
         signature = hashlib.sha256(json.dumps([tool,args], sort_keys=True).encode()).hexdigest()
-        old = self.ledger.get(request_id, self.boot)
+        old = self.ledger.get(request_id, self.task_connection)
         if old:
             if old["data"]["fingerprint"] != signature:
                 return PortResult("rejected","request_id_conflict; query the original request")
             return PortResult(**old)
-        self.ledger.begin(request_id, signature, self.boot)
+        self.ledger.begin(request_id, signature, self.task_connection)
         try:
             value = await self.rpc("call", id=request_id, tool=tool, args=args)
             result = self.mapped(value, request_id, tool)
@@ -163,10 +167,16 @@ class HostedMcpPort:
             return PortResult("unknown", "Original hosted action outcome unknown; query its request ID.")
 
     async def result(self, request_id):
-        saved = self.ledger.get(request_id, self.boot)
+        saved = self.ledger.get(request_id, self.task_connection)
         if saved and saved["status"] not in ("accepted", "unknown"): return PortResult(**saved)
         value = await self.rpc("result", id=request_id)
         result = self.mapped(value, request_id)
+        if (saved and result.status == "accepted" and saved["status"] == "unknown"
+                and saved["data"]["connection"] == self.task_connection):
+            # The call may have returned after the client timed out. Bind its native
+            # task to the original request, without submitting the action again.
+            self.ledger.save(request_id, result.status, result.text, result.execution_id)
+            return result
         if result.status not in ("accepted", "unknown"):
             self.ledger.save(request_id, result.status, result.text, result.execution_id)
             return result
@@ -182,12 +192,57 @@ class HostedMcpPort:
         text = "NUMEN_SELF " + json.dumps(parsed) + "\n" + "\n".join("NUMEN_ENTITY " + json.dumps(e) for e in entities)
         return PortResult("completed", text, {"facts":facts,"battlefield":battle})
 
-    async def events(self):
-        observed = await self.rpc("observe")
+    @staticmethod
+    def _inbox(observed):
         text = observed.get("text", "")
         match = re.search(r'Native inbox snapshot[^\n]*?: (\[.*\])\s*$', text, re.S)
-        if not match: return []
-        rows = json.loads(match[1])
+        return json.loads(match[1]) if match else []
+
+    async def _start_task_window(self):
+        # Task numbers restart at t1. Old inbox entries must never settle a new
+        # action, even if a number and native tool name both happen to match.
+        self.task_floor = None
+        self.finished_ids.clear()
+        try:
+            snapshot = await self.rpc("observe")
+        except Exception:
+            # A missing observation cannot establish which lease created a task.
+            # Keep its outcome unknown; the control fence can still operate.
+            return
+        self.task_floor = snapshot.get("sampledAt")
+        self.finished_ids = {row["id"] for row in self._inbox(snapshot) if row.get("type") == "task_finished"}
+
+    def _record_finishes(self, rows):
+        for row in rows:
+            if (row.get("type") != "task_finished" or row.get("id") in self.finished_ids
+                    or not isinstance(self.task_floor, int) or not isinstance(row.get("at"), int)
+                    or row["at"] <= self.task_floor):
+                continue
+            for task, tool, status, detail in finished_task_details("<events>" + row["text"] + "</events>"):
+                if tool and self.ledger.finish(self.task_connection, task, status, detail, tool=tool):
+                    self.finished_ids.add(row["id"])
+        # Keep applied IDs while the same events are still in the server inbox.
+        self.finished_ids.intersection_update(row["id"] for row in rows)
+
+    async def _drain_stopped(self):
+        # A confirmed pause stops a running walk/fight and publishes task_finished.
+        # The original session is still available here, including after a server-side Stop.
+        pending = self.ledger.pending(self.task_connection)
+        if not pending:
+            return
+        async with asyncio.timeout(4):
+            for request in pending:
+                await self.result(request)
+            for delay in (0, .1, .25, .5):
+                if delay: await asyncio.sleep(delay)
+                self._record_finishes(self._inbox(await self.rpc("observe")))
+                if not self.ledger.pending(self.task_connection):
+                    break
+
+    async def events(self):
+        rows = self._inbox(await self.rpc("observe"))
+        # Reconsider an event that raced the Lua reply on the next read.
+        self._record_finishes(rows)
         result = []
         for row in reversed(rows):
             key = str(row["id"])
@@ -211,9 +266,6 @@ class HostedMcpPort:
                 except (ValueError, TypeError, AttributeError):
                     pass
                 continue
-            if kind == "task_finished":
-                for task, status, detail in finished_tasks("<events>" + words + "</events>"):
-                    self.ledger.finish(self.boot, task, status, detail)
             hint = "chat" if kind in ("talk","query","web_spectator_message") else "system_message"
             result.append(RawEvent(key, words, hint, {"eventId":key,"nativeKind":kind,"occurredAt":row.get("at")}))
         if len(self.seen) > 4096: self.seen = {str(r["id"]) for r in rows}
@@ -227,9 +279,16 @@ class HostedMcpPort:
         # Lua program behind the task it is meant to stop.
         self.epoch += 1
         value = await self.rpc("transition", mode="paused")
-        if value.get("fenced") is not True: return PortResult("unknown","halt not confirmed")
+        if value.get("fenced") is not True or value.get("mode") != "paused" or value.get("epoch") != self.epoch:
+            return PortResult("unknown","halt not confirmed")
+        with contextlib.suppress(Exception):
+            await self._drain_stopped()
+        await self._start_task_window()
+        self.task_connection = str(uuid4())
         self.epoch += 1
-        await self.rpc("transition", mode="harness")
+        resumed = await self.rpc("transition", mode="harness")
+        if resumed.get("fenced") is not True or resumed.get("mode") != "harness" or resumed.get("epoch") != self.epoch:
+            return PortResult("unknown","Original actuator stopped; control resumption is unconfirmed.")
         return PortResult("completed","Original actuator stopped by server fence.")
 
     async def close(self):
@@ -238,7 +297,10 @@ class HostedMcpPort:
             await asyncio.gather(self.heartbeat,return_exceptions=True)
         if self.session and not self.lost:
             self.epoch += 1
-            with contextlib.suppress(Exception): await self.rpc("transition",mode="paused")
+            with contextlib.suppress(Exception):
+                paused = await self.rpc("transition", mode="paused")
+                if paused.get("fenced") is True and paused.get("mode") == "paused" and paused.get("epoch") == self.epoch:
+                    await self._drain_stopped()
         self.stopping.set()
         if self.connection_task: await asyncio.gather(self.connection_task,return_exceptions=True)
         self.ledger.close()

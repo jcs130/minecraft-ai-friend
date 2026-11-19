@@ -17,6 +17,16 @@ from test_server_npc import role
 SPEAKER = "20000000-0000-0000-0000-000000000021"
 
 
+def test_spoken_request_uses_server_address_while_transcript_stays_original():
+    actor = role(id="kirito", name="桐人", body_kind="numen")
+    listener = str(actor.body_id)
+    request = f"qdvoice:{SPEAKER}:voice_direct_12345678-1234-4234-8234-123456789abc_{listener}"
+    event = nearby(actor, "同仁帮我打僵尸", channel="voice", eventId=request)
+    assert addressed_dialogue(event, listener, ("桐人",))
+    assert not addressed_dialogue(nearby(actor, event.text, channel="chat", eventId=request), listener, ("桐人",))
+    assert not addressed_dialogue(nearby(actor, event.text, channel="voice", eventId=request, serverAttributed=False), listener)
+
+
 def nearby(actor, text, **changes):
     body = str(actor.body_id)
     return BodyEvent(kind="dialogue" if actor.body_kind == "maid" else "chat", body_kind=actor.body_kind, body_id=body, text=text,

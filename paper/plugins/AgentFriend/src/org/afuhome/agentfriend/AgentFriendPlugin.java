@@ -202,7 +202,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private static final List<String> COMPASS_QUICK = List.of(
             "night", "selfheal", "blink", "flight", "heal", "feather", "food", "sense", "home");
     private static final int GUIDE_PAGE_SIZE = 36;
-    private final Map<Inventory, Map<Integer, UUID>> playerMenuTargets = new HashMap<>();
+    private record TeammatePage(int index, Map<Integer, UUID> slots) {}
+    private final Map<Inventory, TeammatePage> playerMenuTargets = new HashMap<>();
     private final Map<UUID, UUID> trackedPlayers = new HashMap<>();
     private final Map<UUID, BossBar> trackingBars = new HashMap<>();
     private final Map<UUID, Location> savedCompassTargets = new HashMap<>();
@@ -2034,23 +2035,24 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return LocationOutput.worldLabel(world);
     }
 
-    private List<Player> trackablePlayers(Player viewer) {
-        return Bukkit.getOnlinePlayers().stream()
-                .map(target -> (Player) target)
-                .filter(target -> !target.getUniqueId().equals(viewer.getUniqueId()))
-                .filter(target -> target.getGameMode() != GameMode.SPECTATOR)
-                .filter(target -> !target.getName().equals("Goddess") && viewer.canSee(target))
-                .sorted(Comparator.comparing(Player::getName, String.CASE_INSENSITIVE_ORDER))
-                .toList();
+    private void namedTeammate(Player viewer, String name, boolean teleport) {
+        var matches = TeammateDirectory.named(TeammateDirectory.list(viewer), name);
+        if (matches.size() == 1) {
+            var id = matches.getFirst().id();
+            if (teleport) teleportToTeammate(viewer, id);
+            else trackPlayer(viewer, id);
+        } else if (matches.isEmpty()) {
+            viewer.sendMessage("§e队友不在线或不可定位；打开技能罗盘的「找队友」或用 /mycli locate list 刷新。");
+        } else {
+            viewer.sendMessage("§e有多位同名伙伴。请在罗盘里按世界和坐标选择，或用 /mycli locate list 中的 UUID。");
+        }
     }
 
     private void locate(Player viewer, String[] args) {
         if (args.length == 1) { openMenu(viewer, "players"); return; }
         if (args.length == 3 && (args[1].equalsIgnoreCase("tp") || args[1].equals("传送"))) {
             if (args[2].equalsIgnoreCase("nearest")) { teleportNearest(viewer); return; }
-            trackablePlayers(viewer).stream().filter(target -> target.getName().equalsIgnoreCase(args[2]))
-                    .findFirst().ifPresentOrElse(target -> teleportToTeammate(viewer, target.getUniqueId()),
-                            () -> viewer.sendMessage(ChatColor.RED + "队友不在线或不可传送：" + args[2] + "；/mycli locate list 核对准确名字、世界与在线状态，等目标可用后再传送。"));
+            namedTeammate(viewer, args[2], true);
             return;
         }
         if (args.length != 2) {
@@ -2059,37 +2061,35 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         String choice = args[1];
         if (choice.equalsIgnoreCase("off")) { stopTracking(viewer); return; }
         if (choice.equalsIgnoreCase("nearest")) { trackNearest(viewer); return; }
-        List<Player> visible = trackablePlayers(viewer);
+        var visible = TeammateDirectory.list(viewer);
         if (choice.equalsIgnoreCase("list")) {
             if (visible.isEmpty()) { viewer.sendMessage(ChatColor.GRAY + "当前没有可定位的在线队友；等待队友上线后 /mycli locate list 刷新，当前可继续自己的探索。"); return; }
             viewer.sendMessage(ChatColor.AQUA + "在线伙伴（这份名单不等于已组队；真实队伍查 /mycli guild party status）：");
-            for (Player target : visible) {
-                Location at = target.getLocation();
-                viewer.sendMessage(ChatColor.YELLOW + target.getName() + ChatColor.GRAY + " · "
-                        + worldLabel(target.getWorld()) + " " + at.getBlockX() + ", "
+            for (var target : visible) {
+                Location at = target.body().getLocation();
+                viewer.sendMessage(ChatColor.YELLOW + target.name() + ChatColor.GRAY + " · "
+                        + worldLabel(target.body().getWorld()) + " " + at.getBlockX() + ", "
                         + at.getBlockY() + ", " + at.getBlockZ());
-                viewer.sendMessage("MC_PLAYER name=" + target.getName() + " " + LocationOutput.fields(at));
+                viewer.sendMessage("MC_PLAYER name=" + target.name() + " " + LocationOutput.fields(at) + " uuid=" + target.id());
             }
             return;
         }
-        visible.stream().filter(target -> target.getName().equalsIgnoreCase(choice)).findFirst()
-                .ifPresentOrElse(target -> trackPlayer(viewer, target.getUniqueId()),
-                        () -> viewer.sendMessage(ChatColor.RED + "没有找到可定位的在线玩家：" + choice + "；/mycli locate list 复制准确名字，目标须在线且非旁观者。"));
+        namedTeammate(viewer, choice, false);
     }
 
     private void trackNearest(Player viewer) {
-        trackablePlayers(viewer).stream()
-                .filter(target -> target.getWorld().equals(viewer.getWorld()))
-                .min(Comparator.comparingDouble(target -> target.getLocation().distanceSquared(viewer.getLocation())))
-                .ifPresentOrElse(target -> trackPlayer(viewer, target.getUniqueId()),
+        TeammateDirectory.list(viewer).stream()
+                .filter(target -> target.body().getWorld().equals(viewer.getWorld()))
+                .min(Comparator.comparingDouble(target -> target.body().getLocation().distanceSquared(viewer.getLocation())))
+                .ifPresentOrElse(target -> trackPlayer(viewer, target.id()),
                         () -> viewer.sendMessage(ChatColor.YELLOW + "当前世界没有可定位的在线队友；/mycli locate list 查看其他世界队友，先通过正常入口到同一世界再追踪。"));
     }
 
     private void teleportNearest(Player viewer) {
-        trackablePlayers(viewer).stream()
-                .filter(target -> target.getWorld().equals(viewer.getWorld()))
-                .min(Comparator.comparingDouble(target -> target.getLocation().distanceSquared(viewer.getLocation())))
-                .ifPresentOrElse(target -> teleportToTeammate(viewer, target.getUniqueId()),
+        TeammateDirectory.list(viewer).stream()
+                .filter(target -> target.body().getWorld().equals(viewer.getWorld()))
+                .min(Comparator.comparingDouble(target -> target.body().getLocation().distanceSquared(viewer.getLocation())))
+                .ifPresentOrElse(target -> teleportToTeammate(viewer, target.id()),
                         () -> viewer.sendMessage(ChatColor.YELLOW + "当前世界没有可传送的在线队友；/mycli locate list 核对世界和状态，等队友在线且位置安全后再试。"));
     }
 
@@ -2111,14 +2111,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         };
     }
 
-    private String teamTravelProblem(Player actor,Player target,Location landing) {
-        if(pvpArena!=null&&(pvpArena.blocksNamedTravel(actor)||pvpArena.blocksNamedTravel(target)||pvpArena.namedTravelArea(landing)))
+    private String teamTravelProblem(Player actor,LivingEntity target,Location landing) {
+        if(pvpArena!=null&&(pvpArena.blocksNamedTravel(actor)||(target instanceof Player other && pvpArena.blocksNamedTravel(other))||pvpArena.namedTravelArea(landing)))
             return "[team_pvp_escrow] PvP使用独立背包；先 /mycli pvp leave 完成物品归还，再使用队友传送。";
         String problem=dungeon==null?"":dungeon.reinforcementProblem(actor,target,landing);
         if(!problem.isEmpty())return problem;
         return siteDungeons==null?"":siteDungeons.reinforcementProblem(actor,target,landing);
     }
-    private Location safeNear(Player actor, Player target) {
+    private Location safeNear(Player actor, LivingEntity target) {
         Location at = target.getLocation();
         int[][] offsets = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, 1}, {1, -1}, {-1, -1},
                 {2, 0}, {-2, 0}, {0, 2}, {0, -2}, {0, 0}};
@@ -2135,42 +2135,44 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     private void teleportToTeammate(Player viewer, UUID targetId) {
-        Player target = Bukkit.getPlayer(targetId);
-        if (target == null || !trackablePlayers(viewer).contains(target)) {
+        var target = TeammateDirectory.find(viewer, targetId);
+        if (target == null) {
             viewer.sendMessage(ChatColor.RED + "[team_target_unavailable] 队友已离线或不可传送；未耗魔。下一步：/mycli locate list"); return;
         }
         if(isDowned(viewer)||viewer.isDead()||viewer.isInsideVehicle()||viewer.isGliding()||viewer.isFlying()){
             viewer.sendMessage("§e[team_actor_blocked] 当前倒地、死亡、载具或飞行状态不能传送；未传送、未耗魔。下一步：/mycli status");return;
         }
-        if(target.isDead()){viewer.sendMessage("§e[team_target_respawning] 队友正在重生；等重生完成再支援，未耗魔。");return;}
-        String problem=teamTravelProblem(viewer,target,target.getLocation());
+        if(target.body().isDead()){viewer.sendMessage("§e[team_target_respawning] 队友正在重生；等重生完成再支援，未耗魔。");return;}
+        String problem=teamTravelProblem(viewer,target.body(),target.body().getLocation());
         if(!problem.isEmpty()){viewer.sendMessage("§e"+problem+" 未传送、未耗魔。");return;}
         long now = System.currentTimeMillis();
         long wait = teamTeleportAt.getOrDefault(viewer.getUniqueId(), 0L) + TEAM_TELEPORT_COOLDOWN_MS - now;
         if (wait > 0) {
             viewer.sendMessage(ChatColor.YELLOW + "传送冷却还剩 " + ((wait + 999) / 1000) + " 秒；等待结束再传一次，/mycli locate list 可先核对队友。"); return;
         }
-        Location landing = safeNear(viewer,target);
+        Location landing = safeNear(viewer,target.body());
         if (landing == null) {
             viewer.sendMessage(ChatColor.YELLOW + "[team_no_safe_ground] 队友附近2格内没有可站立的安全地面（需脚下有支撑、身体和头部不被堵住）；请队友移到平地再试。战斗状态和入口平台本身不会禁止支援，未耗魔。"); return;
         }
         if (travelMagic.teleport(viewer, landing, "team", "队友传送术", TravelMagic.DISTANT_MANA, () -> {
             Location arrived=viewer.getLocation();
-            return arrived.getWorld()==landing.getWorld()&&arrived.distanceSquared(landing)<=1
+            var current = TeammateDirectory.find(viewer, targetId);
+            return current != null && current.body().getWorld() == arrived.getWorld()
+                    && current.body().getLocation().distanceSquared(arrived) <= 16 && arrived.getWorld()==landing.getWorld()&&arrived.distanceSquared(landing)<=1
                     &&safeLanding(arrived.getBlock())&&TeamTravelSafety.insideBorder(arrived)
-                    &&teamTravelProblem(viewer,target,arrived).isEmpty()
-                    &&(dungeon==null||dungeon.enrollReinforcement(viewer,target))
-                    &&(siteDungeons==null||siteDungeons.enrollReinforcement(viewer,target));
+                    &&teamTravelProblem(viewer,target.body(),arrived).isEmpty()
+                    &&(dungeon==null||dungeon.enrollReinforcement(viewer,target.body()))
+                    &&(siteDungeons==null||siteDungeons.enrollReinforcement(viewer,target.body()));
         })) {
             teamTeleportAt.put(viewer.getUniqueId(), now);
-            viewer.sendMessage(ChatColor.GREEN + "已安全抵达 " + target.getName() + " 身边。 "
+            viewer.sendMessage(ChatColor.GREEN + "已安全抵达 " + target.name() + " 身边。 "
                     + LocationOutput.fields(viewer.getLocation()));
         }
     }
 
     private void trackPlayer(Player viewer, UUID targetId) {
-        Player target = Bukkit.getPlayer(targetId);
-        if (target == null || !trackablePlayers(viewer).contains(target)) {
+        var target = TeammateDirectory.find(viewer, targetId);
+        if (target == null) {
             viewer.sendMessage(ChatColor.YELLOW + "队友已离线或暂时不可定位，请重新打开罗盘。");
             return;
         }
@@ -2179,11 +2181,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         automaticCompassTargets.remove(viewer.getUniqueId());
         compassAutoPaused.remove(viewer.getUniqueId());
         ensureTrackingBar(viewer);
-        viewer.sendMessage(ChatColor.GREEN + "正在追踪 " + target.getName()
+        viewer.sendMessage(ChatColor.GREEN + "正在追踪 " + target.name()
                 + "；粒子线从你当前位置连向队友，手持技能罗盘时指针也会指向她。直线不代表可通行，罗盘菜单中可停止追踪。");
-        viewer.sendMessage("MC_PLAYER name=" + target.getName() + " " + LocationOutput.fields(target.getLocation()));
+        viewer.sendMessage("MC_PLAYER name=" + target.name() + " " + LocationOutput.fields(target.body().getLocation()));
         showTracking(viewer, target);
-        syncCompass(viewer, target.getLocation());
+        syncCompass(viewer, target.body().getLocation());
     }
 
     private void ensureTrackingBar(Player viewer) {
@@ -2219,8 +2221,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 removeTrackingBar(tracking.getKey());
                 continue;
             }
-            Player target = Bukkit.getPlayer(tracking.getValue());
-            if (target == null || !trackablePlayers(viewer).contains(target)) {
+            var target = TeammateDirectory.find(viewer, tracking.getValue());
+            if (target == null) {
                 trackedPlayers.remove(tracking.getKey());
                 removeTrackingBar(tracking.getKey());
                 viewer.sendMessage(ChatColor.YELLOW + "追踪已结束：队友离线或暂不可定位；/mycli locate list 刷新，确认上线后再 locate <准确玩家名>。");
@@ -2265,8 +2267,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (tradeDirectory.tracking(viewer)) continue;
             UUID selected = trackedPlayers.get(id);
             if (selected != null) {
-                Player target = Bukkit.getPlayer(selected);
-                if (target != null && target.getWorld().equals(viewer.getWorld())) syncCompass(viewer, target.getLocation());
+                var target = TeammateDirectory.find(viewer, selected);
+                if (target != null && target.body().getWorld().equals(viewer.getWorld())) syncCompass(viewer, target.body().getLocation());
                 else restoreCompass(viewer);
                 continue;
             }
@@ -2277,29 +2279,29 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 continue;
             }
             if (compassAutoPaused.contains(id)) continue;
-            Player nearest = trackablePlayers(viewer).stream()
-                    .filter(target -> target.getWorld().equals(viewer.getWorld()))
-                    .min(Comparator.comparingDouble(target -> target.getLocation().distanceSquared(viewer.getLocation())))
+            var nearest = TeammateDirectory.list(viewer).stream()
+                    .filter(target -> target.body().getWorld().equals(viewer.getWorld()))
+                    .min(Comparator.comparingDouble(target -> target.body().getLocation().distanceSquared(viewer.getLocation())))
                     .orElse(null);
             if (nearest == null) {
                 if (automaticCompassTargets.remove(id) != null) removeTrackingBar(id);
                 restoreCompass(viewer);
                 continue;
             }
-            automaticCompassTargets.put(id, nearest.getUniqueId());
+            automaticCompassTargets.put(id, nearest.id());
             ensureTrackingBar(viewer);
             showTracking(viewer, nearest);
-            syncCompass(viewer, nearest.getLocation());
+            syncCompass(viewer, nearest.body().getLocation());
         }
     }
 
-    private void showTracking(Player viewer, Player target) {
-        Location here = viewer.getLocation(), there = target.getLocation();
+    private void showTracking(Player viewer, TeammateDirectory.Target target) {
+        Location here = viewer.getLocation(), there = target.body().getLocation();
         BossBar bar = trackingBars.get(viewer.getUniqueId());
         if (bar == null) return;
         if (!here.getWorld().equals(there.getWorld())) {
             targetGuides.remove(viewer.getUniqueId(), "player");
-            bar.setTitle("§b追踪 " + target.getName() + " §7· " + worldLabel(there.getWorld())
+            bar.setTitle("§b追踪 " + target.name() + " §7· " + worldLabel(there.getWorld())
                     + "（不同维度） · " + LocationOutput.shortForm(there));
             return;
         }
@@ -2307,9 +2309,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         int distance = (int) Math.round(here.distance(there));
         int height = there.getBlockY() - here.getBlockY();
         String vertical = Math.abs(height) <= 2 ? "同一高度" : (height > 0 ? "高 " + height + " 格" : "低 " + -height + " 格");
-        bar.setTitle("§b追踪 " + target.getName() + " §e" + direction(here.getYaw(), dx, dz)
+        bar.setTitle("§b追踪 " + target.name() + " §e" + direction(here.getYaw(), dx, dz)
                 + " " + distance + " 格 §7· " + vertical + " · " + LocationOutput.shortForm(there));
-        targetGuides.show(viewer, "player", there.clone().add(0, Math.min(1.2, target.getEyeHeight() * .8), 0));
+        targetGuides.show(viewer, "player", there.clone().add(0, Math.min(1.2, target.body().getEyeHeight() * .8), 0));
     }
 
     static String direction(float yaw, double dx, double dz) {
@@ -2747,7 +2749,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return Math.max(0, Math.min(requested, Math.max(0, (SpellGuide.entries().size() - 1) / GUIDE_PAGE_SIZE)));
     }
     private int menuCloseSlot(String page, int size) { return page.equals("skills") ? 35 : size - 1; }
-    private void openMenu(Player p, String page) {
+    private void openMenu(Player p, String page) { openMenu(p, page, 0); }
+
+    private void openMenu(Player p, String page, int teamPage) {
         if(nativeRpg.selected()&&(isSpellGuidePage(page)||Set.of("combat","utility").contains(page))){
             playerAdventureMenus.open(p,AdventureMenuModel.Page.COMMON,"");return;
         }
@@ -2929,23 +2933,28 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(8, item(Material.ENDER_PEARL, "§d传送到最近队友", "安全落脚；8 魔力；20 秒冷却"));
             int[] headSlots = {10, 11, 12, 13, 14, 15, 16};
             Map<Integer, UUID> targets = new HashMap<>();
-            List<Player> visible = trackablePlayers(p);
-            for (int i = 0; i < Math.min(headSlots.length, visible.size()); i++) {
-                Player target = visible.get(i);
-                Location at = target.getLocation();
-                String where = target.getWorld().equals(p.getWorld())
+            var visible = TeammateDirectory.list(p);
+            int last = Math.max(0, (visible.size()-1) / headSlots.length);
+            int index = Math.clamp(teamPage, 0, last);
+            if (index > 0) inv.setItem(2, item(Material.ARROW, "§e上一页", "更多伙伴"));
+            if (index < last) inv.setItem(7, item(Material.ARROW, "§e下一页", "更多伙伴"));
+            int start = index * headSlots.length;
+            for (int i = 0; i < Math.min(headSlots.length, visible.size()-start); i++) {
+                var target = visible.get(start+i);
+                Location at = target.body().getLocation();
+                String where = target.body().getWorld().equals(p.getWorld())
                         ? "距离约 " + Math.round(p.getLocation().distance(at)) + " 格"
                         : "在另一维度";
-                inv.setItem(headSlots[i], item(Material.PLAYER_HEAD, "§b追踪 " + target.getName(),
-                        worldLabel(target.getWorld()) + "  " + at.getBlockX() + ", " + at.getBlockY() + ", " + at.getBlockZ(),
+                inv.setItem(headSlots[i], item(Material.PLAYER_HEAD, "§b追踪 " + target.name(),
+                        worldLabel(target.body().getWorld()) + "  " + at.getBlockX() + ", " + at.getBlockY() + ", " + at.getBlockZ(),
                         where + "；罗盘指针跟随"));
-                inv.setItem(headSlots[i] + 9, item(Material.ENDER_PEARL, "§d传送至 " + target.getName(),
+                inv.setItem(headSlots[i] + 9, item(Material.ENDER_PEARL, "§d传送至 " + target.name(),
                         "在队友附近安全落脚；8 魔力；20 秒冷却"));
-                targets.put(headSlots[i], target.getUniqueId());
-                targets.put(headSlots[i] + 9, target.getUniqueId());
+                targets.put(headSlots[i], target.id());
+                targets.put(headSlots[i] + 9, target.id());
             }
             if (visible.isEmpty()) inv.setItem(13, item(Material.BARRIER, "§7暂时没有其他在线玩家", "女神旁观者不会显示在这里"));
-            playerMenuTargets.put(inv, targets);
+            playerMenuTargets.put(inv, new TeammatePage(index, Map.copyOf(targets)));
         } else if (page.equals("pvp")) {
             inv.setItem(10, item(Material.IRON_SWORD, "§a加入匹配", "传送入场 6 魔力；第二人加入后自动开战"));
             inv.setItem(11, item(Material.BARRIER, "§c退出匹配/认输", "排队时退出；战斗中认输"));
@@ -3065,7 +3074,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         Inventory top = event.getView().getTopInventory();
         String page = menus.get(top);
         if (page == null) return;
-        Map<Integer, UUID> targets = playerMenuTargets.get(top);
+        TeammatePage targets = playerMenuTargets.get(top);
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p)) return;
         int slot = event.getRawSlot();
@@ -3205,9 +3214,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 else if (slot == 4) trackNearest(p);
                 else if (slot == 6) stopTracking(p);
                 else if (slot == 8) teleportNearest(p);
-                else if (targets != null && targets.containsKey(slot)) {
-                    if (slot >= 19) teleportToTeammate(p, targets.get(slot));
-                    else trackPlayer(p, targets.get(slot));
+                else if ((slot == 2 || slot == 7) && targets != null && top.getItem(slot) != null)
+                    openMenu(p, "players", targets.index() + (slot == 2 ? -1 : 1));
+                else if (targets != null && targets.slots().containsKey(slot)) {
+                    if (slot >= 19) teleportToTeammate(p, targets.slots().get(slot));
+                    else trackPlayer(p, targets.slots().get(slot));
                 }
             } else if (page.equals("pvp")) {
                 switch (slot) {
@@ -3600,12 +3611,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     .map(id -> id.substring("prospect ".length())).toList();
         if (args.length == 2 && args[0].equalsIgnoreCase("locate")) {
             List<String> choices = new ArrayList<>(List.of("list", "nearest", "off", "tp"));
-            if (sender instanceof Player viewer) trackablePlayers(viewer).forEach(target -> choices.add(target.getName()));
+            if (sender instanceof Player viewer) TeammateDirectory.list(viewer).forEach(target -> choices.add(target.name()));
             return choices;
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("locate") && args[1].equalsIgnoreCase("tp")) {
             List<String> choices = new ArrayList<>(List.of("nearest"));
-            if (sender instanceof Player viewer) trackablePlayers(viewer).forEach(target -> choices.add(target.getName()));
+            if (sender instanceof Player viewer) TeammateDirectory.list(viewer).forEach(target -> choices.add(target.name()));
             return choices;
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("cast")) {

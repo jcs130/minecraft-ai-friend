@@ -21,6 +21,14 @@ public final class NpcDialoguePolicyTest {
         check(NpcDialoguePolicy.addressed(known,"我刚看见结衣")==null);
         check(NpcDialoguePolicy.addressed(known,"YuiSword 很好用")==null);
         var sword=new NpcDialoguePolicy.Profile(UUID.randomUUID(),b,"numen","Kirito","qa",24,List.of("桐人"));
+        var spokenSword=new NpcDialoguePolicy.Profile(sword.id(),b,"numen","Kirito","qa",24,List.of("桐人"),List.of("同仁","同人"));
+        var solo=List.of(spokenSword);
+        check(NpcDialoguePolicy.addressed(solo,"同仁帮我打僵尸",true).text().equals("帮我打僵尸"));
+        check(NpcDialoguePolicy.addressed(solo,"同人，在吗",true).profile()==spokenSword);
+        check(NpcDialoguePolicy.addressed(solo,"桐人帮我打僵尸").profile()==spokenSword);
+        for(String other:List.of("我在读同人小说","同仁堂有药卖","同人作品有哪些","请问同仁帮我了吗"))
+            check(NpcDialoguePolicy.addressed(solo,other,true)==null);
+        check(NpcDialoguePolicy.addressed(solo,"同仁帮我打僵尸")==null && !spokenSword.hasName("同仁") && spokenSword.display().equals("桐人"));
         var fish=new NpcDialoguePolicy.Profile(UUID.randomUUID(),b,"maid","肥鱼","qa",24,List.of("Feiyu"));
         var registered=List.of(sword,fish,known.iterator().next());
         var group=NpcDialoguePolicy.group(registered,"桐人、肥鱼，补给齐了，你们一起来开塔！");
