@@ -21,8 +21,8 @@ native-maid = ["httpx>=0.27,<1"]
 # In-process Graphiti through the existing agent-memory graphiti-sidecar service class.
 graphiti = ["graphiti-core[kuzu]>=0.31,<0.32"]
 # Shared server Graphiti uses the authenticated HTTP sidecar, not one database per NPC.
-server-npc = ["httpx>=0.27,<1", "mcp>=1.28,<3"]
-dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10"]
+server-npc = ["httpx>=0.27,<1", "mcp>=1.28,<3", "PyYAML>=6,<7"]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10", "PyYAML>=6,<7"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
