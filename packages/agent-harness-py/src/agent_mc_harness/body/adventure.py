@@ -35,6 +35,7 @@ CONTENT_ID = re.compile(r"[a-z0-9][a-z0-9_-]{0,79}")
 PARTY_LINE = re.compile(r"VortexRPG » \[Party\] (?:[★☆] )?([\w.]{1,16}): ([^\r\n]{1,400})")
 ARMOR = {"head": "头盔", "chest": "胸甲", "legs": "护腿", "feet": "靴子"}
 PARTY_OPENING = "我们组好队了，在哪个入口会合？分开时用 /mycli guild party chat 加上想说的话，我也能收到。"
+INVITE_INTERVAL = 30 * 60
 SURVEY_LUA = """local n=numen_hosted
 local map=n.scan.map({radius=8})
 local pos=map.center
@@ -65,11 +66,11 @@ def catalogue(peer: str) -> list[NativeAction]:
     query_properties["page"] = {"type": "integer", "minimum": 1, "maximum": 100,
                                 "description": "Optional list page for exploration, combat_jobs and ruins. Required with a snapshot ID for detail_page."}
     actions = result[2].input_schema["properties"]
-    actions["kind"]["enum"].append("prepare_armor")
+    actions["kind"]["enum"].extend(("prepare_armor", "prepare_ammo"))
     actions["text"] = {"type": "string", "maxLength": 100, "description": "party_chat only. A short message to the current native party."}
     actions["partyId"] = {"type": "string", "description": "party_chat only. Copy partyId from the current native party status."}
     actions["slot"] = {"type": "string", "enum": list(ARMOR), "description": "prepare_armor only. Choose a missing armor slot."}
-    actions["allowPurchase"] = {"type": "boolean", "description": "prepare_armor only. Allow one basic iron piece costing up to 20 of your own RPG coins if needed."}
+    actions["allowPurchase"] = {"type": "boolean", "description": "Optional for prepare_armor or prepare_ammo. Use personal supplies first. Allows one iron piece up to 20 RPG coins, or 16 arrows up to 3 coins for your bow."}
     return result
 
 
@@ -271,6 +272,11 @@ def game_result(result, name: str, args: dict, *, account=None, peer=None, recov
     if kind == "turn_in_quest":
         verified_write = any(line.startswith("委托交付成功！") for line in messages)
     effect = "refused" if refused else "read" if name == QUERY else "confirmed" if verified_write else "dispatched"
+    if kind == "travel_trial" and effect == "dispatched" and any(tag == "MC_TRAVEL" and isinstance(row, str)
+            and {"target=arena", "status=pending"}.issubset(row.split()) for tag, row in records):
+        effect = "awaiting_arrival"
+        details["retryWrite"] = False
+        explanation = "The landing is being checked. Stay in place, then observe your position and the trial entrance."
     if not refused and kind == "party_chat":
         sent = any(m and m[1] == account and m[2] == args["text"] for m in (PARTY_LINE.fullmatch(s) for s in messages))
         effect = "sent" if sent else "unverified"
@@ -293,6 +299,8 @@ def game_result(result, name: str, args: dict, *, account=None, peer=None, recov
         evidence["offers"] = [line[:220] for line in messages if re.match(r"^[a-z0-9][a-z0-9_-]{0,79} ", line)][:24]
     if args.get("id"):
         evidence["id"] = args["id"]
+    if kind == "invite_partner" and effect == "confirmed" and peer:
+        evidence["peer"] = peer
     status = "rejected" if refused else "failed" if effect in {"incomplete", "unavailable", "unverified"} else "completed"
     text = f"{kind}: {effect}" + (f" — {explanation}" if explanation else "")
     return replace(result, status=status, text=text, data={"adventure": evidence})
@@ -339,6 +347,98 @@ def current_party(evidence, peer, *, since=0):
         return {"partyId": party_id, "phase": row.get("phase"), "partner": peer,
                 "sameWorld": member.get("sameWorld"), "distance": member.get("distance")}
     return None
+
+
+def public_outing(roster, invitation, creation, trial, travel, peer, snapshot):
+    """A public meeting place needs no access to the invitee's private position."""
+    now = time()
+    sent = invitation.get("at", 0)
+    if (not snapshot or snapshot.life_state != "alive" or not snapshot.position
+            or not 0 <= now - sent < INVITE_INTERVAL or sent < creation.get("at", 0)
+            or invitation.get("effect") != "confirmed" or not 0 <= now - roster.get("at", 0) <= 90):
+        return None
+
+    def value(evidence, tag):
+        return next((r["value"] for r in evidence.get("records", [])
+                     if r.get("type") == tag and isinstance(r.get("value"), dict)), {})
+
+    status = value(roster, "MC_RPG")
+    sent_to = value(invitation, "MC_RPG")
+    original_message = str(sent_to.get("message", "")).startswith(f"已向 {peer} 发送邀请，")
+    if (status.get("phase") != "awaiting_teammates" or status.get("inParty") is not True or status.get("memberCount") != 1
+            or not status.get("selfUuid") or status["selfUuid"] != status.get("leaderUuid")
+            or sent_to.get("success") is not True or not (invitation.get("peer") == peer or original_message)):
+        return None
+    offer = {"place": "试炼塔公共入口", "partnerAttendance": "unconfirmed", "next": "trial"}
+    if trial.get("at", 0) < sent or not 0 <= now - trial.get("at", 0) < 180:
+        return offer
+    facts = value(trial, "MC_TRIAL_STATE")
+    if (not facts or facts.get("participant") is not False or facts.get("reason") in
+            {"observer", "downed", "actor_unavailable", "other_activity", "return_pending", "trial_unavailable"}):
+        return None
+    entrance = facts.get("entrance")
+    if not isinstance(entrance, dict) or not facts.get("worldKey") or not all(
+            isinstance(point.get(k), (float, int)) for point in (entrance, snapshot.position) for k in "xyz"):
+        return None
+    near = snapshot.dimension == facts["worldKey"] and dist([snapshot.position[k] for k in "xyz"], [entrance[k] for k in "xyz"]) <= 24
+    offer["missingArmor"] = [s for s, label in ARMOR.items() if label in facts.get("missingEquipment", [])]
+    if travel.get("at", 0) >= sent and trial.get("at", 0) <= travel["at"] and travel.get("effect") in {"awaiting_arrival", "dispatched", "confirmed"}:
+        offer["next"] = "trial"
+        return offer
+    if near:
+        walk = facts.get("walkTarget")
+        if isinstance(walk, dict) and all(isinstance(walk.get(k), (float, int)) for k in "xyz"):
+            remaining = dist([snapshot.position[k] for k in "xyz"], [walk[k] for k in "xyz"])
+            if remaining <= 3:
+                offer["next"] = "trial"
+            else:
+                offer.update(next="walk_to_platform", walkTarget=walk)
+            return offer
+        ruin = (facts.get("outing") or {}).get("ruin") or {}
+        if isinstance(ruin.get("id"), str) and CONTENT_ID.fullmatch(ruin["id"]):
+            offer.update(next="ruin_info", siteId=ruin["id"], siteName=str(ruin.get("name", ""))[:60])
+        else:
+            offer["next"] = "ruins"
+    elif travel.get("at", 0) >= sent or facts.get("reason") in {"travel_mana_required", "mana_unknown"}:
+        offer["next"] = "ruins"
+    else:
+        offer.update(next="travel_trial", travelMana=facts.get("travelMana", 6))
+    return offer
+
+
+def continue_outing(offer, recent):
+    if offer["next"] != "ruin_info":
+        return
+    site = offer["siteId"]
+    for result in recent:
+        sample = result.get("adventure") or {}
+        if sample.get("id") != site or not 0 <= time() - sample.get("at", 0) <= 180:
+            continue
+        if sample.get("kind") in {"travel_ruin", "start_ruin"}:
+            offer["next"] = "ruin_status"
+            return
+        if sample.get("kind") != "ruin_info" or sample.get("effect") != "read":
+            continue
+        for record in sample.get("records", ()):
+            info = record.get("value")
+            if record.get("type") != "MC_SITE_DUNGEON_INFO" or not isinstance(info, dict) or info.get("id") != site:
+                continue
+            guide = info.get("guidance") or {}
+            stage = guide.get("state")
+            if stage == "requirements" and guide.get("reason") == "EQUIPMENT_REQUIRED":
+                missing = guide.get("missingEquipment", [])
+                offer["missingArmor"] = [s for s, label in ARMOR.items() if label in missing]
+                if offer["missingArmor"]:
+                    offer["next"] = "prepare_armor"
+                elif any(str(label).startswith("另一件可用远程武器") for label in missing):
+                    offer["next"] = "check_ranged_loadout"
+                else:
+                    offer["next"] = "check_loadout"
+            else:
+                offer["next"] = {"travel": "travel_ruin", "ready": "start_ruin",
+                                 "approach": "survey_then_walk"}.get(stage, "ruin_status")
+            offer["siteInstruction"] = str(guide.get("nextAction", ""))[:230]
+            return
 
 
 def meeting_recovery(last, prepared):

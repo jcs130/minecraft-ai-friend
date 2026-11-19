@@ -197,6 +197,28 @@ final class SiteDungeonManager implements Listener {
     boolean hasOpenSite() {
         return ready && sites.values().stream().anyMatch(site -> !runs.containsKey(site.id));
     }
+    /** One optional outing from the installed sites. Use only loaded configuration and the caller's history. */
+    Map<String,Object> lobbyOuting(Player player) {
+        if(!ready || own(player)!=null)return Map.of();
+        UUID id=player.getUniqueId();
+        long now=System.currentTimeMillis();
+        var config=plugin.getConfig();
+        var site=sites.values().stream()
+            .filter(s->s.conquestFloor==0 && Bukkit.getWorld(s.world)!=null && !blockedCheckpoints.contains(s.id)
+                && !runs.containsKey(s.id) && receipt(id,s.id)==null
+                && now-config.getLong(ROOT+".cooldowns."+s.id,0)>=120_000)
+            .min(Comparator.comparing((Site s)->config.contains(ROOT+".outcomes."+id+"."+s.id)
+                    || config.contains(ROOT+".claimed."+id+"."+s.id))
+                .thenComparingInt(s->DungeonAdvice.preparation(s.id,s.minimumLevel).recommendedLevel())
+                .thenComparingLong(s->config.getLong(ROOT+".outcomes."+id+"."+s.id+".endedAt",0))
+                .thenComparing(Site::id));
+        if(site.isEmpty())return Map.of();
+        Site s=site.get();
+        var guide=advice(player,s.id);
+        return Map.of("id",s.id,"name",s.name,"state",guide.get("state"),"infoCommand","/mycli dungeon info "+s.id,
+            "nextCommand",guide.get("nextCommand"),"missingEquipment",guide.get("missingEquipment"),
+            "recommendedLevel",guide.get("recommendedLevel"),"approachMana",8);
+    }
     boolean hasActiveRuns(){return !runs.isEmpty()||!blockedCheckpoints.isEmpty();}
     List<String> ids(){return new ArrayList<>(sites.keySet());}
     boolean activityArea(Location at){return protectionArea(at)!=null;}
