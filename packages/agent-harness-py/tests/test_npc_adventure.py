@@ -53,7 +53,7 @@ def test_partial_and_unrelated_feedback_cannot_confirm_a_write():
     assert life.game_result(unrelated, life.ACT, {"kind": "invite_partner"}).data["adventure"]["effect"] == "dispatched"
     reply = PortResult("completed", "stdout:\n已安全抵达 Friend 身边。 dimension=minecraft:overworld x=-6 y=72 z=102")
     assert life.game_result(reply, life.ACT, {"kind": "meet_partner"}, peer="Friend").data["adventure"]["effect"] == "confirmed"
-    assert life.game_result(reply, life.ACT, {"kind": "meet_partner"}, peer="Other").data["adventure"]["effect"] == "dispatched"
+    assert life.game_result(reply, life.ACT, {"kind": "meet_partner"}, peer="Other").data["adventure"]["effect"] == "unverified"
 
 
 def test_guild_messages_identify_offers_limits_and_actual_settlement():

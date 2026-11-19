@@ -6,6 +6,7 @@ import sqlite3
 import time
 from pathlib import Path
 
+from .body.adventure import PARTY_OPENING
 from .models import ActionReceipt, BodyAction
 
 
@@ -36,6 +37,8 @@ class ActionJournal:
         self.db.execute("CREATE TABLE IF NOT EXISTS listened (body TEXT, event TEXT, intent TEXT, decided_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(body,event))")
         self.db.execute("CREATE TABLE IF NOT EXISTS work_sources (body TEXT, event TEXT, request TEXT, PRIMARY KEY(body,event,request))")
         self.db.execute("CREATE TABLE IF NOT EXISTS npc_contacts (body TEXT, kind TEXT, request TEXT, at REAL, PRIMARY KEY(body,kind))")
+        self.db.execute("CREATE INDEX IF NOT EXISTS npc_adventure_kind ON dispatch(body,json_extract(action,'$.args.kind')) "
+                        "WHERE json_extract(action,'$.name') IN ('adventure_query','adventure_action')")
         self.db.commit()
 
     def begin(self, body: str, action: BodyAction, sources: list[str] | None = None) -> None:
@@ -48,6 +51,9 @@ class ActionJournal:
                 "invite" if action.verb == "native" and action.name == "adventure_action" and action.args.get("kind") == "invite_partner" else None)
             if contact:
                 self.db.execute("INSERT OR REPLACE INTO npc_contacts VALUES (?,?,?,?)", (body, contact, action.request_id, time.time()))
+            if action.name == "adventure_action" and action.args.get("kind") == "party_chat" and isinstance(action.args.get("partyId"), str):
+                key = "party-opening:" + action.args["partyId"] if action.args.get("text") == PARTY_OPENING else "party-speech"
+                self.db.execute("INSERT OR REPLACE INTO npc_contacts VALUES (?,?,?,?)", (body, key, action.request_id, time.time()))
             if action.verb == "chat":
                 self.db.executemany("INSERT INTO replies VALUES (?,?,?)", [(body, event, action.request_id) for event in dict.fromkeys(sources or [])])
             if action.verb == "native" and action.name == "ack" and action.args.get("eventId"):
@@ -97,7 +103,7 @@ class ActionJournal:
                 raise ValueError("receipt_body_mismatch")
             self.db.execute("UPDATE dispatch SET receipt=? WHERE id=?", (receipt.model_dump_json(), receipt.request_id))
             if receipt.terminal and isinstance(receipt.data, dict) and receipt.data.get("partyWriteSent") is False:
-                self.db.execute("DELETE FROM npc_contacts WHERE body=? AND kind='invite' AND request=?", (body, receipt.request_id))
+                self.db.execute("DELETE FROM npc_contacts WHERE body=? AND request=?", (body, receipt.request_id))
 
     def unresolved(self, body: str) -> list[BodyAction]:
         rows = self.db.execute("SELECT action,receipt FROM dispatch WHERE body=?", (body,)).fetchall()
@@ -110,6 +116,14 @@ class ActionJournal:
             (body, limit),
         )
         return [(BodyAction.model_validate_json(action), ActionReceipt.model_validate_json(receipt)) for action, receipt in rows]
+
+    def last_adventure(self, body: str, kind: str) -> dict:
+        row = self.db.execute("SELECT receipt FROM dispatch WHERE body=? AND receipt IS NOT NULL "
+                              "AND json_extract(action,'$.name') IN ('adventure_query','adventure_action') "
+                              "AND json_extract(action,'$.args.kind')=? ORDER BY rowid DESC LIMIT 1", (body, kind)).fetchone()
+        data = json.loads(row[0]).get("data") if row else None
+        evidence = data.get("adventure") if isinstance(data, dict) else None
+        return evidence if isinstance(evidence, dict) else {}
 
     def close(self) -> None:
         self.db.close()

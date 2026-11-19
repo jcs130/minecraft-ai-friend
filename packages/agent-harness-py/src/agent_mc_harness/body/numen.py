@@ -30,6 +30,7 @@ import contextlib
 import hashlib
 import json
 import re
+import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,7 +52,7 @@ from ..models import (
     Scope,
     WorldRef,
 )
-from . import adventure
+from . import adventure, loadout
 from .base import ArgumentError, BaseBody, obj, xyz
 from .native_tasks import NativeTasks, background_task, finished_tasks
 
@@ -555,6 +556,8 @@ class NumenBody(BaseBody):
         self._meals: OrderedDict[str, None] = OrderedDict()
         self._item_uses: OrderedDict[str, str] = OrderedDict()
         self.adventure_partner = adventure_partner
+        self.party_message = None
+        self.observed_party_id = None
         self._adventures: OrderedDict[str, BodyAction] = OrderedDict()
         self.item_use_ids = tuple(dict.fromkeys(item_use_ids))
         if any(not ITEM.fullmatch(item) or ":" not in item for item in self.item_use_ids):
@@ -699,6 +702,11 @@ class NumenBody(BaseBody):
 
     async def _adventure(self, name, args, request_id):
         account = self.identity().name
+        if name == adventure.ACT and args.get("kind") == "prepare_armor":
+            if set(args) - {"kind", "slot", "allowPurchase"}:
+                raise ArgumentError("prepare_armor takes slot and optional allowPurchase only")
+            code = loadout.armor_lua(args.get("slot"), args.get("allowPurchase", False), account)
+            return loadout.armor_result(await self.port.call("lua", {"code": code}, request_id), args["slot"])
         line = adventure.player_command(name, args, account, self.adventure_partner)
         prerequisite = adventure.COORDINATION.get(args["kind"]) if name == adventure.ACT else None
         if prerequisite:
@@ -713,11 +721,16 @@ class NumenBody(BaseBody):
             if sample.status != "completed":
                 return PortResult(sample.status, sample.text, evidence)
             if not any(row["type"] == "MC_RPG" and isinstance(row["value"], dict)
-                       and adventure.coordination_check(args["kind"], self.adventure_partner, row["value"])
+                       and adventure.coordination_check(args["kind"], self.adventure_partner, row["value"], args.get("partyId"))
                        for row in evidence.get("adventure", {}).get("records", [])):
                 return PortResult("rejected", "No party change sent. Follow the server's nextAction, or continue solo while waiting.", evidence)
         result = await self.port.call("lua", {"code": adventure.game_lua(line, account)}, request_id)
-        return adventure.game_result(result, name, args, peer=self.adventure_partner)
+        receipt = adventure.game_result(result, name, args, account=account, peer=self.adventure_partner)
+        if name == adventure.QUERY and args["kind"] == "party":
+            evidence = (receipt.data or {}).get("adventure", {})
+            team = adventure.current_party(evidence, self.adventure_partner)
+            self.observed_party_id = team["partyId"] if team else None
+        return receipt
 
     async def _do_act(self, action: BodyAction, request_id: str) -> ActionReceipt:
         verb, args = action.verb, action.args
@@ -823,8 +836,11 @@ class NumenBody(BaseBody):
         if mapped is not None and action is not None:
             if action.name == adventure.SURVEY:
                 mapped = adventure.survey_result(mapped, recovered=True)
+            elif action.args.get("kind") == "prepare_armor":
+                mapped = loadout.armor_result(mapped, action.args.get("slot"), recovered=True)
             else:
-                mapped = adventure.game_result(mapped, action.name, action.args, peer=self.adventure_partner, recovered=True)
+                mapped = adventure.game_result(mapped, action.name, action.args, account=getattr(self.identity(), "name", None),
+                                               peer=self.adventure_partner, recovered=True)
         if mapped is not None and request_id in self._meals:
             mapped = measured_meal(mapped)
         if mapped is not None and request_id in self._item_uses:
@@ -860,6 +876,13 @@ class NumenBody(BaseBody):
     async def poll_once(self) -> int:
         count = 0
         for raw in await self.port.events():
+            party = adventure.party_line(raw)
+            if party:
+                if (self.adventure_partner and party["speaker"].casefold() == self.adventure_partner.casefold()
+                        and isinstance(party["at"], (int, float)) and 0 <= time.time()*1000 - party["at"] <= 120_000):
+                    self.party_message = {**party, "partyId": self.observed_party_id}
+                    self.emit("status", "Native party channel updated.", data={"partyNotice": True})
+                continue  # Private team text never goes to general events or social memory.
             if raw.kind_hint is not None:  # hosted: agent-mc-world envelope
                 kind = classify_envelope(raw.kind_hint)
                 self._note(kind)
