@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 from pathlib import Path
 
 from .models import ActionReceipt, BodyAction
@@ -34,6 +35,7 @@ class ActionJournal:
         self.db.execute("CREATE TABLE IF NOT EXISTS acknowledgements (body TEXT, event TEXT, request TEXT, PRIMARY KEY(body,event,request))")
         self.db.execute("CREATE TABLE IF NOT EXISTS listened (body TEXT, event TEXT, intent TEXT, decided_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(body,event))")
         self.db.execute("CREATE TABLE IF NOT EXISTS work_sources (body TEXT, event TEXT, request TEXT, PRIMARY KEY(body,event,request))")
+        self.db.execute("CREATE TABLE IF NOT EXISTS npc_contacts (body TEXT, kind TEXT, request TEXT, at REAL, PRIMARY KEY(body,kind))")
         self.db.commit()
 
     def begin(self, body: str, action: BodyAction, sources: list[str] | None = None) -> None:
@@ -42,6 +44,10 @@ class ActionJournal:
         with self.db:
             self.db.execute("INSERT INTO dispatch VALUES (?,?,?,NULL)",
                             (action.request_id, body, action.model_dump_json()))
+            contact = "speech" if action.verb == "chat" else (
+                "invite" if action.verb == "native" and action.name == "adventure_action" and action.args.get("kind") == "invite_partner" else None)
+            if contact:
+                self.db.execute("INSERT OR REPLACE INTO npc_contacts VALUES (?,?,?,?)", (body, contact, action.request_id, time.time()))
             if action.verb == "chat":
                 self.db.executemany("INSERT INTO replies VALUES (?,?,?)", [(body, event, action.request_id) for event in dict.fromkeys(sources or [])])
             if action.verb == "native" and action.name == "ack" and action.args.get("eventId"):
@@ -49,6 +55,10 @@ class ActionJournal:
             if work_key(action) is not None:
                 self.db.executemany("INSERT INTO work_sources VALUES (?,?,?)",
                                     [(body, event, action.request_id) for event in dict.fromkeys(sources or [])])
+
+    def contacted_recently(self, body: str, kind: str, seconds: float) -> bool:
+        return self.db.execute("SELECT 1 FROM npc_contacts WHERE body=? AND kind=? AND at>?",
+                               (body, kind, time.time() - seconds)).fetchone() is not None
 
     def attempted_work(self, body: str, action: BodyAction, events: list[str]) -> bool:
         key = work_key(action)
@@ -86,6 +96,8 @@ class ActionJournal:
             if row != (body,):
                 raise ValueError("receipt_body_mismatch")
             self.db.execute("UPDATE dispatch SET receipt=? WHERE id=?", (receipt.model_dump_json(), receipt.request_id))
+            if receipt.terminal and isinstance(receipt.data, dict) and receipt.data.get("partyWriteSent") is False:
+                self.db.execute("DELETE FROM npc_contacts WHERE body=? AND kind='invite' AND request=?", (body, receipt.request_id))
 
     def unresolved(self, body: str) -> list[BodyAction]:
         rows = self.db.execute("SELECT action,receipt FROM dispatch WHERE body=?", (body,)).fetchall()

@@ -216,6 +216,26 @@ Do not delete it simply because the new NPC executor uses hosted 0.1.5. Retire
 old per-character model gateways only after verifying that no other binding
 uses them. Existing TTS, camera and local System One services are separate.
 
+## Hosted adventuring
+
+A Numen role can opt into the server's existing guild, ruin and trial routes. Set
+`adventure_partner` to the partner's actual game account. For Kirito this is
+`ag_CorMy`. Add `body:native:survey`, `body:native:adventure_query` and
+`body:native:adventure_action` to his existing allowed tools. Include
+`body:native:nourish` for autonomous use of his own carried food.
+
+The Numen owner can enable ordinary RPG commands for that body with
+`/numen_hosted permission rules add allow command(mycli) @Kirito`. The native
+permission covers the command root. The NPC host exposes only the typed actions
+in the adventure catalogue. A missing rule yields a configuration receipt and
+the character can still walk, eat and interact locally. The owner can remove
+that specific rule to withdraw RPG access.
+
+Real party status determines the next step. Each character accepts its own
+invitation. The host queries original request IDs after an interruption.
+For acceptance, check both players' rosters, their measured positions after
+meeting, nearby message delivery and the combat target's health.
+
 ## Validation
 
 ```powershell

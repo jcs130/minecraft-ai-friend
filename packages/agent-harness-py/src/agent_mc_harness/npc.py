@@ -18,6 +18,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .conversation import CONVERSATION_POLICY
+from .body import adventure
 from .journal import ActionJournal, work_key
 from .models import BodyEvent, Scope
 from .runtime import HarnessRuntime, Intent, PlanContext, Step, step_support
@@ -51,6 +52,7 @@ class NpcRole(BaseModel):
     allowed_tools: list[str] = Field(min_length=1, max_length=32)
     native_tasks: list[str] = Field(default_factory=list, max_length=32)
     native_items: list[Annotated[str, Field(pattern=r"^[a-z0-9_.-]+:[a-z0-9_./-]+$", max_length=128)]] = Field(default_factory=list, max_length=16)
+    adventure_partner: str | None = Field(default=None, pattern=r"^[\w.]{1,16}$")
     default_native_guard: bool = False
     social_memory: bool = False
     social_previous_bodies: list[UUID] = Field(default_factory=list, max_length=8)
@@ -71,6 +73,8 @@ class NpcRole(BaseModel):
             raise ValueError("default_guard_requires_native_maid_capability")
         if self.native_items and (self.body_kind != "numen" or "body:use_item" not in self.allowed_tools):
             raise ValueError("reviewed_item_ids_require_numen_use_item")
+        if self.adventure_partner and (self.body_kind != "numen" or "body:native:survey" not in self.allowed_tools):
+            raise ValueError("adventure_partner_requires_hosted_terrain_survey")
         return self
 
     def scope(self, server_id: str) -> Scope:
@@ -360,7 +364,7 @@ class NpcPlanner:
                  "events": [event.model_dump(mode="json") for event in context.recent[-8:]],
                  "memories": [fact.model_dump(mode="json") for fact in context.memories[:8]],
                  "recentEpisodes": [episode.model_dump(mode="json") for episode in context.hot[:6]],
-                 "capabilities": {"actions": {key: value.model_dump(mode="json") for key, value in caps.actions.items()},
+                 "capabilities": {"actions": {key: value.model_dump(mode="json") for key, value in caps.actions.items() if "body:" + key in tools},
                                   "native": native_catalogue, "nativeSchemas": schemas,
                                   "limits": caps.limits} if caps else None}
         if check_in:
@@ -368,6 +372,18 @@ class NpcPlanner:
             facts["goal"] = ("You are beside your active companion in a quiet moment. Offer one brief, natural check-in or a useful "
                              "next step based only on the current scene. This is an initiative from you, not a reply to old chat. "
                              "Do not repeat a generic readiness message or claim to have performed work. Return [] if there is nothing to add.")
+        if role.adventure_partner:
+            facts["adventuring"] = {"partnerAccount": role.adventure_partner,
+                "purpose": "You are an independent adventurer. Choose a concrete, feasible next activity whenever healthy and idle. "
+                "Scout terrain with survey, then walk to one sampled walkTo point. Reuse a fresh survey at this position before scanning again. "
+                "Vary your route and avoid retracing the last move. "
+                "Check live combat or exploration jobs and ruins. If a route catalogue is empty, consult guild_board for today's actual offers. "
+                "Read quest_status after accepting or turning in a quest. Prepare carried gear and fight observed hostiles. "
+                "Pick a feasible alternative when entry equipment or mana is missing. "
+                "Read plan_invitation or plan_joining to arrange a real outing. Follow its nextAction: create means create_party, "
+                "invite means invite_partner, accept means accept_invitation. Inspect the resulting roster before meeting. "
+                "A native invitation leaves acceptance to its recipient. While waiting or when the partner is offline, continue solo. "
+                "Speak briefly when you meet to suggest a concrete activity. Do not repeat invitations or report unverified outcomes."}
         if role.social_memory:
             # Legacy recall lacks verifiable per-peer visibility. Nearby replies
             # can still use local, non-conversation world observations.
@@ -428,7 +444,7 @@ class NpcPlanner:
         if check_in:
             steps = [step for step in steps if step.tool == "body:chat"][:1]
         elif intent.goal == IDLE_GOAL and not context.dialogue:
-            inactive = {"body:chat"}
+            inactive = set() if adventure.partner_nearby(role.adventure_partner, context) else {"body:chat"}
             if already_guarding(current_native_state(context)):
                 inactive.update({"body:stay", "body:stop", "body:native:sit"})
             steps = [step for step in steps if step.tool not in inactive]
@@ -606,6 +622,12 @@ class NpcHost:
             result = {"action": action.name or action.verb, "requestId": receipt.request_id,
                       "status": receipt.status, "terminal": receipt.terminal, "text": receipt.text[:450]}
             data = receipt.data if isinstance(receipt.data, dict) else {}
+            if action.verb == "native" and action.name in {adventure.SURVEY, adventure.ACT, adventure.QUERY}:
+                for key in ("survey", "adventure"):
+                    if isinstance(data.get(key), dict):
+                        result[key] = data[key]
+            elif action.verb == "move":
+                result["destination"] = action.args
             if action.verb == "inventory":
                 if not inventory_added and self.role.body_kind == "numen" and isinstance(data.get("inventory"), list):
                     results.append({**result, "inventorySample": data["inventory"], "handsAtSample": data.get("hands", {}),
@@ -627,13 +649,23 @@ class NpcHost:
             return None
         reviewed = []
         work_selected = False
+        proactive_speech = False
         for step in steps:
             action = step.action("check_00000")
+            if self.role.adventure_partner:
+                if step.tool == "body:chat" and intent.goal == IDLE_GOAL:
+                    if proactive_speech or self.journal.contacted_recently(body_id, "speech", 600):
+                        continue
+                    proactive_speech = True
+                if step.tool == "body:native:adventure_action" and step.args.get("kind") == "invite_partner" and self.journal.contacted_recently(body_id, "invite", 1800):
+                    continue
             if work_key(action) is not None:
                 if work_selected or self.journal.attempted_work(body_id, action, intent.source_events):
                     continue
                 work_selected = True
             reviewed.append(step)
+            if self.role.adventure_partner and step.tool == "body:native:adventure_action":
+                break  # The next decision needs this write's actual receipt.
         steps = reviewed
         silent = all(step.tool in {"body:observe", "body:inventory"} for step in steps)
         if intent.source_events and silent:

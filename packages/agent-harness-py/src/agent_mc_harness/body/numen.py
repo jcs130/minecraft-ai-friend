@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import re
 from collections import OrderedDict
@@ -50,6 +51,7 @@ from ..models import (
     Scope,
     WorldRef,
 )
+from . import adventure
 from .base import ArgumentError, BaseBody, obj, xyz
 from .native_tasks import NativeTasks, background_task, finished_tasks
 
@@ -541,7 +543,7 @@ class NumenBody(BaseBody):
 
     def __init__(self, port: NumenPort, *, scope: Scope, server_id: str | None = None, world_key: str | None = None,
                  name: str | None = None, owner_id: str | None = None, poll_seconds: float = 2.0,
-                 result_poll_seconds: float = 3.0, item_use_ids: tuple[str, ...] = ()) -> None:
+                 result_poll_seconds: float = 3.0, item_use_ids: tuple[str, ...] = (), adventure_partner: str | None = None) -> None:
         super().__init__()
         self.port, self.scope, self.server_id, self.world_key = port, scope, server_id, world_key
         self.name, self.owner_id = name, owner_id
@@ -552,6 +554,8 @@ class NumenBody(BaseBody):
         self._last: dict[str, Any] = {}
         self._meals: OrderedDict[str, None] = OrderedDict()
         self._item_uses: OrderedDict[str, str] = OrderedDict()
+        self.adventure_partner = adventure_partner
+        self._adventures: OrderedDict[str, BodyAction] = OrderedDict()
         self.item_use_ids = tuple(dict.fromkeys(item_use_ids))
         if any(not ITEM.fullmatch(item) or ":" not in item for item in self.item_use_ids):
             raise ValueError("item_use_ids must be namespaced item IDs")
@@ -598,6 +602,8 @@ class NumenBody(BaseBody):
             native_actions = [*native_actions, NativeAction(name="nourish",
                 description="Eat one ordinary food carried in your backpack when hunger is at most 14. Observe the actual consumed item and hunger.",
                 input_schema={"type": "object", "properties": {}, "additionalProperties": False})]
+            if self.adventure_partner:
+                native_actions.extend(adventure.catalogue(self.adventure_partner))
         return Capabilities(
             kind="numen", transport=self.port.transport, actions=acts,
             native_actions=native_actions,
@@ -675,14 +681,57 @@ class NumenBody(BaseBody):
 
     def restore_request(self, action: BodyAction) -> None:
         super().restore_request(action)
+        self._remember_adventure(action)
         if action.verb == "native" and action.name == "nourish":
             self._remember_meal(action.request_id)
         if action.verb == "use_item" and isinstance(action.args.get("item"), str):
             self._remember_item_use(action.request_id, action.args["item"])
 
+    def _remember_adventure(self, action: BodyAction) -> None:
+        if action.verb == "native" and action.name in (adventure.ACT, adventure.QUERY, adventure.SURVEY):
+            self._adventures[action.request_id] = action
+            if len(self._adventures) > self.LEDGER:
+                self._adventures.popitem(last=False)
+
+    @staticmethod
+    def _party_check_id(request_id):
+        return "party_" + hashlib.sha256(request_id.encode()).hexdigest()[:32]
+
+    async def _adventure(self, name, args, request_id):
+        account = self.identity().name
+        line = adventure.player_command(name, args, account, self.adventure_partner)
+        prerequisite = adventure.COORDINATION.get(args["kind"]) if name == adventure.ACT else None
+        if prerequisite:
+            query = {"kind": prerequisite}
+            check_line = adventure.player_command(adventure.QUERY, query, account, self.adventure_partner)
+            read = await self.port.call("lua", {"code": adventure.game_lua(check_line, account)}, self._party_check_id(request_id))
+            if read.status in {"unknown", "accepted"}:
+                return PortResult("unknown", "Original party check pending. The party change was not sent.")
+            sample = adventure.game_result(read, adventure.QUERY, query)
+            evidence = dict(sample.data or {})
+            evidence["partyWriteSent"] = False
+            if sample.status != "completed":
+                return PortResult(sample.status, sample.text, evidence)
+            if not any(row["type"] == "MC_RPG" and isinstance(row["value"], dict)
+                       and adventure.coordination_check(args["kind"], self.adventure_partner, row["value"])
+                       for row in evidence.get("adventure", {}).get("records", [])):
+                return PortResult("rejected", "No party change sent. Follow the server's nextAction, or continue solo while waiting.", evidence)
+        result = await self.port.call("lua", {"code": adventure.game_lua(line, account)}, request_id)
+        return adventure.game_result(result, name, args, peer=self.adventure_partner)
+
     async def _do_act(self, action: BodyAction, request_id: str) -> ActionReceipt:
         verb, args = action.verb, action.args
-        if verb == "native" and action.name == "nourish":
+        if verb == "native" and action.name in (adventure.ACT, adventure.QUERY, adventure.SURVEY):
+            if not self.adventure_partner or self.port.transport != "numen-hosted-mcp":
+                raise ArgumentError("This body has no configured adventure access.")
+            self._remember_adventure(action.model_copy(update={"request_id": request_id}))
+            if action.name == adventure.SURVEY:
+                if args:
+                    raise ArgumentError("survey takes no arguments")
+                mapped = adventure.survey_result(await self.port.call("lua", {"code": adventure.SURVEY_LUA}, request_id))
+            else:
+                mapped = await self._adventure(action.name, args, request_id)
+        elif verb == "native" and action.name == "nourish":
             if args or self.port.transport != "numen-hosted-mcp":
                 raise ArgumentError("nourish takes no arguments and requires the hosted body")
             self._remember_meal(request_id)
@@ -759,7 +808,23 @@ class NumenBody(BaseBody):
         return await self.act(BodyAction(verb="stop", request_id=new_request_id("stop")))
 
     async def _do_result(self, request_id: str, previous: ActionReceipt) -> ActionReceipt:
+        action = self._adventures.get(request_id)
+        if (action and action.name == adventure.ACT and action.args.get("kind") in adventure.COORDINATION
+                and self.port.transport == "numen-hosted-mcp" and not self.port.recorded(request_id)):
+            # A drain or crash may interrupt the read before dispatching the write.
+            # Resolve that read under its original ID. Never submit either leg here.
+            check_id = self._party_check_id(request_id)
+            if self.port.recorded(check_id):
+                check = await self.port.result(check_id)
+                if check is None or check.status in {"unknown", "accepted"}:
+                    return previous
+            return self.settle(request_id, "rejected", "Party change was not dispatched.", {"partyWriteSent": False}) or previous
         mapped = await self.port.result(request_id)
+        if mapped is not None and action is not None:
+            if action.name == adventure.SURVEY:
+                mapped = adventure.survey_result(mapped, recovered=True)
+            else:
+                mapped = adventure.game_result(mapped, action.name, action.args, peer=self.adventure_partner, recovered=True)
         if mapped is not None and request_id in self._meals:
             mapped = measured_meal(mapped)
         if mapped is not None and request_id in self._item_uses:
