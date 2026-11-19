@@ -31,6 +31,10 @@ SVC 2.6.27 的通话键初始未绑定，按键通话读取按下和松开的状
 
 ## 可复现构建
 
+可选的 Xbox 施法模板基于已发布的原生手柄 `preview.6`。用 `python add-wheel-controller.py <原生手柄 preview.6.mrpack> <输出目录>` 生成现有实例的配置 ZIP 和新实例的完整导入包。`python test-wheel-controller.py <原生手柄 preview.6.mrpack>` 核验模板、八个方向、旧文件和原始模组摘要。控制器操作和下载见[玩家指南](PLAYER_GUIDE.md#用-xbox-手柄选技能)。
+
+在 Minecraft 1.21.1、NeoForge 21.1.252 的真实客户端用虚拟 Xbox 手柄验证过八个方向、B 取消和 A 确认。测试角色选中夜视术后获得了 120 秒夜视，按住 View 直到确认也只施放一次。安卓实体手柄的手感仍待实测。
+
 需要 Python 3.12+、Java 21 和联网。Eclipse 编译器、原音频桥及四个模组均在 `sources.lock.json` 锁定来源、大小、SHA1 和 SHA512。
 
 ```sh
