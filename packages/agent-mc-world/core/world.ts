@@ -2452,6 +2452,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     // 说得通的那个,同时保证它不进只读 fork 的装配。没有 barrierAfter:没有要复核的东西。
     name: 'mc_policy',
     tags: ['write'],
+    readOnlyCall: args => Object.keys(args).length === 0,
     description:
       'Set standing rules for how the work gets done in Minecraft. Takes effect immediately, '
       + 'does not queue behind tasks. Call with no fields to read the current rules back.',
@@ -2541,6 +2542,8 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     // 工具只提供查询与写入；移动由 mc_do 的 goto 执行。
     name: 'mc_map',
     tags: ['write'],
+    bodyControl: 'independent',
+    readOnlyCall: args => Object.keys(args).length === 0,
     description:
       'Register dimension-tagged named places in this world: home, bed, chest, workstation, danger zone, resource spot, '
       + 'portal, farm, landmark — up to 24. Call with no fields to read them all back with the bearing '
@@ -2576,6 +2579,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     // 没有 barrierAfter:save 的回执自己就说清了收没收下,没有另一份要复核的世界事实。
     name: 'mc_blueprint',
     tags: ['write'],
+    readOnlyCall: args => Object.keys(args).length === 0,
     description:
       'Design and hold Minecraft project blueprints: buildings, farms, mob systems, pits, redstone, '
       + 'and other functional structures. Submit a host-authored finished '
@@ -5694,9 +5698,10 @@ export class MinecraftWorld implements World {
     const { patch, notes } = parsePolicy(args);
     // 修改前留快照，供回执计算实际 diff。
     const before = this.policy.get();
-    this.policy.set(patch);
-    // 垫脚名单与挖/垫代价直通寻路器,改完当场热改(正在走的那一段也跟着换)
-    this.bridge?.retune();
+    if (Object.keys(patch).length > 0) {
+      this.policy.set(patch);
+      this.bridge?.retune();
+    }
     const head = notes.length > 0 ? `${notes.map(policyNoteText).join(';')}。` : '';
     const after = this.policy.get();
     return head + renderPolicyChange(before, after, patch)
