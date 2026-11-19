@@ -115,6 +115,9 @@ final class DungeonManager implements Listener {
     private static final String DEATH_GUIDE = "dungeon-death-guide.";
     private static final int MAX_BONUS_QUEUE = 1024;
     private PagedPersonalStash storage;
+    private final Map<UUID,Long> stashOutingAt=new HashMap<>();
+    private record SeenInvite(String inviter,long expiresAt) {}
+    private final Map<UUID,SeenInvite> stashInviteShown=new HashMap<>();
     private PagedPersonalStash storage() { if(storage==null)storage=new PagedPersonalStash(plugin);return storage; }
     int stashCapacity() { return PagedPersonalStash.CAPACITY; }
     ItemStack stashItem(UUID id,int slot) { return storage().item(id,slot); }
@@ -699,14 +702,14 @@ final class DungeonManager implements Listener {
             ||plugin.siteDungeons()!=null&&plugin.siteDungeons().isParticipant(player),world()!=null&&onLobbyPlatform(player),mana,cooldown,DungeonLoadout.missing(player));
         var out=new com.google.gson.Gson().toJsonTree(TrialGuide.next(facts)).getAsJsonObject();
         Location at = player.getLocation();
-        if (Set.of("reach_trial_entrance", "travel_mana_required", "mana_unknown").contains(out.get("reason").getAsString())
-                && sameWorld(at) && Math.abs(at.getBlockX()-X)<=2 && at.getBlockZ()>=Z-23 && at.getBlockZ()<=Z-12
-                && at.getY()>=LOBBY_Y && at.getY()<=LOBBY_Y+5) {
+        boolean onEntranceBridge=sameWorld(at) && Math.abs(at.getBlockX()-X)<=2 && at.getBlockZ()>=Z-23 && at.getBlockZ()<=Z-12
+                && at.getY()>=LOBBY_Y && at.getY()<=LOBBY_Y+5;
+        if(onEntranceBridge)out.add("walkTarget",JSON.toJsonTree(Map.of("world","world","x",X,"y",LOBBY_Y+1,"z",Z-8)));
+        if (onEntranceBridge && Set.of("reach_trial_entrance", "travel_mana_required", "mana_unknown").contains(out.get("reason").getAsString())) {
             out.addProperty("reason", "enter_gathering_platform");
             out.addProperty("nextAction", "已到入口桥，不用再次传送。穿过入口门走进围墙内集合平台（主世界 world -590,91,-313），再点开始或 /mycli arena start；桥上路人不会自动入队");
             out.addProperty("nextCommand", TrialGuide.STATUS);
             out.addProperty("requiresWorldAction", true);
-            out.add("walkTarget", new com.google.gson.Gson().toJsonTree(Map.of("world", "world", "x", X, "y", LOBBY_Y+1, "z", Z-8)));
         }
         out.addProperty("schemaVersion", TRIAL_SCHEMA_VERSION);
         boolean participant = isParticipant(player);
@@ -736,6 +739,54 @@ final class DungeonManager implements Listener {
         return out;
     }
     private void showGuidance(Player player){var guide=guidance(player);player.sendMessage("§e[试炼下一步] "+guide.get("nextAction").getAsString()+"。命令："+guide.get("nextCommand").getAsString());}
+
+    private com.google.gson.JsonObject outing(Player p,boolean stash) {
+        var out=new com.google.gson.JsonObject();
+        if(!p.isOnline() || p.isDead() || p.getGameMode()!=org.bukkit.GameMode.SURVIVAL || plugin.isObserver(p)
+                || plugin.isDowned(p) || isParticipant(p) || plugin.pvpParticipant(p)
+                || plugin.siteDungeons()==null || plugin.siteDungeons().isParticipant(p))return out;
+        UUID id=p.getUniqueId();
+        long now=System.currentTimeMillis();
+        var party=plugin.nativeRpg().selected()?plugin.nativeRpg().party(p):null;
+        var pending=party==null?null:party.get("pendingInvite");
+        if(pending!=null && pending.isJsonObject() && pending.getAsJsonObject().has("inviterUuid")
+                && pending.getAsJsonObject().has("expiresInSeconds")){
+            var invite=pending.getAsJsonObject();
+            long remaining=invite.get("expiresInSeconds").getAsLong();
+            String inviter=invite.get("inviterUuid").getAsString();
+            var previous=stashInviteShown.get(id);
+            long expires=now+remaining*1000;
+            boolean newInvite=previous==null || !inviter.equals(previous.inviter()) || Math.abs(expires-previous.expiresAt())>2000;
+            if(remaining>0 && (!stash || newInvite)){
+                out.add("partyInvite",invite.deepCopy());
+                if(stash)stashInviteShown.put(id,new SeenInvite(inviter,expires));
+            }
+        }else if(stash)stashInviteShown.remove(id);
+        if(onLobbyPlatform(p) && (!stash || now-stashOutingAt.getOrDefault(id,0L)>=300_000)){
+            var ruin=plugin.siteDungeons().lobbyOuting(p);
+            if(!ruin.isEmpty()){
+                out.add("ruin",JSON.toJsonTree(ruin));
+                if(stash)stashOutingAt.put(id,now);
+            }
+        }
+        return out;
+    }
+
+    private void showOuting(Player player,com.google.gson.JsonObject options){
+        if(options.isEmpty())return;
+        if(plugin.isRegisteredAgent(player)){
+            player.sendMessage("MC_ADVENTURE_OPTIONS "+options);
+            return;
+        }
+        if(options.has("partyInvite")){
+            var invite=options.getAsJsonObject("partyInvite");
+            player.sendMessage("§b[组队] "+invite.get("inviter").getAsString()+" 邀请你同行，剩余 "+invite.get("expiresInSeconds").getAsLong()+" 秒；接受 "+invite.get("acceptCommand").getAsString()+"，拒绝 "+invite.get("declineCommand").getAsString());
+        }
+        if(options.has("ruin")){
+            var ruin=options.getAsJsonObject("ruin");
+            player.sendMessage("§a[遗迹远征] "+ruin.get("name").getAsString()+" 目前空闲。路线和战备："+ruin.get("infoCommand").getAsString());
+        }
+    }
     void command(Player player, String[] args) {
         String sub = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "status";
         if(Set.of("start","rest","checkpoint","next","leave").contains(sub)&&args.length!=2){player.sendMessage("§e[invalid_argument] 本次未执行；用法：/mycli arena "+sub+"。查询：/mycli arena status");return;}
@@ -743,11 +794,13 @@ final class DungeonManager implements Listener {
             if(java.util.Arrays.stream(args).skip(2).anyMatch(a->!Set.of("--json","--verbose").contains(a))){player.sendMessage("§e[invalid_argument] 此查询只接受 --json 或 --verbose；未执行。命令：/mycli arena "+sub);return;}
         }
         if(sub.equals("status")&&!java.util.Arrays.asList(args).contains("--json")&&!java.util.Arrays.asList(args).contains("--verbose")){
-            var guide=guidance(player);player.sendMessage("§6[试炼塔] "+(isParticipant(player)?"本人参赛中，第"+floor+"/"+maxFloor()+"层":active?"本人未参赛；已有队伍挑战":guide.get("startDescription").getAsString())+"。清层自动下楼，全部通关自动返回入口，奖励到个人箱。详情可用 --json 或 --verbose。");showGuidance(player);return;
+            var guide=guidance(player);player.sendMessage("§6[试炼塔] "+(isParticipant(player)?"本人参赛中，第"+floor+"/"+maxFloor()+"层":active?"本人未参赛；已有队伍挑战":guide.get("startDescription").getAsString())+"。清层自动下楼，全部通关自动返回入口，奖励到个人箱。详情可用 --json 或 --verbose。");showGuidance(player);showOuting(player,outing(player,false));return;
         }
         switch (sub) {
             case "status" -> {
                 var guide = guidance(player);
+                var options=outing(player,false);
+                if(!options.isEmpty())guide.add("outing",options);
                 player.sendMessage("MC_TRIAL_STATE "+guide);
                 boolean participant = active && participants.contains(player.getUniqueId());
                 int selfFloor = floorAt(player.getLocation());
@@ -1222,6 +1275,8 @@ final class DungeonManager implements Listener {
     }
 
     @EventHandler public void onParticipantQuit(PlayerQuitEvent event) {
+        stashOutingAt.remove(event.getPlayer().getUniqueId());
+        stashInviteShown.remove(event.getPlayer().getUniqueId());
         Player player = event.getPlayer();
         returnAttemptAt.remove(player.getUniqueId());
         gearWarningAt.remove(player.getUniqueId());
@@ -2387,6 +2442,7 @@ final class DungeonManager implements Listener {
         if(action.equals("page")&&args.length==4){try{int page=Integer.parseInt(args[3]);if(page<1||page>10)throw new NumberFormatException();openStash(player,page-1);}catch(NumberFormatException e){player.sendMessage("页码为1–10");}return;}
         if (action.equals("list") && (args.length == 3||args.length==4)) {
             int page=1;try{if(args.length==4)page=Integer.parseInt(args[3]);if(page<1||page>10)throw new NumberFormatException();}catch(NumberFormatException e){player.sendMessage("页码为1–10");return;}
+            showOuting(player,outing(player,true));
             inv=storage().page(id,page-1);
             int entries = 0;
             for (int slot = 0; slot < inv.getSize(); slot++) {

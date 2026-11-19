@@ -390,7 +390,9 @@ class NpcPlanner:
                 "When separated, either member can meet_partner. For the trial you can travel_trial to its public entrance before combat. "
                 "Coordinate remotely with party_chat using the current partyId and brief text. Nearby speech cannot cross worlds. "
                 "Use prepare_armor for a missing slot. It wears carried armor, collects from your own queue or stash, or, if you "
-                "choose allowPurchase, buys one ordinary iron piece. A queued purchase must be collected, then worn. If funds are "
+                "choose allowPurchase, buys one ordinary iron piece. A queued purchase must be collected, then worn. "
+                "With a bow or crossbow and no ammunition, prepare_ammo uses your own supplies first. With allowPurchase it can buy "
+                "16 arrows for up to 3 RPG coins. A purchase is ready only after collection. If funds are "
                 "short, agree on the public entrance or another activity. Never repeat a failed transfer on the same evidence. "
                 "Speak briefly when you meet. Do not repeat invitations or report unverified outcomes.",
                 "currentParty": context.party_context}
@@ -399,6 +401,15 @@ class NpcPlanner:
                 facts["goal"] = ("Your verified teammate sent the private party message in adventuring.currentParty.message. "
                                  "For a direct coordination question, reply briefly using party_chat with this partyId. "
                                  "Answer from your own current observation. You may listen to group chatter or a closing remark.")
+            elif (context.party_context or {}).get("publicOuting") and intent.goal == IDLE_GOAL and not context.dialogue:
+                facts["goal"] = ("You have invited your partner. Choose a concrete outing now using adventuring.currentParty.publicOuting. "
+                                 "You may travel_trial to the public meeting place independently for the listed mana. "
+                                 "The other player's attendance is unconfirmed. You can go before an invitation is accepted. "
+                                 "When walk_to_platform is offered, use body:move toward the server's walkTarget inside the gate. "
+                                 "At the platform read the suggested ruin's info once. Follow its live next step. With check_ranged_loadout, "
+                                 "inspect carried equipment; a bow without arrows can use prepare_ammo. Choose whether to visit the ruin. "
+                                 "Check its actual entrance and first room before starting. If unsafe or too costly, choose a feasible solo activity. "
+                                 "Use the supplied roster rather than repeatedly checking, inviting again or sorting gear that is already ready.")
         if role.social_memory:
             # Legacy recall lacks verifiable per-peer visibility. Nearby replies
             # can still use local, non-conversation world observations.
@@ -595,6 +606,7 @@ class NpcHost:
         self.next_plan = 0.0
         self.last_danger = False
         self.next_roster_check = 0.0
+        self.next_outing_check = 0.0
         self.checked_party_event = None
 
     def _ack_steps(self, events: list[str]) -> list[Step]:
@@ -647,6 +659,18 @@ class NpcHost:
                 opening = Step(tool="body:native:adventure_action",
                                args={"kind": "party_chat", "partyId": team["partyId"], "text": adventure.PARTY_OPENING})
 
+        elif not notice:
+            outing = adventure.public_outing(latest, self.journal.last_adventure(body_id, "invite_partner"),
+                self.journal.last_adventure(body_id, "create_party"), self.journal.last_adventure(body_id, "trial"),
+                self.journal.last_adventure(body_id, "travel_trial"), peer, context.snapshot)
+            if outing:
+                adventure.continue_outing(outing, context.body_results)
+                context.party_context = {"publicOuting": outing}
+                if (outing["next"] == "trial" and "body:native:adventure_query" in self.role.allowed_tools
+                        and time.monotonic() >= self.next_outing_check):
+                    self.next_outing_check = time.monotonic() + 12
+                    self.next_plan = time.monotonic() + 3
+                    return None, None, Step(tool="body:native:adventure_query", args={"kind": "trial"})
         last = self.journal.last_adventure(body_id, "meet_partner")
         recovery = adventure.meeting_recovery(last, self.journal.last_adventure(body_id, "prepare_armor"))
         if recovery:
@@ -743,7 +767,7 @@ class NpcHost:
                     if proactive_speech or self.journal.contacted_recently(body_id, "speech", 600):
                         continue
                     proactive_speech = True
-                if step.tool == "body:native:adventure_action" and step.args.get("kind") == "invite_partner" and self.journal.contacted_recently(body_id, "invite", 1800):
+                if step.tool == "body:native:adventure_action" and step.args.get("kind") == "invite_partner" and self.journal.contacted_recently(body_id, "invite", adventure.INVITE_INTERVAL):
                     continue
             if work_key(action) is not None:
                 if work_selected or self.journal.attempted_work(body_id, action, intent.source_events):

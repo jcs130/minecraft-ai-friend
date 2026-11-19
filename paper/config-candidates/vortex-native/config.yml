@@ -111,7 +111,7 @@ fractures:
   loot-base-drop-chance: 0.38
   loot-boss-drop-chance: 1.0
   board-max-contracts: 21
-  party-invite-ttl-minutes: 2
+  party-invite-ttl-minutes: 30
   breach-boss-type: wither_skeleton
   breach-boss-health: 450.0
   breach-boss-damage-multiplier: 2.4

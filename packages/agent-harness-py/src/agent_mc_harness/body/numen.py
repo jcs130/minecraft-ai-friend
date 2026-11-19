@@ -702,6 +702,11 @@ class NumenBody(BaseBody):
 
     async def _adventure(self, name, args, request_id):
         account = self.identity().name
+        if name == adventure.ACT and args.get("kind") == "prepare_ammo":
+            if set(args) - {"kind", "allowPurchase"}:
+                raise ArgumentError("prepare_ammo takes optional allowPurchase only")
+            code = loadout.ammo_lua(args.get("allowPurchase", False), account)
+            return loadout.armor_result(await self.port.call("lua", {"code": code}, request_id), "ammo")
         if name == adventure.ACT and args.get("kind") == "prepare_armor":
             if set(args) - {"kind", "slot", "allowPurchase"}:
                 raise ArgumentError("prepare_armor takes slot and optional allowPurchase only")
@@ -836,8 +841,9 @@ class NumenBody(BaseBody):
         if mapped is not None and action is not None:
             if action.name == adventure.SURVEY:
                 mapped = adventure.survey_result(mapped, recovered=True)
-            elif action.args.get("kind") == "prepare_armor":
-                mapped = loadout.armor_result(mapped, action.args.get("slot"), recovered=True)
+            elif action.args.get("kind") in {"prepare_armor", "prepare_ammo"}:
+                slot = "ammo" if action.args["kind"] == "prepare_ammo" else action.args.get("slot")
+                mapped = loadout.armor_result(mapped, slot, recovered=True)
             else:
                 mapped = adventure.game_result(mapped, action.name, action.args, account=getattr(self.identity(), "name", None),
                                                peer=self.adventure_partner, recovered=True)
