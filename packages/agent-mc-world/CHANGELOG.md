@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.109
+
+Game memory, waypoint notes, photography, the message inbox and isolated practice declare their scheduling requirements independently of write permissions. Reading navigation settings leaves the running path and persisted settings intact. Queued scouting preserves pending travel, held inputs and active scripts. A server command refusal leaves real containers, books and dialogs open.
+
 ## 0.5.7-rc.160-preview.108
 
 Script validation identifies syntax-only checks. If a method calls an unavailable timer, the failure receipt points to the original run and the supported physics-tick wait. Directional look errors identify the appropriate control input. Footing placement distinguishes a missing attachment face from an attempted placement whose result is still unconfirmed.

@@ -5,6 +5,8 @@ import {describe,it,expect} from 'vitest';
 import {MinecraftAgentClient,MINECRAFT_CLIENT_DEFAULTS,nullLogger} from '../src/client/index.ts';
 import {createClientMethodPractice} from '../src/learning/client-practice.ts';
 import {PracticeUnknownEffect} from '../src/learning/practice.ts';
+import {HARNESS2_PRACTICE_TOOL} from '../src/learning/harness2-service.ts';
+import {toolRequiresBodyControl} from '../src/contracts/index.ts';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js';
 import {createMinecraftMcpServer} from '../src/mcp/server.ts';
@@ -16,6 +18,11 @@ describe('practice belongs to the public core runtime',()=>{
     try{
       await server.connect(a);await client.connect(b);
       expect((await client.listTools()).tools.some(t=>t.name==='mc_practice')).toBe(true);
+      expect(toolRequiresBodyControl(HARNESS2_PRACTICE_TOOL)).toBe(false);
+      expect(runtime.inspectCall('mc_practice',{op:'cases'})).toMatchObject({valid:true,readOnly:true,requiresBody:false});
+      for(const args of [{op:'start',id:'fixture',methodId:'walk',revision:'a'.repeat(64),task:'Reach the practice target.'},{op:'stage',id:'fixture'},{op:'cancel',id:'fixture'}]){
+        expect(runtime.inspectCall('mc_practice',args)).toMatchObject({valid:true,readOnly:false,backgroundLearning:true,requiresBody:false,dispatched:false});
+      }
       const result=await client.callTool({name:'mc_practice',arguments:{op:'help'}});
       expect(result.isError).not.toBe(true);expect(JSON.parse((result.structuredContent as any).text)).toMatchObject({available:false,adopted:false});
       expect(runtime.status().phase).toBe('disconnected');expect(runtime.experiments().jobs).toEqual([]);

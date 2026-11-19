@@ -63,7 +63,7 @@ export type QueueMode = 'replace' | 'append' | 'now' | 'afterCheckpoint';
 
 export const QUEUE_MODES: readonly QueueMode[] = ['replace', 'append', 'now', 'afterCheckpoint'];
 
-/** mc_do / mc_scout 顶层的 queue 字段 */
+/** mc_do 的动作队列策略。 */
 export const QUEUE_SCHEMA: Record<string, unknown> = {
   type: 'string',
   enum: [...QUEUE_MODES],

@@ -1,6 +1,6 @@
 import { installMovementPace, MOVEMENT_PACE_DEFAULTS, resolveMovementPace } from './movement-pace.ts';
 import { installMiningLimiter, MINING_LIMIT_DEFAULTS, resolveMiningLimits } from './mining-limiter.ts';
-import { onServerScreen, renderScreen, serverScreen, closeLocalScreen } from './server-screens.ts';
+import { onServerScreen, renderScreen, serverScreen } from './server-screens.ts';
 import { compactWorkExecutionEvidence } from '../src/contracts/continuation-evidence.ts';
 import { nativeBodyBlockedReason, nativeBodyReadiness } from './body-readiness.ts';
 import { methodLearningCall } from '../src/learning/method-capability.ts';
@@ -2261,6 +2261,12 @@ const MAP_ICON_ZH: Record<string, string> = {
   jungle_temple: '丛林神庙', swamp_hut: '女巫小屋',
 };
 
+const SCOUT_QUEUE_SCHEMA = {
+  type: 'string', enum: ['append'], default: 'append',
+  description: '侦察只按提交顺序排到队尾（可省略 queue）。立即观察可用 mc_observe。'
+    + '需要显式调整动作队列时，由身体控制者使用 mc_do 的 queue；以试算代替执行时，为支持的技能显式设置 dryRun:true。',
+};
+
 export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   TOOL_HELP_TOOL,
   PHOTO_TOOL,
@@ -2404,8 +2410,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
           description: SCOUT_SKILL_DOC,
           items: SCOUT_STEP_SCHEMA,
         },
-        // 同一条队列就是同一套三态:试算不该另有一份排队语义要记
-        queue: QUEUE_SCHEMA,
+        queue: SCOUT_QUEUE_SCHEMA,
       },
       examples: [{ steps: [{ skill: 'observe', ...SPATIAL_QUERY_EXAMPLE }] }],
       required: ['steps'],
@@ -2452,6 +2457,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     // 说得通的那个,同时保证它不进只读 fork 的装配。没有 barrierAfter:没有要复核的东西。
     name: 'mc_policy',
     tags: ['write'],
+    readOnlyCall: args => Object.keys(args).length === 0,
     description:
       'Set standing rules for how the work gets done in Minecraft. Takes effect immediately, '
       + 'does not queue behind tasks. Call with no fields to read the current rules back.',
@@ -2541,6 +2547,8 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     // 工具只提供查询与写入；移动由 mc_do 的 goto 执行。
     name: 'mc_map',
     tags: ['write'],
+    bodyControl: 'independent',
+    readOnlyCall: args => Object.keys(args).length === 0,
     description:
       'Register dimension-tagged named places in this world: home, bed, chest, workstation, danger zone, resource spot, '
       + 'portal, farm, landmark — up to 24. Call with no fields to read them all back with the bearing '
@@ -2576,6 +2584,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     // 没有 barrierAfter:save 的回执自己就说清了收没收下,没有另一份要复核的世界事实。
     name: 'mc_blueprint',
     tags: ['write'],
+    readOnlyCall: args => Object.keys(args).length === 0,
     description:
       'Design and hold Minecraft project blueprints: buildings, farms, mob systems, pits, redstone, '
       + 'and other functional structures. Submit a host-authored finished '
@@ -5694,9 +5703,10 @@ export class MinecraftWorld implements World {
     const { patch, notes } = parsePolicy(args);
     // 修改前留快照，供回执计算实际 diff。
     const before = this.policy.get();
-    this.policy.set(patch);
-    // 垫脚名单与挖/垫代价直通寻路器,改完当场热改(正在走的那一段也跟着换)
-    this.bridge?.retune();
+    if (Object.keys(patch).length > 0) {
+      this.policy.set(patch);
+      this.bridge?.retune();
+    }
     const head = notes.length > 0 ? `${notes.map(policyNoteText).join(';')}。` : '';
     const after = this.policy.get();
     return head + renderPolicyChange(before, after, patch)
@@ -6968,7 +6978,7 @@ export class MinecraftWorld implements World {
       text: this.toolLog(name, args, `[${name} 失败] ${text}`), failed: true,
       data: { status: 'invalid_arguments', reason: rule, completed: 0, remaining: null,
         retryable: false, retry_after: null, next_safe_read: null, executed: false,
-        errors: correction?.errors ?? [{ path: '/queue', expected: QUEUE_SCHEMA, problem: text, actual: args.queue ?? null }],
+        errors: correction?.errors ?? [{ path: '/queue', expected: name === 'mc_scout' ? SCOUT_QUEUE_SCHEMA : QUEUE_SCHEMA, problem: text, actual: args.queue ?? null }],
         ...(correction?.uncheckedSteps ? { uncheckedSteps: correction.uncheckedSteps } : {}),
         minimal_legal_example: correction?.minimal_legal_example ?? { steps: [{ skill: 'observe', mode: 'voxels' }] } },
       meta: { admission: { accepted: false, dispatched: false, kind: 'correction', rule,
@@ -6976,7 +6986,10 @@ export class MinecraftWorld implements World {
         recovery: [{ tool: 'mc_help', arguments: correction?.helpArguments ?? {},
           text: correction?.hint ?? '按工具签名纠正参数；整批未提交，前面的步骤也未执行。' }] } },
     });
-    const mode = parseQueueMode(args.queue);
+    if (name === 'mc_scout' && args.queue != null && args.queue !== 'append') {
+      return invalidArguments('arguments.queue', SCOUT_QUEUE_SCHEMA.description);
+    }
+    const mode = parseQueueMode(name === 'mc_scout' ? 'append' : args.queue);
     if ('error' in mode) return invalidArguments('arguments.queue', mode.error);
     const parsed = parse(args.steps);
     if ('error' in parsed) {
@@ -7077,10 +7090,10 @@ export class MinecraftWorld implements World {
       rejection = rejected;
       methodAdmission?.({ accepted: value, receipt: '', retryAfterMs, completedImmediately: completed,
         rejection: rejected, taskId });
-    }, () => {
+    }, name === 'mc_scout' ? undefined : () => {
       if (!methodAdmission && this.methodOwnsBody()) this.methods.stop('新的身体任务已受理，原身体方法取消');
       this.interruptIdle('task');
-    });
+    }, name);
     // 受理回执附当前队列状态，与结局回执和世界快照共用渲染。
     const queue = renderQueue(this.executor.status());
     const receipt = this.toolLog(
@@ -8091,19 +8104,27 @@ export class MinecraftWorld implements World {
       bot.once('end', () => { bot._client.off('scoreboard_display_objective', onSidebar); if (sidebarTimer) clearTimeout(sidebarTimer); });
     }
     {
-      // Server refuses commands while it thinks a menu is open that this client never modeled
-      // (the ghost screen). Do what a player does: press Escape once, then tell the agent.
-      let lastEsc = 0;
+      // The server does not identify the refused command. An independent read
+      // may overlap a real interaction, or its reply may arrive after a new menu opens.
+      let lastEsc = -Infinity;
+      let lastKnownNotice = -Infinity;
       const onRefusal = (message: string, position: string, component: unknown, sender?: string) => {
+        if (this.bridge?.bot !== bot) return;
         if (!isServerNotice(component, position, sender) || /^\s*</.test(String(message))) return;
         if (!/打开界面时无法执行指令/.test(String(message))) return;
         const now = Date.now();
+        const windows = serverWindows(bot);
+        if (serverScreen(bot) || (bot.currentWindow && bot.currentWindow.id !== 0) || windows?.current()) {
+          if (now - lastKnownNotice < 8_000) return;
+          lastKnownNotice = now;
+          this.emit('minecraft.event', '[Minecraft] 服务端因界面打开拒绝了指令。当前界面已保留；用 mc_window 查看，待当前交互结束后再决定是否重试。', true);
+          return;
+        }
+        if (!windows) return;
         if (now - lastEsc < 8_000) return;
         lastEsc = now;
-        const screen = serverScreen(bot);
-        if (screen?.kind === 'dialog' && screen.canCloseWithEscape !== false) closeLocalScreen(bot, ['dialog']);
-        const id = serverWindows(bot)?.escape();
-        this.emit('minecraft.event', `[Minecraft] 服务端说有界面开着、拒绝了指令；已像玩家按 Esc 一样发送关闭${id !== undefined ? `（窗口 #${id}）` : ''}。稍等一下再重发那条指令；若仍被拒，先 mc_window 读当前界面。`, true);
+        const id = windows.escape();
+        this.emit('minecraft.event', `[Minecraft] 服务端因界面打开拒绝了指令，本地没有对应界面；已发送关闭窗口 #${id} 的请求。用 mc_window 检查后再决定是否重试。`, true);
       };
       bot.on('messagestr', onRefusal);
       bot.once('end', () => bot.off('messagestr', onRefusal));

@@ -25,6 +25,8 @@ export function preparePhotoContext(record: PhotoRecord, intent: string,
 
 export const PHOTO_TOOL: Omit<ToolDef, 'handler'> = {
   name: 'mc_photo', tags: ['act'], barrierAfter: true, interruptible: true,
+  bodyControl: 'independent',
+  readOnlyCall: args => typeof args.action === 'string' && ['capabilities', 'list', 'status', 'read', 'scene'].includes(args.action),
   description: 'Minecraft photography and historical scene evidence. capture saves an ordinary HUD-free web or native screenshot with fresh game readings. No image model is used. Optional scene:voxel exports bounded loaded block states and a paired proxy; action:scene retrieves those original inputs. read/list/status preserve original captures and legacy archives. Creative image/video/music generation has moved to cortico-world-aigc: pass the returned scene image handle plus explicit Persona appearance references to aigc_create. Legacy create/enhance return a structured capability_moved receipt and never call a provider. Read capabilities before use. cancel cannot cancel a migrated remote job. A photograph is historical evidence, not current facts or a completed goal.',
   parameters: { type: 'object', additionalProperties: false, properties: {
     action: { type: 'string', enum: ['capabilities', 'capture', 'enhance', 'create', 'status', 'read', 'scene', 'list', 'cancel'] },

@@ -8,7 +8,52 @@ import { MinecraftAgentClient, MINECRAFT_CLIENT_DEFAULTS, nullLogger } from '../
 import { inspectToolCall, toolRequiresBodyControl, CALL_CAPABILITY_SCHEMA, type ToolDef, type World } from '../src/contracts/index.ts';
 import {PROXIMITY_VOICE_TOOL} from '../core/proximity-voice-lane.ts';
 import { createMinecraftMcpServer } from '../src/mcp/server.ts';
-import { MINECRAFT_TOOL_DECLS } from '../src/extension.ts';
+import { MinecraftWorld, MINECRAFT_TOOL_DECLS } from '../src/extension.ts';
+
+it('separates editing waypoints and reading plans from live navigation changes', async () => {
+  const world = new MinecraftWorld({cfg: structuredClone(MINECRAFT_CLIENT_DEFAULTS)});
+  const get = (name: string) => world.tools().find(t => t.name === name)!;
+  const map = get('mc_map'), policy = get('mc_policy'), blueprint = get('mc_blueprint');
+  expect(toolRequiresBodyControl(map)).toBe(false);
+  for (const t of [map, policy, blueprint]) {
+    expect(inspectToolCall(t, t.name, {})).toMatchObject({valid:true, readOnly:true, requiresBody:false});
+  }
+  expect(inspectToolCall(map,map.name,{drop:'camp'})).toMatchObject({valid:true,readOnly:false,requiresBody:false});
+  const photo = get('mc_photo');
+  expect(toolRequiresBodyControl(photo)).toBe(false);
+  expect(inspectToolCall(photo,photo.name,{action:'list'})).toMatchObject({readOnly:true,requiresBody:false});
+  expect(inspectToolCall(photo,photo.name,{action:'capture'})).toMatchObject({readOnly:false,requiresBody:false});
+  expect(inspectToolCall(blueprint,blueprint.name,{unload:'hut'})).toMatchObject({valid:true,readOnly:false,requiresBody:true});
+  expect(inspectToolCall(policy,policy.name,{jump:'off'})).toMatchObject({valid:true,readOnly:false,requiresBody:true});
+  const retune = vi.fn();
+  Object.assign(world, {bridge:{retune}});
+  const write = vi.spyOn(world['policy'], 'set');
+  const ctx = {role:'main',log:nullLogger()};
+  await policy.handler({},ctx);
+  expect(write).not.toHaveBeenCalled();
+  expect(retune).not.toHaveBeenCalled();
+  await policy.handler({jump:'off'},ctx);
+  expect(write).toHaveBeenCalledOnce();
+  expect(retune).toHaveBeenCalledOnce();
+});
+
+it('keeps game memory independent of the body while preserving read, write and learning permissions', () => {
+  const memory = MINECRAFT_TOOL_DECLS.find(tool => tool.name === 'mc_memory')!;
+  const action = MINECRAFT_TOOL_DECLS.find(tool => tool.name === 'mc_do')!;
+  const handler = vi.fn(async () => 'not dispatched');
+  const capability = (args: Record<string, unknown>) => inspectToolCall({ ...memory, handler }, memory.name, args);
+
+  expect(memory.tags).toEqual(['read', 'write']);
+  expect([memory].some(toolRequiresBodyControl)).toBe(false);
+  expect([memory, action].some(toolRequiresBodyControl)).toBe(true);
+  expect(capability({ action: 'scene', operation: 'recall', input: { query: 'fixture' } }))
+    .toMatchObject({ valid: true, readOnly: true, requiresBody: false, dispatched: false });
+  expect(capability({ action: 'remember', kind: 'note', summary: 'Fixture', content: 'A recorded observation.', source: { kind: 'agent_note' } }))
+    .toMatchObject({ valid: true, readOnly: false, backgroundLearning: false, requiresBody: false, dispatched: false });
+  expect(capability({ action: 'scene', operation: 'archive', input: { id: 'fixture' } }))
+    .toMatchObject({ valid: true, readOnly: false, backgroundLearning: true, requiresBody: false, dispatched: false });
+  expect(handler).not.toHaveBeenCalled();
+});
 
 it('classifies built-in boat routine discovery as a read, never routine execution or mixed arguments',()=>{
  const decl=MINECRAFT_TOOL_DECLS.find(t=>t.name==='mc_script')!;
