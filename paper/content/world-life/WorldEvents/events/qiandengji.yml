@@ -43,7 +43,7 @@ events:
     type: CONSOLE_COMMAND
     duration: 600
     display-name: 冒险者集结·试炼塔
-    announcement: '<gold>[公会集结·试炼塔]</gold> <gray>召集10分钟，可单人或结伴；主世界world（-596,92,-313）。/mycli goto arena 直达入口（6魔力）。穿齐四甲，带近战武器和另一件可用远程武器（弓弩加弹药或攻击法器）。伙伴到按钮12格内，一人 /mycli arena start（免费）。每次从第1层开始，清层立即恢复，随后自动下楼。/mycli arena status 查下一步。</gray>'
+    announcement: '<gold>[公会集结·试炼塔]</gold> <gray>邀请持续10分钟，可单人或结伴。试炼塔空闲时达标玩家随时可主动开场。/mycli goto arena 到主世界入口（6魔力），走进围墙内的集合平台（桥上不计入）。穿齐四甲，带近战及可用远程武器。/mycli arena status 查战备，一人 /mycli arena start 免费开场，每次从第1层开始。</gray>'
     symbol: ⚔
     weight: 45
     bossbar-color: BLUE
@@ -55,7 +55,7 @@ events:
     type: CONSOLE_COMMAND
     duration: 600
     display-name: 冒险者集结·遗迹远征
-    announcement: '<gold>[公会集结·遗迹远征]</gold> <gray>召集10分钟，可用传送魔法赶往集结点，不必长途跑图！先 /mycli dungeon list 选空闲地点，用 /mycli dungeon info 地点ID 核对准入；/mycli dungeon travel 地点ID（成功耗8魔力）到入口或外围，再沿通道进首室，一人 /mycli dungeon start 地点ID normal 开场。遗迹内装备达标者自动同队；/mycli dungeon status 地点ID 核对参战。传送不等于开场；占用或故障就换目标。</gray>'
+    announcement: '<gold>[公会集结·遗迹远征]</gold> <gray>邀请持续10分钟。开放遗迹随时可按准入条件主动开场。/mycli dungeon list 选地点，/mycli dungeon info 地点ID 查路线及准入，再用 /mycli dungeon travel 地点ID（成功耗8魔力）到入口。沿通道进首室，一人 /mycli dungeon start 地点ID normal 开场。占用或故障时可选其他遗迹。</gray>'
     symbol: ◈
     weight: 35
     bossbar-color: PURPLE

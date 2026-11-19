@@ -743,11 +743,12 @@ final class DungeonManager implements Listener {
             if(java.util.Arrays.stream(args).skip(2).anyMatch(a->!Set.of("--json","--verbose").contains(a))){player.sendMessage("§e[invalid_argument] 此查询只接受 --json 或 --verbose；未执行。命令：/mycli arena "+sub);return;}
         }
         if(sub.equals("status")&&!java.util.Arrays.asList(args).contains("--json")&&!java.util.Arrays.asList(args).contains("--verbose")){
-            var guide=guidance(player);player.sendMessage("§6[试炼塔] "+(isParticipant(player)?"本人参赛中，第"+floor+"/"+maxFloor()+"层":active?"本人未参赛；已有队伍挑战":"本人未参赛；当前空闲")+"。清层自动下楼，全部通关自动返回入口，奖励到个人箱。详情可用 --json 或 --verbose。");showGuidance(player);return;
+            var guide=guidance(player);player.sendMessage("§6[试炼塔] "+(isParticipant(player)?"本人参赛中，第"+floor+"/"+maxFloor()+"层":active?"本人未参赛；已有队伍挑战":guide.get("startDescription").getAsString())+"。清层自动下楼，全部通关自动返回入口，奖励到个人箱。详情可用 --json 或 --verbose。");showGuidance(player);return;
         }
         switch (sub) {
             case "status" -> {
-                player.sendMessage("MC_TRIAL_STATE "+guidance(player));
+                var guide = guidance(player);
+                player.sendMessage("MC_TRIAL_STATE "+guide);
                 boolean participant = active && participants.contains(player.getUniqueId());
                 int selfFloor = floorAt(player.getLocation());
                 int remaining = 0, missing = 0, outside = 0;
@@ -768,7 +769,7 @@ final class DungeonManager implements Listener {
                         : remaining == 0 ? "wait_clear" : "search_remaining_mobs";
                 String globalState = !active ? "idle" : pausedAt > 0 ? "waiting_reconnect"
                         : cleared ? "cleared" : spawned ? "fighting" : "preparing";
-                String globalDescription = !active ? "待命" : "第 " + floor + "/" + maxFloor()
+                String globalDescription = !active ? guide.get("startDescription").getAsString() : "第 " + floor + "/" + maxFloor()
                         + " 层 · " + THEMES.get(floor - 1).name()
                         + (pausedAt > 0 ? "，队伍暂离，等待重连"
                             : cleared ? "，约 " + Math.max(0, (advanceAt - System.currentTimeMillis() + 999) / 1000)
@@ -776,11 +777,13 @@ final class DungeonManager implements Listener {
                 player.sendMessage(ChatColor.GOLD + "本人试炼：" + (participant ? "参赛中" : "未参赛")
                         + "；全服试炼：" + globalDescription + (active ? "〔" + difficulty.label + "〕" : "") + "。"
                         + (participant ? "奖励存进你的个人箱子，不自动进入背包。" : "只有参赛者获得本轮奖励。")
-                        + (!active ? "当前没有进行中的试炼，无需继续搜怪。"
+                        + (!active ? "本人下一步：" + guide.get("nextAction").getAsString() + "。建议命令：" + guide.get("nextCommand").getAsString() + "。"
                             : participant && spawned && !cleared ? "本层剩余 " + remaining + " 只怪物。" : ""));
                 player.sendMessage("MC_DUNGEON status participant=" + participant
                         + " selfState=" + (participant ? "participating" : "not_participating")
                         + " globalActive=" + active + " globalState=" + globalState
+                        + " startAvailability=" + guide.get("startAvailability").getAsString()
+                        + " canStart=" + guide.get("canStart").getAsBoolean()
                         + " activityType=trial_tower activityLabel=试炼塔"
                         + " globalDifficulty=" + (active ? difficulty.id : "none")
                         + " selectedDifficulty=" + chosenDifficulty(player).id

@@ -48,7 +48,7 @@ steps:
   complete:
     title: 攻略路线已开启
     message: 用 /mycli dungeon list 选遗迹，或 /mycli arena status 查试炼。穿齐四甲并带近战和可用远程武器；一人开场，同场达标者自动参战，不必邀请。清场立即恢复生命与魔力并清除负面状态。通关后用 /mycli dungeon status 查领奖。
-release-revision: 8
+release-revision: 11
 release-notice:
-- '[攻略更新] 试炼塔与遗迹要穿齐四甲，带近战和可用远程武器。/mycli arena status 查战备，/mycli goto arena 前往入口（6魔力）。每次从第1层开始，清场立即恢复生命、魔力并清除负面状态。'
-- '[玩法目录] /mycli world list 分页查职业、技能、组队、遗迹、交易、个人箱、NPC、照片、日记、外观和语音；/mycli world events 查随机集结。活动自主参加，不自动开场或领奖。'
+- '[冒险公告] 试炼塔空闲代表达标玩家可主动开场。/mycli arena status --json 查询入场与本人下一步。遗迹可由到达首室的一名玩家主动开场，随机集结供自愿参加。'
+- '[任务与副本] /mycli tasks list exploration 查探索委托，/mycli dungeon list 查遗迹和准入。随时用 /mycli world events --json 回看最新发布及尚在进行的集结。'

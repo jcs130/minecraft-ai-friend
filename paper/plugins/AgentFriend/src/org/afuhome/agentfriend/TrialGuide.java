@@ -5,6 +5,24 @@ import java.util.*;
 /** Advice only: never enrolls, teleports, spends mana or supplies quest evidence. */
 final class TrialGuide {
     static final String STATUS="/mycli arena status", TRAVEL="/mycli goto arena";
+    enum Opening {
+        OPEN, COOLDOWN, IN_PROGRESS, UNAVAILABLE
+    }
+
+    static Opening opening(boolean built, boolean active, long cooldownMs) {
+        if (!built) return Opening.UNAVAILABLE;
+        if (active) return Opening.IN_PROGRESS;
+        return cooldownMs > 0 ? Opening.COOLDOWN : Opening.OPEN;
+    }
+
+    static String idleDescription(Opening opening) {
+        return switch (opening) {
+            case OPEN -> "目前空闲，达标玩家可主动开场，无需等服务器公告";
+            case COOLDOWN -> "目前冷却中，结束后可主动开场";
+            case UNAVAILABLE -> "当前未开放";
+            case IN_PROGRESS -> "已有队伍挑战";
+        };
+    }
     record Facts(boolean built,boolean participant,boolean active,boolean paused,boolean spawned,boolean cleared,
                  int floor,int selfFloor,int remaining,int maxFloor,boolean observer,boolean canAct,boolean downed,
                  boolean inOtherActivity,boolean nearEntrance,double mana,long cooldownMs,List<String> missing) { }
@@ -32,6 +50,10 @@ final class TrialGuide {
             else{reason="reach_trial_entrance";action="前往主世界 world（-596,92,-313）的试炼塔入口；传送成功耗6魔力。creeping_crypt是另一处遗迹";command=TRAVEL;}
         }else{reason="ready_to_start";action="已到集合平台。"+DungeonLoadoutRules.REQUIREMENTS+"；一人start免费开场，整个平台内合格玩家一起进入，缺条件者会点名提示。桥上不计入队伍。每次新开从第1层开始，历史通关不自动跳层；清层立即恢复并自动下楼，全部通关自动返回入口平台";command="/mycli arena start";}
         var out=new LinkedHashMap<String,Object>();out.put("reason",reason);out.put("nextAction",action);out.put("nextCommand",command);
+        var opening = opening(f.built(), f.active(), f.cooldownMs());
+        out.put("startAvailability", opening.name().toLowerCase(Locale.ROOT));
+        out.put("startDescription", idleDescription(opening));
+        out.put("startPolicy", "player_initiated");
         out.put("verifyCommand",STATUS);out.put("requiresWorldAction",worldAction);out.put("queryOnly",true);
         out.put("canStart",reason.equals("ready_to_start"));out.put("entryMana",0);out.put("travelMana",6);out.put("checkpointMana",8);
         out.put("groupRule","lobby_platform");out.put("missingEquipment",f.missing());

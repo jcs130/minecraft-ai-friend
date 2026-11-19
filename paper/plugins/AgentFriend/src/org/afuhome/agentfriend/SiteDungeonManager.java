@@ -662,6 +662,8 @@ final class SiteDungeonManager implements Listener {
             else send(p,"MC_SITE_DUNGEON_ITEM",Map.of("id",s.id,"name",s.name,"rooms",s.rooms.size(),"active",runs.containsKey(s.id),"expedition",s.expedition));
         }
         Map<String,Object> summary=new LinkedHashMap<>();summary.put("total",sites.size());summary.put("page",page);summary.put("pages",Math.max(1,(sites.size()+6)/7));summary.put("partyLimit",PARTY_LIMIT);summary.put("parallelSites",true);
+        summary.put("startPolicy", "player_initiated");
+        if(!jsonOutput.get())p.sendMessage("§7开放遗迹到首室可主动开场，无需等随机集结。先查 /mycli dungeon info 地点ID 核对路线与准入。");
         if(jsonOutput.get())summary.put("items",items);
         if(first+7<rows.size())summary.put("nextCommand","/mycli dungeon list --page "+(page+1));
         send(p,"MC_SITE_DUNGEON_LIST",summary);
