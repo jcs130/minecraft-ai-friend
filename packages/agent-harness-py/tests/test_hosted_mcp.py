@@ -159,6 +159,26 @@ def test_reused_task_numbers_old_or_wrong_events_do_not_complete_walk(tmp_path):
     asyncio.run(run())
 
 
+def test_unavailable_inbox_during_halt_does_not_strand_control_or_invent_a_result(tmp_path):
+    async def run():
+        session = WalkingSession()
+        p = port(tmp_path, session)
+        await p.open()
+        await p.call("lua", {"code":"first()"}, "lost_walk")
+        original = session.call_tool
+        async def unavailable(tool, args):
+            if args["op"] == "observe": raise TimeoutError()
+            return await original(tool, args)
+        session.call_tool = unavailable
+        try:
+            assert (await p.halt("halt")).status == "completed" and session.mode == "harness"
+            assert (await p.result("lost_walk")).status == "unknown"
+            assert sum(c["op"] == "call" for c in session.calls) == 1
+        finally:
+            await p.close()
+    asyncio.run(run())
+
+
 def test_unproven_previous_connection_is_not_settled_by_reused_number(tmp_path):
     async def run():
         session = WalkingSession()

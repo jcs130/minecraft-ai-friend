@@ -201,7 +201,14 @@ class HostedMcpPort:
     async def _start_task_window(self):
         # Task numbers restart at t1. Old inbox entries must never settle a new
         # action, even if a number and native tool name both happen to match.
-        snapshot = await self.rpc("observe")
+        self.task_floor = None
+        self.finished_ids.clear()
+        try:
+            snapshot = await self.rpc("observe")
+        except Exception:
+            # A missing observation cannot establish which lease created a task.
+            # Keep its outcome unknown; the control fence can still operate.
+            return
         self.task_floor = snapshot.get("sampledAt")
         self.finished_ids = {row["id"] for row in self._inbox(snapshot) if row.get("type") == "task_finished"}
 
@@ -272,12 +279,16 @@ class HostedMcpPort:
         # Lua program behind the task it is meant to stop.
         self.epoch += 1
         value = await self.rpc("transition", mode="paused")
-        if value.get("fenced") is not True: return PortResult("unknown","halt not confirmed")
-        await self._drain_stopped()
+        if value.get("fenced") is not True or value.get("mode") != "paused" or value.get("epoch") != self.epoch:
+            return PortResult("unknown","halt not confirmed")
+        with contextlib.suppress(Exception):
+            await self._drain_stopped()
         await self._start_task_window()
         self.task_connection = str(uuid4())
         self.epoch += 1
-        await self.rpc("transition", mode="harness")
+        resumed = await self.rpc("transition", mode="harness")
+        if resumed.get("fenced") is not True or resumed.get("mode") != "harness" or resumed.get("epoch") != self.epoch:
+            return PortResult("unknown","Original actuator stopped; control resumption is unconfirmed.")
         return PortResult("completed","Original actuator stopped by server fence.")
 
     async def close(self):
