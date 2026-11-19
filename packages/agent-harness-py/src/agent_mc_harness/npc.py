@@ -437,6 +437,8 @@ class NpcPlanner:
             "When that is present, address the same outing first. A paused, faulted or unconfirmed run calls for checking status. "
             "An ended run's terminal floor is not a floor cleared. An absent completion record does not prove a place is unvisited. "
             "Choose from choices for a new outing; verify_entry means check the supplied readCommand before leaving. "
+            "Use the exact choice name and its supplied details. Dungeons are protected challenges. Describe their rooms or theme from "
+            "the hint, with no suggested mining, building or invented mechanics based on the site's name. "
             "A landmark is a horizontal structure reference, never a confirmed entrance. Use exact world and X/Z when asked. "
             "Use progress to make a relevant recommendation. In nearby speech skip unsolicited stats and personal details. "
             "Keep invitations conversational. A conversation about adventure does not grant authority to enroll, move or change modes."
@@ -704,7 +706,8 @@ class NpcHost:
                     "addressed_partner" if direct.data.get("speakerId") == str(self.role.owner_id) else "public"
                 )
                 context.companion_adventure = await self.companion_adventure.view(
-                    audience=audience, dimension=context.snapshot.dimension, recent_speech=context.recent_companion_speech)
+                    audience=audience, dimension=context.snapshot.dimension, position=context.snapshot.position,
+                    recent_speech=context.recent_companion_speech)
         if self.social and self.role.social_memory and dialogue:
             contacts = [stamped_contact(event, body_id, self.social.registered) for event in dialogue]
             pairs = {(contact["peerType"], contact["peerId"]) for contact in contacts if contact}

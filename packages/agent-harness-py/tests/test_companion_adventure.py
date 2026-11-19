@@ -42,7 +42,7 @@ def source(path, **changes):
                   "outcomes": {str(OWNER): {"occupied": {"endedAt": now - 10000, "reason": "completed", "clearedRooms": 3}}},
               }}
     write(path, "config.yml", config | changes)
-    write(path, "dungeons.yml", {"sites": {key: {"name": name, "world": "world", "rooms": [1, 2, 3]}
+    write(path, "dungeons.yml", {"sites": {key: {"name": name, "world": "world", "rooms": [1, 2, 3], "hint": "三室守卫挑战"}
                                           for key, name in [("occupied", "旧墓室"), ("cooling", "赤焰洞"),
                                                             ("stalled", "迷雾谷"), ("ready", "潮汐圣所")]}})
     write(path, "world-life.yml", {"season": "远行季", "contracts": ["tm_survey", "tm_photo"]})
@@ -74,6 +74,7 @@ def test_checkpoint_distinguishes_other_run_actual_outcome_and_routes(tmp_path):
     assert progress["guildCompleted"] == 73 and progress["activeCommission"]["id"] == "tm_photo"
     assert progress["recentCompletedCommissions"][0]["id"] == "tm_survey"
     assert {choice["id"] for choice in result["choices"]} == {"shipwreck", "ready", "tm_photo"}
+    assert next(choice for choice in result["choices"] if choice["id"] == "ready")["hint"] == "三室守卫挑战"
     place = result["choices"][0]
     assert (place["world"], place["x"], place["z"], place["entranceVerified"]) == ("minecraft:overworld", -101, 290, False)
     assert "y" not in place

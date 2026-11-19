@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import math
 import re
 import time
 from collections.abc import Callable
@@ -81,13 +82,13 @@ class CompanionAdventure:
             landmarks = {}
         self.catalogue = {"sites": mapping(sites.get("sites")), "season": season, "tasks": tasks, "landmarks": landmarks}
 
-    async def view(self, *, audience, dimension, recent_speech):
+    async def view(self, *, audience, dimension, recent_speech, position=None):
         if time.monotonic() >= self.next_refresh:
             await asyncio.to_thread(self._refresh)
             self.next_refresh = time.monotonic() + 20
-        return self._project(audience, dimension, recent_speech, int(time.time() * 1000))
+        return self._project(audience, dimension, recent_speech, position, int(time.time() * 1000))
 
-    def _project(self, audience, dimension, recent_speech, now):
+    def _project(self, audience, dimension, recent_speech, position, now):
         state = self.state
         owner = self.owner if audience != "public" else None
         fresh = self.saved_at is not None and 0 <= now - self.saved_at <= MAX_CHECKPOINT_AGE_MS
@@ -123,16 +124,18 @@ class CompanionAdventure:
             if not run and unsigned(data.get("conquest-floor")) and mapping(state.get("conquest-world")).get("enabled") is not True:
                 status = "unconfirmed"
             site = {"kind": "dungeon", "id": site_id, "name": name, "world": WORLDS.get(world, world), "rooms": len(rooms),
-                    "status": status if fresh else "unconfirmed", "readCommand": f"/mycli dungeon info {site_id}"}
+                    "status": status if fresh else "unconfirmed", "readCommand": f"/mycli dungeon info {site_id}",
+                    "hint": label(data.get("hint"), 128)}
             dungeons.append(site)
             if owner and owner in rows(run.get("party")):
                 active.append(site | {"room": min(len(rooms), unsigned(run.get("stage")) + 1),
                                       "phase": label(run.get("phase"), 24),
                                       "readCommand": f"/mycli dungeon status {site_id}"})
 
+        landmarks = self._landmarks(dimension, recent_speech, position)
         result.update(trial=tower, dungeons=dungeons[:16], activeWithPartner=active, choices=[])
         if owner is None:
-            result["choices"] = self._landmarks(dimension, recent_speech)
+            result["choices"] = landmarks
             return result
         guild = mapping(mapping(state.get("guild-players")).get(owner))
         completed = mapping(guild.get("everDone"))
@@ -164,7 +167,7 @@ class CompanionAdventure:
         if active:
             return result
         if fresh:
-            result["choices"] = self._suggestions(dungeons, tower, outcomes, active_task, completed, dimension, recent_speech)
+            result["choices"] = self._suggestions(landmarks, dungeons, tower, outcomes, active_task, completed, dimension, recent_speech)
             # A new recorded ending can open a conversation without another walk.
             endings = [{"name": "试炼塔", "endedAt": unsigned(recent_trial.get("endedAt")),
                         "reason": label(recent_trial.get("reason"))}]
@@ -175,10 +178,10 @@ class CompanionAdventure:
                 result["lastActivityEndedAt"] = latest["endedAt"]
                 result["recentEnding"] = latest
         else:
-            result["choices"] = self._landmarks(dimension, recent_speech)
+            result["choices"] = landmarks
         return result
 
-    def _suggestions(self, dungeons, tower, outcomes, active_task, completed, dimension, recent_speech):
+    def _suggestions(self, landmarks, dungeons, tower, outcomes, active_task, completed, dimension, recent_speech):
         def mentioned(place):
             return any(place["name"] in speech for speech in recent_speech)
 
@@ -186,7 +189,7 @@ class CompanionAdventure:
             last = mapping(outcomes.get(site["id"]))
             return last.get("reason") == "completed", site["world"] != dimension, unsigned(last.get("endedAt")), site["id"]
 
-        choices = self._landmarks(dimension, recent_speech)
+        choices = list(landmarks)
         choices += sorted((site for site in dungeons if site["status"] == "verify_entry" and not mentioned(site)), key=priority)[:2]
         if tower["status"] == "verify_entry" and not mentioned(tower):
             choices.append(tower)
@@ -199,7 +202,7 @@ class CompanionAdventure:
         choices.extend({"kind": "commission", **task} for task in candidates if not mentioned(task))
         return choices[:6]
 
-    def _landmarks(self, dimension, recent_speech):
+    def _landmarks(self, dimension, recent_speech, position):
         catalog = self.catalogue["landmarks"]
         verified_at = label(catalog.get("verifiedAt"), 48)
         if catalog.get("schemaVersion") != 1 or catalog.get("source") != "formal_anvil_structure_and_block_records" or not verified_at:
@@ -216,4 +219,12 @@ class CompanionAdventure:
             places.append({"kind": "landmark", "id": key, "name": name, "world": row["world"],
                            "x": row["x"], "z": row["z"], "verifiedAt": verified_at,
                            "precision": "horizontal_structure_reference", "entranceVerified": False})
-        return sorted(places, key=lambda place: place["world"] != dimension)[:2]
+        position = mapping(position)
+        has_position = all(type(position.get(axis)) in (int, float) and math.isfinite(position[axis]) for axis in ("x", "z"))
+
+        def priority(place):
+            current_world = place["world"] == dimension
+            distance = math.hypot(place["x"] - position["x"], place["z"] - position["z"]) if current_world and has_position else 0
+            return not current_world, distance
+
+        return sorted(places, key=priority)[:2]
