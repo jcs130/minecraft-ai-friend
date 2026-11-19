@@ -25,6 +25,11 @@ $file=@{source=$source;target='QiandengVoice-0.1.0.jar';sha256=(Get-FileHash -Li
 Refuse $file 'requires a complete cold backup'
 $maid=$file.Clone();$maid.target='qiandengji-maid-native-0.1.12-conversation.jar'
 Refuse $maid 'requires a complete cold backup'
+$residentTargets=@('mods/qiandengji-maid-brain-0.1.0.jar','config/tlm-residents.json')
+foreach($target in $residentTargets) {
+    $resident=$file.Clone();$resident.target=$target
+    Refuse $resident 'requires a complete cold backup'
+}
 New-Item -ItemType File -Path (Join-Path $cold '.complete'),(Join-Path $mirror '.complete') | Out-Null
 $script:listening=$true;Refuse $file 'requires stopped Paper';$script:listening=$false
 $bad=$file.Clone();$bad.sha256='0'*64;Refuse $bad 'source hash mismatch'
@@ -44,4 +49,20 @@ $bad=$maid.Clone();$bad.beforeSha256='0'*64;Refuse $bad 'target changed'
 Plan $maid;Deploy-PendingContent $cold $mirror
 if ((Get-FileHash -LiteralPath $maidTarget).Hash -ne $maid.sha256) { throw 'Maid bridge replacement mismatch' }
 $checks++
-Write-Output "PASS $checks voice deployment boundary checks"
+foreach($target in $residentTargets) {
+    $resident=$file.Clone();$resident.Remove('beforeSha256');$resident.target=$target
+    Refuse $resident 'Resident replacement requires its current digest'
+    $path=Join-Path $serverDir $target
+    [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path))
+    [IO.File]::WriteAllBytes($path,[byte[]]@(7,8))
+    $resident.beforeSha256='0'*64
+    Refuse $resident 'target changed'
+    $resident.beforeSha256=(Get-FileHash -LiteralPath $path).Hash
+    Plan $resident;Deploy-PendingContent $cold $mirror
+    if ((Get-FileHash -LiteralPath $path).Hash -ne $resident.sha256) { throw 'Resident replacement mismatch' }
+    $checks++
+}
+foreach($neighbor in @('mods/other.jar','mods/../config/tlm-residents.json','config/tlm-maid-agents.json')) {
+    if(Content-ResidentTarget $neighbor) { throw 'Unrelated resident path accepted' }; $checks++
+}
+Write-Output "PASS $checks voice and resident deployment boundary checks"

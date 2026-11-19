@@ -87,6 +87,23 @@ final class MaidCompanions {
         if(maid!=null)result.put("currentPosition",point(maid));
         result.put("observedAt",java.time.Instant.now().toString());result.put("retryable",false);return result;
     }
+    UUID pendingTravelId(UUID id) throws IOException {
+        var row = travelState.load(id);
+        return row == null ? null : row.pending();
+    }
+
+    Map<String,Object> regroup(EntityMaid maid, LivingEntity leader) throws IOException {
+        var role = agents.residents().role(maid.getUUID());
+        if (role == null || !leader.getUUID().equals(role.expeditionLeader()) || !role.allied(leader.getUUID())
+                || reserved(maid.getUUID()) || actorsChanged(maid, leader))
+            throw new IllegalArgumentException("expedition_binding_changed");
+        var plan = ResidentTravel.prepareVisit(maid, leader);
+        return transfer(maid, plan, UUID.randomUUID(), "expedition", null);
+    }
+
+    private boolean actorsChanged(EntityMaid maid, LivingEntity leader) {
+        return agents.loaded(agents.agent(maid.getUUID())) != maid || actor(leader.getUUID()) != leader;
+    }
     Map<String,Object> inspectTravel(UUID id,UUID request,UUID review,com.google.gson.JsonObject inspection)throws IOException {
         var prior=travelReviews.read(id,review);
         if(prior!=null){if(!request.toString().equals(prior.get("sourceRequestId")))throw new IllegalArgumentException("review_id_conflict");return prior;}
@@ -94,11 +111,20 @@ final class MaidCompanions {
         if(pending==null||!request.equals(pending.pending())||original==null||!Set.of("accepted","unknown").contains(original.get("status")))
             throw new IllegalArgumentException("unresolved_travel_request_required");
         var maid=agents.loaded(agents.agent(id));var contract=ledger.get(id);
-        if(maid==null||!maid.isAlive()||contract==null||thinking(id)||agents.residents()!=null&&agents.residents().busy(id))
+        var role=agents.residents()==null?null:agents.residents().role(id);
+        boolean expedition=role!=null&&role.expeditionLeader()!=null&&!reserved(id)
+                &&"expedition".equals(original.get("order"))&&role.expeditionLeader().toString().equals(original.get("leaderId"));
+        if(maid==null||!maid.isAlive()||(!expedition&&contract==null)||thinking(id)||agents.residents()!=null&&agents.residents().busy(id))
             throw new IllegalArgumentException("original_body_unavailable_or_busy");
         ResidentTravelInspection.check(inspection,maid.level().dimension().location().toString(),maid.getX(),maid.getY(),maid.getZ());
         var row=new LinkedHashMap<String,Object>();row.put("maidId",id.toString());row.put("requestId",review.toString());
-        row.put("sourceRequestId",request.toString());row.put("contractId",contract.contract().toString());row.put("originalOutcome","unknown");row.put("originalCompleted",false);
+        row.put("sourceRequestId",request.toString());row.put("contractId",contract==null?null:contract.contract().toString());row.put("originalOutcome","unknown");row.put("originalCompleted",false);
+        if (expedition) {
+            row.put("expeditionLeader",role.expeditionLeader().toString());
+            row.put("inspection",inspection);row.put("observedAt",java.time.Instant.now().toString());
+            row.put("status","completed");row.put("completed",true);row.put("reason","inspection_recorded_travel_still_fenced");
+            travelReviews.write(id,review,row);return row;
+        }
         row.put("inspection",inspection);row.put("observedAt",java.time.Instant.now().toString());row.put("status","accepted");
         travelReviews.write(id,review,row);
         halt(maid);anchor(maid,point(maid));maid.setInSittingPose(true);
@@ -112,6 +138,19 @@ final class MaidCompanions {
         var row=travelReviews.read(id,review);
         if(row==null||!"completed".equals(row.get("status")))throw new IllegalArgumentException("completed_inspection_required");
         if(Boolean.TRUE.equals(row.get("resumed")))return row;
+        if (row.get("expeditionLeader") instanceof String leader) {
+            var role=agents.residents().role(id);var body=agents.loaded(agents.agent(id));
+            var original=UUID.fromString((String)row.get("sourceRequestId"));
+            var pending=pendingTravelId(id);
+            if(role==null||!leader.equals(String.valueOf(role.expeditionLeader()))||body==null||reserved(id)
+                    ||!(original.equals(pending)||(pending==null&&Boolean.TRUE.equals(row.get("resumeRequested")))))
+                throw new IllegalArgumentException("inspected_body_or_travel_changed");
+            // The explicit resume clears only this old fence. Never repeat the original spell.
+            row.put("resumeRequested",true);travelReviews.write(id,review,row);
+            if(pending!=null)travelState.finish(id,original);
+            row.put("resumed",true);row.put("resumedAt",java.time.Instant.now().toString());
+            travelReviews.write(id,review,row);return row;
+        }
         var entry=ledger.get(id);var maid=agents.loaded(agents.agent(id));
         if(entry==null||!entry.mode().equals("paused")||!entry.contract().toString().equals(row.get("contractId"))||pendingTravel(id)||maid==null||!maid.isAlive())
             throw new IllegalArgumentException("inspected_body_or_contract_changed");
@@ -441,10 +480,11 @@ final class MaidCompanions {
         if(pendingTravel(id))throw new IllegalArgumentException("travel_unknown_query_original_request");
         var old=travelReceipts.read(id,request);if(old!=null)return old;
         var receipt=new LinkedHashMap<String,Object>();receipt.put("maidId",id.toString());receipt.put("requestId",request.toString());
+        if(plan.partner()!=null)receipt.put("leaderId",plan.partner().toString());
         receipt.put("contractId",contract==null?null:contract.toString());receipt.put("order",order);receipt.put("plan",plan.evidence());
         receipt.put("status","accepted");receipt.put("completed",false);receipt.put("observedAt",java.time.Instant.ofEpochMilli(now).toString());
         travelState.locate(id,maid.level().dimension().location().toString(),maid.chunkPosition().x,maid.chunkPosition().z);
-        travelState.begin(id,request);travelReceipts.write(id,request,receipt);
+        travelReceipts.write(id,request,receipt);travelState.begin(id,request);
         try {receipt.putAll(ResidentTravel.execute(maid,plan));}
         catch(IllegalArgumentException blocked){receipt.put("status","blocked");receipt.put("reason",blocked.getMessage());}
         catch(RuntimeException uncertain){receipt.put("status","unknown");receipt.put("reason","travel_result_unknown_query_original_request");}
@@ -491,7 +531,7 @@ final class MaidCompanions {
         if (!p.isAlive() || p.isSpectator()) throw new IllegalArgumentException("player_not_active");
     }
 
-    private LivingEntity actor(UUID id) {
+    LivingEntity actor(UUID id) {
         var player = server.getPlayerList().getPlayer(id);
         if (player != null) return player;
         var agent = agents.agent(id);
