@@ -147,6 +147,18 @@ manual work and a temporary wait. A fresh delegated guard does not need another
 write. Native combat, follow and healing continue through quiet turns and keep
 their own confirmed effects.
 
+A maid can opt into independent activity decisions with `activity_review_seconds`
+(10–600 seconds, Yui uses 90). An ordinary request to wait is a commitment she
+can reconsider. The host passes the observed activity, its duration, the known
+reason for waiting and the native expedition observation to her own planner.
+A quiet review can continue the same wait without a body write. Fresh danger,
+addressed dialogue or a change in the leader's availability can prompt an
+earlier decision. The controller can select a local task, rest or delegate
+guard even when the original owner and the expedition leader are different.
+Confirmed wait reasons stay in the body's local action journal across restarts.
+Mode selections appear in the private NPC health route; the body's receipt
+and a fresh observation establish the actual outcome.
+
 An existing registered companion residence can run under that native guard
 delegation. It holds at most the original configured residence and a short
 ticket for the original body's last confirmed generated chunk. If a body needs

@@ -37,16 +37,21 @@ class ActionJournal:
         self.db.execute("CREATE TABLE IF NOT EXISTS listened (body TEXT, event TEXT, intent TEXT, decided_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(body,event))")
         self.db.execute("CREATE TABLE IF NOT EXISTS work_sources (body TEXT, event TEXT, request TEXT, PRIMARY KEY(body,event,request))")
         self.db.execute("CREATE TABLE IF NOT EXISTS npc_contacts (body TEXT, kind TEXT, request TEXT, at REAL, PRIMARY KEY(body,kind))")
+        self.db.execute("CREATE TABLE IF NOT EXISTS npc_activity (body TEXT PRIMARY KEY, mode TEXT NOT NULL, "
+                        "since REAL NOT NULL, cue TEXT, reviewed REAL, purpose TEXT)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS npc_wait_notes (request TEXT PRIMARY KEY, note TEXT NOT NULL)")
         self.db.execute("CREATE INDEX IF NOT EXISTS npc_adventure_kind ON dispatch(body,json_extract(action,'$.args.kind')) "
                         "WHERE json_extract(action,'$.name') IN ('adventure_query','adventure_action')")
         self.db.commit()
 
-    def begin(self, body: str, action: BodyAction, sources: list[str] | None = None) -> None:
+    def begin(self, body: str, action: BodyAction, sources: list[str] | None = None, *, note: str | None = None) -> None:
         if not action.request_id:
             raise ValueError("durable_request_id_required")
         with self.db:
             self.db.execute("INSERT INTO dispatch VALUES (?,?,?,NULL)",
                             (action.request_id, body, action.model_dump_json()))
+            if note and (action.verb in {"stay", "stop"} or action.verb == "native" and action.name == "sit"):
+                self.db.execute("INSERT INTO npc_wait_notes VALUES (?,?)", (action.request_id, note[:200]))
             contact = "speech" if action.verb == "chat" else (
                 "invite" if action.verb == "native" and action.name == "adventure_action" and action.args.get("kind") == "invite_partner" else None)
             if contact:
@@ -102,8 +107,39 @@ class ActionJournal:
             if row != (body,):
                 raise ValueError("receipt_body_mismatch")
             self.db.execute("UPDATE dispatch SET receipt=? WHERE id=?", (receipt.model_dump_json(), receipt.request_id))
+            if receipt.terminal:
+                wait = self.db.execute("SELECT note FROM npc_wait_notes WHERE request=?", (receipt.request_id,)).fetchone()
+                if wait and receipt.status == "completed":
+                    now = time.time()
+                    # Preserve the start of a continuous wait, including across controller restarts.
+                    self.db.execute("INSERT INTO npc_activity VALUES (?, 'waiting', ?, NULL, ?, ?) "
+                                    "ON CONFLICT(body) DO UPDATE SET mode='waiting', "
+                                    "since=CASE WHEN mode='waiting' THEN since ELSE excluded.since END, "
+                                    "cue=NULL, reviewed=excluded.reviewed, purpose=excluded.purpose",
+                                    (body, now, now, wait[0]))
+                if wait:
+                    self.db.execute("DELETE FROM npc_wait_notes WHERE request=?", (receipt.request_id,))
             if receipt.terminal and isinstance(receipt.data, dict) and receipt.data.get("partyWriteSent") is False:
                 self.db.execute("DELETE FROM npc_contacts WHERE body=? AND request=?", (body, receipt.request_id))
+
+    def observe_activity(self, body: str, mode: str, cue: str, now: float) -> tuple[float, float | None, str | None, bool]:
+        """Return this observed episode's start, last review, known wait purpose and any change of scene."""
+        row = self.db.execute("SELECT mode,since,cue,reviewed,purpose FROM npc_activity WHERE body=?", (body,)).fetchone()
+        if not row or row[0] != mode:
+            with self.db:
+                self.db.execute("INSERT OR REPLACE INTO npc_activity VALUES (?,?,?,?,NULL,NULL)", (body, mode, now, cue))
+            return now, None, None, True
+        changed = row[2] is not None and row[2] != cue
+        if row[2] != cue:
+            with self.db:
+                self.db.execute("UPDATE npc_activity SET cue=?, reviewed=CASE WHEN ? THEN NULL ELSE reviewed END WHERE body=?",
+                                (cue, changed, body))
+        return row[1], None if changed else row[3], row[4], changed
+
+    def reviewed_activity(self, body: str, mode: str, cue: str, now: float, renewed_purpose: str | None = None) -> None:
+        with self.db:
+            self.db.execute("UPDATE npc_activity SET reviewed=?, purpose=COALESCE(?,purpose) WHERE body=? AND mode=? AND cue=?",
+                            (now, renewed_purpose, body, mode, cue))
 
     def unresolved(self, body: str) -> list[BodyAction]:
         rows = self.db.execute("SELECT action,receipt FROM dispatch WHERE body=?", (body,)).fetchall()
