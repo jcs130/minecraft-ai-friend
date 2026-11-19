@@ -161,3 +161,20 @@ def test_only_the_unsent_invitation_releases_its_cooldown(tmp_path):
     unsent("old_invite")
     assert journal.contacted_recently("actor", "invite", 1800)
     journal.close()
+
+
+@pytest.mark.parametrize("action", ["clean", "store", "donate"])
+def test_inventory_shortcuts(action):
+    import json
+    body = "10000000-0000-0000-0000-000000000011"
+    kind = "inventory_" + action
+    for name, preview in [(life.QUERY, True), (life.ACT, False)]:
+        expected = f"/mycli inventory {action}" + (" --dry-run" if preview else "") + " --json"
+        assert life.player_command(name, {"kind": kind}, "Kirito", "ag_CorMy") == expected
+        row = {"action": action, "dryRun": preview, "success": True, "playerUuid": body,
+               "reason": "preview" if preview else "partial", "leftForCapacity": 8}
+        result = PortResult("completed", "stdout:\nMC_INVENTORY_BATCH " + json.dumps(row))
+        evidence = life.game_result(result, name, {"kind": kind}, body_id=body)
+        assert evidence.status == "completed" and evidence.data["adventure"]["receipt"] == row
+        mismatch = life.game_result(result, name, {"kind": kind}, body_id="another")
+        assert mismatch.status == ("failed" if preview else "unknown") and not mismatch.data["adventure"]["retryWrite"]

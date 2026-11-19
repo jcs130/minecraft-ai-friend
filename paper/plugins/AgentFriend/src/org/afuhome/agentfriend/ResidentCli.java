@@ -27,6 +27,7 @@ public final class ResidentCli {
             case "profession" -> a.length==2&&a[1].equals("list")||a.length==3&&Set.of("info","choose").contains(a[1]);
             case "skills" -> a.length==2&&Set.of("list","tree","points").contains(a[1])||a.length==3&&Set.of("info","learn","prepare").contains(a[1]);
             case "archive" -> ARCHIVE.contains(a[1]); case "photo" -> PHOTO.contains(a[1]);
+            case "inventory" -> InventoryBatch.ACTIONS.contains(a[1]) && Arrays.stream(a).skip(2).allMatch(s -> s.equals("--dry-run") || s.equals("--json"));
             case "tasks" -> Set.of("list","info","status").contains(a[1]);
             case "dungeon" -> Set.of("list","info","status","travel","start","join","resume","leave","claim").contains(a[1]);
             case "land" -> a.length==2&&a[1].equals("here")
@@ -135,12 +136,12 @@ public final class ResidentCli {
             if(command.startsWith("photo take")){
                 String status=value.has("status")?value.get("status").getAsString():"";
                 terminal=Set.of("success","denied","cancelled","stopped","expired","unknown").contains(status);success=status.equals("success");
-            }else if(command.startsWith("cast ")||command.startsWith("profession ")||command.startsWith("skills ")||command.startsWith("archive ")||command.startsWith("photo ")||command.startsWith("tasks ")||command.startsWith("arena ")||command.startsWith("dungeon ")||command.startsWith("land ")){
+            }else if(command.startsWith("inventory ")||command.startsWith("cast ")||command.startsWith("profession ")||command.startsWith("skills ")||command.startsWith("archive ")||command.startsWith("photo ")||command.startsWith("tasks ")||command.startsWith("arena ")||command.startsWith("dungeon ")||command.startsWith("land ")){
                 terminal=true;success=!value.has("errorCode")&&(!value.has("success")||value.get("success").getAsBoolean());
                 if(value.has("status")&&Set.of("denied","unavailable","error").contains(value.get("status").getAsString()))success=false;
             }
             boolean unchangedRefusal=value.has("success")&&!value.get("success").getAsBoolean()&&value.has("changed")&&!value.get("changed").getAsBoolean();
-            boolean unknown=value.has("status")&&value.get("status").getAsString().equals("unknown")||!unchangedRefusal&&value.has("errorCode")&&value.get("errorCode").getAsString().contains("UNKNOWN");
+            boolean unknown=value.has("outcomeUnknown")&&value.get("outcomeUnknown").getAsBoolean()||value.has("status")&&value.get("status").getAsString().equals("unknown")||!unchangedRefusal&&value.has("errorCode")&&value.get("errorCode").getAsString().contains("UNKNOWN");
             if(value.has("pending")&&value.get("pending").getAsBoolean()&&value.has("reason")&&Set.of("recycle_pending","recycle_unverified","money_pending","money_unverified").contains(value.get("reason").getAsString()))unknown=true;
             if(terminal){row.addProperty("status",unknown?"unknown":success?"completed":"blocked");row.addProperty("completed",success&&!unknown);row.addProperty("reason",unknown?"service_result_unknown_query_original_request":success?"service_receipt_received":"service_refused");row.add("serviceReceipt",value);}
         }catch(Exception notStructured){/* Human prose is evidence, never proof of success. */}
@@ -223,6 +224,7 @@ public final class ResidentCli {
                 var denied=new JsonObject();denied.addProperty("success",false);denied.addProperty("reason","trial_downed_read_status_wait_for_rescue");finish(id,request,denied);return row.toString();
             }
             switch(args[0]){
+                case "inventory" -> plugin().inventoryBatch(player,args);
                 case "cast","profession","skills" -> {
                     var rpg=Bukkit.getPluginManager().getPlugin("QiandengjiRpg");if(rpg==null||!rpg.isEnabled())throw new IllegalStateException("native_rpg_unavailable");
                     ((org.bukkit.command.CommandExecutor)rpg).onCommand(player,((org.bukkit.plugin.java.JavaPlugin)rpg).getCommand("qdrpg"),"qdrpg",(command+" --json").split(" +"));

@@ -30,6 +30,9 @@ final class ResidentCliContract {
         write("arena shop buy <offerId>","purchase_to_personal_reward_queue"),read("arena stash summary"),read("arena stash inventory"),read("arena stash list <page 1-10>"),
         write("arena stash take <stashSlot 1-540> <count 1-64>","transfer_personal_box_to_actual_bag"),
         write("arena stash putslot <nativeBagSlot 0-based> <count 1-64>","transfer_actual_bag_to_personal_box"),
+        write("inventory clean [--dry-run]","discard_plain_common_and_merge_own_bag"),
+        write("inventory store [--dry-run]","store_surplus_in_own_personal_box"),
+        write("inventory donate [--dry-run]","donate_plain_surplus_to_public_guild_chests"),
         write("arena stash collect","transfer_existing_reward_queue_to_personal_box"),
         read("dungeon list [--page 1]"),read("dungeon info <ID>"),read("dungeon status [ID]"),
         write("dungeon travel <ID>","travel_to_dungeon_entrance_not_enroll"),write("dungeon start <ID> [normal|adventure|apocalypse]","start_dungeon"),
@@ -45,6 +48,9 @@ final class ResidentCliContract {
         if(operation==null)return Map.of("queryOnly",false,"operationEffect","unknown","completionScope","unknown");
         var row=new LinkedHashMap<String,Object>();row.put("operation",operation.key());row.put("queryOnly",operation.queryOnly());
         row.put("operationEffect",operation.effect());row.put("completionScope",operation.queryOnly()?"query_snapshot_not_world_action":"single_operation_not_overall_objective");
+        if(operation.key().startsWith("inventory ") && Arrays.asList(normalized.split(" ")).contains("--dry-run")){
+            row.put("queryOnly",true); row.put("operationEffect","read_only"); row.put("completionScope","query_snapshot_not_world_action");
+        }
         if(operation.key().equals("arena entrance")){
             row.put("operationNotice","Returns entrance coordinates and current conditions only; it does not move, enroll or start. Walk to the returned entrance, then inspect entry conditions before starting.");
             row.put("nextSafeRead","arena status");
