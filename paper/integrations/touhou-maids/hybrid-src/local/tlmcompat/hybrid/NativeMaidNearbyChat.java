@@ -49,6 +49,7 @@ final class NativeMaidNearbyChat implements Listener {
             :MaidAddressing.addressed(maid.getName().getString(),text);
         if(direct!=null)return new Address(direct,partner);
         if(plugin.ownerDialogue(actor,maid)){
+            if (addressesSomeoneElse(actor, maid, text)) return null;
             String vocative=MaidAddressing.partnerAddressed("女仆",text);
             if(vocative!=null)return new Address(vocative,true);
             if(facing && text!=null && !text.isBlank()
@@ -58,6 +59,18 @@ final class NativeMaidNearbyChat implements Listener {
         String followup=conversation.followup(actor.getUniqueId(),maid.getUUID(),actor.getWorld().getUID(),actor,text,System.nanoTime());
         return followup==null?null:new Address(followup,false);
     }
+    private boolean addressesSomeoneElse(Player actor, EntityMaid maid, String text) {
+        int radius = MaidConversationRange.speaker(maid, actor);
+        for (var entity : actor.getNearbyEntities(radius, radius, radius)) {
+            if (entity.getUniqueId().equals(maid.getUUID()) || !actor.canSee(entity)) continue;
+            var otherMaid = HybridMaidPlugin.nativeMaid(entity);
+            String name = otherMaid != null ? otherMaid.getName().getString()
+                : entity instanceof Player player ? player.getName() : null;
+            if (name != null && MaidAddressing.partnerAddressed(name, text) != null) return true;
+        }
+        return false;
+    }
+
     NativeMaidNearbyChat(HybridMaidPlugin plugin){
         this.plugin=plugin;Bukkit.getPluginManager().registerEvents(this,plugin);
         Bukkit.getScheduler().runTaskTimer(plugin,this::sample,1,5);

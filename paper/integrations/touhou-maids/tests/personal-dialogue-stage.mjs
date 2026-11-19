@@ -103,8 +103,11 @@ try{
     neighbor.chat('沐白，看见我了吗？');await sleep(1150);
     check('visitor cannot invoke the personal model',listEvents().slice(start).every(r=>r.path!='/v1/chat/completions'));
     await inWorld('overworld','summon touhou_little_maid:maid 104.5 90 103.5 {UUID:'+dataInts(other)+',Owner:'+dataInts(ownerId)+',Sitting:1b,CustomName:\'{"text":"小杏"}\',PersistenceRequired:1b}');
-    await actor.look(Math.PI,0,true);actor.chat('小杏，这里下雨了吗？');await sleep(1150);
-    check('second maid of same owner has no shared AI',listEvents().slice(start).every(r=>r.path!='/v1/chat/completions'));
+    await inWorld('overworld','tp '+other+' 104.5 90 103.5');
+    await until('other original maid in range',()=>hasBody(other,'overworld'));
+    const priorCount=receiptList().length;
+    await face(actor);actor.chat('小杏，这里下雨了吗？');await sleep(1150);
+    check('speaking to another maid overrides gaze and spends no model budget',receiptList().length===priorCount&&listEvents().slice(start).every(r=>r.path!='/v1/chat/completions'));
     await face(actor);await sleep(700);
     const before=receiptList().map(r=>r.operationId);
     await microphone();
