@@ -1,0 +1,45 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {createHash,randomBytes,randomUUID} from 'node:crypto';
+import {trialIssuer} from './issuer.mjs';
+
+test('a real desktop poll changes only after explicit scoped one-use consent', async t => {
+  const hash=v=>createHash('sha256').update(v).digest('hex');
+  const voucher='mdinvite_'+randomBytes(32).toString('base64url');
+  const token='mdw_'+randomBytes(32).toString('base64url');
+  const second='mdw_'+randomBytes(32).toString('base64url');
+  let now=Date.now();
+  const cfg={origin:'https://example.org',bodyEndpoint:'https://192.168.0.2:8888/api/v1/maid-body',name:'结衣',maidId:randomUUID(),ownerId:randomUUID(),until:now+7200_000,invitations:[hash(voucher)]};
+  const db=new DatabaseSync(':memory:');
+  const server=trialIssuer(cfg,db,()=>now);
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));
+  t.after(async()=>{await new Promise(r=>server.close(r));db.close();});
+  const endpoint='http://127.0.0.1:'+server.address().port+'/api/v1/maid-connect';
+  const post=(suffix,body,headers={})=>fetch(endpoint+suffix,{method:'POST',headers:{'content-type':'application/json',...headers},body:JSON.stringify(body)});
+  const poll=key=>post('/check',{}, {Authorization:'Bearer '+key});
+  const start=async key=>{
+    const response=await post('/request',{tokenHash:hash(key)});assert.equal(response.status,201);
+    const data=await response.json();assert.match(data.verificationUrl,/^https:\/\/example.org\/maid-connect.html#request=/);
+    return [new URLSearchParams(new URL(data.verificationUrl).hash.slice(1)).get('request'),data.confirmationCode];
+  };
+  const [id,code]=await start(token);
+  const claim=(id,code,v,origin=cfg.origin)=>post('/requests/'+id+'/trial',{confirmationCode:code,invitation:v},{origin});
+  assert.equal((await poll(token)).status,202);
+  assert.equal((await poll(second)).status,401);
+  assert.equal((await claim(id,code,voucher,'https://another.example')).status,403);
+  assert.equal((await claim(id,code,'mdinvite_'+randomBytes(32).toString('base64url'))).status,403);
+  assert.equal((await claim(id,code==='000000'?'FFFFFF':'000000',voucher)).status,403);
+  assert.equal((await poll(token)).status,202);
+  assert.equal((await claim(id,code,voucher)).status,200);
+  assert.equal((await claim(id,code,voucher)).status,200);
+  const approved=await (await poll(token)).json();
+  assert.deepEqual(approved,{state:'approved',bodyEndpoint:cfg.bodyEndpoint,maidId:cfg.maidId,ownerId:cfg.ownerId,expiresAt:cfg.until});
+  const [other,otherCode]=await start(second);
+  assert.equal((await claim(other,otherCode,voucher)).status,409);
+  assert.equal((await poll(second)).status,202);
+  assert.equal((await post('/request',{tokenHash:hash(second)},{origin:cfg.origin})).status,403);
+  now=cfg.until+1;
+  assert.equal((await poll(token)).status,410);
+  assert.equal((await (await fetch(endpoint+'/trial')).json()).active,false);
+});
