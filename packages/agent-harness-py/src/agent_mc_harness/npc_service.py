@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import time
 from uuid import UUID
 
 from .body.maid import MaidBody
@@ -43,6 +44,27 @@ def open_role_memory(directory: Path, connection: tuple[str, str] | None) -> Mem
     """Both modes keep the same local journal. A sidecar uses its own durable role outbox."""
     graph = RemoteGraphMemory(*connection, directory / "graph-outbox.sqlite3") if connection else None
     return MemoryRouter(LocalMemory(directory / "memory.sqlite3"), graph)
+
+
+def external_handoff(role, transport, *, now=None):
+    """A trusted operator lease pauses one original maid, even if the LAN relay exits unexpectedly."""
+    filename = transport.get("externalHandoffFile")
+    if role.body_kind != "maid" or not filename:
+        return False
+    marker = Path(filename)
+    if not marker.is_absolute():
+        raise ValueError("external_handoff_requires_absolute_path")
+    try:
+        row = read(marker)
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError):
+        # The native controller lease still arbitrates exclusive access on failures.
+        return False
+    current = time.time() if now is None else now
+    until = row.get("until") if isinstance(row, dict) else None
+    return (type(until) in (int, float) and current < until <= current + 180
+            and row.get("bodyId") == str(role.body_id) and row.get("ownerId") == str(role.owner_id))
 
 
 def adventure_source(settings):
@@ -111,9 +133,14 @@ async def serve(path: Path):
         clients.append(provider[name])
     system1 = FastSelector(provider["tokenplan"], settings.get("systemOneModel", "decision-model-preview"))
     semaphore = asyncio.Semaphore(2)
-    async def delayed(host):
-        await asyncio.sleep(15)
-        await host.run()
+    def handoff(role):
+        return external_handoff(role, settings["bodies"][role.id])
+
+    async def start_local(host, delay=0):
+        if delay:
+            await asyncio.sleep(delay)
+        if not maintenance() and not handoff(host.role):
+            await host.run()
 
     def maintenance():
         return bool(settings.get("pauseFile") and Path(settings["pauseFile"]).exists())
@@ -135,7 +162,7 @@ async def serve(path: Path):
     async def answer_social(role, planner):
         body = str(role.body_id)
         while True:
-            if not maintenance():
+            if not maintenance() and not handoff(role):
                 for answer, row in await asyncio.to_thread(social.dialogue_requests, role):
                     speaker = row["speakerId"]
                     peer = social.registered.get(speaker, speaker)
@@ -155,6 +182,8 @@ async def serve(path: Path):
                         response = {"status": "prepared", "reply": reply}
                     except Exception:
                         response = {"status": "failed", "reason": "dialogue_reply_unavailable"}
+                    if maintenance() or handoff(role):
+                        break
                     try:
                         await asyncio.to_thread(publish_json, answer, response | {
                             "schemaVersion": 1, "id": row["id"], "maidId": body, "speakerId": speaker, "channel": row["channel"]})
@@ -180,11 +209,12 @@ async def serve(path: Path):
         return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1),
                        memory, ActionJournal(state / role.id / "actions.sqlite3"), social=social, social_graph=social_graph,
                        companion_adventure=CompanionAdventure(*source, role.owner_id) if role.adventure_advice and source else None)
+    yielded = {}
     try:
         for role in roles:
             host = build(role)
             hosts.append(host)
-            tasks.append(asyncio.create_task(host.run(), name="npc-" + role.id))
+            tasks.append(asyncio.create_task(start_local(host), name="npc-" + role.id))
         if social:
             if social_graph:
                 social_graph.graph.start()
@@ -193,10 +223,16 @@ async def serve(path: Path):
                                 for host in hosts if host.role.social_memory)
         while True:
             pausing = maintenance()
-            for host in hosts:
-                host.pausing = pausing
+            holding = [handoff(host.role) for host in hosts]
             status = {"schema": 1, "pid": os.getpid(), "pausing": pausing, "roles": []}
-            for host, task in zip(hosts, tasks, strict=True):
+            for index, (host, task) in enumerate(zip(hosts, tasks, strict=True)):
+                paused = pausing or holding[index]
+                if paused != host.pausing:
+                    host.pausing = paused
+                    host.wake.set()
+                if index in yielded:
+                    status["roles"].append(yielded[index])
+                    continue
                 error = type(task.exception()).__name__ if task.done() and not task.cancelled() and task.exception() else None
                 status["roles"].append({"id": host.role.id, "bodyKind": host.role.body_kind, "bodyId": str(host.role.body_id),
                                         "model": host.role.model, "provider": host.role.provider, "running": not task.done(), "error": error,
@@ -206,6 +242,12 @@ async def serve(path: Path):
                                         "socialGraphiti": social_graph.last.get(str(host.role.body_id)) if social_graph else None,
                                         "unknownRequests": len(host.journal.unresolved(str(host.role.body_id))),
                                         "intents": [{"id": i.id, "state": i.state, "reason": i.reason} for i in list(host.runtime.intents.values())[-8:]]})
+                if holding[index] and task.done() and not status["roles"][-1]["unknownRequests"]:
+                    await host.close()
+                    row = status["roles"][-1]
+                    row.update(running=False, controlMode="available_for_external_controller")
+                    row["health"] = host.body.health().model_dump(mode="json")
+                    yielded[index] = row
             await asyncio.to_thread(health_file.publish, status)
             if all(task.done() for task in tasks) and pausing:
                 return
@@ -213,17 +255,19 @@ async def serve(path: Path):
                 # One unloaded body must not interrupt other characters' active
                 # actions. Re-open only that actor with its original journals.
                 for index,task in enumerate(tasks):
-                    if task.done():
-                        await hosts[index].close()
+                    if task.done() and not holding[index]:
+                        if yielded.pop(index, None) is None:
+                            await hosts[index].close()
                         hosts[index]=build(roles[index])
-                        tasks[index]=asyncio.create_task(delayed(hosts[index]),name="npc-"+roles[index].id)
+                        tasks[index]=asyncio.create_task(start_local(hosts[index], 15), name="npc-"+roles[index].id)
             await asyncio.sleep(2)
     finally:
         for task in [*tasks, *social_tasks]:
             task.cancel()
         await asyncio.gather(*tasks, *social_tasks, return_exceptions=True)
-        for host in hosts:
-            await host.close()
+        for index, host in enumerate(hosts):
+            if index not in yielded:
+                await host.close()
         if social_graph:
             await social_graph.graph.close()
         for client in clients:
