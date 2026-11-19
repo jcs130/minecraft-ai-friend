@@ -71,7 +71,7 @@ No game action, teammate authorization or body-task cancellation is started here
 
 const stringField = (maxLength: number) => ({ type: 'string', minLength: 1, maxLength });
 export const GAME_MEMORY_TOOL: Omit<ToolDef, 'handler'> = {
-  name: 'mc_memory', tags: ['read', 'write'],
+  name: 'mc_memory', tags: ['read', 'write'], bodyControl: 'independent',
   sceneKnowledge: { protocol: 'agent-mc-scenes/v1' },
   trajectoryLearning: { protocol: 'agent-mc-trajectory/v1' },
   readOnlyCall: args => ['help', 'search', 'get', 'replication'].includes(String(args.action ?? 'help'))

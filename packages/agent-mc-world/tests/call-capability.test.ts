@@ -10,6 +10,24 @@ import {PROXIMITY_VOICE_TOOL} from '../core/proximity-voice-lane.ts';
 import { createMinecraftMcpServer } from '../src/mcp/server.ts';
 import { MINECRAFT_TOOL_DECLS } from '../src/extension.ts';
 
+it('keeps game memory independent of the body while preserving read, write and learning permissions', () => {
+  const memory = MINECRAFT_TOOL_DECLS.find(tool => tool.name === 'mc_memory')!;
+  const action = MINECRAFT_TOOL_DECLS.find(tool => tool.name === 'mc_do')!;
+  const handler = vi.fn(async () => 'not dispatched');
+  const capability = (args: Record<string, unknown>) => inspectToolCall({ ...memory, handler }, memory.name, args);
+
+  expect(memory.tags).toEqual(['read', 'write']);
+  expect([memory].some(toolRequiresBodyControl)).toBe(false);
+  expect([memory, action].some(toolRequiresBodyControl)).toBe(true);
+  expect(capability({ action: 'scene', operation: 'recall', input: { query: 'fixture' } }))
+    .toMatchObject({ valid: true, readOnly: true, requiresBody: false, dispatched: false });
+  expect(capability({ action: 'remember', kind: 'note', summary: 'Fixture', content: 'A recorded observation.', source: { kind: 'agent_note' } }))
+    .toMatchObject({ valid: true, readOnly: false, backgroundLearning: false, requiresBody: false, dispatched: false });
+  expect(capability({ action: 'scene', operation: 'archive', input: { id: 'fixture' } }))
+    .toMatchObject({ valid: true, readOnly: false, backgroundLearning: true, requiresBody: false, dispatched: false });
+  expect(handler).not.toHaveBeenCalled();
+});
+
 it('classifies built-in boat routine discovery as a read, never routine execution or mixed arguments',()=>{
  const decl=MINECRAFT_TOOL_DECLS.find(t=>t.name==='mc_script')!;
  const actual={...decl,handler:vi.fn(async()=> 'never called')};
