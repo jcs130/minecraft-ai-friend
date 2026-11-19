@@ -1,0 +1,24 @@
+{
+  "mod_id": "qiandeng_controls",
+  "mod_name": "千灯纪 · 施法轮盘",
+  "mod_versions": [
+    {
+      "version": "0.1.2",
+      "inGameKeys": {
+        "key.qiandeng_controls.wheel": { "channels": ["keyMapping"] }
+      },
+      "screen": {
+        "dev.qiandeng.controls.SpellWheelScreen": {
+          "rightStick": {
+            "behavior": "RADIAL_PATH",
+            "threshold": 0.5,
+            "cursorRadius": 72,
+            "angleBias": 0.0,
+            "keepLastPosition": true,
+            "showCursor": true
+          }
+        }
+      }
+    }
+  ]
+}

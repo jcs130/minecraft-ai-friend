@@ -10,6 +10,17 @@ FCL 导入一个 `.mrpack`，自动准备 Minecraft 1.21.1 / NeoForge 21.1.252�
 
 见随包 [PLAYER_GUIDE.md](PLAYER_GUIDE.md) 或官网 `/android.html`。用 FCL 1.3.4.6 导入独立实例，选择 Java 21，游戏侧栏打开「手柄控制」，输入模式选「SDL 直通」。需要语音时在游戏内按 V 完成麦克风向导。
 
+## 用 Xbox 手柄选技能
+
+官网原生手柄包的 Recommend 模板把 View 键（Xbox 左侧两个小方框）分配给 Control Flex 的「径向菜单 1」。初始八格都是空的。千灯纪的「千灯纪·施法」模板把同一个键接到服务器为你保存的八个技能。
+
+- 已在玩原生手柄包时，退出游戏，把小包中的 `config` 合并到这个实例的游戏目录。重开后在 Control Flex 设置侧栏用 ◀ / ▶ 选「千灯纪·施法」。[下载手柄配置](https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/0e8bfc02d4a6982efd6dcb92d7417057616efdb396d9ffb4bc02b614071c2acc/qiandengji-fcl-spell-wheel-1.zip)
+- 新装时，把施法版 `.mrpack` 导入 FCL 的独立实例，首次启动即选用该模板。[下载 FCL 施法版](https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/bb6194dcf9721b17a1bab59b9688e414b6bc541d8efce75c7ceacf2bc4cd54c9/qiandengji-android-1.21.1-neoforge-1.0.0-preview.6-wheel.1.mrpack)
+
+长按 View 打开，右摇杆指向技能，看清技能名称后按 A 确认，B 返回。轮盘打开后可以松开 View。要换掉某一招，用左摇杆移到下方「配置轮盘」，按 A 选槽位，再选技能。需要目标的传送术会接着让你选队友或目的地。
+
+若想给原有的 Control Flex 径向菜单加一个入口，也可以把空格类型设为「聊天指令」，填 `/mycli menu wheel`。手柄原有方案仍可从设置侧栏选回。
+
 ## 原生手柄输入
 
 [Control Flex 0.8.9-beta.3](https://github.com/ControlFlexMC/control-flex/releases/tag/v0.8.9-beta.3) 提供对应 Minecraft 1.21.1 / NeoForge 的原版构建和 Android ARM64 JNI。清单固定发布者的 SHA256、Modrinth 格式的 SHA1/SHA512 及下载地址。其 Android 后端复用 FCL 的 SDL3，由游戏模组读取实际摇杆轴与按钮。游戏启动后在 FCL 侧栏设置 `SDL_DIRECT`。手柄键位由 Control Flex 的游戏内设置管理。
@@ -30,6 +41,10 @@ SVC 2.6.27 的通话键初始未绑定，按键通话读取按下和松开的状
 - 不混装只带 Fabric 元数据的 `voicechat-android-fix`，也不把 `use_natives=false` 宣称为解决全部音频问题。Java 回退不提供原生降噪、自动增益及 SVC 录音。
 
 ## 可复现构建
+
+可选的 Xbox 施法模板基于已发布的原生手柄 `preview.6`。用 `python add-wheel-controller.py <原生手柄 preview.6.mrpack> <输出目录>` 生成现有实例的配置 ZIP 和新实例的完整导入包。`python test-wheel-controller.py <原生手柄 preview.6.mrpack>` 核验模板、八个方向、旧文件和原始模组摘要。
+
+在 Minecraft 1.21.1、NeoForge 21.1.252 的真实客户端用虚拟 Xbox 手柄验证过八个方向、B 取消和 A 确认。测试角色选中夜视术后获得了 120 秒夜视，按住 View 直到确认也只施放一次。安卓实体手柄的手感仍待实测。
 
 需要 Python 3.12+、Java 21 和联网。Eclipse 编译器、原音频桥及四个模组均在 `sources.lock.json` 锁定来源、大小、SHA1 和 SHA512。
 
