@@ -349,6 +349,31 @@ def current_party(evidence, peer, *, since=0):
     return None
 
 
+def assembly_action(evidence, peer: str, actor: str) -> str | None:
+    """Use the native roster to propose a single action for the configured partner."""
+    at = evidence.get("at", 0)
+    if not isinstance(at, (int, float)) or not 0 <= time() - at <= 90:
+        return None
+    for record in evidence.get("records", []):
+        row = record.get("value")
+        if (record.get("type") != "MC_RPG" or not isinstance(row, dict) or row.get("type") != "party"
+                or row.get("available") is not True or row.get("inviteStateKnown") is not True or row.get("selfUuid") != actor):
+            continue
+        phase = row.get("phase")
+        if row.get("inParty") is False and phase == "not_in_party" and row.get("memberCount") == 0:
+            return "create_party"
+        if row.get("inParty") is False and phase == "invited":
+            invite = row.get("pendingInvite")
+            expires = invite.get("expiresInSeconds") if isinstance(invite, dict) else None
+            if isinstance(expires, (int, float)) and invite.get("inviter") == peer and expires > time() - at:
+                return "accept_invitation"
+        if (row.get("inParty") is True and phase == "awaiting_teammates" and row.get("memberCount") == 1
+                and row.get("leaderUuid") == actor):
+            return "invite_partner"
+        return None
+    return None
+
+
 def public_outing(roster, invitation, creation, trial, travel, peer, snapshot):
     """A public meeting place needs no access to the invitee's private position."""
     now = time()

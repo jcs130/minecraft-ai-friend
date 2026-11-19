@@ -18,7 +18,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .companion_adventure import mentions_activity
-from .conversation import COMPANION_SPEECH_POLICY, CONVERSATION_POLICY, repeats_companion_speech
+from .conversation import COMPANION_SPEECH_POLICY, CONVERSATION_POLICY, WHALE_SPEECH_POLICY, names_listener, repeats_companion_speech, whale_speech
 from .body import adventure
 from .journal import ActionJournal, work_key
 from .models import BodyEvent, Scope
@@ -54,8 +54,10 @@ class NpcRole(BaseModel):
     native_tasks: list[str] = Field(default_factory=list, max_length=32)
     native_items: list[Annotated[str, Field(pattern=r"^[a-z0-9_.-]+:[a-z0-9_./-]+$", max_length=128)]] = Field(default_factory=list, max_length=16)
     adventure_partner: str | None = Field(default=None, pattern=r"^[\w.]{1,16}$")
+    autonomous_rendezvous: bool = False
     default_native_guard: bool = False
     adventure_advice: bool = False
+    speech_profile: Literal["whale"] | None = None
     social_memory: bool = False
     social_previous_bodies: list[UUID] = Field(default_factory=list, max_length=8)
     interval_seconds: int = Field(default=45, ge=10, le=600)
@@ -79,6 +81,9 @@ class NpcRole(BaseModel):
             raise ValueError("reviewed_item_ids_require_numen_use_item")
         if self.adventure_partner and (self.body_kind != "numen" or "body:native:survey" not in self.allowed_tools):
             raise ValueError("adventure_partner_requires_hosted_terrain_survey")
+        if self.autonomous_rendezvous and (not self.adventure_partner or
+                not {"body:native:adventure_query", "body:native:adventure_action"}.issubset(self.allowed_tools)):
+            raise ValueError("rendezvous_requires_native_party_and_a_configured_partner")
         return self
 
     def scope(self, server_id: str) -> Scope:
@@ -129,12 +134,21 @@ def already_guarding(native: dict[str, Any]) -> bool:
     return native.get("nativeGuardDelegated") is True and native.get("sitting") is not True
 
 
-def addressed_dialogue(event: BodyEvent, body_id: str) -> bool:
+def addressed_dialogue(event: BodyEvent, body_id: str, aliases: tuple[str, ...] = ()) -> bool:
     data = event.data
-    return (event.kind == "dialogue" and event.body_kind == "maid" and event.body_id == body_id
-            and data.get("serverAttributed") is True and data.get("maidId") == body_id
-            and data.get("deliveryScope") == "addressed" and data.get("recipientId") == body_id
-            and isinstance(data.get("eventId"), str))
+    event_id = data.get("eventId")
+    if event.body_id != body_id or data.get("serverAttributed") is not True or not isinstance(event_id, str):
+        return False
+    if (event.kind == "dialogue" and event.body_kind == "maid" and data.get("maidId") == body_id
+            and data.get("deliveryScope") == "addressed" and data.get("recipientId") == body_id):
+        return True
+    # Nearby relay events already bind the actual speaker and listener.
+    # A name at the start gives the planner a recipient, never action authority.
+    speaker = data.get("speakerId")
+    return (event.kind in {"chat", "dialogue"} and data.get("listenerId") == body_id
+            and data.get("deliveryScope") == "nearby" and data.get("channel") in {"npc_chat", "chat", "public", "voice"}
+            and isinstance(speaker, str) and speaker != body_id
+            and event_id.startswith(f"qdvoice:{speaker}:") and names_listener(event.text, aliases))
 
 
 def companion_check_in(role: NpcRole, context: PlanContext) -> tuple[str, tuple[float, float, float]] | None:
@@ -234,6 +248,11 @@ def reviewed_steps(role: NpcRole, context: PlanContext, values: Any) -> list[Ste
             text = step.args.get("text")
             if not isinstance(text, str) or not 1 <= len(text) <= role.max_speech_chars or any(ord(c) < 32 for c in text):
                 raise ValueError("short_single_line_speech_required")
+            if role.speech_profile == "whale":
+                text = whale_speech(text)
+                if not text:
+                    continue
+                step.args["text"] = text
         # The plan already received this sample. A mode write is necessary
         # again after an earlier step has actually changed the body.
         if not body_changed and unnecessary_step(step, context, native):
@@ -287,9 +306,10 @@ class NpcPlanner:
             facts["socialRelationship"] = relationship
             facts["sharedPast"] = relationship["evidence"]
         audience = "这是附近玩家可见的公开回复。" if public else "只向当前说话者私聊。"
+        style = "\n" + WHALE_SPEECH_POLICY if self.role.speech_profile == "whale" else ""
         request = {"model": self.role.model, "max_tokens": 280, "enable_thinking": False,
                    "response_format": {"type": "json_object"}, "messages": [
-                      {"role": "system", "content": self.role.persona +
+                      {"role": "system", "content": self.role.persona + style +
                        "\n" + audience + "根据这次对话和该对象可引用的共同经历回答。"
                        "没有发生的事件、未确认的约定和权限不可当成事实。"
                        "这轮仅回复文字。返回只含 reply 的 JSON，最多 140 字。"},
@@ -301,13 +321,13 @@ class NpcPlanner:
         if (not isinstance(reply, str) or not 1 <= len(reply.strip()) <= 140
                 or not reply.isprintable() or "§" in reply):
             raise ValueError("invalid_dialogue_reply")
-        return reply.strip()
+        return (whale_speech(reply) or "我在，慢慢说。") if style else reply.strip()
 
     async def __call__(self, intent: Intent, context: PlanContext):
         role = self.role
         caps = context.capabilities
         now = time.monotonic()
-        addressed = [event for event in context.dialogue if addressed_dialogue(event, str(role.body_id))]
+        addressed = [event for event in context.dialogue if addressed_dialogue(event, str(role.body_id), (role.name, role.id))]
         if addressed:
             self.next_companion_check_in = max(self.next_companion_check_in, now + COMPANION_CHECK_IN_SECONDS)
         check_in: str | None = None
@@ -460,7 +480,9 @@ class NpcPlanner:
         )
         payload = {"model": role.model, "max_tokens": 900, "enable_thinking": False,
                    "response_format": {"type": "json_object"}, "messages": [
-                       {"role": "system", "content": role.persona + "\nYou control only this registered NPC through game actions. "
+                       {"role": "system", "content": role.persona +
+                        ("\n" + WHALE_SPEECH_POLICY if role.speech_profile == "whale" else "") +
+                        "\nYou control only this registered NPC through game actions. "
                         "Return JSON {\"steps\":[{\"tool\":\"body:...\",\"args\":{}}]}. At most 3 steps. "
                         "Use [] to rest. Only these tools: " + json.dumps(tools) + ". Never invent success, inventory, abilities or coordinates. "
                         "cast spellId is the learned skill's bare ID, for example radiant_pulse; omit the display prefix mycli:. "
@@ -650,6 +672,7 @@ class NpcHost:
         self.last_danger = False
         self.next_roster_check = 0.0
         self.next_outing_check = 0.0
+        self.next_rendezvous_attempt: dict[str, float] = {}
         self.checked_party_event = None
 
     def _ack_steps(self, events: list[str]) -> list[Step]:
@@ -673,6 +696,24 @@ class NpcHost:
                 expired.append(key)
         if expired:
             self.journal.listen(body_id, expired, "expired-native-dialogue")
+
+    def _rendezvous_step(self, kind: str | None, context: PlanContext, body_id: str) -> Step | None:
+        snapshot = context.snapshot
+        if (not self.role.autonomous_rendezvous or not kind or snapshot is None or snapshot.life_state != "alive"
+                or snapshot.health is None or not snapshot.dimension or not snapshot.position or danger(snapshot)):
+            return None
+        step = Step(tool="body:native:adventure_action", args={"kind": kind})
+        if step_support(step, context.capabilities):
+            return None
+        now = time.monotonic()
+        if now < self.next_rendezvous_attempt.get(kind, 0):
+            return None
+        if kind == "invite_partner" and self.journal.contacted_recently(body_id, "invite", adventure.INVITE_INTERVAL):
+            return None
+        self.next_rendezvous_attempt[kind] = now + 180
+        self.next_roster_check = 0.0
+        self.next_plan = now + 3
+        return step
 
     def _party_turn(self, body_id, context):
         peer = self.role.adventure_partner
@@ -701,6 +742,9 @@ class NpcHost:
             elif team["phase"] == "assembling" and not self.journal.contacted_recently(body_id, "party-opening:" + team["partyId"], 86400):
                 opening = Step(tool="body:native:adventure_action",
                                args={"kind": "party_chat", "partyId": team["partyId"], "text": adventure.PARTY_OPENING})
+            elif team["phase"] == "assembling" and (team["sameWorld"] is False or
+                    isinstance(team["distance"], (int, float)) and team["distance"] > 12):
+                opening = self._rendezvous_step("meet_partner", context, body_id)
 
         elif not notice:
             outing = adventure.public_outing(latest, self.journal.last_adventure(body_id, "invite_partner"),
@@ -714,6 +758,10 @@ class NpcHost:
                     self.next_outing_check = time.monotonic() + 12
                     self.next_plan = time.monotonic() + 3
                     return None, None, Step(tool="body:native:adventure_query", args={"kind": "trial"})
+                if outing["next"] == "travel_trial":
+                    opening = self._rendezvous_step("travel_trial", context, body_id)
+            if not opening:
+                opening = self._rendezvous_step(adventure.assembly_action(latest, peer, body_id), context, body_id)
         last = self.journal.last_adventure(body_id, "meet_partner")
         recovery = adventure.meeting_recovery(last, self.journal.last_adventure(body_id, "prepare_armor"))
         if recovery:
@@ -727,7 +775,7 @@ class NpcHost:
         if self.role.default_native_guard:
             context.recent_companion_speech = self.journal.recent_companion_speech(body_id)
         if self.companion_adventure and context.snapshot and context.snapshot.life_state == "alive":
-            direct = next((event for event in dialogue if addressed_dialogue(event, body_id)), None)
+            direct = next((event for event in dialogue if addressed_dialogue(event, body_id, (self.role.name, self.role.id))), None)
             if direct or (intent.goal == IDLE_GOAL and companion_check_in(self.role, context)):
                 audience = "nearby_partner" if direct is None else (
                     "addressed_partner" if direct.data.get("speakerId") == str(self.role.owner_id) else "public"
@@ -897,7 +945,7 @@ class NpcHost:
                 events = list(self.pending_dialogue)[:8]
                 # A named speaker gets one turn and a receipt of their own, even with ambient chatter queued.
                 direct = next((key for key, event in self.pending_dialogue.items()
-                               if addressed_dialogue(event, identity.body_id)), None)
+                               if addressed_dialogue(event, identity.body_id, (self.role.name, self.role.id))), None)
                 if direct:
                     events = [direct]
                 self._expire_dialogue(identity.body_id, events)
