@@ -17,7 +17,8 @@ async function until(fn,ms=12000){const end=Date.now()+ms;while(Date.now()<end){
 function vint(n){const out=[];do{let b=n&127;n>>>=7;if(n)b|=128;out.push(b);}while(n);return Buffer.from(out);}
 function readv(b,offset){let n=0,s=0,p=offset;for(;p<b.length&&s<35;s+=7){let v=b[p++];n|=(v&127)<<s;if(!(v&128))return[n,p];}throw Error('Invalid synthetic UDP packet');}
 async function receiver(bot){
- const sock=createSocket('udp4'),state={audio:0,privateAudio:0,acks:0,errors:0,secret:false,packets:[],privatePackets:[],players:new Map(),stateChanges:0};let key,uuid;
+ const sock=createSocket('udp4'),state={audio:0,privateAudio:0,acks:0,errors:0,secret:false,packets:[],privatePackets:[],audioTimes:[],players:new Map(),stateChanges:0};let key,uuid;
+ let sequence=0n;
  const send=(id,body=Buffer.alloc(0))=>{const iv=randomBytes(12),cipher=createCipheriv('aes-128-gcm',key,iv),encrypted=Buffer.concat([iv,cipher.update(Buffer.concat([Buffer.from([id]),body])),cipher.final(),cipher.getAuthTag()]);sock.send(Buffer.concat([Buffer.from([255]),uuid,vint(encrypted.length),encrypted]),29522,'127.0.0.1');};
  sock.on('message',(packet,rinfo)=>{try{
   assert.equal(rinfo.address,'127.0.0.1');assert.equal(rinfo.port,29522);assert.equal(packet[0],255);const[len,at]=readv(packet,1),enc=packet.subarray(at,at+len),dec=createDecipheriv('aes-128-gcm',key,enc.subarray(0,12));dec.setAuthTag(enc.subarray(-16));const data=Buffer.concat([dec.update(enc.subarray(12,-16)),dec.final()]);
@@ -26,7 +27,7 @@ async function receiver(bot){
    if(size>0){
     const payload=data.subarray(start,start+size).toString('base64');
     if(data[0]===3){state.privateAudio++;state.privatePackets.push(payload);}
-    else{state.audio++;state.packets.push(payload);}
+    else{state.audio++;state.audioTimes.push(Date.now());state.packets.push(payload);}
    }
   }
  }catch{state.errors++;}});
@@ -42,7 +43,37 @@ async function receiver(bot){
  await until(()=>state.acks>0);const timer=setInterval(()=>send(8),1000);
  const setDisabled=value=>bot._client.write('custom_payload',{channel:'voicechat:update_state',data:Buffer.from([value?1:0])});
  setDisabled(false);await sleep(400);
- const result={state,setDisabled,close(){clearInterval(timer);bot._client.off('custom_payload',secret);sock.close();}};udp.push(result);return result;
+ function sendMicrophone(frame){
+  const seq=Buffer.alloc(8);seq.writeBigInt64BE(sequence++);
+  send(1,Buffer.concat([vint(frame.length),frame,seq,Buffer.from([0])]));
+ }
+ const result={state,setDisabled,sendMicrophone,close(){clearInterval(timer);bot._client.off('custom_payload',secret);sock.close();}};udp.push(result);return result;
+}
+async function verifySpeechTurn(near,source,adapter,wav){
+ // The native listener sends the synthetic Opus clip it just received as microphone input.
+ const samples=near.state.packets.map(data=>Buffer.from(data,'base64'));
+ assert.ok(samples.length>0);
+ const first=near.state.audio,requestId=randomUUID(),ledger=lab+'/plugins/QiandengVoice/receipts/'+source.player.uuid+'.jsonl';
+ let index=0,endedAt,playback;
+ const sendFrame=()=>near.sendMicrophone(samples[index++%samples.length]);
+ sendFrame();
+ const mic=setInterval(sendFrame,20);
+ try{
+  await sleep(200);
+  playback=adapter.upload(wav,{requestId});
+  await until(()=>readFileSync(ledger,'utf8').split('\n').some(line=>{
+   if(!line)return false;
+   const row=JSON.parse(line);
+   return row.requestId===requestId&&row.state==='queued'&&row.reason==='WAITING_FOR_NEARBY_SPEAKER';
+  }));
+  await sleep(300);
+  check('native listener receives no Agent audio while speaking',near.state.audio===first);
+ }finally{
+  clearInterval(mic);endedAt=Date.now();near.sendMicrophone(Buffer.alloc(0));
+ }
+ const result=await playback;
+ check('same request is delivered after native microphone release',result.requestId===requestId&&result.state==='sent'
+     &&result.delivery?.packetOffers>0&&near.state.audioTimes[first]-endedAt>=400);
 }
 try{
  for(const name of [mode==='goddess'?'Goddess':'QVSource','QVReceiver','QVFar','QVDisabled']){
@@ -137,7 +168,9 @@ try{
   check('encrypted UDP audio reaches enabled near receiver',near.state.audio>=45);check('far receiver receives zero audio',far.state.audio===0);check('disabled receiver receives zero audio',disabled.state.audio===0);check('UDP authenticates and decrypts without errors',report.udp.errors===0);
   check('receipt differentiates offer from hearing',sent.reason==='VOICE_SENT_HEARING_UNVERIFIED'&&sent.delivery?.listenerCount===1&&sent.delivery?.packetOffers===near.state.audio&&sent.actualHearingVerified===false);
   const before=near.state.audio,duplicate=await voice.upload(wav,{requestId:id});await sleep(300);check('duplicate returns persisted receipt without playback',near.state.audio===before&&JSON.stringify(duplicate.delivery)===JSON.stringify(sent.delivery));
-  await run('execute in minecraft:the_nether run tp QVReceiver 3 80 0');await sleep(700);const other=await voice.upload(wav,{requestId:randomUUID()});await sleep(150);check('different dimension blocks audio and diagnoses no receiver',near.state.audio===before&&other.reason==='VOICE_NO_RECEIVER_CHECK_STATUS');
+  if(mode==='candidate')await verifySpeechTurn(near,bots[0],voice,wav);
+  const beforeTravel=near.state.audio;
+  await run('execute in minecraft:the_nether run tp QVReceiver 3 80 0');await sleep(700);const other=await voice.upload(wav,{requestId:randomUUID()});await sleep(150);check('different dimension blocks audio and diagnoses no receiver',near.state.audio===beforeTravel&&other.reason==='VOICE_NO_RECEIVER_CHECK_STATUS');
   for(const [status,code]of [[403,'VOICE_MEDIA_AUTH_REJECTED'],[503,'VOICE_MEDIA_BUSY'],[422,'VOICE_AUDIO_INPUT_REJECTED'],[299,'VOICE_NORMALIZED_AUDIO_INVALID']]){
    writeFileSync(base+'/http-mode',String(status));const failure=await voice.upload(wav,{requestId:randomUUID()});check('backend '+status+' gives stage-specific error',failure.state==='failed'&&failure.reason===code&&typeof failure.nextStep==='string'&&!JSON.stringify(failure).includes('private detail'));
   }
@@ -154,7 +187,7 @@ try{
   bots[0]._client.write('custom_payload',{channel:'minecraft:unregister',data:Buffer.from('mcagent:voice')});await sleep(300);
   check('legacy bridge unregister clears confirmed adapter state',near.state.players.get('QVSource')?.disconnected===true);
   voice=attachProximityVoice(bots[0],{timeoutMs:15000});await sleep(400);
-  check('reattaching the same body reports connected without replaying audio',near.state.players.get('QVSource')?.disconnected===false&&near.state.audio===before);
+  check('reattaching the same body reports connected without replaying audio',near.state.players.get('QVSource')?.disconnected===false&&near.state.audio===beforeTravel);
   report.finalBridgeState=near.state.players.get('QVSource');
   report.passed=report.failures.length===0;
  }

@@ -3,6 +3,7 @@ package dev.god.godvoice;
 import com.google.gson.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.regex.Pattern;
 
 /** Explicit NPC voice identities, never inferred from names or chat text. */
 final class NpcDialoguePolicy {
@@ -11,6 +12,30 @@ final class NpcDialoguePolicy {
         String display(){return aliases.isEmpty()?name:aliases.getFirst();}
     }
     record Address(Profile profile,String text) {}
+    record Group(List<Profile> recipients, String message) {}
+    private static final Pattern GROUP_END = Pattern.compile("[,，:：]");
+
+    /** A leading list of registered names followed by a separate message. */
+    static Group group(Collection<Profile> profiles, String text) {
+        if (text == null || text.length() > 1200 || !text.contains("、")
+                || text.codePoints().anyMatch(c -> Character.isISOControl(c) || c == 0xA7)) return null;
+        String line = text.strip();
+        var end = GROUP_END.matcher(line);
+        if (!end.find()) return null;
+        String message = line.substring(end.end()).strip();
+        String[] names = line.substring(0, end.start()).split("、", -1);
+        if (message.isEmpty() || names.length < 2) return null;
+        var recipients = new LinkedHashSet<Profile>();
+        for (String name : names) {
+            String label = name.strip();
+            if (label.startsWith("@")) label = label.substring(1);
+            Profile target = null;
+            for (var profile : profiles) if (profile.hasName(label)) { target = profile; break; }
+            if (target == null) return null;
+            recipients.add(target);
+        }
+        return new Group(List.copyOf(recipients), message);
+    }
     static Map<UUID,Profile> profiles(JsonObject config) {
         if(!config.has("schema")||config.get("schema").getAsInt()!=1||!config.has("roles"))throw new IllegalArgumentException("NPC_VOICE_CONFIG_INVALID");
         var result=new LinkedHashMap<UUID,Profile>();

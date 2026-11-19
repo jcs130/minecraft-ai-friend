@@ -89,10 +89,33 @@ final class NpcConversations implements Listener {
         Player source=Bukkit.getPlayer(actor);
         if(source==null||source.isDead()||source.isInvisible()||source.getGameMode()==GameMode.SPECTATOR||!source.getWorld().getUID().equals(world))return;
         if(System.currentTimeMillis()-occurredAt>120_000||occurredAt>System.currentTimeMillis())return;
+        if (groupChat(source, text, audience, utterance, "voice", occurredAt)) return;
         var address=address(source,text,NpcDialoguePolicy.fresh(occurredAt,System.currentTimeMillis()));
         if(address!=null&&audience.contains(address.profile().id())&&
             natural(source,address,"nearby",audience,"voice_"+utterance))return;
         for(UUID target:audience)deliver(source,target,"voice_"+utterance,text,"voice",occurredAt);
+    }
+
+    private boolean groupChat(Player speaker, String text, Set<UUID> audience, UUID input, String channel, long at) {
+        var group = NpcDialoguePolicy.group(profiles.values(), text);
+        if (group == null) return false;
+        if (closing(group.message())) return true;
+        for (var profile : group.recipients()) {
+            var body = live(profile.id());
+            if (!hears(speaker, body, profile)) continue;
+            // ASR listeners must have been present throughout the original utterance.
+            if (channel.equals("voice") && !audience.contains(profile.id())) continue;
+            if (channel.equals("chat") && body instanceof Player && !audience.contains(profile.id())) continue;
+            if (profile.kind().equals("maid") && !profile.owner().equals(speaker.getUniqueId())
+                    && speaker.getLocation().distanceSquared(body.getLocation()) > 64) continue;
+            String event = channel + "_group_" + input + "_" + profile.id();
+            deliver(speaker, profile.id(), event, text, channel, at);
+        }
+        return true;
+    }
+
+    private static boolean closing(String text) {
+        return CLOSINGS.contains(text.replaceAll("[\\p{P}\\s]+", ""));
     }
 
     private NpcDialoguePolicy.Address address(Player player,String text,boolean allowLook){
@@ -111,14 +134,15 @@ final class NpcConversations implements Listener {
         if(configured(player.getUniqueId())||!hears(player,body,profile)||!player.hasLineOfSight(body))return false;
         if(profile.kind().equals("maid")&&profile.owner().equals(player.getUniqueId()))return false;
         if(profile.kind().equals("maid")&&player.getLocation().distanceSquared(body.getLocation())>64)return false;
-        var words=address.text().replaceAll("[\\p{P}\\s]+","");
-        if(CLOSINGS.contains(words))return true;
+        if(closing(address.text()))return true;
         if(!delivered.add(profile.id(),player.getUniqueId(),"natural_"+input,System.currentTimeMillis()))return true;
         return plugin.naturalNpcDialogue(profile,player,address.text(),scope,audience);
     }
 
     boolean naturalMaidChat(Player actor,String text,Set<UUID> recipients){
         if(!Bukkit.isPrimaryThread()||Bukkit.getPlayer(actor.getUniqueId())!=actor)return false;
+        // The chat listener owns a named group's one event, including its maid recipients.
+        if (NpcDialoguePolicy.group(profiles.values(), text) != null) return true;
         var address=address(actor,text,true);
         return address!=null&&address.profile().kind().equals("maid")&&
             natural(actor,address,"public",recipients,"chat_"+UUID.randomUUID());
@@ -175,6 +199,7 @@ final class NpcConversations implements Listener {
         UUID input=UUID.randomUUID();long at=System.currentTimeMillis();
         Bukkit.getScheduler().runTask(plugin,()->{
             if(Bukkit.getPlayer(actor.getUniqueId())!=actor||actor.isDead()||actor.isInvisible()||actor.getGameMode()==GameMode.SPECTATOR||!local(actor,original))return;
+            if (groupChat(actor, text, recipients, input, "chat", at)) return;
             var address=address(actor,text,true);
             if(address!=null&&(address.profile().kind().equals("maid")||natural(actor,address,"public",recipients,"chat_"+input)))return;
             // Maids already receive their native local-chat path; do not duplicate it.

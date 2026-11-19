@@ -56,6 +56,9 @@ final class NativeMaidSpeech implements AutoCloseable {
         volatile Set<UUID> audible=Set.of();volatile boolean cancelled,exhausted;boolean finished;final AtomicInteger offers=new AtomicInteger();
         final long created = System.nanoTime();
         AudioPlayer player;OpusEncoder encoder;UUID channel;LocationalAudioChannel spatial;Future<?> media;int offset;
+        final UUID turn=UUID.randomUUID();
+        short[] prepared;
+        boolean holdingTurn;
         Job(EntityMaid maid,String request,String text,String kind,Map<UUID,Stamp> listeners,MaidVoiceClips.Clip original){this.maid=maid;this.request=request;this.text=text;this.kind=kind;this.listeners=Map.copyOf(listeners);this.original=original;world=maid.getBukkitEntity().getWorld().getUID();}
     }
     static NativeMaidSpeech create(HybridMaidPlugin plugin){
@@ -183,6 +186,13 @@ final class NativeMaidSpeech implements AutoCloseable {
         if(job.kind.equals("combat")&&!MaidCombatSpeech.fresh(job.created,System.nanoTime())){finish(job,"skipped","combat_scene_expired");return;}
         if(job.audible.isEmpty()||api==null){finish(job,"cancelled","audience_or_entity_changed");return;}
         try{
+            if(!publicTurn(job,true)){
+                if(job.prepared==null)finishRecord(job,"queued","waiting_for_nearby_speaker");
+                job.prepared=pcm;
+                return;
+            }
+            job.holdingTurn=true;
+            job.prepared=null;
             // Positional packets also play when the client projects or temporarily lacks the native entity UUID.
             job.channel=UUID.randomUUID();var channel=api.createLocationalAudioChannel(job.channel,api.fromServerLevel(job.maid.getBukkitEntity().getWorld()),api.createPosition(job.maid.getX(),job.maid.getEyeY(),job.maid.getZ()));job.spatial=channel;
             if(channel==null)throw new IllegalStateException("Position channel unavailable");channel.setDistance(MaidConversationRange.PARTNER);channel.setFilter(p->job.audible.contains(p.getUuid()));
@@ -194,6 +204,14 @@ final class NativeMaidSpeech implements AutoCloseable {
             finishRecord(job,"playing","");job.player.startPlaying();
         }catch(Exception error){if(job.encoder!=null)job.encoder.close();finish(job,"failed","playback_unavailable_no_replay");}
     }
+    private boolean publicTurn(Job job,boolean start)throws ReflectiveOperationException{
+        var voicePlugin=Bukkit.getPluginManager().getPlugin("QiandengVoice");
+        if(voicePlugin==null||!voicePlugin.isEnabled())return true;
+        try{
+            var method=voicePlugin.getClass().getMethod("publicSpeechTurn",org.bukkit.entity.Entity.class,UUID.class,double.class,boolean.class);
+            return Boolean.TRUE.equals(method.invoke(voicePlugin,job.maid.getBukkitEntity(),job.turn,(double)MaidConversationRange.PARTNER,start));
+        }catch(NoSuchMethodException older){return true;}
+    }
     private void finishRecord(Job job,String state,String reason)throws Exception{
         JsonObject result=new JsonObject();result.addProperty("voice",voice);result.addProperty("kind",job.kind);result.addProperty("reason",reason);result.addProperty("packetOffers",job.offers.get());result.addProperty("hearingVerified",false);result.addProperty("retryAllowed",false);
         result.addProperty("audioSource",job.original==null?"server_tts":"original_chinese_maid_pack");
@@ -203,7 +221,14 @@ final class NativeMaidSpeech implements AutoCloseable {
         JsonArray listeners=new JsonArray();job.listeners.keySet().stream().sorted().forEach(id->listeners.add(id.toString()));result.add("listenerUuids",listeners);
         receipts.finish(maidId,job.request,state,result);if(active==job||active==null){lastRequest=job.request;lastState=state;lastReason=reason;}
     }
-    private void finish(Job job,String state,String reason){if(job.finished)return;job.finished=true;try{finishRecord(job,state,reason);}catch(Exception error){if(active==job||active==null){lastState="unknown";lastReason="speech_receipt_unavailable_no_replay";}}if(active==job)active=null;}
+    private void finish(Job job,String state,String reason){
+        if(job.finished)return;
+        job.finished=true;
+        job.prepared=null;
+        if(job.holdingTurn)try{publicTurn(job,false);}catch(ReflectiveOperationException unavailable){/* Short leases expire if the bridge stops. */}
+        try{finishRecord(job,state,reason);}catch(Exception error){if(active==job||active==null){lastState="unknown";lastReason="speech_receipt_unavailable_no_replay";}}
+        if(active==job)active=null;
+    }
     private void cancel(String reason){Job job=active;if(job==null)return;job.cancelled=true;job.audible=Set.of();if(job.media!=null)job.media.cancel(true);if(job.player!=null)job.player.stopPlaying();finish(job,"cancelled",reason);}
     void combat(EntityMaid maid, Mob target, String mode, float damage) {
         if (!Bukkit.isPrimaryThread() || !valid(maid) || maid.level()!=target.level()) return;
@@ -255,7 +280,7 @@ final class NativeMaidSpeech implements AutoCloseable {
     private void tick(){
         EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(maidId));
         if(maid==null||!valid(maid)){cancelWaiting("companion_unavailable");cancel("companion_unavailable");return;}
-        if(active!=null){refresh(active);if(active.audible.isEmpty())cancel("audience_left");}
+        if(active!=null){refresh(active);if(active.audible.isEmpty())cancel("audience_left");else if(active.prepared!=null)play(active,active.prepared);}
         var next=waiting.peek();
         if(next!=null&&next.expired(System.nanoTime())){waiting.take();finish(next.item(),"skipped","reply_wait_expired");}
         else if(next!=null&&active==null){waiting.take();begin(next.item());}

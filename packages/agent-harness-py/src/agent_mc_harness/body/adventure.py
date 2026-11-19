@@ -32,7 +32,8 @@ ACTIONS = {
 QUERY, ACT, SURVEY = "adventure_query", "adventure_action", "survey"
 PLAYER = re.compile(r"[\w.]{1,16}")
 CONTENT_ID = re.compile(r"[a-z0-9][a-z0-9_-]{0,79}")
-PARTY_LINE = re.compile(r"VortexRPG » \[Party\] (?:[★☆] )?([\w.]{1,16}): ([^\r\n]{1,400})")
+# Read old, server-authored display echoes when reconciling an earlier installation.
+PARTY_LINE = re.compile(r"(?:[^\[\]<>:\r\n»]{1,96} » )?\[Party\] (?:[★☆] )?([\w.]{1,16}): ([^\r\n]{1,400})")
 ARMOR = {"head": "头盔", "chest": "胸甲", "legs": "护腿", "feet": "靴子"}
 PARTY_OPENING = "我们组好队了，在哪个入口会合？分开时用 /mycli guild party chat 加上想说的话，我也能收到。"
 INVITE_INTERVAL = 30 * 60
@@ -170,9 +171,21 @@ def game_lua(line: str, account: str) -> str:
             "for _,line in ipairs(r.output) do print(line) end")
 
 
-def party_line(raw):
+def party_delivery(row):
+    if not isinstance(row, dict) or type(row.get("schema")) is not int or row["schema"] != 1 or not isinstance(row.get("speaker"), str):
+        return False
+    try:
+        return (all(isinstance(row.get(k), str) and str(UUID(row[k])) == row[k]
+                    for k in ("id", "partyId", "speakerId", "recipientId"))
+                and PLAYER.fullmatch(row["speaker"]) is not None
+                and isinstance(row.get("text"), str) and 0 < len(row["text"]) <= 400)
+    except ValueError:
+        return False
+
+
+def party_line(raw, listener=None):
     """Recognise Vortex's native channel only as untrusted speech, never as an identity grant."""
-    if raw.data.get("nativeKind") != "server_message" or len(raw.text) > 1600 or not raw.text.startswith("<event "):
+    if raw.data.get("nativeKind") != "server_message" or len(raw.text) > 8192 or not raw.text.startswith("<event "):
         return None
     header, closing, body = raw.text.partition(">")
     if not closing or not body.endswith("</event>"):
@@ -183,7 +196,17 @@ def party_line(raw):
         return None
     if envelope.tag != "event" or envelope.get("kind") != "server_message" or envelope.get("where") != "chat":
         return None
-    match = PARTY_LINE.fullmatch(re.sub(r"§.", "", unescape(body.removesuffix("</event>"))))
+    line = unescape(body.removesuffix("</event>"), {"&quot;": '"', "&apos;": "'"})
+    if line.startswith("MC_PARTY_CHAT "):
+        try:
+            row = json.loads(line.removeprefix("MC_PARTY_CHAT "))
+        except ValueError:
+            return None
+        if not party_delivery(row) or row["recipientId"] != listener:
+            return None
+        return {"eventId": "party:" + row["id"], "at": raw.data.get("occurredAt"),
+                "partyId": row["partyId"], "speakerId": row["speakerId"], "speaker": row["speaker"], "text": row["text"]}
+    match = PARTY_LINE.fullmatch(re.sub(r"§.", "", line))
     if match:
         return {"eventId": "party:" + raw.id, "at": raw.data.get("occurredAt"), "speaker": match[1], "text": match[2]}
     return None
@@ -207,7 +230,7 @@ def travel_denial(messages):
     return {}, ""
 
 
-def game_result(result, name: str, args: dict, *, account=None, peer=None, recovered=False):
+def game_result(result, name: str, args: dict, *, account=None, body_id=None, peer=None, recovered=False):
     if result.status == "unknown" and name == QUERY:
         return replace(result, status="failed", text="RPG read unavailable. Sample again when ready.")
     if result.status != "completed":
@@ -278,7 +301,14 @@ def game_result(result, name: str, args: dict, *, account=None, peer=None, recov
         details["retryWrite"] = False
         explanation = "The landing is being checked. Stay in place, then observe your position and the trial entrance."
     if not refused and kind == "party_chat":
-        sent = any(m and m[1] == account and m[2] == args["text"] for m in (PARTY_LINE.fullmatch(s) for s in messages))
+        receipts = [row for tag, row in records if tag == "MC_PARTY_CHAT"]
+        sent = next((row for row in receipts if party_delivery(row) and row["partyId"] == args.get("partyId")
+                     and row["speakerId"] == row["recipientId"] == body_id
+                     and row["speaker"] == account and row["text"] == args["text"]), None)
+        if sent:
+            details["messageId"] = sent["id"]
+        elif not receipts:
+            sent = any(m and m[1] == account and m[2] == args["text"] for m in (PARTY_LINE.fullmatch(s) for s in messages))
         effect = "sent" if sent else "unverified"
     if kind == "meet_partner" and effect == "dispatched":
         effect = "unverified"
@@ -293,6 +323,7 @@ def game_result(result, name: str, args: dict, *, account=None, peer=None, recov
         "effect": effect, **details}
     if kind == "party_chat":
         evidence["messages"] = []  # Party dialogue does not enter general action memory.
+        evidence["records"] = []
     if guild_status:
         evidence["source"] = "guild status"
     if kind == "guild_board":
