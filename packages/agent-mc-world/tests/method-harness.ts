@@ -19,13 +19,13 @@ export function methodHarness(version = '1.20.6', createWorld = () => new Minecr
   const registry = req('prismarine-registry')(version);
   const Blocks = req('prismarine-block')(registry);
   const host = new FakeHost();
-  const cells = new Map<string, string>();
+  const cells = new Map<string, string | number>();
   const keys = Object.fromEntries(CONTROL_KEYS.map(key => [key, false]));
   const said: string[] = [];
   const blockAt = (at: Vec3) => {
     const pos = at.floored();
-    const name = cells.get(pos.toString()) ?? (pos.y < 64 ? 'stone' : 'air');
-    const block = Blocks.fromStateId(registry.blocksByName[name].defaultState, 0);
+    const cell = cells.get(pos.toString()) ?? (pos.y < 64 ? 'stone' : 'air');
+    const block = Blocks.fromStateId(typeof cell === 'number' ? cell : registry.blocksByName[cell].defaultState, 0);
     block.position = pos;
     return block;
   };
@@ -56,7 +56,7 @@ export function methodHarness(version = '1.20.6', createWorld = () => new Minecr
   }, 50);
   const detach = watchFlightAbilities(bot as unknown as Bot);
   return { world, exec, bot, said, keys, host, runner: internals.methods,
-    set: (x: number, y: number, z: number, name: string) => cells.set(new Vec3(x, y, z).toString(), name),
+    set: (x: number, y: number, z: number, block: string | number) => cells.set(new Vec3(x, y, z).toString(), block),
     close: () => { internals.methods.stop('测试结束'); exec.shutdown(); clearInterval(timer); detach(); } };
 }
 

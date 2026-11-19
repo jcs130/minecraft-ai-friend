@@ -86,7 +86,7 @@ import { attachHearing, hearingReadout } from './perception-hearing.ts';
 import { AttentionReader, PERCEPTION_TOOLS, perceptionArgs, validDetection, type DetectionEvidence } from './perception-tools.ts';
 import { IdleBehaviorController, IdlePresentationContext, type IdleBehaviorScene } from './idle-behavior.ts';
 import { sampleIdleActions, executeIdleAction } from './idle-actions.ts';
-import { idleRoamOwnsPath } from './idle-roam.ts';
+import { IdleRoamAttention, IdleRoamBlocked, idleRoamOwnsPath } from './idle-roam.ts';
 import { bossBarChange, classifyBossBarTitle, readBossBar, readBossBarHud, renderBossBarHud, type BossBarReading } from './boss-bar.ts';
 import { readServerDisplay, renderServerDisplayHud, scoreRowText } from './server-display.ts';
 import { minecraftTextComponent } from './text-component.ts';
@@ -2851,6 +2851,7 @@ export class MinecraftWorld implements World {
   protected static readonly IDLE_ARRIVAL_SETTLE_MS = 150;
   protected idleArrival: { generation: string; expiresAtMs: number; readyAtMs?: number; blockedBy?: string } | null = null;
   protected idleSceneCache: IdleBehaviorScene | null = null;
+  protected readonly idleRoamAttention = new IdleRoamAttention();
   protected idleMovementAnchor: { generation: string; position: Vec3 } | null = null;
   protected bodyDisplay: { key: string; since: number; published: number } | null = null;
   protected visualWarmKey: string | null = null;
@@ -4623,7 +4624,13 @@ export class MinecraftWorld implements World {
             inventoryPreview: (open) => {
               (bot as unknown as EventEmitter).emit('viewer_inventory_preview', { open });
             },
-          }); } finally {
+          }); } catch (error) {
+            if (error instanceof IdleRoamBlocked && !signal.aborted
+              && bot === this.bridge?.bot && scene.generation === this.idleGeneration()) {
+              this.noteIdleRoamBlocked(scene.generation, origin, bot.entity.position, error);
+            }
+            throw error;
+          } finally {
             if (['short_walk', 'wander', 'stroll'].includes(id)) this.diag.write({ lane: 'body',
               event: 'idle-movement-ended', msg: id, level: 'debug', data: {
                 actionId: id, generation: scene.generation, cancelled: signal.aborted,
@@ -8380,6 +8387,16 @@ export class MinecraftWorld implements World {
     return `${this.connectionGeneration}:${this.idleActivityVersion}:${this.bridge?.bot?.game?.dimension ?? ''}`;
   }
 
+  protected noteIdleRoamBlocked(generation: string, origin: Vec3, at: Vec3, error: IdleRoamBlocked): void {
+    const note = this.idleRoamAttention.blocked(generation, origin, at, error, Date.now());
+    this.diag.write({ lane: 'body', event: 'idle-stroll-obstructed', msg: 'no-progress', level: 'debug',
+      data: { generation, from: origin.toArray(), at: at.toArray(), destination: error.destination, next: error.next } });
+    if (!note) return;
+    this.emit('minecraft.event',
+      `[Minecraft] 两次闲逛都从同一处起步，实测位移均不超过 0.2 格。当前脚格 (${Math.floor(at.x)}, ${Math.floor(at.y)}, ${Math.floor(at.z)})。可查看相邻脚格的支撑和净空，再选路线。`,
+      false, { trigger: 'piggyback', meta: { idleRoamObstruction: note } });
+  }
+
   /** Wait for stable physics after arrival before handing the view to a small idle action. */
   protected tryArrivalIdle(): void {
     const pending = this.idleArrival;
@@ -8450,6 +8467,8 @@ export class MinecraftWorld implements World {
   }
 
   protected idleScene(): IdleBehaviorScene | null {
+    const pos = this.bridge?.bot?.entity?.position;
+    if (pos) this.idleRoamAttention.observe(this.idleGeneration(), pos, Date.now());
     if (!this.canIdle()) {
       this.idleSceneCache = null;
       return null;

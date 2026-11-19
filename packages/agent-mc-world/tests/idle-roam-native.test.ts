@@ -1,3 +1,4 @@
+import '../core/dependency-patches.ts';
 import {afterEach,expect,it,vi} from 'vitest';
 import {Vec3} from 'vec3';
 import type {Bot} from 'mineflayer';
@@ -8,8 +9,8 @@ import {installPartialBlockStartRepair} from '../core/pathfinder-start.ts';
 import {executeIdleRoam,sampleIdleRoam,idleRoamOwnsPath} from '../core/idle-roam.ts';
 import {sampleIdleActions} from '../core/idle-actions.ts';
 afterEach(()=>vi.useRealTimers());
-function fixture(){
- vi.useFakeTimers();const h=methodHarness('1.21.1'),b=h.bot as unknown as Bot;
+function fixture(version='1.21.1'){
+ vi.useFakeTimers();const h=methodHarness(version),b=h.bot as unknown as Bot;
  Object.assign(b,{supportFeature:(name:string)=>b.registry.supportFeature(name),getControlState:(k:string)=>h.keys[k],isAlive:true,
   dig:vi.fn(()=>{throw Error('idle must not dig');}),placeBlock:vi.fn(()=>{throw Error('idle must not place');})});
  Object.assign(b.game,{minY:-64,height:384});
@@ -53,6 +54,32 @@ it('offers a reachable stroll and walks around a wall, without changing blocks',
   expect(Math.max(...zs.map(Math.abs))).toBeGreaterThan(1.5);
   expect(h.b.dig).not.toHaveBeenCalled();expect(h.b.placeBlock).not.toHaveBeenCalled();
   expect(h.b.pathfinder.movements.canDig).toBe(true);expect(idleRoamOwnsPath(h.b)).toBe(false);
+ }finally{h.close();}
+});
+
+it.each(['1.21','1.21.1','1.21.4','1.21.5'])('walks from a path onto a full block under a two-block ceiling on %s',async version=>{
+ const h=fixture(version);try{
+  h.set(0,63,0,'dirt_path');
+  const slab=h.b.registry.blocksByName.spruce_slab.defaultState;
+  for(let z=-1;z<=6;z++)for(let x=-2;x<=2;x++)h.set(x,66,z,slab);
+  h.b.entity.position.set(.69999,63+15/16,.69999);
+  await run(h,new Vec3(0,64,5),undefined,true);
+  expect(h.b.entity.position.z).toBeGreaterThan(5);
+  expect(h.b.entity.position.y).toBeCloseTo(64);
+  expect(h.b.dig).not.toHaveBeenCalled();expect(h.b.placeBlock).not.toHaveBeenCalled();
+ }finally{h.close();}
+});
+
+it.each(['1.20.6','1.21.1'])('honors ceiling collision and still walks an ordinary level route on %s',async version=>{
+ const h=fixture(version);try{
+  for(let x=-14;x<=14;x++)for(let z=-1;z<=6;z++)h.set(x,66,z,'stone');
+  for(let x=-14;x<=14;x++)h.set(x,64,2,'stone');
+  await vi.advanceTimersByTimeAsync(300);
+  expect(h.b.entity.onGround).toBe(true);
+  const origin=h.b.entity.position.clone();
+  await run(h,new Vec3(0,64,4));expect(h.b.entity.position.distanceTo(origin)).toBeLessThan(.2);
+  await run(h,new Vec3(5,64,0),undefined,true);
+  expect(h.b.entity.position.x).toBeGreaterThan(5);
  }finally{h.close();}
 });
 it('walks up a one-block step and is not cancelled by its own airborne/moving gate',async()=>{
