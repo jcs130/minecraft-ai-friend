@@ -27,7 +27,9 @@ def compile_probe(jdk, libraries, output):
     patched = [p for p in jars if p.name.startswith('neoforge-') and p.name.endswith('-server.jar')]
     args = [str(jdk / 'javac.exe'), '--release', '21', '-encoding', 'UTF-8', '-proc:none',
             '-cp', os.pathsep.join(map(str, [*patched, *jars])), '-d', str(classes), str(source / 'CombatProbe.java')]
-    subprocess.run(args, check=True)
+    argfile = classes / 'javac.args'
+    argfile.write_text('\n'.join('"' + arg.replace('\\', '/') + '"' for arg in args[1:]), encoding='utf-8')
+    subprocess.run([args[0], '@' + str(argfile)], check=True)
     with zipfile.ZipFile(output / 'plugins' / 'combat-probe.jar', 'w', zipfile.ZIP_DEFLATED) as probe:
         probe.write(source / 'plugin.yml', 'plugin.yml')
         for path in sorted(classes.rglob('*.class')):
