@@ -63,6 +63,7 @@ class Intent(BaseModel):
     strategy_refs: list[tuple[str, int]] = Field(default_factory=list)  # (key, version) of lessons the planner was given
     receipts: list[ActionReceipt] = Field(default_factory=list)
     source_events: list[str] = Field(default_factory=list, max_length=32)  # host-observed inbox IDs, never model-generated
+    remember_wait_purpose: bool = False
     recall_query: str | None = Field(default=None, max_length=500)
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -90,6 +91,7 @@ class PlanContext(BaseModel):
     recent_companion_speech: list[str] = Field(default_factory=list, max_length=8)
     party_context: dict[str, Any] | None = None
     companion_adventure: dict[str, Any] | None = None
+    activity_review: dict[str, Any] | None = None
     lessons: list[str] = Field(default_factory=list)  # active versioned lessons (self-iteration store), trial or adopted
 
 
@@ -475,7 +477,7 @@ class HarnessRuntime:
                 return ActionReceipt(request_id=rid, verb=action.verb, status="unknown", terminal=False,
                                      text="unresolved_original_request_requires_reconciliation")
             # This commit must succeed before any body write is dispatched.
-            self.journal.begin(body_key, action, intent.source_events)
+            self.journal.begin(body_key, action, intent.source_events, note=step.note if intent.remember_wait_purpose else None)
         future: asyncio.Future[BodyEvent] = asyncio.get_running_loop().create_future()
         self._results[rid] = future
         def record(receipt: ActionReceipt) -> ActionReceipt:
