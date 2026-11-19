@@ -8,6 +8,7 @@ describe('exact inventory slot reads through the public tool',()=>{
       const slots=r.bot.inventory.slots as any[];
       slots[9]={name:'bone',count:64};slots[35]={name:'iron_chestplate',count:1};
       slots[36]={name:'bone',count:25};slots[44]={name:'rotten_flesh',count:2};
+      slots[42]={name:'torch',count:63};
       slots[5]={name:'diamond_helmet',count:1};slots[45]={name:'shield',count:1};
       r.bot.inventory.items=()=>slots.slice(9,45).filter(Boolean) as never;
       (r.bot as any).currentWindow={title:'Chest',slots:[{name:'diamond',count:64}],selectedItem:null};
@@ -16,13 +17,20 @@ describe('exact inventory slot reads through the public tool',()=>{
       const summary=await tool.handler({},ctx);
       expect(typeof summary==='string'?summary:summary.text).not.toContain('windowSlot');
       const result=await tool.handler({detail:'slots'},ctx) as any;
-      expect(result.data.occupied.map((s:any)=>[s.windowSlot,s.name,s.count])).toEqual([
-        [9,'bone',64],[35,'iron_chestplate',1],[36,'bone',25],[44,'rotten_flesh',2]]);
-      expect(result.data.emptyWindowSlots).toHaveLength(32);
+      expect(result.data.occupied.map((s:any)=>[s.windowSlot,s.inventorySlot,s.name,s.count])).toEqual([
+        [9,9,'bone',64],[35,35,'iron_chestplate',1],[36,0,'bone',25],[42,6,'torch',63],[44,8,'rotten_flesh',2]]);
+      expect(result.data.emptyWindowSlots).toHaveLength(31);
       expect(result.data.emptyWindowSlots).not.toContain(36);
       expect(result.text).not.toContain('diamond');
       const filtered=await tool.handler({detail:'slots',item:'骨头'},ctx) as any;
       expect(filtered.data.occupied.map((s:any)=>s.windowSlot)).toEqual([9,36]);
+      expect(filtered.data.freeSlots).toBe(31);
+      slots[42].count=31;
+      const partial=await tool.handler({detail:'slots',item:'torch'},ctx) as any;
+      expect(partial.data).toMatchObject({freeSlots:31,occupied:[{inventorySlot:6,count:31}]});
+      slots[42]=null;
+      const cleared=await tool.handler({detail:'slots',item:'torch'},ctx) as any;
+      expect(cleared.data).toMatchObject({freeSlots:32,occupied:[]});
       // Same aggregate quantity, different physical slots: do not return the old repeated-read pointer.
       [slots[9],slots[10]]=[slots[10],slots[9]];
       const moved=await tool.handler({detail:'slots',item:'minecraft:bone'},ctx) as any;

@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.105
+
+Exact bag reads include the carried inventory slot and the player-window slot for each stack. Filtered reads retain the total number of free carried slots.
+
 ## 0.5.7-rc.160-preview.104
 
 The Java movement simulator uses collision-shape step heights from 1.21. Walking from a path block to level ground under a low ceiling can take a 1/16-block step. Idle movement records the attempted waypoint and delivers a single observation when consecutive walks from the same place make no progress.

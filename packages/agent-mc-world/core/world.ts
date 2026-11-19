@@ -2693,7 +2693,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'it never moves you, never touches the world and never touches the work queue. '
       + 'Set item to a material ID, Chinese material name, or exact custom display name to locate it in your inventory, the currently open container, and last observed chest records; '
       + 'closed virtual backpacks are not included, and chest records are historical until reopened. '
-      + 'Use detail:"slots" for exact current self windowSlot numbers and per-stack counts before slot-based transfers; item optionally filters that table. No script or organize dryRun is needed to read slots. '
+      + 'Use detail:"slots" for both identifiers of each carried stack: inventorySlot for player inventory 0–35, windowSlot for the player window 9–44. Use the field required by the transfer. item optionally filters stacks; freeSlots always covers the entire carried inventory. '
       + 'Ask this instead of re-submitting a task to find out what you are carrying. '
       + 'Once per turn: asking again in the same turn returns a one-line pointer to the answer above.',
     parameters: { type: 'object', properties: {

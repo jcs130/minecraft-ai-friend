@@ -18,7 +18,7 @@ import { narrateInventorySync } from './inventory-window-sync.ts';
 import { itemCustomName } from './item-display.ts';
 import { readDurability, readEnchants, type ItemLike, type EnchantRegistry } from './item-facts.ts';
 
-/** Exact self-window slots, on demand. Never derive slot numbers from merged totals or an open chest. */
+/** Both Java numbering schemes refer to the same stack in the player's own inventory. */
 export function inventorySlotReadout(
   slots: readonly ((ItemLike & { count: number }) | null | undefined)[],
   query?: string, registry?: (NameRegistry & EnchantRegistry) | null,
@@ -29,14 +29,17 @@ export function inventorySlotReadout(
     const displayName = itemCustomName(it);
     if (wanted && !matchItemName(wanted, it.name, registry) && zhName(it.name) !== wanted
       && displayName?.trim().toLowerCase() !== wanted) return [];
-    return [{ windowSlot: index + 9, name: it.name, count: it.count,
+    const windowSlot = index + 9;
+    const inventorySlot = windowSlot >= 36 ? windowSlot - 36 : windowSlot;
+    return [{ windowSlot, inventorySlot, name: it.name, count: it.count,
       displayName: displayName ?? null, durability: readDurability(it),
       enchantments: readEnchants(it, registry ?? undefined) }];
   });
+  const emptyWindowSlots = Array.from({ length: 36 }, (_, i) => i + 9).filter(i => !slots[i] || slots[i]!.count <= 0);
   return { protocol: 'agent-mc/inventory-slots/v1', scope: 'self', slotSpace: 'player-window',
     range: [9, 44], filter: query?.trim() || null, occupied,
-    emptyWindowSlots: Array.from({ length: 36 }, (_, i) => i + 9).filter(i => !slots[i] || slots[i]!.count <= 0),
-    note: 'windowSlot 是本人玩家窗口编号：9–35 主背包，36–44 快捷栏；不是箱子槽或服务器自定义槽号。操作前使用最新读数，不从物品汇总推算槽位。' };
+    emptyWindowSlots, freeSlots: emptyWindowSlots.length,
+    note: '同一堆有两种编号。要本人随身槽 0–35 用 inventorySlot；要本人窗口槽 9–44 用 windowSlot。容器内槽另查。count 是这堆的实数；若要腾格，移走整堆后复查 freeSlots。' };
 }
 
 const GEAR_SLOT_ZH: Record<GearSlot, string> = {
