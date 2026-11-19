@@ -60,6 +60,11 @@ jobs:
             --cache "$RUNNER_TEMP/android-inputs" \
             --output "$RUNNER_TEMP/android-release/with-combat" \
             --catalog paper/integrations/agent-portal/src/android-client-downloads.json --verify-catalog
+      - name: Verify and build the optional Xbox spell preset from the released native pack
+        run: |
+          native="$RUNNER_TEMP/android-release/with-combat/qiandengji-android-1.21.1-neoforge-1.0.0-preview.6.mrpack"
+          python paper/integrations/android-client/test-wheel-controller.py "$native"
+          python paper/integrations/android-client/add-wheel-controller.py "$native" "$RUNNER_TEMP/android-release/with-controller"
       - name: Install Chinese fonts for browser review
         run: |
           sudo apt-get update -qq

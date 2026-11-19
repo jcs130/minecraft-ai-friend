@@ -13,17 +13,6 @@
 
 先在安卓系统通过蓝牙或 USB 连接手柄。启动整合包，在 FCL 游戏侧栏的「手柄」里启用「手柄控制」，将「手柄输入模式」设为「SDL 直通」。
 
-### 用 Xbox 手柄选技能
-
-官网原生手柄包的 Recommend 模板把 View 键（Xbox 左侧两个小方框）分配给 Control Flex 的「径向菜单 1」。初始八格都是空的。千灯纪的「千灯纪·施法」模板把同一个键接到服务器为你保存的八个技能。
-
-- 已在玩原生手柄包时，退出游戏，把小包中的 `config` 合并到这个实例的游戏目录。重开后在 Control Flex 设置侧栏用 ◀ / ▶ 选「千灯纪·施法」。[下载手柄配置](https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/0e8bfc02d4a6982efd6dcb92d7417057616efdb396d9ffb4bc02b614071c2acc/qiandengji-fcl-spell-wheel-1.zip)
-- 新装时，把施法版 `.mrpack` 导入 FCL 的独立实例，首次启动即选用该模板。[下载 FCL 施法版](https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/bb6194dcf9721b17a1bab59b9688e414b6bc541d8efce75c7ceacf2bc4cd54c9/qiandengji-android-1.21.1-neoforge-1.0.0-preview.6-wheel.1.mrpack)
-
-长按 View 打开，右摇杆指向技能，看清技能名称后按 A 确认，B 返回。轮盘打开后可以松开 View。要换掉某一招，用左摇杆移到下方「配置轮盘」，按 A 选槽位，再选技能。需要目标的传送术会接着让你选队友或目的地。
-
-若想给原有的 Control Flex 径向菜单加一个入口，也可以把空格类型设为「聊天指令」，填 `/mycli menu wheel`。手柄原有方案仍可从设置侧栏选回。
-
 Control Flex 在游戏内读取摇杆和按钮。预置的千灯纪服务器地址启用连续模拟移动，轻推和全推摇杆的速度不同。先试左摇杆移动、右摇杆转头、左扳机打开手上的技能罗盘。按键可在游戏内的 Control Flex 设置调整，背包和聊天也可用触屏。
 
 这版含 Control Flex 0.8.9-beta.3。手机上的手柄识别、摇杆手感和重连还需实测。
