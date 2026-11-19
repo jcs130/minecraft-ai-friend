@@ -20,6 +20,17 @@ public final class NpcDialoguePolicyTest {
         check(NpcDialoguePolicy.addressed(known,"结衣你要一起出门吗？").text().equals("你要一起出门吗？"));
         check(NpcDialoguePolicy.addressed(known,"我刚看见结衣")==null);
         check(NpcDialoguePolicy.addressed(known,"YuiSword 很好用")==null);
+        var sword=new NpcDialoguePolicy.Profile(UUID.randomUUID(),b,"numen","Kirito","qa",24,List.of("桐人"));
+        var fish=new NpcDialoguePolicy.Profile(UUID.randomUUID(),b,"maid","肥鱼","qa",24,List.of("Feiyu"));
+        var registered=List.of(sword,fish,known.iterator().next());
+        var group=NpcDialoguePolicy.group(registered,"桐人、肥鱼，补给齐了，你们一起来开塔！");
+        check(group.recipients().equals(List.of(sword,fish)) && group.message().equals("补给齐了，你们一起来开塔！"));
+        check(NpcDialoguePolicy.group(registered,"@Feiyu、@kirito：走吧").recipients().equals(List.of(fish,sword)));
+        check(NpcDialoguePolicy.group(registered,"结衣、桐人、肥鱼，集合").recipients().equals(List.of(registered.get(2),sword,fish)));
+        check(NpcDialoguePolicy.group(registered,"桐人、Kirito、肥鱼，走吧").recipients().equals(List.of(sword,fish)));
+        for(String words:List.of("我刚和桐人、肥鱼说过了","等桐人、肥鱼，一起开塔","“桐人、肥鱼，集合”","肥鱼，我们去找桐人、结衣",
+                "桐人、路人，集合","桐人、，集合","桐人、肥鱼，","!桐人、肥鱼，集合","/msg 桐人、肥鱼 集合"))
+            check(NpcDialoguePolicy.group(registered,words)==null);
         var second=first.deepCopy();
         second.addProperty("id",UUID.randomUUID().toString());
         second.addProperty("name","另一位居民");

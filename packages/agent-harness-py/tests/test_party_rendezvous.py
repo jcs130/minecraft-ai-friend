@@ -1,4 +1,5 @@
 """Native party channel, reinforcement and normal player loadout regression tests."""
+import json
 import time
 from types import SimpleNamespace
 
@@ -15,7 +16,7 @@ PARTY = "8c165cfd-0c8d-4bcd-9160-edfd13db3311"
 
 def result(kind, line, **args):
     return adventure.game_result(PortResult("completed", "stdout:\n"+line), adventure.ACT,
-                                 {"kind": kind, **args}, account=SELF, peer=PEER)
+                                 {"kind": kind, **args}, account=SELF, body_id="572cfa2c-7c6d-412f-ab03-678131545e80", peer=PEER)
 
 
 def test_actual_equipment_refusal_is_terminal_and_actionable():
@@ -64,6 +65,41 @@ def test_team_output_is_classified_only_inside_native_party_envelope():
     assert adventure.party_line(event(raw.text, "talk")) is None
     assert adventure.party_line(event('[附近][主世界] LifePeerQA: 入口见！')) is None
     assert adventure.party_line(event(raw.text.replace("VortexRPG »", "[附近] Someone: VortexRPG »"))) is None
+
+
+def test_live_party_brand_on_both_sides_of_a_conversation():
+    line = "千灯纪 » [Party] ★ QaKirito: 附近巡逻？"
+    event = SimpleNamespace(id="native_31", text=f'<event kind="server_message" where="chat">{line}</event>',
+                            data={"nativeKind": "server_message", "occurredAt": 123})
+    assert result("party_chat", line, partyId=PARTY, text="附近巡逻？").data["adventure"]["effect"] == "sent"
+    assert adventure.party_line(event) == {"eventId": "party:native_31", "at": 123, "speaker": SELF, "text": "附近巡逻？"}
+    assert result("party_chat", line.replace("千灯纪", "另一座城"), partyId=PARTY, text="附近巡逻？").data["adventure"]["effect"] == "sent"
+    for different in (line.replace(SELF, PEER), line.replace("巡逻", "集合"), "[附近] Other: " + line):
+        assert result("party_chat", different, partyId=PARTY, text="附近巡逻？").data["adventure"]["effect"] == "unverified"
+
+
+def test_party_receipt_does_not_use_display_and_stays_private():
+    uid = "572cfa2c-7c6d-412f-ab03-678131545e80"
+    peer = "44bfa35b-fb76-458b-99f3-f10207dc442f"
+    mid = "cb7b8c1a-a31b-4bdd-9f86-9795ff760b05"
+    row = {"schema": 1, "id": mid, "partyId": PARTY, "recipientId": uid, "speakerId": uid,
+           "speaker": SELF, "text": "入口见！"}
+    wire = lambda item: "MC_PARTY_CHAT " + json.dumps(item, ensure_ascii=False)
+    def send(item):
+        return result("party_chat", wire(item), partyId=PARTY, text="入口见！").data["adventure"]
+    receipt = send(row)
+    assert (receipt["effect"], receipt["messageId"], receipt["records"], receipt["messages"]) == ("sent", mid, [], [])
+    for wrong in ({"partyId": uid}, {"speakerId": peer}, {"recipientId": peer}, {"speakerId": peer, "recipientId": peer},
+                  {"id": "x"}, {"text": "另一条"}):
+        assert send(row | wrong)["effect"] == "unverified"
+    event = SimpleNamespace(id="frame", text='<event kind="server_message" where="chat">' + wire(row | {"recipientId":peer}) + '</event>',
+                            data={"nativeKind": "server_message", "occurredAt": 123})
+    assert adventure.party_line(event, peer)["eventId"] == "party:" + mid
+    assert adventure.party_line(event, uid) is None
+    from xml.sax.saxutils import escape
+    escaped = escape(wire(row | {"recipientId": peer, "text": '路牌写着 "A & B"'}), {'"': "&quot;"})
+    event.text = '<event kind="server_message" where="chat">' + escaped + '</event>'
+    assert adventure.party_line(event, peer)["text"] == '路牌写着 "A & B"'
 
 
 def test_only_ordinary_armor_slots_can_be_prepared():

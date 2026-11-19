@@ -37,6 +37,22 @@ def test_named_nearby_teammate_evidence_is_bound_to_the_listener(kind, name, acc
     assert not accepts(nearby(actor, "可米，你先准备装备。"))
 
 
+@pytest.mark.parametrize("channel", ["chat", "voice"])
+def test_group_call_is_direct_only_for_the_recipient_selected_by_the_game(channel):
+    actor = role(id="feiyu", name="肥鱼", body_kind="maid")
+    listener = str(actor.body_id)
+    words = "桐人、肥鱼，补给和箱子里的奖励都核对完啦，你们一起来开塔！"
+    original = "bcaafafe-0110-48ad-bd24-9c446fd3b2dd"
+    receipt = f"qdvoice:{SPEAKER}:{channel}_group_{original}_{listener}"
+    accepts = lambda **kw: addressed_dialogue(nearby(actor, words, **kw), listener, ("肥鱼",))
+    assert accepts(channel=channel, eventId=receipt)
+    assert not accepts(channel=channel, eventId=receipt.replace(listener, SPEAKER))
+    assert not accepts(channel=channel, eventId=receipt, serverAttributed=False)
+    assert not accepts(channel="npc_chat", eventId=receipt)
+    assert not accepts(channel=channel, eventId=receipt.replace(original, "invalid"))
+    assert not accepts(channel=channel, eventId=f"qdvoice:{SPEAKER}:{channel}_{original}")
+
+
 def test_direct_teammate_question_does_not_get_filtered_as_background_chat():
     async def run():
         actor = role()

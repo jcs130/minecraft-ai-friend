@@ -41,6 +41,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private final VoiceUploads uploads=new VoiceUploads();
     private final VoiceUploadTrace uploadTrace=new VoiceUploadTrace();
     private final VoiceSequences sequences=new VoiceSequences();
+    private final NearbySpeechTurns turns = new NearbySpeechTurns();
     private final ConcurrentHashMap<UUID,Capture> captures=new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID,VoiceDelivery> deliveries=new ConcurrentHashMap<>();
     private volatile VoiceAudience.Snapshot snapshot=new VoiceAudience.Snapshot(0,Map.of());
@@ -70,6 +71,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         final PrivateRecipient recipient;
         AudioPlayer player;SpeechFrames frames;OpusEncoder encoder;boolean cancelled;String cancelReason="PLAYBACK_INTERRUPTED";
         UUID channel;VoiceDelivery delivery;
+        boolean waitingForTurn;
         Job(UUID a,UUID s,UUID r,String f,String t,String v,byte[] b,PrivateRecipient recipient){
             actor=a;session=s;request=r;fingerprint=f;text=t;voice=v;audio=b;this.recipient=recipient;
         }
@@ -115,7 +117,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
                 public String getPluginId(){return "qiandengji_voice";}
                 public void registerEvents(EventRegistration registration){
                     registration.registerEvent(VoicechatServerStartedEvent.class,event->{api=event.getVoicechat();main(()->{for(Player player:Bukkit.getOnlinePlayers())syncPresence(player);});getLogger().info("SVC API ready; captions stay private and ASR stays on CPU");});
-                    registration.registerEvent(VoicechatServerStoppedEvent.class,event->{api=null;closeCaptures();sequences.clear();main(()->{presence.close();for(UUID actor:new ArrayList<>(lanes.keySet()))cancelSpeech(actor,"VOICE_SERVER_STOPPED");});});
+                    registration.registerEvent(VoicechatServerStoppedEvent.class,event->{api=null;closeCaptures();sequences.clear();turns.clear();main(()->{presence.close();for(UUID actor:new ArrayList<>(lanes.keySet()))cancelSpeech(actor,"VOICE_SERVER_STOPPED");});});
                     registration.registerEvent(MicrophonePacketEvent.class,PaperVoicePlugin.this::microphone);
                     registration.registerEvent(EntitySoundPacketEvent.class,PaperVoicePlugin.this::soundOffered,1000);
                     registration.registerEvent(StaticSoundPacketEvent.class,PaperVoicePlugin.this::soundOffered,1000);
@@ -145,14 +147,17 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         }
         if(npcs!=null)npcs.sample(all);
         snapshot=new VoiceAudience.Snapshot(System.currentTimeMillis(),all);
+        turns.update(snapshot, System.currentTimeMillis());
         uploads.expire(System.currentTimeMillis());
     }
     @EventHandler public void quit(PlayerQuitEvent event){
         UUID actor=event.getPlayer().getUniqueId();bridgePeers.remove(actor);presence.forget(actor);sessions.remove(actor);eventCaptions.remove(actor);uploads.disconnect(actor);dropCapture(actor);sequences.remove(actor);
         cancelSpeech(actor,"ACTOR_DISCONNECTED");
+        turns.forget(actor);
     }
     @EventHandler public void worldChanged(PlayerChangedWorldEvent event){
         UUID actor=event.getPlayer().getUniqueId();uploads.disconnect(actor);dropCapture(actor);cancelSpeech(actor,"ACTOR_WORLD_CHANGED");
+        turns.forget(actor);
     }
     private void cancelSpeech(UUID actor,String reason){
         SpeechLane<Job> lane=lanes.get(actor);if(lane==null)return;
@@ -361,13 +366,47 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
                 if(job.audio==null){JsonObject request=new JsonObject();request.addProperty("actor",job.actor.toString());request.addProperty("requestId",job.request.toString());request.addProperty("voice",job.voice);request.addProperty("text",job.text);wav=request("POST","/v1/tts",gson.toJson(request).getBytes(StandardCharsets.UTF_8),Map.of("Content-Type","application/json"));}
                 else wav=request("POST","/v1/normalize",job.audio,Map.of("Content-Type","audio/wav"));
                 stage="decode";short[] pcm=pcm(wav);
-                io.execute(()->{try{ledger.transition(job.actor,job.request,job.fingerprint,"playing","");main(()->play(job,pcm));}
-                    catch(IOException failure){main(()->finish(job,"failed","VOICE_RECEIPT_STORAGE_UNAVAILABLE"));}});
+                main(()->awaitSpeechTurn(job,pcm));
             }catch(Exception failure){String reason=VoiceDiagnostics.preparationFailure(stage,failure);if(failure instanceof InterruptedException)Thread.currentThread().interrupt();getLogger().warning("Voice preparation failed: request="+job.request+" stage="+stage+" code="+reason);main(()->finish(job,"failed",reason));}
         });
     }
+    /** Shared with the native maid playback through the Bukkit plugin API. */
+    public boolean publicSpeechTurn(org.bukkit.entity.Entity body, UUID request, double range, boolean start) {
+        if (!Bukkit.isPrimaryThread()) return false;
+        long now=System.currentTimeMillis();
+        if (!start) { turns.end(body.getUniqueId(),request,now); return true; }
+        var at=body.getLocation();
+        return turns.begin(body.getUniqueId(),request,new NearbySpeechTurns.Place(body.getWorld().getUID(),
+                at.getX(),at.getY(),at.getZ(),range),now);
+    }
+    private void awaitSpeechTurn(Job job,short[] pcm) {
+        var lane=lanes.get(job.actor);
+        if (lane==null || lane.current()!=job) return;
+        if (!live(job) || api==null) { finish(job,"cancelled","ACTOR_OR_VOICE_SESSION_CHANGED"); return; }
+        if (!takeTurnOrWait(job,pcm)) return;
+        io.execute(()->{try{ledger.transition(job.actor,job.request,job.fingerprint,"playing","");main(()->play(job,pcm));}
+            catch(IOException failure){main(()->finish(job,"failed","VOICE_RECEIPT_STORAGE_UNAVAILABLE"));}});
+    }
+    private boolean takeTurnOrWait(Job job,short[] pcm) {
+        Player source=Bukkit.getPlayer(job.actor);
+        if (job.recipient==null && !publicSpeechTurn(source,job.request,Math.min(distanceCap,api.getVoiceChatDistance()),true)) {
+            if (!job.waitingForTurn) {
+                job.waitingForTurn=true;
+                reply(source,job.request,"queued","WAITING_FOR_NEARBY_SPEAKER");
+                io.execute(()->{try{ledger.transition(job.actor,job.request,job.fingerprint,"queued","WAITING_FOR_NEARBY_SPEAKER");}
+                    catch(IOException error){main(()->finish(job,"failed","VOICE_RECEIPT_STORAGE_UNAVAILABLE"));}});
+            }
+            Bukkit.getScheduler().runTaskLater(this,()->awaitSpeechTurn(job,pcm),3L);
+            return false;
+        }
+        job.waitingForTurn=false;
+        return true;
+    }
     private void play(Job job,short[] pcm){
+        var lane=lanes.get(job.actor);if(lane==null||lane.current()!=job)return;
         if(!live(job)||api==null){finish(job,"cancelled","ACTOR_OR_VOICE_SESSION_CHANGED");return;}
+        // A real microphone may have opened while the playback receipt was being flushed.
+        if(!takeTurnOrWait(job,pcm))return;
         try{
             Player source=Bukkit.getPlayer(job.actor);job.channel=UUID.randomUUID();
             AudioChannel channel;
@@ -393,6 +432,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     }
     private void finish(Job job,String state,String reason){
         SpeechLane<Job> lane=lanes.get(job.actor);if(lane==null||lane.current()!=job)return;
+        turns.end(job.actor,job.request,System.currentTimeMillis());
         if(job.channel!=null)deliveries.remove(job.channel);
         lane.finish(job);terminal(job,state,reason);outstanding.decrementAndGet();begin(job.actor);
     }
@@ -421,19 +461,27 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         ByteArrayOutputStream out=new ByteArrayOutputStream();try(AudioInputStream stream=new AudioInputStream(new ByteArrayInputStream(pcm),new AudioFormat(48000,16,1,true,false),pcm.length/2)){AudioSystem.write(stream,AudioFileFormat.Type.WAVE,out);}return out.toByteArray();
     }
     private void microphone(MicrophonePacketEvent event){
-        VoicechatServerApi current=api;var sender=event.getSenderConnection();if(stopping||current==null||sender==null||sender.isDisabled())return;
+        VoicechatServerApi current=api;var sender=event.getSenderConnection();if(stopping||event.isCancelled()||current==null||sender==null||sender.isDisabled())return;
         UUID id=sender.getPlayer().getUuid();var receiver=event.getReceiverConnection();if(receiver!=null&&!receiver.getPlayer().getUuid().equals(id))return;
-        var observed=snapshot;var actor=observed.actors().get(id);long now=System.currentTimeMillis();if(actor==null||now-observed.at()>200)return;
+        var observed=snapshot;var actor=observed.actors().get(id);long now=System.currentTimeMillis();if(actor==null)return;
         long sequence=event.getPacket().toStaticSoundPacket().getSequenceNumber();if(!sequences.observe(id,actor.session(),sequence))return;
-        if(sender.isInGroup()){dropCapture(id);return;}
+        var group=sender.getGroup();
+        if(group!=null && !Group.Type.OPEN.equals(group.getType())){dropCapture(id);return;}
+        byte[] opus=event.getPacket().getOpusEncodedData();
+        if(opus.length>4096){dropCapture(id);return;}
+        double distance=event.getPacket().isWhispering()?current.getServerConfig().getDouble("whisper_distance",24):current.getVoiceChatDistance();
+        turns.microphone(id,actor.session(),new NearbySpeechTurns.Place(actor.world(),actor.x(),actor.y(),actor.z(),
+                Math.min(distance,distanceCap)),opus.length==0,now);
+        // Open group audio is audible nearby. Captions still require an ungrouped, fresh audience.
+        if(group!=null){dropCapture(id);return;}
+        if(now-observed.at()>200)return;
         Capture capture=captures.get(id);
         if(capture==null){if(captures.size()>=16)return;Capture next=new Capture(actor,current.createDecoder());Capture old=captures.putIfAbsent(id,next);if(old!=null){next.decoder.close();capture=old;}else capture=next;}
         synchronized(capture){
             if(capture.closed||!capture.session.equals(actor.session())){dropCapture(id);return;}
-            byte[] opus=event.getPacket().getOpusEncodedData();if(opus.length==0){flush(capture);return;}if(opus.length>4096){dropCapture(id);return;}
+            if(opus.length==0){flush(capture);return;}
             try{
                 short[] decoded=capture.decoder.decode(opus);if(decoded.length>5760){dropCapture(id);return;}
-                double distance=event.getPacket().isWhispering()?current.getServerConfig().getDouble("whisper_distance",24):current.getVoiceChatDistance();
                 if(!capture.originWorld.equals(actor.world())){dropCapture(id);return;}
                 capture.hearingRange=Math.min(capture.hearingRange,Math.min(distance,distanceCap));
                 double[] point={actor.x(),actor.y(),actor.z()};for(int i=0;i<3;i++){capture.speakerBounds[i]=Math.min(capture.speakerBounds[i],point[i]);capture.speakerBounds[i+3]=Math.max(capture.speakerBounds[i+3],point[i]);}

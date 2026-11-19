@@ -730,7 +730,7 @@ class NumenBody(BaseBody):
                        for row in evidence.get("adventure", {}).get("records", [])):
                 return PortResult("rejected", "No party change sent. Follow the server's nextAction, or continue solo while waiting.", evidence)
         result = await self.port.call("lua", {"code": adventure.game_lua(line, account)}, request_id)
-        receipt = adventure.game_result(result, name, args, account=account, peer=self.adventure_partner)
+        receipt = adventure.game_result(result, name, args, account=account, body_id=self.identity().body_id, peer=self.adventure_partner)
         if name == adventure.QUERY and args["kind"] == "party":
             evidence = (receipt.data or {}).get("adventure", {})
             team = adventure.current_party(evidence, self.adventure_partner)
@@ -846,6 +846,7 @@ class NumenBody(BaseBody):
                 mapped = loadout.armor_result(mapped, slot, recovered=True)
             else:
                 mapped = adventure.game_result(mapped, action.name, action.args, account=getattr(self.identity(), "name", None),
+                                               body_id=getattr(self.identity(), "body_id", getattr(self.port, "body", None)),
                                                peer=self.adventure_partner, recovered=True)
         if mapped is not None and request_id in self._meals:
             mapped = measured_meal(mapped)
@@ -882,13 +883,15 @@ class NumenBody(BaseBody):
     async def poll_once(self) -> int:
         count = 0
         for raw in await self.port.events():
-            party = adventure.party_line(raw)
+            party = adventure.party_line(raw, getattr(self.identity(), "body_id", None))
             if party:
                 if (self.adventure_partner and party["speaker"].casefold() == self.adventure_partner.casefold()
                         and isinstance(party["at"], (int, float)) and 0 <= time.time()*1000 - party["at"] <= 120_000):
-                    self.party_message = {**party, "partyId": self.observed_party_id}
+                    self.party_message = {**party, "partyId": party.get("partyId", self.observed_party_id)}
                     self.emit("status", "Native party channel updated.", data={"partyNotice": True})
                 continue  # Private team text never goes to general events or social memory.
+            if raw.data.get("nativeKind") == "server_message" and raw.text.partition(">")[2].startswith("MC_PARTY_CHAT "):
+                continue
             if raw.kind_hint is not None:  # hosted: agent-mc-world envelope
                 kind = classify_envelope(raw.kind_hint)
                 self._note(kind)
