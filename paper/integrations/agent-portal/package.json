@@ -17,6 +17,7 @@
   "dependencies": {
     "@alicloud/credentials": "2.4.7",
     "ali-oss": "6.23.0",
+    "jpeg-js": "0.4.4",
     "music-metadata": "12.3.3",
     "nodemailer": "10.2.0",
     "pngjs": "7.0.0",

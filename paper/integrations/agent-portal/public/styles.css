@@ -116,3 +116,5 @@ dialog{border:1px solid #405544;border-radius:12px;background:#172225;color:var(
 @media (max-width: 600px) {
   .live-layout > .live-channels { max-height: 210px; }
 }
+.photo-scene{margin-top:1rem}.photo-scene canvas{display:block;width:100%;height:clamp(210px,40vh,420px);border-radius:10px;background:#aec9d2;touch-action:none;cursor:grab}.photo-scene canvas:active{cursor:grabbing}.scene-controls{display:flex;align-items:center;gap:.5rem;margin-top:.55rem}.scene-controls span{margin-right:auto;font-size:.86rem}.scene-controls button{min-width:2.6rem;min-height:2.6rem;border:1px solid currentColor;border-radius:.5rem;background:transparent;color:inherit;cursor:pointer}
+.photo-scene [hidden]{display:none}

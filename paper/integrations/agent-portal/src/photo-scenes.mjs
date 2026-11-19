@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+import {Worker} from 'node:worker_threads';
 import {readSceneArchive,MAX_SCENE_BYTES} from './viewer/photo-scene-archive.mjs';
 const UUID=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i,SHA=/^[a-f0-9]{64}$/;
 const fail=(status,reason,message)=>Object.assign(Error(message),{status,reason});
@@ -35,6 +36,34 @@ export async function readPhotoScene(directory,photo,cache=new Map()){
   }
 }
 export class PhotoScenes{
+  previews=new Map();
+  building=new Map();
+  async preview(id,context){
+    const current=()=>context?this.gallery.manageable(id,context):this.gallery.published(id);
+    const photo=current(),scene=this.gallery.known(id)?.scene;
+    if(!photo||!this.objects?.readScene||!this.ready(id,scene))throw fail(404,'PHOTO_PREVIEW_MISSING','这张照片没有可预览的场景');
+    const key=scene.sha256;
+    if(!this.previews.has(key)){
+      if(!this.building.has(key)){
+        if(this.building.size>=2)throw fail(503,'PHOTO_PREVIEW_BUSY','场景正在准备，请稍后重试');
+        const job=Promise.resolve().then(async()=>{
+          const bytes=await this.objects.readScene(key,scene.bytes);
+          const preview=await new Promise((resolve,reject)=>{
+            const worker=new Worker(new URL('./scene-preview-worker.mjs',import.meta.url),
+              {workerData:{bytes,expectedSha256:key,photoId:id,owner:this.gallery.known(id).authorUuid,source:scene.sourceImageSha256}});
+            worker.once('message',resolve);worker.once('error',reject);
+            worker.once('exit',code=>{if(code!==0)reject(Error('scene worker exited'));});
+          });
+          if(this.previews.size>=32)this.previews.delete(this.previews.keys().next().value);
+          this.previews.set(key,preview);
+        }).catch(()=>{throw fail(503,'PHOTO_PREVIEW_UNAVAILABLE','局部场景暂时无法读取，请稍后重试');}).finally(()=>this.building.delete(key));
+        this.building.set(key,job);
+      }
+      await this.building.get(key);
+    }
+    if(!current()||this.gallery.known(id)?.scene?.sha256!==key||!this.ready(id,scene))throw fail(404,'PHOTO_PREVIEW_MISSING','这张照片的场景已更新');
+    return this.previews.get(key);
+  }
   constructor(store,gallery,objects){this.store=store;this.gallery=gallery;this.objects=objects;store.db.exec('CREATE TABLE IF NOT EXISTS gallery_scenes(id TEXT PRIMARY KEY,owner_uuid TEXT NOT NULL,sha256 TEXT NOT NULL,bytes INTEGER NOT NULL,source_image_sha256 TEXT NOT NULL,received_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS gallery_scene_resources(photo_id TEXT NOT NULL,sha256 TEXT NOT NULL,name TEXT NOT NULL,bytes INTEGER NOT NULL,PRIMARY KEY(photo_id,sha256))');}
   wanted(photos){return this.objects?(photos??[]).filter(p=>{const r=this.store.db.prepare('SELECT sha256,owner_uuid,source_image_sha256 FROM gallery_scenes WHERE id=?').get(p.id);return ['captured','partial'].includes(p.scene?.state)&&(!r||r.sha256!==p.scene.sha256||r.owner_uuid!==p.authorUuid||r.source_image_sha256!==p.scene.sourceImageSha256);}).map(p=>p.id):[];}
   async accept(id,bytes){
