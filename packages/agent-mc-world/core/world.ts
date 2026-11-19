@@ -9,6 +9,7 @@ import { operationInventory } from './operation-experience.ts';
 import { TrajectoryScoreError } from './jitrl-trajectory.ts';
 import { withFactState } from './fact-state.ts';
 import { readWorldIdentity, worldScopedRealm } from './world-scope.ts';
+import { fatalDamageText, observeMobDeaths, ownKillCredit } from './mob-death.ts';
 import { identityObservations } from './identity-observation.ts';
 import {ProximityVoiceLane, PROXIMITY_VOICE_TOOL} from './proximity-voice-lane.ts';
 import { TaskProgressReading } from './task-progress-reading.ts';
@@ -7969,6 +7970,18 @@ export class MinecraftWorld implements World {
   protected hookBotEvents(bot: any): void {
     if (this.hookedBots.has(bot)) return;
     this.hookedBots.add(bot);
+    const reportedDeaths = new WeakSet<object>();
+    observeMobDeaths(bot, receipt => {
+      if (this.bridge?.bot !== bot) return;
+      const victim = receipt.victim;
+      const entity = bot.entities[victim.entityId];
+      if (entity?.uuid?.toLowerCase() === victim.uuid) reportedDeaths.add(entity);
+      this.executor?.noteCombatTargetDead({ id: victim.entityId, uuid: victim.uuid }, receipt);
+      this.combat?.noteServerDeath(receipt);
+      this.emit('minecraft.event', '[Minecraft] ' + fatalDamageText(receipt), false, {
+        trigger: 'piggyback', meta: { mobDeath: receipt, ownKillCredit: ownKillCredit(bot, receipt) },
+      });
+    });
 
     observeStatusEffects(bot);
     this.attachExtension(bot);
@@ -8231,7 +8244,8 @@ export class MinecraftWorld implements World {
       const namedNeutral = !!(customName || identity) && classifyEntity(entity.type, entity.name) !== 'hostile';
       const label = identity?.label ?? (customName ? `「${customName}」（${zhEntity(entity.name)}）` : zhEntity(entity.name));
       this.emit('minecraft.event', `[Minecraft] ${label}死了(${Math.round(d)} 格外)。`, owned,
-        { trigger: owned ? 'flush' : namedNeutral ? 'debounce' : 'piggyback', meta: { entityLifecycle: {
+        { trigger: owned ? 'flush' : namedNeutral ? 'debounce' : 'piggyback',
+          deliver: owned || namedNeutral || !reportedDeaths.has(entity), meta: { entityLifecycle: {
           kind: 'death', source: 'native-entity-status', entityId: entity.id ?? null, uuid: entity.uuid ?? null,
           entityType: entity.name, customName, ownedBySelf: owned ? true : null,
           ...(identity ? { identity } : {}),

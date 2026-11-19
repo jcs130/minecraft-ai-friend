@@ -29,7 +29,7 @@ native permissions and the separate fast controller's relation checks remain.
 Use fresh observations after a lost identity; do not replay old attacks to make
 up for unknown outcomes. These contracts are shared by SDK, MCP and host tools.
 
-## Death observations and kill attribution (rc.128)
+## Native death observations
 
 A matching native `entityDead` confirms the target's death, including when
 another player or the environment caused it. It supplies no killer identity.
@@ -58,3 +58,11 @@ additive observation plus a nullable kill-count contract; consumers must handle
 `null` as unknown, rather than zero. Historical numeric kill maps retain their
 data and are marked `legacy-unverified` on read. They do not become verified
 own kills or training success. Reading the ledger does not rewrite the file.
+
+## Server-reported final damage
+
+AgentFriend 0.4.53 sends one private `mcagent:mob_death` JSON packet for a mob's uncancelled death. A client subscribes through `minecraft:register`. Registered Agents using the older transport receive `MC_MOB_DEATH` privately. Recipients are the causing player in the same world and players tracking the mob with line of sight. Entity visibility applies to all three identities.
+
+Each v1 packet has an `eventId`, server time `occurredAt` in epoch milliseconds, world key, `victim`, namespaced `damageType`, `causingEntity`, `directEntity` and `indirect`. Entity references include the persistent UUID, runtime entity ID, registry type and optional player or custom name. For an arrow hit, the causing entity is the shooter and the direct entity is the arrow. A fall can report both as null even if a player hit the mob earlier.
+
+Core preview.107 records the packet in the event journal as `meta.mobDeath`. When it matches an active attack by victim ID and UUID, its step observation includes `fatalDamage` and `ownKillCredit`. A late receipt remains a separate event with the original victim UUID. The native status alone still leaves credit null. A mixed combat summary reports the measured lower bound in `confirmedOwnKills` and leaves `kills` null until all observed engaged deaths have attribution. Quest and reward completion require their own receipts.

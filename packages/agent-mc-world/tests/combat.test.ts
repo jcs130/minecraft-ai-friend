@@ -1465,6 +1465,23 @@ describe('弓与近战的同一战斗会话', () => {
 });
 
 describe('战斗会话:打与收', () => {
+  it.each(['native-first','server-first'])('correlates the same engaged death once (%s)', async order => {
+    const zombie=Object.assign(foe(7,'zombie',2.5),{uuid:'victim-uuid'});
+    const {bot,attacks}=combatRigBot([zombie]), b=bot as any;
+    const {session,combatReports}=rig(bot);
+    try {
+      b.entity.uuid='shooter-uuid'; b.entity.velocity.y=-.1;
+      session.onHurtBy(7,'zombie');await drive(bot,600);expect(attacks).toContain(7);
+      const receipt={schemaVersion:1 as const,eventId:'event',occurredAt:Date.now(),world:'minecraft:overworld',
+        victim:{entityId:7,uuid:zombie.uuid,name:null,type:'minecraft:zombie'},damageType:'minecraft:arrow',indirect:true,
+        causingEntity:{entityId:4,uuid:b.entity.uuid,name:'Archer',type:'minecraft:player'},
+        directEntity:{entityId:10,uuid:'arrow-uuid',name:null,type:'minecraft:arrow'}};
+      if(order==='native-first')bot.emit('entityDead',zombie);
+      session.noteServerDeath(receipt); session.noteServerDeath(receipt); bot.emit('entityDead',zombie);
+      session.stop();
+      expect(combatReports.at(-1)).toMatchObject({targetDeaths:{zombie:1},killAttribution:'server-confirmed',kills:{zombie:1},attributedDeaths:1});
+    } finally {session.stop();}
+  });
   it.each(['known-uuid', 'id-only'] as const)('does not associate a reused-ID %s death with the original engaged target', async source => {
     const zombie = Object.assign(foe(7, 'zombie', 2.5), { uuid: 'original-target' });
     const { bot, attacks } = combatRigBot([zombie]), b = bot as any;

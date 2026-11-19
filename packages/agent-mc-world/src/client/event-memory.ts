@@ -81,11 +81,15 @@ export function projectGameMemoryEvent(event: EventEnvelope): GameMemoryEvent | 
     actor.self=true;
     category='combat';evidence='client-observation';correlation.combatId=r.id;
     data={...pick(r,['id','startedAt','endedAt','reason','healthBefore','healthAfter','swings','meleeLanded','arrows','rangedLanded',
-      'targetDeaths','killAttribution','scope','sceneBefore','tacticRevision','policy','deathEpisodeId']),
+      'targetDeaths','killAttribution','confirmedOwnKills','attributedDeaths','scope','sceneBefore','tacticRevision','policy','deathEpisodeId']),
       healthDelta:finite(r.healthBefore)!==null&&finite(r.healthAfter)!==null?r.healthAfter-r.healthBefore:null,
       casts:Array.isArray(r.casts)?r.casts.map((c:any)=>pick(obj(c),['spell','sentAt','reply','replyAt','tacticRevision','manaBefore'])):[],
       castBoundary:'A sent cast is an attempt; reply and measured effect must be checked separately.',
-      killCredit:null,goalCompleted:false};
+      killCredit:r.killAttribution==='server-confirmed'?r.kills:null,goalCompleted:false};
+  } else if(suffix==='event' && obj(m.mobDeath).schemaVersion===1 && typeof obj(m.mobDeath).eventId==='string') {
+    category='observation';evidence='native-receipt';correlation.eventId=m.mobDeath.eventId;
+    data={kind:'mob-death',...pick(m.mobDeath,['eventId','world','occurredAt','victim','damageType','causingEntity','directEntity','indirect']),
+      ownKillCredit:m.ownKillCredit??null,goalCompleted:false};
   } else if(obj(m.positionChange).schema==='agent-mc-position-change/v1') {
     category='observation';evidence='client-observation';data={kind:'position-change',subject:'self',
       ...pick(obj(m.positionChange),['schema','source','before','after','distance']),cause:null,initiator:null,

@@ -392,6 +392,7 @@ export interface TaskAttackLease {
   dead: boolean;
   /** Exact target's native death event, not proof of our damage or kill. */
   deathObservedAt?: number | null;
+  fatalDamage?: import('../src/contracts/mob-death.ts').MobDeathReceipt;
   disconnected: boolean;
 }
 
