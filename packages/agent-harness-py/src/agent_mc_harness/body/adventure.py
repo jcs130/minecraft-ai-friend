@@ -6,6 +6,9 @@ import re
 from dataclasses import replace
 from math import dist
 from time import time
+from uuid import UUID
+from xml.etree import ElementTree
+from xml.sax.saxutils import unescape
 
 from ..models import NativeAction
 from .base import ArgumentError
@@ -24,11 +27,14 @@ ACTIONS = {
     "travel_ruin": "dungeon travel {id}", "start_ruin": "dungeon start {id}", "claim_ruin": "dungeon claim {id}",
     "travel_trial": "goto arena", "start_trial": "arena start", "create_party": "guild party create",
     "invite_partner": "guild party invite {peer}", "accept_invitation": "guild party accept",
-    "meet_partner": "locate tp {peer}",
+    "meet_partner": "locate tp {peer}", "party_chat": "guild party chat {text}",
 }
 QUERY, ACT, SURVEY = "adventure_query", "adventure_action", "survey"
 PLAYER = re.compile(r"[\w.]{1,16}")
 CONTENT_ID = re.compile(r"[a-z0-9][a-z0-9_-]{0,79}")
+PARTY_LINE = re.compile(r"VortexRPG » \[Party\] (?:[★☆] )?([\w.]{1,16}): ([^\r\n]{1,400})")
+ARMOR = {"head": "头盔", "chest": "胸甲", "legs": "护腿", "feet": "靴子"}
+PARTY_OPENING = "我们组好队了，在哪个入口会合？分开时用 /mycli guild party chat 加上想说的话，我也能收到。"
 SURVEY_LUA = """local n=numen_hosted
 local map=n.scan.map({radius=8})
 local pos=map.center
@@ -58,6 +64,12 @@ def catalogue(peer: str) -> list[NativeAction]:
     query_properties = result[1].input_schema["properties"]
     query_properties["page"] = {"type": "integer", "minimum": 1, "maximum": 100,
                                 "description": "Optional list page for exploration, combat_jobs and ruins. Required with a snapshot ID for detail_page."}
+    actions = result[2].input_schema["properties"]
+    actions["kind"]["enum"].append("prepare_armor")
+    actions["text"] = {"type": "string", "maxLength": 100, "description": "party_chat only. A short message to the current native party."}
+    actions["partyId"] = {"type": "string", "description": "party_chat only. Copy partyId from the current native party status."}
+    actions["slot"] = {"type": "string", "enum": list(ARMOR), "description": "prepare_armor only. Choose a missing armor slot."}
+    actions["allowPurchase"] = {"type": "boolean", "description": "prepare_armor only. Allow one basic iron piece costing up to 20 of your own RPG coins if needed."}
     return result
 
 
@@ -67,6 +79,17 @@ def player_command(name: str, args: dict, account: str, peer: str) -> str:
     template = options.get(kind) if isinstance(kind, str) else None
     if not template or not PLAYER.fullmatch(account or "") or not PLAYER.fullmatch(peer or "") or account.casefold() == peer.casefold():
         raise ArgumentError("Choose an advertised adventure operation with the configured partner.")
+    if kind == "party_chat":
+        words = args.get("text")
+        try:
+            valid_id = str(UUID(str(args.get("partyId")))) == args.get("partyId")
+        except ValueError:
+            valid_id = False
+        if (set(args) != {"kind", "text", "partyId"} or not valid_id or not isinstance(words, str)
+                or not 1 <= len(words) <= 100 or words != words.strip() or not words.isprintable()
+                or "§" in words or any(word.startswith("-") for word in words.split())):
+            raise ArgumentError("Copy the current partyId and supply one short line of party dialogue.")
+        return "/mycli " + template.format(text=words)
     needs_id = "{id}" in template
     expected = {"kind", "id"} if needs_id else {"kind"}
     if kind == "detail_page" or kind in {"exploration", "combat_jobs", "ruins"} and "page" in args:
@@ -128,22 +151,62 @@ def survey_result(result, *, recovered=False):
     return replace(result, text="Nearby terrain and players sampled.", data={"survey": sample})
 
 
-def game_lua(line: str, account: str) -> str:
+def permission_lua(account: str) -> str:
     # A scoped owner rule is opt-in. An unattended character must not leave a
     # consent question pending for every read when this integration is disabled.
     rule = json.dumps("allow command(mycli) @" + account, ensure_ascii=False)
+    return ("local allowed=false; for _,row in ipairs(numen_hosted.permission.rules().yours) do "
+            "local plain=row:match('^(.-)%s+%-%-') or row; if plain==" + rule + " then allowed=true end end; "
+            "if not allowed then print('QD_ADVENTURE_NOT_CONFIGURED'); return end; ")
+
+
+def game_lua(line: str, account: str) -> str:
     fallback = ""
     if line == "/mycli tasks status --json":
         # A paginated reply may arrive outside mc.run's output capture.
         fallback = "if #r.output==0 then print('QD_GUILD_STATUS'); r=numen_hosted.mc.run('/mycli guild status') end; "
-    return ("local allowed=false; for _,row in ipairs(numen_hosted.permission.rules().yours) do "
-            "local plain=row:match('^(.-)%s+%-%-') or row; if plain==" + rule + " then allowed=true end end; "
-            "if not allowed then print('QD_ADVENTURE_NOT_CONFIGURED'); return end; "
-            "local r=numen_hosted.mc.run(" + json.dumps(line, ensure_ascii=False) + "); " + fallback +
+    return (permission_lua(account) + "local r=numen_hosted.mc.run(" + json.dumps(line, ensure_ascii=False) + "); " + fallback +
             "for _,line in ipairs(r.output) do print(line) end")
 
 
-def game_result(result, name: str, args: dict, *, peer=None, recovered=False):
+def party_line(raw):
+    """Recognise Vortex's native channel only as untrusted speech, never as an identity grant."""
+    if raw.data.get("nativeKind") != "server_message" or len(raw.text) > 1600 or not raw.text.startswith("<event "):
+        return None
+    header, closing, body = raw.text.partition(">")
+    if not closing or not body.endswith("</event>"):
+        return None
+    try:
+        envelope = ElementTree.fromstring(header + "/>")
+    except ElementTree.ParseError:
+        return None
+    if envelope.tag != "event" or envelope.get("kind") != "server_message" or envelope.get("where") != "chat":
+        return None
+    match = PARTY_LINE.fullmatch(re.sub(r"§.", "", unescape(body.removesuffix("</event>"))))
+    if match:
+        return {"eventId": "party:" + raw.id, "at": raw.data.get("occurredAt"), "speaker": match[1], "text": match[2]}
+    return None
+
+
+def travel_denial(messages):
+    for message in messages:
+        tagged = re.match(r"\[((?:team_[a-z_]+|equipment_required|unsafe_destination|protected_entry|protected_exit))\] ", message)
+        if tagged:
+            evidence = {"reason": tagged[1]}
+            missing = re.match(r"\[equipment_required\] 增援需补齐：([^；。]+)", message)
+            if missing:
+                evidence["missingEquipment"] = missing[1].split("、")
+                if "/mycli stash 打开个人箱" in message:
+                    evidence["activity"] = "trial"
+            return evidence, message
+        for prefix, reason in (("传送冷却还剩", "cooldown"), ("传送被保护规则取消", "protected"),
+                               ("魔力不足", "insufficient_mana"), ("旁观者不能使用传送术", "actor_unavailable")):
+            if message.startswith(prefix):
+                return {"reason": reason}, message
+    return {}, ""
+
+
+def game_result(result, name: str, args: dict, *, account=None, peer=None, recovered=False):
     if result.status == "unknown" and name == QUERY:
         return replace(result, status="failed", text="RPG read unavailable. Sample again when ready.")
     if result.status != "completed":
@@ -185,26 +248,54 @@ def game_result(result, name: str, args: dict, *, peer=None, recovered=False):
     if kind == "meet_partner" and peer:
         landing = rf"已安全抵达 {re.escape(peer)} 身边。 dimension=[\w:./-]+ x=-?\d+ y=-?\d+ z=-?\d+"
         verified_write = any(re.fullmatch(landing, message) for message in messages)
+    details, explanation = travel_denial(messages) if kind == "meet_partner" else ({}, "")
+    if details:
+        refused = True
+    if kind == "start_ruin":
+        for tag, row in records:
+            if (tag != "MC_SITE_DUNGEON_RESULT" or not isinstance(row, dict) or row.get("id") != args.get("id")
+                    or row.get("action") != "start" or row.get("success") is not False):
+                continue
+            guide = row.get("guidance") or {}
+            if isinstance(guide, dict) and guide.get("reason") == "EQUIPMENT_REQUIRED":
+                details["reason"] = "equipment_required"
+                explanation = str(guide.get("nextAction") or row.get("nextAction") or "Check entry equipment.")[:350]
+                missing = re.match(r"缺少[：:]?([^。；]+)", explanation)
+                details["missingEquipment"] = row.get("missingEquipment") or (missing[1].split("、") if missing else [])
+    if kind == "trial" and any(tag == "MC_TRIAL_STATE" and isinstance(row, dict)
+                               and row.get("reason") == "trial_busy" for tag, row in records):
+        explanation = "A run is active. Ask in party chat whether your teammate is in it. You can reinforce a participating teammate once equipped."
     if kind == "accept_quest":
         refused |= any(line.startswith(("已有在途任务", "没有这个任务 ID")) for line in messages)
         verified_write = any(line.startswith("已接公会委托：") for line in messages)
     if kind == "turn_in_quest":
         verified_write = any(line.startswith("委托交付成功！") for line in messages)
     effect = "refused" if refused else "read" if name == QUERY else "confirmed" if verified_write else "dispatched"
+    if not refused and kind == "party_chat":
+        sent = any(m and m[1] == account and m[2] == args["text"] for m in (PARTY_LINE.fullmatch(s) for s in messages))
+        effect = "sent" if sent else "unverified"
+    if kind == "meet_partner" and effect == "dispatched":
+        effect = "unverified"
+    if effect == "unverified":
+        details["retryWrite"] = False
+        explanation = "Read current party status and positions before a new decision. Do not repeat this request."
     plain_read = messages and (kind == "guild_board" or kind == "quest_status" and guild_status)
     if name == QUERY and not records and not plain_read:
         effect = "incomplete" if incomplete else "unavailable"
     evidence = {"kind": kind, "at": 0 if recovered else int(time()), "records": [
         {"type": tag, "value": row} for tag, row in records[:5]], "messages": messages[:6] if plain_read else messages[:2],
-        "effect": effect}
+        "effect": effect, **details}
+    if kind == "party_chat":
+        evidence["messages"] = []  # Party dialogue does not enter general action memory.
     if guild_status:
         evidence["source"] = "guild status"
     if kind == "guild_board":
         evidence["offers"] = [line[:220] for line in messages if re.match(r"^[a-z0-9][a-z0-9_-]{0,79} ", line)][:24]
     if args.get("id"):
         evidence["id"] = args["id"]
-    status = "rejected" if refused else "failed" if effect in {"incomplete", "unavailable"} else "completed"
-    return replace(result, status=status, text=f"{args['kind']}: {evidence['effect']}", data={"adventure": evidence})
+    status = "rejected" if refused else "failed" if effect in {"incomplete", "unavailable", "unverified"} else "completed"
+    text = f"{kind}: {effect}" + (f" — {explanation}" if explanation else "")
+    return replace(result, status=status, text=text, data={"adventure": evidence})
 
 
 def partner_nearby(peer, context) -> bool:
@@ -222,8 +313,10 @@ def partner_nearby(peer, context) -> bool:
     return False
 
 
-def coordination_check(kind: str, peer: str, data: dict) -> bool:
-    if kind == "meet_partner":
+def coordination_check(kind: str, peer: str, data: dict, party_id=None) -> bool:
+    if kind in ("meet_partner", "party_chat"):
+        if kind == "party_chat" and (not party_id or data.get("partyId") != party_id):
+            return False
         return data.get("inParty") is True and any(member.get("name") == peer and member.get("online") is True
                                                     for member in data.get("members", []))
     expected = {"create_party": "create", "invite_partner": "invite", "accept_invitation": "accept"}
@@ -231,5 +324,39 @@ def coordination_check(kind: str, peer: str, data: dict) -> bool:
         actor.get("name") == peer and actor.get("online") is True for actor in data.get("requested", []))
 
 
+def current_party(evidence, peer, *, since=0):
+    at = evidence.get("at", 0)
+    if not isinstance(at, (int, float)) or not 0 <= time() - at <= 90 or at + 1 < since:
+        return None
+    for record in evidence.get("records", []):
+        row = record.get("value")
+        if record.get("type") != "MC_RPG" or not isinstance(row, dict) or row.get("type") != "party":
+            continue
+        party_id = row.get("partyId")
+        if not coordination_check("party_chat", peer, row, party_id):
+            return None
+        member = next(m for m in row["members"] if m.get("name") == peer)
+        return {"partyId": party_id, "phase": row.get("phase"), "partner": peer,
+                "sameWorld": member.get("sameWorld"), "distance": member.get("distance")}
+    return None
+
+
+def meeting_recovery(last, prepared):
+    if not 0 <= time() - last.get("at", 0) <= 900:
+        return None
+    # Read receipts from the previous release without rewriting history.
+    denial, _ = travel_denial(last.get("messages", []))
+    if last.get("effect") == "refused" and last.get("reason"):
+        denial.update({key: last[key] for key in ("reason", "missingEquipment", "activity") if key in last})
+    if not denial and last.get("effect") != "unverified":
+        return None
+    recovery = {**denial, "effect": "refused" if denial else "unverified", "at": last["at"]}
+    if prepared.get("at", 0) >= last["at"]:
+        recovery["latestPreparation"] = prepared
+        if denial.get("activity") == "trial" and prepared.get("phase") == "insufficient_balance":
+            recovery["alternative"] = "travel_trial"
+    return recovery
+
+
 COORDINATION = {"create_party": "plan_invitation", "invite_partner": "plan_invitation",
-                "accept_invitation": "plan_joining", "meet_partner": "party"}
+                "accept_invitation": "plan_joining", "meet_partner": "party", "party_chat": "party"}

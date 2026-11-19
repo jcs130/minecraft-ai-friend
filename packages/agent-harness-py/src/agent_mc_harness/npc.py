@@ -383,7 +383,18 @@ class NpcPlanner:
                 "Read plan_invitation or plan_joining to arrange a real outing. Follow its nextAction: create means create_party, "
                 "invite means invite_partner, accept means accept_invitation. Inspect the resulting roster before meeting. "
                 "A native invitation leaves acceptance to its recipient. While waiting or when the partner is offline, continue solo. "
-                "Speak briefly when you meet to suggest a concrete activity. Do not repeat invitations or report unverified outcomes."}
+                "When separated, either member can meet_partner. For the trial you can travel_trial to its public entrance before combat. "
+                "Coordinate remotely with party_chat using the current partyId and brief text. Nearby speech cannot cross worlds. "
+                "Use prepare_armor for a missing slot. It wears carried armor, collects from your own queue or stash, or, if you "
+                "choose allowPurchase, buys one ordinary iron piece. A queued purchase must be collected, then worn. If funds are "
+                "short, agree on the public entrance or another activity. Never repeat a failed transfer on the same evidence. "
+                "Speak briefly when you meet. Do not repeat invitations or report unverified outcomes.",
+                "currentParty": context.party_context}
+            message = (context.party_context or {}).get("message")
+            if message:
+                facts["goal"] = ("Your verified teammate sent the private party message in adventuring.currentParty.message. "
+                                 "For a direct coordination question, reply briefly using party_chat with this partyId. "
+                                 "Answer from your own current observation. You may listen to group chatter or a closing remark.")
         if role.social_memory:
             # Legacy recall lacks verifiable per-peer visibility. Nearby replies
             # can still use local, non-conversation world observations.
@@ -443,7 +454,7 @@ class NpcPlanner:
         steps = reviewed_steps(role, context, plan["steps"])
         if check_in:
             steps = [step for step in steps if step.tool == "body:chat"][:1]
-        elif intent.goal == IDLE_GOAL and not context.dialogue:
+        elif intent.goal == IDLE_GOAL and not context.dialogue and not (context.party_context or {}).get("message"):
             inactive = set() if adventure.partner_nearby(role.adventure_partner, context) else {"body:chat"}
             if already_guarding(current_native_state(context)):
                 inactive.update({"body:stay", "body:stop", "body:native:sit"})
@@ -578,6 +589,8 @@ class NpcHost:
         self.pausing = False
         self.next_plan = 0.0
         self.last_danger = False
+        self.next_roster_check = 0.0
+        self.checked_party_event = None
 
     def _ack_steps(self, events: list[str]) -> list[Step]:
         # Only actual maid inbox entries support ack. Ambient owner-client chat
@@ -600,6 +613,40 @@ class NpcHost:
                 expired.append(key)
         if expired:
             self.journal.listen(body_id, expired, "expired-native-dialogue")
+
+    def _party_turn(self, body_id, context):
+        peer = self.role.adventure_partner
+        latest = self.journal.last_adventure(body_id, "party")
+        notice = getattr(self.body, "party_message", None)
+        if notice and (not 0 <= time.time() * 1000 - notice["at"] <= 120_000
+                       or self.journal.handled(body_id, notice["eventId"])):
+            notice = None
+        unread = notice and self.checked_party_event != notice["eventId"]
+        periodic = (self.next_roster_check == 0 or time.time() - latest.get("at", 0) > 90) and time.monotonic() >= self.next_roster_check
+        if (unread or periodic) and "body:native:adventure_query" in self.role.allowed_tools:
+            self.checked_party_event = notice["eventId"] if notice else None
+            self.next_roster_check = time.monotonic() + 90
+            self.next_plan = time.monotonic() + 3
+            return None, None, Step(tool="body:native:adventure_query", args={"kind": "party"})
+
+        team = adventure.current_party(latest, peer, since=notice["at"] / 1000 if notice else 0)
+        opening = None
+        if notice and (not team or notice.get("partyId") != team["partyId"]):
+            self.journal.listen(body_id, [notice["eventId"]], "party-membership-unavailable")
+            notice = None
+        if team:
+            context.party_context = dict(team)
+            if notice:
+                context.party_context["message"] = {"from": peer, "text": notice["text"], "replyChannel": "party_only"}
+            elif team["phase"] == "assembling" and not self.journal.contacted_recently(body_id, "party-opening:" + team["partyId"], 86400):
+                opening = Step(tool="body:native:adventure_action",
+                               args={"kind": "party_chat", "partyId": team["partyId"], "text": adventure.PARTY_OPENING})
+
+        last = self.journal.last_adventure(body_id, "meet_partner")
+        recovery = adventure.meeting_recovery(last, self.journal.last_adventure(body_id, "prepare_armor"))
+        if recovery:
+            context.party_context = {**(context.party_context or {}), "lastMeetingAttempt": recovery}
+        return notice, team, opening
 
     async def _plan(self, intent: Intent, context: PlanContext):
         body_id = str(self.role.body_id)
@@ -644,15 +691,47 @@ class NpcHost:
                 result["observedItemUse"] = data["itemUse"]
             results.append(result)
         context.body_results = results[:6]
-        steps = await self.planner(intent, context)
+        notice = team = opening = None
+        if self.role.adventure_partner and intent.goal == IDLE_GOAL and not dialogue:
+            notice, team, opening = self._party_turn(body_id, context)
+            if opening and opening.tool == "body:native:adventure_query":
+                return [opening]
+        steps = [opening] if opening else await self.planner(intent, context)
         if steps is None:
             return None
+        if notice:
+            self.journal.listen(body_id, [notice["eventId"]], "party-message-reviewed")
+            # A party message may prompt an ordinary game decision. Any reply stays in this party.
+            steps = [Step(tool="body:native:adventure_action",
+                          args={"kind": "party_chat", "partyId": team["partyId"], "text": s.args["text"]})
+                     if s.tool == "body:chat" else s for s in steps]
         reviewed = []
         work_selected = False
         proactive_speech = False
         for step in steps:
             action = step.action("check_00000")
             if self.role.adventure_partner:
+                if step.tool == "body:native:adventure_action" and step.args.get("kind") == "meet_partner":
+                    # Each refused or unverified transfer requires fresh world evidence before a later write.
+                    recovery = (context.party_context or {}).get("lastMeetingAttempt", {})
+                    if recovery and self.journal.last_adventure(body_id, "party").get("at", 0) <= recovery["at"]:
+                        return [Step(tool="body:native:adventure_query", args={"kind": "party"})]
+                    if recovery.get("alternative") == "travel_trial":
+                        if self.journal.last_adventure(body_id, "travel_trial").get("at", 0) < recovery["at"]:
+                            return [Step(tool="body:native:adventure_action", args={"kind": "travel_trial"})]
+                        continue
+                    if recovery.get("reason") == "equipment_required" and not recovery.get("latestPreparation"):
+                        slot = next((s for s, label in adventure.ARMOR.items() if label in recovery.get("missingEquipment", ())), None)
+                        if slot:
+                            return [Step(tool="body:native:adventure_action", args={"kind": "prepare_armor", "slot": slot})]
+                if step.tool == "body:native:adventure_action" and step.args.get("kind") == "party_chat":
+                    if not team or step.args.get("partyId") != team["partyId"]:
+                        continue
+                    text = step.args.get("text")
+                    if not isinstance(text, str) or (step is not opening and len(text) > self.role.max_speech_chars):
+                        continue
+                    if step is not opening and self.journal.contacted_recently(body_id, "party-speech", 15 if notice else 300):
+                        continue
                 if step.tool == "body:chat" and intent.goal == IDLE_GOAL:
                     if proactive_speech or self.journal.contacted_recently(body_id, "speech", 600):
                         continue
@@ -679,6 +758,10 @@ class NpcHost:
 
     def _event(self, event: BodyEvent):
         if event.body_id not in (None, str(self.role.body_id)):
+            return
+        if event.kind == "status" and event.data.get("partyNotice") is True:
+            self.next_plan = 0.0
+            self.wake.set()
             return
         if self.role.social_memory and (event.kind == "whisper" or event.data.get("channel") == "private"):
             return  # Private replies use the identity-bound mailbox, never nearby body:chat.
