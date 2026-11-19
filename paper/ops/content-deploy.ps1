@@ -32,6 +32,10 @@ function Content-MaidBridgeTarget([string]$relative) {
     return $relative -ceq 'qiandengji-maid-native-0.1.12-conversation.jar'
 }
 
+function Content-ResidentTarget([string]$relative) {
+    return $relative -cin @('mods/qiandengji-maid-brain-0.1.0.jar','config/tlm-residents.json')
+}
+
 function Content-NearbyChatTarget([string]$relative) {
     # One official companion module and two reviewed static files only.
     return $relative -cin @('EssentialsXChat-2.22.0.jar',
@@ -143,7 +147,8 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     $voiceChange = @($plan.files | Where-Object { Content-ProximityVoiceTarget ([string]$_.target) }).Count -gt 0 -or
         @($plan.removeJars | Where-Object { Content-ProximityVoiceJar ([string]$_.name) }).Count -gt 0
     $maidBridgeChange = @($plan.files | Where-Object { Content-MaidBridgeTarget ([string]$_.target) }).Count -gt 0
-    if ($voiceChange -or $maidBridgeChange -or $plan.unifyEconomy) {
+    $residentChange = @($plan.files | Where-Object { Content-ResidentTarget ([string]$_.target) }).Count -gt 0
+    if ($voiceChange -or $maidBridgeChange -or $residentChange -or $plan.unifyEconomy) {
         if (-not $coldBackup -or -not (Test-Path -LiteralPath (Join-Path $coldBackup '.complete'))) {
             throw 'This deployment requires a complete cold backup'
         }
@@ -169,7 +174,10 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     $entries = @(); $seen = @{}
     foreach ($file in @($plan.files)) {
         $relative = [string]$file.target
-        if (Content-MaidBridgeTarget $relative) {
+        if (Content-ResidentTarget $relative) {
+            if ($file.beforeSha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Resident replacement requires its current digest' }
+            $target = Join-Path $serverDir $relative
+        } elseif (Content-MaidBridgeTarget $relative) {
             if ($file.beforeSha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Maid bridge replacement requires its current digest' }
             $target = Join-Path (Join-Path $serverDir 'plugins') $relative
         } elseif ($relative -match '^[A-Za-z0-9][A-Za-z0-9_.-]*\.jar$') {

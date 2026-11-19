@@ -22,7 +22,9 @@ def main():
             str(ROOT / 'src/local/qdj/maids/brain/CompanionDecision.java'),
             str(ROOT / 'src/local/qdj/maids/brain/CompanionJournal.java'),
             *[str(ROOT / ('src/local/qdj/maids/brain/' + name + '.java')) for name in ('ResidentState','ResidentReceipts','ResidentContract','ResidentTravelInspection','ResidentActionMemory','ResidentPlanningHealth','ResidentCliContract')],
+            str(ROOT / 'src/local/qdj/maids/brain/ExpeditionSpacing.java'), str(ROOT / 'tests/ExpeditionSpacingTest.java'),
             str(ROOT / 'tests/CompanionLedgerTest.java'),str(ROOT / 'tests/ResidentLedgerTest.java'),str(ROOT / 'tests/ResidentPlanningHealthTest.java'),str(ROOT / 'tests/ResidentGoalContextTest.java')], check=True)
+        subprocess.run([str(args.jdk / 'bin' / ('java' + suffix)), '-cp', str(work), 'local.qdj.maids.brain.ExpeditionSpacingTest'], check=True)
         subprocess.run([str(args.jdk / 'bin' / ('java' + suffix)), '-cp', str(work) + os.pathsep + str(args.gson),
             'local.qdj.maids.brain.CompanionLedgerTest', str(work / 'state')], check=True)
         subprocess.run([str(args.jdk / 'bin' / ('java' + suffix)), '-cp', str(work) + os.pathsep + str(args.gson),

@@ -34,6 +34,7 @@ final class MaidResidents {
     private final ResidentState state;
     private final ResidentPlanningHealth planningHealth;
     final ResidentCombat combat=new ResidentCombat(this);
+    private final Map<UUID, ResidentExpedition> expeditions = new LinkedHashMap<>();
     private final java.util.Set<UUID> combatReady=new java.util.HashSet<>();
     final ResidentSettings settings;
     private final Map<UUID,ResidentConfig.Resident> roles=new LinkedHashMap<>();
@@ -59,6 +60,8 @@ final class MaidResidents {
                 if(terminal!=null&&List.of("completed","blocked","rejected","partial","cancelled","timeout").contains(terminal.get("status")))state.finish(r.maidId(),last.pending());}
         }
         config.residents().forEach(r->{roles.put(r.maidId(),r);nextPlan.put(r.maidId(),System.currentTimeMillis()+30_000+roles.size()*10_000L);});
+        for (var role : config.residents()) if (role.expeditionLeader() != null)
+            expeditions.put(role.maidId(), new ResidentExpedition(role.expeditionLeader()));
         settings=new ResidentSettings(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-resident-settings"),dir,this,agents);
     }
     ResidentConfig.Resident role(UUID id) { return roles.get(id); }
@@ -72,7 +75,15 @@ final class MaidResidents {
     boolean external(UUID id){return roles.containsKey(id)&&roles.get(id).external();}
     private final java.util.Set<UUID> externalGuards=new java.util.HashSet<>();
     void externalReady(UUID id){try{var b=body(id);var previous=state.load(id);if(!external(id)||b==null||busy(id)||leased(id)||previous!=null&&previous.pending()!=null||!b.getPersistentData().getString(ACTIVE).isBlank())throw new IllegalStateException("resident_external_control_not_ready");}catch(IOException error){throw new IllegalStateException("resident_checkpoint_unavailable",error);}}
-    void externalGuard(UUID id,boolean enabled){externalReady(id);if(enabled)externalGuards.add(id);else{externalGuards.remove(id);combat.tick(body(id),false);}}
+    boolean expeditionDelegated(UUID id) { return expeditions.containsKey(id) && externalGuards.contains(id); }
+    void externalGuard(UUID id,boolean enabled){
+        externalReady(id);
+        if(enabled){externalGuards.add(id);return;}
+        externalGuards.remove(id);
+        var maid=body(id);
+        if(expeditions.containsKey(id))expeditions.get(id).pause(maid,"not_delegated");
+        combat.tick(maid,false);
+    }
     boolean holdsPosition(UUID id) { var job=jobs.get(id);return job!=null&&ResidentContract.holdsPosition(job.input()); }
     boolean ownsMovement(UUID id){var job=jobs.get(id);return job!=null&&(ResidentContract.holdsPosition(job.input())||List.of("walk","home").contains(job.input().get("action").getAsString()));}
     void combatStarted(UUID id){agents.agent(id).invalidateActions();}
@@ -88,6 +99,8 @@ final class MaidResidents {
         var r=require(id);var maid=body(id);var row=new LinkedHashMap<String,Object>();
         row.put("maidId",id.toString());row.put("name",settings.name(id));row.put("profession",r.profession());row.put("home",r.home());
         row.put("loaded",maid!=null);row.put("observedAt",java.time.Instant.now().toString());row.put("usesPlayerSlot",false);
+        var expedition = expeditions.get(id);
+        if (expedition != null) row.put("expedition", expedition.describe(maid, agents.companions()));
         if(maid!=null) {
             row.put("position",ResidentActions.point(maid.blockPosition()));row.put("dimension",maid.level().dimension().location().toString());
             row.put("health",maid.getHealth());row.put("sleeping",maid.isSleeping());row.put("task",maid.getTask().getUid().toString());
@@ -267,7 +280,16 @@ final class MaidResidents {
             settings.install(id);
             combatReady.add(id);
             ResidentRpg.tick(maid);
-            if(external(id))continue; // Unified host owns planning; native body/RPG and chunk simulation remain.
+            if(external(id)){
+                var expedition = expeditions.get(id);
+                if (expedition != null) {
+                    var companions = agents.companions();
+                    boolean delegated = externalGuards.contains(id) && !busy(id) && !leased(id)
+                        && maid.getPersistentData().getString(ACTIVE).isBlank();
+                    expedition.tick(maid, companions, delegated, combat.active(id), now);
+                }
+                continue;
+            }
             var job=jobs.get(id);
             if(job!=null){step(r,maid,job,now);continue;}
             if(maid.getPersistentData().getBoolean(ResidentBodyAccess.DOWNED))continue;

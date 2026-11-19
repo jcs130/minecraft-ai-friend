@@ -26,7 +26,7 @@ record ResidentConfig(int schema, int planningSeconds, List<Resident> residents)
     record Home(String dimension, Point door, Point bed, String facing, Point sign, String signFacing,
                 Point work, Area interior, List<Furniture> furniture) {}
     record Resident(UUID maidId, String name, String profession, String nativeTask, Home home,
-                    Area workArea, List<String> mineBlocks, List<String> buildBlocks, boolean autonomous, Appearance appearance,boolean roamingWork,Boolean combatEnabled,String controller,List<UUID> allies) {
+                    Area workArea, List<String> mineBlocks, List<String> buildBlocks, boolean autonomous, Appearance appearance,boolean roamingWork,Boolean combatEnabled,String controller,List<UUID> allies, UUID expeditionLeader) {
         boolean combat(){return !Boolean.FALSE.equals(combatEnabled);}
         boolean external(){return "unified".equals(controller);}
         boolean allied(UUID other){return external()&&allies!=null&&allies.contains(other);}
@@ -41,6 +41,8 @@ record ResidentConfig(int schema, int planningSeconds, List<Resident> residents)
         for(var r:c.residents) {
             if(r!=null&&r.controller!=null&&!List.of("native","unified").contains(r.controller))throw new IllegalArgumentException("invalid_resident_controller");
             if(r!=null&&r.allies!=null&&(r.allies.size()>16||r.allies.contains(null)||new HashSet<>(r.allies).size()!=r.allies.size()))throw new IllegalArgumentException("invalid_resident_allies");
+            if (r != null && r.expeditionLeader != null && (!r.allied(r.expeditionLeader) || r.expeditionLeader.equals(r.maidId)))
+                throw new IllegalArgumentException("expedition_leader_must_be_a_distinct_configured_ally");
             if(r==null||r.maidId==null||agents.agent(r.maidId)==null||!ids.add(r.maidId)||!text(r.name,24)||
                 !names.add(r.name)||!List.of("guardian","ranger","mage","healer","artisan","farmer","knight","cleric","engineer","beastmaster").contains(r.profession))
                 throw new IllegalArgumentException("invalid_resident_identity_or_profession");
@@ -65,6 +67,13 @@ record ResidentConfig(int schema, int planningSeconds, List<Resident> residents)
                 if(blocks.size()>32) throw new IllegalArgumentException("too_many_resident_block_types");
                 blocks.forEach(ResourceLocation::parse);
             }
+        }
+        var follows = new java.util.HashMap<UUID, UUID>();
+        for (var r : c.residents) if (r.expeditionLeader != null) follows.put(r.maidId, r.expeditionLeader);
+        for (var id : follows.keySet()) {
+            var chain = new HashSet<UUID>();
+            for (UUID next = id; next != null; next = follows.get(next))
+                if (!chain.add(next)) throw new IllegalArgumentException("resident_expedition_cycle");
         }
         return c;
     }

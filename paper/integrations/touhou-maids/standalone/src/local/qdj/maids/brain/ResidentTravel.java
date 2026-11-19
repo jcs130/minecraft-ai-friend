@@ -78,8 +78,17 @@ final class ResidentTravel {
             var plugin=Class.forName("org.bukkit.plugin.PluginManager").getMethod("getPlugin",String.class).invoke(pm,"AgentFriend");if(plugin==null)return false;
             Object speaker=partner.getClass().getMethod("getBukkitEntity").invoke(partner);
             var location=Class.forName("org.bukkit.Location");var entity=Class.forName("org.bukkit.entity.Entity");
-            Object target=entity.getMethod("getLocation").invoke(speaker);
+            Object centre=entity.getMethod("getLocation").invoke(speaker);
+            Object target=location.getMethod("clone").invoke(centre);
+            location.getMethod("setX",double.class).invoke(target,at.getX()+.5);
+            location.getMethod("setY",double.class).invoke(target,(double)at.getY());
+            location.getMethod("setZ",double.class).invoke(target,at.getZ()+.5);
             var access=plugin.getClass().getClassLoader().loadClass("org.afuhome.agentfriend.CompanionTravelAccess");
+            var player=Class.forName("org.bukkit.entity.Player");
+            if(player.isInstance(speaker)){
+                var combatPosition=access.getMethod("companionCombatPosition",player,location);
+                if(!combatPosition.invoke(null,speaker,centre).equals(combatPosition.invoke(null,speaker,target)))return false;
+            }
             return Boolean.TRUE.equals(access.getMethod("mayInviteResidentEntity",entity,location).invoke(null,speaker,target));
         }catch(ReflectiveOperationException|LinkageError failure){return false;}
     }
