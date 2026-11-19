@@ -963,7 +963,10 @@ function Backup-Server {
             }
             $proceed = $true
         } finally {
-            if (-not $proceed -and $announcedContent) { Send-ContentWindowNotice $announcedContent 'cancelled' }
+            if (-not $proceed -and $announcedContent) {
+                try { Send-ContentWindowNotice $announcedContent 'cancelled' }
+                catch { Log "WARN scheduled cancellation notice: $_" }
+            }
             if (-not $proceed -and $goddessStopped) { try { Start-Goddess } catch { Log "WARN Goddess bridge restart: $_" } }
         }
     }
