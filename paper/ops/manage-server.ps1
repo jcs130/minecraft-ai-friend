@@ -940,6 +940,11 @@ function Backup-Server {
         # disconnect anyone if an unknown (human) name is present.
         $humans = @(HumanPlayers)
         if ($humans.Count) { Log "Backup skipped: human player(s) online: $($humans -join ', ')"; return }
+        $announcedContent = Get-AnnouncedContentPlan $pendingContentDeploy
+        if ($announcedContent -and -not (Wait-ContentWindow $announcedContent)) {
+            Log 'Scheduled content remains queued until a safe backup window'
+            return
+        }
         $goddessStopped = $false
         $proceed = $false
         try {
@@ -952,12 +957,13 @@ function Backup-Server {
                  (Test-Path -LiteralPath $pendingContentDeploy) -or
                  (Test-Path -LiteralPath $pendingPaperCoreUpgrade) -or
                  (Test-Path -LiteralPath $pendingRuntimeRelocation) -or
-                 (Test-Path -LiteralPath $pendingServerSettings)) -and (DungeonActive)) {
+                 (Test-Path -LiteralPath $pendingServerSettings)) -and (Test-ContentChallengeActive $announcedContent)) {
                 Log 'Backup and pending deployment skipped: dungeon run active'
                 return
             }
             $proceed = $true
         } finally {
+            if (-not $proceed -and $announcedContent) { Send-ContentWindowNotice $announcedContent 'cancelled' }
             if (-not $proceed -and $goddessStopped) { try { Start-Goddess } catch { Log "WARN Goddess bridge restart: $_" } }
         }
     }
