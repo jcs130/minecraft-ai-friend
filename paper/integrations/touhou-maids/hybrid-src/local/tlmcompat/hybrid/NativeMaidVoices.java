@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.google.gson.*;
 import java.nio.file.*;
 import java.util.*;
+import net.minecraft.world.entity.Mob;
 
 /** Explicit per-body voices using the existing local media service and durable receipts. */
 final class NativeMaidVoices implements AutoCloseable {
@@ -39,7 +40,7 @@ final class NativeMaidVoices implements AutoCloseable {
         return result;
     }
     void reply(EntityMaid maid,String operation,String text,Set<UUID> audience){var voice=voices.get(maid.getUUID());if(voice!=null)voice.reply(maid,operation,text,audience);}
-    void combat(EntityMaid maid,String mode,float damage){var voice=voices.get(maid.getUUID());if(voice!=null)voice.combat(maid,mode,damage);}
+    void combat(EntityMaid maid,Mob target,String mode,float damage){var voice=voices.get(maid.getUUID());if(voice!=null)voice.combat(maid,target,mode,damage);}
     JsonObject describe(EntityMaid maid){var voice=voices.get(maid.getUUID());if(voice!=null)return voice.describe(maid);var out=new JsonObject();out.addProperty("enabled",false);out.addProperty("reason","voice_not_configured");return out;}
     public void close(){for(var voice:voices.values())voice.close();voices.clear();}
 }

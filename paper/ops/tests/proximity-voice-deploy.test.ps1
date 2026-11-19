@@ -23,6 +23,8 @@ function Refuse($file,$reason){Plan $file;$failed=$false;try{Deploy-PendingConte
 $source=Join-Path $fixture 'voice.jar';[IO.File]::WriteAllBytes($source,[byte[]]@(1,2,3))
 $file=@{source=$source;target='QiandengVoice-0.1.0.jar';sha256=(Get-FileHash -LiteralPath $source).Hash}
 Refuse $file 'requires a complete cold backup'
+$maid=$file.Clone();$maid.target='qiandengji-maid-native-0.1.12-conversation.jar'
+Refuse $maid 'requires a complete cold backup'
 New-Item -ItemType File -Path (Join-Path $cold '.complete'),(Join-Path $mirror '.complete') | Out-Null
 $script:listening=$true;Refuse $file 'requires stopped Paper';$script:listening=$false
 $bad=$file.Clone();$bad.sha256='0'*64;Refuse $bad 'source hash mismatch'
@@ -33,4 +35,13 @@ Refuse $file 'unrecorded file'
 $bad=$file.Clone();$bad.beforeSha256='0'*64;Refuse $bad 'target changed'
 $file.beforeSha256=$file.sha256;Plan $file;Deploy-PendingContent $cold $mirror
 if(-not (Get-ChildItem -LiteralPath (Join-Path $opsDir 'repairs') -Recurse -Filter '0.original')){throw 'Voice before-image missing'};$checks++
+Refuse $maid 'replacement requires its current digest'
+$maidTarget=Join-Path $serverDir ('plugins/'+$maid.target)
+[IO.File]::WriteAllBytes($maidTarget,[byte[]]@(5,6,7))
+$maid.beforeSha256=(Get-FileHash -LiteralPath $maidTarget).Hash
+$bad=$maid.Clone();$bad.target='qiandengji-maid-native-0.1.99-conversation.jar';Refuse $bad 'Unexpected plugin JAR'
+$bad=$maid.Clone();$bad.beforeSha256='0'*64;Refuse $bad 'target changed'
+Plan $maid;Deploy-PendingContent $cold $mirror
+if ((Get-FileHash -LiteralPath $maidTarget).Hash -ne $maid.sha256) { throw 'Maid bridge replacement mismatch' }
+$checks++
 Write-Output "PASS $checks voice deployment boundary checks"
