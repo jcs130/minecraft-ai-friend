@@ -75,7 +75,9 @@ def catalogue(peer: str) -> list[NativeAction]:
     query_properties["target"] = {"type": "string", "description": "locate_character only: exact name or UUID from the skill compass."}
     actions = result[2].input_schema["properties"]
     actions["targetUuid"] = {"type": "string", "format": "uuid", "description": "meet_character only: use the exact UUID from locate_character. Uses the ordinary RPG travel spell."}
-    actions["kind"]["enum"].extend(("prepare_armor", "prepare_ammo"))
+    actions["kind"]["enum"].extend(("prepare_armor", "prepare_ammo", "craft_torches"))
+    actions["expectedProgress"] = {"type": "integer", "minimum": 0,
+                                   "description": "craft_torches only. Copy the unfinished torch stage's current progress. Crafts one batch of 4 from your backpack."}
     actions["text"] = {"type": "string", "maxLength": 100, "description": "party_chat only. A short message to the current native party."}
     actions["partyId"] = {"type": "string", "description": "party_chat only. Copy partyId from the current native party status."}
     actions["slot"] = {"type": "string", "enum": list(ARMOR), "description": "prepare_armor only. Choose a missing armor slot."}

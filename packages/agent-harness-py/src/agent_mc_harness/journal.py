@@ -209,5 +209,13 @@ class ActionJournal:
         evidence = data.get("adventure") if isinstance(data, dict) else None
         return evidence if isinstance(evidence, dict) else {}
 
+    def inventory_after(self, body: str, request_id: str) -> list[dict]:
+        row = self.db.execute("""
+            SELECT receipt FROM dispatch WHERE body=? AND json_extract(action,'$.verb')='inventory'
+            AND json_extract(receipt,'$.status')='completed'
+            AND rowid>(SELECT rowid FROM dispatch WHERE id=? AND body=?) ORDER BY rowid DESC LIMIT 1
+        """, (body, request_id, body)).fetchone()
+        return ((json.loads(row[0]).get("data") or {}).get("inventory") or []) if row else []
+
     def close(self) -> None:
         self.db.close()
