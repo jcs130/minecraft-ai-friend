@@ -177,6 +177,18 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(speech!=null)speech.combat(maid,target,mode,damage);
     }
     void speakPublicReply(EntityMaid maid,String operation,String text,Set<UUID> audience){if(speech!=null)speech.reply(maid,operation,text,audience);}
+    public boolean canRenderResidentReply(UUID id,UUID owner,Player listener){
+        if(!Bukkit.isPrimaryThread()||!nativeExclusive(id)||speech==null)return false;
+        var maid=ownedLoaded(owner,id);
+        var voice=speech.forReply(maid);
+        return voice!=null&&voice.readyFor(maid,listener);
+    }
+    public String renderResidentReply(UUID id,UUID owner,UUID conversation,String text,Set<UUID> audience){
+        if(!Bukkit.isPrimaryThread()||!nativeExclusive(id)||speech==null||audience.isEmpty())return null;
+        var maid=ownedLoaded(owner,id);
+        var voice=speech.forReply(maid);
+        return voice==null?null:voice.socialReply(maid,"social_"+conversation,text,audience);
+    }
     JsonObject nativeSpeechState(EntityMaid maid){if(speech!=null)return speech.describe(maid);var state=new JsonObject();state.addProperty("enabled",false);state.addProperty("reason","voice_not_configured");return state;}
     private final Map<String,Boolean> publishedDialogue=new LinkedHashMap<>();
     void publishPublicSpeech(EntityMaid maid,String operation,String text,int delivered){

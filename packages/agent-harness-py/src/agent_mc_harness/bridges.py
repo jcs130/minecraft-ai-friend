@@ -61,10 +61,7 @@ class NativeMaidBridge:
 
     def __init__(self, endpoint: str, token: str, *, owner_id: str, maid_id: str, controller_id: str,
                  http: Any = None) -> None:
-        parsed = urlsplit(endpoint)
-        if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or parsed.path != "/maid-body"
-                or parsed.username or parsed.password or parsed.query or parsed.fragment or not parsed.port):
-            raise ValueError("maid_transport_must_be_loopback")
+        self._validate_endpoint(endpoint)
         if not token.strip() or "\n" in token or "\r" in token:
             raise ValueError("maid_transport_token_required")
         self.owner_id = str(UUID(owner_id))
@@ -78,6 +75,13 @@ class NativeMaidBridge:
         self.stopping = asyncio.Event()
         self._closed = False
         self._bind_lock = asyncio.Lock()
+
+    @staticmethod
+    def _validate_endpoint(endpoint: str) -> None:
+        parsed = urlsplit(endpoint)
+        if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or parsed.path != "/maid-body"
+                or parsed.username or parsed.password or parsed.query or parsed.fragment or not parsed.port):
+            raise ValueError("maid_transport_must_be_loopback")
 
     def _fence(self) -> None:
         self.stopping.set()
@@ -194,6 +198,37 @@ class NativeMaidBridge:
             self._token = ""
             if self.http is not None:
                 await self.http.aclose()
+
+
+class MaidApiBridge(NativeMaidBridge):
+    """The owner-scoped HTTPS API for the same native body and receipt protocol."""
+
+    transport = "native private companion (HTTPS /api/v1/maid-body)"
+
+    @staticmethod
+    def _validate_endpoint(endpoint: str) -> None:
+        parsed = urlsplit(endpoint)
+        if (not endpoint.startswith("https://") or not parsed.hostname or parsed.path != "/api/v1/maid-body"
+                or parsed.username is not None or parsed.password is not None
+                or "?" in endpoint or "#" in endpoint or parsed.port == 0):
+            raise ValueError("maid_api_requires_https_endpoint")
+
+    @classmethod
+    async def identify(cls, endpoint: str, token: str, *, http: Any) -> tuple[str, str]:
+        cls._validate_endpoint(endpoint)
+        response = await http.post(endpoint, json={"operation": "identity"},
+                                   headers={"Authorization": "Bearer " + token}, timeout=8, follow_redirects=False)
+        if response.status_code in (401, 403):
+            raise ControlChanged("MAID_API_GRANT_DENIED")
+        if response.status_code != 200:
+            raise RuntimeError("maid_api_identity_unavailable")
+        try:
+            identity = response.json()
+            if not isinstance(identity, dict) or identity.get("protocol") != cls.protocol:
+                raise ValueError("invalid protocol")
+            return str(UUID(identity["ownerId"])), str(UUID(identity["maidId"]))
+        except (AttributeError, KeyError, TypeError, ValueError):
+            raise RuntimeError("maid_api_invalid_identity") from None
 
 
 def text_content(result: dict[str, Any]) -> str:

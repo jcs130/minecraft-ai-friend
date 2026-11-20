@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -293,6 +294,7 @@ final class DungeonManager implements Listener {
             if (challengeBuilt) clearFloorFire(LAVA_FLOOR);
             if (expanded) ensureMerchants();
             restoreRun();
+            if (!active) requestTowerReset();
         }
         Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 20L);
         plugin.getLogger().info("Dungeon ready; built=" + built + ", floors=" + maxFloor());
@@ -554,6 +556,16 @@ final class DungeonManager implements Listener {
         return null;
     }
     boolean deniesEdit(Location at) { return inBuild(at); }
+
+    boolean editableInterior(Player player, Location at) {
+        if (!active || pausedAt != 0 || !committedCurrentRun() || !isParticipant(player)
+                || !inFloor(player.getLocation(), floor) || !inFloor(at, floor)) return false;
+        int y = Y[floor - 1], x = at.getBlockX(), z = at.getBlockZ();
+        if (at.getBlockY() <= y || at.getBlockY() >= y + 7) return false;
+        // The stash and navigation control columns must stay usable throughout a fight.
+        return z < chestZ(floor) - 1 || z > chestZ(floor)
+                || x != chestX(floor) && x != nextX(floor) && x != leaveX(floor) && x != chestX(floor) + 2;
+    }
 
     boolean mayExtinguishTrialFire(Player caster, Location fire) {
         return built && active && pausedAt == 0 && validParticipantTarget(caster) && inFloor(fire, floor);
@@ -1082,6 +1094,7 @@ final class DungeonManager implements Listener {
             showGuidance(starter);return;
         }
         if (active) { starter.sendMessage(ChatColor.YELLOW + "已有队伍在挑战试炼塔；/mycli arena status 查看，等本场结束后再开场，或 dungeon list 选择别处。"); return; }
+        if (!towerResetReady(starter)) return;
         long now = System.currentTimeMillis();
         if (now - lastRun < COOLDOWN_MS) {
             starter.sendMessage(ChatColor.YELLOW + "试炼场休息中，还需 " + ((COOLDOWN_MS - (now - lastRun) + 999) / 1000) + " 秒。");
@@ -1126,6 +1139,7 @@ final class DungeonManager implements Listener {
             starter.sendMessage(ChatColor.YELLOW + "先通关第六层，即可解锁深层驿站直达。"); return;
         }
         if (active) { starter.sendMessage(ChatColor.YELLOW + "已有队伍在挑战试炼塔，稍后再来。"); return; }
+        if (!towerResetReady(starter)) return;
         long now = System.currentTimeMillis();
         if (now - lastRun < COOLDOWN_MS) {
             starter.sendMessage(ChatColor.YELLOW + "试炼场休息中，还需 "
@@ -1151,6 +1165,31 @@ final class DungeonManager implements Listener {
             if (player != null && player.isOnline()) sendStart(player, starter);
         }
         announce(ChatColor.GOLD + "已从检查点直达第七层驿站〔" + difficulty.label + "〕；队伍可补给，再继续深入。");
+    }
+
+    private boolean requestTowerReset() {
+        var journal = plugin.dungeonEdits();
+        if (!journal.ready("tower")) return false;
+        if (!journal.dirty("tower")) return true;
+        Set<ProtectionArea> rooms = new LinkedHashSet<>();
+        for (Location at : journal.editedLocations("tower")) {
+            if (!at.isWorldLoaded()) return false;
+            int n = floorAt(at);
+            if (n == 0) return false;
+            int x = floorX(n), z = floorZ(n), r = radius(n);
+            rooms.add(ProtectionArea.box("trial_floor_" + n, "试炼塔第" + n + "层", world(),
+                x-r, Y[n-1], z-r, x+r, Y[n-1]+7, z+r));
+        }
+        List<ProtectionArea> affected = List.copyOf(rooms);
+        return journal.restore("tower", () -> WildRuinResets.empty(affected));
+    }
+
+    private boolean towerResetReady(Player starter) {
+        if (requestTowerReset()) return true;
+        starter.sendMessage(ChatColor.YELLOW + (plugin.dungeonEdits().failed("tower")
+            ? "试炼塔的场地恢复记录需要服主检查，请先选择其他遗迹。"
+            : "试炼塔正在还原上一轮的地形。请在入口等待恢复，再开始新一轮。"));
+        return false;
     }
 
     private void sendStart(Player player, Player starter) {
@@ -2110,6 +2149,7 @@ final class DungeonManager implements Listener {
                 + ", reason=" + reason + ", remaining=" + mobs.size() + ", message=" + message);
         cleanupMobs();
         active = false;
+        requestTowerReset();
         advanceAt = 0;
         pausedAt = 0;
         outsideSince = 0;
@@ -2698,6 +2738,11 @@ final class DungeonManager implements Listener {
         return number > 0 && at.distanceSquared(new Location(world(), chestX(number) + .5,
                 Y[number - 1] + 1.5, chestZ(number) + .5)) <= 25
                 && world().getBlockAt(chestX(number), Y[number - 1] + 1, chestZ(number)).getType() == Material.CHEST;
+    }
+    boolean stashAnchor(Location at) {
+        if (!sameWorld(at)) return false;
+        int n = floorAt(at);
+        return n > 0 && at.getBlockX() == chestX(n) && at.getBlockY() == Y[n-1] + 1 && at.getBlockZ() == chestZ(n);
     }
     private void explainStashFull(Player player,int remaining) {
         int used=stashSnapshot(player.getUniqueId()).occupied();
@@ -3298,20 +3343,6 @@ final class DungeonManager implements Listener {
     @EventHandler public void onNaturalSpawn(CreatureSpawnEvent event) {
         if (built && event.getEntity() instanceof Monster && floorAt(event.getLocation()) > 0
                 && event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.CUSTOM) event.setCancelled(true);
-    }
-    @EventHandler public void onBreak(BlockBreakEvent event) {
-        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
-        if (inBuild(event.getBlock().getLocation())) {
-            event.setCancelled(true);
-            plugin.protectionAdvisor().denied(event.getPlayer(), "break", event.getBlock().getLocation(), "dungeon", protectionArea(event.getBlock().getLocation()));
-        }
-    }
-    @EventHandler public void onPlace(BlockPlaceEvent event) {
-        if (plugin.bypassBlockProtection(event.getPlayer(), event.getBlock().getLocation())) return;
-        if (inBuild(event.getBlock().getLocation())) {
-            event.setCancelled(true);
-            plugin.protectionAdvisor().denied(event.getPlayer(), "place", event.getBlock().getLocation(), "dungeon", protectionArea(event.getBlock().getLocation()));
-        }
     }
     @EventHandler public void onChange(EntityChangeBlockEvent event) { if (inBuild(event.getBlock().getLocation())) event.setCancelled(true); }
     @EventHandler public void onBurn(BlockBurnEvent event) { if (inBuild(event.getBlock().getLocation())) event.setCancelled(true); }

@@ -63,6 +63,7 @@ class Intent(BaseModel):
     strategy_refs: list[tuple[str, int]] = Field(default_factory=list)  # (key, version) of lessons the planner was given
     receipts: list[ActionReceipt] = Field(default_factory=list)
     source_events: list[str] = Field(default_factory=list, max_length=32)  # host-observed inbox IDs, never model-generated
+    desktop_request_id: str | None = None  # From the role-scoped worker's check endpoint.
     remember_wait_purpose: bool = False
     recall_query: str | None = Field(default=None, max_length=500)
     created_at: datetime = Field(default_factory=utcnow)
@@ -88,12 +89,15 @@ class PlanContext(BaseModel):
     decision: Decision | None = None  # route level, requested/effective thinking tier, output budget profile
     snapshot: BodySnapshot | None = None
     body_results: list[dict[str, Any]] = Field(default_factory=list, max_length=6)
+    communication_receipts: list[dict[str, Any]] = Field(default_factory=list, max_length=4)
     recent_companion_speech: list[str] = Field(default_factory=list, max_length=8)
     party_context: dict[str, Any] | None = None
     companion_adventure: dict[str, Any] | None = None
     maid_companions: dict[str, Any] | None = None
     companion_choice: dict[str, str] | None = None
     activity_review: dict[str, Any] | None = None
+    agenda: dict[str, Any] | None = None
+    proposed_agenda: list[dict[str, Any]] | None = None
     lessons: list[str] = Field(default_factory=list)  # active versioned lessons (self-iteration store), trial or adopted
 
 
@@ -125,10 +129,11 @@ class HarnessRuntime:
                  memory: MemoryRouter | None = None, execute: bool = False, step_timeout: float = 120.0,
                  fastslow: FastSlow | None = None, verifier: Verifier | None = None, strategies: StrategyStore | None = None,
                  review_interval: float = 1800.0, max_workers: int = 2, defer_seconds: float = 5.0, max_defers: int = 12,
-                 journal: ActionJournal | None = None) -> None:
+                 journal: ActionJournal | None = None, private_mailbox: bool = False) -> None:
         self.body, self.planner, self.reflection, self.memory = body, planner, reflection, memory
         self.execute, self.step_timeout = execute, step_timeout
         self.journal = journal
+        self.private_mailbox = private_mailbox
         self.fastslow, self.verifier, self.strategies, self.review_interval = fastslow, verifier, strategies, review_interval
         self.defer_seconds, self.max_defers = defer_seconds, max_defers
         self.lease, self.metrics, self.pool = BodyLease(), BrainMetrics(), WorkerPool(max_workers)
@@ -157,6 +162,8 @@ class HarnessRuntime:
         self._unsub = body.subscribe(self._on_body_event)
 
     def _on_body_event(self, event: BodyEvent) -> None:
+        if self.private_mailbox and (event.kind == "whisper" or event.data.get("channel") == "private"):
+            return  # Resident whispers use the pair-scoped mailbox and must never enter public recall.
         if event.kind == "action_result" and event.request_id and (future := self._results.pop(event.request_id, None)) and not future.done():
             future.set_result(event)
         if event.kind == "safety":

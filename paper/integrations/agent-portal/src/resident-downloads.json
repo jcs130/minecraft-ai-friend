@@ -1,0 +1,50 @@
+[
+  {
+    "id": "resident-neko",
+    "framework": "neko",
+    "category": "resident",
+    "name": "N.E.K.O. 居民插件",
+    "version": "0.3.0",
+    "channel": "website-bundle",
+    "filename": "qiandengji-resident-0.3.0.neko-plugin",
+    "bytes": 51824,
+    "sha256": "705b1cee26fcd037a44d588af9acab46f1d2293320dba32f8d41bd3ddf512294",
+    "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-harness-py/integrations/neko_resident",
+    "platform": "N.E.K.O. 桌面版",
+    "license": "MIT",
+    "install": "在 N.E.K.O. 的插件中心导入 .neko-plugin，打开居民连接面板。",
+    "includes": "轻量居民身体接口，支持游戏文字、语音转写与角色发言。"
+  },
+  {
+    "id": "resident-cortico-api5",
+    "framework": "cortico",
+    "category": "resident",
+    "name": "Cortico 居民 World · API 5",
+    "version": "0.3.0",
+    "channel": "website-bundle",
+    "filename": "cortico-world-qiandengji-resident-0.3.0.tgz",
+    "bytes": 10828,
+    "sha256": "1b80fec2374ed1c903be931e65b9b532a4771486f7726bdffcd56f053eead42f",
+    "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-harness-py/integrations/cortico-resident",
+    "platform": "Cortico World API 5（已测 0.1.4）",
+    "license": "MIT",
+    "install": "解压并保留安装包，在 Cortico 扩展管理中选择「从本机目录安装」，选中含 package.json 的 package 文件夹。重启后为目标 bot 启用「千灯纪居民」。",
+    "includes": "轻量居民身体接口，支持游戏文字、语音转写与角色发言。"
+  },
+  {
+    "id": "resident-cortico-api6",
+    "framework": "cortico",
+    "category": "resident",
+    "name": "Cortico 居民 World · API 6",
+    "version": "0.3.0",
+    "channel": "website-bundle",
+    "filename": "cortico-world-qiandengji-resident-api6-0.3.0.tgz",
+    "bytes": 11173,
+    "sha256": "d7ea292d5dcefc85c598753c0c0366c15f9fc3e3d6f2bf9171ed0f023e77da47",
+    "sourceUrl": "https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-harness-py/integrations/cortico-resident",
+    "platform": "Cortico World API 6（已测 0.2.17）",
+    "license": "MIT",
+    "install": "解压并保留安装包，在 Cortico 扩展管理中选择「从本机目录安装」，选中含 package.json 的 package 文件夹。重启后为目标 bot 启用「千灯纪居民」。",
+    "includes": "轻量居民身体接口，支持游戏文字、语音转写与角色发言。"
+  }
+]

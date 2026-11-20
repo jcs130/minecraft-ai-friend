@@ -217,7 +217,7 @@ class MaidBody(BaseBody):
         elif "inbox" in actions:
             events.append("dialogue")
         return Capabilities(
-            kind="maid", transport=NativeMaidBridge.transport if self._native else "mc_maids (maid-port via owner connection)",
+            kind="maid", transport=self.bridge.transport if isinstance(self.bridge, NativeMaidBridge) else "mc_maids (maid-port via owner connection)",
             actions=acts, native_actions=native_actions,
             events=events,
             snapshot=["life_state", "dimension", "position", "health", "inventory", "text"],

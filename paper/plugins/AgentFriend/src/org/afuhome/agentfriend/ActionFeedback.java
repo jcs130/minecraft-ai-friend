@@ -102,6 +102,8 @@ final class ActionFeedback {
                 case "party_not_ready" -> a("队伍尚未全部在首室就绪，未开场。", "全队须在线、穿齐护甲并带本职业武器、结束其他活动，到首室后由队长 start；不要在外面等待自动加入。", "/mycli guild party status", dungeon);
                 case "party_pending_reward" -> a("队友尚有此副本待领奖凭据，未开场。", "请每位队友查询并领取自己的旧奖励，再到首室由队长开场。", "/mycli dungeon status");
                 case "site_busy" -> a("该地点已有挑战队伍。", "用 /mycli dungeon status 查看，等待结束或从 /mycli dungeon list 选另一处。", "/mycli dungeon status", "/mycli dungeon list");
+                case "site_reset_pending" -> a("遗迹还在等待还原。", "请全队先离开遗迹，待地形恢复后回到首室。", dungeon);
+                case "site_reset_fault" -> a("此处的场地恢复记录需要服主检查。", "改选其他遗迹。", "/mycli dungeon list");
                 case "already_in_site_dungeon" -> a("你已有地下城或正式攻略场次，不能重复开场。", "先查本人当前场次；故障暂停且已恢复条件时用resume继续，决定放弃时用leave退出后再开场。", "/mycli dungeon status", "/mycli dungeon resume", "/mycli dungeon leave");
                 case "conquest_profession_required" -> a("正式攻略需要先选择战斗职业。", "选择战士、坦克、法师或牧师，再学习合适的技能。", "/mycli profession menu");
                 case "conquest_level_required" -> a("战斗等级尚未达到本层要求。", "先查询本层最低等级；探索与击败敌对生物获得战斗经验，种地不会增加战斗等级。", dungeon,"/mycli status");

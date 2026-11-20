@@ -251,11 +251,19 @@ jobs:
             "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/$controls_sha/qiandeng-controls-0.1.1.jar" \
             --output "$controls"
           printf '%s  %s\n' "$controls_sha" "$controls" | sha256sum --check
+          motion_pack_sha=2d7ea0ea57f7c4ee182d9d7ab9d08b824bbca353f4196b2f10fa2f3db186d484
+          motion_pack="$RUNNER_TEMP/published-kirito.mrpack"
+          motion="$RUNNER_TEMP/kirito-motion-1.0.0.jar"
+          curl --proto '=https' --tlsv1.2 --retry 3 --max-time 45 -fsSL \
+            "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/$motion_pack_sha/qiandengji-java-1.21.1-neoforge-1.1.3.mrpack" \
+            --output "$motion_pack"
+          printf '%s  %s\n' "$motion_pack_sha" "$motion_pack" | sha256sum --check
+          unzip -p "$motion_pack" overrides/mods/kirito-motion-1.0.0.jar > "$motion"
           python paper/integrations/desktop-client/build.py \
             --cache "$RUNNER_TEMP/desktop-client-inputs" \
             --output "$RUNNER_TEMP/desktop-client-release" \
             --catalog paper/integrations/agent-portal/src/desktop-client-downloads.json \
-            --controls-mod "$controls"
+            --controls-mod "$controls" --kirito-mod "$motion"
       - name: Check current portal and Skill download contracts
         run: node scripts/prepare-downloads.mjs --base-url https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/
         working-directory: paper/integrations/agent-portal

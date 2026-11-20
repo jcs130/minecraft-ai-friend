@@ -1,0 +1,5 @@
+Kirito model and original animation by PoshGiraffe0.
+Original model page: https://ysmhub.top/models/import-8d9273b59136-b3b5c71e
+Qiandengji authored seven third-person motion tracks and the client-side adapter.
+Motion addon license: CC BY-NC-SA 4.0, https://creativecommons.org/licenses/by-nc-sa/4.0/
+The server supplies the original model.

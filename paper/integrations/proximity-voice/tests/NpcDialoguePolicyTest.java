@@ -5,10 +5,37 @@ public final class NpcDialoguePolicyTest {
     static int checks;
     static void check(boolean value){if(!value)throw new AssertionError("NPC dialogue check "+checks);checks++;}
     static void rejected(Runnable work){try{work.run();throw new AssertionError("expected rejection");}catch(IllegalArgumentException expected){checks++;}}
-    public static void main(String[] args){
+    public static void main(String[] args)throws Exception{
         UUID a=UUID.randomUUID(),b=UUID.randomUUID(),world=UUID.randomUUID();
         JsonObject config=JsonParser.parseString("{\"schema\":1,\"roles\":[{\"id\":\""+a+"\",\"ownerId\":\""+b+"\",\"kind\":\"maid\",\"name\":\"结衣\",\"voice\":\"neko-yui-cn\",\"range\":24}]}").getAsJsonObject();
         check(NpcDialoguePolicy.profiles(config).get(a).owner().equals(b));
+        var folder=java.nio.file.Files.createTempDirectory("resident-names");
+        var activated=new com.google.gson.JsonObject();activated.addProperty("bodyId",a.toString());activated.addProperty("ownerGameId",b.toString());
+        activated.addProperty("characterId",UUID.randomUUID().toString());activated.addProperty("bodyKind","maid");activated.addProperty("name","星野");
+        var file=folder.resolve(a+".json");
+        try{
+            java.nio.file.Files.writeString(file,activated.toString());
+            var registered=NpcDialoguePolicy.profiles(config);
+            var profile=NpcDialoguePolicy.residentNames(registered,folder).get(a);
+            check(profile.name().equals(registered.get(a).name())&&profile.voice().equals(registered.get(a).voice()));
+            check(profile.display().equals("星野")&&NpcDialoguePolicy.addressed(List.of(profile),"星野，走吧",true).profile().id().equals(a));
+            var conflicting=config.deepCopy();
+            var other=conflicting.getAsJsonArray("roles").get(0).getAsJsonObject().deepCopy();
+            other.addProperty("name","OtherSlot");other.addProperty("id",UUID.randomUUID().toString());
+            other.add("spokenAliases",JsonParser.parseString("[\"星野\"]"));conflicting.getAsJsonArray("roles").add(other);
+            check(!NpcDialoguePolicy.residentNames(NpcDialoguePolicy.profiles(conflicting),folder).get(a).hasName("星野"));
+            activated.addProperty("ownerGameId",UUID.randomUUID().toString());java.nio.file.Files.writeString(file,activated.toString());
+            check(!NpcDialoguePolicy.residentNames(registered,folder).get(a).hasName("星野"));
+        }finally{java.nio.file.Files.deleteIfExists(file);java.nio.file.Files.deleteIfExists(folder);}
+        var request=new com.google.gson.JsonObject();var answer=new com.google.gson.JsonObject();
+        check("native".equals(NpcDialoguePolicy.replyMode(request,answer)));
+        answer.addProperty("replyMode","speech");check(NpcDialoguePolicy.replyMode(request,answer)==null);
+        request.add("replyModes",JsonParser.parseString("[\"native\",\"text\"]"));
+        check(NpcDialoguePolicy.replyMode(request,answer)==null);
+        answer.addProperty("replyMode","text");check("text".equals(NpcDialoguePolicy.replyMode(request,answer)));
+        request.getAsJsonArray("replyModes").add("speech");answer.addProperty("replyMode","speech");
+        check("speech".equals(NpcDialoguePolicy.replyMode(request,answer)));
+        answer.addProperty("replyMode","public");check(NpcDialoguePolicy.replyMode(request,answer)==null);
         var duplicate=config.deepCopy();duplicate.getAsJsonArray("roles").add(duplicate.getAsJsonArray("roles").get(0).deepCopy());rejected(()->NpcDialoguePolicy.profiles(duplicate));
         var wrong=config.deepCopy();wrong.getAsJsonArray("roles").get(0).getAsJsonObject().addProperty("kind","player");rejected(()->NpcDialoguePolicy.profiles(wrong));
         var named=config.deepCopy();

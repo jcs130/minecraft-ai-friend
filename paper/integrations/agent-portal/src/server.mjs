@@ -46,7 +46,9 @@ import {createSceneObjectStorage} from './scene-object-storage.mjs';
 import { publicDialogueText } from './public-dialogue.mjs';
 import {NekoAuth,NEKO_CALLBACK} from './neko-auth.mjs';
 import {NekoPluginLinks} from './neko-plugin-links.mjs';
+import { MaidConnections, maidConnectionRoute } from './maid-connections.mjs';
 import {hostingRoutes} from './hosting-routes.mjs';
+import {ResidentTurns} from './resident-turns.mjs';
 import { WorldMap } from './world-map.mjs';
 
 const portalVersion = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
@@ -119,6 +121,7 @@ export function createPortal(config, options = {}) {
   const agentAccess = new AgentAccess(config, store, game, accounts);
   const nekoAuth = new NekoAuth(config,store,{fetcher:options.nekoFetch});
   const nekoLinks = new NekoPluginLinks(config,store,accounts,nekoAuth);
+  const maidConnections = new MaidConnections(config, store, options.now);
   const appearance = new Appearance(config, store, game);
   const npcAdmin = new NpcAdmin(store);
   const memories = new Memories(store);
@@ -170,6 +173,7 @@ export function createPortal(config, options = {}) {
       allowRegistration: config.allowRegistration && (config.emailAuth.registrationMode !== 'email' || emailAuth.capabilities().available), emailAuth: emailAuth.capabilities(),
       nekoAuth:nekoAuth.capabilities(session?.owner_id?store.ownerById(session.owner_id):null) };
   }
+  const residentTurns = new ResidentTurns(config, store);
   function auth(req, scopes = []) {
     const bearer = req.headers.authorization;
     if (bearer) {
@@ -314,7 +318,24 @@ export function createPortal(config, options = {}) {
             || /^\/api\/v1\/internal\/photos\/[a-f0-9-]{36}$/.test(pathname)) ? cloud : null;
         if (authority) try { authority.authorize(req); trustedSync = true; } catch { /* Spend the public budget before the normal denial. */ }
       }
-      if (pathname.startsWith('/api/') && !trustedSync) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
+      if (pathname.startsWith('/api/') && !trustedSync) {
+        const principal = residentTurns.pollingPrincipal(req,pathname);
+        rate(principal ? 'resident:' + principal : 'api:' + digest(rateAddress(req, config)), 300, 60000);
+      }
+      if (await maidConnectionRoute({ req, res, pathname, connections: maidConnections,
+        browserAuth, csrf, jsonBody, respond, rate,
+        address: () => digest(rateAddress(req, config)) })) return;
+      const onboarding = /^\/api\/v1\/resident-onboarding\/(pair|list|create|connect|browser-start|browser-status)$/.exec(pathname);
+      if (onboarding) {
+        if (onboarding[1] === 'pair') rate('resident-pair:'+digest(rateAddress(req,config)),24,60000);
+        if (onboarding[1] === 'browser-start') rate('resident-browser-start:'+digest(rateAddress(req,config)),24,60000);
+        await residentTurns.onboarding(req,res,onboarding[1],jsonBody,respond); return;
+      }
+      if (pathname === '/api/v1/resident-turns/pair') {
+        rate('resident-pair:'+digest(rateAddress(req,config)),24,60000);
+        await residentTurns.exchange(req,res,jsonBody,respond); return;
+      }
+      if (pathname.startsWith('/api/v1/resident-turns/') && await residentTurns.machine(req, res, pathname, jsonBody, respond)) return;
       if (req.method === 'GET' && pathname === '/api/v1/downloads') return respond(res, 200, { skill: agentSkill, packages: publicDownloads(config) });
       if(req.method==='POST' && pathname==='/api/v1/internal/npcs/poll') {
         if(!cloud)throw fail(404,'NOT_FOUND','未开放此接口');
@@ -500,6 +521,12 @@ export function createPortal(config, options = {}) {
         rate('write:' + digest(rateAddress(req, config)), 80, 60000);
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
+      if (pathname === '/api/v1/resident-onboarding/browser-approve' && req.method === 'POST') {
+        rate('resident-browser-approve:'+digest(rateAddress(req,config)),24,60000);
+      }
+      if ((pathname.startsWith('/api/v1/resident-turns') || pathname === '/api/v1/resident-onboarding/code'
+          || pathname === '/api/v1/resident-onboarding/browser-approve')
+          && await residentTurns.browser(req, res, pathname, browserAuth, respond, jsonBody)) return;
       if(await hostingRoutes({req,res,pathname,backend:hostedAgents,browserAuth,world,jsonBody,respond,rate,
         agentFor:async(owner,id)=>{
           const agent=(await game.roster()).find(row=>row.id===id);

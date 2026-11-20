@@ -242,9 +242,12 @@ final class ProtectionAdvisor implements Listener {
             add(areas, plugin.guildHall().deniesEdit(player, block) || reason.equals("guild_hall") ? plugin.guildHall().protectionArea(at) : null);
             add(areas, (action.equals("place") ? plugin.trialRoad().deniesPlace(block) : plugin.trialRoad().deniesBreak(block)) || reason.equals("trial_road") ? plugin.trialRoad().protectionArea(at) : null);
             add(areas, plugin.arenaProtectionArea(at)); add(areas, plugin.pvpProtectionArea(at));
-            add(areas, plugin.dungeon().protectionArea(at));
-            if (plugin.siteDungeons() != null) add(areas, plugin.siteDungeons().protectionArea(at));
-            if (plugin.generatedStructures() != null) add(areas, plugin.generatedStructures().protectionArea(at));
+            if (!plugin.editableDungeon(player, at)) {
+                add(areas, plugin.dungeon().protectionArea(at));
+                if (plugin.siteDungeons() != null) add(areas, plugin.siteDungeons().protectionArea(at));
+                if (plugin.wildResets() != null) add(areas, plugin.wildResets().area(at));
+                if (plugin.generatedStructures() != null) add(areas, plugin.generatedStructures().protectionArea(at));
+            }
         }
         if (action.equals("container") && at.getWorld().isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4))
             add(areas, plugin.lands().containerArea(player, at.getBlock()));
@@ -264,10 +267,10 @@ final class ProtectionAdvisor implements Listener {
             commands.add("/mycli land here");
         }
         else if (tagged) next = "这件物品仍归原主人；移出保护区也不会解除归属，请取得主人授权。";
-        else if (reason.equals("site_dungeon")) {
+        else if (reason.equals("site_dungeon") || reason.equals("dungeon")) {
             next = plugin.siteDungeons().campRescueLatch(at.getBlock())
                     ? "黑旗林营的牢笼可救援。先用入口路牌开始清剿；清掉守卫后，面对牢笼围栏按「使用」打开牢门。"
-                    : "副本建筑永久受保护，包括未开场和结束后；不能凿墙、垫块、倒液体或用爆炸改路。沿门、楼梯和原通道前进；箱子与机关可正常交互。";
+                    : "副本外壳和公共机关受保护。参赛队员可在开放的房间内临时搭建、使用工作台和拆除方块，重置期间请等待。野外遗迹在无人时恢复。";
             commands.add(ProtectionQuery.DUNGEON_DISCOVERY_COMMAND);
             commands.add("/mycli dungeon info <ID> --verbose");
         }
@@ -402,8 +405,10 @@ final class ProtectionAdvisor implements Listener {
             return "unknown_out_of_range";
         if (!player.getWorld().isChunkLoaded(x >> 4, z >> 4)) return "unknown_unloaded_chunk";
         Block block = player.getWorld().getBlockAt(x, y, z);
-        if(BlockAccessRules.blockAction(action)&&!plugin.trustedBlockEditor(player)
-                &&plugin.siteDungeons()!=null&&plugin.siteDungeons().activityArea(block.getLocation()))return "site_dungeon";
+        if (BlockAccessRules.blockAction(action) && plugin.dungeonBuildPolicy() != null) {
+            String reason = plugin.dungeonBuildPolicy().denial(player, action, block.getLocation());
+            if (reason != null) return reason;
+        }
         if (BlockAccessRules.blockAction(action) && plugin.bypassBlockProtection(player, block.getLocation())) return null;
         if (plugin.lands().access() != null) {
             if (action.equals("use") && plugin.lands().access().isBoard(block)) return null;
@@ -415,6 +420,10 @@ final class ProtectionAdvisor implements Listener {
             if (!plugin.guildStorage().physicalContainer(block)) return "unknown_not_container";
             if (plugin.guildStorage().deniesContainer(player, block)) return "guild_owner_only";
             if (plugin.lands().deniesContainer(player, block)) return "land_permission_denied";
+            if (plugin.dungeonBuildPolicy() != null) {
+                String denial = plugin.dungeonBuildPolicy().denial(player, action, block.getLocation());
+                if (denial != null) return denial;
+            }
             try {
                 if (!plugin.lands().stateAllows(player, "container", block.getLocation())) return "worldguard";
             } catch (RuntimeException | LinkageError unavailable) { return "unknown_worldguard"; }
@@ -433,10 +442,8 @@ final class ProtectionAdvisor implements Listener {
         if (action.equals("break") ? plugin.trialRoad().deniesBreak(block)
                 : plugin.trialRoad().deniesPlace(block)) return "trial_road";
         if (plugin.deniesArenaEdit(block)) return "arena";
-        if (plugin.dungeon().deniesEdit(block.getLocation())) return "dungeon";
         if (plugin.pvpProtectionArea(block.getLocation()) != null) return "pvp_arena";
-        if (plugin.siteDungeons() != null && plugin.siteDungeons().protectionArea(block.getLocation()) != null) return "site_dungeon";
-        if (plugin.generatedStructures() != null && plugin.generatedStructures().deniesEdit(block)) return plugin.generatedStructures().reason(block.getLocation());
+        if (!plugin.editableDungeon(player, block.getLocation()) && plugin.generatedStructures() != null && plugin.generatedStructures().deniesEdit(block)) return plugin.generatedStructures().reason(block.getLocation());
         try {
             boolean allowed = plugin.lands().stateAllows(player, action, block.getLocation());
             if (!allowed) return "worldguard";

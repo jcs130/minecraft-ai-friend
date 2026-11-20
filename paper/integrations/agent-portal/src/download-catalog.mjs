@@ -4,6 +4,7 @@ import offlineDownloads from './offline-downloads.json' with { type: 'json' };
 import maidClientDownloads from './maid-client-downloads.json' with { type: 'json' };
 import androidClientDownloads from './android-client-downloads.json' with { type: 'json' };
 import desktopClientDownloads from './desktop-client-downloads.json' with { type: 'json' };
+import residentDownloads from './resident-downloads.json' with { type: 'json' };
 
 // Mirror original published bytes, not the current developer checkout. Large
 // binaries stay in OSS; this repository contains only their reviewed manifest.
@@ -38,6 +39,7 @@ const originalReleases = [
     includes: '约 1.11 GB，含 Node、固定后端、依赖和观战资源；仍需自己的 N.E.K.O 与可用模型。' }),
 ];
 export const packageReleases = Object.freeze([
+  ...residentDownloads.map(row => Object.freeze(row)),
   ...desktopClientDownloads.map(row => Object.freeze(row)),
   ...androidClientDownloads.map(row => Object.freeze(row)),
   ...maidClientDownloads.map(row => Object.freeze(row)),
@@ -61,6 +63,8 @@ const previousFclTouch = Object.freeze({id:'android-client-pack', filename:'qian
 const legacyDesktopPack = Object.freeze({id:'desktop-client-pack', filename:'qiandengji-java-1.21.1-neoforge-1.1.0.mrpack',
   bytes:8825, sha256:'1ba659e68a2f980fd9a2ac5151405af2ffc78b449d1ed0639e8cacc5eabd70d3'});
 const legacyDownloads = Object.freeze([
+  Object.freeze({id:'desktop-client-pack', filename:'qiandengji-java-1.21.1-neoforge-1.1.2.mrpack',
+    bytes:32903, sha256:'fd140a3ab45819c44ab3a9bc1ea39a53a6775d620c664e15096441787f8efa4c'}),
   Object.freeze({id:'desktop-client-pack', filename:'qiandengji-java-1.21.1-neoforge-1.1.1.mrpack',
     bytes:29442, sha256:'33042290ac2efac1a4ef10e7692f60c2c50e87fad48b708cf4ec1f737fb1a21a'}),
   Object.freeze({id:'android-native-client-pack', filename:'qiandengji-android-1.21.1-neoforge-1.0.0-preview.5.mrpack',

@@ -106,6 +106,12 @@ final class DungeonAdvice {
         }else if(yes(f,"otherActivity")) {
             state="blocked";reason="ANOTHER_ACTIVITY_ACTIVE";
             action="你仍在另一场活动，先处理原场次；本查询不会替你退出或重复开场。";command=base+"status";
+        }else if(yes(f,"resetFailed")) {
+            state="fault_paused";reason="SITE_RESET_FAULT";
+            action="场地恢复记录需要服主检查，请改选其他遗迹。";command=base+"list";
+        }else if(yes(f,"resetPending")) {
+            state="cooldown";reason="SITE_RESET_PENDING";
+            action="请全队先离开遗迹，等待地形复原，再回首室开场。";command=base+"status "+id;
         }else if(!text(f,"admissionReason").isEmpty()) {
             state="requirements";reason=text(f,"admissionReason");
             action=text(f,"admissionHint");command=text(f,"admissionCommand");

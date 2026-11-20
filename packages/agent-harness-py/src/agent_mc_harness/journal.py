@@ -40,9 +40,30 @@ class ActionJournal:
         self.db.execute("CREATE TABLE IF NOT EXISTS npc_activity (body TEXT PRIMARY KEY, mode TEXT NOT NULL, "
                         "since REAL NOT NULL, cue TEXT, reviewed REAL, purpose TEXT)")
         self.db.execute("CREATE TABLE IF NOT EXISTS npc_wait_notes (request TEXT PRIMARY KEY, note TEXT NOT NULL)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS npc_agendas (character TEXT PRIMARY KEY, until REAL NOT NULL, slots TEXT NOT NULL)")
         self.db.execute("CREATE INDEX IF NOT EXISTS npc_adventure_kind ON dispatch(body,json_extract(action,'$.args.kind')) "
                         "WHERE json_extract(action,'$.name') IN ('adventure_query','adventure_action')")
         self.db.commit()
+
+    def agenda(self, character: str, now: float) -> dict:
+        row = self.db.execute("SELECT slots FROM npc_agendas WHERE character=? AND until>?", (character, now)).fetchone()
+        slots = [s for s in json.loads(row[0]) if s["endsAt"] > now] if row else []
+        return {"now": now, "current": next((s for s in slots if s["startsAt"] <= now), None),
+                "upcoming": [s for s in slots if s["startsAt"] > now]}
+
+    def save_agenda(self, character: str, slots: list[dict], now: float, previous_end: float | None = None) -> None:
+        with self.db:
+            if previous_end is not None:
+                # A late reply to an older schedule cannot modify its replacement.
+                if slots:
+                    self.db.execute("UPDATE npc_agendas SET until=?, slots=? WHERE character=? AND until=? AND until>?",
+                                    (slots[-1]["endsAt"], json.dumps(slots, ensure_ascii=False), character, previous_end, now))
+                else:
+                    self.db.execute("DELETE FROM npc_agendas WHERE character=? AND until=? AND until>?", (character, previous_end, now))
+                return
+            self.db.execute("INSERT INTO npc_agendas VALUES (?,?,?) ON CONFLICT(character) DO UPDATE SET "
+                            "until=excluded.until,slots=excluded.slots WHERE npc_agendas.until<=?",
+                            (character, slots[-1]["endsAt"], json.dumps(slots, ensure_ascii=False), now))
 
     def begin(self, body: str, action: BodyAction, sources: list[str] | None = None, *, note: str | None = None) -> None:
         if not action.request_id:
