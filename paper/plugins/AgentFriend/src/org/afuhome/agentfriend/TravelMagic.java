@@ -5,6 +5,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
@@ -44,7 +45,12 @@ final class TravelMagic implements Listener {
     private final Map<UUID, Long> adminTeleports = new HashMap<>();
     private final Map<UUID, Long> spellTeleports = new HashMap<>();
     private final Set<UUID> internal = new java.util.HashSet<>();
-    private final Map<UUID, Location> homeLandings = new HashMap<>();
+    private record CheckedLanding(Location anchor, Predicate<Location> permitted) {
+        boolean accepts(Player player, Location actual) {
+            return actual != null && permitted.test(actual) && HomeLanding.accepts(player, anchor, actual);
+        }
+    }
+    private final Map<UUID, CheckedLanding> homeLandings = new HashMap<>();
 
     TravelMagic(AgentFriendPlugin plugin) { this.plugin = plugin; }
 
@@ -53,9 +59,37 @@ final class TravelMagic implements Listener {
     }
 
     boolean teleportChecked(Player player, Location destination, String id, String name, int mana) {
-        homeLandings.put(player.getUniqueId(), destination.clone());
+        return teleportChecked(player, destination, destination, at -> true, id, name, mana);
+    }
+
+    private boolean teleportChecked(Player player, Location anchor, Location destination, Predicate<Location> permitted,
+                                    String id, String name, int mana) {
+        homeLandings.put(player.getUniqueId(), new CheckedLanding(anchor.clone(), permitted));
         try { return teleport(player, destination, id, name, mana); }
         finally { homeLandings.remove(player.getUniqueId()); }
+    }
+
+    void home(Player player, Location village) {
+        if (!plugin.professions().basicAllowed(player, "home") || !plugin.hasMana(player, LOCAL_MANA)) return;
+        Location personal = player.getRespawnLocation();
+        LandManager lands = plugin.lands();
+        LandManager.Land residence = personal == null ? lands.registeredHome(player.getUniqueId()) : null;
+        Location anchor = personal != null ? personal : residence != null ? lands.homeAnchor(residence) : village;
+        String target = personal != null ? "respawn" : residence != null ? "residence" : "village";
+        String label = personal != null ? "个人重生点" : residence != null ? residence.home().address() : "村庄";
+        Predicate<Location> permitted = residence != null ? at -> lands.homeAllows(residence, at, player) : at -> true;
+        HomeLanding.Selection landing = new HomeLanding(player, anchor).select(permitted);
+        if (!landing.found()) {
+            player.sendMessage("§e[unsafe_destination] 归乡失败 · " + label + " · " + landing.originalIssue().description()
+                    + "。未传送、未耗魔。");
+            return;
+        }
+        if (teleportChecked(player, anchor, landing.destination(), permitted, "home", "归乡术", LOCAL_MANA)) {
+            if (landing.alternate()) player.sendMessage("§e[home_alternate] 原归乡点" + landing.originalIssue().description()
+                    + "；已使用附近安全落点。" + LocationOutput.fields(player.getLocation()));
+            player.sendMessage("§a归乡 · " + label);
+            player.sendMessage("MC_DESTINATION id=" + target + " " + LocationOutput.fields(player.getLocation()));
+        }
     }
 
     boolean teleport(Player player, Location destination, String id, String name, int mana) {
@@ -80,8 +114,8 @@ final class TravelMagic implements Listener {
         if (!moved) {
             player.sendMessage(ChatColor.RED + "传送被保护规则取消；未耗魔。先 /mycli land here 核对权限，再 /mycli waypoint 另选公开安全目标；持续异常联系服主。"); return "protected";
         }
-        Location homeAnchor = homeLandings.get(player.getUniqueId());
-        if (homeAnchor != null && !HomeLanding.accepts(player, homeAnchor, player.getLocation())) {
+        CheckedLanding homeAnchor = homeLandings.get(player.getUniqueId());
+        if (homeAnchor != null && !homeAnchor.accepts(player, player.getLocation())) {
             homeLandings.remove(player.getUniqueId());
             internal.add(player.getUniqueId());
             try { player.teleport(departure); }
@@ -115,22 +149,6 @@ final class TravelMagic implements Listener {
             player.sendMessage(ChatColor.RED + "旁观者不能使用传送术；请使用对应的生存角色，/mycli status 核对状态。"); return false;
         }
         if (!plugin.hasMana(player, mana)) return false;
-        // A fixed public home spell must not depend on the player's administrative warp command.
-        if (plugin.nativeRpg().selected() && id.equals("home") && command.equals("warp village")) {
-            HomeLanding.Selection landing = new HomeLanding(player, expected).select();
-            if (!landing.found()) {
-                player.sendMessage("§e[unsafe_destination] 归乡失败：" + landing.originalIssue().description()
-                        + "；附近3格、上下2格无已核实安全落点。未传送、未耗魔。下一步：/mycli waypoint list；请服主检查 village。");
-                return false;
-            }
-            homeLandings.put(player.getUniqueId(), expected.clone());
-            try {
-                boolean moved = teleport(player, landing.destination(), id, name, mana);
-                if (moved && landing.alternate()) player.sendMessage("§e[home_alternate] 原归乡点" + landing.originalIssue().description()
-                        + "；已使用附近安全落点。" + LocationOutput.fields(player.getLocation()));
-                return moved;
-            } finally { homeLandings.remove(player.getUniqueId()); }
-        }
         UUID uuid = player.getUniqueId();
         Pending request = new Pending(id, name, mana, expected == null ? null : expected.clone(),
                 System.currentTimeMillis() + COMMAND_WINDOW_MS);
@@ -195,8 +213,8 @@ final class TravelMagic implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onTeleportCheck(PlayerTeleportEvent event) {
-        Location homeAnchor = homeLandings.get(event.getPlayer().getUniqueId());
-        if (homeAnchor != null && !HomeLanding.accepts(event.getPlayer(), homeAnchor, event.getTo())) {
+        CheckedLanding homeAnchor = homeLandings.get(event.getPlayer().getUniqueId());
+        if (homeAnchor != null && !homeAnchor.accepts(event.getPlayer(), event.getTo())) {
             event.setCancelled(true);
             return;
         }
