@@ -4,6 +4,7 @@ import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {siteFixture} from './helpers.mjs';
 import {ResidentTurns} from '../src/resident-turns.mjs';
+import {offlineUuid} from '../src/game-accounts.mjs';
 
 function capacity(id, bodyKind) {
   const key = 'rwt_' + randomBytes(32).toString('base64url');
@@ -39,6 +40,64 @@ test('website login requires both local confirmation and the original plugin sec
   for (let i=0;i<5;i++) assert.equal((await f.admin.request('/'+path+'browser-approve','POST',{id:locked.id,code:digits})).status,400);
   assert.equal((await f.admin.request('/'+path+'browser-approve','POST',{id:locked.id,code:locked.code})).status,403);
   assert.equal((await call(f,path+'browser-status',{},locked.secret)).status,401);
+});
+
+test('one website confirmation binds an existing resident and prepares exactly one player on demand', async t => {
+  const resident = {...capacity('test-maid','maid').slot,characterId:randomUUID(),name:'测试女仆'};
+  const f = await siteFixture(t,{residentTurns:[resident]});
+  const db = f.portal.store.db;
+  const owner = f.portal.store.ownerByName('fixture-admin');
+  db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id,resident.ownerGameId,'fixture',Date.now());
+  const base = 'resident-onboarding/';
+  const player = {clientId:randomUUID(),clientSecret:randomBytes(32).toString('base64url'),
+    username:'ag_SharedTest',requestId:randomUUID()};
+  const register = (secret, input=player) => call(f,base+'player-link',input,secret);
+  const {secret,id,code} = await call(f,base+'browser-start',{});
+  assert.equal((await f.admin.request('/'+base+'browser-approve','POST',{id,code,player:true})).status,200);
+  const authorized = await call(f,base+'browser-status',{},secret);
+  assert.ok(authorized.playerAuthorizationExpiresAt > Date.now());
+  assert.equal(db.prepare('SELECT count(*) AS n FROM account_jobs').get().n,0);
+  assert.equal(db.prepare('SELECT count(*) AS n FROM neko_plugin_links').get().n,0);
+  const {residents} = await call(f,base+'list',{},authorized.onboardingToken);
+  assert.equal(residents[0].characterId,resident.characterId);
+  const binding = await call(f,base+'connect',{id:resident.id,characterId:resident.characterId},authorized.onboardingToken);
+  assert.equal(binding.resident.characterId,resident.characterId);
+  const registration = await register(secret);
+  assert.equal(registration.phase,'approved');
+  assert.equal(registration.verificationUrl,undefined);
+  assert.deepEqual(await register(secret),registration);
+  assert.equal(db.prepare('SELECT count(*) AS n FROM account_jobs').get().n,0);
+  assert.equal((await register(secret,{...player,clientId:randomUUID()})).error.reason,'PLAYER_AUTHORIZATION_IN_USE');
+  assert.equal((await register(secret,{...player,requestId:randomUUID()})).error.reason,'NEKO_LINK_CONFLICT');
+
+  let submitted = 0, state = 'waiting';
+  const playerUuid = offlineUuid(player.username);
+  f.portal.accounts.remote = {capabilities:async()=>({ready:true}),writeRequest:async()=>{submitted++;},
+    readResult:async()=>({requestId:player.requestId,username:player.username,playerUuid,state})};
+  const path = 'neko-plugin/requests/'+player.clientId, token = 'qnp_'+player.clientSecret;
+  const payload = {requestId:player.requestId,username:player.username,gamePassword:'local-fixture-password'};
+  assert.equal((await call(f,path+'/activate',payload,token)).status,202);
+  assert.equal((await call(f,path+'/activate',payload,token)).status,202);
+  assert.equal(submitted,1);
+  state = 'succeeded';
+  const ready = await fetch(f.origin+'/api/v1/'+path+'/status',{headers:{Authorization:'Bearer '+token}}).then(res=>res.json());
+  assert.equal(ready.playerUuid,playerUuid);
+  assert.equal(ready.ready,true);
+  assert.equal(ready.provider,'website');
+  assert.ok(f.portal.store.ownedUuids(owner.id).includes(playerUuid));
+});
+
+test('previous resident-only confirmation remains scoped to resident access', async t => {
+  const f = await siteFixture(t);
+  const base = 'resident-onboarding/';
+  const {secret,id,code} = await call(f,base+'browser-start',{});
+  await f.admin.request('/'+base+'browser-approve','POST',{id,code});
+  await f.admin.request('/'+base+'browser-approve','POST',{id,code,player:true});
+  const status = await call(f,base+'browser-status',{},secret);
+  assert.equal(status.playerAuthorizationExpiresAt,undefined);
+  const body = {clientId:randomUUID(),clientSecret:randomBytes(32).toString('base64url'),username:'ag_Scoped',requestId:randomUUID()};
+  assert.equal((await call(f,base+'player-link',body,secret)).status,401);
+  assert.equal((await call(f,base+'player-link',body,status.onboardingToken)).status,401);
 });
 
 test('an explicit website owner controls only the named resident without gaining game account ownership', async t => {

@@ -33,6 +33,28 @@ const noOverflow = page => page.evaluate(() => document.documentElement.scrollWi
 const visible = (page,id) => page.waitForSelector('#' + id, {visible:true});
 const enabled = (page,id) => page.waitForSelector('#' + id + ':enabled', {visible:true});
 
+test('the shared desktop authorization screen discloses both modes and confirms only once', browserTest, async t => {
+  const {page,origin} = await fixture(t);
+  const api = origin + '/api/v1/resident-onboarding/';
+  const post = (path,token) => fetch(api+path,{method:'POST',headers:{'Content-Type':'application/json',
+    ...(token ? {Authorization:'Bearer '+token} : {})},body:'{}'}).then(res=>res.json());
+  const pending = await post('browser-start');
+  await page.goto(origin+'/resident-connect.html?flow=browser&play=1#'+pending.id);
+  await login(page);
+  await visible(page,'player-authorization');
+  assert.match(await page.$eval('#player-authorization',element=>element.textContent),/Mineflayer/);
+  const requests = [];
+  page.on('request',request=>{if (request.url().endsWith('/browser-approve')) requests.push(request.url());});
+  await page.type('#browser-code',pending.code);
+  await page.click('#browser-approve button');
+  await page.waitForSelector('#browser-approve[hidden]');
+  assert.equal(requests.length,1);
+  const grant = await post('browser-status',pending.secret);
+  assert.equal(grant.state,'authorized');
+  assert.ok(grant.playerAuthorizationExpiresAt>Date.now());
+  assert.equal(await noOverflow(page),true);
+});
+
 test('official login stays in the authorization flow, copies a one-time account code and reveals no resident secret', browserTest, async t => {
   const {page,origin,browser} = await fixture(t);
   await browser.defaultBrowserContext().overridePermissions(origin,['clipboard-read','clipboard-sanitized-write']);

@@ -18,6 +18,7 @@
     <label>网站用户名或邮箱<input name="username" autocomplete="username" required maxlength="254"></label>
     <label>网站密码<input name="password" type="password" autocomplete="current-password" required maxlength="128"></label>
     <button>登录并继续</button>
+    <p id="neko-portal-signin" hidden><a href="/join" target="_blank" rel="noopener noreferrer">用猫娘计划账号登录官网 ↗</a>，登录后返回此页。</p>
     <p><a href="/#connections" target="_blank" rel="noopener noreferrer">到官网注册或找回密码 ↗</a>，完成后返回此页。</p>
   </form>
   <section id="authorize" hidden>
@@ -28,6 +29,7 @@
   <form id="browser-approve" hidden>
     <h2>授权桌面插件</h2>
     <p>确认后，插件可以查看你的居民、使用可用名额新建角色，并连接你选中的一个身体。请核对登录账号，输入你亲自在本机插件中看到的数字。</p>
+    <p id="player-authorization" hidden>也允许插件在你选中 Mineflayer 并确认准备时，为这个网站账号准备一个独立的 Minecraft 玩家角色。</p>
     <label>插件显示的 6 位数字<input id="browser-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" required></label>
     <button>确认授权</button>
   </form>

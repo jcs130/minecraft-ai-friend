@@ -48,7 +48,9 @@ export class ResidentTurns {
       role TEXT PRIMARY KEY, hash TEXT UNIQUE NOT NULL, owner TEXT NOT NULL, until INTEGER NOT NULL, binding TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS resident_browser_logins (
         id TEXT PRIMARY KEY, secret_hash TEXT UNIQUE NOT NULL, code_hash TEXT NOT NULL,
-        until INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, owner TEXT, token_until INTEGER)`);
+        until INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, owner TEXT, token_until INTEGER);
+      CREATE TABLE IF NOT EXISTS resident_play_grants (
+        secret_hash TEXT PRIMARY KEY, owner TEXT NOT NULL, until INTEGER NOT NULL, client_id TEXT)`);
     const bodies = new Set(), keys = new Set(), characters = new Set();
     for (const raw of [...(config.residentTurns ?? []), ...(config.residentCreationSlots ?? []).map(s => ({...s, fresh: true}))]) {
       const r = {...raw};
@@ -186,7 +188,7 @@ export class ResidentTurns {
       .run(id,hash(secret),hash(id + code),expiresAt);
     return {id,secret,code,expiresAt};
   }
-  approveBrowserLogin(owner, {id, code}) {
+  approveBrowserLogin(owner, {id, code, player = false}) {
     if (typeof id !== 'string' || !uuid.test(id) || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
       throw denied(400,'INVALID_BROWSER_LOGIN');
     }
@@ -197,8 +199,19 @@ export class ResidentTurns {
       db.prepare('UPDATE resident_browser_logins SET attempts=attempts+1 WHERE id=? AND owner IS NULL').run(id);
       throw denied(400,'INVALID_BROWSER_LOGIN');
     }
-    if (!pending.owner) db.prepare('UPDATE resident_browser_logins SET owner=?,token_until=? WHERE id=? AND owner IS NULL')
-      .run(owner,now + accountExpiry,id);
+    if (!pending.owner) {
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        const changed = db.prepare('UPDATE resident_browser_logins SET owner=?,token_until=? WHERE id=? AND owner IS NULL')
+          .run(owner,now + accountExpiry,id);
+        if (changed.changes && player === true) {
+          db.prepare('DELETE FROM resident_play_grants WHERE until<=?').run(now);
+          db.prepare('INSERT INTO resident_play_grants(secret_hash,owner,until) VALUES(?,?,?)')
+            .run(pending.secret_hash,owner,now + accountExpiry);
+        }
+        db.exec('COMMIT');
+      } catch (error) { db.exec('ROLLBACK'); throw error; }
+    }
     return {authorized:true};
   }
   browserLoginStatus(req) {
@@ -213,7 +226,31 @@ export class ResidentTurns {
     db.prepare('DELETE FROM resident_onboarding WHERE coalesce(token_until,code_until)<=?').run(now);
     db.prepare('INSERT OR IGNORE INTO resident_onboarding(owner,token_hash,token_until) VALUES(?,?,?)')
       .run(pending.owner,hash(token),pending.token_until);
-    return {state:'authorized',onboardingToken:token,expiresAt:pending.token_until};
+    const playerAuthorization = db.prepare('SELECT until FROM resident_play_grants WHERE secret_hash=? AND owner=? AND until>?')
+      .get(pending.secret_hash,pending.owner,now)?.until;
+    return {state:'authorized',onboardingToken:token,expiresAt:pending.token_until,
+      ...(playerAuthorization ? {playerAuthorizationExpiresAt:playerAuthorization} : {})};
+  }
+  preparePlayer(req, input, prepare) {
+    if (req.method !== 'POST' || req.headers.origin || req.headers.cookie) throw denied(403,'PLUGIN_REQUIRED');
+    if (!input || typeof input !== 'object' || Array.isArray(input)
+      || Object.keys(input).some(key => !['clientId','clientSecret','username','requestId'].includes(key))) {
+      throw denied(400,'NEKO_LINK_INVALID_REQUEST');
+    }
+    const secret = (req.headers.authorization || '').match(/^Bearer (rba_[A-Za-z0-9_-]{43})$/)?.[1];
+    const db = this.store.db;
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const grant = secret && db.prepare('SELECT * FROM resident_play_grants WHERE secret_hash=? AND until>?')
+        .get(hash(secret),this.now());
+      if (!grant || !this.store.ownerById(grant.owner)) throw denied(401,'PLAYER_AUTHORIZATION_EXPIRED');
+      if (grant.client_id && grant.client_id !== input.clientId) throw denied(409,'PLAYER_AUTHORIZATION_IN_USE');
+      const result = prepare(input,grant.owner);
+      if (!grant.client_id) db.prepare('UPDATE resident_play_grants SET client_id=? WHERE secret_hash=?')
+        .run(input.clientId,grant.secret_hash);
+      db.exec('COMMIT');
+      return result;
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
   }
   async onboarding(req,res,op,jsonBody,respond) {
     if (req.method !== 'POST' || req.headers.origin || req.headers.cookie) throw denied(403,'PLUGIN_REQUIRED');

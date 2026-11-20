@@ -3,6 +3,8 @@ const api = '/api/v1/resident-turns';
 const params = new URLSearchParams(location.search);
 const legacy = ['create', 'connect'].includes(params.get('flow'));
 const browserLogin = params.get('flow') === 'browser';
+const playerDisclosure = byId('player-authorization');
+const sharedPlay = browserLogin && params.get('play') === '1' && !!playerDisclosure;
 const browserId = location.hash.slice(1);
 const bodies = {maid: '车万女仆', numen: 'Numen'};
 const flow = byId('flow'), kind = byId('kind'), role = byId('role');
@@ -15,6 +17,11 @@ kind.value = params.get('bodyKind') === 'numen' ? 'numen' : 'maid';
 if (legacy) {
   byId('title').textContent = '连接居民身体';
   byId('intro').textContent = '选择车万女仆或 Numen，获取仅供这个居民使用的连接码。';
+}
+if (sharedPlay) {
+  byId('title').textContent = '授权千灯纪游戏插件';
+  byId('intro').textContent = '登录一次，在 N.E.K.O. 里选择居民或 Mineflayer 玩家模式。';
+  playerDisclosure.hidden = false;
 }
 
 const errors = {
@@ -117,6 +124,8 @@ async function load() {
   loading = (async () => {
     session = await request('/api/v1/session');
     byId('login').hidden = !!session.owner;
+    const nekoSignIn = byId('neko-portal-signin');
+    if (nekoSignIn) nekoSignIn.hidden = session.nekoAuth?.available !== true;
     byId('authorize').hidden = !session.owner || legacy || browserLogin;
     byId('browser-approve').hidden = !session.owner || !browserLogin;
     byId('legacy').hidden = !session.owner || !legacy;
@@ -164,7 +173,8 @@ window.addEventListener('focus', () => { if (session && !session.owner && !busy)
 byId('browser-approve').onsubmit = event => {
   event.preventDefault();
   void action(async () => {
-    await request('/api/v1/resident-onboarding/browser-approve', 'POST', {id:browserId, code:byId('browser-code').value});
+    await request('/api/v1/resident-onboarding/browser-approve', 'POST',
+      {id:browserId, code:byId('browser-code').value, ...(sharedPlay ? {player:true} : {})});
     byId('browser-code').value = '';
     byId('browser-approve').hidden = true;
     history.replaceState(null,'',location.pathname + location.search);

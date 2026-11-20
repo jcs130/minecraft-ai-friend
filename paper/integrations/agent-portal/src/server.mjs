@@ -339,6 +339,11 @@ export function createPortal(config, options = {}) {
       if (await maidConnectionRoute({ req, res, pathname, connections: maidConnections,
         browserAuth, csrf, jsonBody, respond, rate,
         address: () => digest(rateAddress(req, config)) })) return;
+      if (pathname === '/api/v1/resident-onboarding/player-link' && req.method === 'POST') {
+        rate('resident-player-link:'+digest(rateAddress(req,config)),24,60000);
+        const input = await jsonBody(req,8192);
+        return respond(res,200,residentTurns.preparePlayer(req,input,(body,owner)=>nekoLinks.approveWebsite(body,owner)));
+      }
       const onboarding = /^\/api\/v1\/resident-onboarding\/(pair|list|create|connect|browser-start|browser-status)$/.exec(pathname);
       if (onboarding) {
         if (onboarding[1] === 'pair') rate('resident-pair:'+digest(rateAddress(req,config)),24,60000);

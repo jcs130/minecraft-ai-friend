@@ -12,15 +12,19 @@ export class NekoPluginLinks{
   constructor(config,store,accounts,nekoAuth,{now=Date.now}={}){
     Object.assign(this,{config,store,accounts,nekoAuth,now});
     store.db.exec(`CREATE TABLE IF NOT EXISTS neko_plugin_links(client_id TEXT PRIMARY KEY,secret_hash TEXT NOT NULL,username TEXT NOT NULL,game_request_id TEXT NOT NULL UNIQUE,owner_id TEXT REFERENCES owners(id),activation_attempted INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL);`);
+    store.db.exec('CREATE TABLE IF NOT EXISTS neko_plugin_website_links(client_id TEXT PRIMARY KEY REFERENCES neko_plugin_links(client_id))');
   }
   create(body){
     this.nekoAuth.requireEnabled();
+    return this.createRequest(body);
+  }
+  createRequest(body,{allowExpired=false}={}){
     if(!UUID.test(body.clientId||'')||!UUID.test(body.requestId||'')||body.clientId!==body.clientId.toLowerCase()||body.requestId!==body.requestId.toLowerCase()||!name(body.username)
       ||typeof body.clientSecret!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(body.clientSecret))throw fail(400,'NEKO_LINK_INVALID_REQUEST');
     const previous=this.store.db.prepare('SELECT * FROM neko_plugin_links WHERE client_id=?').get(body.clientId);
     if(previous){
       if(!equal(previous.secret_hash,digest(body.clientSecret))||previous.username!==body.username||previous.game_request_id!==body.requestId)throw fail(409,'NEKO_LINK_CONFLICT');
-      if(previous.expires_at<=this.now())throw fail(410,'NEKO_LINK_EXPIRED');
+      if(previous.expires_at<=this.now()&&!allowExpired)throw fail(410,'NEKO_LINK_EXPIRED');
     }else{
       if(this.store.db.prepare('SELECT 1 FROM neko_plugin_links WHERE game_request_id=?').get(body.requestId))throw fail(409,'NEKO_LINK_CONFLICT');
       this.accounts.checkName?.(body.username);
@@ -29,6 +33,22 @@ export class NekoPluginLinks{
     }
     return{clientId:body.clientId,username:body.username,phase:previous?.owner_id?'approved':'authorization_required',
       verificationUrl:this.config.publicOrigin+'/join?neko_request='+body.clientId};
+  }
+  approveWebsite(body,owner){
+    this.createRequest(body,{allowExpired:true});
+    const row=this.row(body.clientId,{allowExpired:true});
+    if(row.owner_id&&row.owner_id!==owner)throw fail(409,'NEKO_LINK_OTHER_OWNER');
+    if(!row.activation_attempted&&!this.fromWebsite(row)){
+      this.store.db.prepare('INSERT INTO neko_plugin_website_links VALUES(?)').run(row.client_id);
+    }
+    if(!row.activation_attempted&&(!row.owner_id||row.expires_at<=this.now())){
+      this.store.db.prepare('UPDATE neko_plugin_links SET owner_id=?,expires_at=? WHERE client_id=?')
+        .run(owner,this.now()+7*86400000,row.client_id);
+    }
+    return {clientId:row.client_id,username:row.username,phase:'approved'};
+  }
+  fromWebsite(row){
+    return !!this.store.db.prepare('SELECT 1 FROM neko_plugin_website_links WHERE client_id=?').get(row.client_id);
   }
   row(id,{allowExpired=false}={}){
     if(!UUID.test(id||''))throw fail(404,'NEKO_LINK_NOT_FOUND');
@@ -54,7 +74,7 @@ export class NekoPluginLinks{
   }
   owner(row){
     const owner=this.store.ownerById(row.owner_id);
-    if(!owner||!this.nekoAuth.capabilities(owner).linked)throw fail(403,'NEKO_LOGIN_REQUIRED');
+    if(!owner||!this.fromWebsite(row)&&!this.nekoAuth.capabilities(owner).linked)throw fail(403,'NEKO_LOGIN_REQUIRED');
     return owner;
   }
   async job(row){
@@ -68,10 +88,10 @@ export class NekoPluginLinks{
     if(!job&&row.expires_at<=this.now())return{...base,phase:row.activation_attempted?'unknown':'expired',ready:false,renewable:!row.activation_attempted};
     if(!row.owner_id)return{...base,phase:'authorization_required',ready:false};
     return{...base,phase:ready?'ready':job?.state||(row.activation_attempted?'unknown':'approved'),ready,
-      gameAccountCreated:ready,playerUuid:ready?job.playerUuid:null,provider:'neko'};
+      gameAccountCreated:ready,playerUuid:ready?job.playerUuid:null,provider:this.fromWebsite(row)?'website':'neko'};
   }
   async activate(row,body){
-    this.nekoAuth.requireEnabled();
+    if(!this.fromWebsite(row))this.nekoAuth.requireEnabled();
     if(body.requestId!==row.game_request_id||body.username!==row.username)throw fail(409,'NEKO_LINK_CONFLICT');
     const old=await this.job(row);
     if(old)return this.status(row);
@@ -84,6 +104,7 @@ export class NekoPluginLinks{
   }
   async renew(row){
     this.nekoAuth.requireEnabled();
+    if(this.fromWebsite(row))throw fail(403,'PLAYER_AUTHORIZATION_REQUIRED');
     if(row.expires_at>this.now())return this.status(row);
     if(row.activation_attempted||row.owner_id&&await this.job(row))throw fail(409,'NEKO_LINK_RESULT_UNKNOWN');
     if(this.store.db.prepare('UPDATE neko_plugin_links SET owner_id=NULL,expires_at=? WHERE client_id=? AND activation_attempted=0 AND expires_at=?')
