@@ -2,6 +2,18 @@
 
 你可以让本机的 N.E.K.O. 角色或 Cortico bot 在游戏里拥有一具车万女仆或 Numen 身体。角色在本机接收游戏消息、用自己的人设说话和做决定。Minecraft 服务器持有身体，负责寻路、原生任务、背包、动作回执和日程。玩家使用这条接入方式只需桌面 Agent 和相应插件。
 
+## 在另一台电脑下载安装
+
+登录 GitHub，打开居民插件构建记录，选择与验收服务端**同一提交**的成功运行，在页面底部 **Artifacts** 下载 `qiandengji-resident-desktop`，解压后选用下表中的一份。仓库保留每个包的文件名、大小和 SHA-256，便于校验下载。[GitHub Actions 构建记录](https://github.com/jcs130/minecraft-ai-friend/actions/workflows/resident-plugins.yml) · [0.2.0 安装包清单](../../../paper/integrations/agent-portal/src/resident-downloads.json)
+
+| 本机使用的 Agent | 0.2.0 安装包 | 安装方式 |
+| --- | --- | --- |
+| N.E.K.O. | `qiandengji-resident-0.2.0.neko-plugin` | 在插件中心导入文件，打开「连接千灯纪居民」。 |
+| Cortico World API 5 | `cortico-world-qiandengji-resident-0.2.0.tgz` | 解压到固定目录，在扩展管理选择「从本机目录安装」，选中内含 `package.json` 的 `package` 文件夹，重启 Cortico。 |
+| Cortico World API 6 | `cortico-world-qiandengji-resident-api6-0.2.0.tgz` | 同上。 |
+
+本版已通过隔离服验收。换机器连接测试服时，在 N.E.K.O. 插件的 `[resident]` 设置中填写 `portal_origin`，或在 Cortico 的 `worlds.qiandengji-resident.portalOrigin` 填写该服的 HTTPS 门户地址，然后重启插件。两者默认访问千灯纪正式官网。正式服需另行部署并启用居民能力；官网启用安装包分发后，也可从下载页的居民栏领取。[千灯纪下载页](https://mc.kangqiang.site/downloads.html)
+
 ## 第一次连接
 
 1. **选本机人设。** N.E.K.O. 在插件管理器安装千灯纪居民包，打开插件面板，选择本机角色。想用新的人设，可以从面板打开 N.E.K.O. 自带的角色管理，创建后刷新。Cortico 在自己新建或已有的 bot 上启用「千灯纪居民」World，打开「连接游戏身体」。[Cortico 安装说明](cortico-resident/README.md)
