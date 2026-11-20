@@ -403,3 +403,115 @@ def test_lease_expiry_needs_idle_body_evidence_before_reconnect(
         finally:
             await p.close()
     run(check())
+
+
+@pytest.mark.parametrize("reported,local_pending,can_reopen", [
+    ({}, False, True),
+    ({"fenced":True}, False, False),
+    ({"mode":"manual"}, False, False),
+    ({"epoch":42}, False, False),
+    ({"epoch":0}, False, False),
+    ({"workPending":True}, False, False),
+    ({"ready":False}, False, False),
+    ({"roleUuid":"other-body"}, False, False),
+    ({}, True, False),
+])
+def test_recheck_after_timed_out_vacancy_read_is_read_only(tmp_path, monkeypatch, run, reported, local_pending, can_reopen):
+    async def check():
+        s = LeaseSession()
+        p = port(tmp_path, s)
+        reads = []
+        async def old_rpc(op, **kwargs):
+            assert op == "facts"
+            raise TimeoutError("initial facts unavailable")
+        @asynccontextmanager
+        async def fresh():
+            async def read(tool, args):
+                assert tool == "hosted_body" and args["op"] == "facts"
+                reads.append(args)
+                return SimpleNamespace(isError=False,structuredContent={
+                    "roleUuid":BODY, "mode":"paused", "epoch":2, "fenced":False,
+                    "workPending":False, "ready":True, **reported})
+            yield SimpleNamespace(call_tool=read)
+        await p.open()
+        try:
+            monkeypatch.setattr(p, "rpc", old_rpc)
+            monkeypatch.setattr(p, "_mcp_session", fresh)
+            if local_pending:
+                p.ledger.begin("original_undelivered", "testfingerprint", p.boot)
+            await p._lose_control(RuntimeError("HOSTED_REQUEST_REFUSED_QUERY_ORIGINAL"))
+            assert p.lost and not p.disconnected.is_set() and p.next_vacancy_probe is not None
+            await p._recheck_vacancy()
+            assert not reads
+            p.next_vacancy_probe = 0
+            await p._recheck_vacancy()
+            assert p.disconnected.is_set() == can_reopen and len(reads) == 1
+            assert s.transitions == [("paused",1),("harness",2)]
+        finally:
+            await p.close()
+    run(check())
+
+
+@pytest.mark.parametrize("previous_terminal,expected", [(True, False), (False, True)])
+def test_archive_requires_matching_original_terminal_for_old_transport_row(tmp_path, previous_terminal, expected):
+    from agent_mc_harness.journal import ActionJournal
+    from agent_mc_harness.models import ActionReceipt, BodyAction
+    journal = ActionJournal(tmp_path/"outer.sqlite3")
+    p = port(tmp_path, LeaseSession())
+    p.action_journal = journal
+    try:
+        rid = "original_old_call"
+        p.ledger.begin(rid,"fingerprint","previous-boot")
+        journal.begin(BODY,BodyAction(verb="attack",request_id=rid))
+        if previous_terminal:
+            journal.settle(BODY,ActionReceipt(verb="attack",status="failed",terminal=True,request_id=rid))
+        assert p._unfinished_local_work() == expected
+        p.ledger.begin("current_attack","fingerprint",p.boot)
+        assert p._unfinished_local_work()
+        p.ledger.save("current_attack","failed","original ended",None)
+        p.ledger.begin_stop("current_stop",p.boot,3)
+        assert p._unfinished_local_work()
+        assert p.ledger.get(rid,"previous-boot")["status"] == "unknown"
+    finally:
+        p.ledger.close()
+        journal.close()
+
+
+def test_recheck_uses_event_poll_and_disarms_after_any_confirmed_handoff(tmp_path,monkeypatch,run):
+    async def check():
+        session = LeaseSession()
+        p = port(tmp_path,session)
+        await p.open()
+        ops = []
+        responses = [ExceptionGroup("transport", [TimeoutError()]),
+                     {"roleUuid":BODY,"mode":"manual","epoch":p.epoch,"fenced":True,"workPending":False,"ready":True}]
+        async def old(op, **kwargs):
+            if op == "facts":
+                raise TimeoutError()
+            assert op == "observe"
+            return {"inbox":[]}
+        @asynccontextmanager
+        async def fresh():
+            async def read(tool,args):
+                ops.append(args["op"])
+                value = responses.pop(0)
+                if isinstance(value,BaseException):
+                    raise value
+                return SimpleNamespace(isError=False,structuredContent=value)
+            yield SimpleNamespace(call_tool=read)
+        monkeypatch.setattr(p,"rpc",old)
+        monkeypatch.setattr(p,"_mcp_session",fresh)
+        try:
+            await p._lose_control(RuntimeError("HOSTED_REQUEST_REFUSED_QUERY_ORIGINAL"))
+            p.next_vacancy_probe=0
+            await p.events()
+            assert p.next_vacancy_probe is not None and not p.disconnected.is_set()
+            p.next_vacancy_probe=0
+            await p.events()
+            assert p.next_vacancy_probe is None and not p.disconnected.is_set()
+            await p.events()
+            assert ops == ["facts","facts"] and len(session.transitions) == 2
+            assert not p._transient_facts_error(ExceptionGroup("bad response", [ValueError("identity mismatch")]))
+        finally:
+            await p.close()
+    run(check())

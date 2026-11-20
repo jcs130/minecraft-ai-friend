@@ -130,6 +130,10 @@ class NativeTasks:
         return [row[0] for row in self.db.execute(
             "SELECT id FROM calls WHERE body=? AND epoch=? AND status IN ('accepted','unknown')", (self.body, epoch))]
 
+    def unsettled(self):
+        return self.db.execute("SELECT id,epoch FROM calls WHERE body=? AND status IN ('accepted','unknown')",
+                               (self.body,)).fetchall()
+
     def finish(self, epoch: str, task: str, status: str, text: str, *, tool=None, eligible=None):
         rows = self.db.execute("SELECT id,fingerprint,text FROM calls WHERE body=? AND epoch=? AND task=? AND status='accepted'",
                                (self.body, epoch, task)).fetchall()
