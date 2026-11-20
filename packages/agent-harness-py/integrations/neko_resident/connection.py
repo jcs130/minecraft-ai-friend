@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 
@@ -72,6 +72,7 @@ def save_binding(path, role, session):
 
 class ConnectionPanel:
     authorization = None
+    browser_login = None
     catalog = None
     waiting = None
     draft = None
@@ -108,7 +109,7 @@ class ConnectionPanel:
                 "localRoles": names, "authorized": self._authorized(), "catalog": self.catalog or {},
                 "waiting": self.waiting[0]["name"] if self.waiting else None,
                 "resident": resident.get("name", ""), "connected": self.session is not None,
-                "uiToken": self.panel_token}
+                "browserCode": self.browser_login["code"] if self.browser_login else None, "uiToken": self.panel_token}
 
     @ui.action(id="open_resident_website", label="打开角色管理或授权页")
     @plugin_entry(id="open_resident_website", name="打开角色管理或授权页", input_schema={
@@ -121,6 +122,60 @@ class ConnectionPanel:
         if not await asyncio.to_thread(webbrowser.open, url):
             return Err("请在浏览器打开 " + url)
         return Ok({"opened": True})
+
+    @ui.action(id="resident_browser_login", label="网页登录并授权")
+    @plugin_entry(id="resident_browser_login", name="网页登录并授权", input_schema={
+        "type": "object", "properties": {"op": {"type": "string", "enum": ["start", "status"]}, "uiToken": SECRET},
+        "required": ["op", "uiToken"], "additionalProperties": False})
+    async def resident_browser_login(self, op, uiToken, **_):
+        if not self._from_panel(uiToken) or op not in ("start", "status"):
+            return Err("请从千灯纪居民面板操作。")
+        if self.pair_lock.locked() and op == "status":
+            return Ok({"state": "pending"})
+        async with self.pair_lock:
+            if self.browser_login and self.browser_login["expiresAt"] <= time.time() * 1000:
+                self.browser_login = None
+            try:
+                api = self.portal + "/api/v1/resident-onboarding/"
+                if op == "start":
+                    if not self.browser_login:
+                        pending = await asyncio.to_thread(request_json, api + "browser-start", {})
+                        if (str(UUID(pending["id"])) != pending["id"]
+                                or not re.fullmatch(r"rba_[A-Za-z0-9_-]{43}", pending["secret"])
+                                or not re.fullmatch(r"[0-9]{6}", pending["code"])
+                                or not pending["expiresAt"] > time.time() * 1000):
+                            raise ValueError("invalid_browser_login")
+                        self.browser_login = pending
+                    url = self.portal + "/resident-connect.html?flow=browser#" + self.browser_login["id"]
+                    if not await asyncio.to_thread(webbrowser.open, url):
+                        return Err("请在浏览器打开 " + url)
+                    return Ok({"opened": True})
+                if not self.browser_login:
+                    return Ok({"state": "expired"})
+                data = await asyncio.to_thread(request_json, api + "browser-status", {}, self.browser_login["secret"])
+                if data["state"] == "authorized":
+                    await self._accept_authorization(data)
+                return Ok({"state": data["state"]})
+            except HTTPError as exc:
+                if op == "status" and exc.code == 401:
+                    self.browser_login = None
+                    return Ok({"state": "expired"})
+                return Err("无法使用网页登录。请检查官网连接，也可以使用授权码。")
+            except (OSError, ValueError, TypeError, KeyError):
+                return Err("网页登录暂未完成，请重试。")
+
+    async def _accept_authorization(self, auth):
+        if (not re.fullmatch(r"rot_[A-Za-z0-9_-]{43}", auth["onboardingToken"])
+                or not auth["expiresAt"] > time.time() * 1000):
+            raise ValueError("invalid_authorization")
+        self._clear_authorization()
+        self.authorization = auth
+        try:
+            await self._list()
+        except (OSError, ValueError, TypeError, KeyError):
+            self._clear_authorization()
+            raise
+        self.browser_login = None
 
     @ui.action(id="pair_resident", label="连接居民身体", refresh_context=True)
     @plugin_entry(id="pair_resident", name="连接居民身体", input_schema={
@@ -145,11 +200,7 @@ class ConnectionPanel:
                         return Err("请先选择本机角色，再提交旧版居民连接码。")
                     grant = await asyncio.to_thread(request_json, self.portal + "/api/v1/resident-turns/pair", payload)
                     return await self._bind(role, grant)
-                if not re.fullmatch(r"rot_[A-Za-z0-9_-]{43}", auth["onboardingToken"]) or not isinstance(auth["expiresAt"], (int, float)):
-                    raise ValueError("invalid_authorization")
-                self._clear_authorization()
-                self.authorization = auth
-                await self._list()
+                await self._accept_authorization(auth)
             except (OSError, ValueError, TypeError, KeyError):
                 return Err("未能完成配对。请检查网络并在官网重新生成连接码。")
         return Ok({"authorized": True})
@@ -163,6 +214,7 @@ class ConnectionPanel:
         session = read_session(grant, self.portal)
         await asyncio.to_thread(save_binding, self.data_path("resident-binding.json"), role, session)
         self._clear_authorization()
+        self.browser_login = None
         await self.detach()
         self.role, self.session = role, session
         await self._on_command_loop_start()

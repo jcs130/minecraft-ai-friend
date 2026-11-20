@@ -4,20 +4,20 @@
 
 ## 在另一台电脑下载安装
 
-登录 GitHub，打开居民插件构建记录，选择与验收服务端**同一提交**的成功运行，在页面底部 **Artifacts** 下载 `qiandengji-resident-desktop`，解压后选用下表中的一份。仓库保留每个包的文件名、大小和 SHA-256，便于校验下载。[GitHub Actions 构建记录](https://github.com/jcs130/minecraft-ai-friend/actions/workflows/resident-plugins.yml) · [0.2.0 安装包清单](../../../paper/integrations/agent-portal/src/resident-downloads.json)
+登录 GitHub，打开居民插件构建记录，选择与验收服务端**同一提交**的成功运行，在页面底部 **Artifacts** 下载 `qiandengji-resident-desktop`，解压后选用下表中的一份。仓库保留每个包的文件名、大小和 SHA-256，便于校验下载。[GitHub Actions 构建记录](https://github.com/jcs130/minecraft-ai-friend/actions/workflows/resident-plugins.yml) · [0.3.0 安装包清单](../../../paper/integrations/agent-portal/src/resident-downloads.json)
 
-| 本机使用的 Agent | 0.2.0 安装包 | 安装方式 |
+| 本机使用的 Agent | 0.3.0 安装包 | 安装方式 |
 | --- | --- | --- |
-| N.E.K.O. | `qiandengji-resident-0.2.0.neko-plugin` | 在插件中心导入文件，打开「连接千灯纪居民」。 |
-| Cortico World API 5 | `cortico-world-qiandengji-resident-0.2.0.tgz` | 解压到固定目录，在扩展管理选择「从本机目录安装」，选中内含 `package.json` 的 `package` 文件夹，重启 Cortico。 |
-| Cortico World API 6 | `cortico-world-qiandengji-resident-api6-0.2.0.tgz` | 同上。 |
+| N.E.K.O. | `qiandengji-resident-0.3.0.neko-plugin` | 在插件中心导入文件，打开「连接千灯纪居民」。 |
+| Cortico World API 5 | `cortico-world-qiandengji-resident-0.3.0.tgz` | 解压到固定目录，在扩展管理选择「从本机目录安装」，选中内含 `package.json` 的 `package` 文件夹，重启 Cortico。 |
+| Cortico World API 6 | `cortico-world-qiandengji-resident-api6-0.3.0.tgz` | 同上。 |
 
 本版已通过隔离服验收。换机器连接测试服时，在 N.E.K.O. 插件的 `[resident]` 设置中填写 `portal_origin`，或在 Cortico 的 `worlds.qiandengji-resident.portalOrigin` 填写该服的 HTTPS 门户地址，然后重启插件。两者默认访问千灯纪正式官网。正式服需另行部署并启用居民能力；官网启用安装包分发后，也可从下载页的居民栏领取。[千灯纪下载页](https://mc.kangqiang.site/downloads.html)
 
 ## 第一次连接
 
 1. **选本机人设。** N.E.K.O. 在插件管理器安装千灯纪居民包，打开插件面板，选择本机角色。想用新的人设，可以从面板打开 N.E.K.O. 自带的角色管理，创建后刷新。Cortico 在自己新建或已有的 bot 上启用「千灯纪居民」World，打开「连接游戏身体」。[Cortico 安装说明](cortico-resident/README.md)
-2. **授权。** 在插件里打开千灯纪官网，登录自己的账号，领取一次性授权码并填回插件。网站密码只填写在官网。授权码有效 5 分钟。
+2. **授权。** 在插件点「网页登录并授权」。N.E.K.O. 会直接打开浏览器，Cortico 会显示「打开千灯纪授权页」。在官网登录，核对账号后输入插件显示的六位数字，确认后返回插件。插件会自动加载角色列表。网页登录请求有效 5 分钟。旧版门户可使用面板里的「改用授权码」。
 3. **在插件里选择「新建角色」或「连接已有角色」。** 新建时选身体，输入名字，可填写托管人设。游戏服绑定原生身体后即可连接。已有角色会显示游戏名和身体类型，选中后沿用同一角色的身体、背包和日程。创建期间关掉面板后，可在已有角色列表找回。身体满额时面板会显示可用情况。
 4. **试着交谈。** 在游戏里靠近角色，打字点名或使用 Java 版 Simple Voice Chat 说话。也可以先在桌面跟自己的 Agent 说「看看游戏里附近有谁」，桌面角色可以主动请求一次身体回合。游戏内语音由服务器识别、合成，并按实际听众范围投递。玩家设备需要启用兼容的语音模组才能收听空间音频。
 
@@ -39,7 +39,9 @@ N.E.K.O. 通过定向消息把回合交给指定角色，用运行时工具收�
 
 | POST 路径 | 请求与结果 |
 | --- | --- |
-| `resident-onboarding/pair` | 插件提交 `{"code":"XXXX-XXXX-XXXX"}`，取得 `onboardingToken` 和 `expiresAt`。网站登录后签发的码兑换一次，账号授权有效 15 分钟。 |
+| `resident-onboarding/browser-start` | 插件提交 `{}`，保存返回的 `secret` 到内存，显示 `code`，打开同源网页 `/resident-connect.html?flow=browser#<id>`。玩家在官网登录并输入插件里的六位数字，请求有效 5 分钟。 |
+| `resident-onboarding/browser-status` | 使用 `secret` 作 Bearer token，每 3 秒提交 `{}`。返回 `pending` 或 `authorized`。已授权时返回 `onboardingToken` 和 `expiresAt`，有效 15 分钟。 |
+| `resident-onboarding/pair` | 兼容旧授权方式。插件提交 `{"code":"XXXX-XXXX-XXXX"}`，取得 `onboardingToken` 和 `expiresAt`。网站登录后签发的码兑换一次，账号授权有效 15 分钟。 |
 | `resident-onboarding/list` | 使用账号授权的 Bearer token，提交空对象。返回本人的 `residents` 和可新建的 `availableBodies`。 |
 | `resident-onboarding/create` | 提交 `requestId`、`bodyKind`（`maid` 或 `numen`）、`name` 和可选的 `persona`。同一次创建的重试沿用相同 UUID 和内容。通过 `list` 等待状态由 `preparing` 变为 `available`。 |
 | `resident-onboarding/connect` | 用选中项的 `id` 和 `characterId` 换取单角色 `endpoint` 和 `token`。持久化到本机宿主的私有存储。已兑换的账号授权不能再列举或新建角色。 |
@@ -85,7 +87,7 @@ N.E.K.O. 通过定向消息把回合交给指定角色，用运行时工具收�
 
 已有角色和新角色复用同一个 NPC 服务、游戏身体适配器和语音服务。官网 `residentTurns` 登记已有角色；`residentCreationSlots` 登记专门用于新建的身体名额。未配置名额的类型不会向玩家提供新建选项。准备、授权、连接和撤销都在服务运行时生效。
 
-1. **官网。** 在私有配置中登记身体唯一的 `id`、`bodyKind`、`bodyId`、`ownerGameId` 和 `workerHash`。已有角色再填写 `name`、`characterId`。每个 worker 的凭据使用 `rwt_` 加 32 个随机字节的无填充 base64url 编码；`workerHash` 为整个凭据的 SHA-256 十六进制。已有角色按官网账号绑定的游戏身份鉴权，新建角色归创建它的官网账号。游戏里主人专用权限仍取决于原生 `ownerGameId`。
+1. **官网。** 备份现有 SQLite，部署包含 `resident-connect.html` 的门户版本，并为网页与 API 使用同一个 HTTPS 域名。首次启动会在现有库创建网页登录表。在私有配置中登记身体唯一的 `id`、`bodyKind`、`bodyId`、`ownerGameId` 和 `workerHash`。已有角色再填写 `name`、`characterId`。每个 worker 的凭据使用 `rwt_` 加 32 个随机字节的无填充 base64url 编码，`workerHash` 为整个凭据的 SHA-256 十六进制。已有角色按官网账号绑定的游戏身份鉴权，新建角色归创建它的官网账号。游戏里主人专用权限仍取决于原生 `ownerGameId`。
 2. **NPC 服务。** `residentTurns` 对象按同一 `id` 提供官网角色端点和私有 `tokenFile`，`bodies` 沿用原生身体的回环端点、控制器和传输配置。已有角色继续放在常规角色表。新角色放在服务配置的 `residentCreationSlots` 对象中，由玩家创建时填入角色 UUID、名字和托管人设。每个角色使用独立的记忆、动作和日程账本。备份官网数据库和 NPC 的 `stateDirectory`，二者分别保存账号归属和已绑定身份。
 3. **游戏与语音。** 女仆名额使用专门准备、绑定了原生主人的空白女仆。Numen 可以使用准备好的 hosted 身体，也可按下文配置在分配时原生创建。如果 `ownerGameId` 已绑定某个官网账号，该名额只对本人开放；给公共名额使用专用的游戏主人。为每个身体在 `plugins/QiandengVoice/npc-voices.json` 登记技术名、UUID、原生主人和音色，并将 NPC 服务的 `residentNamesDirectory` 指向该插件下的 `resident-names`。这样玩家取的名字可用于语音插件的字幕与寻址。专用名额应使用无玩家进度的身体和独立原生身份。游戏服首次确认绑定正确且身体存活后，官网才允许连接。
 4. **分发与验收。** 本次服务端配套版本为 QiandengVoice 0.1.14 与 QiandengjiMaidBridge 0.1.58，部署时配合官网和 NPC 服务使用。新的居民包可以列在官网的现有下载目录。配置好以后，用普通账号在桌面分别新建、重连，在附近打字和用游戏麦克风点名，再到另一位玩家处核实私聊听众范围。[官网安装包发布步骤](../../../paper/docs/WEBSITE_SECURITY_DOWNLOADS.md) · [原生游戏服与角色配置](../../../paper/integrations/unified-npc/README.md)

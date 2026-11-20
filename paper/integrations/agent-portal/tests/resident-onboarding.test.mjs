@@ -15,6 +15,32 @@ async function call(f, path, payload, token) {
   return {status:res.status,...await res.json()};
 }
 
+test('website login requires both local confirmation and the original plugin secret', async t => {
+  const f = await siteFixture(t,{residentCreationSlots:[capacity('blank','maid').slot]});
+  const path = 'resident-onboarding/';
+  const pending = await call(f,path+'browser-start',{});
+  assert.equal(pending.status,201);
+  assert.match(pending.code,/^\d{6}$/);
+  const approve = {id:pending.id,code:pending.code};
+  assert.equal((await call(f,path+'browser-approve',approve)).status,403);
+  assert.equal((await f.admin.request('/'+path+'browser-approve','POST',approve,{'X-CSRF-Token':'invalid'})).status,403);
+  assert.deepEqual(await call(f,path+'browser-status',{},pending.secret),{status:200,state:'pending'});
+  const wrong = {...approve,code:pending.code === '123456' ? '123457' : '123456'};
+  assert.equal((await f.admin.request('/'+path+'browser-approve','POST',wrong)).status,400);
+  const accepted = await f.admin.request('/'+path+'browser-approve','POST',approve);
+  assert.deepEqual(accepted.data,{authorized:true});
+  assert.equal((await call(f,path+'browser-status',{},pending.id)).status,401);
+  const status = await call(f,path+'browser-status',{},pending.secret);
+  assert.equal(status.state,'authorized');
+  assert.deepEqual(await call(f,path+'browser-status',{},pending.secret),status);
+  assert.deepEqual((await call(f,path+'list',{},status.onboardingToken)).availableBodies,['maid']);
+  const locked = await call(f,path+'browser-start',{});
+  const digits = locked.code === '111111' ? '111112' : '111111';
+  for (let i=0;i<5;i++) assert.equal((await f.admin.request('/'+path+'browser-approve','POST',{id:locked.id,code:digits})).status,400);
+  assert.equal((await f.admin.request('/'+path+'browser-approve','POST',{id:locked.id,code:locked.code})).status,403);
+  assert.equal((await call(f,path+'browser-status',{},locked.secret)).status,401);
+});
+
 test('a capacity registered to a player can only be allocated by that website account', async t => {
   const {slot} = capacity('personal','maid');
   const f = await siteFixture(t,{residentCreationSlots:[slot]});

@@ -2,6 +2,8 @@ const byId = id => document.getElementById(id);
 const api = '/api/v1/resident-turns';
 const params = new URLSearchParams(location.search);
 const legacy = ['create', 'connect'].includes(params.get('flow'));
+const browserLogin = params.get('flow') === 'browser';
+const browserId = location.hash.slice(1);
 const bodies = {maid: '车万女仆', numen: 'Numen'};
 const flow = byId('flow'), kind = byId('kind'), role = byId('role');
 const status = byId('status'), result = byId('result');
@@ -16,6 +18,8 @@ if (legacy) {
 }
 
 const errors = {
+  INVALID_BROWSER_LOGIN: '数字有误，请核对本机插件里的 6 位数字。',
+  BROWSER_LOGIN_EXPIRED: '请求已失效，请回到插件重新打开网页登录。',
   INVALID_RESIDENT_PROFILE: '请检查角色名和人设。名字最多 24 个文字、数字、空格、短横线、下划线或间隔号。',
   NO_BODY_CAPACITY: '这种身体暂时没有空位，可稍后刷新或选择另一种身体。',
   RESIDENT_LIMIT: '这个账号已经达到新建居民上限，可以连接已有角色。',
@@ -108,7 +112,8 @@ async function load() {
   loading = (async () => {
     session = await request('/api/v1/session');
     byId('login').hidden = !!session.owner;
-    byId('authorize').hidden = !session.owner || legacy;
+    byId('authorize').hidden = !session.owner || legacy || browserLogin;
+    byId('browser-approve').hidden = !session.owner || !browserLogin;
     byId('legacy').hidden = !session.owner || !legacy;
     if (!session.owner) {
       clearTimeout(poll); clearCode(); catalog = null;
@@ -151,6 +156,16 @@ byId('login').onsubmit = event => {
   });
 };
 window.addEventListener('focus', () => { if (session && !session.owner && !busy) load().catch(report); });
+byId('browser-approve').onsubmit = event => {
+  event.preventDefault();
+  void action(async () => {
+    await request('/api/v1/resident-onboarding/browser-approve', 'POST', {id:browserId, code:byId('browser-code').value});
+    byId('browser-code').value = '';
+    byId('browser-approve').hidden = true;
+    history.replaceState(null,'',location.pathname + location.search);
+    result.textContent = '授权已完成，请关闭此页并返回插件，选择或创建游戏角色。';
+  });
+};
 byId('authorize-code').onclick = () => action(async () => displayCode(await request('/api/v1/resident-onboarding/code', 'POST'), true));
 function changeSelection() {
   selected = null; clearCode(); result.textContent = '';

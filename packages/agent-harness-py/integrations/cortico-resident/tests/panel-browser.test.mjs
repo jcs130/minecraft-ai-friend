@@ -10,7 +10,7 @@ const browserTest = {skip: !process.env.PORTAL_BROWSER_EXECUTABLE};
 for (const kind of ['maid','numen']) {
   test('account authorization, local existing + new ' + kind + ' choices, retry and scoped grant', browserTest, async t => {
     const portal = new URL('../../../../../paper/integrations/agent-portal/', import.meta.url);
-    const {siteFixture} = await import(new URL('tests/helpers.mjs', portal));
+    const {siteFixture, testPassword} = await import(new URL('tests/helpers.mjs', portal));
     const puppeteer = createRequire(new URL('package.json', portal))('puppeteer-core');
     const token = 'rwt_' + randomBytes(32).toString('base64url');
     const slot = {id:'new-role', bodyKind:kind, bodyId:randomUUID(), ownerGameId:randomUUID(),
@@ -47,13 +47,30 @@ for (const kind of ['maid','numen']) {
     async function authorize() {
       const response = await f.admin.request('/resident-onboarding/code','POST');
       assert.equal(response.status,201);
-      await page.type('.authorize input',response.data.code);
-      await page.click('.authorize button');
+      await page.click('.authorize summary');
+      await page.type('.manual input',response.data.code);
+      await page.click('.manual button');
       await page.waitForSelector('.choices:not([hidden])');
-      assert.equal(await page.$eval('.authorize input',e=>e.value),'');
+      assert.equal(await page.$eval('.manual input',e=>e.value),'');
       await page.select('[name=body]',kind);
     }
-    await authorize();
+    await page.click('.browser-start');
+    await page.waitForSelector('.browser-link[href]:not([hidden])');
+    const login = await browser.newPage();
+    await login.goto(await page.$eval('.browser-link',el=>el.href));
+    await login.waitForSelector('#login:not([hidden])');
+    await login.type('[name=username]','fixture-admin');
+    await login.type('[name=password]',testPassword);
+    await login.click('#login button');
+    await login.waitForSelector('#browser-approve:not([hidden])');
+    await login.type('#browser-code',await page.$eval('.browser-code',el=>el.textContent));
+    await login.click('#browser-approve button');
+    await login.waitForFunction(() => document.querySelector('#result').textContent.includes('授权已完成'));
+    assert.equal(new URL(login.url()).hash,'');
+    assert.doesNotMatch(await login.content(), /r(?:ba|ot|dt)_[a-zA-Z0-9_-]{43}/);
+    await login.close();
+    await page.waitForSelector('.choices:not([hidden])');
+    await page.select('[name=body]',kind);
     assert.equal(secrets.size,0);
     assert.equal(await page.$eval('[name=resident] option',e=>e.textContent),role.name);
     await page.click('.connect button');
@@ -85,7 +102,7 @@ for (const kind of ['maid','numen']) {
     await page.click('.connect button');
     await page.waitForFunction(() => document.querySelector('[role=status]').textContent.includes('已配对 新伙伴'));
     assert.equal(secrets.size,1);
-    assert.doesNotMatch(JSON.stringify(receipts), /r[do]t_[A-Za-z0-9_-]{43}/);
+    assert.doesNotMatch(JSON.stringify(receipts), /r(?:ba|ot|dt)_[A-Za-z0-9_-]{43}/);
     const saved = JSON.parse(Buffer.from([...secrets.values()][0],'base64url'));
     assert.equal(saved.resident.characterId,births[0].character);
     assert.equal(saved.resident.bodyId,slot.bodyId);

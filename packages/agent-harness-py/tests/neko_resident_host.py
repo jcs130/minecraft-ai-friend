@@ -22,9 +22,16 @@ def port():
 async def run_test(root, neko):
     main_port, plugin_port = port(), port()
     origin = f"http://127.0.0.1:{main_port}"
+    browser_trace = root / "browser-url.txt"
+    browser_capture = root / "capture-browser.py"
+    browser_capture.write_text(
+        "import sys\nfrom pathlib import Path\nPath(sys.argv[1]).write_text(sys.argv[2], encoding='utf-8')\n",
+        encoding="utf-8",
+    )
     os.environ.update(NEKO_STORAGE_SELECTED_ROOT=str(root), NEKO_STORAGE_ANCHOR_ROOT=str(root),
                       NEKO_MAIN_SERVER_PORT=str(main_port), NEKO_USER_PLUGIN_SERVER_PORT=str(plugin_port),
-                      NEKO_PLUGIN_ZMQ_IPC_ENDPOINT=f"tcp://127.0.0.1:{port()}", PYTHONUTF8="1")
+                      NEKO_PLUGIN_ZMQ_IPC_ENDPOINT=f"tcp://127.0.0.1:{port()}", PYTHONUTF8="1",
+                      BROWSER=f'"{sys.executable}" "{browser_capture}" "{browser_trace}" %s')
     sys.path.insert(0, str(neko))
     os.chdir(neko)
     from fastapi import FastAPI, HTTPException, Request
@@ -63,6 +70,8 @@ async def run_test(root, neko):
     replies = []
     new_code = "BBBB-9999-YYYY"
     onboard = "rot_" + "n" * 43
+    browser_id, browser_secret, digits = str(uuid.uuid4()), "rba_" + "w" * 43, "034589"
+    browser_approved = False
     create_ids = set()
 
     @api.get("/api/characters")
@@ -71,6 +80,14 @@ async def run_test(root, neko):
 
     @api.post("/api/v1/resident-onboarding/{operation}")
     async def onboarding(operation: str, payload: dict, request: Request):
+        if operation == "browser-start":
+            assert not request.headers.get("Authorization")
+            return {"id": browser_id, "secret": browser_secret, "code": digits, "expiresAt": time.time() * 1000 + 60000}
+        if operation == "browser-status":
+            assert request.headers["Authorization"] == "Bearer " + browser_secret
+            if not browser_approved:
+                return {"state": "pending"}
+            return {"state": "authorized", "onboardingToken": onboard, "expiresAt": time.time() * 1000 + 60000}
         if operation == "pair":
             if payload.get("code") != new_code:
                 raise HTTPException(403)
@@ -153,9 +170,16 @@ async def run_test(root, neko):
         panel_token = panel["state"]["uiToken"]
         assert panel_token and not panel["state"]["connected"] and panel["state"]["role"] == "桐人桌面"
         assert {"open_resident_website", "pair_resident"}.issubset({a["id"] for a in panel["actions"]})
-        await host.trigger("pair_resident", {"code": new_code, "uiToken": panel_token})
+        await host.trigger("resident_browser_login", {"op": "start", "uiToken": panel_token})
+        assert browser_trace.read_text(encoding="utf-8") == origin + "/resident-connect.html?flow=browser#" + browser_id
+        waiting = (await host.get_ui_context("resident_connection"))["state"]
+        assert waiting["browserCode"] == digits and browser_secret not in str(waiting)
+        await host.trigger("resident_browser_login", {"op": "status", "uiToken": panel_token})
+        assert not (await host.get_ui_context("resident_connection"))["state"]["authorized"]
+        browser_approved = True
+        await host.trigger("resident_browser_login", {"op": "status", "uiToken": panel_token})
         panel = (await host.get_ui_context("resident_connection"))["state"]
-        assert panel["authorized"] and not panel["connected"] and onboard not in str(panel)
+        assert panel["authorized"] and not panel["connected"] and onboard not in str(panel) and not panel["browserCode"]
         assert panel["catalog"]["availableBodies"] == ["maid"] and panel["localRoles"] == ["桐人桌面", "空"]
         await host.trigger("manage_residents", {"op": "connect", "id": resident["id"], "characterId": resident["characterId"], "uiToken": panel_token})
         async with asyncio.timeout(12):

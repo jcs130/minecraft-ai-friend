@@ -325,9 +325,10 @@ export function createPortal(config, options = {}) {
       if (await maidConnectionRoute({ req, res, pathname, connections: maidConnections,
         browserAuth, csrf, jsonBody, respond, rate,
         address: () => digest(rateAddress(req, config)) })) return;
-      const onboarding = /^\/api\/v1\/resident-onboarding\/(pair|list|create|connect)$/.exec(pathname);
+      const onboarding = /^\/api\/v1\/resident-onboarding\/(pair|list|create|connect|browser-start|browser-status)$/.exec(pathname);
       if (onboarding) {
         if (onboarding[1] === 'pair') rate('resident-pair:'+digest(rateAddress(req,config)),24,60000);
+        if (onboarding[1] === 'browser-start') rate('resident-browser-start:'+digest(rateAddress(req,config)),24,60000);
         await residentTurns.onboarding(req,res,onboarding[1],jsonBody,respond); return;
       }
       if (pathname === '/api/v1/resident-turns/pair') {
@@ -520,7 +521,11 @@ export function createPortal(config, options = {}) {
         rate('write:' + digest(rateAddress(req, config)), 80, 60000);
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
-      if ((pathname.startsWith('/api/v1/resident-turns') || pathname === '/api/v1/resident-onboarding/code')
+      if (pathname === '/api/v1/resident-onboarding/browser-approve' && req.method === 'POST') {
+        rate('resident-browser-approve:'+digest(rateAddress(req,config)),24,60000);
+      }
+      if ((pathname.startsWith('/api/v1/resident-turns') || pathname === '/api/v1/resident-onboarding/code'
+          || pathname === '/api/v1/resident-onboarding/browser-approve')
           && await residentTurns.browser(req, res, pathname, browserAuth, respond, jsonBody)) return;
       if(await hostingRoutes({req,res,pathname,backend:hostedAgents,browserAuth,world,jsonBody,respond,rate,
         agentFor:async(owner,id)=>{

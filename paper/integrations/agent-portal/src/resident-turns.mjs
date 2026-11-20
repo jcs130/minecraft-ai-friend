@@ -1,4 +1,4 @@
-import {createHash, createHmac, randomBytes, randomUUID, timingSafeEqual} from 'node:crypto';
+import {createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual} from 'node:crypto';
 
 const prefix = '/api/v1/resident-turns';
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -10,6 +10,8 @@ const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const codeFormat = /^[2-9A-HJ-NP-Z]{4}(?:-[2-9A-HJ-NP-Z]{4}){2}$/;
 const newCode = () => [...randomBytes(12)].map(b => alphabet[b % alphabet.length]).join('').match(/.{4}/g).join('-');
 const bindingKey = r => JSON.stringify([r.id,r.bodyId,r.characterId,r.bodyKind,r.ownerGameId]);
+const browserLoginExpiry = 300_000;
+const accountExpiry = 900_000;
 
 function validateCommunication(turn, answer) {
   if (!Object.hasOwn(answer, 'communication')) return;
@@ -39,7 +41,10 @@ export class ResidentTurns {
       character TEXT UNIQUE NOT NULL, owner TEXT NOT NULL, request TEXT NOT NULL, name TEXT NOT NULL,
       persona TEXT NOT NULL, ready INTEGER NOT NULL DEFAULT 0, UNIQUE(owner,request));
       CREATE TABLE IF NOT EXISTS resident_pair_codes (
-      role TEXT PRIMARY KEY, hash TEXT UNIQUE NOT NULL, owner TEXT NOT NULL, until INTEGER NOT NULL, binding TEXT NOT NULL)`);
+      role TEXT PRIMARY KEY, hash TEXT UNIQUE NOT NULL, owner TEXT NOT NULL, until INTEGER NOT NULL, binding TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS resident_browser_logins (
+        id TEXT PRIMARY KEY, secret_hash TEXT UNIQUE NOT NULL, code_hash TEXT NOT NULL,
+        until INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, owner TEXT, token_until INTEGER)`);
     const bodies = new Set(), keys = new Set(), characters = new Set();
     for (const raw of [...(config.residentTurns ?? []), ...(config.residentCreationSlots ?? []).map(s => ({...s, fresh: true}))]) {
       const r = {...raw};
@@ -159,12 +164,57 @@ export class ResidentTurns {
       .run(owner,hash(code),expiresAt);
     return {code,expiresAt};
   }
+  startBrowserLogin() {
+    const id = randomUUID();
+    const secret = 'rba_' + randomBytes(32).toString('base64url');
+    const code = String(randomInt(1_000_000)).padStart(6, '0');
+    const expiresAt = this.now() + browserLoginExpiry;
+    const db = this.store.db;
+    db.prepare('DELETE FROM resident_browser_logins WHERE until<=?').run(this.now());
+    db.prepare('INSERT INTO resident_browser_logins(id,secret_hash,code_hash,until) VALUES(?,?,?,?)')
+      .run(id,hash(secret),hash(id + code),expiresAt);
+    return {id,secret,code,expiresAt};
+  }
+  approveBrowserLogin(owner, {id, code}) {
+    if (typeof id !== 'string' || !uuid.test(id) || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+      throw denied(400,'INVALID_BROWSER_LOGIN');
+    }
+    const db = this.store.db, now = this.now();
+    const pending = db.prepare('SELECT * FROM resident_browser_logins WHERE id=? AND until>? AND attempts<5').get(id,now);
+    if (!pending || (pending.owner && pending.owner !== owner)) throw denied(403,'BROWSER_LOGIN_EXPIRED');
+    if (!timingSafeEqual(Buffer.from(hash(id + code)), Buffer.from(pending.code_hash))) {
+      db.prepare('UPDATE resident_browser_logins SET attempts=attempts+1 WHERE id=? AND owner IS NULL').run(id);
+      throw denied(400,'INVALID_BROWSER_LOGIN');
+    }
+    if (!pending.owner) db.prepare('UPDATE resident_browser_logins SET owner=?,token_until=? WHERE id=? AND owner IS NULL')
+      .run(owner,now + accountExpiry,id);
+    return {authorized:true};
+  }
+  browserLoginStatus(req) {
+    const secret = (req.headers.authorization || '').match(/^Bearer (rba_[A-Za-z0-9_-]{43})$/)?.[1];
+    const db = this.store.db, now = this.now();
+    const pending = secret && db.prepare('SELECT * FROM resident_browser_logins WHERE secret_hash=? AND until>? AND attempts<5')
+      .get(hash(secret),now);
+    if (!pending) throw denied(401,'BROWSER_LOGIN_EXPIRED');
+    if (!pending.owner) return {state:'pending'};
+    // Recover the same account grant after a lost response, without storing a cleartext credential.
+    const token = 'rot_' + createHmac('sha256',secret).update('resident-browser-authorization').digest('base64url');
+    db.prepare('DELETE FROM resident_onboarding WHERE coalesce(token_until,code_until)<=?').run(now);
+    db.prepare('INSERT OR IGNORE INTO resident_onboarding(owner,token_hash,token_until) VALUES(?,?,?)')
+      .run(pending.owner,hash(token),pending.token_until);
+    return {state:'authorized',onboardingToken:token,expiresAt:pending.token_until};
+  }
   async onboarding(req,res,op,jsonBody,respond) {
     if (req.method !== 'POST' || req.headers.origin || req.headers.cookie) throw denied(403,'PLUGIN_REQUIRED');
     const input = await jsonBody(req, op === 'create' ? 8192 : 512), db = this.store.db;
+    if (op === 'browser-start') {
+      if (req.headers.authorization) throw denied(403,'PLUGIN_REQUIRED');
+      return respond(res,201,this.startBrowserLogin());
+    }
+    if (op === 'browser-status') return respond(res,200,this.browserLoginStatus(req));
     if (op === 'pair') {
       if (req.headers.authorization || typeof input.code !== 'string' || !codeFormat.test(input.code)) throw denied(400,'INVALID_PAIR_CODE');
-      const token = 'rot_' + randomBytes(32).toString('base64url'), expiresAt = this.now() + 900_000;
+      const token = 'rot_' + randomBytes(32).toString('base64url'), expiresAt = this.now() + accountExpiry;
       const changed = db.prepare('UPDATE resident_onboarding SET code_hash=NULL,code_until=NULL,token_hash=?,token_until=? WHERE code_hash=? AND code_until>?')
         .run(hash(token), expiresAt, hash(input.code), this.now());
       if (!changed.changes) throw denied(403,'PAIR_CODE_EXPIRED');
@@ -277,6 +327,11 @@ export class ResidentTurns {
     return true;
   }
   async browser(req, res, pathname, browserAuth, respond, jsonBody) {
+    if (pathname === '/api/v1/resident-onboarding/browser-approve' && req.method === 'POST') {
+      const {owner} = browserAuth(req);
+      respond(res,200,this.approveBrowserLogin(owner.id, await jsonBody(req,512)));
+      return true;
+    }
     if (pathname === '/api/v1/resident-onboarding/code' && req.method === 'POST') {
       const {owner} = browserAuth(req);
       respond(res,201,this.onboardingCode(owner.id));

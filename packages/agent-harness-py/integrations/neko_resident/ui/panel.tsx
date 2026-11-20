@@ -3,7 +3,7 @@ import type { PluginSurfaceProps } from "@neko/plugin-ui"
 
 type Resident = { id: string, characterId: string, name: string, bodyKind: string, state: string }
 type State = { role?: string, localRoles?: string[], resident?: string, connected?: boolean, authorized?: boolean,
-  uiToken?: string, waiting?: string, catalog?: { residents?: Resident[], availableBodies?: string[] } }
+  uiToken?: string, browserCode?: string, waiting?: string, catalog?: { residents?: Resident[], availableBodies?: string[] } }
 
 export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   const state = props.state || {}
@@ -17,6 +17,7 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   const [name, setName] = useState<string | null>(null)
   const [persona, setPersona] = useState("")
   const [code, setCode] = useState("")
+  const [manual, setManual] = useState(false)
   const [busy, setBusy] = useState(false)
   const checking = useRef(false)
   const localRole = (role ?? state.role) || roles[0] || ""
@@ -39,12 +40,15 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   }
 
   useEffect(() => {
-    if (!state.waiting || !state.authorized) return
+    const browser = state.browserCode && !state.authorized
+    if (!browser && (!state.waiting || !state.authorized)) return
     const timer = window.setInterval(async () => {
       if (checking.current) return
       checking.current = true
       try {
-        await props.api.call("manage_residents", { op: "list", uiToken: state.uiToken })
+        await props.api.call(browser ? "resident_browser_login" : "manage_residents", {
+          op: browser ? "status" : "list", uiToken: state.uiToken,
+        })
       } catch {
         // Network interruptions can be retried while this panel is open.
       } finally {
@@ -52,7 +56,7 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
       }
     }, 3000)
     return () => window.clearInterval(timer)
-  }, [state.waiting, state.authorized, state.uiToken])
+  }, [state.waiting, state.browserCode, state.authorized, state.uiToken])
 
   return <Page title="千灯纪居民"><Stack>
     {state.connected ? <Text>已绑定 {state.role} → {state.resident}</Text> : null}
@@ -67,12 +71,17 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
       </Inline>
     </Stack></Card>
     {!state.authorized ? <Card title="登录千灯纪"><Stack>
-      <Button disabled={!state.uiToken || busy} onClick={() => call("open_resident_website", { page: "authorize" })}>去官网授权</Button>
-      <Field label="官网授权码" help="登录后复制官网显示的连接码。">
-        <PasswordInput value={code} onChange={setCode} placeholder="XXXX-XXXX-XXXX" />
-      </Field>
-      <Button tone="primary" disabled={busy || !state.uiToken || !code.trim()}
-        onClick={() => call("pair_resident", { code: code.trim(), localRole })}>验证连接码</Button>
+      <Button tone="primary" disabled={!state.uiToken || busy} onClick={() => call("resident_browser_login", { op: "start" })}>
+        {state.browserCode ? "重新打开授权页" : "在浏览器登录并授权"}
+      </Button>
+      {state.browserCode ? <Text>请在官网输入 {state.browserCode}。确认后，这里会自动显示游戏角色。</Text> : null}
+      <Button disabled={busy} onClick={() => setManual(!manual)}>{manual ? "收起授权码入口" : "改用授权码"}</Button>
+      {manual ? <Stack>
+        <Button disabled={!state.uiToken || busy} onClick={() => call("open_resident_website", { page: "authorize" })}>去官网获取授权码</Button>
+        <Field label="官网授权码"><PasswordInput value={code} onChange={setCode} placeholder="XXXX-XXXX-XXXX" /></Field>
+        <Button disabled={busy || !state.uiToken || !code.trim()}
+          onClick={() => call("pair_resident", { code: code.trim(), localRole })}>验证授权码</Button>
+      </Stack> : null}
     </Stack></Card> : <Card title="选择游戏角色"><Stack>
       <Inline>
         <Button tone={mode === "connect" ? "primary" : "default"} disabled={busy} onClick={() => { setMode("connect") }}>已有角色</Button>

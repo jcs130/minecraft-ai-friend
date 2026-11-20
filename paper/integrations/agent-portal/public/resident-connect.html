@@ -25,6 +25,12 @@
     <button id="authorize-code">获取插件授权码</button>
     <p><a id="manage-residents" href="/resident-connect.html?flow=connect">管理已有居民连接</a></p>
   </section>
+  <form id="browser-approve" hidden>
+    <h2>授权桌面插件</h2>
+    <p>确认后，此插件可以查看你的居民、新建角色，并连接你在插件里选中的一个身体。请核对登录账号，输入你亲自在本机插件中看到的数字。</p>
+    <label>插件显示的 6 位数字<input id="browser-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" required></label>
+    <button>确认授权</button>
+  </form>
   <section id="legacy" hidden>
     <h2>角色与身体</h2>
     <label>接入方式<select id="flow"><option value="create">新建角色</option><option value="connect">连接已有角色</option></select></label>
