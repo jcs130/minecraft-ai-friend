@@ -195,7 +195,9 @@ final class GeneratedStructureProtection implements Listener {
         }
     }
     String reason(Location at) { return hit(at).reason(); }
-    String temporaryConflict(Location at, String expectedId) { return hit(at, expectedId).reason(); }
+    String temporaryConflict(Location at, String expectedId) {
+        return enabled ? hit(at, expectedId).reason() : "unknown_generated_structure_bounds";
+    }
     ProtectionArea protectionArea(Location at) { return hit(at).area; }
     ProtectionArea protectionArea(Location at, String exemptEnvelopeId) { return hit(at, exemptEnvelopeId).area; }
     private boolean crop(Material type) { return crops && (Tag.CROPS.isTagged(type) || Set.of(Material.SUGAR_CANE, Material.BAMBOO, Material.CACTUS, Material.MELON, Material.PUMPKIN).contains(type)); }

@@ -22,6 +22,7 @@ import org.bukkit.event.block.*;
 import org.bukkit.event.entity.*;
 import org.bukkit.event.inventory.*;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
@@ -99,6 +100,8 @@ final class SiteDungeonManager implements Listener {
     private final Map<UUID,Shot> shots=new HashMap<>();
     private final Set<String> blockedCheckpoints=new HashSet<>();
     private final Map<UUID,Long> lockHints=new HashMap<>();
+    private CryptTemporaryRuntime cryptBuild;
+    private boolean cryptBuildUnavailable;
     private boolean ready;
     private final ThreadLocal<Boolean> jsonOutput=ThreadLocal.withInitial(()->false);
     private final ThreadLocal<Boolean> verboseOutput=ThreadLocal.withInitial(()->false);
@@ -160,11 +163,44 @@ final class SiteDungeonManager implements Listener {
         if(!new File(plugin.getDataFolder(),"dungeons.yml").exists())plugin.saveResource("dungeons.yml",false);
         reload();plugin.getServer().getPluginManager().registerEvents(this,plugin);
         for(World world:Bukkit.getWorlds())for(Entity e:world.getEntities())if(owned(e)||e.getScoreboardTags().contains(SHOT_TAG))e.remove();
-        restore();new DungeonIntegrity(plugin);Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
+        try { cryptBuild=CryptTemporaryRuntime.open(plugin,this); }
+        catch(Exception failure){cryptBuildUnavailable=true;plugin.getLogger().severe("Crypt temporary region unavailable, preserve its ledger: "+failure);}
+        restore();
+        if(cryptBuild!=null||cryptBuildUnavailable){
+            Run current=runs.get(CryptTemporaryBlocks.SITE);
+            String recovered=cryptBuildUnavailable?"crypt_build_journal_unavailable":
+                    cryptBuild.restored(ready&&!blockedCheckpoints.contains(CryptTemporaryBlocks.SITE),current==null?null:UUID.fromString(current.id));
+            if(current!=null&&!recovered.equals("ready")&&current.fault.isEmpty()){
+                current.fault="crypt_build_recovery";current.pausedAt=System.currentTimeMillis();current.pauseReason="runtime_error";
+                plugin.getLogger().warning("Crypt recovery preserved its encounter: "+recovered);
+            }
+        }
+        new DungeonIntegrity(plugin);Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
     }
     private static void require(boolean yes,String reason){if(!yes)throw new IllegalArgumentException(reason);}
     private String day(){return LocalDate.now(ZoneId.of("Asia/Shanghai")).toString();}
     private Run own(Entity p){return runs.values().stream().filter(r->r.party.contains(p.getUniqueId())).findFirst().orElse(null);}
+    boolean cryptContains(Location at){
+        Site site=sites.get(CryptTemporaryBlocks.SITE);
+        return site!=null&&site.contains(at)&&protectionAreas.entrySet().stream()
+                .noneMatch(e->!e.getKey().equals(site.id)&&e.getValue().envelope.contains(at)&&e.getValue().pieces.stream().anyMatch(b->b.contains(at)));
+    }
+    boolean cryptMember(Player p,UUID id){
+        Run r=runs.get(CryptTemporaryBlocks.SITE);
+        return r!=null&&r.id.equals(String.valueOf(id))&&r.party.contains(p.getUniqueId())&&r.fault.isEmpty()&&!r.storageFault&&r.pausedAt==0;
+    }
+    boolean temporaryPlacement(Player p,Location at,Material original,Material placed){
+        return cryptBuild!=null&&cryptBuild.eligible(p,at,original,placed);
+    }
+    boolean temporaryPlacement(BlockPlaceEvent e){
+        return !(e instanceof BlockMultiPlaceEvent)&&cryptBuild!=null&&(cryptBuild.reservedEvent(e)
+                ||temporaryPlacement(e.getPlayer(),e.getBlockPlaced().getLocation(),e.getBlockReplacedState().getType(),e.getBlockPlaced().getType()));
+    }
+    String temporaryStructureId(){return cryptBuild==null?null:cryptBuild.structure();}
+    String relinquishTemporary(int x,int y,int z){
+        try{return cryptBuild!=null&&cryptBuild.relinquish(x,y,z)?"released":"not_reserved";}
+        catch(Exception unavailable){return "journal_unavailable";}
+    }
     boolean isParticipant(Player p){return own(p)!=null;}
     String reinforcementProblem(Player actor,LivingEntity target,Location landing){
         Run targetRun=own(target),actorRun=own(actor);
@@ -334,7 +370,15 @@ final class SiteDungeonManager implements Listener {
             });});return;
         }
     }
-    @EventHandler public void forgetRoomHint(PlayerQuitEvent e){lockHints.remove(e.getPlayer().getUniqueId());}
+    @EventHandler public void forgetRoomHint(PlayerQuitEvent e){lockHints.remove(e.getPlayer().getUniqueId());if(cryptBuild!=null)cryptBuild.left(e.getPlayer().getUniqueId());}
+    @EventHandler public void cryptWorldChange(PlayerChangedWorldEvent e){if(cryptBuild!=null)cryptBuild.left(e.getPlayer().getUniqueId());}
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void cryptWalk(PlayerMoveEvent e){
+        if(cryptBuild!=null&&!(e instanceof PlayerTeleportEvent)&&e.getTo()!=null
+                &&cryptBuild.tracksExit(e.getPlayer().getUniqueId())&&!cryptContains(e.getTo()))cryptBuild.left(e.getPlayer().getUniqueId());
+    }
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void cryptTeleport(PlayerTeleportEvent e){
+        if(cryptBuild!=null&&e.getTo()!=null&&cryptBuild.tracksExit(e.getPlayer().getUniqueId())&&!cryptContains(e.getTo()))cryptBuild.left(e.getPlayer().getUniqueId());
+    }
     private boolean playing(Player p){return p!=null&&p.isOnline()&&!p.isDead()&&p.getGameMode()==GameMode.SURVIVAL;}
     private String entryProblem(Player p,Run r,Location at){
         if(!playing(p)||roomVisitor(p)||plugin.isDowned(p))return "not_survival_or_observer";
@@ -752,10 +796,15 @@ final class SiteDungeonManager implements Listener {
         require(System.currentTimeMillis()-plugin.getConfig().getLong(ROOT+".cooldowns."+s.id,0)>=120_000,"site_cooldown");
         require(receiptCount()<1024,"pending_receipt_capacity");
         if(!loadout(p,"start",s))return;
+        if(s.id.equals(CryptTemporaryBlocks.SITE)){
+            require(!cryptBuildUnavailable,"crypt_build_journal_unavailable");
+            if(cryptBuild!=null){String result=cryptBuild.prepareNext();require(result.equals("ready"),result);}
+        }
         Run r=new Run(s,mode);r.altarTactics=s.id.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled();
         r.enemyMoves=s.id.equals("undead_crypt")&&plugin.dungeonEnemyMoves().enabled();
         r.checkpoint=p.getLocation().clone();r.party.add(p.getUniqueId());r.attendance.put(p.getUniqueId(),0);runs.put(s.id,r);
         try{persist();}catch(RuntimeException failure){runs.remove(s.id);throw failure;}
+        if(cryptBuild!=null&&s.id.equals(CryptTemporaryBlocks.SITE))cryptBuild.begin(UUID.fromString(r.id));
         reconcile(r);
         runResult(p,"start",s.id,r.id);tell(r,"§6"+s.name+"〔"+mode.label+"〕10秒后开始；遗迹内达标的玩家与Agent自动同队，目前"+r.party.size()+"人。中途可加入、离开，已参战的房间保留，通关奖励会给每位真实参战者生成凭据。致命伤害先倒地，队友靠近4格停留10秒救援，清室也可复活。单人或全队战败返回存档点，第三次战败才结束；时限30分钟，全员离场宽限5分钟，故障和断线不扣次数。无需建立或修改日常队伍。");
     }
@@ -967,6 +1016,10 @@ final class SiteDungeonManager implements Listener {
     }
     static long activeMillis(long started,long faultPausedMillis,long now){return Math.max(0,now-started-faultPausedMillis);}
     private void resume(Run r){
+        if(r.site.id.equals(CryptTemporaryBlocks.SITE)&&(cryptBuildUnavailable||cryptBuild!=null)){
+            require(!cryptBuildUnavailable,"crypt_build_journal_unavailable");
+            String recovered=cryptBuild.recoverOlder();require(recovered.equals("ready"),recovered);
+        }
         String fault=r.fault,reason=r.pauseReason;long paused=r.pausedAt,excluded=r.faultPausedMillis;boolean storageFault=r.storageFault;
         long now=System.currentTimeMillis();
         r.faultPausedMillis+=Math.max(0,now-Math.max(r.started,paused));
@@ -1110,6 +1163,11 @@ final class SiteDungeonManager implements Listener {
             plugin.getConfig().createSection(ROOT+".last-outcomes."+r.site.id,Map.of("run",r.id,"reason",reason,"endedAt",System.currentTimeMillis(),"clearedRooms",r.stage,"requiredRooms",r.site.rooms.size(),"resets",r.resets,"lastResetReason",r.lastResetReason));
             outcomes.forEach((id,data)->saveOutcome(id,r.site.id,data));
         });}catch(RuntimeException e){runs.put(r.site.id,r);throw e;}
+        if(cryptBuild!=null&&r.site.id.equals(CryptTemporaryBlocks.SITE)){
+            Set<UUID> standing=new HashSet<>();
+            for(UUID id:r.party){Player p=ResidentCli.find(id);if(playing(p)&&!plugin.isDowned(p)&&cryptContains(p.getLocation()))standing.add(id);}
+            cryptBuild.end(UUID.fromString(r.id),standing);
+        }
         if(plugin.trialRescue()!=null)plugin.trialRescue().releaseTeam(rescueKey(r),r.site.rooms.getFirst().center(Bukkit.getWorld(r.site.world)));
         clean(r);notice(r,"§e【地下城结束】"+endLabel(reason)+"。本场参战与存档点救援已失效；存活者留在原地，请沿原路及时撤离。已保存结果；查询：/mycli dungeon status "+r.site.id);
         outcomes.forEach((id,data)->{Player p=ResidentCli.find(id);if(p!=null)explainOutcome(p,data);});
@@ -1193,7 +1251,7 @@ final class SiteDungeonManager implements Listener {
         }catch(RuntimeException e){blockedCheckpoints.add(id);ready=false;plugin.getLogger().warning("Site dungeon checkpoint preserved for operator: "+id+" "+e.getMessage());}
         if(blockedCheckpoints.isEmpty())for(Run r:expired)try{end(r,"time_limit");}catch(RuntimeException e){r.fault="data_unavailable";plugin.getLogger().warning("Expired dungeon outcome not saved: "+r.site.id);}
     }
-    void shutdown(){try{if(blockedCheckpoints.isEmpty())persist();}finally{for(Run r:runs.values())clean(r);}}
+    void shutdown(){try{if(blockedCheckpoints.isEmpty())persist();}finally{for(Run r:runs.values())clean(r);if(cryptBuild!=null)cryptBuild.close();}}
     private boolean owned(Entity e){return e!=null&&e.getScoreboardTags().contains(TAG);}
     private Run owner(Entity e){if(e==null)return null;Shot shot=shots.get(e.getUniqueId());if(shot!=null)return shot.run;if(!owned(e))return null;return runs.values().stream().filter(r->r.mobs.containsKey(e.getUniqueId())).findFirst().orElse(null);}
     private Entity actor(Entity e){if(e instanceof Projectile p){ProjectileSource source=p.getShooter();return source instanceof Entity a?a:null;}return e;}
@@ -1234,13 +1292,19 @@ final class SiteDungeonManager implements Listener {
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void launch(ProjectileLaunchEvent e){Run r=owner(actor(e.getEntity()));if(r==null)return;if(shots.size()>=128){e.setCancelled(true);return;}e.getEntity().addScoreboardTag(SHOT_TAG);shots.put(e.getEntity().getUniqueId(),new Shot(r,System.currentTimeMillis()+15_000));}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void splash(PotionSplashEvent e){Run r=owner(e.getPotion());if(r==null)r=owner(actor(e.getPotion()));if(r!=null)for(LivingEntity l:e.getAffectedEntities())if(!validParticipant(r,l))e.setIntensity(l,0);}
-    @EventHandler public void death(EntityDeathEvent e){Run r=owner(e.getEntity());if(r!=null){r.mobs.remove(e.getEntity().getUniqueId());e.getDrops().clear();e.setDroppedExp(0);}}
+    @EventHandler public void death(EntityDeathEvent e){if(cryptBuild!=null&&e.getEntity() instanceof Player p)cryptBuild.left(p.getUniqueId());Run r=owner(e.getEntity());if(r!=null){r.mobs.remove(e.getEntity().getUniqueId());e.getDrops().clear();e.setDroppedExp(0);}}
     @EventHandler public void load(EntitiesLoadEvent e){for(Entity entity:e.getEntities())if((owned(entity)||entity.getScoreboardTags().contains(SHOT_TAG))&&owner(entity)==null)entity.remove();}
     @EventHandler public void rejoin(PlayerJoinEvent e){Run r=own(e.getPlayer());if(r!=null)e.getPlayer().sendMessage("§e地下城进度保留，剩余机会 "+(MAX_FAILURES-r.failures)+"/3；dungeon status 查本场。断线不扣次数，倒地续关会自动回存档点；主动离场仍须5分钟内回场。");Bukkit.getScheduler().runTaskLater(plugin,()->clearLoginIntruder(e.getPlayer()),5L);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void breakBlock(BlockBreakEvent e){
         if (plugin.trustedBlockEditor(e.getPlayer())) return;if(activityArea(e.getBlock().getLocation())){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"break",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void placeBlock(BlockPlaceEvent e){
-        if (plugin.trustedBlockEditor(e.getPlayer())) return;if(activityArea(e.getBlock().getLocation())){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"place",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
+        if(plugin.trustedBlockEditor(e.getPlayer()))return;
+        if(activityArea(e.getBlock().getLocation())){
+            if(cryptBuild!=null&&e.canBuild()&&!(e instanceof BlockMultiPlaceEvent)&&cryptBuild.reserve(e))return;
+            e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"place",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));
+        }
+    }
+    @EventHandler(priority=EventPriority.MONITOR)public void finalCryptPlace(BlockPlaceEvent e){if(cryptBuild!=null)cryptBuild.finishPlacement(e);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnNatural(SpawnerSpawnEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnWild(CreatureSpawnEvent e){if(e.getSpawnReason()==CreatureSpawnEvent.SpawnReason.NATURAL&&runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
     private Site surveyedCamp() {

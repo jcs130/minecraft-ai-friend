@@ -95,6 +95,10 @@ final class ActionFeedback {
                 default -> fallback(reason, "/mycli commission mine");
             };
             case "dungeon" -> switch (reason) {
+                case "await_existing_chunk", "await_cleanup_marker" -> a("上一场的临时方块正在核对，尚未开新场。","等待已生成区块就绪后，在首室重新发起一次挑战。",dungeon);
+                case "await_safe_exit" -> a("临时支撑上还有角色，当前未找到安全落脚点。","先沿原路离开临时支撑；仍无法撤离时请管理员检查本场撤离落点。",dungeon);
+                case "block_changed_keep_journal", "ownership_changed_keep_journal", "cleanup_receipts_changed", "crypt_original_image_unconfirmed" -> a("临时建造区的现状和本场记录有差异。","请管理员核对保留的格位与现场；处理前保留方块与原场记录。",dungeon);
+                case "crypt_build_journal_unavailable", "crypt_build_restore_unavailable" -> a("墓穴临时建造记录暂不可用。","请管理员核对现有账本和隔离区域配置，再尝试开场。",dungeon);
                 case "walk_to_first_room", "party_full_or_not_at_first_room" -> a("未到首室，或队伍已满8人。", "用 " + dungeon + " 核对入口和首室坐标；沿原通道进入首室。加入需在10秒集结期且有空位，否则等下一场。", dungeon);
                 case "muster_closed" -> a("本场10秒集结期已关闭。", "用 /mycli dungeon status 查看场次；等本场结束后到首室与队友重新开场，不要强行加入。", "/mycli dungeon status", dungeon);
                 case "party_data_unavailable" -> a("队伍资料暂不可用，未开场。", "稍后重新查询队伍；不会把未知队伍当单人，也不要重复开场。", "/mycli guild party status");

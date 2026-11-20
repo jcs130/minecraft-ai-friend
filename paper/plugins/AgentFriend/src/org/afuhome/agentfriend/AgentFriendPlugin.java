@@ -1330,6 +1330,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             else dungeon.waveConfig(sender, args[2].equalsIgnoreCase("reload"));
             return true;
         }
+        if(args.length==5&&args[0].equalsIgnoreCase("admin")&&args[1].equalsIgnoreCase("cryptrelease")){
+            if(!(sender instanceof ConsoleCommandSender)&&!(sender instanceof RemoteConsoleCommandSender)){sender.sendMessage("此操作仅限服务器控制台。");return true;}
+            try{int x=Integer.parseInt(args[2]),y=Integer.parseInt(args[3]),z=Integer.parseInt(args[4]);
+                sender.sendMessage("MC_CRYPT_RESERVED_CELL x="+x+" y="+y+" z="+z+" status="+siteDungeons.relinquishTemporary(x,y,z));}
+            catch(NumberFormatException invalid){sender.sendMessage("MC_CRYPT_RESERVED_CELL status=invalid_coordinates");}
+            return true;
+        }
         if (args.length == 2 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("dungeonaudit")) {
             if (!(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
                 sender.sendMessage("只允许服务器控制台检查试炼怪物。"); return true;
