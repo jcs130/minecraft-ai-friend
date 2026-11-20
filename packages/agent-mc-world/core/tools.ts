@@ -9,7 +9,7 @@ import { itemsInReach, namedLike, offHandItem, type InvItem } from './inventory.
 import { readDurability, readEnchants } from './item-facts.ts';
 import { itemMatchesPick, pickLabel, pickTargetOf } from './item-pick.ts';
 import { SkillBlocked, type ReserveHit, type SkillContext, type ToolTrace } from './skill-context.ts';
-import { matchItemName } from './chests.ts';
+import { matchItemName, qualifiedItemKey } from './chests.ts';
 import { zhName } from './names.ts';
 import { itemCustomName } from './item-display.ts';
 
@@ -391,6 +391,7 @@ export const HANDHELD_SUFFIXES = ['_pickaxe', '_axe', '_shovel', '_hoe', '_sword
  * 数据里没写的一律拿主手;盾牌与不死图腾的副手位按原版用途单列。
  */
 export function equipDestOf(name: string, registry?: Bot['registry']): 'head' | 'torso' | 'legs' | 'feet' | 'off-hand' | 'hand' {
+  name = qualifiedItemKey(registry, name) ?? name;
   if (name === 'shield' || name === 'totem_of_undying') return 'off-hand';
   const def = registry
     ? (registry.itemsByName as Record<string, { equipDest?: string; equipmentSlot?: string } | undefined>)[name]

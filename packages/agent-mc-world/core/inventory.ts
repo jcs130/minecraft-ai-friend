@@ -5,7 +5,7 @@
  */
 import type { Bot } from 'mineflayer';
 import { itemMatchesPick, pickLabel, pickMissText, pickTargetOf } from './item-pick.ts';
-import { isRealId, matchItemName, type NameRegistry } from './chests.ts';
+import { isRealId, matchItemName, qualifiedItemKey, type NameRegistry } from './chests.ts';
 import { readMapId, type ItemLike } from './item-facts.ts';
 import { SkillBlocked, checkAbort, sleep, type SkillContext } from './skill-context.ts';
 import { zhName } from './names.ts';
@@ -41,6 +41,8 @@ export function invItemNamed(bot: Bot, want: string, pick?: string): InvItem | u
 function itemNamedAmong(bot: Bot, candidates: InvItem[], want: string, pick?: string): InvItem | undefined {
   const items = candidates
     .filter((i) => itemMatchesPick(pick, i, bot.registry as never));
+  const qualified = qualifiedItemKey(bot.registry, want);
+  if (qualified !== null) return items.find((i) => i.name === want || i.name === qualified);
   const exact = items.find((i) => i.name === want);
   if (exact || isRealId(bot.registry, want)) return exact;
   return items.find((i) => itemCustomName(i) === want)
@@ -63,7 +65,8 @@ export function wornItemNamed(bot: Bot, want: string, pick?: string): { item: In
 
 /** invItemNamed 的名字口径,摊开给"这个名字下有哪几件"用 */
 export function namedLike(want: string, name: string, reg?: NameRegistry | null): boolean {
-  return matchItemName(want, name, reg) || (!isRealId(reg, want) && name.startsWith(`${want}_`));
+  return matchItemName(want, name, reg)
+    || (qualifiedItemKey(reg, want) === null && !isRealId(reg, want) && name.startsWith(`${want}_`));
 }
 
 /**

@@ -8,6 +8,7 @@ import { skillEquip } from '../core/skills-craft.ts';
 import { CommandInventoryArrival } from '../core/command-inventory-arrival.ts';
 import { takeWornItem, wornItemNamed } from '../src/equipment-access.ts';
 import { invItemNamed } from '../core/inventory.ts';
+import { precheckStep } from '../core/precheck.ts';
 import { skillAnvil } from '../core/skills-interact.ts';
 import { installInventoryClickSync, INVENTORY_CLICK_CONFIRM_MS } from '../core/inventory-click-sync.ts';
 
@@ -156,6 +157,37 @@ function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; de
 afterEach(() => vi.useRealTimers());
 
 describe('explicit access to worn equipment', () => {
+  it.each([['iron_helmet', 5], ['shield', 45]] as const)('equips the qualified transfer ID for %s once and recognizes the equipped slot', async (name, slot) => {
+    vi.useFakeTimers();
+    const rig = equipmentServer({ version: '1.21.1' });
+    rig.seed(25, name);
+    const call = { skill: 'equip', item: `minecraft:${name}` } as const;
+    expect(precheckStep(rig.bot, call, {} as never)).toBeNull();
+    const work = skillEquip(rig.bot, call);
+    await vi.runAllTimersAsync();
+    await work;
+    expect(rig.server.slots[slot]?.name).toBe(name);
+    if (slot === 5) expect(wornItemNamed(rig.bot, call.item)).toMatchObject({ destination: 'head', slot });
+    const clicks = [...rig.sent];
+    expect(clicks.length).toBeGreaterThan(0);
+    expect(await skillEquip(rig.bot, call)).toContain('本来就');
+    expect(rig.sent).toEqual(clicks);
+  });
+
+  it('keeps qualified selectors exact, including for a custom namespace or a misleading display name', () => {
+    const rig = equipmentServer({ version: '1.21.1' });
+    const named = { name: 'paper', customName: 'minecraft:iron_helmet' };
+    const custom = { name: 'mod:iron_helmet', customName: 'Ceremonial helmet' };
+    const items = [named, custom, { name: 'golden_helmet', customName: 'mod:missing' }];
+    vi.spyOn(rig.bot.inventory, 'items').mockReturnValue(items as never);
+    expect(invItemNamed(rig.bot, 'minecraft:iron_helmet')).toBeUndefined();
+    expect(invItemNamed(rig.bot, 'minecraft:helmet')).toBeUndefined();
+    expect(invItemNamed(rig.bot, 'mod:missing')).toBeUndefined();
+    expect(invItemNamed(rig.bot, 'mod:iron_helmet')).toBe(custom);
+    expect(invItemNamed(rig.bot, 'Ceremonial helmet')).toBe(custom);
+    expect(invItemNamed(rig.bot, 'minecraft:paper', 'not its label')).toBeUndefined();
+  });
+
   it.each(['1.21.1', '1.20.6'])('moves worn armor to the hand with native %s ACKs and leaves other armor alone', async version => {
     vi.useFakeTimers();
     const rig = equipmentServer({ version });
