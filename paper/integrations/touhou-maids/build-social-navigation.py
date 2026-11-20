@@ -8,7 +8,7 @@ from pathlib import Path
 
 BASE = "7786be1c30dfbc6239c9adf4fae5affbc6f1d73952078f328be542784ea73fd6"
 PACKAGE = "local/tlmcompat/hybrid/"
-VERSION = "0.1.59-character-rendezvous"
+VERSION = "0.1.60-autonomous-walk"
 
 
 def main():
@@ -21,7 +21,7 @@ def main():
     if build["digest"](args.baseline) != BASE or args.output.exists():
         parser.error("Expected the 0.1.57 sound-pack baseline and a new output path")
     families = ("HybridMaidPlugin", "MaidBodyControl", "NativeMaidBodyActions", "NativeMaidCompanionSupport",
-                "NativeMaidMagicSupport", "NativeMaidRendezvous")
+                "NativeMaidMagicSupport", "NativeMaidRendezvous", "NativeMaidSpeech", "NativeMaidVoices")
     sources = [here / "hybrid-src" / PACKAGE / (name + ".java") for name in families]
     classpath = str(args.baseline.resolve()) + os.pathsep + args.classpath_file.read_text(encoding="utf-8-sig").strip()
     args.output.parent.mkdir(parents=True, exist_ok=True)

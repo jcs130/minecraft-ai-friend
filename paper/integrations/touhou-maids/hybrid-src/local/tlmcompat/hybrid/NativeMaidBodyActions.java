@@ -425,20 +425,18 @@ final class NativeMaidBodyActions {
                 var goal=BlockPos.containing(walk.target);
                 var navigation=maid.getNavigation();
                 var memory=maid.getBrain().getMemory(MemoryModuleType.WALK_TARGET).orElse(null);
-                if (selectedCompanion(maid) != null) {
-                    // TLM may replace this walk with an ordinary idle stroll between server ticks.
-                    // Preserve the chosen leg and allow the native path to cross its previous idle radius.
-                    int radius = (int)Math.ceil(maid.position().distanceTo(walk.target)) + 4;
-                    if (maid.getRestrictRadius() < radius) maid.restrictTo(goal, radius);
-                    float speed=walkSpeed(maid,walk.character);
-                    if (memory == null || !goal.equals(memory.getTarget().currentBlockPosition()) || memory.getSpeedModifier()!=speed)
-                        BehaviorUtils.setWalkAndLookTargetMemories(maid,goal,speed,0);
-                    var path = navigation.getPath();
-                    if (navigation.isDone() || path == null || !goal.equals(path.getTarget())) {
-                        var next = navigation.createPath(goal,0);
-                        if (next != null && next.canReach()) navigation.moveTo(next,speed);
-                    }
-                } else if(navigation.isDone()||memory==null)BehaviorUtils.setWalkAndLookTargetMemories(maid,goal,walkSpeed(maid,walk.character),0);
+                // The idle AI can overwrite any issued walk, including a walk with no companion target.
+                // Hold the verified path until its receipt settles and the previous schedule is restored.
+                int radius = (int)Math.ceil(remaining) + 4;
+                if (maid.getRestrictRadius() < radius) maid.restrictTo(goal, radius);
+                float speed = walkSpeed(maid, walk.character);
+                if (memory == null || !goal.equals(memory.getTarget().currentBlockPosition()) || memory.getSpeedModifier() != speed)
+                    BehaviorUtils.setWalkAndLookTargetMemories(maid, goal, speed, 0);
+                var path = navigation.getPath();
+                if (navigation.isDone() || path == null || !goal.equals(path.getTarget())) {
+                    var next = navigation.createPath(goal, 0);
+                    if (next != null && next.canReach()) navigation.moveTo(next, speed);
+                }
             }catch(Exception error){walks.remove(id);if(maid!=null){stop(maid);restore(maid);}plugin.getLogger().warning("Native body walk result uncertain; query original request");}
         }
         // Recover only our temporary navigation anchor after a normal or abnormal server restart.
