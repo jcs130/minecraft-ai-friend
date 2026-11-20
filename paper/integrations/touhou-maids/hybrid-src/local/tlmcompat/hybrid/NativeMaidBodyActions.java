@@ -536,7 +536,8 @@ final class NativeMaidBodyActions {
         // this navigation input by the full attribute, including all real status effects.
         var attribute=maid.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED);
         double base=attribute==null ? 0 : attribute.getBaseValue();
-        return base>0 ? (float)Math.clamp(.4/base, .35, 4) : .7f;
+        // Match the effective input of the original companion's native owner follow.
+        return base>0 ? (float)Math.clamp(.35/base, .35, 4) : .7f;
     }
     private static boolean canWalkTo(EntityMaid maid, BlockPos pos) {
         boolean held = selectedCompanion(maid) != null && maid.isHomeModeEnable();

@@ -103,6 +103,7 @@ def parse_choice(plan, characters: list[dict]) -> dict | None:
     if set(plan) != expected or not isinstance(steps, list) or len(steps) > 3:
         raise ValueError("invalid_companion_plan")
     echoed = []
+    guard_echo = False
     for step in steps:
         if not isinstance(step, dict) or set(step) - {"tool", "args"}:
             raise ValueError("invalid_companion_step")
@@ -110,6 +111,10 @@ def parse_choice(plan, characters: list[dict]) -> dict | None:
         if not isinstance(args, dict):
             raise ValueError("invalid_companion_args")
         if step.get("tool") == "body:chat" and set(args) == {"text"} and isinstance(args["text"], str):
+            continue
+        if explicit and step.get("tool") == "body:native:guard" and not args and not guard_echo:
+            # A model may echo its current guard mode alongside a meeting. Only the meeting is executed.
+            guard_echo = True
             continue
         if step.get("tool") != "body:follow" or echoed or set(args) not in (set(), {"uuid"}, {"targetUuid"}):
             raise ValueError("unexpected_companion_step")
@@ -119,7 +124,7 @@ def parse_choice(plan, characters: list[dict]) -> dict | None:
         echoed.append(echoed_target)
     if explicit:
         choice = plan["companion"]
-        if choice == {"mode": "stop"} and not echoed:
+        if choice == {"mode": "stop"} and not echoed and not guard_echo:
             return choice
         if (not isinstance(choice, dict) or set(choice) - {"travel"} not in ({"mode", "targetUuid"}, {"mode", "targetName"})
                 or choice["mode"] not in ("approach", "follow") or choice.get("travel", "auto") not in ("auto", "walk", "teleport")):

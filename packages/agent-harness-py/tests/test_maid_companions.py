@@ -37,6 +37,18 @@ def test_only_explicit_choice_can_reinterpret_empty_native_owner_follow():
     assert parse_choice({"companion": stop, "steps": []}, []) == stop
 
 
+def test_real_meeting_with_guard_and_chat_echoes_only_retains_chosen_companion():
+    choice = {"mode":"approach", "targetUuid":ALICE, "travel":"teleport"}
+    guard = {"tool":"body:native:guard", "args":{}}
+    plan = {"steps":[guard, SPEECH], "companion":choice}
+    assert parse_choice(plan, [{"uuid":ALICE}]) == choice
+    for invalid in ([{**guard,"args":{"targetUuid":BOB}}], [guard,guard], [guard,{"tool":"body:attack"}]):
+        with pytest.raises(ValueError):
+            parse_choice({"steps":invalid,"companion":choice}, [{"uuid":ALICE}])
+    with pytest.raises(ValueError):
+        parse_choice({"steps":[guard],"companion":{"mode":"stop"}}, [])
+
+
 @pytest.mark.parametrize("plan", [
     {"steps": [follow_step(uuid=BOB)]},
     {"steps": [follow_step(uuid=ALICE), follow_step(uuid=ALICE)]},
