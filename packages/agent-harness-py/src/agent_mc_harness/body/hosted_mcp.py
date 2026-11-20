@@ -16,7 +16,7 @@ from uuid import uuid4
 
 from .._reuse import numen_controller
 from ..models import NativeAction
-from .native_tasks import NativeTasks, background_task, finished_task_details
+from .native_tasks import HOSTED_STOP, NativeTasks, background_task, finished_task_details
 from .numen import PortResult, RawEvent, command_lua, _field
 
 
@@ -33,6 +33,7 @@ class HostedMcpPort:
         self.boot, self.epoch = str(uuid4()), 1
         self.task_connection = self.boot
         self.session = session
+        self._provided_session = session
         self.stack = None
         self.connection_task = None
         self.connected = None
@@ -44,6 +45,15 @@ class HostedMcpPort:
         self.finished_ids = set()
         self.lost = False
         self.disconnected = asyncio.Event()
+        self.control_lock = asyncio.Lock()
+        self.transition_lock = asyncio.Lock()
+        self.lease_mode = "paused"
+        self.owned_epoch = 0
+        self.requested_mode = "paused"
+        self.previous_states = frozenset()
+        self.attached = False
+        self._initial_fence = None
+        self.closing = False
         self.next_receipt_probe = {}
         self.ledger = NativeTasks(Path(config["journalDirectory"]) / "hosted-tasks.sqlite3", self.body)
 
@@ -52,9 +62,10 @@ class HostedMcpPort:
             raise RuntimeError("CONTROL_CHANGED")
         return await self._request(self.session, op, **values)
 
-    async def _request(self, session, op, **values):
+    async def _request(self, session, op, *, fence_epoch=None, **values):
         args = {**values, "op": op, "companion": self.body, "expectedName": self.cfg["name"],
-                "expectedOwner": self.cfg["ownerId"], "serverId": self.cfg["serverId"], "boot": self.boot, "epoch": self.epoch}
+                "expectedOwner": self.cfg["ownerId"], "serverId": self.cfg["serverId"], "boot": self.boot,
+                "epoch": self.epoch if fence_epoch is None else fence_epoch}
         reply = await session.call_tool("hosted_body", args)
         if _field(reply, "isError", "is_error"):
             raise RuntimeError("HOSTED_REQUEST_REFUSED_QUERY_ORIGINAL")
@@ -78,17 +89,39 @@ class HostedMcpPort:
         caps = await self.rpc("capabilities")
         if caps.get("protocol") != "qiandengji-hosted-body/v1" or not all(caps.get(k) is True for k in ("stableIdentity", "serverFence", "persistedReceipts")):
             raise ValueError("hosted_fenced_body_required")
-        attached = await self.rpc("attach")
-        if attached.get("fenced") is not True or attached.get("mode") != "paused":
-            raise RuntimeError("original_body_not_paused")
+        await self._acquire("attach", "paused")
+        self.attached = True
         await self._start_task_window()
         self.epoch += 1
-        started = await self.rpc("transition", mode="harness")
-        if started.get("fenced") is not True or started.get("mode") != "harness" or started.get("epoch") != self.epoch:
-            raise RuntimeError("hosted_control_not_confirmed")
+        await self._acquire("transition", "harness")
         self.tools = [NativeAction(name=t["name"], description=t.get("description", "")[:300], input_schema=t.get("parameters", {}), read_only=t["name"] == "guide") for t in (await self.rpc("catalog"))["tools"]]
         self.heartbeat = asyncio.create_task(self._heartbeat())
+        self._initial_fence = self.generation()
         return {"uuid": self.body, "name": self.cfg["name"], "session": True}
+
+    def _confirmed(self, reply, mode, epoch=None):
+        return (reply.get("roleUuid") == self.body and reply.get("fenced") is True
+                and reply.get("mode") == mode and reply.get("epoch") == (self.epoch if epoch is None else epoch))
+
+    @staticmethod
+    def _control_denied(error):
+        return isinstance(error, ValueError) or str(error) in {"CONTROL_CHANGED", "HOSTED_REQUEST_REFUSED_QUERY_ORIGINAL"}
+
+    async def _acquire(self, operation, mode):
+        self.requested_mode = mode
+        try:
+            reply = await self.rpc(operation, **({"mode": mode} if operation == "transition" else {}))
+            if not self._confirmed(reply, mode):
+                raise RuntimeError("CONTROL_CHANGED")
+        except Exception as error:
+            if self._control_denied(error):
+                self.lost = True
+            raise
+        self.lease_mode, self.owned_epoch = mode, self.epoch
+
+    @property
+    def confirmed_initial_fence(self):
+        return None if self.lost or self.closing else self._initial_fence
 
     @contextlib.asynccontextmanager
     async def _mcp_session(self):
@@ -106,26 +139,88 @@ class HostedMcpPort:
                 self.connected.set_result(True)
                 await self.stopping.wait()
         except Exception as error:
-            self.lost = True
-            self.disconnected.set()
+            if not self.lost:
+                self.lost = True
+                self.disconnected.set()
             if not self.connected.done(): self.connected.set_exception(error)
 
     async def _heartbeat(self):
         try:
             while True:
                 await asyncio.sleep(2)
-                status = await self.rpc("heartbeat")
-                if status.get("epoch") != self.epoch or status.get("mode") != "harness":
-                    raise RuntimeError("CONTROL_CHANGED")
+                await self._heartbeat_once()
         except asyncio.CancelledError:
             raise
         except Exception as error:
-            self.lost = True
-            if str(error) not in ("CONTROL_CHANGED", "HOSTED_REQUEST_REFUSED_QUERY_ORIGINAL"):
+            await self._lose_control(error)
+
+    async def _lose_control(self, error):
+        if self.lost:
+            return
+        self.lost = True
+        if not self._control_denied(error):
+            self.disconnected.set()
+        elif (str(error) == "HOSTED_REQUEST_REFUSED_QUERY_ORIGINAL" and self._initial_fence
+              and not self.closing):
+            # Both expiry and an active handoff can refuse our heartbeat. Check
+            # once for a vacant, idle *known* generation. No attach or renewal
+            # occurs here; the native fence still arbitrates any subsequent open.
+            try:
+                async with asyncio.timeout(3):
+                    facts = await self.rpc("facts")
+            except Exception:
+                return
+            if self._vacant(facts, {self.owned_epoch, self.epoch}):
                 self.disconnected.set()
+
+    async def _heartbeat_once(self):
+        # The queue drain can take longer than a lease. Renew our deliberate
+        # pause while it runs, but never race an epoch/mode change.
+        async with self.transition_lock:
+            status = await self.rpc("heartbeat")
+            if not self._confirmed(status, self.lease_mode):
+                raise RuntimeError("CONTROL_CHANGED")
 
     def catalog(self): return self.tools
     def generation(self): return self.boot + ":" + str(self.epoch)
+
+    def new_session_port(self):
+        # Fresh process fence, transport and SQLite handle; durable calls stay
+        # bound to the same configured body. The injected session is for tests.
+        if self.lost and not self.disconnected.is_set():
+            raise RuntimeError("CONTROL_CHANGED")
+        port = HostedMcpPort(self.cfg, session=self._provided_session)
+        port.previous_states = {(self.owned_epoch, self.lease_mode), (self.epoch, self.requested_mode)}
+        return port
+
+    async def wait_previous_release(self):
+        """Observe the prior seat becoming vacant without extending its lease."""
+        if not self.previous_states:
+            return
+        async with asyncio.timeout(25):
+            if self._provided_session is None:
+                async with self._mcp_session() as session:
+                    await self._wait_for_vacancy(session)
+            else:
+                await self._wait_for_vacancy(self._provided_session)
+
+    async def _wait_for_vacancy(self, session):
+        epochs = {epoch for epoch, _ in self.previous_states}
+        while True:
+            facts = await self._request(session, "facts")
+            epoch, mode = facts.get("epoch"), facts.get("mode")
+            if self._vacant(facts, epochs):
+                return  # attach still has to win the native fence atomically
+            if facts.get("roleUuid") != self.body or (epoch, mode) not in self.previous_states:
+                self.lost = True
+                raise RuntimeError("CONTROL_CHANGED")
+            await asyncio.sleep(.5)
+
+    def _vacant(self, facts, epochs):
+        epoch = facts.get("epoch")
+        return (facts.get("roleUuid") == self.body and facts.get("mode") == "paused"
+                and facts.get("fenced") is False and facts.get("workPending") is False
+                and type(epoch) is int and (epoch == 0 or epoch in epochs))
 
     def recorded(self, request_id):
         """A call is committed locally before any RPC can leave this process."""
@@ -166,14 +261,18 @@ class HostedMcpPort:
 
     async def call(self, tool, args, request_id):
         signature = hashlib.sha256(json.dumps([tool,args], sort_keys=True).encode()).hexdigest()
-        old = self.ledger.get(request_id, self.task_connection)
-        if old:
-            if old["data"]["fingerprint"] != signature:
-                return PortResult("rejected","request_id_conflict; query the original request")
-            return PortResult(**old)
-        if self.lost:
-            return PortResult("rejected", "Hosted control unavailable; this new action was not dispatched.")
-        self.ledger.begin(request_id, signature, self.task_connection)
+        # Only admission is serialized. A long-running call must stay interruptible.
+        async with self.control_lock:
+            if self.stopping.is_set():
+                return PortResult("unknown", "Session closed; query the original request after reconnect.")
+            old = self.ledger.get(request_id, self.task_connection)
+            if old:
+                if old["data"]["fingerprint"] != signature:
+                    return PortResult("rejected","request_id_conflict; query the original request")
+                return PortResult(**old)
+            if self.lost or self.closing:
+                return PortResult("rejected", "Hosted control unavailable; this new action was not dispatched.")
+            self.ledger.begin(request_id, signature, self.task_connection)
         try:
             value = await self.rpc("call", id=request_id, tool=tool, args=args)
             result = self.mapped(value, request_id, tool)
@@ -183,8 +282,16 @@ class HostedMcpPort:
             return PortResult("unknown", "Original hosted action outcome unknown; query its request ID.")
 
     async def result(self, request_id):
+        if self.stopping.is_set():
+            return PortResult("unknown", "Session closed; query the original request after reconnect.")
         saved = self.ledger.get(request_id, self.task_connection)
         if saved and saved["status"] not in ("accepted", "unknown"): return PortResult(**saved)
+        if saved and saved["data"]["fingerprint"] == HOSTED_STOP:
+            # No "result" file exists for lease transitions on the Numen server.
+            async with self.control_lock:
+                if self.stopping.is_set():
+                    return PortResult(**saved)
+                return self._stop_result(request_id)
         if self.lost and saved:
             # A transport session can expire after the game has already committed
             # the original result. Read it without attaching or renewing the lease.
@@ -301,33 +408,110 @@ class HostedMcpPort:
     async def command(self, line, request_id):
         return await self.call("lua", {"code":command_lua(line,"numen_hosted")},request_id)
 
+    def _stop_result(self, request_id):
+        saved = self.ledger.get(request_id, self.task_connection)
+        if saved["status"] == "unknown" and self.confirmed_initial_fence:
+            boot, _, confirmed = self.ledger.stop_fence(request_id)
+            if boot != self.boot:
+                # A later *acknowledged* paused attach stopped the old actuator
+                # even if the process died before learning the original outcome.
+                # Only the original pause acknowledgement proves that stop ran.
+                if confirmed:
+                    status, text = "completed", "Original stop was confirmed; control resumed under a new fence."
+                else:
+                    status, text = "failed", "Original stop outcome unknown; superseded by a confirmed startup pause. Do not replay."
+                self.ledger.save(request_id, status, text, None)
+                saved = self.ledger.get(request_id, self.task_connection)
+        return PortResult(**saved)
+
+    async def _stop_transition(self, mode):
+        async with self.transition_lock:
+            if self.lost:
+                raise RuntimeError("CONTROL_CHANGED")
+            self.epoch += 1
+            self.requested_mode = mode
+            try:
+                reply = await self.rpc("transition", mode=mode)
+            except ValueError:
+                raise  # a mismatched identity or invalid control reply is not a lost ACK
+            except Exception:
+                reply = None
+            if reply is None:
+                # Only heartbeat checks this exact boot *and* epoch. Public facts
+                # for a different driver at the same generation are not proof.
+                try:
+                    reply = await self.rpc("heartbeat")
+                except RuntimeError as error:
+                    if str(error) != "HOSTED_REQUEST_REFUSED_QUERY_ORIGINAL":
+                        raise
+                    # A transition that never arrived leaves *our* older fence
+                    # in place. A refusal of both generations requires an
+                    # independent, read-only vacancy check before reopening.
+                    old_epoch = self.epoch - 1
+                    try:
+                        old = await self.rpc("heartbeat", fence_epoch=old_epoch)
+                    except Exception as unverified:
+                        if str(unverified) == "HOSTED_REQUEST_REFUSED_QUERY_ORIGINAL":
+                            raise
+                        raise RuntimeError("CONTROL_CHANGED") from unverified
+                    if not self._confirmed(old, self.lease_mode, epoch=old_epoch):
+                        raise RuntimeError("CONTROL_CHANGED") from error
+                    raise ConnectionError("Original lease still held; transition unconfirmed.") from error
+            if not self._confirmed(reply, mode):
+                raise RuntimeError("CONTROL_CHANGED")
+            self.lease_mode, self.owned_epoch = mode, self.epoch
+
     async def halt(self, request_id):
-        # A lease transition stops the old actuator. It cannot enqueue a second
-        # Lua program behind the task it is meant to stop.
-        self.epoch += 1
-        value = await self.rpc("transition", mode="paused")
-        if value.get("fenced") is not True or value.get("mode") != "paused" or value.get("epoch") != self.epoch:
-            return PortResult("unknown","halt not confirmed")
-        with contextlib.suppress(Exception):
-            await self._drain_stopped()
-        await self._start_task_window()
-        self.task_connection = str(uuid4())
-        self.epoch += 1
-        resumed = await self.rpc("transition", mode="harness")
-        if resumed.get("fenced") is not True or resumed.get("mode") != "harness" or resumed.get("epoch") != self.epoch:
-            return PortResult("unknown","Original actuator stopped; control resumption is unconfirmed.")
-        return PortResult("completed","Original actuator stopped by server fence.")
+        async with self.control_lock:
+            if self.stopping.is_set():
+                return PortResult("unknown", "Session closed; query the original stop after reconnect.")
+            old = self.ledger.get(request_id, self.task_connection)
+            if old:
+                if old["data"]["fingerprint"] != HOSTED_STOP:
+                    return PortResult("rejected", "request_id_conflict; query the original request")
+                return self._stop_result(request_id)
+            if not self.confirmed_initial_fence:
+                return PortResult("rejected", "Hosted control unavailable; stop was not dispatched.")
+
+            self.ledger.begin_stop(request_id, self.boot, self.epoch + 1)
+            restored = False
+            failure = None
+            try:
+                await self._stop_transition("paused")
+                self.ledger.confirm_stop(request_id)
+                with contextlib.suppress(Exception):
+                    await self._drain_stopped()
+                await self._start_task_window()
+                self.task_connection = str(uuid4())
+                await self._stop_transition("harness")
+                self.ledger.save(request_id, "completed", "Original actuator stopped by server fence.", None)
+                restored = True
+            except Exception as error:
+                # Preserve the last durable phase; never issue another pause.
+                failure = error
+                return PortResult("unknown", "Stop/control outcome uncertain; reconcile the original request.")
+            finally:
+                # Includes cancellation between the committed pause and resume.
+                # No subsequent write may use an unconfirmed controller.
+                if not restored:
+                    await self._lose_control(failure)
+            return self._stop_result(request_id)
 
     async def close(self):
+        self.closing = True
         if self.heartbeat:
             self.heartbeat.cancel()
             await asyncio.gather(self.heartbeat,return_exceptions=True)
-        if self.session and not self.lost:
-            self.epoch += 1
-            with contextlib.suppress(Exception):
-                paused = await self.rpc("transition", mode="paused")
-                if paused.get("fenced") is True and paused.get("mode") == "paused" and paused.get("epoch") == self.epoch:
-                    await self._drain_stopped()
-        self.stopping.set()
+        async with self.control_lock:
+            if self.attached and not self.lost:
+                try:
+                    await self._stop_transition("paused")
+                except Exception as error:
+                    await self._lose_control(error)
+                else:
+                    with contextlib.suppress(Exception):
+                        await self._drain_stopped()
+            self.attached = False
+            self.stopping.set()
         if self.connection_task: await asyncio.gather(self.connection_task,return_exceptions=True)
         self.ledger.close()

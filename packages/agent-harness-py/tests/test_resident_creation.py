@@ -1,5 +1,6 @@
 import asyncio
 import json
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -51,8 +52,9 @@ def test_new_character_joins_service_and_recovers_its_identity_while_portal_is_o
         async def close(self): pass
 
     class Native(SimBody):
-        def __init__(self, _, *, scope, owner_id, **kwargs):
+        def __init__(self, transport, *, scope, owner_id, **kwargs):
             super().__init__(body_id=slot["bodyId"])
+            self.port = transport
             self.scope, self.owner = scope, owner_id
         def identity(self):
             return BodyIdentity(kind=kind,body_id=self.body_id,owner_id=self.owner,scope=self.scope)
@@ -72,7 +74,7 @@ def test_new_character_joins_service_and_recovers_its_identity_while_portal_is_o
     monkeypatch.setattr(npc_service.NpcHost,"run",idle)
     monkeypatch.setattr(npc_service,"MaidBody", Native)
     monkeypatch.setattr(npc_service,"NumenBody", Native)
-    monkeypatch.setattr(npc_service,"HostedMcpPort",lambda cfg: None)
+    monkeypatch.setattr(npc_service,"HostedMcpPort",lambda cfg: SimpleNamespace(disconnected=asyncio.Event(), lost=False))
     monkeypatch.setattr(npc_service,"NativeMaidBridge",lambda *args, **kwargs: None)
 
     async def run():

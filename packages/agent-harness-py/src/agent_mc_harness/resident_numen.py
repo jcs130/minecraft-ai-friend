@@ -1,5 +1,4 @@
 """Operator-only admission for a reserved Numen slot after the website profile is durable."""
-import asyncio
 import base64
 import hashlib
 import hmac
@@ -12,6 +11,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
+
+from .numen_connection import run_with_connection as run_with_connection
 
 
 def validate_admission(slot, transport):
@@ -67,18 +68,3 @@ async def admit_numen(role, cfg, transport, token_file, *, http=None):
                         or not 24 <= len(token) <= 1024 or not token.isascii() or not token.isprintable() or " " in token):
                     raise ValueError("invalid_numen_scoped_session")
                 _save_token(token_file, token)
-
-
-async def run_with_connection(host):
-    """Transport loss ends this actor run. The service reopens the same slot and original journal."""
-    actor = asyncio.create_task(host.run())
-    disconnected = asyncio.create_task(host.body.port.disconnected.wait())
-    try:
-        done, _ = await asyncio.wait((actor, disconnected), return_when=asyncio.FIRST_COMPLETED)
-        if actor in done:
-            return actor.result()
-        raise ConnectionError("numen_transport_disconnected")
-    finally:
-        for task in (actor, disconnected):
-            task.cancel()
-        await asyncio.gather(actor, disconnected, return_exceptions=True)

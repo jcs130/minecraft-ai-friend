@@ -555,6 +555,7 @@ class NumenBody(BaseBody):
         self._last: dict[str, Any] = {}
         self._meals: OrderedDict[str, None] = OrderedDict()
         self._item_uses: OrderedDict[str, str] = OrderedDict()
+        self._stops_before_attach: set[str] = set()
         self.adventure_partner = adventure_partner
         self.party_message = None
         self.observed_party_id = None
@@ -650,10 +651,26 @@ class NumenBody(BaseBody):
             self._tasks.append(asyncio.create_task(self._reconcile_loop(), name="numen-results"))
 
     async def reconnect(self) -> None:
-        await self._halt_tasks()
-        with contextlib.suppress(Exception):
-            await self.port.close()
         self._set_state("reconnecting")
+        await self._halt_tasks()
+        if self.port.transport == "numen-hosted-mcp":
+            if self.port.lost and not self.port.disconnected.is_set():
+                self._set_state("error", "Hosted controller changed")
+                raise RuntimeError("CONTROL_CHANGED")
+            await self.port.close()
+            replacement = self.port.new_session_port()
+            try:
+                await replacement.wait_previous_release()
+            except BaseException:
+                if replacement.lost and not replacement.disconnected.is_set():
+                    self.port = replacement
+                await replacement.close()
+                self._set_state("error", "Previous hosted controller release unconfirmed")
+                raise
+            self.port = replacement
+        else:
+            with contextlib.suppress(Exception):
+                await self.port.close()
         self._state = "detached"
         await self.spawn()
 
@@ -684,6 +701,9 @@ class NumenBody(BaseBody):
 
     def restore_request(self, action: BodyAction) -> None:
         super().restore_request(action)
+        if action.verb == "stop" and self._state == "detached" and self.port.transport == "numen-hosted-mcp":
+            if not self.port.recorded(action.request_id):
+                self._stops_before_attach.add(action.request_id)
         self._remember_adventure(action)
         if action.verb == "native" and action.name == "nourish":
             self._remember_meal(action.request_id)
@@ -826,6 +846,15 @@ class NumenBody(BaseBody):
         return await self.act(BodyAction(verb="stop", request_id=new_request_id("stop")))
 
     async def _do_result(self, request_id: str, previous: ActionReceipt) -> ActionReceipt:
+        if previous.verb == "stop" and request_id in self._stops_before_attach:
+            fence = self.port.confirmed_initial_fence
+            if not fence:
+                return previous
+            self._stops_before_attach.discard(request_id)
+            # Legacy halt had no native receipt. A later acknowledged pause
+            # fenced its actuator; its original delivery can never be inferred.
+            return self.settle(request_id, "failed", "Previous stop superseded by a new driver fence; original delivery unknown.",
+                               {"historicalOutcome": "unknown", "supersededByFence": fence}) or previous
         action = self._adventures.get(request_id)
         if (action and action.name == adventure.ACT and action.args.get("kind") in adventure.COORDINATION
                 and self.port.transport == "numen-hosted-mcp" and not self.port.recorded(request_id)):
