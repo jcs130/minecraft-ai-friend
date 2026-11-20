@@ -2304,9 +2304,8 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     learningCall: methodLearningCall,
     readOnlyCall: args => !!args.find || !!args.api || ['list','read'].includes(String((args.scene as {op?:unknown}|undefined)?.op)) || ['list', 'read', 'evidence'].includes(String((args.library as { op?: unknown } | undefined)?.op))
       || Object.keys(args).length===1 && ['list','read'].includes(String((args.routine as {op?:unknown}|undefined)?.op)),
-    description: 'Run an agent-authored JavaScript async function body with params and a restricted mc SDK. '
-      + 'Write new feedback-controlled actions when persistent inputs, calculations or conditional sequencing are useful; this is not limited to existing named scripts. '
-      + '{api:"authoring"} gives the short write/validate/save/execute/review/reuse path. {library:{op:"list",query:"purpose"}} searches only this scoped game-method library; a host procedure_find may use a different library. '
+    description: 'Write and run an async JavaScript function body with params and the restricted mc SDK using the {api:"authoring"} guide. '
+      + 'The guide covers writing, validation, saving, execution, review and reuse. Use feedback, calculations or conditional steps to adapt your actions. {library:{op:"list",query:"purpose"}} searches this scoped game-method library. A host procedure_find may use a different library. '
       + 'scene:{op:"capture",id,target:[x,y,z],radius?:8} records current local collision geometry and initial pose for isolated replay without moving. scene list/read discovers immutable cases; unloaded cells remain unknown. This is not a combat/plugin simulator. '
       + 'Nearby blocks: {find:{names:["water"],maxDistance:8,count:4},waitMs:1000} runs a bounded read recipe without scan loops. name is optional for code; omitted names use its stable source hash. Explicit names are1–80 characters. '
       + 'mc.state() returns {sampledAt,connectionGeneration,snapshot,flight,queue,combatActive,combat,method}. '
@@ -2357,7 +2356,11 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_do',
     tags: ['act'],
     description:
-      'Queue Minecraft actions. A single plain chat with default queue and no needs/expect sends immediately while movement continues; do not append an independent reply after a long goto. queue:"afterCheckpoint" inserts a safe detour and resumes the original task. Return immediately with a task id. Known next steps in one intention can be submitted together; steps and queued tasks continue in the background without another model turn. Put a timed permission chat command and its planned movement in the same group, linked by needs. Flight waits up to 2 seconds for actual server permission; sending a command alone does not prove its effect. Use queue:"now" for immediate food or escape during combat; default submission waits for combat and replaces pending tasks. Start the group with eat, flee or surface to take control even during low-health combat. Environmental rescue still has priority. Use queue:"append" to add work after existing tasks. Use queue:"afterCheckpoint" to do this group at a safe checkpoint of current work, then resume that work; container and transaction groups wait until their operation is complete. Each task reports completion or obstruction as a minecraft.task event; a blocked task leaves later tasks queued. A single plain chat or vanilla /msg, /tell, /w to a named player, with default queue and no needs/expect, sends immediately while movement continues. Other slash commands and chat inside a multi-step group retain queue order.',
+      'Queue Minecraft actions, get a task ID on acceptance and check the terminal minecraft.task event for completion or obstruction. '
+      + 'Submit known steps together. Queued work continues in the background. Link a timed permission command and its movement with needs in one group. Flight waits up to 2 seconds for the server to confirm permission after sending the command. '
+      + 'Default submission waits for combat and replaces pending tasks. Use queue:"now" for immediate food or escape. Start with eat, flee or surface to take control during low-health combat. Environmental rescue still has priority. '
+      + 'Use queue:"append" to add work, or queue:"afterCheckpoint" for a safe detour that resumes the original task. Container and transaction groups finish their operation first. A blocked task leaves later tasks queued. '
+      + 'A single plain chat or vanilla /msg, /tell, /w to a named player with default queue and no needs/expect sends immediately while movement continues. Send independent replies separately from a long goto. Other commands and chat inside multi-step groups retain queue order.',
     parameters: {
       type: 'object',
       properties: {
