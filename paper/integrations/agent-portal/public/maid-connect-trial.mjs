@@ -4,10 +4,14 @@ const id = new URLSearchParams(location.hash.slice(1)).get('request');
 const valid = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(id || '');
 const errors = {TRIAL_EXPIRED:'这次托管邀请已到期。',CONFIRMATION_DENIED:'连接码、请求或邀请文件不匹配。请核对同一台桌面的最新请求。',INVITATION_USED:'这个邀请已用于另一份设备请求。',RATE_LIMITED:'尝试较多，请稍后再试。',INVALID_CONFIRMATION:'请选择官网邀请文件，并填写六位连接码。'};
 const fmt = t => new Date(t).toLocaleString('zh-CN',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Shanghai'});
-try {
+async function showConnection() {
   const response=await fetch(base+'/trial',{cache:'no-store',credentials:'omit'});
   if(!response.ok)throw Error();
   const state=await response.json();
+  if (state.mode === 'owner') {
+    location.replace('/maid-owner-connect.html' + (valid ? '#request=' + id : ''));
+    return;
+  }
   get('status').textContent=state.active?'本期开放「'+state.name+'」的家庭局域网临时托管。':'本期临时托管已结束。';
   get('start').hidden=valid && state.active;
   if(valid && state.active){
@@ -15,7 +19,9 @@ try {
     get('scope').textContent='本次允许这台桌面读取角色状态、行动及收发游戏消息，有效至北京时间 '+fmt(state.expiresAt)+'。';
     get('consent').hidden=false;
   }
-} catch{get('status').textContent='暂时无法读取托管状态，请稍后刷新。';get('start').hidden=false;}
+}
+try { await showConnection(); }
+catch { get('status').textContent='暂时无法读取托管状态，请稍后刷新。';get('start').hidden=false; }
 get('consent').addEventListener('submit',async e=>{
   e.preventDefault();const form=e.currentTarget,button=form.querySelector('button');button.disabled=true;
   try{

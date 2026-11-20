@@ -12,7 +12,7 @@ import pytest
 
 from agent_mc_harness import BodyAction, Scope
 from agent_mc_harness.body.maid import MaidBody, legacy_cast_outcome, reply_status
-from agent_mc_harness.bridges import ControlChanged, NativeMaidBridge
+from agent_mc_harness.bridges import ControlChanged, MaidApiBridge, NativeMaidBridge
 from agent_mc_harness.journal import ActionJournal
 from agent_mc_harness.npc import NpcHost, NpcRole
 from agent_mc_harness.runtime import Step
@@ -24,6 +24,33 @@ OTHER = "00000000-0000-4000-8000-000000000004"
 SCOPE = Scope(realm="isolation", account="original-owner", agent="original-companion")
 TOKEN = "isolated-test-token"
 ENDPOINT = "http://127.0.0.1:19087/maid-body"
+API_ENDPOINT = "https://maids.example.test/api/v1/maid-body"
+
+
+@pytest.mark.parametrize("endpoint", [
+    "http://maids.example.test/api/v1/maid-body",
+    "https://alice@maids.example.test/api/v1/maid-body",
+    "https://maids.example.test/api/v1/maid-body?target=other",
+    "https://maids.example.test/maid-body",
+])
+def test_remote_maid_bridge_requires_the_scoped_https_route(endpoint: str) -> None:
+    with pytest.raises(ValueError, match="maid_api_requires_https_endpoint"):
+        MaidApiBridge(endpoint, TOKEN, owner_id=OWNER, maid_id=MAID, controller_id=CONTROLLER)
+
+
+def test_remote_maid_identity_never_forwards_the_key_on_redirect(run: Any) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == API_ENDPOINT
+        assert request.headers["authorization"] == "Bearer " + TOKEN
+        assert json.loads(request.content) == {"operation": "identity"}
+        return httpx.Response(307, headers={"Location": "https://other.example.test/api/v1/maid-body"})
+
+    async def go() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=True) as http:
+            with pytest.raises(RuntimeError, match="maid_api_identity_unavailable"):
+                await MaidApiBridge.identify(API_ENDPOINT, TOKEN, http=http)
+
+    run(go())
 
 
 class NativeServer:

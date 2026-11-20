@@ -46,6 +46,7 @@ import {createSceneObjectStorage} from './scene-object-storage.mjs';
 import { publicDialogueText } from './public-dialogue.mjs';
 import {NekoAuth,NEKO_CALLBACK} from './neko-auth.mjs';
 import {NekoPluginLinks} from './neko-plugin-links.mjs';
+import { MaidConnections, maidConnectionRoute } from './maid-connections.mjs';
 import {hostingRoutes} from './hosting-routes.mjs';
 import {ResidentTurns} from './resident-turns.mjs';
 import { WorldMap } from './world-map.mjs';
@@ -120,6 +121,7 @@ export function createPortal(config, options = {}) {
   const agentAccess = new AgentAccess(config, store, game, accounts);
   const nekoAuth = new NekoAuth(config,store,{fetcher:options.nekoFetch});
   const nekoLinks = new NekoPluginLinks(config,store,accounts,nekoAuth);
+  const maidConnections = new MaidConnections(config, store, options.now);
   const appearance = new Appearance(config, store, game);
   const npcAdmin = new NpcAdmin(store);
   const memories = new Memories(store);
@@ -320,6 +322,9 @@ export function createPortal(config, options = {}) {
         const principal = residentTurns.pollingPrincipal(req,pathname);
         rate(principal ? 'resident:' + principal : 'api:' + digest(rateAddress(req, config)), 300, 60000);
       }
+      if (await maidConnectionRoute({ req, res, pathname, connections: maidConnections,
+        browserAuth, csrf, jsonBody, respond, rate,
+        address: () => digest(rateAddress(req, config)) })) return;
       const onboarding = /^\/api\/v1\/resident-onboarding\/(pair|list|create|connect)$/.exec(pathname);
       if (onboarding) {
         if (onboarding[1] === 'pair') rate('resident-pair:'+digest(rateAddress(req,config)),24,60000);

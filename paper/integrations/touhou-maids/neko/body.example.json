@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "endpoint": "http://127.0.0.1:28994/maid-body",
+  "owner_id": "20000000-0000-0000-0000-000000000021",
+  "maid_id": "10000000-0000-0000-0000-000000000011",
+  "token_file": "D:/test-fixtures/neko-maid/body.token",
+  "role": "HesuiQA",
+  "forward_owner_dialogue": true
+}

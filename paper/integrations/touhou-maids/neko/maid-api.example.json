@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "port": 19088,
+  "nativePort": 19087,
+  "nativeTokenFile": "D:/private/maid-native.key",
+  "grantsFile": "D:/private/maid-api-grants.json"
+}

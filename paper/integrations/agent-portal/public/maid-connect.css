@@ -1,0 +1,20 @@
+:root { color-scheme: dark; font-family: system-ui, "Microsoft YaHei", sans-serif; color: #e6e9df; background: #101c19; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 38rem; margin: auto; padding: clamp(24px, 7vw, 64px) 20px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 650; text-decoration: none; }
+h1 { margin: 40px 0 12px; font-size: clamp(28px, 6vw, 38px); line-height: 1.25; }
+h2 { font-size: 20px; }
+p { color: #b7c4b9; line-height: 1.6; }
+a { color: #e4c58c; }
+:focus-visible { outline: 2px solid #e4c58c; outline-offset: 3px; }
+form, section { margin-top: 24px; padding: clamp(16px, 4vw, 24px); border: 1px solid #3a5147; border-radius: 12px; background: #182923; }
+label { display: grid; gap: 8px; margin-bottom: 16px; }
+input, select, button { min-height: 44px; padding: 9px 12px; font: inherit; border-radius: 7px; }
+input, select { width: 100%; color: inherit; background: #101c19; border: 1px solid #63756a; }
+button { cursor: pointer; color: #202719; background: #e4c58c; border: 1px solid #e4c58c; font-weight: 620; }
+button:disabled { opacity: .55; }
+.actions, li { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+ul { margin: 0; padding: 0; list-style: none; }
+li { padding: 12px 0; border-top: 1px solid #3a5147; overflow-wrap: anywhere; }
+li button { color: #ebd8ae; background: transparent; border-color: #63756a; }

@@ -38,6 +38,11 @@
     "enabled": false,
     "clientId": ""
   },
+  "maidConnections": {
+    "enabled": false,
+    "bodyEndpoint": "",
+    "bindings": []
+  },
   "emailAuth": {
     "enabled": true,
     "registrationMode": "optional-email",
