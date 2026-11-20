@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections import defaultdict
 import importlib.util
 import json
 import os
@@ -140,6 +141,8 @@ async def serve(path: Path):
         clients.append(provider[name])
     system1 = FastSelector(provider["tokenplan"], settings.get("systemOneModel", "decision-model-preview"))
     semaphore = asyncio.Semaphore(2)
+    # An old planner may still be finishing a request when its host is rebuilt.
+    role_locks = defaultdict(asyncio.Lock)
     def handoff(role):
         return external_handoff(role, settings["bodies"][role.id])
 
@@ -242,7 +245,9 @@ async def serve(path: Path):
             body = NumenBody(port, scope=scope, server_id=settings["serverId"], name=role.name, owner_id=str(role.owner_id),
                              item_use_ids=tuple(role.native_items), adventure_partner=role.adventure_partner)
         memory = open_role_memory(state / role.id, connection)
-        return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1, resident_turns=turns.get(role.id)),
+        planner = NpcPlanner(role, provider[role.provider], semaphore=semaphore, role_lock=role_locks[role.id],
+                             fast=system1, resident_turns=turns.get(role.id))
+        return NpcHost(role, body, planner,
                        memory, journal, social=social, social_graph=social_graph,
                        companion_adventure=CompanionAdventure(*source, role.owner_id) if role.adventure_advice and source else None)
     yielded = {}
