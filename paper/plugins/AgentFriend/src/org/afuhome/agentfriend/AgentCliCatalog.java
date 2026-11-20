@@ -262,8 +262,8 @@ final class AgentCliCatalog {
         add(specs,"arena.recycle.quote","storage","read","/mycli arena recycle quote chest|bag <槽位> [数量]","对精确槽位装备获取5分钟报价；不同槽位独立，最多保留32份","装备未穿戴且不是专属或任务物品","私有 quoteId、组件与价格");
         add(specs,"arena.recycle.sell","storage","item","/mycli arena recycle sell <quoteId>","按报价回收装备并存入个人余额","报价未过期且完整物品组件未变","私有成交与余额回执");
         add(specs,"arena.rewards","storage","gui","/mycli arena rewards","打开本人个人奖励箱","基础远程存箱已可用；成功远程开页2魔力，实体箱旁免费，无需学习或先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
-        add(specs,"arena.rewards.list","storage","read","/mycli arena rewards list","只读查看待入箱奖励；首次开箱前及箱满时都可能有","在线玩家","MC_REWARD、MC_REWARD_SUMMARY");
-        add(specs,"arena.rewards.take","storage","item","/mycli arena rewards take <0–17|all>","领取尚未入箱的奖励；箱内物品用 stash take","背包有空位；远程成功领取 2 魔力，实体箱旁免费","领取结果与远程 MC_STORAGE_MAGIC");
+        add(specs,"arena.rewards.list","storage","read","/mycli arena rewards list [head|chest|legs|feet|ammo]","查看待入箱奖励；加装备部位或弹药可从本人整条队列定位首件匹配奖励","在线玩家","MC_REWARD、MC_REWARD_SUMMARY；额外装备含 slot 和本次 ref");
+        add(specs,"arena.rewards.take","storage","item","/mycli arena rewards take <槽位|all> [ref]","单领筛选出的装备时带上 slot 与 ref；箱内物品用 stash take","未带 ref 可领 0–17 槽或 all；背包有空位，远程成功领取 2 魔力，实体箱旁免费","领取结果与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.stash","storage","gui","/mycli arena stash","本人540格个人箱；Agent可直接putslot存、list查、take取，无需开界面","基础远程存箱已可用；成功远程开页2魔力，实体箱旁免费，无需学习或先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.stash.summary","storage","read",PersonalStashOverview.COMMAND+" [--json]","免费总览十页个人箱的剩余格数、物品件数、武器防具、消耗品与所在页","仅本人；随时远程查询；未入箱的奖励另计","MC_STASH_OVERVIEW 含 categories、freeSlots、pendingRewardEntries、nextCommand");
         add(specs,"arena.stash.pages","storage","gui","/mycli arena stash pages","原版菜单选择10页个人箱","每页54格；无需学习，成功远程开页2魔力","原版分页选择菜单");

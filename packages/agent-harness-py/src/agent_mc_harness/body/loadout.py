@@ -46,13 +46,31 @@ local function take(item,cmd)
   run(cmd)
   done(n.inv.count(item)>before and 'collected' or 'verify_inventory',item)
 end
-local queued
-for _,row in ipairs(run('arena rewards list')) do
+local rewardScanComplete=false
+local reward
+local filteredCount
+for _,row in ipairs(run('arena rewards list '..slot)) do
+  if row:match(' filter=(%a+)$')==slot then filteredCount=tonumber(row:match('^MC_REWARD_SUMMARY visible=(%d+)')) end
   local pos,item=row:match('^MC_REWARD slot=(%d+) id=([%w_:./-]+)')
-  if fits(item) then take(item,'arena rewards take '..pos);return end
-  if row:match('^MC_REWARD_SUMMARY ') then queued=tonumber(row:match('queuedBonus=(%d+)')) end
+  if not reward and fits(item) then
+    local ref=row:match(' ref=(%x+)$')
+    if tonumber(pos)<9 or (ref and #ref==64) then
+      reward={item=item,cmd='arena rewards take '..pos..(ref and ' '..ref or '')}
+    end
+  end
 end
-if not queued or queued>9 then done('rewards_incomplete');return end
+if filteredCount then
+  if filteredCount>0 and reward then take(reward.item,reward.cmd);return end
+  rewardScanComplete=filteredCount==0
+else
+  -- Older servers expose only the first nine bonus entries.
+  for _,row in ipairs(run('arena rewards list')) do
+    local pos,item=row:match('^MC_REWARD slot=(%d+) id=([%w_:./-]+)')
+    if fits(item) then take(item,'arena rewards take '..pos);return end
+    local queued=row:match('^MC_REWARD_SUMMARY .*queuedBonus=(%d+)')
+    if queued then rewardScanComplete=tonumber(queued)<=9 end
+  end
+end
 local pages
 for _,row in ipairs(run('arena stash summary --json')) do
   if row:match('^MC_STASH_OVERVIEW ') then
@@ -75,6 +93,7 @@ for page in pages:gmatch('%d+') do
   end
   if not complete then done('read_unavailable');return end
 end
+if not rewardScanComplete then done('rewards_incomplete');return end
 if not buy then done('no_owned_piece');return end
 local id=ammo and 'arrows' or 'iron_'..suffix
 local page=ammo and 2 or 1
