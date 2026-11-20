@@ -24,7 +24,7 @@ from .companion_adventure import mentions_activity
 from .conversation import COMPANION_SPEECH_POLICY, CONVERSATION_POLICY, WHALE_SPEECH_POLICY, names_listener, repeats_companion_speech, whale_speech
 from .body import adventure
 from .journal import ActionJournal, work_key
-from .maid_companions import MaidCompanions, nearby_maid_listener, parse_choice, walk_available
+from .maid_companions import WALK_TIMEOUT, MaidCompanions, nearby_maid_listener, parse_choice, walk_available
 from .models import BodyEvent, Scope
 from .resident_protocol import social_communication, speech_receipt
 from .runtime import HarnessRuntime, Intent, PlanContext, Step, step_support
@@ -281,6 +281,13 @@ def reviewed_steps(role: NpcRole, context: PlanContext, values: Any) -> list[Ste
             raise ValueError("choose_companion_from_the_skill_compass_before_travel")
         if step.tool == "body:attack" and step.args.get("target", "hostile") != "hostile":
             raise ValueError("npc_cannot_attack_players_or_passive_entities")
+        if role.body_kind == "maid" and step.tool in {"body:move", "body:native:walk"} and not body_changed:
+            last_walk = next((r for r in context.body_results if r.get("action") in {"move", "walk"}), {})
+            rejected = last_walk.get("destination", {})
+            if (0 < last_walk.get("pathBlockedUntil", 0) - time.time() <= WALK_TIMEOUT + 1
+                    and rejected.get("dimension") == step.args.get("dimension", context.snapshot.dimension if context.snapshot else None)
+                    and all(rejected.get(k) is not None and rejected[k] == step.args.get(k) for k in ("x", "y", "z"))):
+                break  # Later steps in this plan may depend on arriving.
         if step.tool == "body:native:task" and step.args.get("taskId") not in role.native_tasks:
             raise ValueError("task_not_in_reviewed_native_catalogue")
         if step.tool == "body:native:task" and step.args.get("taskId") == "touhou_little_maid:fishing":
@@ -620,8 +627,10 @@ class NpcPlanner:
             "your own interests and current evidence. Keep waiting or continue a task with steps: []; elapsed time alone "
             "does not require leaving. You may take a break, help someone, choose local work or regroup. Use a short "
             "private step.note for why you sit or stay. No repeated sit/guard, reminders or public status lines. "
-            "body:native:task with an allowed taskId can stand you up for local activity. body:native:guard delegates "
-            "travel to the expedition leader only when nativeContext.resident.expedition is configured. "
+            "body:native:task with an allowed taskId can stand you up for local activity. "
+            "While seated, activityReview.compassWhileWaiting shows who is actually online. If you choose to join "
+            "someone, stand up with an available task first, then choose them from the refreshed skill compass. "
+            "body:native:guard delegates travel to the expedition leader only when nativeContext.resident.expedition is configured. "
             "body:follow follows your owner, who may be a different person. If the leader is unavailable or travel "
             "has no safe landing, choose among feasible local actions. Never claim arrival without observing it. "
             if role.activity_review_seconds is not None else
@@ -651,6 +660,8 @@ class NpcPlanner:
                         "cast spellId is the learned skill's bare ID, for example radiant_pulse; omit the display prefix mycli:. "
                         "The observation is already supplied. Read again only for missing facts or after an action. "
                         "Use recentBodyResults to continue real work and explain results. A pending work order has not used inputs. "
+                        "For a path_blocked walk, choose another observed approach or follow the moving companion. "
+                        "The exact rejected waypoint can be tried again after pathBlockedUntil (Unix seconds). "
                         "For making items, call body:native:workshop if the authorized workshop catalogue is missing. "
                         "body:observe does not list recipes. Use the catalogue's exact workshopId and recipeId. "
                         "quantity counts finished items. For inventory use 'chest' for the supply chest or 'backpack' for your own backpack. "
@@ -1031,6 +1042,11 @@ class NpcHost:
             context.activity_review = {"activity": mode, "elapsedSeconds": max(0, int(now - since)),
                                        "waitPurpose": purpose, "sceneChanged": changed,
                                        "quietWaitReviewSeconds": self.role.activity_review_seconds}
+            if mode == "waiting" and self.companions and not context.maid_companions:
+                # Reading the server's directory does not require permission to walk.
+                directory = self.companions.context(context.snapshot)
+                if directory["source"] == "skill_compass":
+                    context.activity_review["compassWhileWaiting"] = directory["characters"]
         if self.role.default_native_guard:
             context.recent_companion_speech = self.journal.recent_companion_speech(body_id)
         if self.companion_adventure and context.snapshot and context.snapshot.life_state == "alive":
@@ -1070,7 +1086,7 @@ class NpcHost:
                 for key in ("survey", "adventure"):
                     if isinstance(data.get(key), dict):
                         result[key] = data[key]
-            elif action.verb == "move":
+            elif action.verb == "move" or action.verb == "native" and action.name == "walk":
                 result["destination"] = action.args
             if action.verb == "inventory":
                 if not inventory_added and self.role.body_kind == "numen" and isinstance(data.get("inventory"), list):
@@ -1082,6 +1098,9 @@ class NpcHost:
             if isinstance(reply, dict) and isinstance(reply.get("data"), dict):
                 evidence = reply["data"]
                 result["native"] = {key: evidence[key] for key in ("status", "goalCompleted", "observation", "workshops") if key in evidence}
+                if (receipt.terminal and receipt.status == "failed" and receipt.text == "path_blocked"
+                        and "destination" in result and (observed := timestamp(evidence.get("observedAt")))):
+                    result["pathBlockedUntil"] = observed / 1000 + WALK_TIMEOUT
             if isinstance(data.get("meal"), dict):
                 result["observedMeal"] = data["meal"]
             if isinstance(data.get("itemUse"), dict):

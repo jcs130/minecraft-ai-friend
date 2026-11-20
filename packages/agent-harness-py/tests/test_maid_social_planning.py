@@ -28,6 +28,7 @@ class VisiblePlayers(NativeServer):
         self.directory = None
         self.navigation_target = None
         self.dimension = "minecraft:overworld"
+        self.seated = False
         self.actions.extend(("rendezvous", "release_rendezvous"))
 
     def __call__(self, request):
@@ -39,7 +40,7 @@ class VisiblePlayers(NativeServer):
         row = json.loads(content["text"])
         row["data"].update(health=20, maxHealth=20, dimension=self.dimension, resident={"loaded": True},
                            nearbyPlayers=self.players, socialWalkAvailable=self.available,
-                           taskId="touhou_little_maid:idle", nativeGuardDelegated=True, sitting=False,
+                           taskId="touhou_little_maid:idle", nativeGuardDelegated=True, sitting=self.seated,
                            canMove=True, homeMode=False, passenger=False)
         if self.directory is not None:
             row["data"]["characterDirectory"] = self.directory
@@ -49,8 +50,97 @@ class VisiblePlayers(NativeServer):
         return httpx.Response(response.status_code, json=envelope)
 
 
+def test_seated_resident_reads_compass_then_stands_and_chooses_a_partner(tmp_path):
+    async def run():
+        world = VisiblePlayers()
+        world.actions.append("task")
+        world.directory = [peer(OTHER, "Partner", 16)]
+        world.seated, world.available = True, False
+        task_id = "touhou_little_maid:idle"
+        who = NpcRole(id="healer", name="Healer", owner_id=UUID(OWNER), character_id=UUID(MAID),
+                      body_id=UUID(MAID), body_kind="maid", provider="tokenplan", model="qa",
+                      persona="Decide how to help.", native_tasks=[task_id], activity_review_seconds=60,
+                      allowed_tools=["body:move", "body:native:task", "body:observe"])
+        body = make(world, scope=who.scope("qa"))
+        journal = ActionJournal(tmp_path / "actions.sqlite")
+        prompts = []
+
+        def decide(request):
+            facts = json.loads(json.loads(request.content)["messages"][1]["content"])
+            prompts.append(facts)
+            if facts["activityReview"]["activity"] == "waiting":
+                assert "maidCompanions" not in facts
+                assert [p["uuid"] for p in facts["activityReview"]["compassWhileWaiting"]] == [OTHER]
+                plan = {"steps": [{"tool": "body:native:task", "args": {"taskId": task_id}}]}
+            else:
+                assert facts["maidCompanions"]["characters"][0]["uuid"] == OTHER
+                plan = {"steps": [], "companion": {"mode": "approach", "targetUuid": OTHER}}
+            return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(plan)}}]})
+
+        model = ModelClient("http://127.0.0.1:1/v1", "fixture", http=httpx.AsyncClient(transport=httpx.MockTransport(decide)))
+        host = NpcHost(who, body, NpcPlanner(who, model), None, journal)
+        try:
+            await body.spawn()
+            for index, expected in enumerate(["body:native:task", "body:move"]):
+                context = PlanContext(snapshot=await body.snapshot(), capabilities=body.capabilities())
+                steps = await host._plan(Intent(id=f"turn-{index}", agent=who.id, goal=IDLE_GOAL), context)
+                assert [s.tool for s in steps] == [expected]
+                if index == 0:
+                    assert not world.writes  # Directory read itself never changes posture or casts travel.
+                    applied = await body.act(steps[0].action("qa-stand-for-social-trip"))
+                    assert applied.status == "completed"
+                    world.seated, world.available = False, True
+            assert len(prompts) == 2
+        finally:
+            await body.destroy()
+            await model.close()
+            journal.close()
+    asyncio.run(run())
+
+
+def test_recent_rejected_maid_waypoint_changes_the_plan(tmp_path):
+    async def run():
+        destination = {"x": 9, "y": 65, "z": 4, "dimension": "minecraft:overworld"}
+        async with setup(tmp_path, lambda *_: {}) as (_, body, _):
+            here = PlanContext(snapshot=await body.snapshot(), capabilities=body.capabilities(),
+                               body_results=[{"action": "move", "destination": destination, "pathBlockedUntil": time.time() + 29}])
+            who = NpcRole(id="helper", name="Helper", owner_id=UUID(OWNER), character_id=UUID(MAID),
+                          body_id=UUID(MAID), body_kind="maid", provider="tokenplan", model="qa",
+                          persona="Explore.", allowed_tools=["body:move", "body:chat"])
+            goto = {"tool": "body:move", "args": destination}
+            assert reviewed_steps(who, here, [goto, {"tool": "body:chat", "args":{"text":"到了"}}]) == []
+            assert reviewed_steps(who, here, [{"tool": "body:move", "args": {**destination, "x": 8}}])
+            assert reviewed_steps(who, here, [{"tool": "body:move", "args": {**destination, "dimension": "minecraft:the_nether"}}])
+            here.body_results[0]["pathBlockedUntil"] = time.time() - 1
+            assert reviewed_steps(who, here, [goto])
+    asyncio.run(run())
+
+
+def test_native_blocked_walk_reaches_next_model_turn(tmp_path):
+    from agent_mc_harness.models import ActionReceipt, utcnow
+
+    destination = {"x": 3, "y": 64, "z": 9, "dimension": "minecraft:overworld"}
+    def seed(journal):
+        rid = "original-blocked-walk"
+        journal.begin(MAID, BodyAction(verb="move", args=destination, request_id=rid))
+        journal.settle(MAID, ActionReceipt(verb="move", request_id=rid, status="failed", terminal=True,
+                       text="path_blocked", data={"reply": {"data":{"observedAt":utcnow().isoformat(),
+                       "observation":{"reason":"path_blocked", "effectsApplied":False}}}}))
+
+    def decide(world, facts):
+        previous = facts["recentBodyResults"][0]
+        assert previous["destination"] == destination and previous["pathBlockedUntil"] > time.time()
+        return {"steps":[{"tool":"body:move","args":destination}]}
+
+    async def run():
+        async with setup(tmp_path, decide, seed_journal=seed) as (world, _, plan):
+            assert await plan() == []
+            assert not world.writes
+    asyncio.run(run())
+
+
 @asynccontextmanager
-async def setup(tmp_path, answer):
+async def setup(tmp_path, answer, *, seed_journal=None):
     world = VisiblePlayers()
     who = NpcRole(id="qa_resident", name="测试伙伴", owner_id=UUID(OWNER), character_id=UUID(MAID),
                   body_id=UUID(MAID), body_kind="maid", provider="tokenplan", model="qa-model",
@@ -62,6 +152,8 @@ async def setup(tmp_path, answer):
     client = ModelClient("http://127.0.0.1:1/v1", "synthetic", http=httpx.AsyncClient(transport=httpx.MockTransport(respond)))
     body = make(world, scope=who.scope("qa-server"))
     journal = ActionJournal(tmp_path / "actions.sqlite")
+    if seed_journal:
+        seed_journal(journal)
     host = NpcHost(who, body, NpcPlanner(who, client), None, journal)
     try:
         await body.spawn()
