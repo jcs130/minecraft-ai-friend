@@ -38,13 +38,13 @@ class _Player:
     distance: float | None
 
 
-def _players(snapshot: BodySnapshot | None) -> dict[str, _Player]:
+def _players(snapshot: BodySnapshot | None, *, use_directory: bool = True) -> dict[str, _Player]:
     if (snapshot is None or snapshot.life_state != "alive" or not snapshot.dimension
             or not -1 <= time.time() - snapshot.sampled_at.timestamp() <= 5):
         return {}
     origin = _point(snapshot.position)
     raw = snapshot.raw if isinstance(snapshot.raw, dict) else {}
-    directory = "characterDirectory" in raw
+    directory = use_directory and "characterDirectory" in raw
     rows = raw.get("characterDirectory") if directory else raw.get("nearbyPlayers")
     if origin is None or not isinstance(rows, list):
         return {}
@@ -68,6 +68,13 @@ def _players(snapshot: BodySnapshot | None) -> dict[str, _Player]:
             aliases = tuple(dict.fromkeys(label for label in labels if isinstance(label, str) and label and label != name))
             players[uid] = _Player(uid, name, aliases, pos, dimension, distance)
     return players
+
+
+def nearby_maid_listener(snapshot: BodySnapshot | None) -> bool:
+    # The native near-player list excludes spectators, hidden players and observer accounts.
+    # The world-wide character directory is not evidence of a local audience.
+    return any(player.distance is not None and player.distance <= 8
+               for player in _players(snapshot, use_directory=False).values())
 
 
 def walk_available(snapshot: BodySnapshot | None) -> bool:

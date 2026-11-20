@@ -37,6 +37,7 @@ class ActionJournal:
         self.db.execute("CREATE TABLE IF NOT EXISTS listened (body TEXT, event TEXT, intent TEXT, decided_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(body,event))")
         self.db.execute("CREATE TABLE IF NOT EXISTS work_sources (body TEXT, event TEXT, request TEXT, PRIMARY KEY(body,event,request))")
         self.db.execute("CREATE TABLE IF NOT EXISTS npc_contacts (body TEXT, kind TEXT, request TEXT, at REAL, PRIMARY KEY(body,kind))")
+        self.db.execute("CREATE TABLE IF NOT EXISTS npc_resident_speech (request TEXT PRIMARY KEY, turn_hash TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS npc_activity (body TEXT PRIMARY KEY, mode TEXT NOT NULL, "
                         "since REAL NOT NULL, cue TEXT, reviewed REAL, purpose TEXT)")
         self.db.execute("CREATE TABLE IF NOT EXISTS npc_wait_notes (request TEXT PRIMARY KEY, note TEXT NOT NULL)")
@@ -65,7 +66,8 @@ class ActionJournal:
                             "until=excluded.until,slots=excluded.slots WHERE npc_agendas.until<=?",
                             (character, slots[-1]["endsAt"], json.dumps(slots, ensure_ascii=False), now))
 
-    def begin(self, body: str, action: BodyAction, sources: list[str] | None = None, *, note: str | None = None) -> None:
+    def begin(self, body: str, action: BodyAction, sources: list[str] | None = None, *, note: str | None = None,
+              resident_turn_hash: str | None = None) -> None:
         if not action.request_id:
             raise ValueError("durable_request_id_required")
         with self.db:
@@ -81,6 +83,8 @@ class ActionJournal:
                 key = "party-opening:" + action.args["partyId"] if action.args.get("text") == PARTY_OPENING else "party-speech"
                 self.db.execute("INSERT OR REPLACE INTO npc_contacts VALUES (?,?,?,?)", (body, key, action.request_id, time.time()))
             if action.verb == "chat":
+                if resident_turn_hash:
+                    self.db.execute("INSERT INTO npc_resident_speech VALUES (?,?)", (action.request_id, resident_turn_hash))
                 self.db.executemany("INSERT INTO replies VALUES (?,?,?)", [(body, event, action.request_id) for event in dict.fromkeys(sources or [])])
             if action.verb == "native" and action.name == "ack" and action.args.get("eventId"):
                 self.db.execute("INSERT INTO acknowledgements VALUES (?,?,?)", (body, action.args["eventId"], action.request_id))
@@ -170,6 +174,10 @@ class ActionJournal:
     def receipt(self, body: str, request_id: str) -> ActionReceipt | None:
         row = self.db.execute("SELECT receipt FROM dispatch WHERE body=? AND id=?", (body, request_id)).fetchone()
         return ActionReceipt.model_validate_json(row[0]) if row and row[0] else None
+
+    def speech_turn_hash(self, request_id: str) -> str | None:
+        row = self.db.execute("SELECT turn_hash FROM npc_resident_speech WHERE request=?", (request_id,)).fetchone()
+        return row[0] if row else None
 
     def recent(self, body: str, limit: int = 12) -> list[tuple[BodyAction, ActionReceipt]]:
         rows = self.db.execute(
