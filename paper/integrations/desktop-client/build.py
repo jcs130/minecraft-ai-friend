@@ -5,13 +5,14 @@ import json
 import tomllib
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-from zipfile import ZipFile
+from zipfile import ZIP_DEFLATED, ZipFile
 
 
 ROOT = Path(__file__).resolve().parent
 ANDROID = ROOT.parent / 'android-client'
 PACK_VERSION = '1.1.0'
 WHEEL_PACK_VERSION = '1.1.2'
+MOTION_PACK_VERSION = '1.1.3'
 NEOFORGE = '21.1.252'
 SHARED_CLIENT_MODS = ('touhou-little-maid', 'yes-steve-model', 'simple-voice-chat')
 
@@ -21,7 +22,9 @@ common = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(common)
 
 
-def build(cache, output, catalog=None, controls_mod=None):
+def build(cache, output, catalog=None, controls_mod=None, kirito_mod=None):
+    if kirito_mod and not controls_mod:
+        raise ValueError('Kirito motion pack 1.1.3 includes the controls mod from 1.1.2')
     baseline = json.loads((ANDROID / 'sources.lock.json').read_bytes())
     android_mods = {mod['id']: mod for mod in baseline['files']}
     mods = [android_mods[mod_id] for mod_id in SHARED_CLIENT_MODS]
@@ -32,7 +35,7 @@ def build(cache, output, catalog=None, controls_mod=None):
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(lambda row: common.load_input(row, cache), mods))
 
-    version = WHEEL_PACK_VERSION if controls_mod else PACK_VERSION
+    version = MOTION_PACK_VERSION if kirito_mod else WHEEL_PACK_VERSION if controls_mod else PACK_VERSION
     filename = f'qiandengji-java-{baseline["minecraft"]}-neoforge-{version}.mrpack'
     index = {
         'formatVersion': 1, 'game': 'minecraft', 'versionId': version,
@@ -46,7 +49,7 @@ def build(cache, output, catalog=None, controls_mod=None):
             for mod in mods
         ],
     }
-    guide = (ROOT / 'README.md').read_text(encoding='utf-8')
+    guide = (ROOT / 'pack-guide.md').read_text(encoding='utf-8')
     included = '预置千灯纪主世界地址，包含原生女仆 1.5.3、YSM 2.6.5、附近语音 2.6.27 和 Controlify 3.0.1 LTS。首次导入需联网。'
     contents = {
         'modrinth.index.json': common.encoded(index),
@@ -65,8 +68,21 @@ def build(cache, output, catalog=None, controls_mod=None):
         guide = guide.replace('配置库 YACL。', f'配置库 YACL，以及 {combat}。', 1)
         guide = guide.replace('五份官方模组', '清单中的官方模组', 1)
         included += f'包含 {combat}。F6 或手柄十字键上可打开施法轮盘。'
+    if kirito_mod:
+        jar = kirito_mod.read_bytes()
+        if common.digest(jar) != 'ed7335ffc4274fffa85c8030ff9a277e4116b1bfc692b19767328815e85c264e':
+            raise ValueError('Expected the published Kirito motion 1.0.0 JAR')
+        contents['overrides/mods/kirito-motion-1.0.0.jar'] = jar
+        contents['overrides/LICENSES/Kirito-Motion.txt'] = (ROOT / 'kirito-motion/ATTRIBUTION.txt').read_text(encoding='utf-8').encode()
+        note = '加入桐人模型专用的七段第三人称动作。'
+        index['summary'] += note
+        contents['modrinth.index.json'] = common.encoded(index)
+        included += note
+        guide += ('\n## 桐人动作\n\n桐人的待机、走路、奔跑、坐地、坐垫、手持剑以及看到蛋糕时的动作会随游戏状态播放。'
+                  '使用本包进服即可看到。来源和许可见 `LICENSES/Kirito-Motion.txt`。\n')
     contents['overrides/README-Qiandengji.md'] = guide.encode('utf-8')
-    data = common.archive(contents)
+    data = (common.archive(contents, stamp=(2026, 11, 20, 0, 0, 0), compression=ZIP_DEFLATED, compresslevel=9)
+            if kirito_mod else common.archive(contents))
     row = {
         'id': 'desktop-client-pack', 'framework': 'minecraft', 'category': 'desktop-client',
         'name': '千灯纪桌面 Java 整合包', 'version': version, 'filename': filename,
@@ -96,5 +112,6 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--catalog', type=Path)
     parser.add_argument('--controls-mod', type=Path)
+    parser.add_argument('--kirito-mod', type=Path)
     args = parser.parse_args()
-    print(json.dumps(build(args.cache, args.output, args.catalog, args.controls_mod), ensure_ascii=False))
+    print(json.dumps(build(args.cache, args.output, args.catalog, args.controls_mod, args.kirito_mod), ensure_ascii=False))
