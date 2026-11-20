@@ -197,13 +197,25 @@ async def run_test(root, neko):
             assert (await packet_for("qa-voice"))["scene"]["communication"]["messages"] == [msg]
             desc = await callback(client, "capabilities", id="qa-voice")
             assert desc["communication"]["outputs"] == [route]
-            for bad in ({"sourceEventId": "other"}, {"scope": "public"}, {"mode": "text"}, {"id": "expired"}):
+            for bad, detail in (({"sourceEventId": "other"}, "source_not_offered"),
+                                ({"scope": "public"}, "scope_not_offered"),
+                                ({"mode": "text"}, "mode_not_offered"),
+                                ({"id": "expired"}, "turn_id_mismatch"),
+                                ({"text": "甲" * 161}, "text_too_long")):
                 args = {"id": "qa-voice", "text": "听见了。", **route, **bad}
-                assert not (await callback(client, "communicate", **args))["accepted"]
+                result = await callback(client, "communicate", **args)
+                assert not result["accepted"] and result["detail"] == detail
             assert not replies
             assert (await callback(client, "communicate", id="qa-voice", text="听见了。", **route))["accepted"]
             assert replies == [{"id": "qa-voice", "answer": {"communication": {
                 "mode": "speech", "text": "听见了。", "sourceEventId": "voice-42"}}}]
+            turn = {"id": "qa-proactive", "until": int(time.time() * 1000) + 20000, "resident": resident, "kind": "plan",
+                    "scene": {"communication": {"version": 1, "messages": [], "outputs": [{"mode": "native", "scope": "nearby"}]}}}
+            await packet_for("qa-proactive")
+            args = {"id": "qa-proactive", "scope": "nearby", "mode": "native", "text": "看一看附近。"}
+            assert (await callback(client, "communicate", **args, sourceEventId=""))["detail"] == "source_not_offered"
+            assert (await callback(client, "communicate", **args))["accepted"]
+            assert replies[-1] == {"id": "qa-proactive", "answer": {"communication": {"mode": "native", "text": args["text"]}}}
             tools = [{"tool": "body:observe", "parameters": {"type": "object"}}]
             turn = {"id": "qa-plan", "until": int(time.time() * 1000) + 20000, "resident": resident, "kind": "plan",
                     "scene": {"bodyTools": tools}}
