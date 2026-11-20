@@ -92,7 +92,8 @@ export async function jumpPlaceBelow(bot: Bot, ctx: SkillContext, material?: str
         await bot.placeBlock(below, new Vec3(0, 1, 0));
       }
     } catch (err) {
-      if (err instanceof Aborted) throw err;
+      if (err instanceof Aborted || err instanceof SkillBlocked) throw err;
+      if (err instanceof PlacementRetryDeferred) throw new SkillBlocked(err.message, [], 'local', err.code);
       /* 时机不对就再跳一次 */
     } finally {
       bot.setControlState('jump', false);
