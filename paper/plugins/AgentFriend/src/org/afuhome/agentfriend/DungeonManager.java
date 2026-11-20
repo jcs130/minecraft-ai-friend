@@ -2457,31 +2457,40 @@ final class DungeonManager implements Listener {
     int queuedItems(UUID id) { return bonusItems(id).size(); }
     private void rewardCommand(Player player, String[] args) {
         if (args.length == 2) { openStash(player); return; }
-        if (args[2].equalsIgnoreCase("list") && args.length == 3) {
+        if (args[2].equalsIgnoreCase("list") && (args.length == 3 || args.length == 4)) {
             UUID id = player.getUniqueId();
+            String filter = args.length == 4 ? args[3].toLowerCase(Locale.ROOT) : "";
+            if (!filter.isEmpty() && !Set.of("head", "chest", "legs", "feet", "ammo").contains(filter)) {
+                player.sendMessage("用法：/mycli arena rewards list [head|chest|legs|feet|ammo]"); return;
+            }
             int entries = 0;
             for (int slot = 0; slot < REWARD_TYPES.length; slot++) {
+                if (!filter.isEmpty() && !rewardFits(filter, REWARD_TYPES[slot])) continue;
                 int count = pending(id, REWARD_TYPES[slot]);
                 if (count <= 0) continue;
                 player.sendMessage("MC_REWARD slot=" + slot + itemFields(new ItemStack(REWARD_TYPES[slot], count)));
                 entries++;
             }
             List<ItemStack> bonus = bonusItems(id);
-            for (int index = 0; index < Math.min(9, bonus.size()); index++) {
+            for (int index = 0; index < (filter.isEmpty() ? Math.min(9, bonus.size()) : bonus.size()); index++) {
                 ItemStack item = bonus.get(index);
-                player.sendMessage("MC_REWARD slot=" + (index + 9) + itemFields(item));
+                if (!filter.isEmpty() && !rewardFits(filter, item.getType())) continue;
+                player.sendMessage("MC_REWARD slot=" + (index + 9) + itemFields(item)
+                        + (filter.isEmpty() ? "" : " ref=" + DurableConfigFiles.sha(item.serializeAsBytes())));
                 entries++;
+                if (!filter.isEmpty()) break;
             }
-            player.sendMessage("MC_REWARD_SUMMARY visible=" + entries + " queuedBonus=" + bonus.size()+" queuedPhotos="+PhotoRewards.pending(plugin,id));
+            player.sendMessage("MC_REWARD_SUMMARY visible=" + entries + " queuedBonus=" + bonus.size()+" queuedPhotos="+PhotoRewards.pending(plugin,id)
+                    + (filter.isEmpty() ? "" : " filter=" + filter));
             if(PhotoRewards.pending(plugin,id)>0)player.sendMessage("照片已安全存入个人奖励箱待入箱队列；腾出箱格后重新开箱会自动放入，不必重拍。");
             player.sendMessage("这些是箱满后尚未装入的奖励；清出箱格并重新开箱，或用 /mycli arena rewards take <槽位|all>。");
             return;
         }
-        if (args[2].equalsIgnoreCase("take") && args.length == 4) {
+        if (args[2].equalsIgnoreCase("take") && (args.length == 4 || args.length == 5)) {
             UUID id = player.getUniqueId();
             if (!remoteStashReady(player)) return;
             boolean delivered = false;
-            if (args[3].equalsIgnoreCase("all")) {
+            if (args.length == 4 && args[3].equalsIgnoreCase("all")) {
                 for (Material material : REWARD_TYPES) {
                     for (int stack = 0; stack < 128 && pending(id, material) > 0; stack++)
                         if (claimStandard(player, id, material)) delivered = true;
@@ -2495,7 +2504,16 @@ final class DungeonManager implements Listener {
             }
             try {
                 int slot = Integer.parseInt(args[3]);
-                if (slot >= 0 && slot < REWARD_TYPES.length) delivered = claimStandard(player, id, REWARD_TYPES[slot]);
+                if (args.length == 5) {
+                    List<ItemStack> bonus = bonusItems(id);
+                    int index = slot - 9;
+                    if (slot < 9 || index >= bonus.size() || !args[4].matches("[0-9a-f]{64}")
+                            || !args[4].equals(DurableConfigFiles.sha(bonus.get(index).serializeAsBytes()))) {
+                        player.sendMessage("奖励槽位内容已变化，请重新查询本人奖励。"); return;
+                    }
+                    delivered = claimBonus(player, id, index);
+                }
+                else if (slot >= 0 && slot < REWARD_TYPES.length) delivered = claimStandard(player, id, REWARD_TYPES[slot]);
                 else if (slot >= 9 && slot < 18) delivered = claimBonus(player, id, slot - 9);
                 else player.sendMessage("奖励槽位为 0–17；先用 /mycli arena rewards list 查看。");
                 if (delivered) chargeRemoteStash(player);
@@ -2505,6 +2523,16 @@ final class DungeonManager implements Listener {
             return;
         }
         player.sendMessage("用法：/mycli arena rewards [list|take <槽位|all>]；/mycli arena stash 管理私人储物。");
+    }
+    private static boolean rewardFits(String filter, Material material) {
+        return switch (filter) {
+            case "head" -> material.name().endsWith("_HELMET");
+            case "chest" -> material.name().endsWith("_CHESTPLATE");
+            case "legs" -> material.name().endsWith("_LEGGINGS");
+            case "feet" -> material.name().endsWith("_BOOTS");
+            case "ammo" -> material == Material.ARROW || material == Material.TIPPED_ARROW || material == Material.SPECTRAL_ARROW;
+            default -> false;
+        };
     }
     private String stashPath(UUID id, int slot) { return STASH + id + "." + slot; }
     private String itemFields(ItemStack item) {
