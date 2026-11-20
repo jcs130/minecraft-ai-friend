@@ -82,8 +82,9 @@ it.each(['unconfirmed', 'reference-disappears', 'no-reference', 'deferred', 'den
       if (mode === 'denied') {
         await expect(upkeep.footing(cell)).rejects.toThrow('服务端保护预检 deny');
       } else {
-        expect(await upkeep.footing(cell)).toBe(false);
+        expect(await upkeep.footing(cell, '试算直塔')).toBe(false);
         const reason = upkeep.why('footing');
+        expect(reason.includes('试算直塔')).toBe(mode === 'no-reference');
         if (mode === 'no-reference') expect(reason).toMatch(/放置时没有可贴的实心面，本次未发包/);
         else if (mode === 'deferred') expect(reason).toContain('同场景失败缓存');
         else expect(reason).toMatch(/填充 \(-63, 81, -78\).*未确认放置成功.*回读：air/);
@@ -95,6 +96,21 @@ it.each(['unconfirmed', 'reference-disappears', 'no-reference', 'deferred', 'den
 );
 
 afterEach(() => vi.useRealTimers());
+
+it.each([{rise:16,spiral:true},{rise:12,spiral:false}])('reports the shared stock gate for a $rise-block climb without dispatching a placement', async ({rise,spiral}) => {
+  const r = rig();
+  const ctx = {aborted:()=>false, escape:{active:false},
+    policy:{get:()=>({scaffold:['netherrack','cobblestone']})}} as SkillContext;
+  vi.spyOn(r.bot.inventory,'items').mockReturnValue([]);
+  try {
+    const result = skillTunnel(r.bot,{skill:'tunnel',at:[0,64+rise,0],spiral},ctx);
+    await expect(result).rejects.toThrow('若材料在随身容器里，先开容器并取到随身槽再用');
+    await expect(result).rejects.not.toThrow('直塔');
+    expect(r.bot.placeBlock).not.toHaveBeenCalled();
+    expect(r.bot.equip).not.toHaveBeenCalled();
+    expect(r.bot.moves).toEqual([]);
+  } finally { r.exec.shutdown(); }
+});
 
 it('previews the actual rising diagonal step and its lower floor before taking a step', async () => {
   const r = rig();

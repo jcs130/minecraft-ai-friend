@@ -1969,6 +1969,7 @@ interface ExecutorOptions {
   policy?: SkillContext['policy'];
   /** 普通放置逐块取得许可；用于执行器外部持有的数量保留账。 */
   permitResourcePlacement?: ResourcePlacementGate;
+  inventorySynced?: SkillContext['inventorySynced'];
   /** 试算的只读材料判据;不占串行闸 */
   previewResourcePlacement?: ResourcePlacementPreview;
   /** 路线试算(goto 的 dryRun 与受阻现场的三种走法用) */
@@ -5359,6 +5360,7 @@ export class Executor {
       clock: (ms) => this.clock(ms),
       policy: this.opts.policy,
       permitResourcePlacement: this.opts.permitResourcePlacement,
+      inventorySynced: this.opts.inventorySynced,
       previewResourcePlacement: this.opts.previewResourcePlacement,
       reserveHits: [],
       probeRoutes: this.opts.probeRoutes,

@@ -21,6 +21,7 @@ import {
 import { zhName } from './names.ts';
 import { gotoGoal, GoalWithinBlockReach, reachCell, walkOnlyPath } from './travel.ts';
 import { invCount, type InvItem } from './inventory.ts';
+import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { forgetPlaced } from './placed-ledger.ts';
 import { contentsText, type PlaceCall, zhErrorText } from './receipt.ts';
 import { FALLBACK_DEFAULTS } from './policy.ts';
@@ -283,19 +284,22 @@ export function permittedStockFor(
   ctx: SkillContext,
   preview = false,
 ): PermittedStock {
+  // An explicitly disabled policy is independent of inventory or region permissions.
+  const scaffold = label === '垫脚';
+  const synced = () => (ctx.inventorySynced?.() ?? true) && inventoryReadConfirmed(bot);
   if (!names) {
-    if (label === '垫脚') {
+    if (scaffold) {
       const configured = ctx.policy?.get().scaffold ?? (ctx.policy?.defaults() ?? FALLBACK_DEFAULTS).scaffold;
       if (configured.length) {
         const check = assessScaffoldMaterials(configured, bot.registry);
-        const alternatives = [...new Set(bot.inventory.items().map(item => item.name))]
-          .filter(name => isStableScaffoldMaterial(bot.registry, name));
+        const alternatives = synced() ? carriedScaffoldCandidates(bot, bot.inventory.items()) : [];
         return { why: `垫脚名单已配置但没有可执行材料：${check.rejected.map(r => `${r.name}: ${r.reason}`).join('；')}`
-          + `。这不是地形不可达或设置关闭；${alternatives.length ? `当前背包可支持候选 ${alternatives.join('、')}，可用 mc_policy 修改 scaffold` : '当前背包没有已核验的完整支撑候选，可取得材料或选择其他路线'}` };
+          + `。这不是地形不可达或设置关闭；${alternatives.length ? `当前背包可支持候选 ${alternatives.join('、')}，可用 mc_policy 修改 scaffold` : '可用 mc_bag {detail:"slots"} 核对随身材料，或选择其他路线'}` };
       }
     }
     return { why: `${label}名单是空的(设置里关了)` };
   }
+  if (scaffold && !synced()) return { why: '垫脚材料的随身槽位尚未同步，数量未知；本处未发起放置。同步后可用 mc_bag {detail:"slots"} 核对。' };
   const items = bot.inventory.items();
   let denied = '';
   for (const name of names) {
@@ -303,12 +307,22 @@ export function permittedStockFor(
     if (!item) continue;
     const permit = permitPlacement(ctx, item.name, preview);
     if (permit.ok) return { item, permit };
-    denied ||= permit.reason;
+    denied ||= permit.reason || `${label}材料未获本次使用许可`;
   }
-  return denied
-    ? { why: denied }
-    : { why: `${label}名单里的方块包里都没有(${names.map((n) => zhName(n)).join('、')})`
-      + (label === '垫脚' ? '；若随身有其他可垫的方块，可用 mc_policy 将其物品名加入 scaffold 名单，或换路线' : '') };
+  if (denied) return { why: denied };
+  const missing = `${label}名单里的方块包里都没有(${names.map(n => zhName(n)).join('、')})`;
+  if (!scaffold) return { why: missing };
+  const alternatives = carriedScaffoldCandidates(bot, items);
+  const next = alternatives.length
+    ? `随身另有可垫候选 ${alternatives.join('、')}，可自行选择是否调整 mc_policy 的 scaffold 名单`
+    : '可用 mc_bag {detail:"slots"} 核对随身槽位；若材料在随身容器里，先开容器并取到随身槽再用';
+  return { why: `${missing}；本处未发起放置，区域放置权限未由此核实。${next}` };
+}
+
+function carriedScaffoldCandidates(bot: Bot, items: readonly InvItem[]): string[] {
+  if (!bot.registry?.blocksByName) return [];
+  return [...new Set(items.filter(item => item.count > 0).map(item => item.name))]
+    .filter(name => isStableScaffoldMaterial(bot.registry, name)).slice(0, 4);
 }
 
 /**
@@ -341,7 +355,7 @@ export class Upkeep {
   constructor(private readonly bot: Bot, private readonly ctx: SkillContext) {}
 
   /** 垫脚格只有在回读确认为所用材料后才计入完成。 */
-  async footing(cell: Cell): Promise<boolean> {
+  async footing(cell: Cell, noReferenceHint?: string): Promise<boolean> {
     // 身体占据的放置格会被服务端拒绝，须在发包前检查 occupiedByMe。
     if (occupiedByMe(this.bot, cell)) {
       this.missed.set('footing', `${cellText(cell)} 是我自己站着的那一格,人在里面放不进方块`);
@@ -371,7 +385,7 @@ export class Upkeep {
     }
     if (outcome.kind !== 'placed') {
       const reason = outcome.kind === 'deferred' ? outcome.error.message
-        : outcome.kind === 'no-reference' ? `${cellText(cell)} 放置时没有可贴的实心面，本次未发包；可另选参照或路线`
+        : outcome.kind === 'no-reference' ? `${cellText(cell)} 放置时没有可贴的实心面，本次未发包；${noReferenceHint ?? '可另选参照或路线'}`
         : `尝试用${zhName(stock.item.name)}填充 ${cellText(cell)}，未确认放置成功；回读：${blockAtCell(this.bot, cell)?.name ?? '区块未加载'}。可另选实心参照或路线`;
       this.missed.set('footing', reason);
       return false;

@@ -234,6 +234,8 @@ export interface SkillContext {
   };
   /** 普通放置的材料许可；成功与否必须在同一 permit 上结算。 */
   permitResourcePlacement?: ResourcePlacementGate;
+  /** Whether the current body has a confirmed native inventory in this connection. */
+  inventorySynced?: () => boolean;
   /** 仅正式蓝图目标放置携带；垫脚和补光不使用这份身份。 */
   blueprintPlacement?: Omit<BlueprintPlacementIntent, 'at' | 'aborted'>;
   /** 试算的材料判据;不取 permit,免得预览文案说出结算期的话 */

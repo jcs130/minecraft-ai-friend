@@ -3733,7 +3733,7 @@ export class MinecraftWorld implements World {
           task: queue?.running ? { id: queue.running.id, step: queue.running.step,
             index: queue.running.stepIndex, total: queue.running.stepCount, elapsedMs: queue.running.elapsedMs } : null,
           queued: queue?.waiting.length ?? 0 },
-        constraints: { body: this.bodyInhibitReason, support: snap.standingOn, grounded: snap.onGround },
+        constraints: { body: this.bodyInhibitReason, support: snap.standingOn, supportSource: 'world.footing.block', grounded: snap.onGround },
         lastTask: last ? { kind: last.kind, at: last.at, text: last.text.length <= 160 ? last.text
           : last.text.slice(0, 50) + '…[abridged]…' + last.text.slice(-100) } : null,
       } },
@@ -4427,6 +4427,7 @@ export class MinecraftWorld implements World {
         defaults: () => this.policyDefaults(),
       },
       permitResourcePlacement: (item, intent) => this.permitBlueprintResourcePlacement(item, intent),
+      inventorySynced: () => this.bridge?.invSynced === true,
       previewResourcePlacement: (item) => this.previewBlueprintResourcePlacement(item),
       probeRoutes: (target, goal, profiles) => this.bridge?.probeRoutes(target, goal, profiles) ?? null,
       probeTarget: (target, options) => this.bridge?.probeTarget(target, options) ?? null,
