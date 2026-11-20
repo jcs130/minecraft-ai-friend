@@ -43,14 +43,18 @@ class HostedMcpPort:
         self.task_floor = None
         self.finished_ids = set()
         self.lost = False
+        self.next_receipt_probe = {}
         self.ledger = NativeTasks(Path(config["journalDirectory"]) / "hosted-tasks.sqlite3", self.body)
 
     async def rpc(self, op, **values):
         if self.lost and op not in {"facts", "observe", "result"}:
             raise RuntimeError("CONTROL_CHANGED")
+        return await self._request(self.session, op, **values)
+
+    async def _request(self, session, op, **values):
         args = {**values, "op": op, "companion": self.body, "expectedName": self.cfg["name"],
                 "expectedOwner": self.cfg["ownerId"], "serverId": self.cfg["serverId"], "boot": self.boot, "epoch": self.epoch}
-        reply = await self.session.call_tool("hosted_body", args)
+        reply = await session.call_tool("hosted_body", args)
         if _field(reply, "isError", "is_error"):
             raise RuntimeError("HOSTED_REQUEST_REFUSED_QUERY_ORIGINAL")
         value = _field(reply, "structuredContent", "structured_content")
@@ -85,15 +89,21 @@ class HostedMcpPort:
         self.heartbeat = asyncio.create_task(self._heartbeat())
         return {"uuid": self.body, "name": self.cfg["name"], "session": True}
 
-    async def _connection(self):
+    @contextlib.asynccontextmanager
+    async def _mcp_session(self):
         nc = numen_controller()
+        headers = {"Authorization": "Bearer " + Path(self.cfg["tokenFile"]).read_text().strip()}
+        async with nc.streamablehttp_client(self.cfg["endpoint"], headers=headers, timeout=15) as streams:
+            async with nc.ClientSession(streams[0], streams[1]) as session:
+                await session.initialize()
+                yield session
+
+    async def _connection(self):
         try:
-            async with nc.streamablehttp_client(self.cfg["endpoint"], headers={"Authorization":"Bearer "+Path(self.cfg["tokenFile"]).read_text().strip()}, timeout=15) as streams:
-                async with nc.ClientSession(streams[0],streams[1]) as session:
-                    await session.initialize()
-                    self.session = session
-                    self.connected.set_result(True)
-                    await self.stopping.wait()
+            async with self._mcp_session() as session:
+                self.session = session
+                self.connected.set_result(True)
+                await self.stopping.wait()
         except Exception as error:
             self.lost = True
             if not self.connected.done(): self.connected.set_exception(error)
@@ -157,6 +167,8 @@ class HostedMcpPort:
             if old["data"]["fingerprint"] != signature:
                 return PortResult("rejected","request_id_conflict; query the original request")
             return PortResult(**old)
+        if self.lost:
+            return PortResult("rejected", "Hosted control unavailable; this new action was not dispatched.")
         self.ledger.begin(request_id, signature, self.task_connection)
         try:
             value = await self.rpc("call", id=request_id, tool=tool, args=args)
@@ -169,7 +181,17 @@ class HostedMcpPort:
     async def result(self, request_id):
         saved = self.ledger.get(request_id, self.task_connection)
         if saved and saved["status"] not in ("accepted", "unknown"): return PortResult(**saved)
-        value = await self.rpc("result", id=request_id)
+        if self.lost and saved:
+            # A transport session can expire after the game has already committed
+            # the original result. Read it without attaching or renewing the lease.
+            now = asyncio.get_running_loop().time()
+            if now < self.next_receipt_probe.get(request_id, 0):
+                return PortResult(**saved)
+            self.next_receipt_probe[request_id] = now + 15
+            async with asyncio.timeout(10), self._mcp_session() as session:
+                value = await self._request(session, "result", id=request_id)
+        else:
+            value = await self.rpc("result", id=request_id)
         result = self.mapped(value, request_id)
         if (saved and result.status == "accepted" and saved["status"] == "unknown"
                 and saved["data"]["connection"] == self.task_connection):
@@ -179,6 +201,7 @@ class HostedMcpPort:
             return result
         if result.status not in ("accepted", "unknown"):
             self.ledger.save(request_id, result.status, result.text, result.execution_id)
+            self.next_receipt_probe.pop(request_id, None)
             return result
         return PortResult(**saved) if saved else result
 
