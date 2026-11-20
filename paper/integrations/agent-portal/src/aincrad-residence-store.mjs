@@ -2,7 +2,7 @@ import {validateAincradAddresses} from './aincrad-addresses.mjs';
 
 const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
 const visibleLabel = value => typeof value === 'string' && value.length > 0 && value.length <= 40
-  && value.trim() === value && !/[\p{C}\p{Zl}\p{Zp}]/u.test(value);
+  && value.trim() === value && !/[<>\p{C}\p{Zl}\p{Zp}]/u.test(value);
 
 function conflict(code) {
   throw Object.assign(new Error(code), {code});

@@ -76,7 +76,8 @@ test('only empty homes and rooms in homes may be assigned to vetted identities',
     assert.throws(() => store.assign(ada, id, name), {code: 'AINCRAD_ADDRESS_NOT_RESIDENTIAL'});
   }
   assert.throws(() => store.assign('栗灯', 'east-home', name), {code: 'AINCRAD_CHARACTER_ID_INVALID'});
-  for (const fields of [{name: '栗灯', bodyId: bo}, {name: ' 栗灯'}, {name: '栗灯', profession: null}, {name: '一\n行'}]) {
+  for (const fields of [{name: '栗灯', bodyId: bo}, {name: ' 栗灯'}, {name: '栗灯', profession: null},
+    {name: '一\n行'}, {name: '<b>栗灯</b>'}]) {
     assert.throws(() => store.assign(ada, 'east-home', fields), {code: 'AINCRAD_RESIDENT_LABELS_INVALID'});
   }
   assert.equal(occupant(store.publicCatalogue(), 'east-home'), undefined);
