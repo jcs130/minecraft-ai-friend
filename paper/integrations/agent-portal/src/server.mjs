@@ -59,7 +59,8 @@ MIME['.mjs'] = 'text/javascript; charset=utf-8';
 
 function jsonLdCspHashes(publicDir) {
   try {
-    const html = readFileSync(path.join(publicDir, 'index.html'), 'utf8');
+    // HTML parsers normalize newlines before applying a CSP hash to inline text.
+    const html = readFileSync(path.join(publicDir, 'index.html'), 'utf8').replace(/\r\n?/g, '\n');
     return [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
       .map(([, body]) => `'sha256-${createHash('sha256').update(body, 'utf8').digest('base64')}'`);
   } catch {

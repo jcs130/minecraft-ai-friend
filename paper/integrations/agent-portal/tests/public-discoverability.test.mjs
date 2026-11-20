@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { JSDOM } from 'jsdom';
 import { siteFixture } from './helpers.mjs';
 
 const SITEMAP_PATHS = ['/', '/join', '/downloads.html', '/aincrad.html', '/agent-api.html', '/map.html', '/music.html', '/android.html'];
@@ -16,11 +17,12 @@ test('robots.txt, sitemap.xml and llms.txt are served as UTF-8 text or XML', asy
   const robots = await get(f.origin, '/robots.txt');
   assert.equal(robots.status, 200);
   assert.equal(robots.type, 'text/plain; charset=utf-8');
-  assert.match(robots.text, /^User-agent: \*\nAllow: \//);
+  const directives = robots.text.replace(/\r\n/g, '\n');
+  assert.match(directives, /^User-agent: \*\nAllow: \//);
   for (const bot of ['GPTBot', 'ChatGPT-User', 'ClaudeBot', 'Google-Extended', 'PerplexityBot', 'CCBot']) {
-    assert.match(robots.text, new RegExp(`User-agent: ${bot}\\nAllow: /`));
+    assert.match(directives, new RegExp(`User-agent: ${bot}\\nAllow: /`));
   }
-  assert.match(robots.text, /\nSitemap: https:\/\/mc\.kangqiang\.site\/sitemap\.xml\n?$/);
+  assert.match(directives, /\nSitemap: https:\/\/mc\.kangqiang\.site\/sitemap\.xml\n?$/);
 
   const sitemap = await get(f.origin, '/sitemap.xml');
   assert.equal(sitemap.status, 200);
@@ -63,7 +65,10 @@ test('sitemap paths exist and homepage exposes fallback metadata with a matching
   assert.equal(data.gamePlatform, 'Minecraft Java Edition');
   assert.equal(data.additionalProperty?.value, 'micro.kangqiang.site:25702');
 
-  const hash = createHash('sha256').update(jsonLd[1], 'utf8').digest('base64');
+  const dom = new JSDOM(home.text);
+  t.after(() => dom.window.close());
+  const script = dom.window.document.querySelector('script[type="application/ld+json"]');
+  const hash = createHash('sha256').update(script.textContent, 'utf8').digest('base64');
   assert.ok(home.csp.includes(`script-src 'self' 'sha256-${hash}'`), home.csp);
   assert.doesNotMatch(home.csp, /unsafe-inline/);
 
