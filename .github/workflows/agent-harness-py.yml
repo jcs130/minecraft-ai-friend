@@ -33,3 +33,9 @@ jobs:
           python -m pytest -q tests/test_native_maid.py tests/test_contract.py tests/test_bodies.py tests/test_runtime.py
           python -m ruff check src/agent_mc_harness/bridges.py src/agent_mc_harness/body/maid.py tests/test_native_maid.py
           python -m mypy src/agent_mc_harness/bridges.py src/agent_mc_harness/body/maid.py
+      - name: Check villager quest bridge
+        working-directory: packages/agent-harness-py
+        run: |
+          python -m pytest -q tests/test_villager_quests.py
+          python -m ruff check src/agent_mc_harness/quests tests/test_villager_quests.py
+          python -m mypy src/agent_mc_harness/quests tests/test_villager_quests.py

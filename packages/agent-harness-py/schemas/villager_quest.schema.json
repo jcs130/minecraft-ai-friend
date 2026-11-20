@@ -1,0 +1,573 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jcs130/minecraft-ai-friend/packages/agent-harness-py/schemas/villager_quest.schema.json",
+  "title": "千灯纪村民委托 (Commission)",
+  "description": "村民侧写入 inbox 的委托；$defs 里另有服务器证据 QuestSignal、桥接层记录 Quest 和反馈 Feedback。",
+  "$ref": "#/$defs/Commission",
+  "$defs": {
+    "Area": {
+      "additionalProperties": false,
+      "description": "Where the work counts: a sphere around a point (block coordinates).",
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "z": {
+          "title": "Z",
+          "type": "number"
+        },
+        "radius": {
+          "exclusiveMinimum": 0,
+          "maximum": 256,
+          "title": "Radius",
+          "type": "number"
+        },
+        "world": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "World"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z",
+        "radius"
+      ],
+      "title": "Area",
+      "type": "object"
+    },
+    "Commission": {
+      "additionalProperties": false,
+      "description": "Villager-authored request. ``extra=forbid``: a model that adds ``reward`` or ``steps`` is rejected.",
+      "properties": {
+        "commissionId": {
+          "description": "幂等键，由编剧器生成",
+          "pattern": "^[A-Za-z0-9_.-]{4,64}$",
+          "title": "Commissionid",
+          "type": "string"
+        },
+        "issuer": {
+          "description": "村民 ID，必须在策略白名单里；由插件按配置填写，不取自模型输出",
+          "pattern": "^[A-Za-z0-9_-]{1,48}$",
+          "title": "Issuer",
+          "type": "string"
+        },
+        "type": {
+          "description": "任务类型：slay 讨伐 / gather 收集交付",
+          "enum": [
+            "slay",
+            "gather"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "target": {
+          "description": "命名空间 ID，例如 minecraft:zombie、minecraft:wheat",
+          "pattern": "^[a-z0-9_.-]{1,32}:[a-z0-9_./-]{1,64}$",
+          "title": "Target",
+          "type": "string"
+        },
+        "quantity": {
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "area": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Area"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "讨伐有效区域；gather 时忽略"
+        },
+        "difficulty": {
+          "default": "easy",
+          "enum": [
+            "easy",
+            "normal",
+            "hard"
+          ],
+          "title": "Difficulty",
+          "type": "string"
+        },
+        "deadlineMinutes": {
+          "default": 60,
+          "maximum": 10080,
+          "minimum": 1,
+          "title": "Deadlineminutes",
+          "type": "integer"
+        },
+        "title": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "story": {
+          "default": "",
+          "description": "委托故事，仅作为引用材料，不进入任何可执行字段",
+          "maxLength": 300,
+          "title": "Story",
+          "type": "string"
+        }
+      },
+      "required": [
+        "commissionId",
+        "issuer",
+        "type",
+        "target",
+        "quantity",
+        "title"
+      ],
+      "title": "Commission",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "signalId": {
+          "title": "Signalid",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "mob_kill",
+            "item_delivered"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "count": {
+          "title": "Count",
+          "type": "integer"
+        },
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "signalId",
+        "kind",
+        "count",
+        "at"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Feedback": {
+      "additionalProperties": false,
+      "properties": {
+        "questId": {
+          "title": "Questid",
+          "type": "string"
+        },
+        "villager": {
+          "title": "Villager",
+          "type": "string"
+        },
+        "npcId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Npcid"
+        },
+        "kind": {
+          "enum": [
+            "offered",
+            "accepted",
+            "progress",
+            "completed",
+            "failed",
+            "expired",
+            "cancelled"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "chronicle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chronicle"
+        },
+        "rewardGrant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RewardGrant"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "questId",
+        "villager",
+        "kind",
+        "text"
+      ],
+      "title": "Feedback",
+      "type": "object"
+    },
+    "Quest": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "commission": {
+          "$ref": "#/$defs/Commission"
+        },
+        "status": {
+          "default": "offered",
+          "enum": [
+            "offered",
+            "accepted",
+            "in_progress",
+            "completed",
+            "failed",
+            "expired",
+            "cancelled"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reward": {
+          "$ref": "#/$defs/Reward"
+        },
+        "assignee": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assignee"
+        },
+        "assigneeBody": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assigneebody"
+        },
+        "intentId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Intentid"
+        },
+        "progress": {
+          "default": 0,
+          "title": "Progress",
+          "type": "integer"
+        },
+        "ready": {
+          "default": 0,
+          "title": "Ready",
+          "type": "integer"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "history": {
+          "items": {
+            "$ref": "#/$defs/Transition"
+          },
+          "title": "History",
+          "type": "array"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "deadlineAt": {
+          "format": "date-time",
+          "title": "Deadlineat",
+          "type": "string"
+        },
+        "updatedAt": {
+          "format": "date-time",
+          "title": "Updatedat",
+          "type": "string"
+        },
+        "version": {
+          "default": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "commission",
+        "reward",
+        "deadlineAt"
+      ],
+      "title": "Quest",
+      "type": "object"
+    },
+    "QuestSignal": {
+      "additionalProperties": false,
+      "description": "Server-observed evidence, written by the Bukkit side (EntityDeathEvent / delivery confirmation).",
+      "properties": {
+        "signalId": {
+          "description": "服务器侧唯一 ID，同一个 ID 只计一次",
+          "pattern": "^[A-Za-z0-9_.:-]{1,80}$",
+          "title": "Signalid",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "mob_kill",
+            "item_delivered"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "actor": {
+          "description": "服务器报告的执行者（英雄身体 UUID）",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Actor",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^[a-z0-9_.-]{1,32}:[a-z0-9_./-]{1,64}$",
+          "title": "Target",
+          "type": "string"
+        },
+        "count": {
+          "default": 1,
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Count",
+          "type": "integer"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Position"
+        },
+        "recipient": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_-]{1,48}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "item_delivered：收货村民 ID",
+          "title": "Recipient"
+        },
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "signalId",
+        "kind",
+        "actor",
+        "target"
+      ],
+      "title": "QuestSignal",
+      "type": "object"
+    },
+    "Reward": {
+      "additionalProperties": false,
+      "properties": {
+        "emeralds": {
+          "default": 0,
+          "maximum": 64,
+          "minimum": 0,
+          "title": "Emeralds",
+          "type": "integer"
+        },
+        "vortexXp": {
+          "default": 0,
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "Vortexxp",
+          "type": "integer"
+        },
+        "fame": {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Fame",
+          "type": "integer"
+        }
+      },
+      "title": "Reward",
+      "type": "object"
+    },
+    "RewardGrant": {
+      "additionalProperties": false,
+      "properties": {
+        "idempotencyKey": {
+          "title": "Idempotencykey",
+          "type": "string"
+        },
+        "recipientAgent": {
+          "title": "Recipientagent",
+          "type": "string"
+        },
+        "recipientBody": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recipientbody"
+        },
+        "reward": {
+          "$ref": "#/$defs/Reward"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "recipientAgent",
+        "reward"
+      ],
+      "title": "RewardGrant",
+      "type": "object"
+    },
+    "Transition": {
+      "additionalProperties": false,
+      "properties": {
+        "fromStatus": {
+          "enum": [
+            "offered",
+            "accepted",
+            "in_progress",
+            "completed",
+            "failed",
+            "expired",
+            "cancelled"
+          ],
+          "title": "Fromstatus",
+          "type": "string"
+        },
+        "toStatus": {
+          "enum": [
+            "offered",
+            "accepted",
+            "in_progress",
+            "completed",
+            "failed",
+            "expired",
+            "cancelled"
+          ],
+          "title": "Tostatus",
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "fromStatus",
+        "toStatus",
+        "at"
+      ],
+      "title": "Transition",
+      "type": "object"
+    }
+  }
+}

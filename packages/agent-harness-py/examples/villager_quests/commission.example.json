@@ -1,0 +1,12 @@
+{
+  "commissionId": "qinghe-20261120-night-01",
+  "issuer": "qinghe",
+  "type": "slay",
+  "target": "minecraft:zombie",
+  "quantity": 5,
+  "area": {"x": -547, "y": 67, "z": -445, "radius": 32},
+  "difficulty": "easy",
+  "deadlineMinutes": 60,
+  "title": "麦田边的夜客",
+  "story": "昨夜有僵尸踩坏了东边的麦田，青禾不敢再去收割。"
+}

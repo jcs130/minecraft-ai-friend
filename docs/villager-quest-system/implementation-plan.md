@@ -21,7 +21,7 @@
 | `packages/agent-harness-py/src/agent_mc_harness/quests/models.py` | Pydantic 模型：`Commission`（村民侧输入）、`Quest`（含状态机）、`Reward`、`QuestSignal`（服务器证据）、`Feedback`；`quest_json_schema()` |
 | `.../quests/policy.py` | `QuestPolicy`：村民白名单、目标白名单、各难度的数量上限和奖励表、期限范围、开放数和每日限额、文本清洗 |
 | `.../quests/store.py` | `QuestStore`：SQLite（标准库 `sqlite3`），按 `commissionId` 幂等，带版本号的乐观写 |
-| `.../quests/intake.py` | `parse_commission_line()` 解析 `[委托]{...}`；`SpoolIntake` 读目录里的 `*.json`，处理后移到 `done/` 或 `rejected/`；`read_signals()` 读证据 JSONL |
+| `.../quests/intake.py` | `parse_commission_line()` 解析 `[委托]{...}`；`SpoolIntake` 读目录里的 `*.json`，处理后移到 `done/` 或 `rejected/`；`SignalLog` 增量读取证据 JSONL（跳过未写完的行） |
 | `.../quests/feedback.py` | `FeedbackSink` 协议、`MemoryFeedback`、`JsonlFeedback`（追加写 outbox）；中文台词模板 |
 | `.../quests/bridge.py` | `QuestBridge`：摄入 → 校验 → 存储 → 派发 → 证据跟踪 → 反馈；`IntentSink` 协议和 `RuntimeIntentSink`（包装 `HarnessRuntime.submit_intent` 和 `control("cancel")`）；`HeroSlot` 英雄名单 |
 | `.../quests/__main__.py` | 命令行：`schema` 输出 JSON Schema；`once` 用文件 spool 离线跑一轮，用于演示和本地联调 |
