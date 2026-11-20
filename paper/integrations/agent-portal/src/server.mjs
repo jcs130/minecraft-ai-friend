@@ -1,8 +1,9 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { NpcAdmin } from './npc-admin.mjs';
 import path from 'node:path';
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Store, digest, newSecret, hashPassword, verifyPassword } from './store.mjs';
 import { GameData, UUID } from './game-data.mjs';
 import { WorldCatalog, playerNameValid } from './world-catalog.mjs';
@@ -52,9 +53,21 @@ import {ResidentTurns} from './resident-turns.mjs';
 import { WorldMap } from './world-map.mjs';
 
 const portalVersion = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml; charset=utf-8' };
 const sessionName = 'qd_portal_session';
 MIME['.mjs'] = 'text/javascript; charset=utf-8';
+
+function jsonLdCspHashes(publicDir) {
+  try {
+    // HTML parsers normalize newlines before applying a CSP hash to inline text.
+    const html = readFileSync(path.join(publicDir, 'index.html'), 'utf8').replace(/\r\n?/g, '\n');
+    return [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
+      .map(([, body]) => `'sha256-${createHash('sha256').update(body, 'utf8').digest('base64')}'`);
+  } catch {
+    return [];
+  }
+}
+
 const sameSecret = (a, b) => typeof a === 'string' && typeof b === 'string' && /^[A-Za-z0-9_-]{43}$/.test(a) && a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const fail = (status, reason, message) => Object.assign(new Error(message), { status, reason });
 const usernameValid = name => typeof name === 'string' && /^[\p{L}\p{N}_-]{3,24}$/u.test(name);
@@ -79,6 +92,7 @@ async function jsonBody(req, maximum = 16 * 1024) {
 export function createPortal(config, options = {}) {
   const worldMap = new WorldMap(config);
   const agentClients = getAgentClients(config);
+  const scriptSrc = ["'self'", ...jsonLdCspHashes(config.publicDir)].join(' ');
   const mediaOrigin = publicMediaOrigin(config);
   const store = options.store || new Store(config.dataDir);
   const cloud = config.sourceMode === 'cloud' ? new CloudSource(config, store) : null;
@@ -257,7 +271,7 @@ export function createPortal(config, options = {}) {
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:" + (photoObjects?.origin ? " " + new URL(photoObjects.origin).origin : "") + "; " + `media-src 'self'${[mediaOrigin, musicOrigin].filter(Boolean).map(value => ' ' + value).join('')}; connect-src 'self'${musicOrigin ? ' ' + musicOrigin : ''}; ` + "font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src " + scriptSrc + "; style-src 'self'; img-src 'self' data: blob:" + (photoObjects?.origin ? " " + new URL(photoObjects.origin).origin : "") + "; " + `media-src 'self'${[mediaOrigin, musicOrigin].filter(Boolean).map(value => ' ' + value).join('')}; connect-src 'self'${musicOrigin ? ' ' + musicOrigin : ''}; ` + "font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     res.setHeader('Cache-Control', 'no-store');
     try {
