@@ -47,6 +47,7 @@ import { publicDialogueText } from './public-dialogue.mjs';
 import {NekoAuth,NEKO_CALLBACK} from './neko-auth.mjs';
 import {NekoPluginLinks} from './neko-plugin-links.mjs';
 import {hostingRoutes} from './hosting-routes.mjs';
+import {ResidentTurns} from './resident-turns.mjs';
 import { WorldMap } from './world-map.mjs';
 
 const portalVersion = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
@@ -170,6 +171,7 @@ export function createPortal(config, options = {}) {
       allowRegistration: config.allowRegistration && (config.emailAuth.registrationMode !== 'email' || emailAuth.capabilities().available), emailAuth: emailAuth.capabilities(),
       nekoAuth:nekoAuth.capabilities(session?.owner_id?store.ownerById(session.owner_id):null) };
   }
+  const residentTurns = new ResidentTurns(config, store);
   function auth(req, scopes = []) {
     const bearer = req.headers.authorization;
     if (bearer) {
@@ -315,6 +317,7 @@ export function createPortal(config, options = {}) {
         if (authority) try { authority.authorize(req); trustedSync = true; } catch { /* Spend the public budget before the normal denial. */ }
       }
       if (pathname.startsWith('/api/') && !trustedSync) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
+      if (pathname.startsWith('/api/v1/resident-turns/') && await residentTurns.machine(req, res, pathname, jsonBody, respond)) return;
       if (req.method === 'GET' && pathname === '/api/v1/downloads') return respond(res, 200, { skill: agentSkill, packages: publicDownloads(config) });
       if(req.method==='POST' && pathname==='/api/v1/internal/npcs/poll') {
         if(!cloud)throw fail(404,'NOT_FOUND','未开放此接口');
@@ -500,6 +503,7 @@ export function createPortal(config, options = {}) {
         rate('write:' + digest(rateAddress(req, config)), 80, 60000);
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
+      if (pathname.startsWith('/api/v1/resident-turns') && residentTurns.browser(req, res, pathname, browserAuth, respond)) return;
       if(await hostingRoutes({req,res,pathname,backend:hostedAgents,browserAuth,world,jsonBody,respond,rate,
         agentFor:async(owner,id)=>{
           const agent=(await game.roster()).find(row=>row.id===id);

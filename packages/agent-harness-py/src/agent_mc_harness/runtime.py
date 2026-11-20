@@ -92,6 +92,8 @@ class PlanContext(BaseModel):
     party_context: dict[str, Any] | None = None
     companion_adventure: dict[str, Any] | None = None
     activity_review: dict[str, Any] | None = None
+    agenda: dict[str, Any] | None = None
+    proposed_agenda: list[dict[str, Any]] | None = None
     lessons: list[str] = Field(default_factory=list)  # active versioned lessons (self-iteration store), trial or adopted
 
 

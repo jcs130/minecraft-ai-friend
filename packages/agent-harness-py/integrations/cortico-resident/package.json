@@ -1,0 +1,9 @@
+{
+  "name": "cortico-world-qiandengji-resident",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./world.mjs",
+  "keywords": ["cortico-world"],
+  "description": "通过官网授权连接千灯纪的女仆或 Numen 居民",
+  "cortico": {"kind": "world", "api": 5, "displayName": "千灯纪居民"}
+}

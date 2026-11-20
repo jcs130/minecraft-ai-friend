@@ -1,0 +1,21 @@
+[plugin]
+id = "neko_resident"
+name = "千灯纪居民"
+description = "使用千灯纪官网授权，让当前角色为一位女仆或 Numen 居民规划日程和行动。"
+version = "0.1.0"
+entry = "plugin.plugins.neko_resident:ResidentPlugin"
+
+[plugin.author]
+name = "千灯纪"
+
+[plugin.sdk]
+recommended = ">=0.1.0,<0.3.0"
+supported = ">=0.1.0,<0.3.0"
+
+[plugin_runtime]
+enabled = true
+auto_start = false
+
+[resident]
+role = ""
+session_file = ""

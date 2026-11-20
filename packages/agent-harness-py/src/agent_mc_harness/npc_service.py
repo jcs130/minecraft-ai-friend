@@ -23,6 +23,7 @@ from .memory.remote import RemoteGraphMemory
 from .memory.router import MemoryRouter
 from .memory.social_graph import SocialGraph
 from .npc import FastSelector, ModelClient, NpcHost, NpcPlanner, load_roles
+from .resident_turns import ResidentTurnsClient
 from .social import SocialWorld, publish_json
 from .status_file import StatusFile
 
@@ -191,6 +192,12 @@ async def serve(path: Path):
                         print(f"NPC dialogue result unavailable: {type(failure).__name__}", flush=True)
             await asyncio.sleep(2)
 
+    turns = {}
+    for role in roles:
+        if config := settings.get("residentTurns", {}).get(role.id):
+            turns[role.id] = ResidentTurnsClient(role, config)
+            clients.append(turns[role.id])
+
     def build(role):
         transport = settings["bodies"][role.id]
         scope = role.scope(settings["serverId"])
@@ -206,7 +213,7 @@ async def serve(path: Path):
             body = NumenBody(port, scope=scope, server_id=settings["serverId"], name=role.name, owner_id=str(role.owner_id),
                              item_use_ids=tuple(role.native_items), adventure_partner=role.adventure_partner)
         memory = open_role_memory(state / role.id, connection)
-        return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1),
+        return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1, resident_turns=turns.get(role.id)),
                        memory, ActionJournal(state / role.id / "actions.sqlite3"), social=social, social_graph=social_graph,
                        companion_adventure=CompanionAdventure(*source, role.owner_id) if role.adventure_advice and source else None)
     yielded = {}
