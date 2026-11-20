@@ -1114,10 +1114,8 @@ class NpcHost:
             if not self.companions.choose(choice["mode"], choice.get("targetUuid"), latest, travel=choice.get("travel", "auto")):
                 self.next_plan = 0
                 return []
-            move = self.companions.next_step(latest, can_teleport=self._can_rendezvous(context.capabilities))
-            steps = [move] if move else []
-            if move and move.tool == "body:native:rendezvous":
-                self.rendezvous_intent = intent
+            # The decision is a compass selection. Only raw planner steps go through activity review.
+            steps = []
             if isinstance(self.planner, NpcPlanner):
                 self.planner.last_route["companion"] = dict(choice)
             context.snapshot = latest
@@ -1159,8 +1157,6 @@ class NpcHost:
                     renewed_purpose = steps[0].note if direct else None
                     steps = steps[1:]
             self.journal.reviewed_activity(body_id, *scene, time.time(), renewed_purpose)
-            if isinstance(self.planner, NpcPlanner):
-                self.planner.last_route["activityReview"] = {"observed": scene[0], "selected": [s.tool for s in steps] or ["continue"]}
         if context.proposed_agenda is not None and context.agenda is not None and not self.pausing:
             windows = context.agenda["upcoming"] or [context.agenda["current"]]
             previous_end = windows[-1]["endsAt"] if windows[-1] else None
@@ -1219,10 +1215,20 @@ class NpcHost:
             # Persist before acknowledging/removing input. A restart must not
             # turn deliberate listening into a new request to speak.
             self.journal.listen(str(self.role.body_id), intent.source_events, intent.id)
-        if silent or context.companion_choice or any(step.tool == "body:chat" for step in steps):
-            # Speech's original receipt must complete before these ack steps.
-            steps += self._ack_steps(intent.source_events)
-        return steps
+        # Speech's original receipt must complete before these ack steps.
+        ack_steps = self._ack_steps(intent.source_events) if silent or context.companion_choice or any(
+            step.tool == "body:chat" for step in steps) else []
+        if context.companion_choice is not None:
+            # next_step reserves the original trip against retries. Materialize it only after all
+            # review and inbox bookkeeping, immediately before handing it to the body runtime.
+            move = self.companions.next_step(context.snapshot, can_teleport=self._can_rendezvous(context.capabilities))
+            if move:
+                steps = [move]
+                if move.tool == "body:native:rendezvous":
+                    self.rendezvous_intent = intent
+        if scene is not None and isinstance(self.planner, NpcPlanner):
+            self.planner.last_route["activityReview"] = {"observed": scene[0], "selected": [s.tool for s in steps] or ["continue"]}
+        return steps + ack_steps
 
     def _event(self, event: BodyEvent):
         if event.body_id not in (None, str(self.role.body_id)):
