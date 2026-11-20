@@ -198,7 +198,7 @@ final class NativeMaidBodyActions {
                     long now=System.currentTimeMillis();
                     follows.remove(id);walks.put(id,new Walk(owner,request,target,maid.position(),maid.level().dimension().location().toString(),
                             now+30_000,now+120_000,maid.position().distanceTo(target),socialTarget));
-                    BehaviorUtils.setWalkAndLookTargetMemories(maid,pos,walkSpeed(maid,socialTarget),0);observed.addProperty("effectsApplied",true);observed.addProperty("arrived",false);observed.add("actualPosition",position(maid));
+                    BehaviorUtils.setWalkAndLookTargetMemories(maid,pos,walkSpeed(maid),0);observed.addProperty("effectsApplied",true);observed.addProperty("arrived",false);observed.add("actualPosition",position(maid));
                     return reply(true,control.finish(id,request,"running",observed),null);
                 }
                 case "stop","stay","sit"->{cancel(id,"stopped");stop(maid);maid.setInSittingPose(true);follows.remove(id);observed.addProperty("meaning","mode setting; native movement stopped");}
@@ -429,7 +429,7 @@ final class NativeMaidBodyActions {
                 // Hold the verified path until its receipt settles and the previous schedule is restored.
                 int radius = (int)Math.ceil(remaining) + 4;
                 if (maid.getRestrictRadius() < radius) maid.restrictTo(goal, radius);
-                float speed = walkSpeed(maid, walk.character);
+                float speed = walkSpeed(maid);
                 if (memory == null || !goal.equals(memory.getTarget().currentBlockPosition()) || memory.getSpeedModifier() != speed)
                     BehaviorUtils.setWalkAndLookTargetMemories(maid, goal, speed, 0);
                 var path = navigation.getPath();
@@ -528,8 +528,7 @@ final class NativeMaidBodyActions {
         var saved = maid.getPersistentData().getCompound(ANCHOR);
         return saved.hasUUID("companion") ? saved.getUUID("companion") : null;
     }
-    private static float walkSpeed(EntityMaid maid, UUID character) {
-        if(character==null)return .7f;
+    private static float walkSpeed(EntityMaid maid) {
         // Resident bodies have different base speeds. The native controller multiplies
         // this navigation input by the full attribute, including all real status effects.
         var attribute=maid.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED);
