@@ -10,6 +10,7 @@ from uuid import uuid4
 import httpx
 import pytest
 
+from agent_mc_harness.npc import NpcRole
 from agent_mc_harness.resident_numen import admit_numen, run_with_connection, validate_admission
 
 
@@ -17,9 +18,11 @@ def test_admit_pins_owner_body_native_name_and_refreshes_scoped_token(run, tmp_p
     key = b"x"*32
     keyfile = tmp_path / "control.key"
     keyfile.write_bytes(key)
-    role = SimpleNamespace(body_id=uuid4(), owner_id=uuid4())
+    role = NpcRole(id="original", name="OriginalCharacter", character_id=uuid4(), owner_id=uuid4(),
+                   body_kind="numen", body_id=uuid4(), body_owner_id=uuid4(), allowed_tools=["body:observe"],
+                   persona="Fixture resident.", provider="tokenplan", model="fixture")
     cfg = {"endpoint": "http://127.0.0.1:5000/v1/hosted-role", "controlKeyFile": str(keyfile)}
-    slot = {"bodyKind": "numen", "bodyId": str(role.body_id), "ownerGameId": str(role.owner_id), "numenAdmission": cfg}
+    slot = {"bodyKind": "numen", "bodyId": str(role.body_id), "ownerGameId": str(role.native_owner_id), "numenAdmission": cfg}
     transport = {"name": "OriginalSlot", "endpoint": "http://127.0.0.1:5001/mcp"}
     validate_admission(slot, transport)
     with pytest.raises(ValueError):
@@ -33,7 +36,7 @@ def test_admit_pins_owner_body_native_name_and_refreshes_scoped_token(run, tmp_p
         assert hmac.compare_digest(base64.urlsafe_b64decode(envelope["signature"]+"="),
                                    hmac.new(key, payload.encode(), hashlib.sha256).digest())
         msg = json.loads(base64.urlsafe_b64decode(payload + "="*(-len(payload)%4)))
-        assert (msg["name"],msg["ownerUuid"],msg["roleUuid"]) == ("OriginalSlot",str(role.owner_id),str(role.body_id))
+        assert (msg["name"],msg["ownerUuid"],msg["roleUuid"]) == ("OriginalSlot",str(role.native_owner_id),str(role.body_id))
         assert time.time()*1000 < msg["expires"] <= time.time()*1000+45000
         calls.append(msg["op"])
         result = {"roleUuid": str(role.body_id), "name": msg["name"], "ready": True}
@@ -47,7 +50,7 @@ def test_admit_pins_owner_body_native_name_and_refreshes_scoped_token(run, tmp_p
     assert calls == ["admit","session","admit","session"] and issued[0] != issued[1]
     for code in (403,409):
         with pytest.raises(httpx.HTTPStatusError):
-            run(admit_numen(role,cfg,transport,token_file,http=httpx.MockTransport(lambda r: httpx.Response(code))))
+            run(admit_numen(role,cfg,transport,token_file,http=httpx.MockTransport(lambda r, code=code: httpx.Response(code))))
         assert token_file.read_text() == issued[-1]
 
 

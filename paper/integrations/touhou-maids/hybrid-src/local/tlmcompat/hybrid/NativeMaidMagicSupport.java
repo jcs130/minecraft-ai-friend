@@ -63,6 +63,28 @@ final class NativeMaidMagicSupport {
         }
     }
 
+    static MaidPlayerProfiles.Profile cachedPlayerProfile(UUID player) {
+        var plugin = Bukkit.getPluginManager().getPlugin("VortexRPG");
+        if (!(plugin instanceof VortexCorePlugin vortex) || !vortex.isEnabled()) return null;
+        var profiles = vortex.playerProfileService();
+        if (profiles.qiandengjiLoading(player)) return null;
+        return profiles.profile(player).map(profile -> new MaidPlayerProfiles.Profile(profile.uniqueId(),
+            profile.level(), profile.experience(),
+            vortex.classSkillService().selectedClassDefinition(profile).map(role -> role.id()).orElse(""))).orElse(null);
+    }
+
+    static java.util.concurrent.CompletableFuture<JsonObject> lastSavedPlayerProfile(UUID player, UUID maid) {
+        var plugin = Bukkit.getPluginManager().getPlugin("VortexRPG");
+        if (!(plugin instanceof VortexCorePlugin vortex) || !vortex.isEnabled())
+            return java.util.concurrent.CompletableFuture.completedFuture(MaidPlayerProfiles.unavailable("rpg_bridge_unavailable"));
+        return vortex.playerDataRepository().loadPlayer(player).thenApply(snapshot -> {
+            // Read one stored field. No full metadata, character actor or player slot leaves the repository.
+            var profile = new MaidPlayerProfiles.Profile(snapshot.playerId(), snapshot.level(), snapshot.experience(),
+                snapshot.metadata().getOrDefault("rpg.class", ""));
+            return MaidPlayerProfiles.saved(player, maid, profile, snapshot.revision(), snapshot.updatedAt());
+        });
+    }
+
     CustomItemDefinition staff(EntityMaid maid) {
         return staff(maid.getMainHandItem());
     }

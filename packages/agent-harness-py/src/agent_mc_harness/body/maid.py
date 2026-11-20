@@ -249,6 +249,17 @@ class MaidBody(BaseBody):
             reply = json_text(result)
         if reply is None:
             reply = {"ok": False, "status": "unknown", "reason": "unstructured_reply_query_original_request"}
+        if args["action"] == "inventory" and isinstance(reply, dict):
+            data = reply.get("data")
+            if reply.get("ok") is not True:
+                # A rejected read may carry diagnostics, never a verified inventory.
+                reply = {key: value for key, value in reply.items() if key != "data"}
+            elif (reply_status(reply, bool(result.get("isError"))) != "completed"
+                  or reply.get("action", "inventory") != "inventory"
+                  or not isinstance(data, dict) or str(data.get("maidId", "")).lower() != self.maid_id
+                  or str(data.get("ownerId", self.owner_id)).lower() != self.owner_id
+                  or not isinstance(data.get("slots"), list)):
+                reply = {"ok": False, "status": "failed", "reason": "inventory_observation_unconfirmed"}
         return reply, result
 
     # ---- lifecycle --------------------------------------------------------------------------------

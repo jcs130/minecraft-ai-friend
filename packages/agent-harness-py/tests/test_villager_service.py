@@ -7,7 +7,19 @@ import httpx
 import pytest
 
 from agent_mc_harness.npc import ModelClient
-from agent_mc_harness.villager_service import DECIDE, HEALTH, MODEL, Observation, Reply, Server, Settings, choose
+from agent_mc_harness.villager_service import (
+    DECIDE,
+    HEALTH,
+    MODEL,
+    Observation,
+    Profile,
+    Reply,
+    Server,
+    ServiceError,
+    Settings,
+    VillagerTurnBody,
+    choose,
+)
 
 RESIDENT = "10000000-0000-0000-0000-000000000018"
 SPEAKER = "10000000-0000-0000-0000-000000000019"
@@ -49,6 +61,24 @@ def test_runtime_read_observation_and_private_delivery_memory():
             assert result == Reply(kind="reply", text="能从我的委托板上接夜巡。")
 
     asyncio.run(run())
+
+
+def test_villager_memory_scope_keeps_character_and_conversation_owner_after_body_rebind():
+    original = Profile.model_validate({"residentId": "qinghe", "bodyUuid": RESIDENT, "characterId": RESIDENT})
+    new_body = "10000000-0000-0000-0000-000000000020"
+    new_listener = "10000000-0000-0000-0000-000000000021"
+    rebound = original.model_copy(update={"body_uuid": new_body})
+
+    before = VillagerTurnBody(Observation.model_validate(data()), original).identity()
+    after = VillagerTurnBody(Observation.model_validate(data() | {"bodyUuid": new_body}), rebound).identity()
+    another_listener = VillagerTurnBody(
+        Observation.model_validate(data() | {"bodyUuid": new_body, "speakerUuid": new_listener}), rebound,
+    ).identity()
+
+    assert before.body_id != after.body_id and before.group_id() == after.group_id()
+    assert another_listener.group_id() != after.group_id()
+    with pytest.raises(ServiceError, match="resident_identity_mismatch"):
+        VillagerTurnBody(Observation.model_validate(data()), rebound)
 
 
 @pytest.mark.parametrize("reply", [

@@ -273,7 +273,7 @@ class FakeBridge:
         if action == "context":
             return reply({"lifeState": self.life, "dimension": "minecraft:overworld", "position": {"x": 3, "y": 64, "z": 4}})
         if action == "inventory":
-            return reply({"slots": [], "mainHand": None, "availableSlots": 6})
+            return reply({"maidId": MAID, "slots": [], "mainHand": None, "availableSlots": 6})
         if action == "workshop":
             return reply({"workshops": [{"workshopId": "ws1", "recipes": []}]})
         if action == "inbox":

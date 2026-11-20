@@ -1,7 +1,7 @@
 """BodyAdapter interface and the shared base that enforces the protocol's semantics.
 
 Every adapter keeps the same rules (checked by tests/test_contract.py):
-  * refuse before sending: requestId format -> known verb -> earlier receipt (returned as-is) -> connected
+  * refuse before sending: requestId format -> known verb -> matching original action and receipt -> connected
     -> capability / native name -> argument shape; only then does the body see a write;
   * never replay: ``retry_allowed`` is always False; an uncertain write is ``unknown`` and is reconciled
     with ``result(request_id)`` through the body's own receipt query;
@@ -12,6 +12,8 @@ from __future__ import annotations
 import abc
 import asyncio
 import contextlib
+import hashlib
+import json
 import math
 import uuid
 from collections import OrderedDict
@@ -46,6 +48,11 @@ class ArgumentError(ValueError):
 
 def new_request_id(prefix: str = "rq") -> str:
     return f"{prefix}_{uuid.uuid4().hex[:24]}"
+
+
+def _request_signature(action: BodyAction) -> str:
+    encoded = json.dumps([action.verb, action.name, action.args], sort_keys=True, allow_nan=False, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode()).hexdigest()
 
 
 class BodyAdapter(abc.ABC):
@@ -107,6 +114,8 @@ class BaseBody(BodyAdapter):
         self._state: LifecycleState = "detached"
         self._since = utcnow()
         self._receipts: OrderedDict[str, ActionReceipt] = OrderedDict()
+        self._request_signatures: dict[str, str] = {}
+        self._dispatching: dict[str, ActionReceipt] = {}
         self.counters = Counters()
         self.last_error: str | None = None
         self._last_event: datetime | None = None
@@ -160,7 +169,9 @@ class BaseBody(BodyAdapter):
         self._receipts[receipt.request_id] = receipt
         self._receipts.move_to_end(receipt.request_id)
         while len(self._receipts) > self.LEDGER:
-            self._receipts.popitem(last=False)
+            expired, _ = self._receipts.popitem(last=False)
+            if expired not in self._dispatching:
+                self._request_signatures.pop(expired, None)
         return receipt
 
     def _count(self, receipt: ActionReceipt) -> None:
@@ -185,25 +196,38 @@ class BaseBody(BodyAdapter):
     async def act(self, action: BodyAction) -> ActionReceipt:
         rid = action.request_id or new_request_id()
         verb = action.verb
-        if not REQUEST_ID.match(rid):
+        if not REQUEST_ID.fullmatch(rid):
             return self.receipt(rid[:48] or "invalid", verb, "rejected", "requestId must match [A-Za-z0-9_-]{8,48}")
         if verb not in ACTION_VERBS:
             return self.receipt(rid, verb, "rejected", f"unknown verb {verb}")
-        if rid in self._receipts:
-            return self._receipts[rid]
+        if not isinstance(action.args, dict):
+            return self.receipt(rid, verb, "rejected", "args must be an object")
+        try:
+            signature = _request_signature(action)
+        except (TypeError, ValueError):
+            return self.receipt(rid, verb, "rejected", "args must contain JSON values")
+        previous = self._dispatching.get(rid) or self._receipts.get(rid)
+        if previous is not None:
+            if self._request_signatures.get(rid) != signature:
+                return self.receipt(rid, verb, "rejected", "request_id_conflict; query the original request")
+            return previous
         if not self._connected():
             return self.receipt(rid, verb, "rejected", f"body is {self._state}; spawn() first")
         caps = self.capabilities()
+        self._request_signatures[rid] = signature
         if verb == "native" and not caps.supports("native", action.name):
             return self._finish(self.receipt(rid, verb, "unsupported", f"native operation {action.name!r} is not offered by this body"))
         if verb != "native" and not caps.supports(verb):
             return self._finish(self.receipt(rid, verb, "unsupported", f"{self.kind} body does not support verb {verb}"))
-        if not isinstance(action.args, dict):
-            return self._finish(self.receipt(rid, verb, "rejected", "args must be an object"))
+        # Reserve only this ID before yielding to the transport. Independent
+        # requests, including a stop, must stay interruptible.
+        self._dispatching[rid] = self.receipt(rid, verb, "unknown", "dispatch in progress; query the original request")
         self.counters.actions += 1
         self._last_action = utcnow()
         try:
-            receipt = await self._do_act(action, rid)
+            receipt = await self._do_act(action.model_copy(deep=True), rid)
+            if receipt.request_id != rid:
+                receipt = self.receipt(rid, verb, "unknown", "response requestId mismatch; query the original request")
         except ArgumentError as error:
             receipt = self.receipt(rid, verb, "rejected", str(error))
         except asyncio.CancelledError:
@@ -213,6 +237,8 @@ class BaseBody(BodyAdapter):
         except Exception as error:
             self.last_error = f"{type(error).__name__}"
             receipt = self.receipt(rid, verb, "unknown", f"delivery uncertain ({type(error).__name__}); query result(), do not replay")
+        finally:
+            self._dispatching.pop(rid)
         return self._finish(receipt)
 
     def _finish(self, receipt: ActionReceipt) -> ActionReceipt:
@@ -237,17 +263,24 @@ class BaseBody(BodyAdapter):
         """Restore an uncertain dispatch from the host's durable ledger, without sending it."""
         if not action.request_id or not REQUEST_ID.fullmatch(action.request_id):
             raise ValueError("original_request_id_required")
-        if action.request_id not in self._receipts:
-            self._remember(self.receipt(action.request_id, action.verb, "unknown", "restored_dispatch_query_original_receipt"))
+        rid = action.request_id
+        signature = _request_signature(action)
+        if self._request_signatures.setdefault(rid, signature) != signature:
+            raise ValueError("request_id_conflict; query the original request")
+        if rid not in self._dispatching and rid not in self._receipts:
+            self._remember(self.receipt(rid, action.verb, "unknown", "restored_dispatch_query_original_receipt"))
 
     async def result(self, request_id: str) -> ActionReceipt:
+        if request_id in self._dispatching:
+            return self._dispatching[request_id]
         previous = self._receipts.get(request_id)
         if previous is None:
             return self.receipt(request_id, "native", "unknown", "no receipt for this requestId in this adapter")
         if previous.terminal and previous.status != "unknown":
             return previous
         try:
-            return await self._do_result(request_id, previous)
+            result = await self._do_result(request_id, previous)
+            return result if result.request_id == request_id else previous
         except Exception as error:
             self.last_error = type(error).__name__
             return previous

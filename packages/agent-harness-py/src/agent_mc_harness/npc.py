@@ -45,17 +45,35 @@ MAID_BOND_TONES = (
 )
 
 
-class NpcRole(BaseModel):
+class NpcCharacterProfile(BaseModel):
+    """Personality and memory identity keep the same values on a new body."""
+
     model_config = ConfigDict(extra="forbid")
     id: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,31}$")
     name: str = Field(min_length=1, max_length=24)
     character_id: UUID
-    body_kind: Literal["maid", "numen"]
-    body_id: UUID
     owner_id: UUID
     persona: str = Field(min_length=1, max_length=4000)
     provider: Literal["tokenplan", "codingplan"]
     model: str = Field(min_length=1, max_length=100)
+    speech_profile: Literal["whale"] | None = None
+    social_memory: bool = False
+    social_previous_bodies: list[UUID] = Field(default_factory=list, max_length=8)
+    interval_seconds: int = Field(default=45, ge=10, le=600)
+    agenda_enabled: bool = True
+    max_speech_chars: int = Field(default=40, ge=10, le=100)
+
+    def scope(self, server_id: str) -> Scope:
+        return Scope(realm=server_id, account=str(self.owner_id), agent=self.id, character=str(self.character_id))
+
+
+class NpcBodyProfile(BaseModel):
+    """The active body's identity and reviewed capabilities."""
+
+    model_config = ConfigDict(extra="forbid")
+    body_kind: Literal["maid", "numen"]
+    body_id: UUID
+    body_owner_id: UUID | None = None
     allowed_tools: list[str] = Field(min_length=1, max_length=32)
     native_tasks: list[str] = Field(default_factory=list, max_length=32)
     native_items: list[Annotated[str, Field(pattern=r"^[a-z0-9_.-]+:[a-z0-9_./-]+$", max_length=128)]] = Field(default_factory=list, max_length=16)
@@ -64,12 +82,14 @@ class NpcRole(BaseModel):
     default_native_guard: bool = False
     activity_review_seconds: int | None = Field(default=None, ge=10, le=600)
     adventure_advice: bool = False
-    speech_profile: Literal["whale"] | None = None
-    social_memory: bool = False
-    social_previous_bodies: list[UUID] = Field(default_factory=list, max_length=8)
-    interval_seconds: int = Field(default=45, ge=10, le=600)
-    agenda_enabled: bool = True
-    max_speech_chars: int = Field(default=40, ge=10, le=100)
+
+
+class NpcRole(NpcCharacterProfile, NpcBodyProfile):
+    """An operator-assigned character with one active body."""
+
+    @property
+    def native_owner_id(self) -> UUID:
+        return self.body_owner_id if self.body_owner_id is not None else self.owner_id
 
     @model_validator(mode="after")
     def safe(self):
@@ -79,7 +99,7 @@ class NpcRole(BaseModel):
             raise ValueError("unbounded_execution_not_in_npc_catalogue")
         for tool in self.allowed_tools:
             Step(tool=tool).action("config_validation")
-        if self.owner_id == self.body_id:
+        if self.native_owner_id == self.body_id:
             raise ValueError("independent_owner_identity_required")
         if self.default_native_guard and (self.body_kind != "maid" or "body:native:guard" not in self.allowed_tools):
             raise ValueError("default_guard_requires_native_maid_capability")
@@ -96,15 +116,24 @@ class NpcRole(BaseModel):
             raise ValueError("rendezvous_requires_native_party_and_a_configured_partner")
         return self
 
-    def scope(self, server_id: str) -> Scope:
-        return Scope(realm=server_id, account=str(self.owner_id), agent=self.id, character=str(self.character_id))
+
+class NpcRoleBinding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    character: NpcCharacterProfile
+    body: NpcBodyProfile
+
+    def role(self) -> NpcRole:
+        return NpcRole.model_validate(self.character.model_dump() | self.body.model_dump())
 
 
 def load_roles(path: Path) -> list[NpcRole]:
     raw = json.loads(path.read_text(encoding="utf-8-sig"))
-    if raw.get("schema") != 1:
+    if raw.get("schema") == 1:
+        roles = [NpcRole.model_validate(row) for row in raw["roles"]]
+    elif raw.get("schema") == 2:
+        roles = [NpcRoleBinding.model_validate(row).role() for row in raw["roles"]]
+    else:
         raise ValueError("npc_registry_schema")
-    roles = [NpcRole.model_validate(row) for row in raw["roles"]]
     for attribute in ("id", "character_id", "body_id"):
         if len({getattr(role, attribute) for role in roles}) != len(roles):
             raise ValueError("duplicate_npc_identity")
@@ -501,7 +530,7 @@ class NpcPlanner:
                                   "native": native_catalogue, "nativeSchemas": schemas,
                                   "limits": caps.limits} if caps else None}
         if social_walk:
-            facts["maidCompanions"] = {**context.maid_companions, "ownerUuid": str(role.owner_id)}
+            facts["maidCompanions"] = {**context.maid_companions, "ownerUuid": str(role.native_owner_id)}
         if context.activity_review is not None:
             facts["activityReview"] = context.activity_review
         if requested:
@@ -558,38 +587,42 @@ class NpcPlanner:
                                  "If an active activity is recorded, help with that outing. Otherwise suggest one exact named "
                                  "choice and why it fits now. Speak Chinese, short and naturally. You can stay quiet if it would "
                                  "interrupt or repeat the same idea.")
-        if role.adventure_partner:
-            facts["adventuring"] = {"partnerAccount": role.adventure_partner,
-                "purpose": "You are an independent adventurer. Choose a concrete, feasible next activity whenever healthy and idle. "
-                "Find any locatable character by exact name/UUID with locate_character or browse characters(page) in the skill compass. "
-                "Use the current same-world position for a reachable walk, or meet_character(targetUuid) for the ordinary travel spell. "
-                "Read its confirmed arrival or refusal before claiming you met. "
-                "Scout terrain with survey, then walk to one sampled walkTo point. Reuse a fresh survey at this position before scanning again. "
-                "Vary your route and avoid retracing the last move. "
-                "Check live combat or exploration jobs and ruins. If a route catalogue is empty, consult guild_board for today's actual offers. "
-                "Read quest_status after accepting or turning in a quest. Prepare carried gear and fight observed hostiles. "
-                "Pick a feasible alternative when entry equipment or mana is missing. "
-                "Read plan_invitation or plan_joining to arrange a real outing. Follow its nextAction: create means create_party, "
-                "invite means invite_partner, accept means accept_invitation. Inspect the resulting roster before meeting. "
-                "A native invitation leaves acceptance to its recipient. While waiting or when the partner is offline, continue solo. "
-                "When separated, either member can meet_partner. For the trial you can travel_trial to its public entrance before combat. "
-                "Coordinate remotely with party_chat using the current partyId and brief text. Nearby speech cannot cross worlds. "
-                "Use prepare_armor for a missing slot. It wears carried armor, collects from your own queue or stash, or, if you "
-                "choose allowPurchase, buys one ordinary iron piece. A queued purchase must be collected, then worn. "
-                "With a bow or crossbow and no ammunition, prepare_ammo uses your own supplies first. With allowPurchase it can buy "
-                "16 arrows for up to 3 RPG coins. A purchase is ready only after collection. If funds are "
-                "short, agree on the public entrance or another activity. Never repeat a failed transfer on the same evidence. "
-                "Speak briefly when you meet. Do not repeat invitations or report unverified outcomes.",
-                "currentParty": context.party_context}
+        adventure_query = "body:native:adventure_query"
+        adventure_action = "body:native:adventure_action"
+        survey = "body:native:survey"
+        if adventure_query in tools or adventure_action in tools:
+            guidance = ["Choose a feasible activity from your current tools when healthy and idle."]
+            if adventure_query in tools:
+                guidance.append(
+                    "Read current quests, combat jobs, ruins or the guild board. Locate characters by exact name/UUID. "
+                    "Read quest_status after accepting or turning in a quest.")
+            if survey in tools:
+                guidance.append("Survey the terrain and walk to a sampled walkTo position. Reuse a fresh survey.")
+            if adventure_action in tools:
+                guidance.append(
+                    "Use prepare_armor for a missing slot and prepare_ammo for a bow or crossbow without arrows. "
+                    "Use carried supplies first. With allowPurchase you can buy one ordinary iron piece for up to "
+                    "20 RPG coins or 16 arrows for up to 3. Confirm collection and wear the armor. For meet_character use the UUID "
+                    "from locate_character. Check arrival before reporting success.")
+            adventuring = facts["adventuring"] = {}
+            if role.adventure_partner:
+                adventuring.update(partnerAccount=role.adventure_partner, currentParty=context.party_context)
+                guidance.append(
+                    "Use plan_invitation or plan_joining and follow the server's nextAction. The recipient chooses "
+                    "whether to accept. Read the resulting roster before meet_partner or party_chat. "
+                    "Travel to the public trial entrance independently or continue another solo activity while waiting.")
+            adventuring["purpose"] = " ".join(guidance)
             if context.personal_craft_stage and "body:craft" not in tools:
-                options = [("body:native:adventure_query", {"kind": "ruins"}),
-                           ("body:native:adventure_query", {"kind": "plan_invitation"}), ("body:native:survey", {})]
-                facts["adventuring"]["currentCraftStage"] = {**context.personal_craft_stage,
+                options = [(adventure_query, {"kind": "ruins"})]
+                if role.adventure_partner:
+                    options.append((adventure_query, {"kind": "plan_invitation"}))
+                options.append((survey, {}))
+                adventuring["currentCraftStage"] = {**context.personal_craft_stage,
                     "constraint": "The guild counts personal crafting. Taking a finished item does not count. "
                                   "If this stage has no supported action, keep it and choose another activity.",
                     "otherActivities": [{"tool": tool, "args": args} for tool, args in options if tool in tools]}
-                stage = facts["adventuring"]["currentCraftStage"]
-                if commission_craft.eligible(stage) and "body:native:adventure_action" in tools:
+                stage = adventuring["currentCraftStage"]
+                if commission_craft.eligible(stage) and adventure_action in tools:
                     stage["materials"] = "One carried stick and one coal or charcoal. If short, check your backpack and the guild's /mycli guild shared notice for an open public supply chest, or choose another activity."
                     if not stage.get("previousAttempt"):
                         stage["craftOption"] = {"tool": "body:native:adventure_action",
@@ -1125,8 +1158,9 @@ class NpcHost:
             results.append(result)
         context.body_results = results[:6]
         notice = team = opening = None
-        if self.role.adventure_partner and intent.goal == IDLE_GOAL and not dialogue:
-            notice, team, opening = self._party_turn(body_id, context)
+        if intent.goal == IDLE_GOAL and not dialogue:
+            if self.role.adventure_partner:
+                notice, team, opening = self._party_turn(body_id, context)
             if opening and opening.tool == "body:native:adventure_query":
                 return [opening]
             if (not notice and not opening and context.snapshot and context.snapshot.life_state == "alive"
@@ -1224,11 +1258,11 @@ class NpcHost:
         proactive_speech = False
         for step in steps:
             action = step.action("check_00000")
+            if step.tool == "body:native:adventure_action" and step.args.get("kind") == commission_craft.KIND:
+                stage = context.personal_craft_stage
+                if not commission_craft.eligible(stage) or stage.get("previousAttempt") or step.args.get("expectedProgress") != stage["progress"]:
+                    continue
             if self.role.adventure_partner:
-                if step.tool == "body:native:adventure_action" and step.args.get("kind") == commission_craft.KIND:
-                    stage = context.personal_craft_stage
-                    if not commission_craft.eligible(stage) or stage.get("previousAttempt") or step.args.get("expectedProgress") != stage["progress"]:
-                        continue
                 if step.tool == "body:native:adventure_action" and step.args.get("kind") == "meet_partner":
                     # Each refused or unverified transfer requires fresh world evidence before a later write.
                     recovery = (context.party_context or {}).get("lastMeetingAttempt", {})
@@ -1261,7 +1295,7 @@ class NpcHost:
                     continue
                 work_selected = True
             reviewed.append(step)
-            if self.role.adventure_partner and step.tool == "body:native:adventure_action":
+            if step.tool == "body:native:adventure_action":
                 break  # The next decision needs this write's actual receipt.
         steps = reviewed
         silent = all(step.tool in {"body:observe", "body:inventory"} for step in steps)
@@ -1310,7 +1344,9 @@ class NpcHost:
                     self.body.restore_request(action)
         await self.body.spawn()
         identity = self.body.identity()
-        if not identity or identity.body_id != str(self.role.body_id) or identity.scope.character != str(self.role.character_id):
+        if (not identity or identity.body_id != str(self.role.body_id)
+                or identity.scope.character != str(self.role.character_id)
+                or self.role.body_owner_id is not None and identity.owner_id != str(self.role.native_owner_id)):
             raise RuntimeError("npc_identity_not_bound")
         self.runtime.start()
         if self.memory and callable(getattr(self.memory, "start", None)):

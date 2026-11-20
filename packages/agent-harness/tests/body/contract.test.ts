@@ -1,8 +1,8 @@
 /**
  * Shared Body Adapter contract, run against every body (Mineflayer, Numen hosted_body, Numen mcbot, Touhou Little Maid).
  */
-import { afterEach, describe, expect, it } from 'vitest';
-import { ACTION_VERBS, BODY_EVENT_KINDS, BODY_PROTOCOL, guardBody, HarnessRuntime, paceCategory, type BodyEvent } from '../../src/index.ts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ACTION_VERBS, BODY_EVENT_KINDS, BODY_PROTOCOL, guardBody, HarnessRuntime, paceCategory, type ActionReceipt, type BodyEvent } from '../../src/index.ts';
 import { until } from '../helpers.ts';
 import { DRIVERS, type BodyDriver } from './drivers.ts';
 
@@ -83,6 +83,103 @@ describe.each(DRIVERS)('BodyAdapter contract: %s', (_label, make) => {
     const h = drv.body.health();
     expect(h.counters.actions).toBeGreaterThanOrEqual(2);
     expect(h.connected).toBe(true);
+  });
+
+  it('rejects changed arguments or verb without replacing the original receipt', async () => {
+    const drv = await open();
+    await drv.body.spawn();
+    const action = { ...drv.supported, requestId: 'contract-identity' };
+    await drv.body.act(action);
+    await drv.finish();
+    const original = await drv.body.result(action.requestId);
+    expect(original.status).toBe('completed');
+    const sent = drv.sent();
+    for (const other of [
+      { ...action, args: action.verb === 'move' ? { ...action.args, x: 9 } : { text: 'another message' } },
+      { verb: drv.unsupportedVerb, requestId: action.requestId },
+    ]) {
+      const conflict = await drv.body.act(other);
+      expect(conflict.status).toBe('rejected');
+      expect(conflict.text).toContain('request_id_conflict');
+    }
+    expect(await drv.body.result(action.requestId)).toEqual(original);
+    expect(drv.sent()).toBe(sent);
+  });
+
+  it('simultaneous matching requests send one operation and keep the original result queryable', async () => {
+    const drv = await open();
+    await drv.body.spawn();
+    const action = { ...drv.supported, requestId: 'contract-in-flight' };
+    const reordered = Object.fromEntries(Object.entries(action.args ?? {}).reverse());
+    const before = drv.sent();
+    const first = drv.body.act(action);
+    const duplicate = drv.body.act({ ...action, args: reordered });
+    const query = drv.body.result(action.requestId);
+    const conflict = drv.body.act({ ...action, args: { ...action.args, changed: true } });
+    const [sent, repeated, changed] = await Promise.all([first, duplicate, conflict]);
+    expect(['accepted', 'completed']).toContain(sent.status);
+    expect(repeated).toMatchObject({ requestId: action.requestId, status: 'unknown', terminal: false, retryAllowed: false });
+    expect(await query).toEqual(repeated);
+    expect(drv.sent() - before).toBe(1);
+    expect(changed.text).toContain('request_id_conflict');
+    await drv.finish();
+    expect((await drv.body.result(action.requestId)).status).toBe('completed');
+  });
+
+  it('queries an uncertain dispatch by its original ID and never adopts another receipt', async () => {
+    const drv = await open();
+    await drv.body.spawn();
+    const action = { ...drv.supported, requestId: 'contract-uncertain' };
+    const completed: ActionReceipt = { requestId: action.requestId, verb: action.verb, status: 'completed',
+      terminal: true, text: 'done', retryAllowed: false };
+    const foreign = { ...completed, requestId: 'different-operation' };
+    const transport = drv.body as unknown as {
+      doAct: typeof drv.body.act; doResult(id: string): Promise<ActionReceipt | null>;
+    };
+    const dispatch = vi.spyOn(transport, 'doAct').mockResolvedValue(foreign);
+    const query = vi.spyOn(transport, 'doResult').mockResolvedValueOnce(foreign).mockResolvedValueOnce(completed);
+    expect(await drv.body.act(action)).toMatchObject({ requestId: action.requestId, status: 'unknown' });
+    expect((await drv.body.result(action.requestId)).status).toBe('unknown');
+    expect(await drv.body.act(action)).toEqual(completed);
+    expect(await drv.body.result(action.requestId)).toEqual(completed);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls.map(([id]) => id)).toEqual([action.requestId, action.requestId]);
+  });
+
+  it('keeps an early native completion when the transport subsequently acknowledges dispatch', async () => {
+    const drv = await open();
+    await drv.body.spawn();
+    const action = { ...drv.supported, requestId: 'contract-early' };
+    const transport = drv.body as unknown as {
+      doAct: typeof drv.body.act;
+      settle(id: string, status: 'completed', text: string): ActionReceipt;
+    };
+    const events: BodyEvent[] = [];
+    drv.body.subscribe(event => events.push(event));
+    vi.spyOn(transport, 'doAct').mockImplementationOnce(async () => {
+      const done = transport.settle(action.requestId, 'completed', 'native completion');
+      return { ...done, status: 'accepted', terminal: false, text: 'queued' };
+    });
+    const receipt = await drv.body.act(action);
+    expect(receipt).toMatchObject({ status: 'completed', verb: action.verb, text: 'native completion' });
+    expect(await drv.body.result(action.requestId)).toEqual(receipt);
+    expect(events.filter(e => e.kind === 'action_result')).toHaveLength(1);
+  });
+
+  it('keeps receipt queries bounded and a missing remote record leaves local requests intact', async () => {
+    const drv = await open();
+    await drv.body.spawn();
+    const transport = drv.body as unknown as { doResult(id: string): Promise<ActionReceipt | null> };
+    const query = vi.spyOn(transport, 'doResult').mockImplementation(async id => ({
+      requestId: id, status: id.startsWith('missing-') ? 'unknown' : 'completed', verb: 'native',
+      text: 'queried', terminal: true, retryAllowed: false,
+    }));
+    for (let i = 0; i < 501; i++) await drv.body.result(`recorded-${i}`);
+    await drv.body.result('recorded-0'); // The oldest had to be looked up again.
+    expect(query).toHaveBeenCalledTimes(502);
+    for (let i = 0; i < 501; i++) await drv.body.result(`missing-${i}`);
+    await drv.body.result('recorded-0');
+    expect(query).toHaveBeenCalledTimes(1003);
   });
 
   it('reports death as a severity-3 perception event and a snapshot of what it can observe', async () => {

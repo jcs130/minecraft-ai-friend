@@ -9,7 +9,7 @@ from agent_mc_harness.body import adventure as life
 from agent_mc_harness.body.base import ArgumentError
 from agent_mc_harness.body.numen import NumenBody, PortResult
 from agent_mc_harness.journal import ActionJournal
-from agent_mc_harness.models import BodyAction, BodySnapshot, Scope
+from agent_mc_harness.models import BodyAction, BodyIdentity, BodySnapshot, NativeAction, Scope
 from agent_mc_harness.runtime import PlanContext
 
 
@@ -29,6 +29,44 @@ def test_actual_names_and_live_ids_only():
     assert life.player_command(life.ACT, {"kind": "travel_ruin", "id": "undead_crypt"}, "Kirito", "ag_CorMy") == "/mycli dungeon travel undead_crypt --json"
     with pytest.raises(ArgumentError):
         life.player_command(life.QUERY, {"kind": "party"}, "kirito", "Kirito")
+
+
+def test_hosted_body_offers_solo_adventure_without_a_party_partner():
+    async def run():
+        calls = []
+
+        async def call(name, args, request_id):
+            calls.append((name, args["code"], request_id))
+            return PortResult("completed", "QD_ADVENTURE_NOT_CONFIGURED")
+
+        port = SimpleNamespace(transport="numen-hosted-mcp", dialect="numen-hosted-0.1.5",
+                               catalog=lambda: [NativeAction(name="lua")], call=call)
+        body = NumenBody(port, scope=Scope(realm="qa", account="owner", agent="actor"))
+        body._identity = BodyIdentity(kind="numen", body_id="solo-kirito", name="Kirito", scope=body.scope)
+        body._set_state("ready")
+        advertised = {action.name: action for action in body.capabilities().native_actions}
+        query_kinds = advertised[life.QUERY].input_schema["properties"]["kind"]["enum"]
+        action_kinds = advertised[life.ACT].input_schema["properties"]["kind"]["enum"]
+        assert life.SURVEY in advertised and {"quest_status", "ruins"} <= set(query_kinds)
+        assert {"accept_quest", "prepare_armor", "prepare_ammo", "craft_torches"} <= set(action_kinds)
+        assert "plan_invitation" not in query_kinds and "invite_partner" not in action_kinds
+        for name, kind in [(life.QUERY, "plan_invitation"), (life.ACT, "invite_partner")]:
+            denied = await body.act(BodyAction(verb="native", name=name, args={"kind": kind}))
+            assert denied.status == "rejected"
+        assert calls == []
+        receipt = await body.act(BodyAction(verb="native", name=life.QUERY, args={"kind": "quest_status"},
+                                            request_id="solo_quest_lookup"))
+        assert receipt.status == "rejected" and "unconfigured" in receipt.text
+        assert len(calls) == 1 and calls[0][2] == "solo_quest_lookup"
+        assert "allow command(mycli) @Kirito" in calls[0][1] and "/mycli tasks status --json" in calls[0][1]
+        assert life.player_command(life.ACT, {"kind": "accept_quest", "id": "tm_frontier"}, "Kirito", None) == (
+            "/mycli guild accept tm_frontier")
+        port.transport = "numen-mcp"
+        assert not body.capabilities().supports("native", life.QUERY)
+        unsupported = await body.act(BodyAction(verb="native", name=life.QUERY, args={"kind": "quest_status"}))
+        assert unsupported.status == "unsupported" and len(calls) == 1
+
+    asyncio.run(run())
 
 
 def test_quest_lifecycle_and_catalogue_paging_use_server_formats():
@@ -69,7 +107,8 @@ def test_personal_crafting_advice_uses_the_current_unfinished_server_stage(tag):
     assert life.unfinished_craft_stage({**live, "at": 0}) is None
 
 
-def test_idle_host_samples_self_and_offers_capable_activities_to_the_planner(tmp_path):
+@pytest.mark.parametrize("partner", ["QaFriend", None])
+def test_idle_host_samples_self_and_offers_capable_activities_to_the_planner(tmp_path, partner):
     from simbody import SimBody
     from test_server_npc import role
     from agent_mc_harness.models import ActionReceipt
@@ -78,7 +117,7 @@ def test_idle_host_samples_self_and_offers_capable_activities_to_the_planner(tmp
     async def run():
         body = SimBody()
         await body.spawn()
-        cfg = role(adventure_partner="QaFriend", allowed_tools=["body:native:survey", "body:native:adventure_query"])
+        cfg = role(adventure_partner=partner, allowed_tools=["body:native:survey", "body:native:adventure_query"])
         captured = []
         async def answer(path, data, timeout):
             captured.append(json.loads(data["messages"][1]["content"]))
@@ -86,7 +125,7 @@ def test_idle_host_samples_self_and_offers_capable_activities_to_the_planner(tmp
         journal = ActionJournal(tmp_path / "quests.sqlite")
         host = NpcHost(cfg, body, NpcPlanner(cfg, SimpleNamespace(request=answer)), None, journal)
         caps = body.capabilities()
-        caps.native_actions = life.catalogue("QaFriend")
+        caps.native_actions = life.catalogue(partner)
         context = PlanContext(snapshot=await body.snapshot(), capabilities=caps)
         host.next_roster_check = time.monotonic() + 180
         intent = host.runtime.submit_intent(IDLE_GOAL, agent=cfg.id)
@@ -107,9 +146,10 @@ def test_idle_host_samples_self_and_offers_capable_activities_to_the_planner(tmp
             assert (advice["contractId"], advice["progress"], advice["target"], advice["requirement"]) == (
                 "tm_sample", 0, 1, "亲手合成 TORCH")
             assert advice["otherActivities"] == [
-                {"tool":"body:native:adventure_query", "args":{"kind":"ruins"}},
-                {"tool":"body:native:adventure_query", "args":{"kind":"plan_invitation"}},
-                {"tool":"body:native:survey", "args":{}}]
+                {"tool": "body:native:adventure_query", "args": {"kind": "ruins"}},
+                *([{"tool": "body:native:adventure_query", "args": {"kind": "plan_invitation"}}] if partner else []),
+                {"tool": "body:native:survey", "args": {}}]
+            assert ("partnerAccount" in captured[-1]["adventuring"]) == bool(partner)
             # A later body action supersedes the sample even within one clock second.
             submit_id = "qa_quest_submit"
             journal.begin(str(cfg.body_id), BodyAction(verb="native", name=life.ACT, args={"kind": "turn_in_quest"}, request_id=submit_id))

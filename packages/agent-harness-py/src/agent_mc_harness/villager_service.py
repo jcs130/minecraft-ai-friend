@@ -101,7 +101,12 @@ class Chosen(Strict):
 class Profile(Strict):
     resident_id: ID = Field(alias="residentId")
     body_uuid: UUID = Field(alias="bodyUuid")
+    character_id: UUID | None = Field(default=None, alias="characterId")
     persona: str | None = Field(default=None, max_length=400)
+
+    @property
+    def memory_character_id(self) -> str:
+        return self.character_id or self.body_uuid
 
 
 class Settings(Strict):
@@ -158,6 +163,8 @@ def settings_at(path: Path) -> Settings:
         raise ValueError("modelBaseUrl must be an explicit loopback OpenAI /v1 base URL")
     if len({p.resident_id for p in settings.profiles}) != len(settings.profiles) or len({p.body_uuid for p in settings.profiles}) != len(settings.profiles):
         raise ValueError("villager profile and body IDs must be unique")
+    if len({p.memory_character_id for p in settings.profiles}) != len(settings.profiles):
+        raise ValueError("villager character IDs must be unique")
     return settings
 
 
@@ -166,8 +173,10 @@ class VillagerTurnBody(BaseBody):
 
     kind: Literal["villager"] = "villager"
 
-    def __init__(self, request: Observation):
+    def __init__(self, request: Observation, profile: Profile):
         super().__init__()
+        if request.resident_id != profile.resident_id or request.body_uuid != profile.body_uuid:
+            raise ServiceError(403, "resident_identity_mismatch")
         self.event_id = request.event_id
         self.scene = request.scene
         self._identity = BodyIdentity(
@@ -176,7 +185,12 @@ class VillagerTurnBody(BaseBody):
             name=request.scene.name,
             world=WorldRef(server_id="qiandengji", world_key=request.scene.world, dimension=request.scene.world),
             # The listener is included so any future memory integration keeps this partition private.
-            scope=Scope(realm="qiandengji", account=request.speaker_uuid, agent=request.resident_id, character=request.body_uuid),
+            scope=Scope(
+                realm="qiandengji",
+                account=request.speaker_uuid,
+                agent=profile.resident_id,
+                character=profile.memory_character_id,
+            ),
         )
         self._caps = Capabilities(
             kind=self.kind,
@@ -225,7 +239,7 @@ class VillagerTurnBody(BaseBody):
 
 
 async def choose(model: ModelClient, profile: Profile, request: Observation, timeout: float) -> Reply | Continue:
-    body = VillagerTurnBody(request)
+    body = VillagerTurnBody(request, profile)
     elapsed = time.time() - request.scene.observed_at / 1000
     deadline = min(timeout, MAX_AGE_MS / 1000 - elapsed)
     if deadline < 0.5:
