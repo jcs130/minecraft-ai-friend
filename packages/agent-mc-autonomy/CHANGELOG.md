@@ -1,3 +1,8 @@
+## 0.2.157
+
+- Pin the independent MC core at rc.160-preview.115 and shared viewer at 5ea67445. The packed engine, declarations, dependency lock and viewer sources retain separate verification receipts.
+- Consume current navigation, non-preemptive reads, authoritative storage transfers and tool guidance through the existing body and MCP contracts.
+
 ## 0.2.156
 
 - Surface fresh, typed combat attention to the task owner during a text-only idle wait. Preserve provider retry delays, native work ownership and the existing turn schedule.
