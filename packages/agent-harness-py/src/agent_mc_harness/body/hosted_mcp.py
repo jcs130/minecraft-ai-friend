@@ -43,6 +43,9 @@ class HostedMcpPort:
         self.seen = set()
         self.task_floor = None
         self.finished_ids = set()
+        self.finish_candidates = {}
+        self.finish_outcomes = {}
+        self.latest_finish_at = 0
         self.lost = False
         self.disconnected = asyncio.Event()
         self.control_lock = asyncio.Lock()
@@ -276,6 +279,9 @@ class HostedMcpPort:
         try:
             value = await self.rpc("call", id=request_id, tool=tool, args=args)
             result = self.mapped(value, request_id, tool)
+            if result.status == "accepted" and result.execution_id:
+                bound = self.ledger.bind_background(request_id, self.task_connection, result.execution_id, result.text)
+                return result if bound["status"] == "accepted" else PortResult(**bound)
             self.ledger.save(request_id, result.status, result.text, result.execution_id)
             return result
         except Exception:
@@ -304,12 +310,13 @@ class HostedMcpPort:
         else:
             value = await self.rpc("result", id=request_id)
         result = self.mapped(value, request_id)
-        if (saved and result.status == "accepted" and saved["status"] == "unknown"
-                and saved["data"]["connection"] == self.task_connection):
-            # The call may have returned after the client timed out. Bind its native
-            # task to the original request, without submitting the action again.
-            self.ledger.save(request_id, result.status, result.text, result.execution_id)
-            return result
+        if saved and result.status == "accepted" and result.execution_id:
+            # The original Lua reply identifies the background task. Its finish
+            # may already have been seen and evicted from the bounded native inbox.
+            bound = self.ledger.bind_background(request_id, self.task_connection, result.execution_id, result.text)
+            if saved["status"] == "unknown" and bound["status"] == "accepted":
+                return result
+            return PortResult(**bound)
         if result.status not in ("accepted", "unknown"):
             self.ledger.save(request_id, result.status, result.text, result.execution_id)
             self.next_receipt_probe.pop(request_id, None)
@@ -337,6 +344,9 @@ class HostedMcpPort:
         # action, even if a number and native tool name both happen to match.
         self.task_floor = None
         self.finished_ids.clear()
+        self.finish_candidates.clear()
+        self.finish_outcomes.clear()
+        self.latest_finish_at = 0
         try:
             snapshot = await self.rpc("observe")
         except Exception:
@@ -347,16 +357,37 @@ class HostedMcpPort:
         self.finished_ids = {row["id"] for row in self._inbox(snapshot) if row.get("type") == "task_finished"}
 
     def _record_finishes(self, rows):
+        if not isinstance(self.task_floor, int):
+            return
+        finishes = []
         for row in rows:
-            if (row.get("type") != "task_finished" or row.get("id") in self.finished_ids
-                    or not isinstance(self.task_floor, int) or not isinstance(row.get("at"), int)
-                    or row["at"] <= self.task_floor):
+            if row.get("type") != "task_finished" or type(row.get("at")) is not int or row["at"] <= self.task_floor:
+                continue
+            self.latest_finish_at = max(self.latest_finish_at, row["at"])
+            if row.get("id") in self.finished_ids:
                 continue
             for task, tool, status, detail in finished_task_details("<events>" + row["text"] + "</events>"):
-                if tool and self.ledger.finish(self.task_connection, task, status, detail, tool=tool):
-                    self.finished_ids.add(row["id"])
-        # Keep applied IDs while the same events are still in the server inbox.
-        self.finished_ids.intersection_update(row["id"] for row in rows)
+                if tool:
+                    self.finish_outcomes.setdefault((task, tool), set()).add((status, detail))
+                    finishes.append((row["id"], task, tool, status, detail))
+        pending = frozenset(self.ledger.pending(self.task_connection))
+        if not pending:
+            # A finish already seen with no outstanding calls cannot belong to
+            # a future request, even if it disappears and reenters the inbox.
+            self.task_floor = max(self.task_floor, self.latest_finish_at)
+            self.finish_candidates.clear()
+            self.finished_ids.clear()
+            self.finish_outcomes.clear()
+            return
+        for event, task, tool, status, detail in finishes:
+            eligible = self.finish_candidates.setdefault(event, pending)
+            if len(self.finish_outcomes[task, tool]) == 1 and self.ledger.finish(
+                    self.task_connection, task, status, detail, tool=tool, eligible=eligible):
+                self.finished_ids.add(event)
+            elif len(eligible) == 1 and self.ledger.remember_early_finish(
+                    next(iter(eligible)), self.task_connection, event, task, tool,
+                    "completed" if status == "done" else "failed", detail):
+                self.finished_ids.add(event)
 
     async def _drain_stopped(self):
         # A confirmed pause stops a running walk/fight and publishes task_finished.
