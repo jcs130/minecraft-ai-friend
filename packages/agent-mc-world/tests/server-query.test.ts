@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SERVER_QUERY_TOOL, serverQueryTool, ServerQueryLane, type ServerQueryContext, type ServerQueryDefinition } from '../core/server-query.ts';
+import { SERVER_QUERY_TOOL, SERVER_QUERY_RECEIPT_TOOL, serverQueryTool, serverQueryContextNotice, ServerQueryLane, type ServerQueryContext, type ServerQueryDefinition } from '../core/server-query.ts';
 import type { ToolOutcome } from '../core/support/host-contract.ts';
 import Ajv from 'ajv';
 import { compactToolSchema } from '../src/client/context-budget.ts';
+import { serverQuerySendParameters } from '../src/context.ts';
 
 const definitions: ServerQueryDefinition[] = [{ id: 'status', description: 'Read my server status',
   command: args => args.length === 0 ? '/mycli status' : null,
@@ -70,7 +71,7 @@ describe('read-only server query lane', () => {
     for (const schema of [tool.parameters, compactToolSchema(tool, tool.parameters).schema]) {
       expect((schema as any).properties).toHaveProperty('query');
       expect((schema as any).properties).toHaveProperty('arguments');
-      expect((schema as any).properties).toHaveProperty('requestId');
+      expect((schema as any).properties).not.toHaveProperty('requestId');
       const validate = new Ajv({ strict: false }).compile(schema as object);
       for (const input of [{}, { requestId: 'query-returned' }, { query: 'status' },
         { query: 'skills.status', arguments: [] }, { query: 'dungeon.status', arguments: ['observed_site'] },
@@ -84,6 +85,14 @@ describe('read-only server query lane', () => {
       // Identical argument shapes share a branch rather than repeating the
       // protocol catalogue in every model request.
       expect((schema as any).anyOf).toHaveLength(4);
+      const sendOnly = serverQuerySendParameters(schema as Record<string,unknown>);
+      const sendValid = new Ajv({strict:false}).compile(sendOnly);
+      expect(JSON.stringify(sendOnly)).not.toContain('"requestId"');
+      expect(sendValid({})).toBe(true);
+      expect(sendValid({query:'dungeon.status', arguments:['observed_site']})).toBe(true);
+      expect(sendValid({query:'dungeon.status'})).toBe(false);
+      expect(sendValid({requestId:'query-returned'})).toBe(false);
+      expect(sendValid({query:'status',requestId:'invented'})).toBe(false);
     }
     expect(tool.description!.slice(0, 300)).toContain('Required subject IDs');
     expect(serverQueryTool([])).toBe(SERVER_QUERY_TOOL);
@@ -104,7 +113,7 @@ describe('read-only server query lane', () => {
     expect(serverQueryTool([])).toBe(SERVER_QUERY_TOOL);
     expect(SERVER_QUERY_TOOL.parameters.properties.query).not.toHaveProperty('enum');
   });
-  it.each([{ query: 'missing' }, { query: 'status', requestId: 'invented' }, { command: '/status' }])(
+  it.each([{ query: 'missing' }, { command: '/status' }])(
     'returns configured repair information with rejected %j without dispatching', args => {
       const { lane, send, context } = setup();
       const result = lane.call(args, definitions, context);
@@ -135,6 +144,32 @@ describe('read-only server query lane', () => {
     expect(result.data).toMatchObject({ found: false, outcomeUnknown: true, goal_completed: false });
     expect(result.data?.recovery).toBeUndefined();
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('routes returned ids to a receipt-only read and rejects a generated id without sending a second command', () => {
+    const { lane, send, context } = setup();
+    const sent = lane.call({query:'status'}, definitions, context);
+    const requestId = sent.data!.requestId;
+    const read = {tool:'mc_query_receipt', arguments:{requestId}};
+    expect(sent.data?.next_safe_read).toEqual(read);
+    for (const schema of [SERVER_QUERY_RECEIPT_TOOL.parameters, compactToolSchema(SERVER_QUERY_RECEIPT_TOOL, SERVER_QUERY_RECEIPT_TOOL.parameters).schema]) {
+      const valid = new Ajv({strict:false}).compile(schema as object);
+      expect(valid({requestId})).toBe(true);
+      for (const args of [{}, {query:'status'}, {requestId, query:'status'}]) expect(valid(args)).toBe(false);
+    }
+    expect(lane.call({query:'inventory', arguments:['personal'],requestId}, definitions,context)).toMatchObject({
+      failed:true, data:{requestedQuerySent:false, next_safe_read:read, queryDefinition:{id:'inventory'}}});
+    const invented = lane.call({query:'status',requestId:'status-check-1'}, definitions,context);
+    expect(invented.data).toMatchObject({requestedQuerySent:false,queryDefinition:{id:'status'}});
+    expect(invented.data).not.toHaveProperty('next_safe_read');
+    expect(lane.readReceipt({query:'status',requestId})).toMatchObject({failed:true});
+    expect(lane.readReceipt({requestId:'unknown'}).data).toMatchObject({found:false,outcomeUnknown:true});
+    expect(lane.receive('Status alice: ready',context.generation, context.username)).toBe(true);
+    const received = lane.readReceipt({requestId});
+    expect(received.data).toMatchObject({requestId,phase:'replied',query:'status'});
+    expect(lane.call({requestId},definitions,null)).toEqual(received);
+    expect(JSON.parse(serverQueryContextNotice(received.data)!).next_safe_read).toEqual(read);
+    expect(send).toHaveBeenCalledOnce();
   });
 
   it('returns only the rejected query contract so a missing subject can be repaired without guessing or retrying', () => {

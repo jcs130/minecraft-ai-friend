@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.114
+
+Read a server query's original observation through `mc_query_receipt`. Event notices and pending queries supply its exact arguments. New queries expose only query and argument fields at the top level, and existing receipt-only callers remain compatible.
+
 ## 0.5.7-rc.160-preview.113
 
 Open-container take and stow report quantities matched on both the container and carried sides. Partial transfers expose the amount still needed. A retained window reports provisional observations until close, and uncertain transfers point to a read instead of a repeat click. Item selectors keep the selected stack as their source. Missing scaffold materials link to the take guide.

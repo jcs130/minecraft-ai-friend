@@ -52,7 +52,7 @@ import { readMapDat } from './level-dat.ts';
 import { readMapId } from './item-facts.ts';
 import { Vec3 } from 'vec3';
 import { ServerFeedbackLedger, parseServerActionDenial } from './server-feedback.ts';
-import { ServerQueryLane, SERVER_QUERY_TOOL, serverQueryTool, serverQueryContextNotice, type ServerQueryDefinition } from './server-query.ts';
+import { ServerQueryLane, SERVER_QUERY_TOOL, SERVER_QUERY_RECEIPT_TOOL, serverQueryTool, serverQueryContextNotice, type ServerQueryDefinition } from './server-query.ts';
 import { supervisorEventView } from '../src/client/event-context.ts';
 import { executionFeedbackContext } from '../src/client/execution-context.ts';
 import type { Bot } from 'mineflayer';
@@ -2276,6 +2276,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   KNOWLEDGE_TOOL,
   OPTIONS_TOOL,
   SERVER_QUERY_TOOL,
+  SERVER_QUERY_RECEIPT_TOOL,
   PROXIMITY_VOICE_TOOL,
   ...PERCEPTION_TOOLS,
   RAILWAY_TOOL_DECL,
@@ -4912,6 +4913,7 @@ export class MinecraftWorld implements World {
     const handlers: Record<string, ToolDef['handler']> = {
       mc_voice: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.proximityVoice.call(args); },
       mc_query: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.queryServer(args,ctx.signal); },
+      mc_query_receipt: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.serverQueries.readReceipt(args); },
       mc_tool_help: async (args, ctx) => { ctx.signal?.throwIfAborted(); return readToolHelp(this.tools(), args); },
       mc_knowledge: async (args, ctx) => {
         ctx.signal?.throwIfAborted();
