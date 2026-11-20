@@ -74,6 +74,31 @@ it('prefers a nearby staircase while allowing a direct descent over a much longe
   }
 });
 
+it('routes around an uncertified five-block drop and reaches the same goal', async () => {
+  vi.useFakeTimers();
+  const h = fixture(5), reports: TaskReport[] = [];
+  try {
+    // The native search considers a stair block physical. Its upper collision
+    // face does not supply the full landing footprint required for a fall.
+    for (let z = -3; z <= 3; z++) h.set(1, 58, z, 'stone_stairs');
+    const goal = new pathfinder.goals.GoalBlock(4, 59, 0);
+    const result = h.bot.pathfinder.getPathTo(h.m, goal, 1000);
+    expect(result.status).toBe('success');
+    expect(checkGroundPath(h.bot, result.path)).toBeNull();
+    expect(result.path.some(node => node.y === 59 && Math.abs(Math.floor(node.z)) >= 4)).toBe(true);
+    expect(result.path.at(-1)).toMatchObject({ x: 4.5, y: 59, z: .5 });
+
+    installDoorWaypointRepair(h.bot);
+    Object.assign((h.exec as any).opts, { report: (r: TaskReport) => reports.push(r), fleeHealth: () => 0 });
+    await vi.advanceTimersByTimeAsync(200);
+    h.exec.submitDetailed([{ skill: 'goto', at: [4, 59, 0], exact: true }]);
+    for (let tick = 0; tick < 600 && !reports.length; tick++) await vi.advanceTimersByTimeAsync(50);
+    expect(reports[0]?.kind, JSON.stringify({ position: h.bot.entity.position, issue: groundPathIssueOf(h.bot) })).toBe('done');
+    expect(h.bot.entity.position.floored()).toEqual(new Vec3(4, 59, 0));
+    expect(h.bot.entity.onGround).toBe(true);
+  } finally { h.close(); }
+}, 15000);
+
 it('honours received higher fall damage and a lower safe-fall distance',()=>{
   const h=fixture();
   try{

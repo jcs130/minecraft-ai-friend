@@ -7,7 +7,7 @@
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { createRequire } from 'node:module';
-import { approveNavigationDrop, clearNavigationDrop, estimateFallDamage, finishNavigationDrop, navigationFallBudget, verifiedDryLanding } from './navigation-fall.ts';
+import { approveNavigationDrop, clearNavigationDrop, estimateFallDamage, finishNavigationDrop, isClimbableNavigationBlock, navigationFallBudget, verifiedDryLanding } from './navigation-fall.ts';
 
 const physicsRequire = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 const { PlayerState } = physicsRequire('prismarine-physics');
@@ -64,7 +64,6 @@ function hasCollisionVerifiedClimb(bot: Pick<Bot, 'entity' | 'blockAt'>, from: V
  * A later edge with dig/place depends on future geometry and is deliberately not certified here.
  */
 export function checkGroundPath(bot: Pick<Bot, 'entity' | 'blockAt'> & Partial<Pick<Bot, 'registry' | 'health'>>, path: readonly Waypoint[]): Omit<GroundPathIssue, 'sequence'> | null {
-  const climb = new Set(['ladder', 'vine', 'scaffolding', 'water', 'bubble_column']);
   // Effect-assisted movement has a different jump envelope; the vanilla bound cannot certify it.
   if (Object.keys(bot.entity?.effects ?? {}).some(id => {
     const effect = bot.registry?.effects?.[Number(id)]?.name;
@@ -81,7 +80,7 @@ export function checkGroundPath(bot: Pick<Bot, 'entity' | 'blockAt'> & Partial<P
     if (estimateFallDamage(-rise, bot) > 0 && (i > 0 || bot.entity.onGround)) {
       const start = bot.blockAt(new Vec3(from.x, from.y, from.z).floored());
       const end = bot.blockAt(new Vec3(to.x, to.y, to.z).floored());
-      if (!(start && end && (climb.has(start.name) || climb.has(end.name)))) {
+      if (!(start && end && (isClimbableNavigationBlock(start.name) || isClimbableNavigationBlock(end.name)))) {
         spent += estimateFallDamage(-rise, bot);
         if (spent > budget.damageBudget || !verifiedDryLanding(bot, from, to)) {
           return { from: { x: from.x, y: from.y, z: from.z }, to: { x: to.x, y: to.y, z: to.z }, rise,
@@ -92,7 +91,7 @@ export function checkGroundPath(bot: Pick<Bot, 'entity' | 'blockAt'> & Partial<P
     if (rise > 1.25 && (i > 0 || bot.entity.onGround)) {
       const start = bot.blockAt(new Vec3(from.x, from.y, from.z).floored());
       const end = bot.blockAt(new Vec3(to.x, to.y, to.z).floored());
-      if (start && end && !climb.has(start.name) && !climb.has(end.name) && !hasCollisionVerifiedClimb(bot, from, to)) {
+      if (start && end && !isClimbableNavigationBlock(start.name) && !isClimbableNavigationBlock(end.name) && !hasCollisionVerifiedClimb(bot, from, to)) {
         return { from: { x: from.x, y: from.y, z: from.z }, to: { x: to.x, y: to.y, z: to.z }, rise,
           reason: `路径内部几何校验：脚高 ${from.y.toFixed(3)}→${to.y.toFixed(3)}，需直接升高 ${rise.toFixed(3)} 格，超过普通跳跃范围；该段未安排垫脚/挖掘，也未读到攀爬或水中条件。已拒绝这条路径，不能据此断言目标完全不可达；用 observe sites/voxels 检查台阶、净空和其他路线。` };
       }
