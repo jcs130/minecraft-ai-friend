@@ -38,7 +38,8 @@ final class AgentCliRecovery {
         {"skills","spell","法术","技能","施法","学习"},
         {"profession","class","职业","选职"},
         {"quest","tasks","委托","任务"},
-        {"cancel","abandon","取消","放弃","退出"}
+        {"cancel","abandon","取消","放弃","退出"},
+        {"tidy","organize","整理","收纳","归整"}
     };
     private AgentCliRecovery(){}
     static void warm(List<Card> cards){index(cards);}
@@ -85,6 +86,8 @@ final class AgentCliRecovery {
             Card card=cards.get(item);double lexical=cosine(query,index.vectors().get(item));
             double spelling=wordSimilarity(words,index.paths().get(item));
             double score=.75*lexical+.25*spelling;
+            if(q.codePointCount(0,q.length())>=3 && card.summary().toLowerCase(Locale.ROOT).contains(q))
+                score=Math.max(score,.85);
             if(score>=.16)matches.add(new Match(card,safeNext(card),score,"catalog_terms_and_aliases"));
         }
         return top(matches);
@@ -141,9 +144,28 @@ final class AgentCliRecovery {
         if(q.isEmpty())return List.of();Set<String> tokens=new HashSet<>(Arrays.asList(q.split("\\s+")));
         Set<String> parts=new HashSet<>(Arrays.asList(q.split("[^a-z0-9]+")));
         boolean travel=Arrays.stream(CONCEPTS[0]).anyMatch(a->a.chars().allMatch(c->c<128)?parts.contains(a):q.contains(a))||q.contains("传送点术")||parts.contains("teleprot");
-        if(!travel)return List.of();
+        boolean location=parts.contains("where")||parts.contains("locate")||parts.contains("coordinates")
+            ||!Collections.disjoint(parts,Set.of("follow","walk","meet","approach","find"))
+            ||List.of("在哪","位置","坐标","找人","去找","走到","跑到","跟随","跟着","会合","汇合","碰头","寻路","身边").stream().anyMatch(q::contains);
+        if(!travel&&!location)return List.of();
         var targets=context.dungeonIds().stream().filter(id->tokens.contains(id.toLowerCase(Locale.ROOT))).sorted().toList();
-        var partners=context.onlineNames().stream().filter(name->tokens.contains(name.toLowerCase(Locale.ROOT))).sorted().toList();
+        var partners=context.onlineNames().stream().filter(name->mentions(q,name)).sorted().toList();
+        boolean characterIntent=!partners.isEmpty()||List.of("角色","队友","同伴","玩家","找人","跟谁","跟着谁").stream().anyMatch(q::contains)
+                ||parts.contains("player")||parts.contains("teammate");
+        boolean explicitTeleport=!Collections.disjoint(parts,Set.of("tp","warp","teleport","teleportation","teleprot"))
+                ||q.contains("传送")||q.contains("瞬移");
+        if(characterIntent&&(location||travel)&&!explicitTeleport){
+            boolean exact=partners.size()==1 && targets.isEmpty();
+            String id=exact?"locate.info":"locate.list";
+            return cards.stream().filter(c->c.id().equals(id)).findFirst()
+                    .map(c->List.of(new Match(c,exact?"/mycli locate info "+partners.getFirst()+" --json":"/mycli locate list --json",1,"character_location_query")))
+                    .orElseGet(List::of);
+        }
+        if(!travel)return List.of();
+        if(characterIntent&&partners.isEmpty()&&targets.isEmpty())
+            return cards.stream().filter(c->c.id().equals("locate.tp")).findFirst()
+                    .map(c->List.of(new Match(c,"/mycli locate list --json",1,"character_selection")))
+                    .orElseGet(List::of);
         if(targets.size()+partners.size()>1){
             var choices=new ArrayList<Match>();
             if(!targets.isEmpty())cards.stream().filter(c->c.id().equals("dungeon.travel")).findFirst().ifPresent(c->choices.add(new Match(c,"/mycli dungeon list",1,"confirmed_targets_need_selection")));
@@ -160,10 +182,21 @@ final class AgentCliRecovery {
         }
         return List.of();
     }
+    private static boolean mentions(String query,String name){
+        String key=name.toLowerCase(Locale.ROOT);
+        for(int at=query.indexOf(key);at>=0;at=query.indexOf(key,at+1)){
+            int end=at+key.length();
+            if((at==0||!accountChar(query.charAt(at-1))||!accountChar(key.charAt(0)))
+                    &&(end==query.length()||!accountChar(query.charAt(end))||!accountChar(key.charAt(key.length()-1))))return true;
+        }
+        return false;
+    }
+    private static boolean accountChar(char c){return c>='a'&&c<='z'||c>='0'&&c<='9'||c=='_'||c=='.';}
     private static String safeNext(Card card){
         if(card.id().equals("dungeon.travel"))return "/mycli dungeon list";
-        if(card.id().equals("locate.tp"))return "/mycli locate list";
+        if(card.id().equals("locate.tp")||card.id().equals("locate.info"))return "/mycli locate list";
         String command=card.usage().replaceFirst("\\s+\\[.*$","").trim();
+        if(card.usage().startsWith(command+" [--dry-run]") && !command.contains("<"))return command+" --dry-run";
         if(command.startsWith("/mycli ")&&command.length()<=240&&!command.matches("(?s).*[<>|;；\\r\\n].*"))return command;
         return card.help();
     }
@@ -172,8 +205,43 @@ final class AgentCliRecovery {
         out.addProperty("errorCode",errorCode);out.addProperty("reason",errorCode);out.addProperty("message",message);
         out.addProperty("retryable",false);out.addProperty("readOnly",true);out.addProperty("autoExecute",false);
         out.addProperty("catalogRevision",revision(cards));out.addProperty("nextCommand",matches.isEmpty()?"/mycli --help":matches.getFirst().nextCommand());
-        var suggestions=new JsonArray();for(Match match:matches){var row=new JsonObject();row.addProperty("id",match.card().id());row.addProperty("usage",match.card().usage());row.addProperty("summary",match.card().summary());row.addProperty("requirements",match.card().requirements());row.addProperty("nextCommand",match.nextCommand());row.addProperty("lookupMethod",match.method());row.addProperty("rankingScore",Math.round(match.score()*1000)/1000d);suggestions.add(row);}
-        out.add("suggestions",suggestions);out.addProperty("retryPolicy","本次未执行、未扣费。选择并核对建议后，由本人重新发出正确命令；相近候选不是执行成功或可用性保证。");return out;
+        out.add("suggestions",suggestions(matches));out.addProperty("retryPolicy","本次未执行、未扣费。选择并核对建议后，由本人重新发出正确命令；相近候选不是执行成功或可用性保证。");return out;
+    }
+    private static JsonArray suggestions(List<Match> matches){
+        var rows=new JsonArray();
+        for(var match:matches){
+            var card=match.card();
+            var row=new JsonObject();
+            row.addProperty("id",card.id());row.addProperty("usage",card.usage());
+            row.addProperty("summary",card.summary());row.addProperty("requirements",card.requirements());
+            row.addProperty("nextCommand",match.nextCommand());row.addProperty("helpCommand",card.help());
+            row.addProperty("lookupMethod",match.method());row.addProperty("rankingScore",Math.round(match.score()*1000)/1000d);
+            rows.add(row);
+        }
+        return rows;
+    }
+    static JsonObject searchResult(List<Match> matches,List<Card> cards){
+        // A command copied from discovery should return the actor, target and outcome.
+        matches=matches.stream().map(m->m.nextCommand().startsWith("/mycli locate ")
+                &&!m.nextCommand().endsWith("--json") && !m.nextCommand().endsWith("--help")
+                ?new Match(m.card(),m.nextCommand()+" --json",m.score(),m.method()):m).toList();
+        var out=new JsonObject();
+        out.addProperty("schemaVersion",1);out.addProperty("success",true);
+        out.addProperty("readOnly",true);out.addProperty("changed",false);out.addProperty("autoExecute",false);
+        out.addProperty("found",!matches.isEmpty());out.addProperty("catalogRevision",revision(cards));
+        out.add("suggestions",suggestions(matches));
+        out.addProperty("nextCommand",matches.isEmpty()?"/mycli --help":matches.getFirst().nextCommand());
+        return out;
+    }
+    static List<String> searchText(JsonObject out){
+        var lines=new ArrayList<String>();
+        for(var entry:out.getAsJsonArray("suggestions")){
+            var row=entry.getAsJsonObject();
+            lines.add(row.get("usage").getAsString()+" · "+row.get("summary").getAsString()+"（"+row.get("requirements").getAsString()+"）");
+        }
+        if(lines.isEmpty())lines.add("未找到匹配命令，可以换个说法或浏览目录。");
+        lines.add("下一步："+out.get("nextCommand").getAsString());
+        return List.copyOf(lines);
     }
     static List<String> text(JsonObject out){
         var lines=new ArrayList<String>();lines.add("["+out.get("errorCode").getAsString()+"] "+out.get("message").getAsString()+"；本次未执行、未扣费。");

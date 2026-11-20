@@ -146,6 +146,10 @@ class ActionJournal:
         return [BodyAction.model_validate_json(action) for action, receipt in rows
                 if receipt is None or json.loads(receipt)["status"] in ("accepted", "unknown")]
 
+    def receipt(self, body: str, request_id: str) -> ActionReceipt | None:
+        row = self.db.execute("SELECT receipt FROM dispatch WHERE body=? AND id=?", (body, request_id)).fetchone()
+        return ActionReceipt.model_validate_json(row[0]) if row and row[0] else None
+
     def recent(self, body: str, limit: int = 12) -> list[tuple[BodyAction, ActionReceipt]]:
         rows = self.db.execute(
             "SELECT action,receipt FROM dispatch WHERE body=? AND receipt IS NOT NULL ORDER BY rowid DESC LIMIT ?",

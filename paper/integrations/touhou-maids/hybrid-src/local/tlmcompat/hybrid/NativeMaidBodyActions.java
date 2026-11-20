@@ -106,6 +106,27 @@ final class NativeMaidBodyActions {
             case "speak"->{value=MaidBodyControl.string(input,"text");if(value.isBlank()||value.codePointCount(0,value.length())>140||value.codePoints().anyMatch(x->Character.isISOControl(x)||x==0xA7))throw new MaidBodyControl.Fault(400,"INVALID_text");}
             case "ack"->{value=MaidBodyControl.string(input,"eventId");if(!value.matches("[A-Za-z0-9_:-]{1,128}"))throw new MaidBodyControl.Fault(400,"INVALID_eventId");}
         }
+        if (action.equals("rendezvous")) {
+            UUID targetId = MaidBodyControl.uuid(input, "targetUuid");
+            if (!socialWalkAvailable(maid)) return blocked(owner,id,input,"maid_busy");
+            control.reserve(owner,id,request,input);
+            try {
+                var result = NativeMaidRendezvous.cast(plugin, maid, targetId);
+                boolean arrived = result.get("arrived").getAsBoolean();
+                if (arrived) {
+                    var rebound = plugin.ownedLoaded(owner,id);
+                    plugin.nativeQuiesce(rebound);
+                    guards.remove(id); companions.remove(id); resumeGuards.remove(id); follows.remove(id);
+                    control.invalidateCallbacks(id);
+                }
+                return reply(arrived, control.finish(id, request, arrived ? "completed" : "rejected", result),
+                        arrived ? null : result.get("reason").getAsString());
+            } catch (Exception | LinkageError uncertain) {
+                var info = new JsonObject();
+                info.addProperty("reason", "rendezvous_unconfirmed_query_original");
+                return reply(false, control.finish(id, request, "unknown", info), "rendezvous_unconfirmed_query_original");
+            }
+        }
         if (MaidBodyControl.BAG_ACTIONS.contains(action)) {
             if (!local.qdj.maids.brain.ResidentBodyAccess.external(id)) return blocked(owner,id,input,"resident_account_required");
             control.reserve(owner,id,request,input);
@@ -217,6 +238,7 @@ final class NativeMaidBodyActions {
             data.addProperty("socialWalkAvailable", maid != null && socialWalkAvailable(maid));
             if(maid!=null){
                 data.add("nearbyPlayers", nearbyPlayers(maid));
+                NativeMaidRendezvous.describe(id, data);
                 var fishingState=data.has("fishing") ? data.getAsJsonObject("fishing") : MaidCompanionActions.fishing(maid);
                 String block = busy(id) || plugin.workshops().busy(id) || plugin.editingMaidInventory(maid)
                         ? "maid_busy" : fishingContextBlock(maid,owner);

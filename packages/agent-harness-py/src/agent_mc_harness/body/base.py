@@ -12,6 +12,7 @@ from __future__ import annotations
 import abc
 import asyncio
 import contextlib
+import math
 import uuid
 from collections import OrderedDict
 from collections.abc import Callable
@@ -278,3 +279,16 @@ def xyz(args: dict[str, Any]) -> tuple[float, float, float]:
             raise ArgumentError(f"{key} out of range")
         out.append(float(value))
     return out[0], out[1], out[2]
+
+
+def rendezvous_arrival(actual: object, target: object) -> bool:
+    """The team travel skill lands within four blocks of the current target body."""
+    if not isinstance(actual, dict) or not isinstance(target, dict):
+        return False
+    dimension = actual.get("dimension")
+    if not isinstance(dimension, str) or not dimension or dimension != target.get("dimension"):
+        return False
+    try:
+        return math.dist(xyz(actual), xyz(target)) <= 4
+    except ArgumentError:
+        return False

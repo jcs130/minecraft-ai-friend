@@ -30,3 +30,8 @@ coach:
   idle-seconds: 900
   unused-seconds: 2700
   cooldown-seconds: 1800
+# Public character names for the compass and /mycli locate. Keys are verified body UUIDs.
+character-directory:
+  aliases:
+    822d173a-7181-3b9b-be60-804f29b24ecc: [可米]
+    8ae995f9-5944-48c9-b720-0ab91bdfff09: [桐人]

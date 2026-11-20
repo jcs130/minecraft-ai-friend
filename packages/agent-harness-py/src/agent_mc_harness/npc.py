@@ -246,7 +246,9 @@ def reviewed_steps(role: NpcRole, context: PlanContext, values: Any) -> list[Ste
         if any(key in step.args for key in ("maidId", "ownerId", "companion", "roleUuid", "requestId", "generation")):
             raise ValueError("model_cannot_change_body_or_request_identity")
         if role.body_kind == "maid" and step.tool == "body:follow" and step.args:
-            raise ValueError("body_follow_means_owner_use_companion_for_a_visible_player")
+            raise ValueError("body_follow_means_owner_use_companion_with_a_name_or_uuid_from_the_skill_compass")
+        if step.tool == "body:native:rendezvous":
+            raise ValueError("choose_companion_from_the_skill_compass_before_travel")
         if step.tool == "body:attack" and step.args.get("target", "hostile") != "hostile":
             raise ValueError("npc_cannot_attack_players_or_passive_entities")
         if step.tool == "body:native:task" and step.args.get("taskId") not in role.native_tasks:
@@ -346,7 +348,7 @@ class NpcPlanner:
         check_in: str | None = None
         social_walk = context.maid_companions is not None
         following = social_walk and bool(context.maid_companions.get("selection"))
-        roster = tuple(sorted(p["uuid"] for p in context.maid_companions["nearbyPlayers"])) if social_walk else ()
+        roster = tuple(sorted(p["uuid"] for p in context.maid_companions["characters"])) if social_walk else ()
         review_company = social_walk and (roster != self.social_roster or now >= self.next_social_review)
         if intent.goal in (IDLE_GOAL, DANGER_GOAL) and now >= self.next_meal:
             meal = routine_meal(role, context)
@@ -377,7 +379,7 @@ class NpcPlanner:
                     self.last_route = {"layer": "native-policy", "reason": "guard_continuing",
                                        "adventureState": context.companion_adventure["state"]}
                     return []
-        tools = [tool for tool in role.allowed_tools if not step_support(Step(tool=tool), caps)]
+        tools = [tool for tool in role.allowed_tools if tool != "body:native:rendezvous" and not step_support(Step(tool=tool), caps)]
         if check_in:
             tools = ["body:chat"]
         schemas, native_catalogue = {}, []
@@ -403,7 +405,7 @@ class NpcPlanner:
                     return [] if choice.tool == "body:observe" else [choice]
         native_context = context.snapshot.raw if context.snapshot else None
         if role.body_kind == "maid" and isinstance(native_context, dict):
-            native_context = {key: value for key, value in native_context.items() if key != "favorability"}
+            native_context = {key: value for key, value in native_context.items() if key not in {"favorability", "characterDirectory"}}
         facts = {"goal": intent.goal, "self": {"name": role.name, "characterId": str(role.character_id)},
                  "currentDialogue": [event.model_dump(mode="json") for event in context.dialogue],
                  "addressedEventIds": [event.data["eventId"] for event in addressed],
@@ -442,6 +444,9 @@ class NpcPlanner:
         if role.adventure_partner:
             facts["adventuring"] = {"partnerAccount": role.adventure_partner,
                 "purpose": "You are an independent adventurer. Choose a concrete, feasible next activity whenever healthy and idle. "
+                "Find any locatable character by exact name/UUID with locate_character or browse characters(page) in the skill compass. "
+                "Use the current same-world position for a reachable walk, or meet_character(targetUuid) for the ordinary travel spell. "
+                "Read its confirmed arrival or refusal before claiming you met. "
                 "Scout terrain with survey, then walk to one sampled walkTo point. Reuse a fresh survey at this position before scanning again. "
                 "Vary your route and avoid retracing the last move. "
                 "Check live combat or exploration jobs and ruins. If a route catalogue is empty, consult guild_board for today's actual offers. "
@@ -514,12 +519,12 @@ class NpcPlanner:
             "Do not set the same mode again or switch to a different mode merely because it is quiet. "
         )
         social_policy = (
-            " You may independently choose a walking companion from maidCompanions.nearbyPlayers. "
+            " Use maidCompanions.characters as your skill compass. Look up a character by name or UUID across worlds. Choose whom to approach or accompany based on their activity, dimension and position. "
             "Consider your commitments, a greeting, a request for help, or your own wish to explore with someone. "
             "Keep your own role and existing partnership in mind when choosing whom to accompany. "
             "A greeting alone does not require following. A request is something to weigh for yourself. "
-            'To walk to someone once, output {"steps":[],"companion":{"mode":"approach","targetUuid":"<observed uuid>"}}. '
-            'Use mode "follow" to keep up as they move; choose a different observed UUID to switch. '
+            'To meet someone once, output {"steps":[],"companion":{"mode":"approach","targetUuid":"<listed uuid>"}}. '
+            'Use targetName for an exact name or alias. Follow tracks a moving partner. Choose optional travel auto, walk, or teleport. Walking uses the native pathfinder; distance, blocked routes and dimensions may require the paid travel spell when teleportAvailable. '
             'Use {"steps":[],"companion":{"mode":"stop"}} to end your selection. '
             "When your current choice still fits, omit companion. For a new choice return companion with empty steps. "
             "Do not issue body:follow or announce arrival alongside a choice. A walk receipt describes a leg of the trip. "
@@ -574,7 +579,7 @@ class NpcPlanner:
             # The same bounded step validator still applies to a bare list.
             plan = {"steps": plan}
         if social_walk:
-            choice = parse_choice(plan, context.maid_companions["nearbyPlayers"])
+            choice = parse_choice(plan, context.maid_companions["characters"])
             if choice is not None:
                 context.companion_choice = choice
                 return []
@@ -746,6 +751,7 @@ class NpcHost:
                  companion_adventure=None):
         self.role, self.body, self.planner, self.memory, self.journal = role, body, planner, memory, journal
         self.social = social
+        self.rendezvous_intent: Intent | None = None
         self.social_graph = social_graph
         self.companion_adventure = companion_adventure
         self.companions = MaidCompanions() if role.body_kind == "maid" and "body:move" in role.allowed_tools else None
@@ -762,6 +768,9 @@ class NpcHost:
         self.next_outing_check = 0.0
         self.next_rendezvous_attempt: dict[str, float] = {}
         self.checked_party_event = None
+
+    def _can_rendezvous(self, caps):
+        return bool(caps and caps.supports("native", "rendezvous") and "body:native:rendezvous" in self.role.allowed_tools)
 
     def _ack_steps(self, events: list[str]) -> list[Step]:
         # Only actual maid inbox entries support ack. Ambient owner-client chat
@@ -865,7 +874,8 @@ class NpcHost:
         if (self.companions and context.capabilities and context.capabilities.supports("move")
                 and social_walk_available(context.snapshot)):
             candidates = self.companions.context(context.snapshot)
-            if candidates["nearbyPlayers"] or candidates["selection"]:
+            candidates["teleportAvailable"] = self._can_rendezvous(context.capabilities)
+            if candidates["characters"] or candidates["selection"] or candidates["lastTransfer"] or candidates["source"] == "skill_compass_unavailable":
                 context.maid_companions = candidates
         if self.role.activity_review_seconds is not None:
             intent.remember_wait_purpose = True
@@ -947,11 +957,13 @@ class NpcHost:
                 self.next_plan = 0
                 return []
             choice = context.companion_choice
-            if not self.companions.choose(choice["mode"], choice.get("targetUuid"), latest):
+            if not self.companions.choose(choice["mode"], choice.get("targetUuid"), latest, travel=choice.get("travel", "auto")):
                 self.next_plan = 0
                 return []
-            move = self.companions.next_step(latest)
+            move = self.companions.next_step(latest, can_teleport=self._can_rendezvous(context.capabilities))
             steps = [move] if move else []
+            if move and move.tool == "body:native:rendezvous":
+                self.rendezvous_intent = intent
             if isinstance(self.planner, NpcPlanner):
                 self.planner.last_route["companion"] = dict(choice)
             context.snapshot = latest
@@ -1086,6 +1098,14 @@ class NpcHost:
                             intent.state = "cancelled"
                             intent.reason = "original_receipt_reconciled_replan_from_current_observation"
             elif self.body.health().lifecycle != "error" and not any(i.state in ("active", "queued", "paused") for i in self.runtime.intents.values()):
+                # The durable journal reconciles an interrupted trip under its original request ID.
+                trip = self.rendezvous_intent
+                if trip is not None and trip.receipts:
+                    original = trip.receipts[0]
+                    settled = original if original.terminal else self.journal.receipt(identity.body_id, original.request_id)
+                    if settled and settled.terminal:
+                        self.companions.settle_transfer(trip.steps[0].args["targetUuid"], settled)
+                        self.rendezvous_intent = None
                 # This read never preempts a running world action. Native guard runs
                 # every tick; the fast model chooses modes only when danger changes.
                 try:
@@ -1135,10 +1155,13 @@ class NpcHost:
                             intent.recall_query = "一起完成的委托、副本、探险和之前商量过的目的地"
                     self.next_plan = now + self.role.interval_seconds
                 elif self.companions and self.companions.active and not events:
-                    move = self.companions.next_step(snapshot, busy=not social_walk_available(snapshot))
+                    move = self.companions.next_step(snapshot, busy=not social_walk_available(snapshot),
+                                                     can_teleport=self._can_rendezvous(self.body.capabilities()))
                     if move:
-                        self.runtime.submit_intent("Keep up with the companion I selected.", agent=self.role.id,
-                                                   steps=[move.model_dump()])
+                        trip = self.runtime.submit_intent("Keep up with the companion I selected.", agent=self.role.id,
+                                                          steps=[move.model_dump()])
+                        if move.tool == "body:native:rendezvous":
+                            self.rendezvous_intent = trip
                 self.last_danger = threatened
             # Completed history is bounded in memory; durable receipts and memories remain on disk.
             settled = [key for key, value in self.runtime.intents.items() if value.state in ("completed", "failed", "cancelled")]

@@ -45,6 +45,26 @@ public final class AgentCliRecoveryTest {
         }
         check(find("teleport deepfish",cards,context).getFirst().nextCommand().equals("/mycli locate tp DeepFish"),"reuse actual online name and canonical teammate route");
         check(find("teleport Yui undead_crypt",cards,context).stream().allMatch(m->Set.of("/mycli dungeon list","/mycli locate list").contains(m.nextCommand())),"multiple real targets require selection rather than picking an action");
+        var people=new AgentCliRecovery.Context(Set.of("undead_crypt"),Set.of("肥鱼","可米","DeepFish"));
+        for(String phrase:List.of("肥鱼在哪里","跟着肥鱼去探险","查肥鱼的坐标","where is DeepFish")){
+            var advice=find(phrase,cards,people);
+            String name=phrase.contains("DeepFish")?"DeepFish":"肥鱼";
+            check(advice.getFirst().nextCommand().equals("/mycli locate info "+name+" --json"),"position or walking intent starts with a read: "+phrase);
+        }
+        check(find("传送到可米身边",cards,people).getFirst().nextCommand().equals("/mycli locate tp 可米"),"recognize a confirmed name in natural text");
+        var paid=AgentCliRecovery.searchResult(find("传送到可米身边",cards,people),cards);
+        check(paid.get("nextCommand").getAsString().equals("/mycli locate tp 可米 --json"),"copying the shown spell asks for a structured arrival receipt");
+        for(String phrase:List.of("跑到可米身边","前往可米的位置","去找可米","walk to DeepFish","meet DeepFish")){
+            var next=find(phrase,cards,people).getFirst().nextCommand();
+            check(next.equals("/mycli locate info "+(phrase.contains("DeepFish")?"DeepFish":"可米")+" --json"),"meeting or walking starts with a read-only location lookup: "+phrase);
+        }
+        check(find("where is SuperDeepFish",cards,people).stream().noneMatch(m->m.nextCommand().contains("DeepFish")),"do not match partial account names");
+        check(find("看肥鱼和可米的位置",cards,people).getFirst().nextCommand().equals("/mycli locate list --json"),"ambiguous character search asks for choice");
+        var search=AgentCliRecovery.searchResult(find("整理背包",cards,people),cards);
+        check(search.get("success").getAsBoolean()&&search.get("readOnly").getAsBoolean()&&!search.get("changed").getAsBoolean()&&!search.get("autoExecute").getAsBoolean()&&!search.has("errorCode"),"successful read-only search envelope");
+        check(search.getAsJsonArray("suggestions").asList().stream().anyMatch(e->e.getAsJsonObject().get("id").getAsString().startsWith("inventory.")),"ordinary inventory intent finds inventory commands");
+        check(cards.stream().noneMatch(c->c.id().startsWith("admin.")),"public advice contains player actions");
+        check(AgentCliRecovery.searchResult(List.of(),cards).get("nextCommand").getAsString().equals("/mycli --help"),"empty search offers directory");
         var unknown=find("teleport unknown_secret_destination",cards,context);
         check(unknown.stream().noneMatch(m->m.nextCommand().contains("unknown_secret_destination")),"unknown target cannot become an executable destination");
         check(find("tp Yui",cards,AgentCliRecovery.Context.empty()).stream().noneMatch(m->m.nextCommand().equals("/mycli locate tp Yui")),"offline/unconfirmed target not filled");

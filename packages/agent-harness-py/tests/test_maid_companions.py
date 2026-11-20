@@ -5,7 +5,6 @@ import pytest
 from agent_mc_harness.maid_companions import MaidCompanions, parse_choice, walk_available
 from agent_mc_harness.models import BodySnapshot, utcnow
 
-
 OVERWORLD = "minecraft:overworld"
 NETHER = "minecraft:the_nether"
 ALICE = "cd861923-2f54-4dd2-8b8f-6cf10fbf9ece"
@@ -83,7 +82,7 @@ def loop():
 ])
 def test_never_select_from_unusable_or_invented_evidence(loop, snapshot):
     tracking, _ = loop
-    assert tracking.context(snapshot)["nearbyPlayers"] == []
+    assert tracking.context(snapshot)["characters"] == []
     assert not tracking.choose("follow", ALICE, snapshot)
     assert tracking.next_step(snapshot) is None
 
@@ -91,7 +90,7 @@ def test_never_select_from_unusable_or_invented_evidence(loop, snapshot):
 def test_model_may_choose_any_observed_player_independent_of_name_and_owner(loop):
     tracking, now = loop
     obs = scene(player(name="Same"), player(BOB, x=12, name="Same"))
-    ids = [p["uuid"] for p in tracking.context(obs)["nearbyPlayers"]]
+    ids = [p["uuid"] for p in tracking.context(obs)["characters"]]
     assert ids == [ALICE, BOB]
     assert not tracking.choose("follow", "Same", obs)
     assert tracking.choose("follow", BOB, obs)
@@ -203,7 +202,84 @@ def test_unreachable_destination_yields_and_suppresses_rapid_reselection(loop):
     now[0] = 60
     assert tracking.next_step(obs) is None
     assert tracking.status == "path_unavailable" and not tracking.active
-    assert tracking.context(obs)["nearbyPlayers"] == []
+    assert tracking.context(obs)["characters"] == []
     assert not tracking.choose("follow", ALICE, obs)
     now[0] = 160
     assert tracking.choose("follow", ALICE, obs)
+
+
+def compass(*characters, dimension=OVERWORLD, x=0):
+    result = scene(dimension=dimension, x=x)
+    result.raw["characterDirectory"] = list(characters)
+    return result
+
+
+def test_compass_selects_by_name_beyond_sight_and_paths_to_current_position(loop):
+    tracking, now = loop
+    observed = compass(player(x=55))
+    offered = tracking.context(observed)
+    assert offered["source"] == "skill_compass"
+    assert offered["characters"][0]["position"] == pos(55)
+    selection = parse_choice({"steps": [], "companion": {"mode": "follow", "targetName": "Alice"}}, offered["characters"])
+    assert selection == {"mode": "follow", "targetUuid": ALICE}
+    assert tracking.choose("follow", ALICE, compass(player(x=68)))
+    assert tracking.next_step(compass(player(x=64))).args == {**pos(64), "dimension": OVERWORLD}
+    with pytest.raises(ValueError, match="choose_one_character_uuid"):
+        parse_choice({"steps": [], "companion": {"mode": "follow", "targetName": "ALICE"}},
+                     tracking.context(compass(player(), player(BOB, name="Alice")))["characters"])
+
+
+@pytest.mark.parametrize("dimension,x", [(NETHER, 8), (OVERWORLD, 1800)])
+def test_remote_cast_is_target_bound_and_never_reissued_while_unsettled(loop, dimension, x):
+    tracking, now = loop
+    obs = compass(player(x=x, dimension=dimension))
+    assert tracking.choose("follow", ALICE, obs)
+    step = tracking.next_step(obs, can_teleport=True)
+    assert step.tool == "body:native:rendezvous" and step.args == {"targetUuid": ALICE}
+    now[0] += 100
+    assert tracking.next_step(obs, can_teleport=True) is None
+    assert tracking.context(compass(player(x=x, dimension=dimension), x=x, dimension=dimension))["status"] == "alongside"
+
+
+def test_shared_skill_permission_required_and_directory_removal_wins_over_old_sight(loop):
+    tracking, _ = loop
+    obs = compass(player(x=500))
+    obs.raw["nearbyPlayers"] = [player(BOB)]
+    assert not tracking.choose("follow", BOB, obs)
+    assert tracking.choose("follow", ALICE, obs)
+    assert tracking.next_step(obs, can_teleport=False).args == {**pos(32), "dimension": OVERWORLD}
+    assert not tracking.choose("follow", ALICE, compass())
+
+
+def test_requested_spell_on_older_bridge_reports_unavailable(loop):
+    tracking, _ = loop
+    obs = scene(player(x=12))
+    assert tracking.choose("approach", ALICE, obs, travel="teleport")
+    assert tracking.next_step(obs) is None
+    assert tracking.status == "rendezvous_skill_unavailable"
+
+
+def test_failed_remote_result_gives_planner_the_reason_and_no_new_charge(loop):
+    from agent_mc_harness.models import ActionReceipt
+    tracking, now = loop
+    obs = compass(player(dimension=NETHER))
+    assert tracking.choose("follow", ALICE, obs)
+    assert tracking.next_step(obs, can_teleport=True)
+    receipt = ActionReceipt(request_id="test-travel-rejected", verb="native", status="rejected", terminal=True, text="receipt: rejected",
+                            data={"data": {"observation": {"reason": "insufficient_mana"}}})
+    tracking.settle_transfer(ALICE, receipt)
+    assert not tracking.active and not tracking.choose("follow", ALICE, obs)
+    assert tracking.context(obs)["lastTransfer"]["message"] == "insufficient_mana"
+    now[0] += 100
+    assert tracking.choose("follow", ALICE, obs)
+
+def test_explicit_overland_travel_uses_bounded_legs_without_charging_and_forbids_other_dimension(loop):
+    tracking, now = loop
+    obs = compass(player(x=950))
+    assert tracking.choose("approach", ALICE, obs, travel="walk")
+    assert tracking.next_step(obs, can_teleport=True).args["x"] == 32
+    now[0] += 8
+    assert tracking.next_step(compass(player(x=950), x=32), can_teleport=True).args["x"] == 64
+    now[0] += 8
+    assert tracking.next_step(compass(player(dimension=NETHER)), can_teleport=True) is None
+    assert tracking.status == "different_dimension_requires_rendezvous"

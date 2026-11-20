@@ -48,8 +48,28 @@ final class AgentCliRecoveryService implements AutoCloseable {
     }
     private AgentCliRecovery.Context context(Player player){
         Set<String> online=new HashSet<>();
-        for(Player other:plugin.getServer().getOnlinePlayers())if(player.canSee(other))online.add(other.getName());
+        for(var target:TeammateDirectory.list(player)){
+            online.add(target.name());
+            online.add(target.displayName());
+            online.addAll(target.aliases());
+        }
         return new AgentCliRecovery.Context(plugin.siteDungeons().configuredSiteIds(),online);
+    }
+    void search(Player player,String[] raw) {
+        var catalog=currentCards();
+        var context=context(player);
+        var matches=AgentCliRecovery.suggest(raw,catalog,context);
+        JsonObject out=searchEnvelope(player,matches,catalog,"local");
+        plugin.communication().stamp(player,out);
+        if(Arrays.asList(raw).contains("--json"))player.sendMessage("MC_CLI_SEARCH "+out);
+        else AgentCliRecovery.searchText(out).forEach(player::sendMessage);
+        supplement(player,raw,context,matches,catalog,true);
+    }
+    private JsonObject searchEnvelope(Player player,List<AgentCliRecovery.Match> matches,List<AgentCliRecovery.Card> catalog,String phase){
+        JsonObject out=AgentCliRecovery.searchResult(matches,catalog);
+        out.addProperty("phase",phase);out.addProperty("queryId",requests.getOrDefault(player.getUniqueId(),0L));
+        out.addProperty("scope","self");out.addProperty("playerUuid",player.getUniqueId().toString());
+        return out;
     }
     void reject(Player player,String[] raw,String code,String message){
         List<AgentCliRecovery.Card> cards=currentCards();
@@ -59,7 +79,7 @@ final class AgentCliRecoveryService implements AutoCloseable {
         plugin.communication().stamp(player,out);
         if(Arrays.asList(raw).contains("--json"))player.sendMessage("MC_CLI_ERROR "+out);
         else AgentCliRecovery.text(out).forEach(player::sendMessage);
-        supplement(player,raw,context,matches,cards);
+        supplement(player,raw,context,matches,cards,false);
     }
     boolean rejectMisplacedCast(Player player,String[] raw){
         if(AgentCliRecovery.misplacedCast(raw,currentCards(),context(player)).isEmpty())return false;
@@ -75,7 +95,7 @@ final class AgentCliRecoveryService implements AutoCloseable {
         out.addProperty("semanticLookup",semanticState);
         out.addProperty("scope","self");out.addProperty("playerUuid",player.getUniqueId().toString());
         if(!out.has("nextCommand")||!matches.isEmpty()&&matches.getFirst().method().startsWith("confirmed_"))out.add("nextCommand",advice.get("nextCommand"));
-        supplement(player,raw,context,matches,cards);
+        supplement(player,raw,context,matches,cards,false);
     }
     void plain(JsonObject out,Player player){
         var suggestions=out.getAsJsonArray("suggestions");
@@ -84,8 +104,8 @@ final class AgentCliRecoveryService implements AutoCloseable {
         }
         player.sendMessage("下一步："+out.get("nextCommand").getAsString()+"；请核对后自行执行。");
     }
-    private void supplement(Player player,String[] raw,AgentCliRecovery.Context context,List<AgentCliRecovery.Match> local,List<AgentCliRecovery.Card> cards){
-        if(embeddings==null||closed||AgentCliRecovery.semanticQuery(raw,context).isEmpty()||!local.isEmpty()&&(local.getFirst().method().startsWith("confirmed_")||local.getFirst().method().equals("misplaced_cast_prefix")))return;
+    private void supplement(Player player,String[] raw,AgentCliRecovery.Context context,List<AgentCliRecovery.Match> local,List<AgentCliRecovery.Card> cards,boolean search){
+        if(embeddings==null||closed||AgentCliRecovery.semanticQuery(raw,context).isEmpty()||!local.isEmpty()&&(local.getFirst().method().startsWith("confirmed_")||local.getFirst().method().equals("character_location_query")||local.getFirst().method().equals("misplaced_cast_prefix")))return;
         UUID id=player.getUniqueId();long now=System.currentTimeMillis();
         if(now-lastLookup.getOrDefault(id,0L)<10_000)return;
         while(lastLookup.size()>=128)lastLookup.remove(lastLookup.keySet().iterator().next());lastLookup.put(id,now);
@@ -99,8 +119,10 @@ final class AgentCliRecoveryService implements AutoCloseable {
                 out.addProperty("scope","self");out.addProperty("playerUuid",id.toString());
                 if(!closed)plugin.getServer().getScheduler().runTask(plugin,()->{
                     if(closed||!player.isOnline()||requests.getOrDefault(id,-1L)!=request||!AgentCliRecovery.revision(cards).equals(AgentCliRecovery.revision(currentCards())))return;
-                    plugin.communication().stamp(player,out);
-                    if(Arrays.asList(input).contains("--json"))player.sendMessage("MC_CLI_ERROR "+out);else AgentCliRecovery.text(out).forEach(player::sendMessage);
+                    var result=search?searchEnvelope(player,matches,cards,"refined"):out;
+                    plugin.communication().stamp(player,result);
+                    if(Arrays.asList(input).contains("--json"))player.sendMessage((search?"MC_CLI_SEARCH ":"MC_CLI_ERROR ")+result);
+                    else (search?AgentCliRecovery.searchText(result):AgentCliRecovery.text(result)).forEach(player::sendMessage);
                 });
             }catch(Exception unavailable){semanticState="unavailable_local_advice_preserved";}
         });}catch(RejectedExecutionException busy){semanticState="busy_local_advice_preserved";}

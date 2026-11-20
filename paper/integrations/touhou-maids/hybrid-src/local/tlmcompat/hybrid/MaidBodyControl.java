@@ -11,11 +11,11 @@ final class MaidBodyControl {
     static final String PROTOCOL="qiandengji-maid-body/v1";
     static final long LEASE_MILLIS=120_000;
     static final Set<String> READS=Set.of("list","context","inventory","tasks","brain","receipt","inbox","spells","workshop");
-    static final Set<String> WRITES=Set.of("walk","stop","stay","sit","follow","guard","companion","cast","task","equip","pickup","schedule","speak","ack","dismount","make","fish","bag_clean","bag_store","bag_donate");
+    static final Set<String> WRITES=Set.of("rendezvous","walk","stop","stay","sit","follow","guard","companion","cast","task","equip","pickup","schedule","speak","ack","dismount","make","fish","bag_clean","bag_store","bag_donate");
     static final Set<String> BAG_ACTIONS=Set.of("bag_clean","bag_store","bag_donate");
     static Set<String> fields(String action){
         var keys=new HashSet<>(Set.of("action","maidId","requestId"));
-        keys.addAll(switch(action){case "walk"->Set.of("x","y","z","dimension");case "receipt"->Set.of("operationId","operationAction");
+        keys.addAll(switch(action){case "rendezvous"->Set.of("targetUuid");case "walk"->Set.of("x","y","z","dimension");case "receipt"->Set.of("operationId","operationAction");
             case "task"->Set.of("taskId");case "equip"->Set.of("hand","slot");case "schedule"->Set.of("schedule");
             case "cast"->Set.of("spellId");case "pickup"->Set.of("enabled");case "speak"->Set.of("text");case "ack"->Set.of("eventId");
             case "bag_clean","bag_store","bag_donate"->Set.of("dryRun");
@@ -26,7 +26,8 @@ final class MaidBodyControl {
         if(!READS.contains(action)&&!WRITES.contains(action))throw new Fault(400,"UNSUPPORTED_ACTION");keys(input,fields(action));
         if(input.has("dryRun")&&(!input.get("dryRun").isJsonPrimitive()||!input.getAsJsonPrimitive("dryRun").isBoolean()))throw new Fault(400,"INVALID_dryRun");
         for(String field:new TreeSet<>(requiredFields(action)))if(!input.has(field))throw new Fault(400,"INVALID_"+field);
-        for(String field:List.of("maidId","requestId","operationId","operationAction","taskId","hand","schedule","text","dimension","eventId","spellId","workshopId","recipeId","inventory"))if(input.has(field))string(input,field);
+        if (action.equals("rendezvous")) uuid(input, "targetUuid");
+        for(String field:List.of("maidId","requestId","operationId","operationAction","taskId","hand","schedule","text","dimension","eventId","targetUuid","spellId","workshopId","recipeId","inventory"))if(input.has(field))string(input,field);
     }
     static final class Fault extends RuntimeException {
         final int http; final String code;
@@ -118,7 +119,7 @@ final class MaidBodyControl {
         var schema=new JsonObject();schema.addProperty("type","object");schema.addProperty("additionalProperties",false);
         var p=new JsonObject();var action=new JsonObject();action.addProperty("type","string");var values=new JsonArray();
         new TreeSet<>(READS).forEach(values::add);new TreeSet<>(WRITES).forEach(values::add);action.add("enum",values);p.add("action",action);
-        for(String k:List.of("maidId","requestId","operationId","operationAction","taskId","hand","schedule","text","dimension","eventId","spellId","workshopId","recipeId","inventory")){var field=new JsonObject();field.addProperty("type","string");p.add(k,field);}
+        for(String k:List.of("maidId","requestId","operationId","operationAction","taskId","hand","schedule","text","dimension","eventId","targetUuid","spellId","workshopId","recipeId","inventory")){var field=new JsonObject();field.addProperty("type","string");p.add(k,field);}
         var quantity = new JsonObject();quantity.addProperty("type","integer");quantity.addProperty("minimum",1);quantity.addProperty("description","Number of finished items. Omit for one batch.");p.add("quantity",quantity);
         for(String k:List.of("x","y","z")){var field=new JsonObject();field.addProperty("type","number");field.addProperty("description","Absolute world coordinate in blocks; all x,y,z required for walk. Loaded destination within 96 blocks, no digging or teleporting.");p.add(k,field);}
         var slot=new JsonObject();slot.addProperty("type","integer");slot.addProperty("minimum",0);p.add("slot",slot);
@@ -129,6 +130,6 @@ final class MaidBodyControl {
             var needed=new JsonArray();requiredFields(name).stream().sorted().forEach(needed::add);branch.add("required",needed);
             var names=new JsonObject();var allowed=new JsonArray();fields(name).stream().sorted().forEach(allowed::add);names.add("enum",allowed);branch.add("propertyNames",names);branches.add(branch);}
         schema.add("oneOf",branches);
-        var out=new JsonObject();out.addProperty("name","mc_maids");out.addProperty("description","Original owned maid body, lease scoped. Reads need no online owner. Writes require original requestId; query receipt after timeout. Workshop make uses only an authorized site, recipe and inventory with the real nearby owner. A pending job is not a finished item. bag_clean clears plain junk, bag_store sends surplus to the personal box, bag_donate gives surplus to public guild chests. dryRun=true previews. spells lists learned spells; walk lasts at most 30s.");out.add("inputSchema",schema);return out;
+        var out=new JsonObject();out.addProperty("name","mc_maids");out.addProperty("description","Original owned maid body, lease scoped. Reads need no online owner. Writes require original requestId; query receipt after timeout. Workshop make uses only an authorized site, recipe and inventory with the real nearby owner. A pending job is not a finished item. bag_clean clears plain junk, bag_store sends surplus to the personal box, bag_donate gives surplus to public guild chests. dryRun=true previews. spells lists learned spells; walk lasts at most 30s. Use context.characterDirectory for world-wide targets; rendezvous takes targetUuid, spends team-travel mana on verified arrival.");out.add("inputSchema",schema);return out;
     }
 }

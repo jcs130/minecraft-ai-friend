@@ -39,7 +39,7 @@ from ..models import (
     Scope,
     WorldRef,
 )
-from .base import ArgumentError, BaseBody, new_request_id, obj, xyz
+from .base import ArgumentError, BaseBody, new_request_id, obj, rendezvous_arrival, xyz
 from .numen import classify_envelope
 
 UUID = re.compile(r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
@@ -109,6 +109,16 @@ def workshop_completed(receipt: dict, request_id: str) -> bool:
             and isinstance(detail.get("itemId"), str) and bool(detail["itemId"])
             and type(detail.get("count")) is int and detail["count"] > 0
             and detail.get("inventory") in {"chest", "backpack"})
+
+
+def rendezvous_completed(receipt, request_id, target):
+    detail = receipt.get("observation")
+    if not (receipt.get("operationId") == request_id and receipt.get("action") == "rendezvous"
+            and receipt.get("status") == "completed" and receipt.get("goalCompleted") is True
+            and isinstance(detail, dict) and detail.get("arrived") is True and target
+            and detail.get("targetUuid") == target):
+        return False
+    return rendezvous_arrival(detail.get("actualPosition"), detail.get("targetPosition"))
 
 
 def fishing_completed(receipt: dict) -> bool:
@@ -436,6 +446,9 @@ class MaidBody(BaseBody):
             data = reply.get("data") or {}
             if data.get("status") != "completed" or data.get("goalCompleted") is not True:
                 status = "accepted"
+        if args["action"] == "rendezvous" and status == "completed" and not rendezvous_completed(
+                reply.get("data") or {}, request_id, args.get("targetUuid")):
+            status = "unknown"
         if args["action"] == "make" and status == "completed" and not workshop_completed(reply.get("data") or {}, request_id):
             status = "unknown"
         if args["action"] == "fish" and status == "completed" and not fishing_completed(reply.get("data") or {}):
@@ -501,6 +514,9 @@ class MaidBody(BaseBody):
             if verified:
                 return self.settle(request_id, verified, data["observation"]["state"], {"maidAction": "cast", "reply": reply}) or previous
         status = reply_status(data, bool(result.get("isError")))
+        if data.get("action") == "rendezvous" and status == "completed" and not rendezvous_completed(
+                data, request_id, original.args.get("targetUuid") if original else None):
+            return previous
         if data.get("action") == "make" and status == "completed" and not workshop_completed(data, request_id):
             return previous
         if data.get("action") == "fish" and status == "completed" and not fishing_completed(data):

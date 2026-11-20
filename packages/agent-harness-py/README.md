@@ -121,14 +121,21 @@ The native endpoint reuses the private companion executor. Its supplied action c
 equipment, follow and other available operations. Public-resident registration and owner inventory
 transfers have separate implementation and authorization requirements.
 
-The NPC host can choose a walking companion when a native maid reports `socialWalkAvailable`.
-Its model sees nearby visible players and can approach one once, follow as they move, switch
-companions, or end the walk. For example, a decision can return
-`{"steps":[],"companion":{"mode":"follow","targetUuid":"<uuid from nearbyPlayers>"}}`.
-The host checks a fresh observation before walking and submits each leg to the native navigator.
-Arrival uses the measured distance to the person. A target who disappears from view receives
-no further navigation requests until seen again. Selection ends after 15 seconds out of sight.
-The maid's owner, inventory rights and ordinary owner-follow action retain their existing meanings.
+Maid NPCs receive the skill compass character directory with live UUIDs, names, aliases,
+dimensions and positions. An NPC can choose a one-time meeting with
+`{"steps":[],"companion":{"mode":"approach","targetName":"可米"}}` or continually
+track a character with `{"steps":[],"companion":{"mode":"follow","targetUuid":"<listed uuid>"}}`.
+Ambiguous names require an exact UUID. The host checks the current location again before
+acting. It requests a native walk for a reachable same-dimension leg of up to 96 blocks.
+For longer, cross-dimension or blocked routes the host can use the ordinary travel spell
+when the role allows `body:native:rendezvous` and its bridge advertises that action.
+The original request receipt records the outcome. A drained or disconnected host queries
+that ID before planning further. A failed transfer reports the reason to the next decision.
+Earlier bridges retain local walking using their visual observation.
+
+A hosted Numen adventurer can query `characters` (optional page) or `locate_character`
+(exact name or UUID) through `adventure_query`. Its `meet_character` action accepts the
+target UUID and uses the same `/mycli locate tp` interface available to regular players.
 
 ## Development
 

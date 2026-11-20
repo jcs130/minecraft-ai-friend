@@ -1,7 +1,7 @@
 package org.afuhome.agentfriend;
 
 import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 
@@ -16,6 +16,15 @@ import java.util.UUID;
 final class TeammateDirectory {
     record Target(LivingEntity body, String name) {
         UUID id() { return body.getUniqueId(); }
+        List<String> aliases() {
+            var plugin = Bukkit.getPluginManager().getPlugin("AgentFriend");
+            return plugin == null ? List.of() : plugin.getConfig().getStringList("character-directory.aliases." + id())
+                    .stream().filter(s -> !s.isBlank() && s.length() <= 48 && s.codePoints().noneMatch(Character::isISOControl)).limit(8).toList();
+        }
+        String displayName() {
+            if (body instanceof Player player) return PlainTextComponentSerializer.plainText().serialize(player.displayName());
+            return name;
+        }
     }
 
     private static Map<UUID, String> companions() {
@@ -37,14 +46,25 @@ final class TeammateDirectory {
         return result;
     }
 
-    private static boolean visible(Player viewer, LivingEntity body) {
-        if (body == null || !body.isValid() || body.getUniqueId().equals(viewer.getUniqueId())) return false;
-        if (body instanceof Player player)
-            return player.isOnline() && player.getGameMode() != GameMode.SPECTATOR && !player.getName().equals("Goddess") && viewer.canSee(player);
-        return !body.isDead() && !body.isInvisible() && viewer.canSee(body);
+    static LivingEntity registeredActor(UUID id) {
+        if (!(Bukkit.getEntity(id) instanceof LivingEntity actor) || !actor.isValid() || actor.isDead()) return null;
+        if (actor instanceof Player player) return player.isOnline() ? player : null;
+        return companions().containsKey(id) ? actor : null;
     }
 
-    static List<Target> list(Player viewer) {
+    private static boolean visible(LivingEntity viewer, LivingEntity body) {
+        if (body == null || !body.isValid() || body.isDead() || body.isInvisible()
+                || body.getUniqueId().equals(viewer.getUniqueId())
+                || body.getMetadata("vanished").stream().anyMatch(v -> v.asBoolean())) return false;
+        if (body instanceof Player player) {
+            if (!player.isOnline() || !(Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin)
+                    || plugin.isObserver(player)) return false;
+        }
+        return viewer instanceof Player player ? player.canSee(body) : body.isVisibleByDefault();
+    }
+
+    static List<Target> list(Player viewer) { return list((LivingEntity)viewer); }
+    static List<Target> list(LivingEntity viewer) {
         var result = new LinkedHashMap<UUID, Target>();
         for (Player player : Bukkit.getOnlinePlayers()) if (visible(viewer, player))
             result.put(player.getUniqueId(), new Target(player, player.getName()));
@@ -57,7 +77,8 @@ final class TeammateDirectory {
         return ordered;
     }
 
-    static Target find(Player viewer, UUID id) {
+    static Target find(Player viewer, UUID id) { return find((LivingEntity)viewer, id); }
+    static Target find(LivingEntity viewer, UUID id) {
         var player = Bukkit.getPlayer(id);
         if (player != null) return visible(viewer, player) ? new Target(player, player.getName()) : null;
         if (!(Bukkit.getEntity(id) instanceof LivingEntity body) || !visible(viewer, body)) return null;
@@ -66,7 +87,12 @@ final class TeammateDirectory {
     }
 
     static List<Target> named(List<Target> visible, String key) {
-        return visible.stream().filter(t -> t.id().toString().equalsIgnoreCase(key) || t.name().equalsIgnoreCase(key)).toList();
+        try {
+            UUID id = UUID.fromString(key);
+            if (id.toString().equalsIgnoreCase(key)) return visible.stream().filter(t -> t.id().equals(id)).toList();
+        } catch (IllegalArgumentException ignored) { /* ordinary character name */ }
+        return visible.stream().filter(t -> t.name().equalsIgnoreCase(key) || t.displayName().equalsIgnoreCase(key)
+                || t.aliases().stream().anyMatch(key::equalsIgnoreCase)).toList();
     }
 }
 

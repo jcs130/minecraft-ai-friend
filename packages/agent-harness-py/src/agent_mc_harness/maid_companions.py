@@ -1,4 +1,4 @@
-"""Turn an autonomous social choice into native walks towards observed players."""
+"""Turn an autonomous social choice into a path or a travel spell to a located character."""
 from __future__ import annotations
 
 import math
@@ -9,9 +9,9 @@ from uuid import UUID
 from .models import BodySnapshot
 from .runtime import Step
 
-
 Point = tuple[float, float, float]
-SIGHT_RANGE = 24
+SIGHT_RANGE = 24  # Scope of a visual observation from an older bridge.
+WALK_RANGE = 96  # The native navigator accepts goals within 96 blocks.
 ARRIVAL_RANGE = 3
 FOLLOW_AGAIN_RANGE = 5
 STEP_INTERVAL = 3
@@ -32,8 +32,10 @@ def _point(value) -> Point | None:
 class _Player:
     uuid: str
     name: str
+    aliases: tuple[str, ...]
     position: Point
-    distance: float
+    dimension: str
+    distance: float | None
 
 
 def _players(snapshot: BodySnapshot | None) -> dict[str, _Player]:
@@ -41,12 +43,14 @@ def _players(snapshot: BodySnapshot | None) -> dict[str, _Player]:
             or not -1 <= time.time() - snapshot.sampled_at.timestamp() <= 5):
         return {}
     origin = _point(snapshot.position)
-    rows = snapshot.raw.get("nearbyPlayers") if isinstance(snapshot.raw, dict) else None
+    raw = snapshot.raw if isinstance(snapshot.raw, dict) else {}
+    directory = "characterDirectory" in raw
+    rows = raw.get("characterDirectory") if directory else raw.get("nearbyPlayers")
     if origin is None or not isinstance(rows, list):
         return {}
     players = {}
     for row in rows:
-        if not isinstance(row, dict) or row.get("dimension") != snapshot.dimension:
+        if not isinstance(row, dict) or not isinstance(row.get("dimension"), str) or not row["dimension"]:
             continue
         name, uid, pos = row.get("name"), row.get("uuid"), _point(row.get("position"))
         if not isinstance(name, str) or not name.strip() or not isinstance(uid, str) or pos is None:
@@ -56,9 +60,13 @@ def _players(snapshot: BodySnapshot | None) -> dict[str, _Player]:
                 continue
         except ValueError:
             continue
-        distance = math.dist(origin, pos)
-        if distance <= SIGHT_RANGE:
-            players[uid] = _Player(uid, name, pos, distance)
+        dimension = row["dimension"]
+        distance = math.dist(origin, pos) if snapshot.dimension == dimension else None
+        if directory or (distance is not None and distance <= SIGHT_RANGE):
+            aliases = row.get("aliases")
+            labels = [row.get("displayName"), *(aliases if isinstance(aliases, list) else ())]
+            aliases = tuple(dict.fromkeys(label for label in labels if isinstance(label, str) and label and label != name))
+            players[uid] = _Player(uid, name, aliases, pos, dimension, distance)
     return players
 
 
@@ -81,7 +89,7 @@ def walk_available(snapshot: BodySnapshot | None) -> bool:
                 {"travel_ledger_unavailable", "travel_unconfirmed_check_ledger", "inspect_original_travel"})
 
 
-def parse_choice(plan, nearby_players: list[dict]) -> dict | None:
+def parse_choice(plan, characters: list[dict]) -> dict | None:
     """Parse one social intention. Echoed native steps are never executed."""
     if not isinstance(plan, dict):
         return None
@@ -113,16 +121,23 @@ def parse_choice(plan, nearby_players: list[dict]) -> dict | None:
         choice = plan["companion"]
         if choice == {"mode": "stop"} and not echoed:
             return choice
-        if (not isinstance(choice, dict) or set(choice) != {"mode", "targetUuid"}
-                or choice["mode"] not in ("approach", "follow")):
+        if (not isinstance(choice, dict) or set(choice) - {"travel"} not in ({"mode", "targetUuid"}, {"mode", "targetName"})
+                or choice["mode"] not in ("approach", "follow") or choice.get("travel", "auto") not in ("auto", "walk", "teleport")):
             raise ValueError("invalid_companion_choice")
+        if "targetName" in choice:
+            name = choice["targetName"]
+            matches = [p["uuid"] for p in characters if isinstance(name, str) and any(
+                label.casefold() == name.casefold() for label in (p["name"], *p.get("aliases", ())))]
+            if len(matches) != 1:
+                raise ValueError("choose_one_character_uuid_from_the_directory")
+            choice = {k: v for k, v in choice.items() if k != "targetName"} | {"targetUuid": matches[0]}
         target = choice["targetUuid"]
         if echoed and echoed[0] is not None and echoed[0] != target:
             raise ValueError("conflicting_companion_targets")
     else:
         target = echoed[0]
         choice = {"mode": "follow", "targetUuid": target}
-    if not isinstance(target, str) or not any(p.get("uuid") == target for p in nearby_players):
+    if not isinstance(target, str) or not any(p.get("uuid") == target for p in characters):
         raise ValueError("companion_target_not_observed")
     return choice
 
@@ -134,11 +149,14 @@ class MaidCompanions:
         self.clock = clock
         self.target: str | None = None
         self.name = self.dimension = self.mode = ""
+        self.travel = "auto"
         self.status = "idle"
         self.last_walk = -math.inf
         self.last_goal: Point | None = None
         self.last_origin: Point | None = None
         self.attempts = 0
+        self.remote_sent = False
+        self.last_transfer: dict | None = None
         self.missing_since: float | None = None
         self.blocked_until: dict[str, float] = {}
 
@@ -148,6 +166,7 @@ class MaidCompanions:
 
     def _clear(self, status: str):
         self.target = None
+        self.remote_sent = False
         self.status = status
         self.last_goal = self.last_origin = None
         self.attempts = 0
@@ -157,7 +176,7 @@ class MaidCompanions:
         if not self.active:
             return
         if snapshot is not None and (snapshot.life_state == "dead"
-                                     or snapshot.dimension and snapshot.dimension != self.dimension):
+                                     or "characterDirectory" not in (snapshot.raw or {}) and snapshot.dimension and snapshot.dimension != self.dimension):
             self._clear("target_lost")
             return
         player = visible.get(self.target)
@@ -170,14 +189,15 @@ class MaidCompanions:
                 self._clear("target_lost")
             return
         self.missing_since = None
-        if player.distance <= ARRIVAL_RANGE:
+        if player.distance is not None and player.distance <= ARRIVAL_RANGE:
+            self.remote_sent = False
             if self.mode == "approach":
                 self._clear("arrived")
             else:
                 self.status = "alongside"
                 self.last_goal = self.last_origin = None
                 self.attempts = 0
-        elif self.status != "alongside" or player.distance > FOLLOW_AGAIN_RANGE:
+        elif self.status != "alongside" or player.distance is None or player.distance > FOLLOW_AGAIN_RANGE:
             self.status = "tracking"
 
     def context(self, snapshot: BodySnapshot | None) -> dict:
@@ -185,19 +205,26 @@ class MaidCompanions:
         self._observe(snapshot, visible)
         now = self.clock()
         self.blocked_until = {uid: end for uid, end in self.blocked_until.items() if end > now}
+        raw = snapshot.raw if snapshot and isinstance(snapshot.raw, dict) else {}
+        source = "skill_compass" if "characterDirectory" in raw else "sight"
+        if raw.get("characterDirectoryUnavailable"):
+            source = "skill_compass_unavailable"
         return {
-            "nearbyPlayers": [{"uuid": p.uuid, "name": p.name, "distance": round(p.distance, 1)}
-                              for p in sorted(visible.values(), key=lambda p: (p.distance, p.uuid))
+            "source": source,
+            "characters": [{"uuid": p.uuid, "name": p.name, "aliases": list(p.aliases), "distance": round(p.distance, 1) if p.distance is not None else None,
+                            "dimension": p.dimension, "position": dict(zip("xyz", p.position, strict=True))}
+                              for p in sorted(visible.values(), key=lambda p: (p.distance if p.distance is not None else math.inf, p.uuid))
                               if p.uuid not in self.blocked_until],
-            "selection": {"mode": self.mode, "uuid": self.target, "name": self.name} if self.active else None,
+            "selection": {"mode": self.mode, "travel": self.travel, "uuid": self.target, "name": self.name} if self.active else None,
             "status": self.status,
+            "lastTransfer": self.last_transfer,
         }
 
-    def choose(self, mode: str, target_uuid: str | None, snapshot: BodySnapshot | None) -> bool:
+    def choose(self, mode: str, target_uuid: str | None, snapshot: BodySnapshot | None, *, travel: str = "auto") -> bool:
         if mode == "stop" and target_uuid is None:
             self._clear("stopped")
             return True
-        if mode not in ("approach", "follow") or not isinstance(target_uuid, str):
+        if mode not in ("approach", "follow") or not isinstance(target_uuid, str) or travel not in ("auto", "walk", "teleport"):
             return False
         visible = _players(snapshot)
         player = visible.get(target_uuid)
@@ -207,11 +234,35 @@ class MaidCompanions:
             self._clear("tracking")
         elif self.mode != mode:
             self.status = "tracking"
+        self.travel = travel
         self.target, self.name, self.dimension, self.mode = target_uuid, player.name, snapshot.dimension, mode
         self._observe(snapshot, visible)
         return True
 
-    def next_step(self, snapshot: BodySnapshot | None, *, busy: bool = False) -> Step | None:
+    def settle_transfer(self, target, receipt):
+        if not receipt.terminal:
+            return
+        envelope = receipt.data if isinstance(receipt.data, dict) else {}
+        reply = envelope.get("reply", envelope)
+        evidence = reply.get("data") if isinstance(reply, dict) else None
+        observation = evidence.get("observation") if isinstance(evidence, dict) else None
+        reason = observation.get("reason") if isinstance(observation, dict) else None
+        self.last_transfer = {"targetUuid": target, "requestId": receipt.request_id,
+                              "status": receipt.status, "message": (reason if isinstance(reason, str) else receipt.text)[:300]}
+        if self.target != target:
+            return
+        if receipt.status != "completed":
+            self.blocked_until[target] = self.clock() + BLOCKED_COOLDOWN
+            self._clear("rendezvous_refused")
+        elif self.mode == "approach":
+            self._clear("arrived")
+        else:
+            self.remote_sent = False
+            self.last_goal = self.last_origin = None
+            self.attempts = 0
+            self.status = "alongside"
+
+    def next_step(self, snapshot: BodySnapshot | None, *, busy: bool = False, can_teleport: bool = False) -> Step | None:
         """Only emit a new walk when the host has no competing or uncertain body action."""
         visible = _players(snapshot)
         self._observe(snapshot, visible)
@@ -223,7 +274,28 @@ class MaidCompanions:
         elapsed = now - self.last_walk
         if elapsed < STEP_INTERVAL:
             return None
-        if self.last_goal is not None and math.dist(self.last_goal, player.position) < 2 and elapsed < WALK_TIMEOUT:
+        remote = player.distance is None or player.distance > WALK_RANGE
+        no_progress = self.attempts >= 2 and self.last_origin and math.dist(origin, self.last_origin) < 1.5
+        use_spell = self.travel == "teleport" or (self.travel == "auto" and can_teleport and (remote or no_progress))
+        if use_spell:
+            if self.remote_sent:
+                self.status = "check_original_rendezvous_receipt"
+                return None
+            if not can_teleport or "characterDirectory" not in snapshot.raw:
+                self._clear("rendezvous_skill_unavailable")
+                return None
+            self.remote_sent = True
+            self.last_walk = now
+            return Step(tool="body:native:rendezvous", args={"targetUuid": player.uuid})
+        if player.distance is None:
+            self._clear("different_dimension_requires_rendezvous")
+            return None
+        # Distant overland travel uses bounded legs. A native path failure never
+        # licenses a growing series of unverified moves or an unrequested paid spell.
+        destination = player.position
+        if player.distance > WALK_RANGE:
+            destination = tuple(a + (b - a) * 32 / player.distance for a, b in zip(origin, player.position, strict=True))
+        if self.last_goal is not None and math.dist(self.last_goal, destination) < 2 and elapsed < WALK_TIMEOUT:
             return None
         if self.last_origin is not None and math.dist(self.last_origin, origin) >= 1.5:
             self.attempts = 0
@@ -232,5 +304,5 @@ class MaidCompanions:
             self._clear("path_unavailable")
             return None
         self.attempts += 1
-        self.last_walk, self.last_origin, self.last_goal = now, origin, player.position
-        return Step(tool="body:move", args={**dict(zip("xyz", player.position)), "dimension": snapshot.dimension})
+        self.last_walk, self.last_origin, self.last_goal = now, origin, destination
+        return Step(tool="body:move", args={**dict(zip("xyz", destination, strict=True)), "dimension": snapshot.dimension})

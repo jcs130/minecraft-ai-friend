@@ -1,4 +1,4 @@
-"""Build the visible-player observation over the released selected-sound-pack bridge."""
+"""Build world-wide character navigation over the released selected-sound-pack bridge."""
 
 import argparse
 import os
@@ -8,7 +8,7 @@ from pathlib import Path
 
 BASE = "7786be1c30dfbc6239c9adf4fae5affbc6f1d73952078f328be542784ea73fd6"
 PACKAGE = "local/tlmcompat/hybrid/"
-VERSION = "0.1.58-social-navigation"
+VERSION = "0.1.59-character-rendezvous"
 
 
 def main():
@@ -20,7 +20,8 @@ def main():
     build = runpy.run_path(str(here.parents[1] / "plugins/AgentFriend/scripts/build-dungeon-readiness.py"))
     if build["digest"](args.baseline) != BASE or args.output.exists():
         parser.error("Expected the 0.1.57 sound-pack baseline and a new output path")
-    families = ("NativeMaidBodyActions",)
+    families = ("HybridMaidPlugin", "MaidBodyControl", "NativeMaidBodyActions", "NativeMaidCompanionSupport",
+                "NativeMaidMagicSupport", "NativeMaidRendezvous")
     sources = [here / "hybrid-src" / PACKAGE / (name + ".java") for name in families]
     classpath = str(args.baseline.resolve()) + os.pathsep + args.classpath_file.read_text(encoding="utf-8-sig").strip()
     args.output.parent.mkdir(parents=True, exist_ok=True)
