@@ -131,6 +131,7 @@ For longer, cross-dimension or blocked routes the host can use the ordinary trav
 when the role allows `body:native:rendezvous` and its bridge advertises that action.
 The original request receipt records the outcome. A drained or disconnected host queries
 that ID before planning further. A failed transfer reports the reason to the next decision.
+After meeting by spell, a follower walks when the companion moves nearby.
 Following binds the selected UUID to native navigation even when the two are already beside
 one another. Finishing a one-time meeting, stopping or changing partners releases the old
 target by UUID. Native work orders and releasing the body restore its prior navigation settings.

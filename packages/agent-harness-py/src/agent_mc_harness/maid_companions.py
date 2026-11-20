@@ -173,6 +173,12 @@ class MaidCompanions:
         self.attempts = 0
         self.missing_since = None
 
+    def _alongside(self):
+        self.status = "alongside"
+        if self.travel == "teleport":
+            # The chosen spell was for the meeting. Walk behind the person from here.
+            self.travel = "auto"
+
     def _observe(self, snapshot, visible):
         if not self.active:
             return
@@ -195,7 +201,7 @@ class MaidCompanions:
             if self.mode == "approach":
                 self._clear("arrived")
             else:
-                self.status = "alongside"
+                self._alongside()
                 raw = snapshot.raw or {}
                 if ("socialNavigationTargetUuid" not in raw or raw.get("socialNavigationTargetUuid") == player.uuid
                         or raw.get("ownerId") == player.uuid):
@@ -264,7 +270,7 @@ class MaidCompanions:
             self.remote_sent = False
             self.last_goal = self.last_origin = None
             self.attempts = 0
-            self.status = "alongside"
+            self._alongside()
 
     def next_step(self, snapshot: BodySnapshot | None, *, busy: bool = False, can_teleport: bool = False) -> Step | None:
         """Only emit a new walk when the host has no competing or uncertain body action."""

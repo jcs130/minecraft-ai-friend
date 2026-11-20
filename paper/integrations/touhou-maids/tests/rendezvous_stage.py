@@ -40,10 +40,15 @@ def verify(fixture, players, client, command, check):
     def walk_to(player, x, y, z):
         row = action("walk", dimension="minecraft:"+destination, targetUuid=player, x=x, y=y, z=z)
         deadline = time.monotonic()+32
+        trail = []
+        sampled = 0.
         while not row["terminal"] and time.monotonic()<deadline:
+            if time.monotonic()-sampled>=1:
+                trail.append(json.loads(in_world(destination,f"bodyportqa navigation {maid}")))
+                sampled=time.monotonic()
             time.sleep(.2)
             row = client.call("receipt", operationId=row["requestId"])["data"]
-        return row
+        return row,trail
 
     def sample(label, center):
         samples = []
@@ -79,8 +84,8 @@ def verify(fixture, players, client, command, check):
         place("MaidOwnerQA",destination,260.5)
         sample("owner_arrives_in_same_world_without_taking_body",(185.5,81,100.5))
         place("MaidSocialOne",destination,171.5)
-        walk=walk_to(target,172.5,81,100.5)
-        check("follows_moving_visitor",walk["goalCompleted"] and context()["socialNavigationTargetUuid"]==target,receipt=walk)
+        walk,trail=walk_to(target,172.5,81,100.5)
+        check("follows_moving_visitor",walk["goalCompleted"] and context()["socialNavigationTargetUuid"]==target,receipt=walk,samples=trail)
         stale=action("release_rendezvous",targetUuid=other)
         check("stale_release_preserves_selection",not stale["observation"]["effectsApplied"] and context()["socialNavigationTargetUuid"]==target)
         released=action("release_rendezvous",targetUuid=target)
@@ -92,8 +97,8 @@ def verify(fixture, players, client, command, check):
         check("original_owner_follow_resumes",abs(context()["position"][0]-260.5)<6)
         x,y,z=context()["position"]
         place("MaidSocialTwo",destination,x+1,y,z)
-        walk=walk_to(other,x,y,z)
-        check("nearby_selection_without_paid_cast",walk["goalCompleted"] and context()["socialNavigationTargetUuid"]==other,receipt=walk)
+        walk,trail=walk_to(other,x,y,z)
+        check("nearby_selection_without_paid_cast",walk["goalCompleted"] and context()["socialNavigationTargetUuid"]==other,receipt=walk,samples=trail)
         place("MaidOwnerQA",destination,176.5)
         sample("nearby_selection_survives_owner_movement",(x,y,z))
         client.release()

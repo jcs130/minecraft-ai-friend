@@ -22,7 +22,14 @@ import org.bukkit.entity.Player;
 final class NativeMaidBodyActions {
     private static final String ANCHOR="qiandengji_native_body_walk";
     private static final String FISH_REQUEST="qiandengji_native_body_fish";
-    private record Walk(UUID owner,String request,Vec3 target,Vec3 start,String dimension,long until){}
+    private record Walk(UUID owner,String request,Vec3 target,Vec3 start,String dimension,long until,
+                        long deadline,double bestRemaining,UUID character){
+        Walk progress(double remaining,long now) {
+            if(character==null || remaining+.75>bestRemaining)return this;
+            return new Walk(owner,request,target,start,dimension,Math.min(deadline,now+30_000),
+                    deadline,remaining,character);
+        }
+    }
     private record Fishing(UUID owner, String request, String dimension, long until, long revision, boolean guard) {}
     private final HybridMaidPlugin plugin;
     private final MaidBodyControl control;
@@ -99,7 +106,7 @@ final class NativeMaidBodyActions {
             case "walk"->{
                 if(input.has("dimension")&&!MaidBodyControl.string(input,"dimension").equals(maid.level().dimension().location().toString()))throw new MaidBodyControl.Fault(400,"DIMENSION_MISMATCH");
                 target=new Vec3(number(input,"x"),number(input,"y"),number(input,"z"));
-                if (socialTarget != null && !NativeMaidRendezvous.walkingNear(id, socialTarget,
+                if (socialTarget != null && !NativeMaidRendezvous.walkingNear(id, socialTarget,maid.getBukkitEntity().getLocation(),
                         new org.bukkit.Location(maid.getBukkitEntity().getWorld(),target.x,target.y,target.z)))
                     return blocked(owner,id,input,"team_target_moved_or_unavailable");
                 if(maid.position().distanceTo(target)>96||target.y<maid.level().getMinBuildHeight()||target.y>=maid.level().getMaxBuildHeight())return blocked(owner,id,input,"walk_out_of_range");
@@ -188,8 +195,10 @@ final class NativeMaidBodyActions {
                     restore(maid);
                     var pos=BlockPos.containing(target);
                     anchor(maid, pos, owner.equals(socialTarget) ? null : socialTarget);
-                    follows.remove(id);walks.put(id,new Walk(owner,request,target,maid.position(),maid.level().dimension().location().toString(),System.currentTimeMillis()+30_000));
-                    BehaviorUtils.setWalkAndLookTargetMemories(maid,pos,.7f,0);observed.addProperty("effectsApplied",true);observed.addProperty("arrived",false);observed.add("actualPosition",position(maid));
+                    long now=System.currentTimeMillis();
+                    follows.remove(id);walks.put(id,new Walk(owner,request,target,maid.position(),maid.level().dimension().location().toString(),
+                            now+30_000,now+120_000,maid.position().distanceTo(target),socialTarget));
+                    BehaviorUtils.setWalkAndLookTargetMemories(maid,pos,walkSpeed(maid,socialTarget),0);observed.addProperty("effectsApplied",true);observed.addProperty("arrived",false);observed.add("actualPosition",position(maid));
                     return reply(true,control.finish(id,request,"running",observed),null);
                 }
                 case "stop","stay","sit"->{cancel(id,"stopped");stop(maid);maid.setInSittingPose(true);follows.remove(id);observed.addProperty("meaning","mode setting; native movement stopped");}
@@ -394,9 +403,24 @@ final class NativeMaidBodyActions {
             else if(!control.active(id))failure="control_changed";
             else if(!walk.dimension.equals(maid.level().dimension().location().toString()))failure="dimension_changed";
             else if(plugin.editingMaidInventory(maid))failure="inventory_opened";
-            boolean arrived=failure==null&&maid.position().distanceTo(walk.target)<=.9;
-            if(failure==null&&!arrived&&System.currentTimeMillis()>walk.until)failure="walk_timeout";
+            long now=System.currentTimeMillis();
+            double remaining=failure==null ? maid.position().distanceTo(walk.target) : Double.POSITIVE_INFINITY;
+            boolean arrived=failure==null&&remaining<=.9;
+            if(failure==null&&!arrived){
+                var progress=walk.progress(remaining,now);
+                if(progress!=walk){walk=progress;walks.put(id,walk);}
+                if(now>walk.until)failure="walk_timeout";
+            }
             try{
+                if(failure==null && walk.character!=null && (arrived || receiptTick%10==0)) {
+                    var world=maid.getBukkitEntity().getWorld();
+                    var from=new org.bukkit.Location(world, walk.start.x, walk.start.y, walk.start.z);
+                    var to=new org.bukkit.Location(world, walk.target.x, walk.target.y, walk.target.z);
+                    if(!NativeMaidRendezvous.walkingNear(id,walk.character,from,to)) {
+                        finishWalk(id,maid,"cancelled","team_target_moved_or_unavailable",false);
+                        continue;
+                    }
+                }
                 if(failure!=null||arrived){finishWalk(id,maid,arrived?"completed":"failed",failure==null?"arrived":failure,arrived);continue;}
                 var goal=BlockPos.containing(walk.target);
                 var navigation=maid.getNavigation();
@@ -406,14 +430,15 @@ final class NativeMaidBodyActions {
                     // Preserve the chosen leg and allow the native path to cross its previous idle radius.
                     int radius = (int)Math.ceil(maid.position().distanceTo(walk.target)) + 4;
                     if (maid.getRestrictRadius() < radius) maid.restrictTo(goal, radius);
-                    if (memory == null || !goal.equals(memory.getTarget().currentBlockPosition()))
-                        BehaviorUtils.setWalkAndLookTargetMemories(maid,goal,.7f,0);
+                    float speed=walkSpeed(maid,walk.character);
+                    if (memory == null || !goal.equals(memory.getTarget().currentBlockPosition()) || memory.getSpeedModifier()!=speed)
+                        BehaviorUtils.setWalkAndLookTargetMemories(maid,goal,speed,0);
                     var path = navigation.getPath();
                     if (navigation.isDone() || path == null || !goal.equals(path.getTarget())) {
                         var next = navigation.createPath(goal,0);
-                        if (next != null && next.canReach()) navigation.moveTo(next,.7);
+                        if (next != null && next.canReach()) navigation.moveTo(next,speed);
                     }
-                } else if(navigation.isDone()||memory==null)BehaviorUtils.setWalkAndLookTargetMemories(maid,goal,.7f,0);
+                } else if(navigation.isDone()||memory==null)BehaviorUtils.setWalkAndLookTargetMemories(maid,goal,walkSpeed(maid,walk.character),0);
             }catch(Exception error){walks.remove(id);if(maid!=null){stop(maid);restore(maid);}plugin.getLogger().warning("Native body walk result uncertain; query original request");}
         }
         // Recover only our temporary navigation anchor after a normal or abnormal server restart.
@@ -504,6 +529,14 @@ final class NativeMaidBodyActions {
     private static UUID selectedCompanion(EntityMaid maid) {
         var saved = maid.getPersistentData().getCompound(ANCHOR);
         return saved.hasUUID("companion") ? saved.getUUID("companion") : null;
+    }
+    private static float walkSpeed(EntityMaid maid, UUID character) {
+        if(character==null)return .7f;
+        // Resident bodies have different base speeds. The native controller multiplies
+        // this navigation input by the full attribute, including all real status effects.
+        var attribute=maid.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED);
+        double base=attribute==null ? 0 : attribute.getBaseValue();
+        return base>0 ? (float)Math.clamp(.4/base, .35, 4) : .7f;
     }
     private static boolean canWalkTo(EntityMaid maid, BlockPos pos) {
         boolean held = selectedCompanion(maid) != null && maid.isHomeModeEnable();

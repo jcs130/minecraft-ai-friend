@@ -31,6 +31,22 @@ public final class NativeBodyProbe {
                     var plugin=Class.forName("org.bukkit.plugin.PluginManager").getMethod("getPlugin",String.class).invoke(manager,"QiandengjiMaidBridge");
                     var out=new JsonObject();
                     switch(a[0]){
+                        case "navigation" -> {
+                            var path=maid.getNavigation().getPath();
+                            var target=maid.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
+                            out.addProperty("worldTick",maid.level().getGameTime());
+                            out.addProperty("x",maid.getX());out.addProperty("z",maid.getZ());
+                            out.addProperty("hunger",maid.getHunger());
+                            out.addProperty("speed",maid.getSpeed());
+                            out.addProperty("velocity",maid.getDeltaMovement().toString());
+                            out.addProperty("moveIntent",maid.getMoveControl().hasWanted());
+                            out.addProperty("radius",maid.getRestrictRadius());
+                            out.addProperty("brainTarget",target.map(t->t.getTarget().currentBlockPosition().toShortString()).orElse(""));
+                            out.addProperty("path",path==null?"":path.getTarget().toShortString());
+                            out.addProperty("node",path==null?-1:path.getNextNodeIndex());
+                            out.addProperty("nodes",path==null?0:path.getNodeCount());
+                            out.addProperty("done",maid.getNavigation().isDone());
+                        }
                         case "controller"->{out.addProperty("active",(boolean)method(plugin,"nativeControlled",new Class<?>[]{UUID.class},id));out.addProperty("exclusive",(boolean)method(plugin,"nativeExclusive",new Class<?>[]{UUID.class},id));out.addProperty("epoch",(long)method(plugin,"nativeControlEpoch",new Class<?>[]{UUID.class},id));}
                         case "persona"->{maid.getAiChatManager().customSetting="你是隔离联测伙伴，只回答测试者的问题。保留并使用原来的对话记忆，回复简短，不虚构动作完成。";out.addProperty("configured",!maid.getAiChatManager().customSetting.isBlank());}
                         case "remember"->{maid.getAiChatManager().getHistory().add(com.github.tartaricacid.touhoulittlemaid.ai.service.llm.LLMMessage.systemChat(maid,"隔离记忆：我们的暗号是蓝色纸船。"));out.addProperty("remembered",true);}

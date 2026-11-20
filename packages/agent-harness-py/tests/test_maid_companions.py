@@ -323,6 +323,25 @@ def test_requested_spell_on_older_bridge_reports_unavailable(loop):
     assert tracking.status == "rendezvous_skill_unavailable"
 
 
+@pytest.mark.parametrize("first_leg", ["cast", "already_alongside"])
+def test_explicit_meeting_spell_is_not_recast_when_followed_peer_walks_away(loop, first_leg):
+    from agent_mc_harness.models import ActionReceipt
+    tracking, now = loop
+    if first_leg == "cast":
+        start = compass(player(dimension=NETHER))
+        assert tracking.choose("follow", ALICE, start, travel="teleport")
+        assert tracking.next_step(start, can_teleport=True).tool == "body:native:rendezvous"
+        tracking.settle_transfer(ALICE, ActionReceipt(request_id="arrived-for-follow", verb="native",
+                                                     status="completed", terminal=True))
+    else:
+        assert tracking.choose("follow", ALICE, compass(player(x=1)), travel="teleport")
+    now[0] += 4
+    next_scene = compass(player(x=10))
+    next_scene.raw["socialNavigationTargetUuid"] = ALICE
+    step = tracking.next_step(next_scene, can_teleport=True)
+    assert step.tool == "body:move" and step.args["targetUuid"] == ALICE
+
+
 def test_failed_remote_result_gives_planner_the_reason_and_no_new_charge(loop):
     from agent_mc_harness.models import ActionReceipt
     tracking, now = loop
