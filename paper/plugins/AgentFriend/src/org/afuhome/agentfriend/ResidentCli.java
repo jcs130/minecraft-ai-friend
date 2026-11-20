@@ -27,7 +27,7 @@ public final class ResidentCli {
             case "profession" -> a.length==2&&a[1].equals("list")||a.length==3&&Set.of("info","choose").contains(a[1]);
             case "skills" -> a.length==2&&Set.of("list","tree","points").contains(a[1])||a.length==3&&Set.of("info","learn","prepare").contains(a[1]);
             case "archive" -> ARCHIVE.contains(a[1]); case "photo" -> PHOTO.contains(a[1]);
-            case "inventory" -> InventoryBatch.ACTIONS.contains(a[1]) && Arrays.stream(a).skip(2).allMatch(s -> s.equals("--dry-run") || s.equals("--json"));
+            case "inventory" -> InventoryBatch.supports(a);
             case "tasks" -> Set.of("list","info","status").contains(a[1]);
             case "dungeon" -> Set.of("list","info","status","travel","start","join","resume","leave","claim").contains(a[1]);
             case "land" -> a.length==2&&a[1].equals("here")
