@@ -2,11 +2,16 @@ export default {panels: {pair: {async mount(ctx) {
   const {root} = ctx;
   root.innerHTML = `
     <p class="resident-status" role="status"></p>
-    <form class="authorize">
-      <p><a class="official" target="_blank" rel="noopener noreferrer">打开千灯纪官网获取授权码 ↗</a></p>
-      <label>官网授权码 <input name="code" type="password" required maxlength="14" autocomplete="off" spellcheck="false"></label>
-      <button>授权本机插件</button>
-    </form>
+    <section class="authorize">
+      <button class="browser-start" type="button">网页登录并授权</button>
+      <p class="browser-instructions" hidden>请在官网输入 <strong class="browser-code"></strong>。确认后，这里会自动显示游戏角色。</p>
+      <p><a class="browser-link" target="_blank" rel="noopener noreferrer" hidden>打开千灯纪授权页 ↗</a></p>
+      <details><summary>改用授权码</summary><form class="manual">
+        <p><a class="official" target="_blank" rel="noopener noreferrer">去官网获取授权码 ↗</a></p>
+        <label>官网授权码 <input name="code" type="password" required maxlength="14" autocomplete="off" spellcheck="false"></label>
+        <button>授权本机插件</button>
+      </form></details>
+    </section>
     <section class="choices" hidden>
       <label>接入方式 <select name="flow"><option value="connect">连接已有角色</option><option value="create">新建角色</option></select></label>
       <label>身体 <select name="body"><option value="maid">车万女仆</option><option value="numen">Numen</option></select></label>
@@ -28,7 +33,7 @@ export default {panels: {pair: {async mount(ctx) {
     </form></details>`;
   const el = selector => root.querySelector(selector);
   const status = el('.resident-status'), body = el('[name=body]'), flow = el('[name=flow]'), role = el('[name=resident]');
-  let list, selected, timer, disposed = false, busy = false;
+  let list, selected, timer, browserTimer, disposed = false, busy = false, browserApproved = false;
   let setup;
   try { setup = await ctx.invoke('status'); }
   catch { status.textContent = '请启用千灯纪居民 World 后重新打开。'; return; }
@@ -85,11 +90,58 @@ export default {panels: {pair: {async mount(ctx) {
     const box = el(form + ' input'); const code = box.value.trim().toUpperCase(); box.value = ''; return code;
   }
   function connected(r) {
+    stopBrowserLogin();
     status.textContent = '已配对 ' + (r.name || '居民') + '。';
     list = null; clearTimeout(timer); el('.choices').hidden = true; el('.authorize').hidden = false;
   }
-  submit('.authorize', async () => {
-    await ctx.invoke('authorize', [takeCode('.authorize')]);
+  function stopBrowserLogin() {
+    clearTimeout(browserTimer);
+    browserApproved = false;
+    el('.browser-link').hidden = el('.browser-instructions').hidden = true;
+    el('.browser-link').removeAttribute('href');
+    el('.browser-code').textContent = '';
+  }
+  async function pollBrowserLogin() {
+    if (disposed || el('.browser-link').hidden) return;
+    if (!busy) {
+      try {
+        const {state} = browserApproved ? {state:'authorized'} : await ctx.invoke('browser-status');
+        if (disposed || el('.browser-link').hidden) return;
+        if (state === 'authorized') {
+          browserApproved = true;
+          await refresh();
+          stopBrowserLogin();
+          status.textContent = '官网已授权，请选择接入方式和身体。';
+          return;
+        }
+        if (state === 'expired') {
+          stopBrowserLogin();
+          status.textContent = '网页登录已失效，请重新发起。';
+          return;
+        }
+      } catch {
+        const current = browserApproved && await ctx.invoke('status').catch(() => null);
+        if (current && !current.authorized) {
+          stopBrowserLogin();
+          status.textContent = '网页登录已失效，请重新发起。';
+          return;
+        }
+      }
+    }
+    if (!disposed && !el('.browser-link').hidden) browserTimer = setTimeout(pollBrowserLogin, 3000);
+  }
+  function watchBrowserLogin({code, url}) {
+    if (disposed) return;
+    el('.browser-code').textContent = code;
+    el('.browser-link').href = url;
+    el('.browser-link').hidden = el('.browser-instructions').hidden = false;
+    clearTimeout(browserTimer);
+    browserTimer = setTimeout(pollBrowserLogin, 3000);
+  }
+  el('.browser-start').onclick = () => run(async () => watchBrowserLogin(await ctx.invoke('browser-start')));
+  submit('.manual', async () => {
+    await ctx.invoke('authorize', [takeCode('.manual')]);
+    stopBrowserLogin();
     status.textContent = '官网已授权，请选择接入方式和身体。';
     await refresh();
   });
@@ -112,5 +164,6 @@ export default {panels: {pair: {async mount(ctx) {
   role.onchange = () => { selected = role.value; render(); };
   flow.onchange = body.onchange = () => {selected = null; el('[name=name]').value = el('[name=persona]').value = ''; render();};
   if (setup.authorized) await run(refresh);
-  return {dispose() { disposed = true; clearTimeout(timer); }};
+  else if (setup.browserLogin) watchBrowserLogin(setup.browserLogin);
+  return {dispose() { disposed = true; clearTimeout(timer); clearTimeout(browserTimer); }};
 }}}};

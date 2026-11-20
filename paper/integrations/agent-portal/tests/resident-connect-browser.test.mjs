@@ -65,7 +65,7 @@ test('authorization links only to the enabled resident installers and their revi
   await visible(page,'resident');
   const hrefs = await page.$$eval('#resident-downloads a[download]', nodes=>nodes.map(n=>n.href));
   assert.deepEqual(hrefs.map(s=>new URL(s).pathname).sort(),[
-    '/downloads/cortico-world-qiandengji-resident-api6-0.2.0.tgz','/downloads/qiandengji-resident-0.2.0.neko-plugin']);
+    '/downloads/cortico-world-qiandengji-resident-api6-0.3.0.tgz','/downloads/qiandengji-resident-0.3.0.neko-plugin']);
   for (const url of hrefs) {
     const r = await fetch(url,{method:'HEAD',redirect:'manual'});
     assert.equal(r.status,307);

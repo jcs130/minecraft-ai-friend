@@ -65,13 +65,17 @@ class ResidentWorld {
       if (panel !== 'pair') throw Error('未知居民面板');
       if (method === 'status') return this.status();
       if (method === 'pair' && args.length === 1) return this.pair(args[0]);
-      if (['authorize', 'list', 'create', 'connect'].includes(method)) return this.onboard(method, args?.[0]);
+      if (['authorize', 'browser-start', 'browser-status', 'list', 'create', 'connect'].includes(method)) return this.onboard(method, args?.[0]);
       throw Error('未知居民操作');
     }};
   }
   status() {
     return {origin: this.origin, authorized: Date.now() < this.account?.expiresAt, name: this.session?.resident?.name ?? null, bodyKind: this.session?.resident?.bodyKind ?? null,
-            connected: !!this.session && this.lastPolled > Date.now() - 15_000};
+            connected: !!this.session && this.lastPolled > Date.now() - 15_000, browserLogin: this.browserLink()};
+  }
+  browserLink() {
+    if (!(this.browserLogin?.expiresAt > Date.now())) return null;
+    return {code:this.browserLogin.code, url:this.origin + '/resident-connect.html?flow=browser#' + this.browserLogin.id};
   }
   async saveGrant(data) {
     const session = validateSession(data, this.origin);
@@ -85,12 +89,29 @@ class ResidentWorld {
     if (this.pairing) throw Error('正在处理上一次操作，请稍后重试。');
     this.pairing = true;
     try {
+      if (method === 'browser-start') {
+        if (!(this.browserLogin?.expiresAt > Date.now())) {
+          const pending = await this.accountRequest(method, {});
+          if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(pending.id)
+              || !/^rba_[A-Za-z0-9_-]{43}$/.test(pending.secret) || !/^\d{6}$/.test(pending.code)
+              || !(pending.expiresAt > Date.now())) throw Error('网页登录请求无效。');
+          this.browserLogin = pending;
+        }
+        return this.browserLink();
+      }
+      if (method === 'browser-status') {
+        if (!(this.browserLogin?.expiresAt > Date.now())) {
+          this.browserLogin = null;
+          return {state:'expired'};
+        }
+        const data = await this.accountRequest(method, {}, this.browserLogin.secret);
+        if (data.state === 'authorized') this.acceptAuthorization(data);
+        return {state:data.state};
+      }
       if (method === 'authorize') {
         if (typeof input !== 'string' || !/^[A-Z0-9]{4}(-[A-Z0-9]{4}){2}$/.test(input)) throw Error('请输入官网给出的三组授权码。');
         const data = await this.accountRequest('pair', {code:input});
-        if (!/^rot_[A-Za-z0-9_-]{43}$/.test(data.onboardingToken) || !(data.expiresAt > Date.now())) throw Error('网站授权无效。');
-        this.account = data;
-        this.pendingBirth = null;
+        this.acceptAuthorization(data);
         return {authorized:true};
       }
       if (!(this.account?.expiresAt > Date.now())) throw Error('授权已过期，请重新获取官网授权码。');
@@ -111,12 +132,21 @@ class ResidentWorld {
       return await this.saveGrant(data);
     } finally { this.pairing = false; }
   }
-  async accountRequest(op, body) {
+  acceptAuthorization(data) {
+    if (!/^rot_[A-Za-z0-9_-]{43}$/.test(data.onboardingToken) || !(data.expiresAt > Date.now())) throw Error('网站授权无效。');
+    this.account = data;
+    this.pendingBirth = this.browserLogin = null;
+  }
+  async accountRequest(op, body, token = this.account?.onboardingToken) {
     const res = await fetch(this.origin + '/api/v1/resident-onboarding/' + op, {method:'POST', redirect:'error',
-      headers:{'Content-Type':'application/json', ...(op === 'pair' ? {} : {Authorization:'Bearer ' + this.account.onboardingToken})},
+      headers:{'Content-Type':'application/json', ...(token && !['pair','browser-start'].includes(op) ? {Authorization:'Bearer ' + token} : {})},
       signal:AbortSignal.timeout(10000), body:JSON.stringify(body)});
     if (res.ok) return res.json();
     const reason = (await res.json().catch(() => ({}))).error?.reason;
+    if (reason === 'BROWSER_LOGIN_EXPIRED') {
+      this.browserLogin = null;
+      return {state:'expired'};
+    }
     if (reason === 'ONBOARDING_EXPIRED') this.account = null;
     const messages = {PAIR_CODE_EXPIRED:'官网授权码已过期或已兑换，请重新领取。', ONBOARDING_EXPIRED:'官网授权已过期，请重新授权。',
       RESIDENT_NOT_READY:'游戏服务正在准备身体。', NO_BODY_CAPACITY:'这种身体暂时没有空位。', RESIDENT_LIMIT:'已达到账号的新建居民上限。',
@@ -133,6 +163,7 @@ class ResidentWorld {
       const res = await fetch(this.origin + '/api/v1/resident-turns/pair', {method: 'POST', redirect: 'error',
         headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code}), signal: AbortSignal.timeout(8000)});
       if (!res.ok) throw Error('配对未完成。请在官网确认角色并重新获取配对码。');
+      this.browserLogin = this.account = null;
       return await this.saveGrant(await res.json());
     } finally { this.pairing = false; }
   }
