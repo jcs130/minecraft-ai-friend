@@ -12,17 +12,33 @@ const newCode = () => [...randomBytes(12)].map(b => alphabet[b % alphabet.length
 const bindingKey = r => JSON.stringify([r.id,r.bodyId,r.characterId,r.bodyKind,r.ownerGameId]);
 const browserLoginExpiry = 300_000;
 const accountExpiry = 900_000;
+const planningStates = new Set(['pending','completed','deferred','rejected','unavailable']);
+const diagnosticPart = /^[a-zA-Z0-9_:-]{1,80}$/;
 
-function validateCommunication(turn, answer) {
-  if (!Object.hasOwn(answer, 'communication')) return;
-  const msg = answer.communication, channel = turn.scene.communication;
-  if (!channel || !msg || typeof msg !== 'object' || Object.keys(answer).length !== 1
-      || Object.keys(msg).some(key => !['mode','sourceEventId','text'].includes(key))
-      || typeof msg.text !== 'string' || !msg.text.trim() || [...msg.text.trim()].length > channel.maxTextChars
-      || /[\p{C}\p{Zl}\p{Zp}§]/u.test(msg.text)
-      || channel.outputs?.filter(o => o.mode === msg.mode && o.sourceEventId === msg.sourceEventId).length !== 1) {
-    throw denied(400, 'COMMUNICATION_UNAVAILABLE');
+function residentActivity(value, updatedAt) {
+  if (!value || typeof value.turnHash !== 'string' || !/^[0-9a-f]{12}$/.test(value.turnHash)
+      || !planningStates.has(value.planningStatus)) return null;
+  const {turnHash, planningStatus, completedActions, failedActions, pendingActions, planningError} = value;
+  if (![completedActions, failedActions, pendingActions].every(n => Number.isSafeInteger(n) && n >= 0 && n <= 32)) return null;
+  const activity = {turnHash, planningStatus, completedActions, failedActions, pendingActions, updatedAt};
+  if (typeof planningError?.step === 'string' && diagnosticPart.test(planningError.step)
+      && typeof planningError.code === 'string' && diagnosticPart.test(planningError.code)) {
+    activity.planningError = {step:planningError.step, code:planningError.code};
   }
+  if (typeof value.transferError === 'string' && /^rendezvous_[a-z_]{1,65}$/.test(value.transferError)) {
+    activity.transferError = value.transferError;
+  }
+  return activity;
+}
+
+function communicationAllowed(turn, answer) {
+  if (!Object.hasOwn(answer, 'communication')) return true;
+  const msg = answer.communication, channel = turn.scene.communication;
+  return channel && msg && typeof msg === 'object' && Object.keys(answer).length === 1
+    && Object.keys(msg).every(key => ['mode','sourceEventId','text'].includes(key))
+    && typeof msg.text === 'string' && msg.text.trim() && [...msg.text.trim()].length <= channel.maxTextChars
+    && !/[\p{C}\p{Zl}\p{Zp}§]/u.test(msg.text)
+    && channel.outputs?.filter(o => o.mode === msg.mode && o.sourceEventId === msg.sourceEventId).length === 1;
 }
 
 // One scoped desktop grant and at most one pending decision per original body.
@@ -271,6 +287,12 @@ export class ResidentTurns {
     try { this.authorize(r,req,worker); return (worker ? 'worker:' : 'desktop:') + r.id; }
     catch { return; }
   }
+  operatorActivity() {
+    const freshAfter = this.now() - 20_000;
+    return [...this.roles.values()]
+      .filter(r => r.activity?.updatedAt > freshAfter)
+      .map(r => ({role:r.id, name:r.name, ...r.activity}));
+  }
   async machine(req, res, pathname, jsonBody, respond) {
     const match = /^\/api\/v1\/resident-turns\/([a-z][a-z0-9_-]{1,31})\/(offer|poll|reply|begin|check|activation)$/.exec(pathname);
     if (!match) return false;
@@ -291,6 +313,7 @@ export class ResidentTurns {
       }
       result = {activation: born ? {characterId:born.character,name:born.name,persona:born.persona} : null};
     } else if (op === 'check') {
+      if (input?.activity !== undefined) r.activity = residentActivity(input.activity, this.now());
       result = {requestId: this.valid(r) && r.wake?.until > this.now() ? r.wake.id : null};
     } else if (op === 'begin') {
       r.grant.lastPoll = this.now();
@@ -304,10 +327,21 @@ export class ResidentTurns {
       }
       result = {turn: r.pending?.turn ?? null};
     } else if (op === 'reply') {
-      if (!r.pending || r.pending.turn.id !== input.id || this.now() >= r.pending.turn.until) throw denied(409, 'STALE_TURN');
-      if (!input.answer || typeof input.answer !== 'object' || Array.isArray(input.answer)) throw denied(400, 'INVALID_DECISION');
-      validateCommunication(r.pending.turn,input.answer);
-      r.pending.finish({state: 'answered', id: input.id, answer: input.answer});
+      const pending = r.pending;
+      const id = input?.id;
+      const turn = pending?.turn;
+      let reason;
+      if (!turn || turn.id !== id || this.now() >= turn.until) reason = 'STALE_TURN';
+      else if (!input.answer || typeof input.answer !== 'object' || Array.isArray(input.answer)) reason = 'INVALID_DECISION';
+      else if (!communicationAllowed(turn,input.answer)) reason = 'COMMUNICATION_UNAVAILABLE';
+      if (!reason) pending.finish({state: 'answered', id, answer: input.answer});
+      if (typeof id === 'string' && uuid.test(id)) {
+        console.info(JSON.stringify({
+          event: 'resident_turn', stage: 'portal_reply', role: r.id, turnHash: hash(id).slice(0,12),
+          status: reason ? 'rejected' : 'accepted', ...(reason ? {reason} : {kind: turn.kind})
+        }));
+      }
+      if (reason) throw denied(reason === 'STALE_TURN' ? 409 : 400, reason);
       result = {accepted: true};
     } else {
       if (input.bodyId !== r.bodyId || input.characterId !== r.characterId || input.bodyKind !== r.bodyKind || input.ownerGameId !== r.ownerGameId

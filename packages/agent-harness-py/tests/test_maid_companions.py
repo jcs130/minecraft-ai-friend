@@ -1,9 +1,18 @@
+import asyncio
+import hashlib
+import json
 from datetime import timedelta
 
+import httpx
 import pytest
 
+from agent_mc_harness.journal import ActionJournal
 from agent_mc_harness.maid_companions import MaidCompanions, parse_choice, walk_available
-from agent_mc_harness.models import BodySnapshot, utcnow
+from agent_mc_harness.models import BodySnapshot, NativeAction, utcnow
+from agent_mc_harness.npc import IDLE_GOAL, NpcHost, NpcPlanner
+from agent_mc_harness.resident_turns import ResidentTurnsClient
+from simbody import SimBody
+from test_server_npc import role
 
 OVERWORLD = "minecraft:overworld"
 NETHER = "minecraft:the_nether"
@@ -337,7 +346,105 @@ def test_remote_cast_is_target_bound_and_never_reissued_while_unsettled(loop, di
     assert step.tool == "body:native:rendezvous" and step.args == {"targetUuid": ALICE}
     now[0] += 100
     assert tracking.next_step(obs, can_teleport=True) is None
+    assert tracking.context(obs)["status"] == "check_original_rendezvous_receipt"
     assert tracking.context(compass(player(x=x, dimension=dimension), x=x, dimension=dimension))["status"] == "alongside"
+
+
+def test_explicit_remote_cast_uses_the_ready_turn_even_after_a_local_walk(loop):
+    tracking, _ = loop
+    local = compass(player())
+    assert tracking.choose("follow", ALICE, local)
+    assert tracking.next_step(local).tool == "body:move"
+    remote = compass(player(), player(BOB, dimension=NETHER))
+    remote.raw["socialNavigationTargetUuid"] = ALICE
+    assert tracking.choose("approach", BOB, remote, travel="teleport", turn_hash="a1b2c3d4e5f6")
+    action = tracking.next_step(remote, can_teleport=True)
+    assert action.tool == "body:native:rendezvous" and action.args == {"targetUuid": BOB}
+    assert tracking.turn_hash == "a1b2c3d4e5f6"
+
+
+def test_explicit_remote_cast_reports_why_the_selected_trip_could_not_dispatch(loop):
+    tracking, _ = loop
+    remote = compass(player(dimension=NETHER))
+    assert tracking.choose("approach", ALICE, remote, travel="teleport", turn_hash="a1b2c3d4e5f6")
+    remote.raw["socialWalkAvailable"] = False
+    assert tracking.next_step(remote, can_teleport=True) is None
+    assert tracking.context(remote)["lastTransfer"] == {
+        "targetUuid": ALICE, "turnHash": "a1b2c3d4e5f6", "stage": "before_dispatch",
+        "status": "rejected", "message": "rendezvous_body_unavailable",
+    }
+    assert not tracking.active
+
+
+@pytest.mark.parametrize("refusal", [None, "rendezvous_body_unavailable", "rendezvous_skill_unavailable"])
+def test_portal_meeting_decision_dispatches_or_reports_a_preflight_refusal(tmp_path, refusal):
+    async def run():
+        actor = role(id="yui", body_kind="maid", activity_review_seconds=90,
+                     allowed_tools=["body:move", "body:native:rendezvous"])
+        body = SimBody(body_id=str(actor.body_id))
+        await body.spawn()
+        caps = body.capabilities()
+        caps.native_actions.append(NativeAction(name="rendezvous"))
+        body.capabilities = lambda: caps
+        observed = compass(player(dimension=NETHER))
+        observed.raw["resident"] = {"loaded": True}
+        answer = {"steps": [], "companion": {"mode": "approach", "travel": "teleport", "targetUuid": ALICE}}
+        turn_id = "5e68536f-0334-4442-8f73-130c9a963add"
+        turn_hash = hashlib.sha256(turn_id.encode()).hexdigest()[:12]
+        tokens = tmp_path / "turn.token"
+        tokens.write_text("test-token", encoding="ascii")
+
+        def offer(req):
+            assert json.loads(req.content)["scene"]["maidCompanions"]["teleportAvailable"] is True
+            if refusal == "rendezvous_body_unavailable":
+                observed.raw.update(sitting=True, socialWalkAvailable=False)
+            return httpx.Response(200, json={"state": "answered", "id": turn_id, "answer": answer})
+
+        async def snapshot():
+            return observed.model_copy(deep=True)
+
+        body.snapshot = snapshot
+        turns = ResidentTurnsClient(actor, {"endpoint": "http://127.0.0.1/api/v1/resident-turns/yui",
+                                            "tokenFile": str(tokens)},
+                                    http=httpx.AsyncClient(transport=httpx.MockTransport(offer)))
+        journal = ActionJournal(tmp_path / "actions.sqlite3")
+        host = NpcHost(actor, body, NpcPlanner(actor, None, resident_turns=turns), None, journal)
+
+        if refusal == "rendezvous_skill_unavailable":
+            async def plan_then_remove_capability(intent, context):
+                steps = await host._plan(intent, context)
+                context.capabilities.native_actions.clear()
+                return steps
+
+            host.runtime.planner = plan_then_remove_capability
+        try:
+            intent = host.runtime.submit_intent(IDLE_GOAL, agent=actor.id)
+            await host.runtime.run_intent(intent)
+            assert intent.resident_turn_hash == turn_hash
+            host._settle_rendezvous(str(actor.body_id))
+            last_transfer = host.companions.context(observed)["lastTransfer"]
+            assert last_transfer["turnHash"] == turn_hash
+            if refusal:
+                assert not body.acts
+                assert not journal.recent(str(actor.body_id))
+                assert not host.companions.active
+                assert not host.rendezvous_intent
+                assert last_transfer["message"] == refusal
+                assert "requestId" not in last_transfer
+                if refusal == "rendezvous_skill_unavailable":
+                    assert intent.state == "failed"
+            else:
+                action, = body.acts
+                assert action.name == "rendezvous" and action.args == {"targetUuid": ALICE}
+                assert journal.resident_turn_hash(action.request_id) == turn_hash
+                receipt, = intent.receipts
+                assert receipt.request_id == action.request_id and receipt.terminal
+                assert last_transfer["requestId"] == receipt.request_id and last_transfer["status"] == "completed"
+        finally:
+            await turns.close()
+            await host.close()
+
+    asyncio.run(run())
 
 
 def test_shared_skill_permission_required_and_directory_removal_wins_over_old_sight(loop):

@@ -159,6 +159,14 @@ Confirmed wait reasons stay in the body's local action journal across restarts.
 Mode selections appear in the private NPC health route; the body's receipt
 and a fresh observation establish the actual outcome.
 
+For a desktop decision, match the twelve-character `turnHash` in the portal
+`portal_reply` log and the worker's `resident_turn` logs. Validation failures
+include a step and error code. Body dispatch and terminal receipt entries
+include the same request hash. The administrator's resident page shows the
+latest desktop planning status and the counts of completed, failed and pending
+body actions. The private health snapshot retains the individual receipt
+hashes and the last transfer result.
+
 An existing registered companion residence can run under that native guard
 delegation. It holds at most the original configured residence and a short
 ticket for the original body's last confirmed generated chunk. If a body needs

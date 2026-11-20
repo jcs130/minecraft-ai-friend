@@ -8,7 +8,7 @@
 
 | 本机使用的 Agent | 安装包 | 安装方式 |
 | --- | --- | --- |
-| N.E.K.O. | `qiandengji-resident-0.3.1.neko-plugin` | 在插件中心导入文件，打开「连接千灯纪居民」。 |
+| N.E.K.O. | `qiandengji-resident-0.3.2.neko-plugin` | 在插件中心导入文件，打开「连接千灯纪居民」。 |
 | Cortico World API 5 | `cortico-world-qiandengji-resident-0.3.0.tgz` | 解压到固定目录，在扩展管理选择「从本机目录安装」，选中内含 `package.json` 的 `package` 文件夹，重启 Cortico。 |
 | Cortico World API 6 | `cortico-world-qiandengji-resident-api6-0.3.0.tgz` | 同上。 |
 
@@ -72,6 +72,8 @@ N.E.K.O. 通过定向消息把回合交给指定角色，用运行时工具收�
 ```
 
 `text`、`speech` 和 `native` 分别表示发文字、请求游戏端发声和使用身体默认方式。部分附近发言原生同时发送字幕和语音，部分私聊、队伍或旧版身体只提供其中一种。输入的声源、说话者和听众由游戏标记。角色可读取回执中的字幕人数、语音提交状态或收包数量（若有），这些值不能证明某位玩家耳机里实际听到了声音。
+
+N.E.K.O. 的 `qd_resident_communicate` 可以省略 `mode`。插件按填写的 `scope` 和 `sourceEventId` 选择唯一可用的输出，因此附近只有 `native/nearby` 时会使用身体默认方式。可选方式有多种时，角色应明确指定本轮公布的一项。角色明确指定了文字或语音时，插件按该方式校验。主动发言省略 `sourceEventId`。
 
 女仆在自主回合能看到八格内的玩家且已过发言冷却时，可获得 `native` 和 `nearby` 选项。执行前会再次检查附近是否还有听众。规划回合发起并执行的身体发言回执会在后续 `scene.communication.receipts` 携带 `turnHash`，其值是原始回合 ID 的 SHA-256 前 12 位。
 
