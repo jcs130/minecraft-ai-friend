@@ -10,7 +10,7 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 import { WorldMap, mapFileKey, validateMapState, MAP_FRESH_MS, MAP_FILE_LIMIT } from '../src/world-map.mjs';
 import { createWorldMapService } from '../src/world-map-service.mjs';
 import { parseMapObservation, readCommands } from '../scripts/world-map-source.mjs';
-import { visiblePlayers, covered, positionText } from '../public/world-map-model.js';
+import { visiblePlayers, covered, positionText, directoryIndex, matchingPlaces, placeAddress } from '../public/world-map-model.js';
 
 const uuid = '11111111-1111-3111-8111-111111111111';
 const at = Date.parse('2026-11-07T12:00:00Z');
@@ -73,6 +73,62 @@ test('public state allowlists fields and rejects misleading identity/geometry/ti
   for (const change of [row => { row.players[0].x = NaN; }, row => { row.players[0].name = 'Goddess'; }, row => { row.players.push({ ...player }); }, row => { row.maps[0].dimension = 'minecraft:the_end'; }, row => { row.observedAt = new Date(at + 10000).toISOString(); }, row => { row.observedAt = new Date(at - 60001).toISOString(); }]) {
     const copy = structuredClone(snapshot()); change(copy); assert.throws(() => validateMapState(copy, at));
   }
+});
+test('all current native resident professions fit the live map projection', () => {
+  const professions = ['guardian', 'ranger', 'mage', 'healer', 'artisan', 'farmer', 'knight', 'cleric', 'engineer', 'beastmaster'];
+  const npcs = professions.map((profession, index) => ({
+    ...player, kind: 'npc', uuid: '22222222-2222-3222-8222-00000000000' + index,
+    profession, name: '职业' + index
+  }));
+  assert.deepEqual(validateMapState({ ...snapshot(), npcs }, at).npcs.map(row => row.profession), professions);
+  assert.throws(() => validateMapState({ ...snapshot(), npcs: [{...npcs[0], profession: 'unknown'}] }, at),
+    { reason: 'MAP_NPC_FORMAT' });
+});
+const fixtureAddresses = {
+  version: 1, world: 'minecraft:aincrad',
+  districts: [{ id: 'ground', name: '起始街区' }],
+  streets: [{ id: 'east', districtId: 'ground', name: '东巷', path: [{ x: 10, y: 64, z: 7 }, { x: 20, y: 64, z: 7 }] }],
+  places: [
+    { id: 'east-01', kind: 'home', districtId: 'ground', streetId: 'east', number: '01', name: '东巷小屋',
+      position: { x: 11, y: 64, z: 9 }, residents: [{ name: '小葵', profession: '园艺' }] },
+    { id: 'cave', kind: 'dungeon-room', districtId: 'ground', name: '地下一室', parentId: 'cave-entry', position: { x: -14, y: 34, z: 3 } },
+    { id: 'cave-entry', kind: 'building', districtId: 'ground', name: '地下城入口', position: { x: -14, y: 64, z: 2 } }
+  ]
+};
+test('address search matches names, doors and street or resident labels', () => {
+  const [home, cave] = fixtureAddresses.places;
+  assert.equal(placeAddress(home, directoryIndex(fixtureAddresses)), '起始街区 · 东巷 · 01');
+  assert.deepEqual(matchingPlaces(fixtureAddresses, { streetId: 'east', search: '小葵 01' }), [home]);
+  assert.deepEqual(matchingPlaces(fixtureAddresses, { search: '地下城房间' }), [cave]);
+  assert.deepEqual(matchingPlaces(fixtureAddresses, { streetId: 'east', search: '地下一室' }), []);
+  const room = { id: 'east-room', kind: 'room', districtId: 'ground', parentId: home.id, name: '楼上房间', position: { x: 12, y: 71, z: 8 } };
+  const nested = { ...fixtureAddresses, places: [...fixtureAddresses.places, room] };
+  assert.deepEqual(matchingPlaces(nested, { streetId: 'east', search: '楼上 小屋' }), [room]);
+});
+test('public address directory, fixed house markers and streets stay visible without live state', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'qd-map-addresses-'));
+  const service = createWorldMapService({ dataDir: root, publicDir: root, tokenHash: 'f'.repeat(64) });
+  await fs.writeFile(path.join(root, 'aincrad-addresses.json'), JSON.stringify(fixtureAddresses));
+  await new Promise(resolve => service.server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { await new Promise(resolve => service.server.close(resolve)); await fs.rm(root, { recursive: true, force: true }); });
+  const origin = 'http://127.0.0.1:' + service.server.address().port;
+  const live = await (await fetch(origin + '/api/v1/world-map')).json();
+  assert.equal(live.stale, true);
+  assert.deepEqual(live.npcs, []);
+  const addressRoute = origin + '/world-map/aincrad-addresses.json';
+  const response = await fetch(addressRoute);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), fixtureAddresses);
+  const head = await fetch(addressRoute, { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), '');
+  assert.equal((await fetch(addressRoute, { method: 'POST' })).status, 405);
+  const markers = await (await fetch(origin + '/world-map/maps/aincrad/live/markers.json')).json();
+  assert.deepEqual(markers['aincrad-addresses'].markers['east-01'].position, fixtureAddresses.places[0].position);
+  assert.match(markers['aincrad-addresses'].markers['east-01'].detail, /小葵/);
+  assert.deepEqual(markers['aincrad-streets'].markers.east.line, fixtureAddresses.streets[0].path);
+  assert.equal(markers['aincrad-rooms'].defaultHidden, true);
+  assert.deepEqual(await (await fetch(origin + '/world-map/maps/overworld/live/markers.json')).json(), {});
 });
 test('public file paths cannot reach private data, hidden files, SQL/PHP or live markers', () => {
   for (const key of ['../portal.sqlite', 'assets/../../accounts.json', '/assets/a.png', 'assets/.hidden.json', 'assets/a\\b.js', 'maps/overworld/live/players.json', 'sql.php', 'state.json', 'config.json', 'assets/code.exe', 'maps/unknown/settings.json']) assert.throws(() => mapFileKey(key));
