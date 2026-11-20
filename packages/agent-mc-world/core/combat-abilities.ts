@@ -39,6 +39,8 @@ export class CombatAbilities {
   protected pending: { spell: CombatSpell; at: number } | null = null;
   protected mana: number | null = null;
   protected manaLoading = false;
+  private manaRevision = 0;
+  private castManaRevision = -1;
   protected tactic: CombatTactic | null = null;
   protected realm = '';
   protected readonly casts: CombatCastAttempt[] = [];
@@ -85,7 +87,7 @@ export class CombatAbilities {
       block: !this.available.has(spell) ? 'ability-not-observed'
         : !this.costs.has(spell) ? 'mana-cost-unknown'
         : !this.serverReadyAt.has(spell) ? 'cooldown-unknown'
-        : this.mana === null || this.manaLoading ? 'mana-unknown' : this.manualCastBlock(spell, now) }));
+        : this.mana === null || this.manaLoading ? 'mana-unknown' : this.manualCastBlock(spell, now) ?? this.automaticTargetBlock(bot, spell) }));
     const facts: Omit<CombatRuleFacts, 'cost'> = { ...this.ruleFacts(bot),
       enemies: battlefield.actors.flatMap(e => e.relation === 'hostile' && e.lineOfSight === true && e.distance !== null
         && e.distance <= 16 && e.health.current !== 0 ? [{ type: e.type ?? '', distance: e.distance }] : []) };
@@ -138,11 +140,13 @@ export class CombatAbilities {
 
   noteMana(current: number | null, now = Date.now()): void {
     if (current === null) {
+      this.manaRevision++;
       this.mana = null;
       this.manaLoading = true;
       return;
     }
     if (Number.isFinite(current) && current >= 0) {
+      this.manaRevision++;
       this.mana = current;
       this.manaLoading = false;
     }
@@ -183,7 +187,8 @@ export class CombatAbilities {
 
     const ready = (spell: CombatSpell): boolean => this.available.has(spell) && this.hasMana(spell, now)
       && now >= (this.serverReadyAt.get(spell) ?? Number.NEGATIVE_INFINITY)
-      && now - (this.lastSent.get(spell) ?? Number.NEGATIVE_INFINITY) >= this.cooldownOf(spell);
+      && now - (this.lastSent.get(spell) ?? Number.NEGATIVE_INFINITY) >= this.cooldownOf(spell)
+      && this.automaticTargetBlock(bot, spell) === null;
 
     this.decision = null;
     if (this.tactic?.rules?.length) {
@@ -225,12 +230,23 @@ export class CombatAbilities {
     this.lastSent.set(spell, now);
     this.lastAny = now;
     this.pending = { spell, at: now };
+    this.castManaRevision = this.manaRevision;
     const cost = this.costs.get(spell) ?? this.defaultCosts[spell];
     if (this.mana !== null && cost !== undefined) this.mana = Math.max(0, this.mana - cost);
   }
 
   noteSupportSent(now = Date.now()): void {
     if (this.supportSpell) this.noteSent(this.supportSpell, now, 'support');
+  }
+
+  /** Server adapters can exclude impossible automatic targets using current observations. */
+  automaticTargetBlock(_bot: Bot, _spell: CombatSpell): string | null { return null; }
+
+  /** Undo only the speculative debit belonging to the correlated attempt. A newer HUD sample wins. */
+  protected noteUnspentMana(attempt: CombatCastAttempt): void {
+    if (this.pending?.spell !== attempt.spell || this.pending.at !== Date.parse(attempt.sentAt)) return;
+    if (this.castManaRevision === this.manaRevision) this.mana = attempt.manaBefore;
+    this.pending = null;
   }
 
   protected hasMana(spell: CombatSpell, now: number): boolean {
