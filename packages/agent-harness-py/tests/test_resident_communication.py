@@ -8,7 +8,7 @@ import pytest
 
 from agent_mc_harness.journal import ActionJournal
 from agent_mc_harness.models import ActionReceipt, BodyEvent
-from agent_mc_harness.npc import DIALOGUE_GOAL, NpcHost, NpcPlanner
+from agent_mc_harness.npc import DIALOGUE_GOAL, IDLE_GOAL, NpcHost, NpcPlanner
 from agent_mc_harness.resident_protocol import prepare_scene, social_communication, speech_receipt, translate_answer
 from agent_mc_harness.resident_turns import ResidentTurnsClient
 from agent_mc_harness.runtime import Intent, PlanContext
@@ -114,3 +114,64 @@ def test_receipt_does_not_attribute_another_voice_job_to_this_reply():
                                      "hearingVerified":False,"voice":{"requestId":voice_id,"state":"sent"}}
     observed["voice"]["requestId"]="another-utterance"
     assert "voice" not in speech_receipt(receipt)
+
+
+@pytest.mark.parametrize(("audience_distance", "leaves", "offered", "spoken"), [
+    (None, False, False, False),
+    (9, False, False, False),
+    (5, False, True, True),
+    (5, True, True, False),
+])
+def test_quiet_desktop_maid_can_greet_observed_nearby_players(audience_distance, leaves, offered, spoken, tmp_path):
+    async def run():
+        actor = role(body_kind="maid")
+        listener = {"uuid": str(uuid4()), "name": "Alice", "dimension": "minecraft:overworld",
+                    "position": {"x": audience_distance or 1, "y": 64, "z": 0}}
+
+        class Maid(SimBody):
+            nearby = [listener] if audience_distance is not None else []
+
+            async def snapshot(self):
+                snapshot = await super().snapshot()
+                snapshot.raw.update({"nearbyPlayers": self.nearby, "characterDirectory": [listener]})
+                return snapshot
+
+        body = Maid(body_id=str(actor.body_id))
+        await body.spawn()
+        turn_id = str(uuid4())
+        seen = []
+
+        def handle(req):
+            payload = json.loads(req.content)
+            outputs = payload["scene"]["communication"]["outputs"]
+            seen.append(outputs)
+            assert payload["scene"]["communication"]["messages"] == []
+            assert "If outputs is empty, skip game communication" in payload["instructions"]
+            if leaves:
+                body.nearby = []
+            answer = {"communication": {"mode": "native", "text": "你好。"}} if outputs else {"steps": []}
+            return httpx.Response(200, json={"state": "answered", "id": turn_id, "answer": answer})
+
+        token = tmp_path / "token"
+        token.write_text("fixture")
+        client = ResidentTurnsClient(actor, {"endpoint": "https://example.test/api/v1/resident-turns/kirito", "tokenFile": token},
+                                     http=httpx.AsyncClient(transport=httpx.MockTransport(handle)))
+        journal = ActionJournal(tmp_path / "journal.sqlite")
+        host = NpcHost(actor, body, NpcPlanner(actor, None, resident_turns=client), None, journal)
+        try:
+            intent = Intent(id="quiet-turn", agent=actor.id, goal=IDLE_GOAL, state="active")
+            steps = await host._plan(intent, PlanContext(snapshot=await body.snapshot(), capabilities=body.capabilities()))
+            assert seen == [[{"mode": "native", "scope": "nearby"}] if offered else []]
+            assert [step.tool for step in steps] == (["body:chat"] if spoken else [])
+            if spoken:
+                game_receipt = await host.runtime._execute(steps[0], intent)
+                await host._plan(Intent(id="next-quiet-turn", agent=actor.id, goal=IDLE_GOAL),
+                                 context := PlanContext(snapshot=await body.snapshot(), capabilities=body.capabilities()))
+                assert seen[-1] == []
+                [receipt] = context.communication_receipts
+                assert receipt["requestId"] == game_receipt.request_id
+                assert receipt["turnHash"] == hashlib.sha256(turn_id.encode()).hexdigest()[:12]
+        finally:
+            await host.close()
+            await client.close()
+    asyncio.run(run())

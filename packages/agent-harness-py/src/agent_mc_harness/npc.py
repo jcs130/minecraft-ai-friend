@@ -6,6 +6,7 @@ operator-owned. Conversation, observations and recalled memories are untrusted d
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import math
 import re
@@ -23,7 +24,7 @@ from .companion_adventure import mentions_activity
 from .conversation import COMPANION_SPEECH_POLICY, CONVERSATION_POLICY, WHALE_SPEECH_POLICY, names_listener, repeats_companion_speech, whale_speech
 from .body import adventure
 from .journal import ActionJournal, work_key
-from .maid_companions import MaidCompanions, parse_choice, walk_available
+from .maid_companions import MaidCompanions, nearby_maid_listener, parse_choice, walk_available
 from .models import BodyEvent, Scope
 from .resident_protocol import social_communication, speech_receipt
 from .runtime import HarnessRuntime, Intent, PlanContext, Step, step_support
@@ -389,6 +390,8 @@ class NpcPlanner:
 
     async def __call__(self, intent: Intent, context: PlanContext):
         role = self.role
+        intent.resident_turn_hash = None
+        context.recheck_nearby_speech = False
         requested = intent.desktop_request_id if intent.goal == DESKTOP_GOAL else None
         if intent.goal == DESKTOP_GOAL and (not requested or not context.snapshot or context.snapshot.life_state != "alive" or danger(context.snapshot)):
             return []
@@ -441,11 +444,15 @@ class NpcPlanner:
         tools = [tool for tool in role.allowed_tools if tool not in {"body:native:rendezvous", "body:native:release_rendezvous"} and not step_support(Step(tool=tool), caps)]
         if intent.goal == IDLE_GOAL and "body:native:survey" in tools and surveyed_here(context):
             tools.remove("body:native:survey")
+        quiet_turn = intent.goal == IDLE_GOAL and not context.dialogue and not (context.party_context or {}).get("message")
+        near_partner = quiet_turn and adventure.partner_nearby(role.adventure_partner, context)
+        near_maid_listener = (quiet_turn and self.resident_turns is not None and role.body_kind == "maid"
+                              and not context.nearby_speech_on_cooldown and nearby_maid_listener(context.snapshot)
+                              and not danger(context.snapshot))
         if check_in:
             tools = ["body:chat"]
-        elif (self.resident_turns and intent.goal == IDLE_GOAL and not context.dialogue
-              and not (context.party_context or {}).get("message")):
-            if not adventure.partner_nearby(role.adventure_partner, context) and "body:chat" in tools:
+        elif self.resident_turns and quiet_turn:
+            if not (near_partner or near_maid_listener) and "body:chat" in tools:
                 tools.remove("body:chat")
             if role.activity_review_seconds is None and already_guarding(current_native_state(context)):
                 tools = [name for name in tools if name not in {"body:stay", "body:stop", "body:native:sit"}]
@@ -711,17 +718,21 @@ class NpcPlanner:
             if context.companion_adventure and not context.companion_adventure["activeWithPartner"]:
                 names = {choice["name"] for choice in context.companion_adventure["choices"]}
                 steps = [step for step in steps if any(mentions_activity(name, step.args["text"]) for name in names)]
-        elif intent.goal == IDLE_GOAL and not context.dialogue and not (context.party_context or {}).get("message"):
-            inactive = set() if adventure.partner_nearby(role.adventure_partner, context) else {"body:chat"}
+        elif quiet_turn:
+            desktop_greeting = provider == "desktop" and near_maid_listener and not near_partner
+            inactive = set() if near_partner or desktop_greeting else {"body:chat"}
             if role.activity_review_seconds is None and already_guarding(current_native_state(context)):
                 inactive.update({"body:stay", "body:stop", "body:native:sit"})
             steps = [step for step in steps if step.tool not in inactive]
+            context.recheck_nearby_speech = desktop_greeting
         speech = [step.args["text"] for step in steps if step.tool == "body:chat"]
         if speech and context.dialogue and not addressed and self.fast is not None:
             allowed = await self.fast.allow_reply(role, context, speech)
             self.last_route["attention"] = self.fast.last_attention
             if not allowed:
                 steps = [step for step in steps if step.tool != "body:chat"]
+        if delivery and isinstance(turn_id := response.get("id"), str) and turn_id:
+            intent.resident_turn_hash = hashlib.sha256(turn_id.encode()).hexdigest()[:12]
         return steps
 
 
@@ -993,6 +1004,8 @@ class NpcHost:
         dialogue = [self.pending_dialogue[key] for key in intent.source_events if key in self.pending_dialogue]
         context.dialogue = dialogue
         context.proposed_agenda = None
+        if self.role.body_kind == "maid" and intent.goal == IDLE_GOAL and not dialogue:
+            context.nearby_speech_on_cooldown = self.journal.contacted_recently(body_id, "speech", COMPANION_CHECK_IN_SECONDS)
         inbox_at_start = set(self.pending_dialogue)
         if self.role.agenda_enabled and context.snapshot and context.snapshot.life_state == "alive":
             context.agenda = self.journal.agenda(str(self.role.character_id), time.time())
@@ -1043,7 +1056,10 @@ class NpcHost:
         for action, receipt in self.journal.recent(body_id):
             if action.verb == "chat":
                 if len(context.communication_receipts) < 4:
-                    context.communication_receipts.append(speech_receipt(receipt))
+                    result = speech_receipt(receipt)
+                    if turn_hash := self.journal.speech_turn_hash(receipt.request_id):
+                        result["turnHash"] = turn_hash
+                    context.communication_receipts.append(result)
                 continue
             if action.verb == "observe" or action.name == "ack":
                 continue
@@ -1080,6 +1096,13 @@ class NpcHost:
         steps = [opening] if opening else await self.planner(intent, context)
         if steps is None:
             return None
+        if context.recheck_nearby_speech and any(s.tool == "body:chat" for s in steps):
+            latest = await self.body.snapshot()
+            new_order = any(k not in inbox_at_start and addressed_dialogue(e, body_id, (self.role.name, self.role.id))
+                            for k, e in self.pending_dialogue.items())
+            if (self.pausing or new_order or latest.dimension != context.snapshot.dimension
+                    or danger(latest) or not nearby_maid_listener(latest)):
+                steps = [step for step in steps if step.tool != "body:chat"]
         if context.companion_choice is not None:
             latest = await self.body.snapshot()
             changed_inbox = any(k not in inbox_at_start and addressed_dialogue(e, body_id, (self.role.name, self.role.id))

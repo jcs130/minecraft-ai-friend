@@ -64,6 +64,7 @@ class Intent(BaseModel):
     receipts: list[ActionReceipt] = Field(default_factory=list)
     source_events: list[str] = Field(default_factory=list, max_length=32)  # host-observed inbox IDs, never model-generated
     desktop_request_id: str | None = None  # From the role-scoped worker's check endpoint.
+    resident_turn_hash: str | None = Field(default=None, exclude=True)  # Assigned by the host, never by the model.
     remember_wait_purpose: bool = False
     recall_query: str | None = Field(default=None, max_length=500)
     created_at: datetime = Field(default_factory=utcnow)
@@ -90,6 +91,8 @@ class PlanContext(BaseModel):
     snapshot: BodySnapshot | None = None
     body_results: list[dict[str, Any]] = Field(default_factory=list, max_length=6)
     communication_receipts: list[dict[str, Any]] = Field(default_factory=list, max_length=4)
+    nearby_speech_on_cooldown: bool = False
+    recheck_nearby_speech: bool = False
     recent_companion_speech: list[str] = Field(default_factory=list, max_length=8)
     party_context: dict[str, Any] | None = None
     companion_adventure: dict[str, Any] | None = None
@@ -486,7 +489,8 @@ class HarnessRuntime:
                 return ActionReceipt(request_id=rid, verb=action.verb, status="unknown", terminal=False,
                                      text="unresolved_original_request_requires_reconciliation")
             # This commit must succeed before any body write is dispatched.
-            self.journal.begin(body_key, action, intent.source_events, note=step.note if intent.remember_wait_purpose else None)
+            self.journal.begin(body_key, action, intent.source_events, note=step.note if intent.remember_wait_purpose else None,
+                               resident_turn_hash=intent.resident_turn_hash if action.verb == "chat" else None)
         future: asyncio.Future[BodyEvent] = asyncio.get_running_loop().create_future()
         self._results[rid] = future
         def record(receipt: ActionReceipt) -> ActionReceipt:

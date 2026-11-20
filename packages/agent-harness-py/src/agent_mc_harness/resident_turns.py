@@ -38,6 +38,11 @@ class ResidentTurnsClient:
         payload = {"bodyKind": role.body_kind, "bodyId": str(role.body_id), "characterId": str(role.character_id), "ownerGameId": str(role.owner_id),
                    "kind": kind, "instructions": messages[0]["content"],
                    "scene": prepare_scene(role, kind, json.loads(messages[1]["content"]))}
+        payload["instructions"] += (
+            "\nUse the exact mode, scope and sourceEventId from scene.communication.outputs. "
+            "When an output has no sourceEventId, omit that argument. "
+            "If outputs is empty, skip game communication and continue with a permitted action or an empty plan."
+        )
         try:
             response = await self.http.post(self.endpoint + "/offer", json=payload, headers={"Authorization": "Bearer " + self.token}, timeout=39)
             response.raise_for_status()
