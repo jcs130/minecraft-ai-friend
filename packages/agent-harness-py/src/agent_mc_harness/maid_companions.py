@@ -89,7 +89,7 @@ def walk_available(snapshot: BodySnapshot | None) -> bool:
                 {"travel_ledger_unavailable", "travel_unconfirmed_check_ledger", "inspect_original_travel"})
 
 
-def parse_choice(plan, characters: list[dict]) -> dict | None:
+def parse_choice(plan, characters: list[dict], *, read_echoes: set[str] | None = None) -> dict | None:
     """Parse one social intention. Echoed native steps are never executed."""
     if not isinstance(plan, dict):
         return None
@@ -103,18 +103,20 @@ def parse_choice(plan, characters: list[dict]) -> dict | None:
     if set(plan) != expected or not isinstance(steps, list) or len(steps) > 3:
         raise ValueError("invalid_companion_plan")
     echoed = []
-    guard_echo = False
+    incidental = set()
     for step in steps:
         if not isinstance(step, dict) or set(step) - {"tool", "args"}:
             raise ValueError("invalid_companion_step")
         args = step.get("args", {})
         if not isinstance(args, dict):
             raise ValueError("invalid_companion_args")
-        if step.get("tool") == "body:chat" and set(args) == {"text"} and isinstance(args["text"], str):
-            continue
-        if explicit and step.get("tool") == "body:native:guard" and not args and not guard_echo:
-            # A model may echo its current guard mode alongside a meeting. Only the meeting is executed.
-            guard_echo = True
+        tool = step.get("tool")
+        if not isinstance(tool, str) or tool in incidental:
+            raise ValueError("unexpected_companion_step")
+        if ((tool == "body:chat" and set(args) == {"text"} and isinstance(args["text"], str))
+                or (explicit and not args and (tool == "body:native:guard" or tool in (read_echoes or ())))):
+            # Recorded samples and guard chatter can accompany a choice. Only the chosen meeting executes.
+            incidental.add(tool)
             continue
         if step.get("tool") != "body:follow" or echoed or set(args) not in (set(), {"uuid"}, {"targetUuid"}):
             raise ValueError("unexpected_companion_step")
@@ -124,7 +126,7 @@ def parse_choice(plan, characters: list[dict]) -> dict | None:
         echoed.append(echoed_target)
     if explicit:
         choice = plan["companion"]
-        if choice == {"mode": "stop"} and not echoed and not guard_echo:
+        if choice == {"mode": "stop"} and not echoed and "body:native:guard" not in incidental:
             return choice
         if (not isinstance(choice, dict) or set(choice) - {"travel"} not in ({"mode", "targetUuid"}, {"mode", "targetName"})
                 or choice["mode"] not in ("approach", "follow") or choice.get("travel", "auto") not in ("auto", "walk", "teleport")):

@@ -49,6 +49,18 @@ def test_real_meeting_with_guard_and_chat_echoes_only_retains_chosen_companion()
         parse_choice({"steps":[guard],"companion":{"mode":"stop"}}, [])
 
 
+@pytest.mark.parametrize("tool", ["body:observe", "body:inventory", "body:native:context"])
+def test_published_argument_free_read_echo_does_not_prevent_meeting(tool):
+    choice = {"mode":"approach", "targetUuid":ALICE, "travel":"teleport"}
+    read = {"tool":tool, "args":{}}
+    plan = {"steps":[SPEECH,read], "companion":choice}
+    assert parse_choice(plan, [{"uuid":ALICE}], read_echoes={tool}) == choice
+    for steps, available in [([read], set()), ([dict(read,args={"targetUuid":BOB})], {tool}),
+                             ([read,read], {tool}), ([SPEECH,SPEECH], {tool})]:
+        with pytest.raises(ValueError):
+            parse_choice({"steps":steps,"companion":choice}, [{"uuid":ALICE}], read_echoes=available)
+
+
 @pytest.mark.parametrize("plan", [
     {"steps": [follow_step(uuid=BOB)]},
     {"steps": [follow_step(uuid=ALICE), follow_step(uuid=ALICE)]},

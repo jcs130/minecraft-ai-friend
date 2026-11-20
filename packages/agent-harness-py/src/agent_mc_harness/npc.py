@@ -580,7 +580,12 @@ class NpcPlanner:
             # The same bounded step validator still applies to a bare list.
             plan = {"steps": plan}
         if social_walk:
-            choice = parse_choice(plan, context.maid_companions["characters"])
+            reads = {tool for tool in tools if tool in {"body:observe", "body:inventory"}}
+            if caps:
+                reads.update("body:native:" + action.name for action in caps.native_actions
+                             if action.read_only and "body:native:" + action.name in tools
+                             and isinstance(action.input_schema, dict) and not action.input_schema.get("required"))
+            choice = parse_choice(plan, context.maid_companions["characters"], read_echoes=reads)
             if choice is not None:
                 context.companion_choice = choice
                 return []
