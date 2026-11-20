@@ -1,8 +1,9 @@
 """Exercise the model, unified planner, maid adapter and native walk receipt together."""
 import asyncio
 import json
+import time
 from contextlib import asynccontextmanager
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -10,7 +11,8 @@ from test_native_maid import MAID, OTHER, OWNER, NativeServer, make
 
 from agent_mc_harness.journal import ActionJournal
 from agent_mc_harness.models import BodyAction
-from agent_mc_harness.npc import IDLE_GOAL, ModelClient, NpcHost, NpcPlanner, NpcRole, reviewed_steps
+from agent_mc_harness.npc import DESKTOP_GOAL, IDLE_GOAL, ModelClient, NpcHost, NpcPlanner, NpcRole, reviewed_steps
+from agent_mc_harness.resident_turns import ResidentTurnsClient
 from agent_mc_harness.runtime import Intent, PlanContext
 
 
@@ -25,6 +27,7 @@ class VisiblePlayers(NativeServer):
         self.available = True
         self.directory = None
         self.navigation_target = None
+        self.dimension = "minecraft:overworld"
         self.actions.extend(("rendezvous", "release_rendezvous"))
 
     def __call__(self, request):
@@ -34,7 +37,8 @@ class VisiblePlayers(NativeServer):
         envelope = response.json()
         content = envelope["result"]["content"][0]
         row = json.loads(content["text"])
-        row["data"].update(health=20, maxHealth=20, nearbyPlayers=self.players, socialWalkAvailable=self.available,
+        row["data"].update(health=20, maxHealth=20, dimension=self.dimension, resident={"loaded": True},
+                           nearbyPlayers=self.players, socialWalkAvailable=self.available,
                            taskId="touhou_little_maid:idle", nativeGuardDelegated=True, sitting=False,
                            canMove=True, homeMode=False, passenger=False)
         if self.directory is not None:
@@ -168,4 +172,109 @@ def test_host_targeted_walk_reaches_native_bridge_but_direct_model_arguments_can
             assert len(world.writes) == 1 and world.writes[0]["targetUuid"] == OTHER
             missing = await body.act(BodyAction(verb="native", name="release_rendezvous", request_id="no-target-release"))
             assert missing.status == "rejected" and len(world.writes) == 1
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("scenario", ["arrive", "unknown", "busy", "scene_changed", "unlisted", "no_skill", "raw", "walk", "release"])
+def test_desktop_activity_review_dispatches_only_current_compass_decisions(tmp_path, scenario):
+    async def run():
+        world = VisiblePlayers()
+        target = peer(OTHER, "ag_CorMy", 16)
+        world.directory = [target]
+        world.navigation_target = OWNER if scenario == "release" else ""
+        world.dimension = "minecraft:overworld" if scenario == "walk" else "minecraft:aincrad"
+        allowed = ["body:move", "body:observe", "body:native:release_rendezvous"]
+        if scenario != "no_skill":
+            allowed.append("body:native:rendezvous")
+        who = NpcRole(id="yui", name="结衣", body_id=UUID(MAID), character_id=UUID(MAID), owner_id=UUID(OWNER),
+                      body_kind="maid", provider="tokenplan", model="qa", persona="Choose a companion.",
+                      activity_review_seconds=60, allowed_tools=allowed)
+        request_id = str(uuid4())
+        offers = []
+
+        def desktop(request):
+            scene = json.loads(request.content)["scene"]
+            offers.append(scene)
+            assert scene["desktopRequestId"] == request_id and scene["goal"] == DESKTOP_GOAL
+            assert scene["maidCompanions"]["characters"][0]["uuid"] == OTHER
+            if scenario == "busy":
+                world.available = False
+            if scenario == "scene_changed":
+                world.dimension = "minecraft:the_nether"
+            if scenario == "unlisted":
+                world.directory = []
+            if scenario == "raw":
+                answer = {"steps": [{"tool": "body:native:rendezvous", "args": {"targetUuid": OTHER}}]}
+            elif scenario == "release":
+                answer = {"steps": [], "companion": {"mode": "stop"}}
+            else:
+                travel = "walk" if scenario == "walk" else "teleport"
+                answer = {"steps": [], "companion": {"mode": "approach", "targetName": "ag_CorMy", "travel": travel}}
+            return httpx.Response(200, json={"state": "answered", "id": "desktop-turn", "answer": answer})
+
+        def game(request):
+            response = world(request)
+            args = json.loads(request.content).get("arguments", {})
+            if args.get("action") != "rendezvous" or scenario != "arrive":
+                return response
+            rid = args["requestId"]
+            at = {"dimension": target["dimension"], **target["position"]}
+            world.position, world.dimension = target["position"], target["dimension"]
+            world.receipts[rid].update(status="completed", goalCompleted=True, observation={
+                "arrived": True, "targetUuid": OTHER, "targetPosition": at, "actualPosition": at})
+            envelope = response.json()
+            envelope["result"]["content"][0]["text"] = json.dumps({"ok": True, "data": world.receipts[rid]})
+            return httpx.Response(200, json=envelope)
+
+        key = tmp_path / "worker"
+        key.write_text("fixture")
+        turns = ResidentTurnsClient(who, {"endpoint": "https://worker.example/api/v1/resident-turns/yui", "tokenFile": key},
+                                    http=httpx.AsyncClient(transport=httpx.MockTransport(desktop)))
+        body = make(game, scope=who.scope("qa-server"))
+        journal = ActionJournal(tmp_path / "actions.sqlite")
+        host = NpcHost(who, body, NpcPlanner(who, None, resident_turns=turns), None, journal)
+        try:
+            await body.spawn()
+            intent = host.runtime.submit_intent(DESKTOP_GOAL, agent=who.id)
+            intent.desktop_request_id = request_id
+            host.runtime.step_timeout = .01
+            await host.runtime.run_intent(intent)
+            assert len(offers) == 1
+            expected = {"arrive": "rendezvous", "unknown": "rendezvous", "walk": "walk", "release": "release_rendezvous"}
+            if scenario not in expected:
+                assert not world.writes and not intent.receipts and not host.companions.remote_sent
+                assert intent.state == ("failed" if scenario == "raw" else "completed")
+                return
+            assert [(w["action"], w["targetUuid"]) for w in world.writes] == [
+                (expected[scenario], OWNER if scenario == "release" else OTHER)]
+            original, = intent.receipts
+            assert original.request_id == world.writes[0]["requestId"]
+            if scenario == "unknown":
+                assert intent.state == "paused" and not original.terminal
+                assert [a.request_id for a in journal.unresolved(MAID)] == [original.request_id]
+                assert host.companions.next_step(await body.snapshot(), can_teleport=True) is None
+            else:
+                assert intent.state == "completed" and original.terminal and original.status == "completed"
+                assert journal.receipt(MAID, original.request_id) == original
+                if scenario == "arrive":
+                    observed = await body.snapshot()
+                    assert (observed.dimension, observed.position) == (target["dimension"], target["position"])
+                    host.next_plan = time.monotonic() + 600
+                    settler = asyncio.create_task(host._actor_loop(body.identity()))
+                    try:
+                        async with asyncio.timeout(2):
+                            while host.rendezvous_intent is not None:
+                                await asyncio.sleep(.01)
+                        result = host.companions.context(observed)
+                        assert result["status"] == "arrived"
+                        assert result["lastTransfer"]["requestId"] == original.request_id
+                        assert result["lastTransfer"]["targetUuid"] == OTHER
+                        assert len(world.writes) == 1
+                    finally:
+                        host.closed = True
+                        host.wake.set()
+                        await settler
+        finally:
+            await host.close()
+            await turns.close()
     asyncio.run(run())
