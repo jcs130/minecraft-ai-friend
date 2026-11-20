@@ -111,12 +111,26 @@ final class NativeMaidSpeech implements AutoCloseable {
         }return result;
     }
     void reply(EntityMaid maid,String operation,String text,Set<UUID> allowed){submit(maid,"r_"+UUID.nameUUIDFromBytes(operation.getBytes(java.nio.charset.StandardCharsets.UTF_8)),text,"reply",allowed);}
+    boolean readyFor(EntityMaid maid,Player listener){
+        var settings=maid.getAiChatManager();
+        boolean packSite=requiredSoundPack!=null && PersonalMaidDialogue.SITE.equals(settings.ttsSite);
+        if(!valid(maid)||(!settings.getTTSModel().isBlank()&&!packSite)
+                ||requiredSoundPack!=null&&com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.MaidAIChatSerializable.isNoTTSSite(settings.ttsSite))return false;
+        return listeners(maid,Set.of(listener.getUniqueId())).containsKey(listener.getUniqueId());
+    }
+    String socialReply(EntityMaid maid,String operation,String text,Set<UUID> audience){
+        if(text==null||text.isBlank()||text.length()>280||audience.stream().map(Bukkit::getPlayer)
+                .noneMatch(player->player!=null&&readyFor(maid,player)))return null;
+        String id="r_"+UUID.nameUUIDFromBytes(operation.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        submit(maid,id,text,"social_reply",audience);
+        return id;
+    }
     private void submit(EntityMaid maid,String request,String raw,String kind,Set<UUID> allowed){
         submit(maid,request,raw,kind,allowed,null);
     }
     private void submit(EntityMaid maid,String request,String raw,String kind,Set<UUID> allowed,MaidVoiceClips.Clip original){
         if(!valid(maid)||request.length()>48)return;
-        String text=MaidShortReply.text(raw);if(text.isEmpty())return;
+        String text=kind.equals("social_reply")?raw.strip():MaidShortReply.text(raw);if(text.isEmpty())return;
         if(!MaidCombatSpeech.lowPriority(kind))nextAmbient=System.nanoTime()+MaidAmbientPolicy.GLOBAL_GAP;
         if(!MaidCombatSpeech.lowPriority(kind))plugin.conversationSpoken();
         // Nearby personal replies have a text-only TLM callback. Only the native GUI calls its TTS site.

@@ -1,0 +1,12 @@
+{
+  "name": "cortico-world-qiandengji-resident",
+  "version": "0.2.0",
+  "license": "MIT",
+  "type": "module",
+  "main": "./world.mjs",
+  "keywords": ["cortico-world"],
+  "description": "通过官网配对连接千灯纪女仆或 Numen，收发游戏文字、语音转写和角色发言。",
+  "files": ["world.mjs", "panel.mjs"],
+  "scripts": {"test": "node --test tests/*.test.mjs", "pack:api5": "node pack.mjs --api5", "pack:api6": "node pack.mjs"},
+  "cortico": {"kind": "world", "api": 5, "displayName": "千灯纪居民", "consoleClient": "panel.mjs"}
+}

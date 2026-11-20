@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>N.E.K.O. 女仆连接 · 千灯纪</title>
+  <link rel="icon" href="/assets/lantern.svg">
+  <link rel="stylesheet" href="/maid-connect.css">
+  <script type="module" src="/maid-connect.mjs"></script>
+</head>
+<body>
+  <main>
+    <a class="brand" href="/"><img src="/assets/lantern.svg" width="32" height="32" alt="">千灯纪</a>
+    <h1>连接 N.E.K.O. 女仆</h1>
+    <p id="status" role="status">正在读取网站会话…</p>
+    <form id="login" method="post" hidden>
+      <label>网站用户名或邮箱<input name="username" autocomplete="username" maxlength="254" required></label>
+      <label>网站密码<input name="password" type="password" autocomplete="current-password" maxlength="128" required></label>
+      <div class="actions"><button type="submit">登录千灯纪</button><a href="/#account">账号帮助</a></div>
+    </form>
+    <form id="approve" method="post" hidden>
+      <label>要连接的女仆<select name="maidId" required></select></label>
+      <label>N.E.K.O. 显示的连接码<input name="confirmationCode" autocomplete="off" spellcheck="false" autocapitalize="characters" maxlength="6" pattern="[A-Fa-f0-9]{6}" required></label>
+      <p>授权后，这台设备可读取女仆状态、下达游戏动作并接收该女仆的留言。</p>
+      <button type="submit">确认连接此女仆</button>
+    </form>
+    <section id="management" hidden>
+      <h2>我的女仆授权</h2>
+      <ul id="connections"></ul>
+      <p id="empty" hidden>当前没有有效授权。</p>
+    </section>
+  </main>
+</body>
+</html>

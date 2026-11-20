@@ -94,7 +94,7 @@ final class NativeMaidVoices implements AutoCloseable {
         }
     }
 
-    private NativeMaidSpeech forReply(EntityMaid maid){
+    NativeMaidSpeech forReply(EntityMaid maid){
         UUID id=maid.getUUID();
         var current=voices.get(id);
         if(current!=null&&!personalVoices.contains(id))return current;

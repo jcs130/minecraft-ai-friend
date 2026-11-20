@@ -10,15 +10,19 @@ import { packageReleases } from '../src/download-catalog.mjs';
 // Read-only preparation. It cannot upload files, open cloud credentials or
 // publish a directory; only explicitly reviewed public releases are eligible.
 const { values } = parseArgs({ options: { 'base-url': { type: 'string' },
-  'include-packages': { type: 'boolean', default: false }, 'package-directory': { type: 'string' } } });
+  'include-packages': { type: 'boolean', default: false }, 'resident-packages': {type:'boolean', default:false},
+  'package-directory': { type: 'string' } } });
 const baseUrl = downloadBaseUrl(values['base-url']);
 if (!baseUrl) throw new Error('Provide --base-url https://your-bucket.oss-region.aliyuncs.com/qiandengji/skills/');
 const objects = [];
-const selected = reviewedSkills.map(release => ({ release, file: new URL('../public/downloads/' + release.filename, import.meta.url) }));
-if (values['include-packages']) {
+const residentOnly = values['resident-packages'];
+if (residentOnly && values['include-packages']) throw new Error('Choose --resident-packages or --include-packages');
+const selected = residentOnly ? [] : reviewedSkills.map(release => ({ release, file: new URL('../public/downloads/' + release.filename, import.meta.url) }));
+if (values['include-packages'] || residentOnly) {
   if (!values['package-directory']) throw new Error('Provide the directory containing the exact reviewed upstream files');
   const directory = await fs.realpath(values['package-directory']);
-  for (const release of packageReleases) selected.push({ release, file: path.join(directory, release.filename) });
+  const packages = residentOnly ? packageReleases.filter(row => row.category === 'resident') : packageReleases;
+  for (const release of packages) selected.push({ release, file: path.join(directory, release.filename) });
 }
 for (const { release, file } of selected) {
   const stat = await fs.stat(file), hash = createHash('sha256');

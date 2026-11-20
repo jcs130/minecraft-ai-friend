@@ -16,7 +16,7 @@ dependencies = ["pydantic>=2.7,<3"]
 numen = ["mcp>=1.28,<3", "httpx>=0.27,<1"]
 # Maid / hosted Numen over the agent-mc-world tool bridge of agent-mc-autonomy (DSH).
 bridge = ["agent-mc-autonomy", "httpx>=0.27,<1"]
-# Private companions through the server's authenticated loopback /maid-body endpoint.
+# Private companions through the authenticated local body port or HTTPS maid API.
 native-maid = ["httpx>=0.27,<1"]
 # In-process Graphiti through the existing agent-memory graphiti-sidecar service class.
 graphiti = ["graphiti-core[kuzu]>=0.31,<0.32"]

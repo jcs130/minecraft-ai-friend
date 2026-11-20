@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>授权居民插件 · 千灯纪</title>
+  <link rel="stylesheet" href="/maid-connect-trial.css"><link rel="stylesheet" href="/resident-connect.css">
+  <script type="module" src="/resident-connect.mjs"></script>
+</head>
+<body><main>
+  <a class="brand" href="/">千灯纪</a>
+  <h1 id="title">授权居民插件</h1>
+  <p id="intro">使用千灯纪账号授权后，回到 N.E.K.O. 或 Cortico 插件，就可以新建或连接你的女仆和 Numen。</p>
+  <p id="install" hidden><a href="/downloads.html#resident">下载居民插件</a></p>
+  <p id="status" role="status">正在读取网站身份…</p>
+  <form id="login" hidden>
+    <h2>登录千灯纪</h2>
+    <label>网站用户名或邮箱<input name="username" autocomplete="username" required maxlength="254"></label>
+    <label>网站密码<input name="password" type="password" autocomplete="current-password" required maxlength="128"></label>
+    <button>登录并继续</button>
+    <p><a href="/#connections" target="_blank" rel="noopener noreferrer">到官网注册或找回密码 ↗</a>，完成后返回此页。</p>
+  </form>
+  <section id="authorize" hidden>
+    <h2>授权本机插件</h2><p>填入授权码后，你的插件可以查看已有居民、为你新建角色，并连接你在插件里选中的一个身体。</p>
+    <button id="authorize-code">获取插件授权码</button>
+    <p><a id="manage-residents" href="/resident-connect.html?flow=connect">管理已有居民连接</a></p>
+  </section>
+  <section id="legacy" hidden>
+    <h2>角色与身体</h2>
+    <label>接入方式<select id="flow"><option value="create">新建角色</option><option value="connect">连接已有角色</option></select></label>
+    <label>身体类型<select id="kind"><option value="maid">车万女仆</option><option value="numen">Numen</option></select></label>
+    <p id="availability" role="status"></p>
+    <form id="create" hidden>
+      <label>角色名<input id="name" maxlength="24" autocomplete="off" required></label>
+      <label>人设（选填）<textarea id="persona" rows="3" maxlength="1000"></textarea></label>
+      <button id="create-button">创建角色</button>
+    </form>
+    <div id="existing" hidden>
+      <label>你的角色<select id="role"></select></label>
+      <button id="role-code">获取居民连接码</button>
+      <details id="advanced"><summary>高级连接</summary>
+        <p>下载连接文件会替换此居民的旧连接。仅在本机插件中导入。</p>
+        <div class="row"><button id="download">下载连接文件</button><button id="release">撤销该居民连接</button></div>
+      </details>
+    </div>
+    <button id="refresh" class="secondary" hidden>刷新身体状态</button>
+  </section>
+  <section id="delivery" hidden aria-labelledby="code-title">
+    <h2 id="code-title"></h2>
+    <div class="row"><input id="code" readonly aria-labelledby="code-title" spellcheck="false"><button id="copy">复制</button></div>
+    <p id="expires"></p>
+  </section>
+  <p id="result" aria-live="polite"></p>
+  <noscript><p>请开启 JavaScript 完成网站授权。</p></noscript>
+</main></body></html>

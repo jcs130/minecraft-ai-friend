@@ -1,0 +1,24 @@
+[plugin]
+id = "neko_tlm"
+name = "酒狐插件 · 千灯纪"
+version = "1.0.7.1+qiandengji.3"
+description = "在 Project N.E.K.O. 对话中观察和控制已登记的千灯纪私人女仆。"
+keywords = ["Minecraft", "车万女仆", "千灯纪", "女仆", "跟随", "坐下", "停止", "移动", "坐标", "回执", "背包", "法术"]
+entry = "plugin.plugins.neko_tlm:NekoMinecraftPlugin"
+
+[plugin.author]
+name = "ggg233m / 千灯纪"
+
+[plugin.sdk]
+recommended = ">=0.1.0,<0.3.0"
+supported = ">=0.1.0,<0.3.0"
+
+[plugin_runtime]
+enabled = true
+auto_start = false
+
+[maid_body]
+endpoint = ""
+token_file = ""
+role = ""
+forward_owner_dialogue = false

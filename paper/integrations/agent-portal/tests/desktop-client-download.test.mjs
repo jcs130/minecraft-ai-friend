@@ -11,8 +11,9 @@ const alias = '/downloads/java-client';
 const release = packageAt(alias);
 
 test('desktop pack is public when enabled and keeps the old optional maid downloads separate', async t => {
-  assert.equal(release.version, '1.1.2');
+  assert.equal(release.version, '1.1.3');
   assert.match(release.includes, /Better Combat 2\.4\.0/);
+  assert.match(release.includes, /桐人.*七段/);
   const disabled = await siteFixture(t);
   assert.equal((await fetch(disabled.origin + alias, { redirect: 'manual' })).status, 503);
   const enabled = await siteFixture(t, { downloads: { baseUrl, enabledPackages: [release.id, 'maids-client-pack'] } });
@@ -25,6 +26,9 @@ test('desktop pack is public when enabled and keeps the old optional maid downlo
     }
   }
   const olderDesktop = await fetch(enabled.origin + '/downloads/qiandengji-java-1.21.1-neoforge-1.1.0.mrpack', { redirect: 'manual' });
+  const beforeMotion = await fetch(enabled.origin + '/downloads/qiandengji-java-1.21.1-neoforge-1.1.2.mrpack', { redirect: 'manual' });
+  assert.equal(beforeMotion.status, 307);
+  assert.equal(beforeMotion.headers.get('x-checksum-sha256'), 'fd140a3ab45819c44ab3a9bc1ea39a53a6775d620c664e15096441787f8efa4c');
   assert.equal(olderDesktop.status, 307);
   assert.equal(olderDesktop.headers.get('x-checksum-sha256'), '1ba659e68a2f980fd9a2ac5151405af2ffc78b449d1ed0639e8cacc5eabd70d3');
   const beforeCombat = await fetch(enabled.origin + '/downloads/qiandengji-java-1.21.1-neoforge-1.1.1.mrpack', { redirect: 'manual' });

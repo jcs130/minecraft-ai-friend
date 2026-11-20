@@ -2,6 +2,8 @@ package dev.god.godvoice;
 
 import com.google.gson.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -16,6 +18,15 @@ final class NpcDialoguePolicy {
     }
     record Address(Profile profile,String text) {}
     record Group(List<Profile> recipients, String message) {}
+    static String replyMode(JsonObject submitted, JsonObject answer){
+        if(!answer.has("replyMode"))return "native";
+        var value=answer.get("replyMode");
+        if(!value.isJsonPrimitive()||!value.getAsJsonPrimitive().isString())return null;
+        String mode=value.getAsString();
+        if(mode.equals("native"))return mode;
+        return Set.of("text","speech").contains(mode) && submitted.has("replyModes")
+            && submitted.getAsJsonArray("replyModes").contains(value)?mode:null;
+    }
     private static final Pattern GROUP_END = Pattern.compile("[,，:：]");
 
     /** A leading list of registered names followed by a separate message. */
@@ -78,6 +89,38 @@ final class NpcDialoguePolicy {
         labels.add(profile.name());
         if(spoken)labels.addAll(profile.spokenAliases());
         return labels;
+    }
+    /** Local activation records add a display name to a pre-registered body; all native bindings stay fixed. */
+    static Map<UUID,Profile> residentNames(Map<UUID,Profile> configured, Path folder){
+        if(!Files.isDirectory(folder))return configured;
+        var claims=new HashMap<String,Set<UUID>>();
+        var desired=new LinkedHashMap<UUID,String>();
+        for(var profile:configured.values()){
+            for(String label:labels(profile,true))
+                claims.computeIfAbsent(label.toLowerCase(Locale.ROOT),key->new HashSet<>()).add(profile.id());
+            Path file=folder.resolve(profile.id()+".json");
+            try{
+                if(!Files.isRegularFile(file,java.nio.file.LinkOption.NOFOLLOW_LINKS)||Files.size(file)>4096)continue;
+                var record=JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+                if(!profile.id().toString().equals(record.get("bodyId").getAsString())
+                        ||!profile.owner().toString().equals(record.get("ownerGameId").getAsString())
+                        ||!profile.kind().equals(record.get("bodyKind").getAsString()))continue;
+                String character=record.get("characterId").getAsString();
+                if(!character.equals(UUID.fromString(character).toString()))continue;
+                String name=record.get("name").getAsString();
+                if(!name.equals(name.strip())||!name.matches("[\\p{L}\\p{N}_· -]{1,24}"))continue;
+                desired.put(profile.id(),name);
+                claims.computeIfAbsent(name.toLowerCase(Locale.ROOT),key->new HashSet<>()).add(profile.id());
+            }catch(java.io.IOException|RuntimeException unavailable){/* A malformed record never changes the native profile. */}
+        }
+        var result=new LinkedHashMap<>(configured);
+        for(var entry:desired.entrySet()){
+            if(claims.get(entry.getValue().toLowerCase(Locale.ROOT)).size()!=1)continue;
+            var p=configured.get(entry.getKey());
+            var aliases=new LinkedHashSet<String>();aliases.add(entry.getValue());aliases.addAll(p.aliases());
+            result.put(p.id(),new Profile(p.id(),p.owner(),p.kind(),p.name(),p.voice(),p.range(),List.copyOf(aliases),p.spokenAliases()));
+        }
+        return Collections.unmodifiableMap(result);
     }
     static Address addressed(Collection<Profile> profiles,String text){
         return addressed(profiles,text,false);

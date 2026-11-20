@@ -23,7 +23,11 @@ from .memory.remote import RemoteGraphMemory
 from .memory.router import MemoryRouter
 from .memory.social_graph import SocialGraph
 from .npc import FastSelector, ModelClient, NpcHost, NpcPlanner, load_roles
-from .social import SocialWorld, publish_json
+from .resident_turns import ResidentTurnsClient
+from .resident_slots import BirthRegistry, activate, slot_templates
+from .resident_numen import admit_numen, run_with_connection
+from .resident_protocol import social_receipt
+from .social import SocialWorld, publish_json, read_json
 from .status_file import StatusFile
 
 
@@ -94,7 +98,8 @@ async def serve(path: Path):
     if settings.get("schema") != 1:
         raise ValueError("npc_service_schema")
     roles = load_roles(Path(settings["rolesFile"]))
-    source = adventure_source(settings["companionAdventure"]) if any(role.adventure_advice for role in roles) else None
+    slots = slot_templates(settings, roles)
+    source = adventure_source(settings["companionAdventure"]) if any(r.adventure_advice for r in [*roles,*slots.values()]) else None
     state = Path(settings["stateDirectory"])
     state.mkdir(parents=True, exist_ok=True)
     health_file = StatusFile(state / "health.json")
@@ -112,6 +117,7 @@ async def serve(path: Path):
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     clients, hosts, tasks = [], [], []
     social_tasks = []
+    slot_tasks = {}
     social = None
     social_graph = None
     recall = None
@@ -140,7 +146,12 @@ async def serve(path: Path):
         if delay:
             await asyncio.sleep(delay)
         if not maintenance() and not handoff(host.role):
-            await host.run()
+            if settings.get("residentCreationSlots", {}).get(host.role.id, {}).get("numenAdmission"):
+                await prepare_numen(host.role)
+                if not maintenance():
+                    await run_with_connection(host)
+            else:
+                await host.run()
 
     def maintenance():
         return bool(settings.get("pauseFile") and Path(settings["pauseFile"]).exists())
@@ -161,8 +172,17 @@ async def serve(path: Path):
 
     async def answer_social(role, planner):
         body = str(role.body_id)
+        awaiting = {}
         while True:
             if not maintenance() and not handoff(role):
+                for request, (target, source, expiry) in list(awaiting.items()):
+                    receipt = social_receipt(source, await asyncio.to_thread(read_json, target))
+                    if receipt:
+                        planner.social_receipts[request] = receipt
+                        if len(planner.social_receipts) > 4:
+                            del planner.social_receipts[next(iter(planner.social_receipts))]
+                    if time.monotonic() > expiry or receipt and receipt.get("voice", {}).get("state") != "submitted":
+                        del awaiting[request]
                 for answer, row in await asyncio.to_thread(social.dialogue_requests, role):
                     speaker = row["speakerId"]
                     peer = social.registered.get(speaker, speaker)
@@ -178,8 +198,8 @@ async def serve(path: Path):
                         recall_modes[role.id] = mode
                         relationship = await asyncio.to_thread(social.lookup, body, peer_type, peer, public=public,
                                                                topic=row["message"], ranked=ranked, graph_ranked=graph_ranked)
-                        reply = await planner.answer_dialogue(row["message"], relationship, public=public)
-                        response = {"status": "prepared", "reply": reply}
+                        reply = await planner.prepare_dialogue(row["message"], relationship, public=public, row=row)
+                        response = {"status": "prepared", **reply}
                     except Exception:
                         response = {"status": "failed", "reason": "dialogue_reply_unavailable"}
                     if maintenance() or handoff(role):
@@ -187,9 +207,19 @@ async def serve(path: Path):
                     try:
                         await asyncio.to_thread(publish_json, answer, response | {
                             "schemaVersion": 1, "id": row["id"], "maidId": body, "speakerId": speaker, "channel": row["channel"]})
+                        if planner.resident_turns and response.get("status") == "prepared":
+                            awaiting[row["id"]] = (answer.with_name(row["id"] + "-result.json"), row, time.monotonic() + 130)
+                            if len(awaiting) > 32:
+                                del awaiting[next(iter(awaiting))]
                     except OSError as failure:
                         print(f"NPC dialogue result unavailable: {type(failure).__name__}", flush=True)
             await asyncio.sleep(2)
+
+    turns = {}
+    for role in [*roles, *slots.values()]:
+        if config := settings.get("residentTurns", {}).get(role.id):
+            turns[role.id] = ResidentTurnsClient(role, config)
+            clients.append(turns[role.id])
 
     def build(role):
         transport = settings["bodies"][role.id]
@@ -200,17 +230,53 @@ async def serve(path: Path):
                                       owner_id=str(role.owner_id), maid_id=str(role.body_id), controller_id=controller)
             body = MaidBody(bridge, scope=scope, owner_id=str(role.owner_id), maid_id=str(role.body_id), server_id=settings["serverId"])
         else:
+            if settings.get("residentCreationSlots", {}).get(role.id, {}).get("numenAdmission"):
+                transport = {**transport, "tokenFile": state / role.id / "numen" / "hosted.token"}
             port = HostedMcpPort({**transport, "name": transport["name"], "bodyId":str(role.body_id),
                                   "ownerId":str(role.owner_id), "serverId":settings["serverId"],
                                   "journalDirectory":str(state / role.id / "numen")})
             body = NumenBody(port, scope=scope, server_id=settings["serverId"], name=role.name, owner_id=str(role.owner_id),
                              item_use_ids=tuple(role.native_items), adventure_partner=role.adventure_partner)
         memory = open_role_memory(state / role.id, connection)
-        return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1),
+        return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1, resident_turns=turns.get(role.id)),
                        memory, ActionJournal(state / role.id / "actions.sqlite3"), social=social, social_graph=social_graph,
                        companion_adventure=CompanionAdventure(*source, role.owner_id) if role.adventure_advice and source else None)
     yielded = {}
+    def attach(role):
+        nonlocal social
+        if any(r.id == role.id for r in roles):
+            raise ValueError("resident_slot_duplicate_host")
+        roles.append(role)
+        turns[role.id].role = role
+        if directory := settings.get("residentNamesDirectory"):
+            publish_json(Path(directory) / (str(role.body_id) + ".json"),
+                         {"bodyId": str(role.body_id), "bodyKind": role.body_kind, "ownerGameId": str(role.owner_id),
+                          "characterId": str(role.character_id), "name": role.name})
+        if social is not None:
+            social = SocialWorld(world_data, settings["serverId"], roles)
+            for existing in hosts:
+                existing.social = social
+            if social_graph:
+                social_graph.world = social
+        host = build(role)
+        hosts.append(host)
+        tasks.append(asyncio.create_task(start_local(host), name="npc-" + role.id))
+        if social and role.social_memory:
+            social_tasks.append(asyncio.create_task(answer_social(role, host.planner), name="npc-dialogue-" + role.id))
+
+    def current_body(role_id):
+        return next(host.body for host in hosts if host.role.id == role_id)
+
+    async def prepare_numen(role):
+        if maintenance():
+            raise RuntimeError("resident_admission_paused")
+        cfg = settings["residentCreationSlots"][role.id]["numenAdmission"]
+        await admit_numen(role, cfg, settings["bodies"][role.id], state / role.id / "numen" / "hosted.token")
+
+    registry = None
     try:
+        if slots or (state / "resident-births.sqlite3").exists():
+            registry = BirthRegistry(state, slots, roles)
         for role in roles:
             host = build(role)
             hosts.append(host)
@@ -221,11 +287,18 @@ async def serve(path: Path):
             social_tasks.append(asyncio.create_task(project_social(), name="npc-relationships"))
             social_tasks.extend(asyncio.create_task(answer_social(host.role, host.planner), name="npc-dialogue-" + host.role.id)
                                 for host in hosts if host.role.social_memory)
+        for slot_id, template in slots.items():
+            slot_tasks[slot_id] = asyncio.create_task(activate(template, registry, turns[slot_id], attach, current_body),
+                                                      name="resident-birth-" + slot_id)
         while True:
             pausing = maintenance()
             holding = [handoff(host.role) for host in hosts]
             status = {"schema": 1, "pid": os.getpid(), "pausing": pausing, "roles": []}
-            for index, (host, task) in enumerate(zip(hosts, tasks, strict=True)):
+            if slot_tasks:
+                status["creationSlots"] = {key: ("waiting" if not task.done() else
+                    "failed:" + type(task.exception()).__name__ if task.exception() else "bound")
+                    for key, task in slot_tasks.items()}
+            for index, (host, task) in enumerate(list(zip(hosts, tasks, strict=True))):
                 paused = pausing or holding[index]
                 if paused != host.pausing:
                     host.pausing = paused
@@ -234,7 +307,8 @@ async def serve(path: Path):
                     status["roles"].append(yielded[index])
                     continue
                 error = type(task.exception()).__name__ if task.done() and not task.cancelled() and task.exception() else None
-                status["roles"].append({"id": host.role.id, "bodyKind": host.role.body_kind, "bodyId": str(host.role.body_id),
+                status["roles"].append({"id": host.role.id, "characterId": str(host.role.character_id),
+                                        "bodyKind": host.role.body_kind, "bodyId": str(host.role.body_id),
                                         "model": host.role.model, "provider": host.role.provider, "running": not task.done(), "error": error,
                                         "health": host.body.health().model_dump(mode="json"), "route": host.planner.last_route,
                                         "memory": host.memory.status,
@@ -254,7 +328,7 @@ async def serve(path: Path):
             if not pausing:
                 # One unloaded body must not interrupt other characters' active
                 # actions. Re-open only that actor with its original journals.
-                for index,task in enumerate(tasks):
+                for index,task in enumerate(tasks[:len(holding)]):
                     if task.done() and not holding[index]:
                         if yielded.pop(index, None) is None:
                             await hosts[index].close()
@@ -262,9 +336,9 @@ async def serve(path: Path):
                         tasks[index]=asyncio.create_task(start_local(hosts[index], 15), name="npc-"+roles[index].id)
             await asyncio.sleep(2)
     finally:
-        for task in [*tasks, *social_tasks]:
+        for task in [*slot_tasks.values(), *tasks, *social_tasks]:
             task.cancel()
-        await asyncio.gather(*tasks, *social_tasks, return_exceptions=True)
+        await asyncio.gather(*slot_tasks.values(), *tasks, *social_tasks, return_exceptions=True)
         for index, host in enumerate(hosts):
             if index not in yielded:
                 await host.close()
@@ -272,6 +346,8 @@ async def serve(path: Path):
             await social_graph.graph.close()
         for client in clients:
             await client.close()
+        if registry:
+            registry.db.close()
         lock.close()
 
 

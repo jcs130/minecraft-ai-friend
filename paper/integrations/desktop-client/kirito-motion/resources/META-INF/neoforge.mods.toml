@@ -1,0 +1,15 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="CC-BY-NC-SA-4.0"
+[[mods]]
+modId="qd_kirito_motion"
+version="1.0.0"
+displayName="千灯纪 · 桐人动作"
+authors="千灯纪；原 Kirito 模型及原动画 PoshGiraffe0"
+description="Third-person character animation for the Kirito model on the Qiandengji server."
+[[dependencies.qd_kirito_motion]]
+modId="yes_steve_model"
+type="required"
+versionRange="[2.6.5-neoforge+mc1.21.1]"
+ordering="AFTER"
+side="CLIENT"

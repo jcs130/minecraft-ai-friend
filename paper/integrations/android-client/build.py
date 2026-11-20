@@ -37,17 +37,17 @@ def text_input(name):
     return (ROOT / name).read_text(encoding='utf-8').encode('utf-8')
 
 
-def archive(files):
+def archive(files, *, stamp=STAMP, compression=zipfile.ZIP_STORED, compresslevel=None):
     result = io.BytesIO()
     with zipfile.ZipFile(result, 'w', compression=zipfile.ZIP_STORED) as output:
         for name, data in sorted(files.items()):
             path = PurePosixPath(name)
             if path.is_absolute() or '..' in path.parts or '\\' in name:
                 raise ValueError('Unsafe archive member')
-            info = zipfile.ZipInfo(name, STAMP)
+            info = zipfile.ZipInfo(name, stamp)
             info.create_system = 3
             info.external_attr = 0o100644 << 16
-            output.writestr(info, data)
+            output.writestr(info, data, compress_type=compression, compresslevel=compresslevel)
     return result.getvalue()
 
 

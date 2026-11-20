@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { downloadBaseUrl } from './download-mirror.mjs';
 import { packageReleases } from './download-catalog.mjs';
+import { validateMaidConnections } from './maid-connections.mjs';
 
 export const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -65,6 +66,8 @@ export function loadConfig(overrides = {}) {
     if (origin.protocol !== 'https:' || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) throw new Error('PORTAL_PUBLIC_ORIGIN must be an HTTPS origin without a path or credentials');
     config.publicOrigin = origin.origin;
   }
+  config.maidConnections = { ...defaults.maidConnections, ...local.maidConnections, ...overrides.maidConnections };
+  validateMaidConnections(config.maidConnections, config.publicOrigin);
   for (const origin of config.localOrigins || []) {
     const parsed = new URL(origin);
     if (parsed.origin !== origin || !['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error('Invalid local origin');

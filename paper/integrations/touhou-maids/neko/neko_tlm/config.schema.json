@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "properties": {
+    "maid_body": {
+      "type": "object",
+      "title": "千灯纪女仆连接",
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "title": "手动 API 地址",
+          "description": "官网授权时留空。手动接入使用服主提供的 HTTPS 地址。"
+        },
+        "token_file": {
+          "type": "string",
+          "title": "手动 Key 文件路径",
+          "description": "手动接入时填写服主发放的 Key 文件绝对路径。"
+        },
+        "role": {
+          "type": "string",
+          "title": "N.E.K.O. 角色名",
+          "description": "此角色可以调用女仆工具。"
+        },
+        "forward_owner_dialogue": {
+          "type": "boolean",
+          "title": "转发游戏内主人留言",
+          "description": "将绑定女仆收到的原主人留言送入该角色的对话。"
+        }
+      }
+    }
+  }
+}

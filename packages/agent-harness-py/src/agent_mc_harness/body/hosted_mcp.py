@@ -43,6 +43,7 @@ class HostedMcpPort:
         self.task_floor = None
         self.finished_ids = set()
         self.lost = False
+        self.disconnected = asyncio.Event()
         self.next_receipt_probe = {}
         self.ledger = NativeTasks(Path(config["journalDirectory"]) / "hosted-tasks.sqlite3", self.body)
 
@@ -106,6 +107,7 @@ class HostedMcpPort:
                 await self.stopping.wait()
         except Exception as error:
             self.lost = True
+            self.disconnected.set()
             if not self.connected.done(): self.connected.set_exception(error)
 
     async def _heartbeat(self):
@@ -117,8 +119,10 @@ class HostedMcpPort:
                     raise RuntimeError("CONTROL_CHANGED")
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as error:
             self.lost = True
+            if str(error) not in ("CONTROL_CHANGED", "HOSTED_REQUEST_REFUSED_QUERY_ORIGINAL"):
+                self.disconnected.set()
 
     def catalog(self): return self.tools
     def generation(self): return self.boot + ":" + str(self.epoch)
