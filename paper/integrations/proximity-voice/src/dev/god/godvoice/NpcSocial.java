@@ -192,7 +192,9 @@ final class NpcSocial {
 
     private UUID enqueue(UUID body, Player speaker, String message, String scope, Set<Player> audience, boolean automatic,String medium) throws IOException {
         var entity = residents.live(body);
-        if (!Bukkit.isPrimaryThread() || Bukkit.getPlayer(speaker.getUniqueId()) != speaker || ready(body) == null
+        var profile = residents.profile(body);
+        boolean directVillager = profile != null && profile.residentId() != null && !automatic && scope.equals("private");
+        if (!Bukkit.isPrimaryThread() || Bukkit.getPlayer(speaker.getUniqueId()) != speaker || (!directVillager && ready(body) == null)
                 || entity == null || body.equals(speaker.getUniqueId()))
             throw new IllegalArgumentException("居民对话暂不可用");
         if (!scope.equals("private") && !residents.hears(speaker, entity, residents.profile(body)))
@@ -224,7 +226,33 @@ final class NpcSocial {
         row.addProperty("status", "accepted");
         write(directory(body).resolve(request + "-request.json"), row);
         pending.put(request, new Pending(speaker, now, speaker.getWorld().getUID(), audience, automatic));
+        if(directVillager && !residents.tellVillager(profile,speaker,request,message,now)){
+            pending.remove(request);
+            row.addProperty("status","unavailable");
+            row.addProperty("reason","villager_busy_or_unavailable");
+            write(directory(body).resolve(request+"-result.json"),row);
+            throw new IllegalArgumentException("这位村民忙碌或暂不可用。请求编号 " + request);
+        }
         return request;
+    }
+
+    boolean finishVillager(UUID body,UUID speaker,UUID request,String reply) throws IOException {
+        var profile=residents.profile(body);
+        var source=pending.get(request);
+        if(profile==null || profile.residentId()==null || source==null
+                || !source.player().getUniqueId().equals(speaker))return false;
+        Path folder=directory(body), result=folder.resolve(request+"-result.json");
+        var submitted=read(folder.resolve(request+"-request.json"));
+        if(!request.toString().equals(value(submitted,"id")) || !speaker.toString().equals(value(submitted,"speakerId"))
+                || !body.toString().equals(value(submitted,"maidId")) || !"private".equals(value(submitted,"channel"))
+                || !"accepted".equals(value(submitted,"status")) || Files.exists(result))return false;
+        // Claim before delivery. A crash after this point is queried as unknown and never replayed.
+        try{Files.createFile(folder.resolve(request+"-sending.json"));}
+        catch(java.nio.file.FileAlreadyExistsException duplicate){return false;}
+        var answer=new JsonObject();
+        answer.addProperty("status",reply==null?"failed":reply.isBlank()?"silent":"prepared");
+        if(reply!=null)answer.addProperty("reply",reply);
+        return deliver(profile,request,submitted,answer,result);
     }
 
     private void poll() {
@@ -235,6 +263,7 @@ final class NpcSocial {
                 else try{updateAudio(result);}catch(IOException|RuntimeException unavailable){/* Original receipt remains queryable. */}
             }
             for (var profile : residents.profiles()) {
+                if(profile.residentId()!=null)continue; // Registered villagers finish through their bound plugin callback.
                 Path folder = directory(profile.id());
                 if (!Files.isDirectory(folder)) continue;
                 try (var paths = Files.list(folder)) {
@@ -274,7 +303,7 @@ final class NpcSocial {
         Bukkit.getScheduler().runTask(plugin, () -> deliver(profile, request, submitted, row, result));
     }
 
-    private void deliver(NpcDialoguePolicy.Profile profile, UUID request, JsonObject submitted, JsonObject answer, Path target) {
+    private boolean deliver(NpcDialoguePolicy.Profile profile, UUID request, JsonObject submitted, JsonObject answer, Path target) {
         Pending source = pending.remove(request);
         submitted.addProperty("status", "failed");
         boolean privateDialogue = "private".equals(value(submitted, "channel"));
@@ -287,7 +316,8 @@ final class NpcSocial {
             boolean valid = "prepared".equals(value(answer, "status")) && !reply.isBlank() && reply.codePointCount(0, reply.length()) <= 140
                     && mode!=null && reply.codePoints().noneMatch(cp -> Character.isISOControl(cp) || cp == 0xA7);
             var body = residents.live(profile.id());
-            if (valid && (privateDialogue && !source.automatic() || residents.hears(source.player(), body, profile))) {
+            boolean currentVillager=profile.residentId()==null || residents.privateVillagerTurn(profile.id(),source.player().getUniqueId(),request.toString());
+            if (valid && currentVillager && (privateDialogue && !source.automatic() || residents.hears(source.player(), body, profile))) {
                 String line=(privateDialogue ? "[私聊] " : "[附近] ")
                     +profile.display()+"："+reply;
                 boolean caption=!mode.equals("speech");
@@ -314,7 +344,9 @@ final class NpcSocial {
                     if(speech!=null)submitted.addProperty("speechRequestId",speech);
                     else if(!caption)submitted.addProperty("status","failed");
                 }
-            } else if(!source.automatic()) source.player().sendMessage(profile.name() + "暂时无法回复。");
+            } else if(currentVillager && "silent".equals(value(answer,"status"))){
+                submitted.addProperty("status","silent");
+            } else if(currentVillager && !source.automatic()) source.player().sendMessage(profile.name() + "暂时无法回复。");
         }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
@@ -324,6 +356,7 @@ final class NpcSocial {
             }
             catch (IOException failure) { plugin.getLogger().fine("NPC outcome pending inspection for " + request); }
         });
+        return "answered".equals(value(submitted,"status"));
     }
 
     private void updateAudio(AudioResult original) throws IOException {
@@ -331,8 +364,9 @@ final class NpcSocial {
         String speech=original.speech();
         String state;
         JsonObject detail;
-        if(profile.kind().equals("numen")){
-            var row=JsonParser.parseString(plugin.npcSpeechStatus(profile.id(),"social_"+original.conversation())).getAsJsonObject();
+        if(!profile.kind().equals("maid")){
+            String event=profile.residentId()==null?"social_"+original.conversation():original.conversation().toString();
+            var row=JsonParser.parseString(plugin.npcSpeechStatus(profile.id(),event)).getAsJsonObject();
             if(!speech.equals(value(row,"requestId")))return;
             state=value(row,"state");detail=row.getAsJsonObject("delivery");
         }else{

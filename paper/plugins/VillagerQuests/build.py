@@ -10,7 +10,7 @@ Citizens and the DeepSeek plugin are reached by reflection, so they are not need
 from pathlib import Path
 import argparse, hashlib, json, os, subprocess, zipfile
 
-VERSION = '0.1.2'
+VERSION = '0.1.3'
 p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 src_group = p.add_mutually_exclusive_group(required=True)
 src_group.add_argument('--server', type=Path)

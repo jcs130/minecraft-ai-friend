@@ -1,4 +1,4 @@
-# 千灯纪村民委托 qiandeng-villager-quests 0.1.2
+# 千灯纪村民委托
 # Defaults are conservative and safe to load on a test server. Never put an API key in this file in Git:
 # use the environment variable named by llm.http.apiKeyEnv instead.
 

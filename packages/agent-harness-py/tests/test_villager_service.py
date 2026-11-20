@@ -36,8 +36,9 @@ def data():
     }
 
 
-def test_runtime_read_observation_and_private_delivery_memory():
-    request = Observation.model_validate(data())
+@pytest.mark.parametrize("channel", ["voice", "chat", "private"])
+def test_runtime_read_observation_and_private_delivery_memory(channel):
+    request = Observation.model_validate(data() | {"channel": channel})
     profile = Settings.model_validate({"profiles": [{"residentId": "qinghe", "bodyUuid": RESIDENT, "persona": "只认登记的人设。"}]}).profiles[0]
 
     def respond(call):
@@ -48,6 +49,8 @@ def test_runtime_read_observation_and_private_delivery_memory():
         assert payload["response_format"] == {"type": "json_object"}
         assert "只认登记的人设" in payload["messages"][0]["content"] and "住在村边" not in payload["messages"][0]["content"]
         context = json.loads(payload["messages"][1]["content"])
+        assert context["channel"] == channel
+        assert ("正在与你私聊" in payload["messages"][0]["content"]) == (channel == "private")
         assert context["recent"] == data()["conciseMemory"]
         assert context["scene"]["openCommissions"][0]["title"] == "夜巡"
         assert RESIDENT not in call.content.decode() and SPEAKER not in call.content.decode()
