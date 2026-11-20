@@ -85,6 +85,7 @@ def test_failed_resident_retirement_keeps_other_residents_and_health_running(tmp
             status = states[-1]
             assert status["second"]["running"] and status["third"]["running"]
             assert not status["first"]["running"]
+            assert status["first"]["unknownRequests"] == 0
             assert all(healthy_steps[actor_id] > count for actor_id, count in steps_before.items())
             if close_mode == "raises":
                 assert status["first"]["error"] == "close_OSError"

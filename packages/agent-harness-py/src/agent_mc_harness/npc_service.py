@@ -39,6 +39,7 @@ class ResidentRun:
     task: asyncio.Task[None]
     closing: asyncio.Task[None] | None = None
     released: bool = False
+    unknown_requests: int = 0
     restart_after: float = 0
     restart_error: str | None = None
 
@@ -336,6 +337,8 @@ async def serve(path: Path):
                     else:
                         resident.released = True
                         error = resident.restart_error or error
+                if resident.closing is None:
+                    resident.unknown_requests = len(host.journal.unresolved(str(host.role.body_id)))
                 row = {"id": host.role.id, "characterId": str(host.role.character_id),
                                         "bodyKind": host.role.body_kind, "bodyId": str(host.role.body_id),
                                         "model": host.role.model, "provider": host.role.provider, "running": not task.done(), "error": error,
@@ -343,14 +346,12 @@ async def serve(path: Path):
                                         "memory": host.memory.status,
                                         "dialogueMemory": recall_modes.get(host.role.id),
                                         "socialGraphiti": social_graph.last.get(str(host.role.body_id)) if social_graph else None,
-                                        "unknownRequests": None,
+                                        "unknownRequests": resident.unknown_requests,
                                         "intents": [{"id": i.id, "state": i.state, "reason": i.reason} for i in list(host.runtime.intents.values())[-8:]]}
                 status["roles"].append(row)
-                if resident.closing is None:
-                    row["unknownRequests"] = len(host.journal.unresolved(str(host.role.body_id)))
-                elif not resident.closing.done():
+                if resident.closing is not None and not resident.closing.done():
                     row["controlMode"] = "closing"
-                elif not resident.released:
+                elif resident.closing is not None and not resident.released:
                     row["controlMode"] = "close_failed"
                 if resident.released and holding:
                     row.update(controlMode="available_for_external_controller", unknownRequests=0)
