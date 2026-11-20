@@ -28,8 +28,6 @@ if a.server:
 else:
     libs = sorted(a.classpath_dir.glob('*.jar'))
 assert libs, 'no compile jars found'
-gson = next((j for j in libs if j.name.startswith('gson-')), None)
-assert gson, 'gson (bundled with Paper) not found on the classpath'
 
 a.output.mkdir(parents=True, exist_ok=False)
 classes = a.output / 'classes'; classes.mkdir()
@@ -45,8 +43,9 @@ def args_file(name, values):
 def run(name, argv):
     with (a.output / (name + '.log')).open('wb') as log:
         r = subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT)
-    assert r.returncode == 0, 'Inspect ' + name + '.log'
-    return (a.output / (name + '.log')).read_text(encoding='utf8', errors='replace')
+    text = (a.output / (name + '.log')).read_text(encoding='utf8', errors='replace')
+    assert r.returncode == 0, name + ' failed:\n' + text[-4000:]
+    return text
 
 
 javac, java = str(a.jdk / ('bin/javac' + suffix)), str(a.jdk / ('bin/java' + suffix))
@@ -54,9 +53,11 @@ sources = sorted(here.glob('src/**/*.java'))
 run('compile', [javac, args_file('compile.args', ['-proc:none', '-encoding', 'UTF-8', '--release', '21', '-cp', os.pathsep.join(map(str, libs)), '-d', classes, *sources])])
 core = sorted(here.glob('src/org/qiandengji/villagerquests/core/*.java'))
 test_src = sorted(here.glob('tests/**/*.java'))
-run('compile-tests', [javac, args_file('tests.args', ['-proc:none', '-encoding', 'UTF-8', '--release', '21', '-cp', str(gson), '-d', tests, *core, *test_src])])
+# Same classpath as the plugin, so the rules run against the gson the server actually ships.
+cp = os.pathsep.join(map(str, libs))
+run('compile-tests', [javac, args_file('tests.args', ['-proc:none', '-encoding', 'UTF-8', '--release', '21', '-cp', cp, '-d', tests, *core, *test_src])])
 schema = repo / 'packages/agent-harness-py/schemas/villager_quest.schema.json'
-rules = run('rules', [java, '-ea', '-cp', os.pathsep.join([str(tests), str(gson)]), 'org.qiandengji.villagerquests.core.CoreRulesTest', str(schema)])
+rules = run('rules', [java, '-ea', args_file('rules.args', ['-cp', os.pathsep.join([str(tests), cp]), 'org.qiandengji.villagerquests.core.CoreRulesTest', str(schema)])])
 assert 'passed=true' in rules, rules
 
 jar = a.output / f'qiandeng-villager-quests-{VERSION}.jar'
