@@ -48,8 +48,8 @@ final class ConquestWorld implements Listener {
     }
     private boolean protectedAt(Location l){return l.getWorld()!=null&&WORLD.equals(l.getWorld().getName())&&areas.stream().anyMatch(a->a.contains(l));}
     private boolean editor(org.bukkit.entity.Player p){return p.isOp()||plugin.trustedBlockEditor(p);}
-    @EventHandler(ignoreCancelled=true) public void breaking(BlockBreakEvent e){if(protectedAt(e.getBlock().getLocation())&&!editor(e.getPlayer())){e.setCancelled(true);e.getPlayer().sendActionBar(net.kyori.adventure.text.Component.text("艾恩葛朗特建筑受保护，可探索与战斗；/aincrad 查看往返。"));}}
-    @EventHandler(ignoreCancelled=true) public void placing(BlockPlaceEvent e){if(protectedAt(e.getBlock().getLocation())&&!editor(e.getPlayer()))e.setCancelled(true);}
+    @EventHandler(ignoreCancelled=true) public void breaking(BlockBreakEvent e){if(protectedAt(e.getBlock().getLocation())&&!editor(e.getPlayer())&&!plugin.editableDungeon(e.getPlayer(),e.getBlock().getLocation())){e.setCancelled(true);e.getPlayer().sendActionBar(net.kyori.adventure.text.Component.text("艾恩葛朗特建筑受保护，可探索与战斗；/aincrad 查看往返。"));}}
+    @EventHandler(ignoreCancelled=true) public void placing(BlockPlaceEvent e){if(protectedAt(e.getBlock().getLocation())&&!editor(e.getPlayer())&&!plugin.editableDungeon(e.getPlayer(),e.getBlock().getLocation()))e.setCancelled(true);}
     @EventHandler(ignoreCancelled=true) public void explosion(EntityExplodeEvent e){e.blockList().removeIf(b->protectedAt(b.getLocation()));}
     @EventHandler(ignoreCancelled=true) public void blocks(BlockExplodeEvent e){e.blockList().removeIf(b->protectedAt(b.getLocation()));}
     @EventHandler(ignoreCancelled=true) public void mobGrief(EntityChangeBlockEvent e){if(protectedAt(e.getBlock().getLocation()))e.setCancelled(true);}

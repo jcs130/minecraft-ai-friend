@@ -233,6 +233,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private long nextWaveAt;
     private long lastRun;
     private DungeonManager dungeon;
+    private DungeonEditJournal dungeonEdits;
+    DungeonEditJournal dungeonEdits() { return dungeonEdits; }
     private DungeonEnemyMoves dungeonEnemyMoves;
     private TrialEntranceControls trialButtons;
     private GuildManager guild;
@@ -437,6 +439,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         getCommand("mycli").setExecutor(this);
         getCommand("mycli").setTabCompleter(this);
         weaponEngravings = new WeaponEngravings(this, imprintSpellKey);
+        dungeonEdits = new DungeonEditJournal(this);
         dungeonEnemyMoves = new DungeonEnemyMoves(this);
         dungeon = new DungeonManager(this);
         trialSharedSupplies = new TrialSharedSupplies(this);
@@ -486,6 +489,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         try { conquestWorldReady=ConquestWorld.load(this); }
         catch (Exception failure) { getLogger().log(java.util.logging.Level.SEVERE,"Formal conquest unavailable; other activities retained",failure); }
         siteDungeons = new SiteDungeonManager(this);
+        wildResets = new WildRuinResets(this);
+        dungeonBuildPolicy = new DungeonBuildPolicy(this);
+        getServer().getPluginManager().registerEvents(dungeonBuildPolicy, this);
         cliRecovery = new AgentCliRecoveryService(this);
         new WorldLifeActions(this);
         soulboundGear = new SoulboundGear(this);
@@ -603,6 +609,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     boolean bypassBlockProtection(Player player, Location at) {
         return blockAccess != null && blockAccess.allows(player, at);
     }
+    private DungeonBuildPolicy dungeonBuildPolicy;
+    DungeonBuildPolicy dungeonBuildPolicy() { return dungeonBuildPolicy; }
+    boolean editableDungeon(Player player, Location at) {
+        return dungeonBuildPolicy != null && dungeonBuildPolicy.editable(player, at);
+    }
     boolean trustedBlockEditor(Player player) { return blockAccess!=null&&blockAccess.trustedEditor(player); }
     GeneratedStructureProtection generatedStructures() { return generatedStructures; }
     NativeTraversalPractice traversalPractice() { return traversalPractice; }
@@ -654,6 +665,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return playerNameTags == null ? null : playerNameTags.attachedEye(player);
     }
     private SiteDungeonManager siteDungeons;
+    private WildRuinResets wildResets;
+    WildRuinResets wildResets() { return wildResets; }
     SiteDungeonManager siteDungeons() { return siteDungeons; }
     boolean dungeonParticipant(Player player) { return dungeon != null && dungeon.isParticipant(player)
             || siteDungeons != null && siteDungeons.isParticipant(player); }

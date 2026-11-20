@@ -113,6 +113,10 @@ final class SiteDungeonManager implements Listener {
         facts.put("configured",ready&&!blockedCheckpoints.contains(id)&&Bukkit.getWorld(s.world)!=null);
         facts.put("pendingReward",receipt(p.getUniqueId(),id)!=null);
         facts.put("participant",run!=null&&run.party.contains(p.getUniqueId()));
+        if (run == null) {
+            facts.put("resetFailed", plugin.dungeonEdits().failed("site-" + id));
+            facts.put("resetPending", plugin.dungeonEdits().dirty("site-" + id));
+        }
         facts.put("otherActivity",mine!=null&&mine!=run||plugin.dungeonParticipant(p)&&mine==null||plugin.pvpParticipant(p));
         facts.put("occupied",run!=null);facts.put("joinable",run!=null&&!run.phase.equals("returning")&&run.fault.isEmpty()&&run.party.size()<PARTY_LIMIT);
         facts.put("atFirstRoom",first.contains(p.getLocation())&&s.contains(p.getLocation()));facts.put("atSite",s.contains(p.getLocation()));
@@ -220,8 +224,48 @@ final class SiteDungeonManager implements Listener {
             "recommendedLevel",guide.get("recommendedLevel"),"approachMana",8);
     }
     boolean hasActiveRuns(){return !runs.isEmpty()||!blockedCheckpoints.isEmpty();}
+    boolean emptyForRestore(String id) {
+        BuildingAreas building = protectionAreas.get(id);
+        if (!ready || building == null || runs.containsKey(id) || blockedCheckpoints.contains(id)) return false;
+        // Piece 0 also covers the search/approach buffer. For a surveyed site it is
+        // enough to wait for everyone to leave the authored space that may be reset.
+        List<ProtectionArea> occupiedAreas = building.pieces.size() > 1
+                ? building.pieces.subList(1, building.pieces.size()) : building.pieces;
+        return WildRuinResets.empty(occupiedAreas);
+    }
+    boolean overlapsResetSite(ProtectionArea area) {
+        return !ready || protectionAreas.values().stream()
+                .anyMatch(site -> site.pieces.stream().anyMatch(piece -> WildRuinResets.overlaps(piece, area)));
+    }
     List<String> ids(){return new ArrayList<>(sites.keySet());}
     boolean activityArea(Location at){return protectionArea(at)!=null;}
+    String editDomain(Location at) {
+        for (var item : protectionAreas.entrySet()) {
+            BuildingAreas building = item.getValue();
+            if (building.envelope.contains(at) && building.pieces.stream().anyMatch(piece -> piece.contains(at)))
+                return "site-" + item.getKey();
+        }
+        return null;
+    }
+
+    boolean editableInterior(String id, Player player, Location at) {
+        Site site = sites.get(id);
+        BuildingAreas building = protectionAreas.get(id);
+        if (!ready || site == null || building == null || blockedCheckpoints.contains(id) || campRescueLatch(at.getBlock())) return false;
+        if (!canUseSite(id, player)) return false;
+        // Piece zero is the broad combat/search buffer. Authored structure pieces define the
+        // shell, including shared seams. A site without pieces opens just its combat rooms.
+        if (building.pieces.size() > 1)
+            return DungeonBuildPolicy.insidePieces(building.pieces.subList(1, building.pieces.size()), at);
+        return site.rooms.stream().anyMatch(room -> Math.abs(at.getBlockX() - room.x) < room.radius
+                && Math.abs(at.getBlockZ() - room.z) < room.radius && at.getBlockY() >= room.y && at.getBlockY() < room.y + 4);
+    }
+    boolean canUseSite(String id, Player player) {
+        if (!ready || !sites.containsKey(id) || blockedCheckpoints.contains(id)) return false;
+        Run run = runs.get(id);
+        return run == null || !run.invalid && run.pausedAt == 0 && run.fault.isEmpty() && !run.retryLoading
+                && !run.phase.equals("returning") && !run.phase.equals("retrying") && run.party.contains(player.getUniqueId());
+    }
     ProtectionArea protectionArea(Location at) {
         for(BuildingAreas building:protectionAreas.values()){
             if(!building.envelope.contains(at))continue;
@@ -553,6 +597,7 @@ final class SiteDungeonManager implements Listener {
     private Site site(String id){Site s=sites.get(id);require(s!=null,"unknown_dungeon");return s;}
     private String reload(){
         if(hasActiveRuns())return "active_runs";
+        if(sites.keySet().stream().anyMatch(id -> plugin.dungeonEdits().dirty("site-" + id))) return "pending_terrain_reset";
         try{
             var yaml=new YamlConfiguration();yaml.load(new File(plugin.getDataFolder(),"dungeons.yml"));
             require(yaml.getInt("schema-version")==1,"schema_version");var defs=yaml.getConfigurationSection("sites");require(defs!=null&&defs.getKeys(false).size()<=16,"sites_limit_16");
@@ -749,6 +794,8 @@ final class SiteDungeonManager implements Listener {
         require(playing(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
         require(s.contains(p.getLocation())&&s.rooms.getFirst().contains(p.getLocation()),"walk_to_first_room");
         require(!runs.containsKey(s.id),"site_busy");require(receipt(p.getUniqueId(),s.id)==null,"claim_previous_reward_first");
+        require(!plugin.dungeonEdits().failed("site-" + s.id), "site_reset_fault");
+        require(!plugin.dungeonEdits().dirty("site-" + s.id), "site_reset_pending");
         require(System.currentTimeMillis()-plugin.getConfig().getLong(ROOT+".cooldowns."+s.id,0)>=120_000,"site_cooldown");
         require(receiptCount()<1024,"pending_receipt_capacity");
         if(!loadout(p,"start",s))return;
@@ -1110,6 +1157,7 @@ final class SiteDungeonManager implements Listener {
             plugin.getConfig().createSection(ROOT+".last-outcomes."+r.site.id,Map.of("run",r.id,"reason",reason,"endedAt",System.currentTimeMillis(),"clearedRooms",r.stage,"requiredRooms",r.site.rooms.size(),"resets",r.resets,"lastResetReason",r.lastResetReason));
             outcomes.forEach((id,data)->saveOutcome(id,r.site.id,data));
         });}catch(RuntimeException e){runs.put(r.site.id,r);throw e;}
+        plugin.dungeonEdits().restore("site-" + r.site.id, () -> emptyForRestore(r.site.id));
         if(plugin.trialRescue()!=null)plugin.trialRescue().releaseTeam(rescueKey(r),r.site.rooms.getFirst().center(Bukkit.getWorld(r.site.world)));
         clean(r);notice(r,"§e【地下城结束】"+endLabel(reason)+"。本场参战与存档点救援已失效；存活者留在原地，请沿原路及时撤离。已保存结果；查询：/mycli dungeon status "+r.site.id);
         outcomes.forEach((id,data)->{Player p=ResidentCli.find(id);if(p!=null)explainOutcome(p,data);});
@@ -1237,10 +1285,6 @@ final class SiteDungeonManager implements Listener {
     @EventHandler public void death(EntityDeathEvent e){Run r=owner(e.getEntity());if(r!=null){r.mobs.remove(e.getEntity().getUniqueId());e.getDrops().clear();e.setDroppedExp(0);}}
     @EventHandler public void load(EntitiesLoadEvent e){for(Entity entity:e.getEntities())if((owned(entity)||entity.getScoreboardTags().contains(SHOT_TAG))&&owner(entity)==null)entity.remove();}
     @EventHandler public void rejoin(PlayerJoinEvent e){Run r=own(e.getPlayer());if(r!=null)e.getPlayer().sendMessage("§e地下城进度保留，剩余机会 "+(MAX_FAILURES-r.failures)+"/3；dungeon status 查本场。断线不扣次数，倒地续关会自动回存档点；主动离场仍须5分钟内回场。");Bukkit.getScheduler().runTaskLater(plugin,()->clearLoginIntruder(e.getPlayer()),5L);}
-    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void breakBlock(BlockBreakEvent e){
-        if (plugin.trustedBlockEditor(e.getPlayer())) return;if(activityArea(e.getBlock().getLocation())){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"break",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
-    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void placeBlock(BlockPlaceEvent e){
-        if (plugin.trustedBlockEditor(e.getPlayer())) return;if(activityArea(e.getBlock().getLocation())){e.setCancelled(true);plugin.protectionAdvisor().denied(e.getPlayer(),"place",e.getBlock().getLocation(),"site_dungeon",protectionArea(e.getBlock().getLocation()));}}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnNatural(SpawnerSpawnEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnWild(CreatureSpawnEvent e){if(e.getSpawnReason()==CreatureSpawnEvent.SpawnReason.NATURAL&&runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
     private Site surveyedCamp() {

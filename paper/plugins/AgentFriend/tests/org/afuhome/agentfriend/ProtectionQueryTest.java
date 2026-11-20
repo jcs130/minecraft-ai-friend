@@ -25,7 +25,7 @@ public final class ProtectionQueryTest {
     }
     public static void main(String[] args) {
         var permanent=ProtectionQuery.compact(result(0,"deny","site_dungeon",null));
-        check("dungeon compact verdict explains permanence and route",permanent.get("nextAction").getAsString().contains("永久")&&permanent.get("nextAction").getAsString().contains(ProtectionQuery.DUNGEON_DISCOVERY_COMMAND)&&!permanent.get("nextAction").getAsString().contains("主人授权"));
+        check("dungeon denial distinguishes its boundary from editable rooms",permanent.get("nextAction").getAsString().contains("外围")&&permanent.get("nextAction").getAsString().contains("房间内部")&&permanent.get("nextAction").getAsString().contains(ProtectionQuery.DUNGEON_DISCOVERY_COMMAND));
         check("dungeon discovery is an existing read-only command",AgentCliCatalog.helpData(new String[]{"dungeon","list","--help"},List.of()).get("actionReadOnly").getAsBoolean());
         check("dungeon details are an existing read-only command",AgentCliCatalog.helpData(new String[]{"dungeon","info","--help"},List.of()).get("actionReadOnly").getAsBoolean());
         var dungeonHelp=AgentCliCatalog.helpData(new String[]{"dungeon","start","--help"},List.of());
