@@ -17,6 +17,9 @@ import { CombatProgramRunner, CombatProgramBusyError, CombatProgramSceneChangedE
 import { combatRulesError, type CombatRule } from './combat-rules.ts';
 import { combatMayTakeTask, diverseCombatOptions } from './combat-options.ts';
 import { combatSearchCandidates, CombatSearchHistory } from './combat-search.ts';
+import { goalPlanSummary } from './goal-plan.ts';
+import type { TaskReport } from './executor.ts';
+import type { Battlefield } from './battlefield.ts';
 import { COMBAT_TACTIC_TOOL } from './combat-tool.ts';
 import { validCombatRoutines, type CombatRoutine } from './combat-routines.ts';
 import { validMeleeWeaponOrder } from './weapon-capabilities.ts';
@@ -40,6 +43,16 @@ private readonly routineGraphs = new Map<string, ProcedureGraph | Error>();
 private routineAdmission: RoutineAdmission | null = null;
 private routineError: string | null = null;
 private readonly searchHistory = new CombatSearchHistory();
+private searchScope(field: Battlefield): string {
+  const life = (this.bridge?.bot as (Bot & {deathLifecycle?:{episodeId?:string}}) | null)?.deathLifecycle;
+  return JSON.stringify([this.realmKey(),field.connectionGeneration,field.dimension,field.world?.key,field.world?.revision,life?.episodeId]);
+}
+protected override onTaskReport(report: TaskReport): void {
+  if (report.taskId !== undefined && ['done','blocked','partial','cancelled','superseded'].includes(report.kind)) {
+    this.searchHistory.terminal(report.taskId,report.kind !== 'cancelled' && report.kind !== 'superseded');
+  }
+  super.onTaskReport(report);
+}
 private readonly combatProbe: CombatProgramProbe;
   constructor(options: MinecraftWorldOptions, protected readonly tactics = new CombatAbilities(new CombatTacticBook(options.dataDir ? join(options.dataDir,'minecraft-combat-tactics.json') : null))) {
     super(options); this.combatProbe = new CombatProgramProbe(options.dataDir ? join(options.dataDir, 'combat-probes') : null);
@@ -311,9 +324,15 @@ protected sampleCombatDecision(): CombatDecisionFrame | null {
     const stroll: CombatCandidate[] = walk ? [{ id: 'idle_wander', kind: 'idle', action: 'wander',
       destination: [walk.destination.x, walk.destination.y, walk.destination.z],
       intent: 'Stroll two or three steps on verified safe nearby ground while the body is free; yield immediately to tasks or danger. This does not complete a goal or a trade.' }] : [];
-    const search=this.searchHistory.filter(JSON.stringify([this.realmKey(),battlefield.connectionGeneration,battlefield.dimension]),
+    const searchScope = this.searchScope(battlefield);
+    this.searchHistory.observe(searchScope,battlefield,this.lastReflexHurtAt);
+    // Count the next objective's typed travel, stock or construction checks. A remembered goal title
+    // or an opaque combat judgment alone does not establish a competing physical destination.
+    const competingGoal = this.goals().list.some(goal => goalPlanSummary(goal.plan).next?.verify?.some(probe =>
+      ['position','inventory','block','blueprint','item'].includes(probe.source)));
+    const search=this.searchHistory.filter(searchScope,
       combatSearchCandidates(bot,battlefield,control.bodyFree&&!queue?.running&&!queue?.waiting.length,
-        cfg.allowMovement&&!bot.currentWindow&&!(this.executor?.eating??false)),now);
+        cfg.allowMovement&&!bot.currentWindow&&!(this.executor?.eating??false),hint=>this.searchHistory.allowSound(hint,competingGoal)),now);
     const choices = [...reactions, ...frame.candidates, ...search, ...routines, ...stroll];
     if(frame.actionPool)frame.actionPool.push(...search);
     if (frame.actionPool) frame.actionPool.push(...stroll);
@@ -385,7 +404,7 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
     }
     if (candidate.kind === 'idle') return this.idleBehavior?.startSelected(candidate.action) ?? false;
     if(candidate.kind==='search'){
-      if(!this.searchHistory.filter(JSON.stringify([this.realmKey(),current.battlefield.connectionGeneration,current.battlefield.dimension]),
+      if(!this.searchHistory.filter(this.searchScope(current.battlefield),
         [candidate],current.battlefield.sampledAtMs).length)return false;
       const queue=this.executor?.status(),p=bot.entity.position,to=new Vec3(...candidate.destination);
       if(!this.executor||queue?.running||queue?.waiting.length||queue?.hold||this.combat?.active||this.methodOwnsBody()
@@ -395,8 +414,9 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
       const yawDeg=Math.atan2(Math.sin(targetYaw-bot.entity.yaw),Math.cos(targetYaw-bot.entity.yaw))*180/Math.PI;
       const result=this.executor.submitDetailed([{skill:'control',keys:['forward'],durationMs:250,mode:'ground',yawDeg}], 'append');
       if(!result.accepted||result.taskId===undefined)return false;
-      this.searchHistory.record(JSON.stringify([this.realmKey(),current.battlefield.connectionGeneration,current.battlefield.dimension]),
+      this.searchHistory.record(this.searchScope(current.battlefield),
         candidate.clueKey,[p.x,p.y,p.z],current.battlefield.sampledAtMs);
+      this.searchHistory.submitted(result.taskId,candidate,current.battlefield);
       this.routineAdmission={runId:result.taskId,execution:{kind:'task',id:`${this.executionEpoch}:${result.taskId}`,
         phase:'accepted',terminal:false,goalCompleted:false,evidence:{source:'search-clue',clueKey:candidate.clueKey}}};
       return true;
