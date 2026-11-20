@@ -73,6 +73,20 @@ test('authorization links only to the enabled resident installers and their revi
   }
 });
 
+test('production website creation selects a maid even when the link asks for Numen', browserTest, async t => {
+  const {page,origin} = await fixture(t,{residentCreationMode:'maid-only'});
+  await page.goto(origin+'/resident-connect.html?flow=create&bodyKind=numen');
+  await login(page);
+  await visible(page,'create');
+  assert.equal(await page.$eval('#kind-label',el=>el.hidden),true);
+  assert.equal(await page.$eval('#kind',el=>el.value),'maid');
+  await page.type('#name','雾灯');
+  await page.type('#persona','在营地招待朋友。');
+  await page.click('#create-button');
+  await page.waitForFunction(() => document.getElementById('result').textContent.includes('创建请求已保存'));
+  assert.equal(new URL(page.url()).searchParams.get('bodyKind'),'maid');
+});
+
 test('existing Numen is connected by code, downloaded separately and revoked', browserTest, async t => {
   const {page,origin,browser,store,owner} = await fixture(t);
   await page.goto(origin + '/resident-connect.html');
@@ -90,7 +104,7 @@ test('existing Numen is connected by code, downloaded separately and revoked', b
   assert.match(await page.$eval('#availability',e=>e.textContent),/还没有/);
   await page.select('#kind','numen');
   await page.select('#flow','create');
-  assert.match(await page.$eval('#availability',e=>e.textContent),/暂无空闲/);
+  assert.match(await page.$eval('#availability',e=>e.textContent),/暂无可分配.*身体名额/);
   await page.select('#flow','connect');
   await page.click('#advanced summary');
   const grant = page.waitForResponse(r => r.url().endsWith('/kirito/grant') && r.request().method() === 'POST');

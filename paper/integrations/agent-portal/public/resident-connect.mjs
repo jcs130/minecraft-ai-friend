@@ -19,6 +19,7 @@ if (legacy) {
 
 const errors = {
   INVALID_BROWSER_LOGIN: '数字有误，请核对本机插件里的 6 位数字。',
+  MAID_ONLY: '新建角色使用车万女仆。已有 Numen 可从居民列表连接。',
   BROWSER_LOGIN_EXPIRED: '请求已失效，请回到插件重新打开网页登录。',
   INVALID_RESIDENT_PROFILE: '请检查角色名和人设。名字最多 24 个文字、数字、空格、短横线、下划线或间隔号。',
   NO_BODY_CAPACITY: '这种身体暂时没有空位，可稍后刷新或选择另一种身体。',
@@ -78,6 +79,9 @@ function render() {
   clearTimeout(poll);
   if (!catalog || !session?.owner || !legacy) return;
   const creating = flow.value === 'create';
+  const maidOnly = creating && catalog.creationMode === 'maid-only';
+  byId('kind-label').hidden = maidOnly;
+  if (maidOnly) kind.value = 'maid';
   const residents = catalog.residents.filter(r => r.bodyKind === kind.value);
   const current = residents.find(r => r.id === selected) || residents[0];
   const pending = creating && getDraft();
@@ -92,7 +96,8 @@ function render() {
     if (pending) { byId('name').value = pending.name; byId('persona').value = pending.persona; }
     byId('create-button').textContent = pending ? '继续上次创建' : '创建角色';
     available.textContent = pending ? '上次的创建请求已保存，可继续确认同一角色。'
-      : capacity ? '给新居民取一个名字。' : '暂无空闲的' + bodies[kind.value] + '身体，可稍后刷新或选择另一种身体。';
+      : capacity ? '给新' + bodies[kind.value] + '取一个名字。'
+      : '当前账号暂无可分配的' + bodies[kind.value] + '身体名额。';
   } else {
     role.replaceChildren(...residents.map(r => new Option(r.name + (r.state === 'preparing' ? ' · 准备中' : ''), r.id)));
     if (current) { selected = current.id; role.value = selected; }
@@ -193,6 +198,9 @@ byId('create').onsubmit = event => {
     selected = data.resident.id; flow.value = 'connect'; updateUrl(); setDraft(null);
     byId('name').value = byId('persona').value = '';
     await refresh();
+    if (catalog.creationMode === 'maid-only') {
+      result.textContent = '创建请求已保存。身体准备好后，在本机居民插件里授权并连接这个角色。';
+    }
   });
 };
 byId('role-code').onclick = () => action(async () => displayCode(await request(api + '/' + role.value + '/code', 'POST'), false));

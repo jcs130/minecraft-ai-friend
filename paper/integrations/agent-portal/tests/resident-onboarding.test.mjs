@@ -60,6 +60,45 @@ test('an explicit website owner controls only the named resident without gaining
   assert.deepEqual(relay.list(second).residents.map(x=>x.id),['other']);
 });
 
+test('maid-only production allows both website and plugin creation while preserving existing Numen', async t => {
+  const existing = {...capacity('numen-existing','numen').slot,characterId:randomUUID(),name:'桐人'};
+  const f = await siteFixture(t,{residentCreationMode:'maid-only',residentTurns:[existing],
+    residentCreationSlots:[capacity('blank-maid','maid').slot,capacity('blank-agent','numen').slot]});
+  const db = f.portal.store.db;
+  const owner = db.prepare('SELECT id FROM owners LIMIT 1').get();
+  db.prepare('INSERT INTO ownerships(owner_id,agent_uuid,proof,created_at) VALUES(?,?,?,?)')
+    .run(owner.id,existing.ownerGameId,'test',Date.now());
+  const base = 'resident-onboarding/';
+  const {data:{code}} = await f.admin.request('/'+base+'code','POST', {});
+  const {onboardingToken} = await call(f,base+'pair',{code});
+  const desktop = await call(f,base+'list',{},onboardingToken);
+  assert.deepEqual(desktop.availableBodies,['maid']);
+  assert.equal(desktop.residents[0].id,existing.id);
+  const profile = {requestId:randomUUID(),bodyKind:'numen',name:'新朋友'};
+  assert.equal((await call(f,base+'create',profile,onboardingToken)).error.reason,'MAID_ONLY');
+  assert.equal((await f.admin.request('/resident-turns','POST',profile)).data.error.reason,'MAID_ONLY');
+  const maid = {...profile,bodyKind:'maid',persona:'照看营地。'};
+  const created = await f.admin.request('/resident-turns','POST',maid);
+  assert.equal(created.status,201);
+  const same = await call(f,base+'create',maid,onboardingToken);
+  assert.deepEqual(same.resident,created.data.resident);
+  assert.equal(db.prepare('SELECT count(*) AS n FROM resident_births').get().n,1);
+});
+
+test('maid-only rollout keeps the original owner and request receipt for an earlier Numen creation', async t => {
+  const f = await siteFixture(t,{residentCreationSlots:[capacity('prior-numen','numen').slot]});
+  const store = f.portal.store;
+  const owner = store.db.prepare('SELECT id FROM owners LIMIT 1').get().id;
+  const profile = {requestId:randomUUID(),bodyKind:'numen',name:'旧友',persona:'巡查营地。'};
+  const original = new ResidentTurns(f.config,store).create(owner,profile);
+  const updated = new ResidentTurns({...f.config,residentCreationMode:'maid-only'},store);
+  assert.deepEqual(updated.create(owner,profile),original);
+  assert.throws(() => updated.create(owner,{...profile,name:'另一位'}),e => e.reason === 'CREATION_REQUEST_CHANGED');
+  assert.throws(() => updated.create(randomUUID(),profile),e => e.reason === 'MAID_ONLY');
+  assert.throws(() => updated.create(owner,{...profile,requestId:randomUUID()}),e => e.reason === 'MAID_ONLY');
+  assert.equal(store.db.prepare('SELECT count(*) AS n FROM resident_births').get().n,1);
+});
+
 test('a capacity registered to a player can only be allocated by that website account', async t => {
   const {slot} = capacity('personal','maid');
   const f = await siteFixture(t,{residentCreationSlots:[slot]});

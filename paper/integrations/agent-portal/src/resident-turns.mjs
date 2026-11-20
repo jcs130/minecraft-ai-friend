@@ -32,6 +32,10 @@ export class ResidentTurns {
     this.store = store;
     this.now = now;
     this.waitMs = waitMs;
+    this.maidOnlyCreation = config.residentCreationMode === 'maid-only';
+    if (config.residentCreationMode !== undefined && !this.maidOnlyCreation) {
+      throw Error('Invalid resident creation mode');
+    }
     this.roles = new Map();
     store.db.exec(`CREATE TABLE IF NOT EXISTS resident_onboarding (
       owner TEXT NOT NULL, code_hash TEXT UNIQUE, code_until INTEGER, token_hash TEXT UNIQUE, token_until INTEGER, connected TEXT)`);
@@ -92,7 +96,9 @@ export class ResidentTurns {
   list(owner) {
     const roles = [...this.roles.values()];
     return {residents: roles.filter(r => this.owns(owner,r)).map(r => this.describe(r)),
-            availableBodies: [...new Set(roles.filter(r => this.canCreate(owner,r)).map(r => r.bodyKind))]};
+            availableBodies: [...new Set(roles.filter(r => this.canCreate(owner,r)
+                && (!this.maidOnlyCreation || r.bodyKind === 'maid')).map(r => r.bodyKind))],
+            ...(this.maidOnlyCreation ? {creationMode:'maid-only'} : {})};
   }
   describe(r) {
     const {id, name, bodyKind, bodyId, characterId} = r;
@@ -147,6 +153,7 @@ export class ResidentTurns {
       let born = db.prepare('SELECT * FROM resident_births WHERE owner=? AND request=?').get(owner, input.requestId);
       if (born && (name !== born.name || persona !== born.persona || input.bodyKind !== born.kind)) throw denied(409,'CREATION_REQUEST_CHANGED');
       if (!born) {
+        if (this.maidOnlyCreation && input.bodyKind !== 'maid') throw denied(403,'MAID_ONLY');
         const slot = [...this.roles.values()].find(r => this.canCreate(owner,r) && r.bodyKind === input.bodyKind
           && !db.prepare('SELECT 1 FROM resident_births WHERE role=? OR body=?').get(r.id,r.bodyId));
         if (!slot) throw denied(409,'NO_BODY_CAPACITY');
@@ -348,7 +355,8 @@ export class ResidentTurns {
     }
     if (pathname === prefix && req.method === 'POST') {
       const {owner} = browserAuth(req);
-      respond(res, 201, {resident: this.create(owner.id, await jsonBody(req, 8192))});
+      const input = await jsonBody(req, 8192);
+      respond(res, 201, {resident: this.create(owner.id, input)});
       return true;
     }
     const match = /^\/api\/v1\/resident-turns\/([a-z][a-z0-9_-]{1,31})\/(grant|code)$/.exec(pathname);
