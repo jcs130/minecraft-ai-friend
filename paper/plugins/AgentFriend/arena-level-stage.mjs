@@ -56,7 +56,9 @@ try {
   const highScale = await until(() => high.lines.find(line => line.includes('category=level_scaling')),
     'platinum reward');
   assert.match(lowScale, /recommendedDifficulty=normal runDifficulty=normal rewardPercent=100 firstClear=true/);
-  assert.match(highScale, /recommendedDifficulty=apocalypse runDifficulty=normal rewardPercent=30 firstClear=false repeatedGear=false/);
+  assert.match(highScale, /recommendedDifficulty=apocalypse runDifficulty=normal rewardPercent=0 firstClear=false repeatedGear=false/);
+  await until(() => high.lines.some(line => line.includes('category=practice')
+      && line.includes('coinsDue=0 itemsEligible=false credited=false')), 'below-level clear has no payout');
   await until(() => low.lines.some(line => line.includes('category=supply')), 'bronze supplies');
   assert.equal(high.lines.filter(line => line.includes('category=supply')).length, 0,
     'repeat under-tier reward must not create supplies');

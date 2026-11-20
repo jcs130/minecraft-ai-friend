@@ -72,13 +72,13 @@ final class GuildManager implements Listener {
                     Goal.FLOOR, 1, 1, 0, 5, 2, Material.BREAD, 2),
             new Contract("desert_scout", "遗迹前哨", "通关地下城第 2 层", Material.SANDSTONE,
                     Goal.FLOOR, 1, 2, 0, 6, 3, Material.ARROW, 8),
-            new Contract("deep_explorer", "深层远征", "通关地下城第 3 层", Material.DEEPSLATE_BRICKS,
+            new Contract("deep_explorer", "深层远征", "接单后到初始村试炼塔集合平台开场，随队清完第3层即可交单；可在本场继续下楼", Material.DEEPSLATE_BRICKS,
                     Goal.FLOOR, 1, 3, 1, 10, 5, Material.GOLDEN_APPLE, 1),
             new Contract("ocean_guard", "海渊守望", "通关地下城第 5 层", Material.PRISMARINE_BRICKS,
                     Goal.FLOOR, 1, 5, 1, 15, 6, Material.GOLDEN_APPLE, 1),
             new Contract("treasure_vault", "宝库守护者", "通关地下城第 6 层", Material.DIAMOND,
                     Goal.FLOOR, 1, 6, 2, 20, 8, Material.DIAMOND, 1),
-            new Contract("trial_seven", "星光深径", "通关地下城第 7 层，越深越亮", Material.AMETHYST_SHARD,
+            new Contract("trial_seven", "星光深径", "随试炼队从第6层下楼，实际抵达第7层驿站后交单，可在驿站补给", Material.AMETHYST_SHARD,
                     Goal.FLOOR, 1, 7, 4, 18, 8, Material.GOLDEN_APPLE, 2, null, 1),
             new Contract("trial_ten", "千灯之巅", "通关地下城第 10 层，登临绝顶", Material.BEACON,
                     Goal.FLOOR, 1, 10, 4, 30, 12, Material.NETHERITE_SCRAP, 1, null, 1),
@@ -124,7 +124,7 @@ final class GuildManager implements Listener {
             // —— 约束遵守（dim 5）——
             new Contract("stone_only", "朴素远征", "背包中无铁质以上武器，通关第 2 层", Material.STONE_SWORD,
                     Goal.STONE_FLOOR, 1, 2, 1, 12, 5, Material.IRON_INGOT, 2, null, 5),
-            new Contract("pilgrimage", "徒步朝圣", "不使用传送：步行远离出发点 500 格后再返回", Material.LEATHER_BOOTS,
+            new Contract("pilgrimage", "徒步朝圣", PilgrimageRoute.DESCRIPTION, Material.LEATHER_BOOTS,
                     Goal.PILGRIMAGE, 1, 0, 1, 12, 5, Material.COOKED_BEEF, 8, null, 5),
             new Contract("fasting", "斋戒试炼", "接单后不进食，通关第 3 层", Material.MUSHROOM_STEW,
                     Goal.FAST_FLOOR, 1, 3, 3, 15, 6, Material.GOLDEN_APPLE, 2, null, 5),
@@ -145,11 +145,15 @@ final class GuildManager implements Listener {
 
     private String base(UUID id) { return "guild-players." + id; }
     String activeId(Player p) { return plugin.getConfig().getString(base(p.getUniqueId()) + ".active.id", ""); }
+    private boolean expiredDaily(String id) {
+        return id.startsWith("db_") && plugin.dailyBoard()!=null && plugin.dailyBoard().card(id)==null;
+    }
     private String today() { return LocalDate.now(GUILD_ZONE).toString(); }
     private boolean member(Player p) { return plugin.getConfig().contains(base(p.getUniqueId()) + ".joined"); }
     boolean hasJoined(Player p) { return member(p); }
     boolean hasActiveContract(Player p) {
-        return !activeId(p).isEmpty();
+        String id=activeId(p);
+        return !id.isEmpty() && !expiredDaily(id);
     }
     com.google.gson.JsonObject onboardingState(Player p) {
         com.google.gson.JsonObject out = new com.google.gson.JsonObject();
@@ -162,11 +166,24 @@ final class GuildManager implements Listener {
         // Never call active()/status() here: old expired daily contracts may be
         // released by those legacy paths. A progress query must retain the slot.
         var out=onboardingState(p);String id=out.get("activeId").getAsString();
+        var assessments=plugin.skillAssessments();
+        if(member(p)&&assessments!=null&&assessments.rankPointLedgerReady()){
+            int grade=assessments.readGrade(p);
+            out.addProperty("pointsFromGrade",grade);
+            out.addProperty("rankPoints",rankPoints(p,grade));
+            out.addProperty("rankPointsTarget",grade<GuildRankPoints.LAST_GRADE?GuildRankPoints.target(grade+1):0);
+        }
         out.addProperty("kind","adventure");out.addProperty("title","冒险者公会委托");
         out.addProperty("status",id.isEmpty()?"none":"active");
         out.addProperty("nextCommand",id.isEmpty()?"/mycli guild board":"/mycli guild status");
         var missing=new com.google.gson.JsonArray();out.add("missingConditions",missing);
         if(id.isEmpty())return out;
+        if(expiredDaily(id)){
+            out.addProperty("status","expired");
+            out.addProperty("nextCommand","/mycli guild board");
+            out.addProperty("advice","这张每日委托已过期，选择新委托时将释放旧任务槽。");
+            return out;
+        }
         Contract quest=null;
         if(plugin.taskMarket().isMarket(id)) {
             var market=plugin.taskMarket().progressState(p);out.add("market",market);
@@ -176,6 +193,8 @@ final class GuildManager implements Listener {
             if(saved!=null)try{quest=plugin.dailyBoard().savedCard(saved).contract();}catch(IllegalArgumentException ignored){ }
         } else for(Contract candidate:CONTRACTS)if(candidate.id().equals(id)){quest=candidate;break;}
         if(quest==null){out.addProperty("status","unavailable");missing.add("在途定义缺失或已过期；本查询保留原任务，联系服主核对");return out;}
+        var pointOffer=rankPointPreview(p,quest);
+        if(pointOffer!=null)out.add("rankPointPreview",rankPointReceipt(pointOffer));
         int current=plugin.getConfig().getInt(base(p.getUniqueId())+".active.progress",0);
         if(quest.goal()==Goal.DONATE){Material material=Material.matchMaterial(quest.siteId()==null?"":quest.siteId());current=material==null?0:Math.min(quest.target(),countPlainStorage(p,material));}
         boolean verify=EngineeringSites.GOALS.contains(quest.goal());
@@ -193,6 +212,15 @@ final class GuildManager implements Listener {
         if (!out.has("market")) {
             var guide=TaskProgressGuidance.guide(quest,current,null,"",new com.google.gson.JsonObject());
             if(quest.goal()==Goal.PEAK)guide=PeakSurvey.guide(guide,PeakSurvey.inspect(p.getLocation()));
+            if(quest.goal()==Goal.PILGRIMAGE) {
+                var route=pilgrimageState(p);
+                if(route!=null){
+                    guide.add("route",route);guide.add("phase",route.get("phase"));
+                    guide.add("nextAction",route.get("nextAction"));
+                    out.add("missingConditions",new com.google.gson.JsonArray());
+                    out.getAsJsonArray("missingConditions").add(route.get("nextAction"));
+                }
+            }
             out.add("guidance",guide);out.addProperty("advice",guide.get("nextAction").getAsString());
             out.addProperty("nextCommand",guide.get("nextCommand").getAsString());
         }
@@ -219,6 +247,74 @@ final class GuildManager implements Listener {
     }
     private int fame(Player p) { return plugin.getConfig().getInt(base(p.getUniqueId()) + ".fame", 0); }
     int reputation(Player p) {return fame(p);}
+    int rankPoints(Player player, int fromGrade) {
+        if (fromGrade < 0 || fromGrade >= GuildRankPoints.LAST_GRADE) return 0;
+        String path = base(player.getUniqueId());
+        var config = plugin.getConfig();
+        var points = config.getConfigurationSection(path + ".rankPoints");
+        if (points != null) return points.getInt("fromGrade", -1) == fromGrade
+                ? Math.clamp(points.getInt("points"), 0, GuildRankPoints.target(fromGrade + 1)) : 0;
+        if (!plugin.skillAssessments().legacyPointCreditAllowed(player)) return 0;
+        return GuildRankPoints.legacyCredit(fromGrade, deliveredIds(path));
+    }
+
+    private java.util.Set<String> deliveredIds(String path) {
+        var config = plugin.getConfig();
+        var history = config.getConfigurationSection(path + ".everDone");
+        var ids = new java.util.HashSet<String>();
+        if (history != null) ids.addAll(history.getKeys(false));
+        // Oldest profiles have only daily completion receipts. Mirror certified() without migrating on a read.
+        if (!config.contains(path + ".rituals.certified")) {
+            var daily = config.getConfigurationSection(path + ".daily");
+            if (daily != null) ids.addAll(daily.getKeys(false));
+        }
+        return ids;
+    }
+
+    GuildRankPoints.Award rankPointPreview(Player player, Contract quest) {
+        var assessments = plugin.skillAssessments();
+        if (assessments == null || !assessments.rankPointLedgerReady() || !member(player)) return null;
+        int grade = assessments.readGrade(player);
+        String path = base(player.getUniqueId()) + ".rankPoints";
+        var config = plugin.getConfig();
+        int uses = config.getInt(path + ".fromGrade", -1) == grade
+                ? config.getInt(path + ".templates." + GuildRankPoints.template(quest.id())) : 0;
+        boolean deliveryOnly = quest.goal() == Goal.DONATE;
+        if (plugin.taskMarket()!=null && plugin.taskMarket().isMarket(quest.id())) {
+            var task=plugin.taskMarket().find(player,quest.id());
+            if (task!=null) deliveryOnly=task.steps().stream().allMatch(step->step.goal()==Goal.DONATE);
+        }
+        return GuildRankPoints.preview(grade, rankPoints(player, grade), uses, quest.fame(), deliveryOnly);
+    }
+
+    String rankPointHint(Player player, Contract quest) {
+        var award = rankPointPreview(player, quest);
+        return award == null ? "" : " · 整单晋级分 +" + award.gain() + "（" + award.tier() + "，" + award.explanation() + "）";
+    }
+
+    static com.google.gson.JsonObject rankPointReceipt(GuildRankPoints.Award award) {
+        var out = new com.google.gson.JsonObject();
+        out.addProperty("fromGrade", award.fromGrade());
+        out.addProperty("pointsBefore", award.before());
+        out.addProperty("pointsAfter", award.after());
+        out.addProperty("pointsEarned", award.gain());
+        out.addProperty("pointsTarget", award.target());
+        out.addProperty("priorTemplateCompletions", award.priorUses());
+        out.addProperty("tier", award.tier());
+        out.addProperty("reason", award.reason());
+        out.addProperty("description", award.explanation());
+        return out;
+    }
+
+    private void recordRankPoints(Player player, Contract quest, GuildRankPoints.Award award) {
+        if (award == null || award.fromGrade() == GuildRankPoints.LAST_GRADE) return;
+        String path = base(player.getUniqueId()) + ".rankPoints";
+        var config = plugin.getConfig();
+        if (config.getInt(path + ".fromGrade", -1) != award.fromGrade()) config.set(path, null);
+        config.set(path + ".fromGrade", award.fromGrade());
+        config.set(path + ".points", award.after());
+        config.set(path + ".templates." + GuildRankPoints.template(quest.id()), Math.min(2, award.priorUses() + 1));
+    }
     int legacyRank(Player p) {return Math.min(rankIndex(fame(p)),certified(p));}
     int readLegacyRank(Player p) {
         int rank = rankIndex(fame(p));
@@ -230,6 +326,67 @@ final class GuildManager implements Listener {
     }
     boolean promotionHistoryMet(int rank,Player p) {return certRequirementMet(rank,p);}
     String promotionHistoryAdvice(int rank) {return rank==1?"声望达标并通过首次综合考试":certRequirementText(rank);}
+
+    private PromotionHistory.Progress promotionProgress(Player player, PromotionHistory rule) {
+        String path = base(player.getUniqueId());
+        var categories = plugin.getConfig().getConfigurationSection(path + ".dailyTypes");
+        var dimensions = new java.util.HashSet<Integer>();
+        var ids = deliveredIds(path);
+        for (Contract quest : CONTRACTS) if (ids.contains(quest.id())) dimensions.add(quest.dim());
+        return rule.progress(ids, dimensions, categories == null ? List.of() : categories.getValues(false).values());
+    }
+
+    com.google.gson.JsonArray missingPromotionHistory(Player player, int rank) {
+        var missing = new com.google.gson.JsonArray();
+        var rule = PromotionHistory.forRank(rank);
+        if (rule == null) return missing;
+        var progress = promotionProgress(player, rule);
+        if (!progress.milestoneDone()) addPromotionStep(missing, player, rule.milestone(), "交付「" + contract(rule.milestone()).title() + "」委托");
+        if (!progress.dimensionDone()) {
+            var choices=rule.categoryChoices();
+            var options=new com.google.gson.JsonArray();
+            for(String id:choices)addPromotionStep(options, player, id, contract(id).title());
+            var selected=options.get(0).getAsJsonObject();
+            for(var option:options){
+                var entry=option.getAsJsonObject();
+                String state=entry.get("offerState").getAsString();
+                if(state.equals("current_contract_active")){selected=entry;break;}
+                if(state.equals("available")&&!selected.get("offerState").getAsString().equals("available"))selected=entry;
+            }
+            var step=selected.deepCopy();
+            String names=choices.stream().map(id->contract(id).title()).collect(java.util.stream.Collectors.joining(" / "));
+            step.addProperty("requirement","交付一张"+DIMS[rule.dimension()]+"类委托"+(choices.size()>1?"（任选其一："+names+"）":""));
+            if(choices.size()>1)step.add("options",options);
+            missing.add(step);
+        }
+        if (progress.distinct() < progress.minimum()) {
+            var step = new com.google.gson.JsonObject();
+            step.addProperty("requirement", "交付不同种类的委托（" + progress.distinct() + "/" + progress.minimum() + "）");
+            step.addProperty("nextCommand", "/mycli guild board");
+            missing.add(step);
+        }
+        return missing;
+    }
+
+    private void addPromotionStep(com.google.gson.JsonArray missing, Player player, String id, String requirement) {
+        var step = new com.google.gson.JsonObject();
+        var quest = contract(id);
+        String state = acceptanceReason(player, id);
+        if (state.equals("another_contract_active") && id.equals(activeId(player))) state = "current_contract_active";
+        step.addProperty("requirement", requirement);
+        step.addProperty("contractId", id);
+        String instruction = quest.title() + " · " + TaskGuidance.step(quest.goal(), quest.description());
+        if (state.equals("current_contract_active")) instruction = "已接此单，继续完成：" + instruction;
+        else if (state.equals("another_contract_active")) instruction = "完成在办委托后再接：" + instruction;
+        step.addProperty("instruction", instruction);
+        step.addProperty("offerState", state);
+        step.addProperty("nextCommand", switch (state) {
+            case "available" -> "/mycli guild accept " + id;
+            case "exam_contract_incompatible" -> "/mycli guild exam status";
+            default -> "/mycli guild status";
+        });
+        missing.add(step);
+    }
     void mirrorPromotion(Player p,int rank) {
         String path=base(p.getUniqueId())+".rituals.certified";
         if(rank>plugin.getConfig().getInt(path,0)){plugin.getConfig().set(path,rank);plugin.saveConfig();}
@@ -254,12 +411,6 @@ final class GuildManager implements Listener {
         if (plugin.taskMarket() != null && plugin.taskMarket().isMarket(id))
             return plugin.taskMarket().active(p);
         Contract found = contract(id);
-        if (found == null && id.startsWith("db_")) {
-            String beneficiary = plugin.getConfig().getString(path + ".beneficiary", "公会伙伴");
-            plugin.getConfig().set(path, null);
-            plugin.saveConfig();
-            p.sendMessage(ChatColor.YELLOW + "给" + beneficiary + "的今日委托已过期或撤下，未交付物品不会扣除；任务槽已释放。");
-        }
         if (found != null && id.startsWith("db_")) {
             java.util.Map<?, ?> snapshot = snapshot(p);
             if (snapshot != null) try {
@@ -270,6 +421,15 @@ final class GuildManager implements Listener {
             }
         }
         return found;
+    }
+    private boolean releaseExpiredDaily(Player player) {
+        if (!expiredDaily(activeId(player))) return false;
+        String path=base(player.getUniqueId())+".active";
+        String beneficiary=plugin.getConfig().getString(path+".beneficiary","公会伙伴");
+        plugin.getConfig().set(path,null);
+        plugin.saveConfig();
+        player.sendMessage(ChatColor.YELLOW+"给"+beneficiary+"的今日委托已过期或撤下，未交付物品不会扣除；任务槽已释放。");
+        return true;
     }
     private java.util.Map<?, ?> snapshot(Player player) {
         Object raw = plugin.getConfig().get(base(player.getUniqueId()) + ".active.snapshot");
@@ -347,6 +507,10 @@ final class GuildManager implements Listener {
         plugin.getConfig().set(path + ".joined", today());
         plugin.getConfig().set(path + ".fame", 0);
         plugin.getConfig().set(path + ".completed", 0);
+        if (plugin.skillAssessments() != null && plugin.skillAssessments().promotionsEnabled()) {
+            plugin.getConfig().set(path + ".rankPoints.fromGrade", 0);
+            plugin.getConfig().set(path + ".rankPoints.points", 0);
+        }
         plugin.saveConfig();
         player.sendMessage(ChatColor.GOLD + "欢迎加入千灯纪冒险者公会！当前等级：青铜。输入 /mycli guild board 看任务。");
         plugin.getLogger().info("Guild joined: player=" + player.getUniqueId());
@@ -360,7 +524,7 @@ final class GuildManager implements Listener {
             Contract quest = card.contract();
             player.sendMessage(ChatColor.YELLOW + quest.id() + ChatColor.WHITE + " " + quest.title()
                     + " · " + TaskGuidance.step(quest.goal(),quest.description()) + " · 声望+" + quest.fame()
-                    + " / 绿宝石×" + quest.emeralds()
+                    + " / 绿宝石×" + quest.emeralds() + rankPointHint(player,quest)
                     + " [" + (doneToday(player, quest) ? "今日已完成" : examBlocks(player, quest.id()) ? "不适合本场考试" : "可接") + "]");
         }
         player.sendMessage(ChatColor.GOLD + "【冒险者公会 · 常驻委托】");
@@ -375,7 +539,7 @@ final class GuildManager implements Listener {
             String state = doneToday(player, quest) ? "今日已完成" : examBlocks(player, quest.id()) ? "不适合本场考试" : gate;
             player.sendMessage(ChatColor.YELLOW + quest.id() + ChatColor.WHITE + " " + quest.title()
                     + " · " + TaskGuidance.step(quest.goal(),quest.description()) + " · 声望+" + quest.fame()
-                    + " / 绿宝石×" + quest.emeralds() + " [" + DIMS[quest.dim()] + "|" + state + "]");
+                    + " / 绿宝石×" + quest.emeralds() + rankPointHint(player,quest) + " [" + DIMS[quest.dim()] + "|" + state + "]");
         }
         player.sendMessage(ChatColor.GRAY + "每日轮换开放约 " + DAILY_POOL + " 张；当日完成 3 个不同维度，声望 +20%。"
                 + "用 /mycli guild accept <ID> 接单；完成后 /mycli guild claim 交付。");
@@ -394,13 +558,19 @@ final class GuildManager implements Listener {
                 next.append("，并完成认证：").append(certRequirementText(rank + 1));
             }
         } else next.append("；已达最高认证");
-        if(plugin.skillAssessments()!=null&&plugin.skillAssessments().promotionsEnabled()){next.setLength(0);next.append("；/mycli guild exam promotion 查看下一阶考试与缺项");}
+        if(plugin.skillAssessments()!=null&&plugin.skillAssessments().promotionsEnabled()){
+            next.setLength(0);
+            int grade=plugin.skillAssessments().readGrade(player);
+            if(plugin.skillAssessments().rankPointLedgerReady()&&grade<GuildRankPoints.LAST_GRADE)
+                next.append("；本阶晋级分 ").append(rankPoints(player,grade)).append("/").append(GuildRankPoints.target(grade+1));
+            next.append("；/mycli guild exam promotion 查看本阶进度。小段达标后确认晋升，跨大段需通过实操");
+        }
         player.sendMessage(ChatColor.GOLD + "冒险者认证：" + adventurerRankName(player) + " · 声望 " + fame
                 + " · 已完成 " + completed + " 单" + next);
         Contract quest = active(player);
         player.sendMessage(quest == null ? ChatColor.GRAY + "当前没有在办的委托。"
                 : ChatColor.AQUA + "正在进行：" + quest.title() + " [" + progress(player) + "/"
-                + quest.target() + "]" + (progress(player) >= quest.target() ? "；可交付领取" : ""));
+                + quest.target() + "]" + rankPointHint(player,quest) + (progress(player) >= quest.target() ? "；可交付领取" : ""));
         if (quest == null) {
             var cave = GuildAdventureGuide.cave(id -> plugin.taskMarket().availableOffer(player, id));
             player.sendMessage("§a[冒险路线] " + (cave == null ? "洞穴与天然遗迹委托：/mycli tasks list exploration"
@@ -412,7 +582,8 @@ final class GuildManager implements Listener {
         showBiomeBorderRequirement(player, quest);
         if (quest != null && plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().surveyStatus(player);
         else if (quest != null) {
-            var guide=TaskProgressGuidance.guide(quest,progress(player),null,"",new com.google.gson.JsonObject());
+            var guide=quest.goal()==Goal.PILGRIMAGE?pilgrimageState(player):null;
+            if(guide==null)guide=TaskProgressGuidance.guide(quest,progress(player),null,"",new com.google.gson.JsonObject());
             player.sendMessage("§a下一步："+guide.get("nextAction").getAsString());
             if(progress(player)<quest.target()&&TrialGuide.goal(quest.goal()))dungeon.command(player,new String[]{"arena","status"});
         }
@@ -431,8 +602,9 @@ final class GuildManager implements Listener {
         if(player.getGameMode()==GameMode.SPECTATOR)return "requires_survival";
         boolean market=plugin.taskMarket().isMarket(id);
         if(!dungeon.isBuilt()&&!market)return "dungeon_not_built";
-        if(active(player)!=null)return "another_contract_active";
-        if(plugin.taskMarket().isMarket(plugin.getConfig().getString(base(player.getUniqueId())+".active.id","")))return "active_snapshot_invalid";
+        String activeId = activeId(player);
+        if(!activeId.isEmpty() && !expiredDaily(activeId))return plugin.taskMarket().isMarket(activeId) && plugin.taskMarket().active(player)==null
+                ? "active_snapshot_invalid" : "another_contract_active";
         if(market){var task=plugin.taskMarket().find(player,id);if(task==null)return "task_not_found";
             String state=plugin.taskMarket().offerState(task,player);if(!state.equals("available"))return state;}
         if(doneToday(player,quest))return "done_today";
@@ -455,6 +627,8 @@ final class GuildManager implements Listener {
             item.addProperty("id",q.id());item.addProperty("title",q.title());item.addProperty("condition",TaskGuidance.step(q.goal(),q.description()));
             item.addProperty("goal",q.goal().name().toLowerCase(Locale.ROOT));item.addProperty("target",q.target());
             item.addProperty("fame",q.fame());item.addProperty("emeralds",q.emeralds());item.addProperty("minRank",q.minRank());
+            var pointOffer=rankPointPreview(player,q);
+            if(pointOffer!=null)item.add("rankPointPreview",rankPointReceipt(pointOffer));
             item.addProperty("state",state);item.addProperty("canAccept",state.equals("available"));
             item.addProperty("acceptCommand","guild accept "+q.id());rows.add(item);
         }
@@ -469,6 +643,7 @@ final class GuildManager implements Listener {
         out.addProperty("autoContinue",false);return out;
     }
     private void accept(Player player, String id) {
+        releaseExpiredDaily(player);
         String state=acceptanceReason(player,id);
         if(!state.equals("available")) {
             String advice=switch(state){
@@ -502,6 +677,7 @@ final class GuildManager implements Listener {
         if (quest.goal() == Goal.PILGRIMAGE) {
             org.bukkit.Location loc = player.getLocation();
             plugin.getConfig().set(path + ".origin", loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ());
+            plugin.getConfig().set(path + ".originWorld", loc.getWorld().getName());
             plugin.getConfig().set(path + ".far", 0);
         }
         if (quest.goal() == Goal.FAST_FLOOR || quest.goal() == Goal.NO_DEATH) {
@@ -518,6 +694,7 @@ final class GuildManager implements Listener {
         player.sendMessage(ChatColor.GREEN + "已接公会委托：" + quest.title() + "。" + TaskGuidance.step(quest.goal(),quest.description())
                 + "；完成后用 /mycli guild claim 领取声望与箱中物资。");
         showBiomeBorderRequirement(player, quest);
+        if(quest.goal()==Goal.PILGRIMAGE)player.sendMessage("§a"+pilgrimageState(player).get("nextAction").getAsString());
         if (quest.siteId() != null && quest.goal() == Goal.EXPLORE) player.sendMessage(ChatColor.AQUA
                 + "用传送罗盘选择「" + DungeonExpeditions.site(quest.siteId()).name()
                 + "」或输入 /mycli guild travel " + quest.siteId() + "；落点在遗迹外约 70 格。");
@@ -533,6 +710,11 @@ final class GuildManager implements Listener {
         if (plugin.taskMarket().combat(player) != null) return;
         if (quest.goal() == Goal.KILLS) advance(player, quest);
         else if (quest.goal() == Goal.WITCH_KILLS && type == org.bukkit.entity.EntityType.WITCH) advance(player, quest);
+    }
+
+    void onRestStationArrival(Player player) {
+        Contract quest=active(player);
+        if(quest!=null && quest.id().equals("trial_seven"))advance(player,quest);
     }
 
     void onDungeonFloorCleared(Player player, int floor, int partySize) {
@@ -614,9 +796,8 @@ final class GuildManager implements Listener {
         Contract quest = active(player);
         if (quest != null && (quest.goal() == Goal.BIOME_BORDER || quest.goal() == Goal.PEAK)) return;
         if (quest != null && quest.goal() == Goal.PILGRIMAGE) {
-            plugin.getConfig().set(base(player.getUniqueId()) + ".active.far", 0);
-            plugin.saveConfig();
-            player.sendMessage(ChatColor.YELLOW + "朝圣记录：传送会重置「徒步朝圣」的远方标记，步行才算数。");
+            interruptPilgrimage(player,event.getFrom().getWorld());
+            return;
         }
         checkExplore(player, event.getFrom(), event.getTo());
     }
@@ -626,8 +807,7 @@ final class GuildManager implements Listener {
         Player player = event.getPlayer();
         Contract quest = active(player);
         if (quest != null && quest.goal() == Goal.PILGRIMAGE) {
-            plugin.getConfig().set(base(player.getUniqueId()) + ".active.far", 0);
-            plugin.saveConfig();
+            interruptPilgrimage(player,player.getWorld());
         }
     }
 
@@ -746,7 +926,7 @@ final class GuildManager implements Listener {
                 if (origin != null && origin.getWorld() == to.getWorld() && horizontal(origin, to) > 200)
                     advance(player, quest);
             }
-            case PILGRIMAGE -> checkPilgrimage(player, to);
+            case PILGRIMAGE -> checkPilgrimage(player, from, to);
             default -> { }
         }
     }
@@ -789,22 +969,74 @@ final class GuildManager implements Listener {
         player.sendMessage(ChatColor.GREEN + "已实际跨过群系边界：" + start.biome() + " → " + end.biome());
     }
 
-    private void checkPilgrimage(Player player, org.bukkit.Location to) {
+    private com.google.gson.JsonObject pilgrimageState(Player player) {
+        String path=base(player.getUniqueId())+".active";
+        var cfg=plugin.getConfig();
+        var here=player.getLocation();
+        var origin=parseLoc(here.getWorld(),cfg.getString(path+".origin",""));
+        if(origin==null)return null;
+        String world=cfg.getString(path+".originWorld",here.getWorld().getName());
+        return PilgrimageRoute.guide(world,origin.getBlockX(),origin.getBlockY(),origin.getBlockZ(),
+                world.equals(here.getWorld().getName()),horizontal(origin,here),cfg.getBoolean(path+".restartWalk"),
+                cfg.getInt(path+".far")==1,cfg.getString(path+".trailBiome",""),progress(player)>=1);
+    }
+
+    private void interruptPilgrimage(Player player, org.bukkit.World fromWorld) {
+        String path=base(player.getUniqueId())+".active";
+        var cfg=plugin.getConfig();
+        if(progress(player)>=1 || cfg.getBoolean(path+".restartWalk"))return;
+        if(!cfg.contains(path+".originWorld"))cfg.set(path+".originWorld",fromWorld.getName());
+        cfg.set(path+".restartWalk",true);cfg.set(path+".far",0);cfg.set(path+".trailBiome",null);
+        plugin.saveConfig();
+        player.sendMessage(ChatColor.YELLOW + "徒步路线已中断。回到原起点50格内走一步可再出发，委托仍保留。");
+    }
+
+    private void checkPilgrimage(Player player, org.bukkit.Location from, org.bukkit.Location to) {
+        if(progress(player)>=1)return;
         String path = base(player.getUniqueId()) + ".active";
-        org.bukkit.Location origin = parseLoc(player.getWorld(),
-                plugin.getConfig().getString(path + ".origin", ""));
-        if (origin == null || origin.getWorld() != to.getWorld()) return;
-        int far = horizontal(origin, to);
-        if (plugin.getConfig().getInt(path + ".far", 0) == 0 && far > 500) {
-            plugin.getConfig().set(path + ".far", 1);
+        var cfg=plugin.getConfig();
+        if(from.getWorld()!=to.getWorld() || player.isInsideVehicle() || player.isFlying() || player.isGliding()
+                || from.distanceSquared(to)>32*32){
+            interruptPilgrimage(player,from.getWorld());return;
+        }
+        if(from.getBlockX()==to.getBlockX() && from.getBlockZ()==to.getBlockZ())return;
+        var origin = parseLoc(to.getWorld(),cfg.getString(path + ".origin", ""));
+        if(origin==null)return;
+        if(!cfg.contains(path+".originWorld")){
+            // Existing active contracts already have an origin and may have a verified outward leg.
+            cfg.set(path+".originWorld",from.getWorld().getName());plugin.saveConfig();
+        }
+        if(!to.getWorld().getName().equals(cfg.getString(path+".originWorld")))return;
+        int distance=horizontal(origin,to);
+        if(cfg.getBoolean(path+".restartWalk")){
+            if(distance<=PilgrimageRoute.RETURN){cfg.set(path+".restartWalk",null);plugin.saveConfig();
+                player.sendMessage("§a已回起点，可以重新徒步勘察。");}
+            return;
+        }
+        if(cfg.getInt(path+".far")==1){
+            if(distance<=PilgrimageRoute.RETURN)advance(player,contract("pilgrimage"));
+            return;
+        }
+        boolean surveyed=cfg.contains(path+".trailBiome");
+        boolean sampled=false;
+        if(!surveyed){
+            String fromBiome=WorldBiomes.at(from),toBiome=WorldBiomes.at(to);
+            if(!fromBiome.equals(toBiome)&&BiomeBorder.known(fromBiome)&&BiomeBorder.known(toBiome)){
+                cfg.set(path+".trailBiome",toBiome);sampled=true;
+                player.sendMessage("§a已勘察群系交界："+fromBiome+" → "+toBiome+"。");
+            }
+        }
+        if (PilgrimageRoute.reachedTurn(distance,surveyed||sampled)) {
+            cfg.set(path + ".far", 1);
             plugin.saveConfig();
-            player.sendMessage(ChatColor.AQUA + "已远离出发点 500 格！现在原路返回（50 格内）完成朝圣。");
-        } else if (plugin.getConfig().getInt(path + ".far", 0) == 1 && far <= 50) advance(player, contract("pilgrimage"));
+            player.sendMessage(ChatColor.AQUA + pilgrimageState(player).get("nextAction").getAsString());
+        } else if(sampled)plugin.saveConfig();
     }
 
     private org.bukkit.Location parseLoc(org.bukkit.World world, String raw) {
         if (raw == null || raw.isEmpty()) return null;
         String[] parts = raw.split(",");
+        if(parts.length!=3)return null;
         try {
             return new org.bukkit.Location(world, Integer.parseInt(parts[0]), Integer.parseInt(parts[1]),
                     Integer.parseInt(parts[2]));
@@ -826,8 +1058,10 @@ final class GuildManager implements Listener {
         plugin.getConfig().set(path, init);
         org.bukkit.configuration.ConfigurationSection daily =
                 plugin.getConfig().getConfigurationSection(base(player.getUniqueId()) + ".daily");
-        if (daily != null) for (String key : daily.getKeys(false))
-            plugin.getConfig().set(base(player.getUniqueId()) + ".everDone." + key, today());
+        if (daily != null) for (String key : daily.getKeys(false)) {
+            String receipt = base(player.getUniqueId()) + ".everDone." + key;
+            if (!plugin.getConfig().contains(receipt)) plugin.getConfig().set(receipt, daily.get(key));
+        }
         if (init > 0) plugin.getLogger().info("Guild v2.1 migrated: player=" + player.getUniqueId()
                 + ", certified=" + init);
         plugin.saveConfig();
@@ -838,16 +1072,13 @@ final class GuildManager implements Listener {
     int rankOf(Player player) { return effectiveRank(player); }
 
     private int effectiveRank(Player player) {
-        return plugin.skillAssessments()!=null&&plugin.skillAssessments().promotionsEnabled()?plugin.skillAssessments().grade(player)/3:legacyRank(player);
-    }
-
-    private boolean everDone(Player player, Contract quest) {
-        return plugin.getConfig().contains(base(player.getUniqueId()) + ".everDone." + quest.id());
+        return readRank(player);
     }
 
     private List<Contract> everDoneList(Player player) {
         List<Contract> done = new java.util.ArrayList<>();
-        for (Contract quest : CONTRACTS) if (everDone(player, quest)) done.add(quest);
+        var ids = deliveredIds(base(player.getUniqueId()));
+        for (Contract quest : CONTRACTS) if (ids.contains(quest.id())) done.add(quest);
         return done;
     }
 
@@ -863,30 +1094,13 @@ final class GuildManager implements Listener {
     }
 
     private boolean certRequirementMet(int rank, Player player) {
-        List<Contract> done = everDoneList(player);
-        switch (rank) {
-            case 1: return true;
-            case 2: return hasId(done, "deep_explorer") && hasDim(done, 5);
-            case 3: return hasId(done, "ocean_guard") && hasDim(done, 3);
-            case 4: return hasId(done, "treasure_vault") && done.size() >= 20 && hasDim(done, 4);
-            case 5: return hasId(done, "trial_ten") && done.size() >= 25 && hasDim(done, 0);
-            default: return false;
-        }
-    }
-
-    private boolean hasId(List<Contract> done, String id) {
-        for (Contract quest : done) if (quest.id().equals(id)) return true;
-        return false;
-    }
-
-    private boolean hasDim(List<Contract> done, int dim) {
-        for (Contract quest : done) if (quest.dim() == dim) return true;
-        return false;
+        var rule = PromotionHistory.forRank(rank);
+        return rank == 1 || (rule != null && promotionProgress(player, rule).complete());
     }
 
     private void checkCertify(Player player) {
         if(plugin.skillAssessments()!=null&&plugin.skillAssessments().promotionsEnabled()) {
-            player.sendMessage("§6声望已增长；/mycli guild exam promotion 查看晋级资格。达到门槛后主动参加考试，旧资历保持。");return;
+            player.sendMessage("§6声望已增长。查看 /mycli guild exam promotion 核对声望、本阶晋级分和履历；小段达标后确认晋升，跨大段再报名实操。");return;
         }
         int fameRank = rankIndex(fame(player));
         int certifiedNow = certified(player);
@@ -932,6 +1146,13 @@ final class GuildManager implements Listener {
         if (plugin.taskMarket() != null && plugin.taskMarket().offered(quest.id()) != null) return true;
         if (plugin.dailyBoard() != null && plugin.dailyBoard().card(quest.id()) != null) return true;
         if (poolIds().contains(quest.id())) return true;
+        var assessments = plugin.skillAssessments();
+        if (assessments != null && assessments.promotionsEnabled() && member(player)) {
+            int next = assessments.readGrade(player) + 1;
+            var rule = next % 3 == 0 ? PromotionHistory.forRank(next / 3) : null;
+            if (rule != null && (quest.id().equals(rule.milestone()) || rule.categoryChoices().contains(quest.id()))
+                    && rule.offers(quest.id(), promotionProgress(player, rule))) return true;
+        }
         // 等级特权：黑铁 +1、白金 +2 的个人追加池（seed=日期+uuid，公平可复现）
         int rank = effectiveRank(player);
         int extra = rank >= 4 ? 2 : rank >= 1 ? 1 : 0;
@@ -970,6 +1191,7 @@ final class GuildManager implements Listener {
     }
 
     private void abandon(Player player) {
+        if(releaseExpiredDaily(player))return;
         Contract quest = active(player);
         if (quest == null) { player.sendMessage(ChatColor.YELLOW + "当前没有可放弃的任务；/mycli guild status 核对，想接单请 guild board 查看开放清单。"); return; }
         if (plugin.taskMarket().isMarket(quest.id())) plugin.taskMarket().abandoned(player);
@@ -1015,6 +1237,14 @@ final class GuildManager implements Listener {
             result.addProperty("actorId",player.getUniqueId().toString());result.add("before",before);result.add("after",after);
             result.addProperty("fameBefore",fameBefore);result.addProperty("fame",reputation(player));
             result.addProperty("goalCompleted",action.equals("claim")&&after.get("completed").getAsInt()>before.get("completed").getAsInt());
+            if (result.get("goalCompleted").getAsBoolean() && before.has("rankPointPreview") && after.has("rankPoints")
+                    && before.get("pointsFromGrade").equals(after.get("pointsFromGrade"))) {
+                var actual=before.getAsJsonObject("rankPointPreview").deepCopy();
+                int points=after.get("rankPoints").getAsInt();
+                actual.addProperty("pointsAfter",points);
+                actual.addProperty("pointsEarned", points - before.get("rankPoints").getAsInt());
+                result.add("rankPointSettlement",actual);
+            }
             finish.accept(result);
         };
         if(action.equals("claim")){claim(player,done);return;}
@@ -1026,6 +1256,12 @@ final class GuildManager implements Listener {
     }
 
     private void claimVerified(Player player) {
+        var assessments = plugin.skillAssessments();
+        if (assessments != null && assessments.promotionsEnabled() && !assessments.rankPointLedgerReady()) {
+            player.sendMessage(ChatColor.YELLOW + "晋级档案暂时无法读取，委托和物品已保留，请稍后交付。");
+            return;
+        }
+        if(releaseExpiredDaily(player))return;
         Contract quest = active(player);
         if (quest == null) { player.sendMessage(ChatColor.YELLOW + "当前没有可交付的任务；/mycli guild status 核对在途记录，没有任务时先 guild board 选单再 accept。"); return; }
         if (progress(player) < quest.target()) {
@@ -1036,6 +1272,8 @@ final class GuildManager implements Listener {
             player.sendMessage(ChatColor.RED + "今日奖励已结算；请联系服主核对异常记录。"); return;
         }
         var finishedTask = plugin.taskMarket().find(player, quest.id());
+        // Freeze legacy rank before changing lifetime fame or delivered-contract history.
+        if (assessments != null && assessments.rankPointLedgerReady()) assessments.grade(player);
         if(quest.goal()==Goal.SKILL_ASSESSMENT&&!plugin.skillAssessments().submitMarket(player))return;
         ItemStack[] playerBefore = null;
         GuildSharedStorage.Receipt delivery = null;
@@ -1098,6 +1336,8 @@ final class GuildManager implements Listener {
         int dims = diversityBonus(player, quest.dim());
         int gain = dims >= 3 ? quest.fame() + (int) Math.ceil(quest.fame() * 0.2) : quest.fame();
         int nextFame = fame(player) + gain;
+        var rankAward = rankPointPreview(player, quest);
+        recordRankPoints(player,quest,rankAward);
         plugin.getConfig().set(path + ".fame", nextFame);
         plugin.getConfig().set(path + ".completed", plugin.getConfig().getInt(path + ".completed", 0) + 1);
         String completedDate = dynamic == null ? today() : dynamic.date();
@@ -1112,6 +1352,10 @@ final class GuildManager implements Listener {
         player.sendMessage(ChatColor.GREEN + "委托交付成功！声望 +" + gain
                 + (dims >= 3 ? "（含三维度 +20% 加成，今日已集 " + dims + " 个维度）" : "")
                 + "，绿宝石 ×" + emeraldGain + "及额外奖励已存入个人试炼箱。");
+        if (rankAward != null) {
+            player.sendMessage(ChatColor.AQUA + "晋级分 +" + rankAward.gain() + "（" + rankAward.explanation() + "）"
+                    + (rankAward.target() > 0 ? " · 本阶 " + rankAward.after() + "/" + rankAward.target() : ""));
+        }
         if (finishedTask != null && java.util.Set.of("exploration", "combat").contains(finishedTask.route()))
             plugin.agentCoach().rememberAdventure(player, "这趟公会委托已经交付");
         if (dynamic != null) player.sendMessage(ChatColor.GREEN + dynamic.beneficiary()
@@ -1168,6 +1412,10 @@ final class GuildManager implements Listener {
 
     ItemStack taskButton(Player p, String id) {
         String activeId = activeId(p);
+        if (expiredDaily(activeId)) {
+            if (id.equals(activeId)) return icon(Material.GRAY_DYE, "§7每日委托已过期", "可从看板直接选择新委托");
+            activeId = "";
+        }
         if (id.isEmpty()) return icon(Material.GRAY_DYE, "§7没有在途委托", "选择看板上的委托接取");
         if (!id.equals(activeId)) {
             if (!activeId.isEmpty()) return icon(Material.GRAY_DYE, "§7已有在途委托", "打开看板的当前委托继续");
@@ -1181,7 +1429,7 @@ final class GuildManager implements Listener {
             } else if (doneToday(p, offer) || !availableToday(p, offer)) {
                 return icon(Material.GRAY_DYE, "§7本轮不可接取", doneToday(p, offer) ? "本轮已经交付" : "等待看板轮换");
             }
-            return markTaskButton(icon(Material.LIME_DYE, "§a接取委托", offer.title()), "accept|" + id);
+            return markTaskButton(icon(Material.LIME_DYE, "§a接取委托", offer.title() + rankPointHint(p,offer)), "accept|" + id);
         }
 
         var state = progressState(p);
@@ -1200,6 +1448,8 @@ final class GuildManager implements Listener {
         String condition = state.get("condition").getAsString();
         String reward = ready ? (stage == stages ? "奖励存入个人奖励箱" : "继续下一阶段")
                 : state.has("advice") ? state.get("advice").getAsString() : "达成后回到这里交付";
+        if (state.has("rankPointPreview") && stage == stages)
+            reward += " · 晋级分 +" + state.getAsJsonObject("rankPointPreview").get("pointsEarned").getAsInt();
         String stepToken = plugin.taskMarket().stepToken(p);
         if (market == null) stepToken = plugin.getConfig().getString(base(p.getUniqueId()) + ".active.accepted", "");
         ItemStack button = icon(ready || needsCheck ? Material.EMERALD : Material.BOOK, title,
@@ -1240,17 +1490,17 @@ final class GuildManager implements Listener {
 
     void fillBoard(Player player, Inventory inventory) {
         int rank = effectiveRank(player);
-        inventory.setItem(0, icon(Material.BOOK, "§6冒险者档案", "等级：" + RANKS[rank],
+        inventory.setItem(0, icon(Material.BOOK, "§6冒险者档案", "公会段位：" + adventurerRankName(player),
                 "声望：" + fame(player), member(player) ? "点击查看当前任务" : "点击注册入会"));
         inventory.setItem(7, icon(Material.CLOCK, "§6今日动态委托", "每日 05:00 更新", "下方是常驻委托"));
-        inventory.setItem(6,icon(Material.WRITABLE_BOOK,"§b训练与晋级考试",adventurerRankName(player),"实操证书、技能升级资格与分段晋级"));
+        inventory.setItem(6,icon(Material.WRITABLE_BOOK,"§b训练与公会晋级",adventurerRankName(player),"小段确认晋升，跨大段参加实操；也可单独考技能证书"));
         inventory.setItem(8, icon(Material.BRICKS, "§6任务市场 · 千灯纪委托", "远征探索、工程、红石与多阶段生活任务", "点击查看任务与本人能力记录"));
         inventory.setItem(9,icon(Material.WRITABLE_BOOK,"§6玩家委托","收购、结伴讨伐与探索；报酬先托管"));
         List<DailyBoardManager.Card> dynamic = plugin.dailyBoard().cards();
         for (int i = 0; i < Math.min(5, dynamic.size()); i++) {
             Contract quest = dynamic.get(i).contract();
             inventory.setItem(1 + i, quest.id().equals(activeId(player)) ? taskButton(player, quest.id()) : icon(quest.icon(), "§6今日 §e" + quest.title() + " §7(" + quest.id() + ")",
-                    TaskGuidance.step(quest.goal(),quest.description()), "声望 +" + quest.fame() + " / 绿宝石 ×" + quest.emeralds(),
+                    TaskGuidance.step(quest.goal(),quest.description()), "声望 +" + quest.fame() + " / 绿宝石 ×" + quest.emeralds() + rankPointHint(player,quest),
                     doneToday(player, quest) ? "今天已完成" : "点击接单"));
         }
         for (int i = 0; i < CONTRACTS.size(); i++) {
@@ -1261,7 +1511,7 @@ final class GuildManager implements Listener {
                     : quest.minRank() > rank ? "需要" + RANKS[quest.minRank()] : "点击接单";
             inventory.setItem(10 + i, quest.id().equals(activeId(player)) ? taskButton(player, quest.id()) : icon(quest.icon(), "§e" + quest.title() + " §7(" + quest.id() + ")",
                 new String[]{"§7维度：" + DIMS[quest.dim()], TaskGuidance.step(quest.goal(),quest.description()),
-                    "声望 +" + quest.fame() + " / 绿宝石 ×" + quest.emeralds(), state}));
+                    "声望 +" + quest.fame() + " / 绿宝石 ×" + quest.emeralds() + rankPointHint(player,quest), state}));
         }
         Contract quest = active(player);
         inventory.setItem(48, icon(Material.BARRIER, "§c放弃当前委托", quest == null ? "没有在办的任务"

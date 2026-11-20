@@ -44,6 +44,7 @@ public final class AgentCliContractTest {
         var dungeonHelp=help("dungeon --help").getAsJsonArray("commands");
         check("dungeon essential steps fit page one",dungeonHelp.size()==7&&dungeonHelp.get(0).getAsJsonObject().get("name").getAsString().equals("list")&&dungeonHelp.get(2).getAsJsonObject().get("name").getAsString().equals("status"));
         check("exam status explicitly supports JSON",help("guild exam status --help --json").get("jsonSupported").getAsBoolean());
+        check("promotion advertises the read-only JSON progress query",help("guild exam promotion --help --json").get("jsonSupported").getAsBoolean()&&help("guild exam promotion --help --json").get("actionReadOnly").getAsBoolean());
         check("exam info explicitly supports JSON",help("guild exam info survey_basic --help --json").get("jsonSupported").getAsBoolean());
         check("supplies claim is an explicit JSON action",help("guild exam supplies claim map --help --json").get("jsonSupported").getAsBoolean()&&!help("guild exam supplies claim map --help --json").get("actionReadOnly").getAsBoolean());
         check("supplies status is an inexpensive JSON query",help("guild exam supplies status --help --json").get("jsonSupported").getAsBoolean()&&help("guild exam supplies status --help --json").get("actionReadOnly").getAsBoolean());

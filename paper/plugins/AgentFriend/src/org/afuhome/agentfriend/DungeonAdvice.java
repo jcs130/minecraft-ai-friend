@@ -47,14 +47,34 @@ final class DungeonAdvice {
         return new Request(words.toArray(String[]::new),json,verbose,page);
     }
     record Preparation(int stars,int recommendedLevel,String equipment,String party) { }
+    record Outing(String id,int level,boolean claimed,long lastEnded) {
+        static Comparator<Outing> orderFor(int playerLevel) {
+            return Comparator.comparingInt((Outing route)->Math.max(0,route.level-playerLevel-2))
+                .thenComparing(Outing::claimed)
+                .thenComparingInt(route->Math.abs(route.level-playerLevel))
+                .thenComparingLong(Outing::lastEnded)
+                .thenComparing(Outing::id);
+        }
+    }
     static Preparation preparation(String id,int minimumLevel) {
-        return switch(id) {
+        Preparation guide = switch(id) {
             case "undead_crypt" -> new Preparation(3,8,"铁制武器、铁甲、盾、熟食16、火把16","可单人；2–3人更稳：坦克或近战＋输出，有治疗更稳");
             case "creeping_crypt" -> new Preparation(3,10,"铁制武器、完整铁甲、盾、熟食16；准备解毒或治疗","可单人；建议坦克＋输出＋牧师，注意毒与远程敌人");
             case "bunker" -> new Preparation(4,12,"附魔铁制或钻石装备、盾、远程武器与弹药、熟食32","可单人；建议3–4人，坦克承伤、牧师恢复、输出清场");
             case "illager_camp" -> new Preparation(2,6,"近战与远程各一、铁甲、盾、熟食16","可单人；建议近战或坦克＋输出，用盾应对弩箭");
+            case "corsair_cove" -> new Preparation(2,7,"盾、远程武器、熟食","沿船舱逐段推进，先用掩体隔开弩手，再接近持斧敌人");
+            case "deep_mineworks" -> new Preparation(3,9,"盾、火把、牛奶或治疗","沿矿道楼梯结队下降，先清洞穴蜘蛛，再处理远处的骷髅");
+            case "sunken_dynasty" -> new Preparation(3,9,"盾、熟食、近战武器","利用墓室转角挡箭，把尸壳引到同一侧再集火");
+            case "tide_sanctum" -> new Preparation(3,10,"盾、弓箭、治疗补给","先找岸边掩体，分开处理溺尸和投药的女巫");
+            case "winter_manor" -> new Preparation(3,10,"盾、牛奶或治疗、弓箭","绕过走廊转角再交战，队友照看后排，优先清女巫");
+            case "jungle_covenant" -> new Preparation(3,11,"盾、解毒补给、远程武器","沿通道接近祭坛，先解决女巫，再集中处理接近的蜘蛛");
+            case "sky_watch" -> new Preparation(4,12,"盾、弓箭、熟食","上梯前先压制高处射手，站在平台内侧接敌");
+            case "frost_keep" -> new Preparation(4,13,"盾、远程武器、治疗补给","先找掩体避箭，寒霜守望者蓄力时横移出霜线");
+            case "ember_foundry" -> new Preparation(4,14,"抗火补给、盾、弓箭","先清烈焰人，近战绕到熔火监工侧后方躲开横扫");
+            case "void_citadel" -> new Preparation(5,16,"附魔护甲、远程武器、解毒和治疗补给","高处射手与女巫会同时施压，分人封住楼梯并清后排");
             default -> new Preparation(2,Math.max(5,minimumLevel),"铁制武器、铁甲、盾、熟食16；至少准备一项战斗技能","可单人；建议坦克或近战＋输出，牧师提供恢复");
         };
+        return new Preparation(guide.stars(),Math.max(minimumLevel,guide.recommendedLevel()),guide.equipment(),guide.party());
     }
     static String skill(String role) {
         return switch(role) {

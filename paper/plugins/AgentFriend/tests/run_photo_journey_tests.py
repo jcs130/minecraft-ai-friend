@@ -30,7 +30,7 @@ def main():
     cp = os.pathsep.join(str(p.resolve()) for p in [args.classes, *libraries])
     source = root / "src/org/afuhome/agentfriend"
     sources = [source / (name + ".java") for name in ["PhotoCameraManager", "PhotoJournal", "PhotoTaskLedger",
-               "PhotoRequest", "PhotoEvidence", "GuildAdventureGuide", "ProfessionLedger"]]
+               "PhotoRequest", "PhotoEvidence", "GuildAdventureGuide", "PromotionHistory", "ProfessionLedger"]]
     sources += [root / "tests/org/afuhome/agentfriend" / (name + ".java") for name in tests]
     report = {"scope": "Complete production manager with Bukkit/ImageFrame doubles; real atomic ledger files. No real game, model or photograph.",
               "realMinecraft": False, "realModelCalls": 0, "realPhotos": 0,

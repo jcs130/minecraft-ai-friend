@@ -47,6 +47,7 @@ public final class DungeonLifecycleTest {
         check(state.get("lifecycle").equals("ended")&&state.get("rescueActive").equals(false),"another team's run never revives old membership");
         state.clear();lifecycle.invoke(manager,state,null,player,Map.of());check(state.get("lifecycle").equals("none")&&state.get("rescueActive").equals(false),"no history means none, not a fault");
         var rescue=(TrialRescueManager)unsafe.allocateInstance(TrialRescueManager.class);
+        set(rescue,"companions",new HashMap<>());
         var covers=TrialRescueManager.class.getDeclaredMethod("covers",TrialRescueManager.Team.class,Player.class);covers.setAccessible(true);
         var at=List.of(false,true);for(boolean inside:at)for(int size:List.of(1,2))for(String prefix:List.of("site:","tower:")){
             Set<UUID> members=size==1?Set.of(id):Set.of(id,UUID.randomUUID());

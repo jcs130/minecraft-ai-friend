@@ -23,7 +23,7 @@ try{
   const status=lines.find(line=>line.startsWith('MC_DUNGEON status '));
   assert.ok(status);assert.match(status,/participant=false/);assert.match(status,/maxFloor=15/);
   lines.length=0;bot.chat('/mycli arena loot');await sleep(600);
-  assert.match(lines.join('\n'),/dailyLimitPerFloor=1/);
+  assert.match(lines.join('\n'),/dailyItemAwardsPerFloor=1 dailyCoinClearsPerFloor=2/);
   rcon(`tp ${name} -588 91 -310`);await sleep(850);
   if(bot.currentWindow)bot.closeWindow(bot.currentWindow);
   bot.setQuickBarSlot(8);

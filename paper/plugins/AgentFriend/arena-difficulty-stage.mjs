@@ -4,7 +4,7 @@ import {execFileSync} from 'node:child_process';
 
 const difficulty = process.argv[2] ?? 'adventure';
 const health = {normal: 20, adventure: 30, apocalypse: 44}[difficulty];
-const wallet = {normal: 0, adventure: 2, apocalypse: 5}[difficulty];
+const wallet = {normal: 1, adventure: 2, apocalypse: 5}[difficulty];
 assert.ok(health, 'expected normal, adventure or apocalypse');
 const require = createRequire('E:/Cortico/package.json');
 const mineflayer = require('mineflayer');
@@ -52,14 +52,10 @@ try {
     rcon(`minecraft:effect give ${bot.username} minecraft:resistance 240 4 true`);
   rcon('minecraft:kill @e[tag=afu_dungeon_mob]');
   await until(() => messages.some(line => line.includes('category=difficulty_wallet')
-      || difficulty === 'normal' && line.includes('第 1 层过关')), 'floor reward', 8000);
-  if (difficulty !== 'normal') {
-    assert.ok(messages.some(line => line.includes(`difficulty=${difficulty} amount=${wallet}`)),
-      messages.slice(-20).join(' | '));
-    bot.chat('/mycli arena wallet');
-    await until(() => messages.some(line => line.includes('MC_ARENA_ECONOMY')
-      && line.includes(`"balance":${wallet}`)), 'virtual wallet');
-  }
+      && line.includes(`amount=${wallet}`)), 'floor reward', 8000);
+  bot.chat('/mycli arena wallet');
+  await until(() => messages.some(line => line.includes('MC_ARENA_ECONOMY')
+    && line.includes(`"balance":${wallet}`)), 'virtual wallet');
   let deep = null;
   if (process.argv.includes('--deep')) {
     const floorY = {2: 57, 3: 45, 4: 33, 5: 21, 6: 9};

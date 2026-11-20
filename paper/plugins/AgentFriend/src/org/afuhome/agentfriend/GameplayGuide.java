@@ -24,7 +24,7 @@ final class GameplayGuide {
         add(out,"dungeons","遗迹与攻略Boss","/mycli dungeon list",enabled.contains("AgentFriend"),"按info核对难度、装备和职业搭配；占用或故障时换目标");
         add(out,"party","组队协作","/mycli guild party status",rpg,"队长create/invite，对方accept；建队不等于副本参战");
         add(out,"events","随机集结活动","/mycli world events",enabled.contains("WorldEvents"),"公告邀请，自主参加；集结结束不会中止已开始的挑战");
-        add(out,"rank","冒险者公会与晋级","/mycli guild status",enabled.contains("AgentFriend"),"探索委托交付得声望；用 guild exam promotion 查下一阶缺项，晋级与职业等级分开");
+        add(out,"rank","冒险者公会与晋级","/mycli guild status",enabled.contains("AgentFriend"),"交付委托积累声望和本阶晋级分；公会晋级页可确认小段、报名大段实操，或用 guild exam promotion 查看下一步");
         add(out,"trade","金币、交易与回收","/mycli trade --help",enabled.contains("Vault"),"RPG商店/委托/回收/玩家交易行共用金币；村民仍用实物；交易行 /mycli trade auction，商品送个人箱");
         add(out,"storage","远程个人箱与补给","/mycli arena stash inventory",enabled.contains("AgentFriend"),"按真实槽位putslot；公共补给guild shared，箱子与随身背包分开");
         add(out,"npc","NPC与剧情","/mycli world npcs",enabled.contains("NPCSpeak"),"先读人物ID与实际位置，再靠近world talk；剧情不由客户端编造");

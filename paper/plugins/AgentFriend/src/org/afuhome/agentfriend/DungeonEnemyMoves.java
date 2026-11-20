@@ -33,6 +33,7 @@ import org.bukkit.util.Vector;
 final class DungeonEnemyMoves implements Listener {
     enum Move {
         GRAVE_CLEAVE("grave_cleave", "封印重劈", "从侧面或背后绕开扇形", 34, 22, 240, 4.5, 55, 6, Color.ORANGE),
+        FORGE_SWEEP("forge_sweep", "炉卫横扫", "绕到监工身后或退到橙色弧线外", 40, 26, 260, 5, 65, 7, Color.fromRGB(255, 100, 35)),
         FROST_LINE("frost_line", "霜痕直劈", "横移出霜线", 28, 18, 220, 5.5, .8, 4, Color.AQUA);
 
         final String id;

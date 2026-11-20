@@ -905,20 +905,64 @@ final class ArenaEconomy implements Listener {
         return Math.max(0, plugin.getConfig().getInt(WALLET + owner, 0));
     }
 
-    int creditDifficulty(UUID owner, int amount) {
-        if(nativeRpg.selected()){
-            Player p=Bukkit.getPlayer(owner);if(p==null||amount<=0)return 0;
-            String run=plugin.getConfig().getString("dungeon-active-run.id","");
-            int floor=plugin.getConfig().getInt("dungeon-active-run.floor",0);
-            if(run.isEmpty()||floor<1){p.sendMessage("§e[reward_unverified] 缺少试炼场次证明，金币未发放；联系服主核对，不重复领奖。");return 0;}
-            JsonObject receipt=nativeRpg.settleMoney(p,"trial:"+run+":"+floor,amount,"trialFloor="+floor+";coins="+amount,()->{});
-            if(receipt.get("success").getAsBoolean())return amount;
-            p.sendMessage("§e["+receipt.get("reason").getAsString()+"] 试炼金币未确认；查询 /mycli arena recycle status，勿重复领奖。");
-            return 0;
+    private static final String TRIAL_COINS = "dungeon-pending-coins.";
+
+    String recordTrialCoins(UUID owner, String run, int floor, int amount) {
+        String request = "trial:" + run + ":" + floor;
+        if (amount > 0) {
+            String key = TRIAL_COINS + owner + "." + request;
+            plugin.getConfig().set(key + ".amount", amount);
+            plugin.getConfig().set(key + ".native", nativeRpg.selected());
         }
-        int credited = Math.min(Math.max(0, amount), MAX_BALANCE - balance(owner));
-        if (credited > 0) plugin.getConfig().set(WALLET + owner, balance(owner) + credited);
-        return credited;
+        return request;
+    }
+
+    Set<String> deliverTrialCoins(Player player) {
+        UUID owner = player.getUniqueId();
+        var pending = plugin.getConfig().getConfigurationSection(TRIAL_COINS + owner);
+        if (pending == null) return Set.of();
+        Set<String> confirmed = new java.util.HashSet<>();
+        for (String request : Set.copyOf(pending.getKeys(false))) {
+            if (pending.getBoolean(request + ".native") != nativeRpg.selected()) {
+                player.sendMessage("§e金币服务已切换，试炼凭据 " + request + " 保留在原钱包等待核对。");
+                continue;
+            }
+            int amount = pending.getInt(request + ".amount");
+            boolean alreadyPaid = false;
+            if (nativeRpg.selected()) {
+                JsonObject receipt;
+                try {
+                    receipt = nativeRpg.settleMoney(player, request, amount, "coins=" + amount, () -> {});
+                } catch (RuntimeException unavailable) {
+                    plugin.getLogger().warning("Trial wallet unavailable for " + request + ": " + unavailable.getClass().getSimpleName());
+                    player.sendMessage("§e金币服务暂不可用，试炼凭据 " + request + " 已保留。");
+                    break;
+                }
+                String reason = receipt.get("reason").getAsString();
+                alreadyPaid = reason.equals("transaction_already_completed");
+                if (!receipt.get("success").getAsBoolean() && !alreadyPaid) {
+                    player.sendMessage("§e试炼金币待核对 [" + reason + "]，已保留凭据 " + request + "。");
+                    break;
+                }
+            } else {
+                int room = MAX_BALANCE - balance(owner);
+                if (room < amount) {
+                    player.sendMessage("§e钱包余量不足，试炼金币仍保留在原凭据中。");
+                    break;
+                }
+                plugin.getConfig().set(WALLET + owner, balance(owner) + amount);
+            }
+            pending.set(request, null);
+            if (pending.getKeys(false).isEmpty()) plugin.getConfig().set(TRIAL_COINS + owner, null);
+            plugin.saveConfig();
+            confirmed.add(request);
+            player.sendMessage(ChatColor.GREEN + (alreadyPaid ? "已核实原试炼金币凭据，" + amount + " 金此前已结算。"
+                    : "试炼金币已结算 +" + amount + "，可在商人处购买补给。"));
+            player.sendMessage("MC_DUNGEON_LOOT floor=" + request.substring(request.lastIndexOf(':') + 1)
+                    + " category=difficulty_wallet request=" + request + " amount=" + amount + " recipient=" + player.getName()
+                    + " alreadyPaid=" + alreadyPaid);
+        }
+        return confirmed;
     }
 
     private ItemStack source(Player player, boolean stash, int slot) {
