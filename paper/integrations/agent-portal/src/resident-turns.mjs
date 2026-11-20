@@ -61,6 +61,7 @@ export class ResidentTurns {
       }
       if (!/^[a-z][a-z0-9_-]{1,31}$/.test(r.id) || !['maid', 'numen'].includes(r.bodyKind)
           || ![r.bodyId, r.ownerGameId].every(v => uuid.test(v)) || r.bodyId === r.ownerGameId
+          || (r.websiteOwnerId != null && (r.fresh || !uuid.test(r.websiteOwnerId)))
           || (!(r.fresh && !r.characterId) && !uuid.test(r.characterId))
           || typeof r.name !== 'string' || !r.name.trim() || !/^[a-f0-9]{64}$/.test(r.workerHash)
           || keys.has(r.workerHash) || bodies.has(r.bodyId) || r.characterId && characters.has(r.characterId) || this.roles.has(r.id)) {
@@ -75,6 +76,9 @@ export class ResidentTurns {
 
   owns(owner, r) {
     if (!owner) return false;
+    if (r.websiteOwnerId) {
+      return r.websiteOwnerId === owner && !!this.store.ownerById(owner) && this.nativeOwnerAllows(r,owner);
+    }
     if (!r.fresh) return this.store.ownedUuids(owner).includes(r.ownerGameId);
     return r.creator === owner && !!this.store.ownerById(owner) && this.nativeOwnerAllows(r,owner);
   }
