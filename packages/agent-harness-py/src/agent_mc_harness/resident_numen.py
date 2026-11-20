@@ -49,7 +49,7 @@ async def admit_numen(role, cfg, transport, token_file, *, http=None):
     key = Path(cfg["controlKeyFile"]).read_bytes()
     if len(key) != 32:
         raise ValueError("invalid_resident_numen_control_key")
-    identity = {"roleUuid": str(role.body_id), "ownerUuid": str(role.owner_id), "name": transport["name"]}
+    identity = {"roleUuid": str(role.body_id), "ownerUuid": str(role.native_owner_id), "name": transport["name"]}
     async with httpx.AsyncClient(trust_env=False, follow_redirects=False, transport=http, timeout=50) as client:
         for op in ("admit", "session"):
             claims = {**identity, "op": op, "expires": int(time.time() * 1000) + 45000}

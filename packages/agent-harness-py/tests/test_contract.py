@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 from fakes import COMPANION, MAID, OWNER, FakeBridge, FakeNumenWorld, MaidOracle, patch_native
+from simbody import SimBody
 
 from agent_mc_harness import BodyAction, Scope, guard_body
 from agent_mc_harness.body.base import BodyAdapter
@@ -88,6 +89,10 @@ def test_action_semantics(kind: str, tmp_path: Path, monkeypatch: pytest.MonkeyP
             assert again == first, "same requestId returns the original receipt"
             assert len(edge.writes()) == writes_before + 1, "idempotent: no second write"
             assert again.retry_allowed is False
+            conflict = await body.act(BodyAction(verb="chat", args={"text": "另一句"}, request_id=first.request_id))
+            assert conflict.status == "rejected" and "request_id_conflict" in conflict.text
+            assert len(edge.writes()) == writes_before + 1
+            assert (await body.result(first.request_id)).request_id == first.request_id
             stop = await body.stop("test")
             assert stop.verb == "stop"
             snap = await body.snapshot()
@@ -95,6 +100,90 @@ def test_action_semantics(kind: str, tmp_path: Path, monkeypatch: pytest.MonkeyP
             h = body.health()
             assert h.counters.actions >= 1 and h.connected
             await body.destroy()
+    run(go())
+
+
+def test_original_request_binds_native_operation_and_json_arguments(run: Any) -> None:
+    async def go() -> None:
+        body = SimBody()
+        await body.spawn()
+        rid = "req-native-010"
+        first = BodyAction(verb="native", name="lua", args={"item": {"x": True, "y": [1, 2]}}, request_id=rid)
+        saved = await body.act(first)
+        reordered = first.model_copy(update={"args": {"item": {"y": [1, 2], "x": True}}})
+        assert await body.act(reordered) == saved
+        for changed in ({"name": "other"}, {"verb": "chat"}, {"args": {"item": {"x": 1, "y": [1, 2]}}}):
+            conflict = await body.act(first.model_copy(update=changed))
+            assert conflict.status == "rejected" and "request_id_conflict" in conflict.text
+        assert await body.result(rid) == saved and len(body.acts) == 1
+
+        recovered = SimBody()
+        recovered.restore_request(first)
+        recovered.restore_request(reordered)
+        with pytest.raises(ValueError, match="request_id_conflict"):
+            recovered.restore_request(first.model_copy(update={"name": "other"}))
+        await recovered.spawn()
+        assert (await recovered.act(reordered)).status == "unknown"
+        assert (await recovered.act(first.model_copy(update={"name": "other"}))).status == "rejected"
+        assert (await recovered.result(rid)).status == "unknown" and not recovered.acts
+    run(go())
+
+
+def test_foreign_dispatch_and_query_receipts_do_not_settle_original(monkeypatch: pytest.MonkeyPatch, run: Any) -> None:
+    async def go() -> None:
+        body = SimBody()
+        await body.spawn()
+        async def crossed_reply(*args):
+            return body.receipt("req-foreign-01", "chat", "completed")
+
+        monkeypatch.setattr(body, "_do_act", crossed_reply)
+        monkeypatch.setattr(body, "_do_result", crossed_reply)
+        action = BodyAction(verb="chat", args={"text": "hello"}, request_id="req-original-01")
+        sent = await body.act(action)
+        assert sent.request_id == action.request_id and sent.status == "unknown"
+        assert await body.result(sent.request_id) == sent
+        assert await body.act(action) == sent and body.health().counters.actions == 1
+    run(go())
+
+
+@pytest.mark.parametrize("cancel_dispatch", [False, True])
+def test_original_request_claimed_before_dispatch(monkeypatch: pytest.MonkeyPatch, run: Any, cancel_dispatch: bool) -> None:
+    async def go() -> None:
+        body = SimBody()
+        await body.spawn()
+        entered, release = asyncio.Event(), asyncio.Event()
+        calls = []
+
+        async def dispatch(action, rid):
+            calls.append((rid, action.args["text"]))
+            entered.set()
+            await release.wait()
+            return body.receipt(rid, action.verb, "completed", "delivered")
+
+        monkeypatch.setattr(body, "_do_act", dispatch)
+        original = BodyAction(verb="chat", args={"text": "first"}, request_id="req-race-001")
+        sending = asyncio.create_task(body.act(original))
+        await entered.wait()
+        duplicate = asyncio.create_task(body.act(original))
+        conflict = asyncio.create_task(body.act(original.model_copy(update={"args": {"text": "changed"}})))
+        await asyncio.sleep(0)
+        interim = await body.result("req-race-001")
+        if cancel_dispatch:
+            sending.cancel()
+        release.set()
+        if cancel_dispatch:
+            with pytest.raises(asyncio.CancelledError):
+                await sending
+        else:
+            assert (await sending).status == "completed"
+        assert interim.request_id == "req-race-001" and not interim.terminal
+        assert (await duplicate).request_id == "req-race-001"
+        refused = await conflict
+        assert refused.status == "rejected" and "request_id_conflict" in refused.text
+        final = await body.result("req-race-001")
+        assert final.status == ("unknown" if cancel_dispatch else "completed")
+        assert await body.act(original) == final
+        assert calls == [("req-race-001", "first")]
     run(go())
 
 

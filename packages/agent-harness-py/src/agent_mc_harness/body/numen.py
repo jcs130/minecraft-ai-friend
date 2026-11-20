@@ -606,8 +606,7 @@ class NumenBody(BaseBody):
             native_actions = [*native_actions, NativeAction(name="nourish",
                 description="Eat one ordinary food carried in your backpack when hunger is at most 14. Observe the actual consumed item and hunger.",
                 input_schema={"type": "object", "properties": {}, "additionalProperties": False})]
-            if self.adventure_partner:
-                native_actions.extend(adventure.catalogue(self.adventure_partner))
+            native_actions.extend(adventure.catalogue(self.adventure_partner))
         return Capabilities(
             kind="numen", transport=self.port.transport, actions=acts,
             native_actions=native_actions,
@@ -772,8 +771,6 @@ class NumenBody(BaseBody):
     async def _do_act(self, action: BodyAction, request_id: str) -> ActionReceipt:
         verb, args = action.verb, action.args
         if verb == "native" and action.name in (adventure.ACT, adventure.QUERY, adventure.SURVEY):
-            if not self.adventure_partner or self.port.transport != "numen-hosted-mcp":
-                raise ArgumentError("This body has no configured adventure access.")
             self._remember_adventure(action.model_copy(update={"request_id": request_id}))
             if action.name == adventure.SURVEY:
                 if args:

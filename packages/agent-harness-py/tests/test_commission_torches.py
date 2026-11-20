@@ -79,7 +79,8 @@ def test_interrupted_stage_read_cannot_submit_a_new_craft():
     assert asyncio.run(body.result(original)).status == "rejected"
     assert calls == []
 
-def test_planner_can_choose_one_batch_and_observes_stale_or_missing_stock(tmp_path):
+@pytest.mark.parametrize("partner", ["QaFriend", None])
+def test_planner_can_choose_one_batch_and_observes_stale_or_missing_stock(tmp_path, partner):
     from simbody import SimBody
     from test_server_npc import role
     from agent_mc_harness.journal import ActionJournal
@@ -91,7 +92,7 @@ def test_planner_can_choose_one_batch_and_observes_stale_or_missing_stock(tmp_pa
         body = SimBody()
         await body.spawn()
         allowed = ["body:native:adventure_query", "body:native:adventure_action", "body:inventory", "body:native:survey"]
-        cfg = role(adventure_partner="QaFriend", allowed_tools=allowed)
+        cfg = role(adventure_partner=partner, allowed_tools=allowed)
         journal = ActionJournal(tmp_path/"actions.sqlite3")
         facts = []
         async def reply(path, data, timeout):
@@ -102,7 +103,7 @@ def test_planner_can_choose_one_batch_and_observes_stale_or_missing_stock(tmp_pa
             return {"choices":[{"message":{"content":json.dumps({"steps":[proposed]})}}]}
         host = NpcHost(cfg, body, NpcPlanner(cfg, SimpleNamespace(request=reply)), None, journal)
         caps = body.capabilities()
-        caps.native_actions = adventure.catalogue("QaFriend")
+        caps.native_actions = adventure.catalogue(partner)
         context = PlanContext(snapshot=await body.snapshot(),capabilities=caps)
         host.next_roster_check = float("inf")
         intent = host.runtime.submit_intent(IDLE_GOAL, agent=cfg.id)

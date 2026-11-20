@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import type { ActionReceipt, ActionStatus, ActionVerb, BodyAction, BodyAdapter, BodyCapabilities, BodyEvent, BodyEventKind, BodyHealth,
   BodyIdentity, BodyKind, BodyLifecycleState, BodySnapshot } from './types.ts';
 import { ACTION_VERBS } from './types.ts';
@@ -21,6 +22,7 @@ export abstract class BaseBodyAdapter implements BodyAdapter {
   protected state: BodyLifecycleState = 'detached';
   private readonly listeners = new Set<(e: BodyEvent) => void>();
   protected readonly receipts = new Map<string, ActionReceipt>();
+  private readonly requests = new Map<string, { action: BodyAction; dispatching: boolean }>();
   private readonly startedAt = new Date().toISOString();
   protected readonly counters = { actions: 0, completed: 0, accepted: 0, failed: 0, unknown: 0, unsupported: 0, safetyBlocked: 0, events: 0, errors: 0 };
   private lastEventAt: string | null = null;
@@ -73,33 +75,57 @@ export abstract class BaseBodyAdapter implements BodyAdapter {
     const requestId = action.requestId ?? newRequestId();
     const verb = action.verb;
     this.counters.actions++; this.lastActionAt = this.now().toISOString();
-    if (!REQUEST_ID.test(requestId)) return this.record(this.receipt(requestId, verb, 'rejected', 'requestId must match [A-Za-z0-9_-]{8,48}'));
-    if (!(ACTION_VERBS as readonly string[]).includes(verb)) return this.record(this.receipt(requestId, verb, 'unsupported', `unknown verb ${String(verb)}`));
+    if (!REQUEST_ID.test(requestId)) return this.receipt(requestId, verb, 'rejected', 'requestId must match [A-Za-z0-9_-]{8,48}');
+    const input = { verb, name: action.name, args: action.args === undefined ? {} : action.args };
+    const original = this.requests.get(requestId);
     const prior = this.receipts.get(requestId);
-    if (prior) return prior.terminal ? prior : (await this.result(requestId, signal));
+    if ((original || prior) && !isDeepStrictEqual(original?.action, input))
+      return this.receipt(requestId, verb, 'rejected', 'request_id_conflict; query the original request');
+    if (original?.dispatching || prior) return this.result(requestId, signal);
+    if (!(ACTION_VERBS as readonly string[]).includes(verb)) return this.receipt(requestId, verb, 'unsupported', `unknown verb ${String(verb)}`);
+    if (typeof input.args !== 'object' || input.args === null || Array.isArray(input.args))
+      return this.receipt(requestId, verb, 'rejected', 'args must be an object');
+    let request;
+    try { request = { action: structuredClone(input), dispatching: false }; }
+    catch { return this.receipt(requestId, verb, 'rejected', 'args must contain transportable values'); }
+    this.requests.set(requestId, request);
     if (!this.connected()) return this.record(this.receipt(requestId, verb, 'rejected', `body is ${this.lifecycle()}; spawn/reconnect first`));
     const caps = this.capabilities();
     if (verb !== 'native' && !caps.actions[verb])
       return this.record(this.receipt(requestId, verb, 'unsupported', `${this.kind} body does not support "${verb}"; supported: ${Object.keys(caps.actions).join(', ')}`));
     if (verb === 'native' && (!action.name || !caps.nativeActions.some(n => n.name === action.name)))
       return this.record(this.receipt(requestId, verb, 'unsupported', `unknown native action "${String(action.name)}" for ${this.kind}`));
-    if (action.args !== undefined && (typeof action.args !== 'object' || action.args === null || Array.isArray(action.args)))
-      return this.record(this.receipt(requestId, verb, 'rejected', 'args must be an object'));
+    // Reserve this ID before a transport callback or another caller can enter act().
+    request.dispatching = true;
     try {
-      return this.record(await this.doAct({ ...action, verb, requestId, args: action.args ?? {} }, signal));
+      const receipt = await this.doAct({ ...structuredClone(request.action), requestId }, signal);
+      return this.record(receipt.requestId === requestId ? receipt :
+        this.receipt(requestId, verb, 'unknown', 'response requestId mismatch; query the original request'));
     } catch (error) {
       this.fail(error);
       // The request may or may not have reached the body: report unknown, never retry.
       return this.record(this.receipt(requestId, verb, error instanceof ArgumentError ? 'rejected' : 'unknown', this.lastError ?? 'error'));
+    } finally {
+      request.dispatching = false;
+      this.trimReceipts();
     }
   }
 
   async result(requestId: string, signal?: AbortSignal): Promise<ActionReceipt> {
+    const request = this.requests.get(requestId);
     const known = this.receipts.get(requestId);
-    if (known?.terminal) return known;
+    if (known?.terminal && known.status !== 'unknown') return known;
+    if (request?.dispatching)
+      return this.receipt(requestId, request.action.verb, 'unknown', 'dispatch in progress; query the original request', { terminal: false });
     const fresh = await this.doResult(requestId, signal).catch(error => { this.fail(error); return null; });
-    if (fresh) { this.receipts.set(requestId, fresh); if (fresh.terminal && known && !known.terminal) this.settled(fresh); return fresh; }
-    return known ?? this.receipt(requestId, 'native', 'unknown', 'no record of this request');
+    const latest = this.receipts.get(requestId);
+    if (latest?.terminal && latest.status !== 'unknown') return latest;
+    if (fresh?.requestId === requestId) {
+      if (latest || fresh.status !== 'unknown') this.remember(fresh);
+      if (latest && fresh.terminal && fresh.status !== 'unknown') this.settled(fresh);
+      return fresh;
+    }
+    return latest ?? this.receipt(requestId, 'native', 'unknown', 'no record of this request');
   }
 
   async stop(reason = 'stop requested'): Promise<ActionReceipt> {
@@ -129,9 +155,26 @@ export abstract class BaseBodyAdapter implements BodyAdapter {
     return { requestId, verb, status, terminal: status !== 'accepted', text: text.slice(0, 2000), retryAllowed: false, ...extra };
   }
 
-  protected record(r: ActionReceipt): ActionReceipt {
+  private remember(r: ActionReceipt): void {
     this.receipts.set(r.requestId, r);
-    if (this.receipts.size > 500) this.receipts.delete(this.receipts.keys().next().value!);
+    this.trimReceipts();
+  }
+
+  private trimReceipts(): void {
+    if (this.receipts.size <= 500) return;
+    for (const id of this.receipts.keys()) {
+      if (this.requests.get(id)?.dispatching) continue;
+      this.receipts.delete(id);
+      this.requests.delete(id);
+      if (this.receipts.size <= 500) break;
+    }
+  }
+
+  protected record(r: ActionReceipt): ActionReceipt {
+    // A native completion event may have arrived before the dispatch returned.
+    const latest = this.receipts.get(r.requestId);
+    if (latest?.terminal && latest.status !== 'unknown') return latest;
+    this.remember(r);
     const c = this.counters;
     if (r.status === 'completed') c.completed++; else if (r.status === 'accepted') c.accepted++; else if (r.status === 'unknown') c.unknown++;
     else if (r.status === 'unsupported') c.unsupported++; else if (r.status === 'blocked_by_safety') c.safetyBlocked++; else c.failed++;
@@ -141,9 +184,10 @@ export abstract class BaseBodyAdapter implements BodyAdapter {
   /** Mark an accepted request terminal and publish `action_result` (used by bodies whose results arrive later). */
   protected settle(requestId: string, status: Exclude<ActionStatus, 'accepted'>, text: string, data?: unknown, raw?: unknown): ActionReceipt | null {
     const prior = this.receipts.get(requestId);
-    if (prior?.terminal) return null;
-    const r = this.receipt(requestId, prior?.verb ?? 'native', status, text, { executionId: prior?.executionId ?? requestId, ...(data !== undefined ? { data } : {}) });
-    this.receipts.set(requestId, r);
+    if (prior?.terminal && (prior.status !== 'unknown' || status === 'unknown')) return null;
+    const verb = prior?.verb ?? this.requests.get(requestId)?.action.verb ?? 'native';
+    const r = this.receipt(requestId, verb, status, text, { executionId: prior?.executionId ?? requestId, ...(data !== undefined ? { data } : {}) });
+    this.remember(r);
     if (status === 'completed') this.counters.completed++; else if (status === 'unknown') this.counters.unknown++; else this.counters.failed++;
     this.settled(r, raw);
     return r;

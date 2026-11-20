@@ -18,6 +18,7 @@ final class NativeMaidBodyPort implements AutoCloseable {
     private final HybridMaidPlugin plugin;
     private final MaidBodyControl control;
     private final NativeMaidBodyActions actions;
+    private final MaidPlayerProfiles playerProfiles;
     private final HttpServer server;
     private final ExecutorService executor;
     private final byte[] token;
@@ -46,6 +47,14 @@ final class NativeMaidBodyPort implements AutoCloseable {
                 plugin.registerUnifiedBody(maid);
             }
         }
+        MaidPlayerProfiles profiles;
+        try {
+            profiles = MaidPlayerProfiles.from(rows);
+        } catch (MaidBodyControl.Fault | IllegalArgumentException invalid) {
+            plugin.getLogger().warning("Player profile reads disabled: invalid playerProfileId pairing in native-body-port.json");
+            profiles = MaidPlayerProfiles.from(new JsonArray());
+        }
+        playerProfiles = profiles;
         control=new MaidBodyControl(plugin.getDataFolder().toPath().resolve("native-body-receipts"),bindings);
         actions=new NativeMaidBodyActions(plugin,control);
         server=HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),port),16);
@@ -55,6 +64,13 @@ final class NativeMaidBodyPort implements AutoCloseable {
         plugin.getLogger().info("Native maid body port listening on loopback; "+bindings.size()+" explicit bindings");
     }
     boolean active(UUID maid){return control.active(maid);}
+    JsonObject playerRoleProfile(UUID player, UUID maid) {
+        return playerProfiles.read(player, maid, () -> plugin.ownedLoaded(player, maid).getOwnerUUID(),
+            NativeMaidMagicSupport::cachedPlayerProfile);
+    }
+    String playerRoleIssue(UUID player, UUID maid) {
+        return playerProfiles.issue(player, maid, () -> plugin.ownedLoaded(player, maid).getOwnerUUID());
+    }
     boolean exclusive(UUID maid){return active(maid)&&!actions.companion(maid);}
     boolean guarding(UUID maid){return active(maid)&&actions.guarding(maid);}
     long epoch(UUID maid){return control.epoch(maid);}

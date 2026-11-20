@@ -367,6 +367,40 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     public EntityMaid ownedLoaded(Player actor,UUID id){
         return ownedLoaded(actor.getUniqueId(),id);
     }
+    /** Server plugin ABI. The caller supplies its authenticated original player, never a client-selected identity. */
+    public String playerRoleProfile(UUID verifiedPlayerId, UUID maidId) {
+        if (!Bukkit.isPrimaryThread()) throw new IllegalStateException("main_thread_required");
+        if (!isEnabled() || bodyPort == null) return MaidPlayerProfiles.unavailable("player_body_not_paired").toString();
+        try {
+            return bodyPort.playerRoleProfile(verifiedPlayerId, maidId).toString();
+        } catch (CompatibilityException denied) {
+            return MaidPlayerProfiles.unavailable(denied.code()).toString();
+        } catch (LinkageError missingRpgApi) {
+            return MaidPlayerProfiles.unavailable("rpg_bridge_unavailable").toString();
+        }
+    }
+    /** Last committed revision only. The plugin caller must wait asynchronously, outside the game thread. */
+    public java.util.concurrent.CompletableFuture<String> lastSavedPlayerRoleProfile(UUID verifiedPlayerId, UUID maidId) {
+        if (!Bukkit.isPrimaryThread()) throw new IllegalStateException("main_thread_required");
+        String issue = playerRoleIssue(verifiedPlayerId, maidId);
+        if (issue != null) return java.util.concurrent.CompletableFuture.completedFuture(MaidPlayerProfiles.unavailable(issue).toString());
+        String unavailable = MaidPlayerProfiles.unavailable("player_profile_unavailable").toString();
+        try {
+            return NativeMaidMagicSupport.lastSavedPlayerProfile(verifiedPlayerId, maidId).thenApplyAsync(view -> {
+                String currentIssue = playerRoleIssue(verifiedPlayerId, maidId);
+                return currentIssue == null ? view.toString() : MaidPlayerProfiles.unavailable(currentIssue).toString();
+            }, Bukkit.getScheduler().getMainThreadExecutor(this))
+                .completeOnTimeout(unavailable, 5, java.util.concurrent.TimeUnit.SECONDS)
+                .exceptionally(failure -> unavailable);
+        } catch (LinkageError | RuntimeException unavailableApi) {
+            return java.util.concurrent.CompletableFuture.completedFuture(unavailable);
+        }
+    }
+    private String playerRoleIssue(UUID player, UUID maid) {
+        if (!isEnabled() || bodyPort == null) return "player_body_not_paired";
+        try { return bodyPort.playerRoleIssue(player, maid); }
+        catch (CompatibilityException denied) { return denied.code(); }
+    }
     EntityMaid ownedLoaded(UUID actor,UUID id){
         owned(actor,id);EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
         if(maid==null||!maid.isAlive()||!maid.getBukkitEntity().isValid())throw new CompatibilityException(maid!=null&&!maid.isAlive()?"maid_dead":"unloaded","Query context before acting on the original body");

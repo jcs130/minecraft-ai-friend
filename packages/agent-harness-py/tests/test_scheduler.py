@@ -62,8 +62,9 @@ def test_system0_reflex_is_not_preempted(run: Any) -> None:
         assert rt.metrics.deferred and "native" in (done.reason or "")
         body.health_, body.native_busy = 20.0, True  # native work running -> still waits
         j = rt.submit_intent("mine iron again", candidates=CANDIDATES)
-        await asyncio.sleep(0.03)
-        assert rt.intents[j.id].state == "queued" and body.acts == []
+        waiting = await settle(rt, j.id, ("paused",))
+        assert "native" in (waiting.reason or "")
+        assert body.acts == [] and planner.contexts == []
         await rt.close()
     run(go())
 

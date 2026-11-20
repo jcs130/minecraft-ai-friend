@@ -1,20 +1,21 @@
 import json
-from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 
 from agent_mc_harness.npc_service import external_handoff
+from test_server_npc import role as npc_role
 
 
 def test_external_handoff_is_scoped_and_expires(tmp_path):
-    role = SimpleNamespace(body_kind="maid", body_id=uuid4(), owner_id=uuid4())
+    role = npc_role(body_kind="maid", body_id=uuid4(), owner_id=uuid4(), body_owner_id=uuid4(),
+                    allowed_tools=["body:observe"])
     marker = tmp_path / "handoff.json"
     cfg = {"externalHandoffFile": str(marker)}
     assert not external_handoff(role, cfg, now=100)
-    valid = {"bodyId": str(role.body_id), "ownerId": str(role.owner_id), "until": 232}
+    valid = {"bodyId": str(role.body_id), "ownerId": str(role.native_owner_id), "until": 232}
     for changes, expected in [
-        ({}, True), ({"bodyId": str(uuid4())}, False), ({"ownerId": str(uuid4())}, False),
+        ({}, True), ({"bodyId": str(uuid4())}, False), ({"ownerId": str(role.owner_id)}, False),
         ({"until": 100}, False), ({"until": 281}, False), ({"until": "232"}, False),
     ]:
         marker.write_text(json.dumps(valid | changes))
@@ -27,7 +28,7 @@ def test_external_handoff_is_scoped_and_expires(tmp_path):
 
 
 def test_incomplete_handoff_never_opens_a_second_controller(tmp_path):
-    role = SimpleNamespace(body_kind="maid", body_id=uuid4(), owner_id=uuid4())
+    role = npc_role(body_kind="maid", body_id=uuid4(), owner_id=uuid4(), allowed_tools=["body:observe"])
     marker = tmp_path / "handoff.json"
     for content in ("bad", "[]", "{}", "null"):
         marker.write_text(content)

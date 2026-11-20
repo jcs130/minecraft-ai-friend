@@ -105,6 +105,8 @@ def test_maid_commands_validated_by_the_real_maid_port(tmp_path: Path, monkeypat
             assert body.identity().name == "肥鱼"  # type: ignore[union-attr]
             await body.act(BodyAction(verb="follow", request_id="req-follow-0001"))
             await body.act(BodyAction(verb="chat", args={"text": "跟我来"}, request_id="req-speak-0001"))
+            inventory = (await body.snapshot()).inventory
+            assert inventory is not None and inventory["slots"] == [] and inventory["availableSlots"] == 6
             assert any("follow" in c for c in bridge.maid_commands) and any("speak" in c or "say" in c for c in bridge.maid_commands)
             recall = await body.act(BodyAction(verb="recall", request_id="req-recall-001"))
             assert recall.status == "accepted" and not recall.terminal

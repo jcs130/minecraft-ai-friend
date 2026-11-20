@@ -4,6 +4,9 @@ One `agent_mc_harness.npc_service` schedules registered characters. Numen and
 Touhou Little Maid supply bodies, native pathfinding, combat and real inventory;
 they do not run a second language-model control loop for these bindings.
 
+The [unified character architecture plan](../../docs/UNIFIED_AGENT_ARCHITECTURE_PLAN.md)
+covers the staged extension to native villagers and Mineflayer.
+
 | Character | Body | Deliberate decisions |
 |---|---|---|
 | Kirito | Numen hosted 0.1.5, original UUID | Token Plan `qwen3.8-flash` |
@@ -191,6 +194,23 @@ native/PowerContext histories remain archived; this is not a claim that all old
 external memories have already been ingested into Graphiti.
 
 ## Body migration and rollback
+
+The role registry accepts schema 2 with separate `character` and `body`
+objects per role. `character` contains the stable role ID, character UUID,
+owner UUID, display name, persona, model, and memory options. `body` names the
+active body kind and UUID, its allowed tools, and any body-specific settings.
+The old flat schema 1 still loads.
+
+An optional `body_owner_id` in the body object selects the native owner used
+for the body lease. The character owner still scopes the role's memory and
+desktop access. For example, a hosted Numen can use a distinct native owner
+while keeping the character's existing personality and memory. On a planned
+body reassignment, keep the character block, the role state directory, and the
+server and world scope together. Point the service's existing transport config
+for that role at the replacement body after the previous controller has been
+released. The registry format is an operator input, with one active body per
+role. The asset and control handoff still needs the corresponding body's
+save and release procedure.
 
 1. Freeze exact candidate hashes and current loaded paths. Wait for the existing
    player/activity gate, give 180/60/10-second notices, stop normally and verify

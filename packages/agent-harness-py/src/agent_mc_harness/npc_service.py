@@ -69,7 +69,7 @@ def external_handoff(role, transport, *, now=None):
     current = time.time() if now is None else now
     until = row.get("until") if isinstance(row, dict) else None
     return (type(until) in (int, float) and current < until <= current + 180
-            and row.get("bodyId") == str(role.body_id) and row.get("ownerId") == str(role.owner_id))
+            and row.get("bodyId") == str(role.body_id) and row.get("ownerId") == str(role.native_owner_id))
 
 
 def adventure_source(settings):
@@ -227,19 +227,20 @@ async def serve(path: Path):
     def build(role):
         transport = settings["bodies"][role.id]
         scope = role.scope(settings["serverId"])
+        native_owner = str(role.native_owner_id)
         controller = str(UUID(transport["controllerId"]))
         journal = ActionJournal(state / role.id / "actions.sqlite3")
         if role.body_kind == "maid":
             bridge = NativeMaidBridge(transport["endpoint"], Path(transport["tokenFile"]).read_text().strip(),
-                                      owner_id=str(role.owner_id), maid_id=str(role.body_id), controller_id=controller)
-            body = MaidBody(bridge, scope=scope, owner_id=str(role.owner_id), maid_id=str(role.body_id), server_id=settings["serverId"])
+                                      owner_id=native_owner, maid_id=str(role.body_id), controller_id=controller)
+            body = MaidBody(bridge, scope=scope, owner_id=native_owner, maid_id=str(role.body_id), server_id=settings["serverId"])
         else:
             if settings.get("residentCreationSlots", {}).get(role.id, {}).get("numenAdmission"):
                 transport = {**transport, "tokenFile": state / role.id / "numen" / "hosted.token"}
             port = HostedMcpPort({**transport, "name": transport["name"], "bodyId":str(role.body_id),
-                                  "ownerId":str(role.owner_id), "serverId":settings["serverId"],
+                                  "ownerId":native_owner, "serverId":settings["serverId"],
                                   "journalDirectory":str(state / role.id / "numen")}, action_journal=journal)
-            body = NumenBody(port, scope=scope, server_id=settings["serverId"], name=role.name, owner_id=str(role.owner_id),
+            body = NumenBody(port, scope=scope, server_id=settings["serverId"], name=transport["name"], owner_id=native_owner,
                              item_use_ids=tuple(role.native_items), adventure_partner=role.adventure_partner)
         memory = open_role_memory(state / role.id, connection)
         return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1, resident_turns=turns.get(role.id)),

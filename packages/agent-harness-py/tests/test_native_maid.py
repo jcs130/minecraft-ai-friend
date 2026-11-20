@@ -66,6 +66,7 @@ class NativeServer:
         self.life = "alive"
         self.drop_reply = False
         self.reply_override: dict[str, Any] | None = None
+        self.inventory_result: dict[str, Any] | None = None
         self.cast_observation: dict[str, Any] | None = None
         self.actions = ["list", "context", "inventory", "tasks", "brain", "receipt", "walk", "follow", "stay", "speak"]
         self.messages: list[dict[str, Any]] = []
@@ -139,6 +140,8 @@ class NativeServer:
                 raise httpx.ReadTimeout("injected after commit", request=request)
         reply = {"ok": True, "data": data}
         envelope["result"] = {"content": [{"type": "text", "text": json.dumps(reply)}]}
+        if action == "inventory" and self.inventory_result is not None:
+            envelope["result"] = self.inventory_result
         return httpx.Response(200, json=envelope)
 
 
@@ -302,6 +305,39 @@ def test_workshop_inventory_has_an_explicit_default_and_rejects_a_guessed_name(r
         finally:
             await body.destroy()
 
+    run(scenario())
+
+
+@pytest.mark.parametrize("change,result_error", [
+    ({"ok": False, "reason": "maid_unavailable"}, False),
+    ({"ok": True, "status": "pending"}, False),
+    ({"ok": True}, True),
+    ({"action": "context"}, False),
+    ({"data": {"maidId": OTHER, "slots": []}}, False),
+    ({"data": {"maidId": MAID, "ownerId": OTHER, "slots": []}}, False),
+    ({"data": {"slots": []}}, False),
+    ({"data": {"maidId": MAID, "slots": {}}}, False),
+])
+def test_inventory_observation_requires_a_successful_read_of_the_original_maid(change, result_error, run):
+    async def scenario():
+        server = NativeServer()
+        body = make(server)
+        try:
+            await body.spawn()
+            inventory = {"maidId": MAID, "ownerId": OWNER, "slots": [{"slot": 32, "id": "minecraft:torch", "count": 4}],
+                         "backpackId": "touhou_little_maid:big_backpack", "availableSlots": 36, "freeSlotCount": 35}
+            reply = {"ok": True, "data": inventory}
+            server.inventory_result = {"content": [{"type": "text", "text": json.dumps(reply)}]}
+            assert (await body.snapshot()).inventory == inventory
+            server.inventory_result = {"isError": result_error, "content": [
+                {"type": "text", "text": json.dumps(reply | change)}]}
+            observed = await body.snapshot()
+            assert observed.life_state == "alive" and observed.inventory is None
+            read = await body.act(BodyAction(verb="inventory", request_id="inventory_verify"))
+            assert read.status == "failed" and read.terminal
+            assert server.writes == []
+        finally:
+            await body.destroy()
     run(scenario())
 
 

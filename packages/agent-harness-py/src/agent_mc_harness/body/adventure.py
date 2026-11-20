@@ -1,4 +1,4 @@
-"""Player-level RPG choices for one configured hosted adventurer."""
+"""Player-level RPG choices for a hosted adventurer."""
 from __future__ import annotations
 
 import json
@@ -35,6 +35,9 @@ ACTIONS = {
     "meet_partner": "locate tp {peer}", "party_chat": "guild party chat {text}",
 }
 QUERY, ACT, SURVEY = "adventure_query", "adventure_action", "survey"
+COORDINATION = {"create_party": "plan_invitation", "invite_partner": "plan_invitation",
+                "accept_invitation": "plan_joining", "meet_partner": "party", "party_chat": "party"}
+PARTNER_OPERATIONS = set(COORDINATION) | {"plan_invitation", "plan_joining"}
 PLAYER = re.compile(r"[\w.]{1,16}")
 CONTENT_ID = re.compile(r"[a-z0-9][a-z0-9_-]{0,79}")
 # Read old, server-authored display echoes when reconciling an earlier installation.
@@ -58,15 +61,19 @@ end
 print('SURVEY_END')"""
 
 
-def catalogue(peer: str) -> list[NativeAction]:
+def catalogue(peer: str | None) -> list[NativeAction]:
     result = [NativeAction(name=SURVEY, read_only=True, description="Survey the nearby ground and players. walkTo positions are sampled destinations for body:move.",
                            input_schema={"type": "object", "properties": {}, "additionalProperties": False})]
+    action_description = "Use your own inventory, equipment and RPG progress. Check the actual effect afterwards."
+    if peer:
+        action_description += f" Your configured party partner is {peer}. Inviting gives the other player a choice."
     for name, options, description in (
         (QUERY, QUERIES, "Preview inventory clean/store/donate or read this player's live event, quest, ruin, trial or native party. Use returned IDs and requirements."),
-        (ACT, ACTIONS, f"Act as yourself. When space is tight, store ordinary surplus privately, clean common junk, or donate extra supplies to the guild. Party partner is {peer}. Inviting gives the other player a choice. Check the effect afterwards."),
+        (ACT, ACTIONS, action_description),
     ):
         result.append(NativeAction(name=name, description=description, read_only=name == QUERY, input_schema={
-            "type": "object", "properties": {"kind": {"type": "string", "enum": list(options)},
+            "type": "object", "properties": {"kind": {"type": "string", "enum": [
+                operation for operation in options if peer or operation not in PARTNER_OPERATIONS]},
             "id": {"type": "string", "description": "Exact returned quest or ruin ID, only for operations that require one."}},
             "required": ["kind"], "additionalProperties": False}))
     query_properties = result[1].input_schema["properties"]
@@ -85,12 +92,16 @@ def catalogue(peer: str) -> list[NativeAction]:
     return result
 
 
-def player_command(name: str, args: dict, account: str, peer: str) -> str:
+def player_command(name: str, args: dict, account: str, peer: str | None) -> str:
     options = QUERIES if name == QUERY else ACTIONS if name == ACT else {}
     kind = args.get("kind")
     template = options.get(kind) if isinstance(kind, str) else None
-    if not template or not PLAYER.fullmatch(account or "") or not PLAYER.fullmatch(peer or "") or account.casefold() == peer.casefold():
-        raise ArgumentError("Choose an advertised adventure operation with the configured partner.")
+    if not template or not PLAYER.fullmatch(account or ""):
+        raise ArgumentError("Choose an advertised adventure operation for this player.")
+    if peer is not None and (not PLAYER.fullmatch(peer) or account.casefold() == peer.casefold()):
+        raise ArgumentError("The configured partner must be another valid player.")
+    if kind in PARTNER_OPERATIONS and not peer:
+        raise ArgumentError("This party operation requires a configured partner.")
     if kind == "characters":
         page = args.get("page", 1)
         if set(args) - {"kind", "page"} or type(page) is not int or not 1 <= page <= 2 ** 31 - 1:
@@ -629,7 +640,3 @@ def meeting_recovery(last, prepared):
         if denial.get("activity") == "trial" and prepared.get("phase") == "insufficient_balance":
             recovery["alternative"] = "travel_trial"
     return recovery
-
-
-COORDINATION = {"create_party": "plan_invitation", "invite_partner": "plan_invitation",
-                "accept_invitation": "plan_joining", "meet_partner": "party", "party_chat": "party"}

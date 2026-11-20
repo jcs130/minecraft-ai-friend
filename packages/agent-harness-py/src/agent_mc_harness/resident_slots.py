@@ -18,7 +18,7 @@ def slot_templates(config, roles):
     slots = {}
     for slot_id, row in config.get("residentCreationSlots", {}).items():
         defaults = row["roleDefaults"]
-        if set(defaults) & {"id", "character_id", "body_kind", "body_id", "owner_id", "name", "social_previous_bodies"}:
+        if set(defaults) & {"id", "character_id", "body_kind", "body_id", "owner_id", "body_owner_id", "name", "social_previous_bodies"}:
             raise ValueError("resident_slot_identity_must_be_independent")
         # The template is validated before the first reservation and is never attached.
         template = NpcRole(**defaults, id=slot_id, name=slot_id[:24], character_id=UUID(int=0),
@@ -82,7 +82,7 @@ class BirthRegistry:
 async def binding_is_live(role, body):
     identity = body.identity()
     if (not identity or identity.kind != role.body_kind or identity.body_id != str(role.body_id)
-            or identity.owner_id != str(role.owner_id) or identity.scope.character != str(role.character_id)
+            or identity.owner_id != str(role.native_owner_id) or identity.scope.character != str(role.character_id)
             or not body.health().connected):
         return False
     scene = await body.snapshot()

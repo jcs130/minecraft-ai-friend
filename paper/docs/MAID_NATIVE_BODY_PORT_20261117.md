@@ -27,6 +27,14 @@
 
 请求使用 `POST /maid-body`、`Authorization: Bearer <token>`、UTF-8 JSON，单次请求最多 16 KiB。所有实际操作在服务器主线程再次检查。HTTP 工作线程有界；等待主线程超时且尚未开始则撤销排队，已经开始则返回结果未知。两者都不会由服务器自动重放。
 
+### 服务端查询已配对玩家的 RPG 资料
+
+需要将某个既有玩家和一只原生女仆配成同一角色时，服主可在上例对应行显式添加 `playerProfileId`，值为已核验的原玩家 UUID。首版支持原玩家也是原生主人的配对。每个玩家只能配对一只身体，且玩家 UUID 与女仆 UUID 分开。仅登记领养关系的普通女仆不会获得这项配对。
+
+受信任的服务端插件在游戏主线程调用 `HybridMaidPlugin.playerRoleProfile(verifiedPlayerId, maidId)`。第一个参数来自调用方已验证的角色身份。成功的 JSON 包含 `available`、`playerId`、`maidId`、`level`、`experience` 和 `profession`（未选职为空字符串）。每次读取都核对本服绑定、原生存活实体及其当前主人，再查询 Vortex 已加载的玩家资料。区块卸载、主人变更、资料加载中或缓存缺失会返回 `available:false` 及原因。桌面身体授权仍只授予既有身体接口，该资料查询仅供游戏服进程调用。
+
+原玩家退出时 Vortex 会移除在线缓存并排队保存。服务端插件可在主线程调用 `lastSavedPlayerRoleProfile(verifiedPlayerId, maidId)`，通过返回的 `CompletableFuture<String>` 异步接收最近一次已提交的存档。请用回调接收结果，避免在游戏线程等待。结果附带 `source=last_saved_vortex_snapshot`、`revision` 和保存时间 `savedAt`。正在排队的变化可能要到下一版存档中才能读到。尚未生成存档的 UUID 会返回 `no_saved_player_profile`。存档读取前与交付时均复核本服配对及原生身体。
+
 首次请求：
 
 ```json
