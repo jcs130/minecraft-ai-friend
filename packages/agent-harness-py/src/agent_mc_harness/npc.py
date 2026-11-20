@@ -525,7 +525,8 @@ class NpcPlanner:
             "Keep your own role and existing partnership in mind when choosing whom to accompany. "
             "A greeting alone does not require following. A request is something to weigh for yourself. "
             'To meet someone once, output {"steps":[],"companion":{"mode":"approach","targetUuid":"<listed uuid>"}}. '
-            'Use targetName for an exact name or alias. If you decide to travel together (跟我走、一路同行), choose follow to keep pace when the person moves after arrival. Use approach for a one-time meeting. Choose optional travel auto, walk, or teleport. Walking uses the native pathfinder; distance, blocked routes and dimensions may require the paid travel spell when teleportAvailable. '
+            'To keep travelling with them (跟我走、一路同行), output {"steps":[],"companion":{"mode":"follow","targetUuid":"<listed uuid>"}}. Follow includes reaching them first and keeping pace when they move. '
+            'Both modes accept targetName for an exact name or alias and optional travel auto, walk, or teleport. Walking uses the native pathfinder; distance, blocked routes and dimensions may require the paid travel spell when teleportAvailable. '
             'Use {"steps":[],"companion":{"mode":"stop"}} to end your selection. '
             "When your current choice still fits, omit companion. For a new choice return companion with empty steps. "
             "Do not issue body:follow or announce arrival alongside a choice. A walk receipt describes a leg of the trip. "
