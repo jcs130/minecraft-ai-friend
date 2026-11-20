@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { MapTileCdn, MAP_TILE_MANIFEST_LIMIT } from './world-map-tile-cdn.mjs';
-import { validateAincradAddresses } from './aincrad-addresses.mjs';
+import { validateAincradAddresses, withNativeResidences } from './aincrad-addresses.mjs';
 import { directoryIndex, placeAddress } from '../public/world-map-model.js';
 
 export const MAP_FILE_LIMIT = 8 * 1024 * 1024;
@@ -160,7 +160,7 @@ export class WorldMap {
     return { schemaVersion: 1, available: !!state && !stale, stale, observedAt: state?.observedAt || null, source: 'minecraft.rcon-readonly',
       freshForMs: MAP_FRESH_MS, players: stale ? [] : state.players, npcs: stale ? [] : (state.npcs||[]), maps: state?.maps || [], readOnly: true };
   }
-  addresses() {
+  baseAddresses() {
     if (this.addressBook === undefined) {
       this.addressBook = this.publicDir
         ? fs.readFile(path.join(this.publicDir, 'aincrad-addresses.json'), 'utf8')
@@ -169,10 +169,34 @@ export class WorldMap {
     }
     return this.addressBook;
   }
+  async addresses() {
+    const catalogue = await this.baseAddresses();
+    await this.state();
+    const residences = this.stateCache?.residences;
+    if (!catalogue || !residences) return catalogue;
+    if (this.nativeAddressBook?.residences !== residences) {
+      this.nativeAddressBook = {residences, catalogue: withNativeResidences(catalogue, residences)};
+    }
+    return this.nativeAddressBook.catalogue;
+  }
   async acceptState(value) {
     const checked = validateMapState(value, this.now());
     const operation = this.queue.then(async () => {
       await this.state();
+      if (Object.hasOwn(value, 'residences')) {
+        const previous = this.stateCache?.residences;
+        if (previous && JSON.stringify(previous) === JSON.stringify(value.residences)) {
+          checked.residences = previous;
+        } else {
+          const catalogue = await this.baseAddresses();
+          if (!catalogue) throw fail(400, 'MAP_RESIDENCE_FORMAT');
+          try { withNativeResidences(catalogue, value.residences); }
+          catch { throw fail(400, 'MAP_RESIDENCE_FORMAT'); }
+          checked.residences = value.residences;
+        }
+      } else if (this.stateCache?.residences) {
+        checked.residences = this.stateCache.residences;
+      }
       if (this.stateCache && checked.sequence <= this.stateCache.sequence) {
         if (checked.sequence === this.stateCache.sequence && JSON.stringify(checked) === JSON.stringify(this.stateCache)) return { accepted: true, duplicate: true };
         throw Object.assign(fail(409, 'MAP_STATE_SEQUENCE'), { currentSequence: this.stateCache.sequence });

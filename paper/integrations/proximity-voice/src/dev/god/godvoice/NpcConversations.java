@@ -12,6 +12,7 @@ import org.bukkit.event.*;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.persistence.PersistentDataType;
 
 /** Scoped text/ASR input for registered NPCs. No model, controller or new player connection. */
 final class NpcConversations implements Listener {
@@ -19,10 +20,20 @@ final class NpcConversations implements Listener {
     private volatile Map<UUID,NpcDialoguePolicy.Profile> profiles;
     // The native speech adapter renews every five game ticks, including during silence.
     static final long BINDING_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
-    record Binding(Entity entity,Function<String,Boolean> input,long renewedAt){
+    record Binding(Entity entity,Function<String,Boolean> input,long renewedAt,UUID generation){
+        Binding(Entity entity,Function<String,Boolean> input,long renewedAt){
+            this(entity,input,renewedAt,UUID.randomUUID());
+        }
         boolean current(Entity original,long now){return original==entity && now-renewedAt < BINDING_NANOS;}
     }
     private record Generation(Entity entity,UUID world,UUID session){}
+    record VillagerTurn(Entity body, Player speaker, UUID world, UUID generation, long expiresAt){
+        boolean current(Entity entity,Player player,UUID dimension,UUID binding,long now){
+            return body==entity&&speaker==player&&world.equals(dimension)&&generation.equals(binding)&&now<=expiresAt;
+        }
+    }
+    private static final NamespacedKey VILLAGER_ID=Objects.requireNonNull(NamespacedKey.fromString("qiandeng-villager-quests:resident-id"));
+    private final Map<String,VillagerTurn> villagerTurns=new LinkedHashMap<>();
     private final Map<UUID,Binding> hosted=new HashMap<>();
     private final Map<UUID,Generation> generations=new HashMap<>();
     private final NpcDialoguePolicy.Seen delivered=new NpcDialoguePolicy.Seen();
@@ -59,6 +70,9 @@ final class NpcConversations implements Listener {
     Entity live(UUID id){
         var profile=profiles.get(id);if(profile==null)return null;
         Entity entity=Bukkit.getEntity(id);if(!(entity instanceof LivingEntity living)||living.isDead()||!living.isValid())return null;
+        if(profile.kind().equals("villager"))return entity instanceof Villager villager
+                && villager.hasAI() && !villager.isInvisible()
+                && profile.residentId().equals(villager.getPersistentDataContainer().get(VILLAGER_ID,PersistentDataType.STRING))?villager:null;
         try{
             Object handle=entity.getClass().getMethod("getHandle").invoke(entity);
             String type=handle.getClass().getName();
@@ -74,7 +88,9 @@ final class NpcConversations implements Listener {
     }
     JsonArray catalogue(){
         var rows=new JsonArray();for(var p:profiles.values()){
-            var row=new JsonObject();row.addProperty("id",p.id().toString());row.addProperty("ownerId",p.owner().toString());
+            var row=new JsonObject();row.addProperty("id",p.id().toString());
+            if(p.owner()!=null)row.addProperty("ownerId",p.owner().toString());
+            if(p.residentId()!=null)row.addProperty("residentId",p.residentId());
             row.addProperty("kind",p.kind());row.addProperty("name",p.name());row.addProperty("displayName",p.display());row.addProperty("voice",p.voice());row.addProperty("range",p.range());rows.add(row);
         }return rows;
     }
@@ -95,6 +111,28 @@ final class NpcConversations implements Listener {
         var binding=hosted.get(entity.getUniqueId());
         return binding!=null && binding.current(entity,System.nanoTime()) && entity.isValid() && !entity.isDead();
     }
+    boolean bindVillager(UUID id,Function<String,Boolean> input){
+        var profile=profiles.get(id);
+        Entity body=live(id);
+        if(profile==null||!profile.kind().equals("villager")||body==null||input==null)return false;
+        long now=System.nanoTime();
+        var prior=hosted.get(id);
+        if(prior!=null&&prior.current(body,now))hosted.put(id,new Binding(body,input,now,prior.generation()));
+        else hosted.put(id,new Binding(body,input,now));
+        return true;
+    }
+    Player villagerListener(UUID id,UUID listener,String event){
+        var profile=profiles.get(id);
+        var turn=villagerTurns.get(event);
+        var body=live(id);
+        var player=Bukkit.getPlayer(listener);
+        var binding=hosted.get(id);
+        if(profile==null||!profile.kind().equals("villager")||turn==null||body==null||player==null
+                ||binding==null||!binding.current(body,System.nanoTime())
+                ||!turn.current(body,player,body.getWorld().getUID(),binding.generation(),System.currentTimeMillis())
+                ||!hears(player,body,profile)||!player.hasLineOfSight(body))return null;
+        return player;
+    }
     void disconnected(Player player){
         var binding=hosted.get(player.getUniqueId());
         if(binding!=null && binding.entity()==player)hosted.remove(player.getUniqueId());
@@ -102,6 +140,7 @@ final class NpcConversations implements Listener {
     void sample(Map<UUID,VoiceAudience.Actor> all){
         for(var p:profiles.values()){
             Entity entity=live(p.id());if(entity==null){generations.remove(p.id());hosted.remove(p.id());continue;}
+            if(p.residentId()!=null&&!hostedReady(entity)){generations.remove(p.id());continue;}
             Location at=entity.getLocation();var generation=generations.get(p.id());
             if(generation==null||generation.entity()!=entity||!generation.world().equals(at.getWorld().getUID())){
                 generation=new Generation(entity,at.getWorld().getUID(),UUID.randomUUID());generations.put(p.id(),generation);
@@ -166,6 +205,8 @@ final class NpcConversations implements Listener {
         if(profile.kind().equals("maid")&&profile.owner().equals(player.getUniqueId()))return false;
         if(profile.kind().equals("maid")&&player.getLocation().distanceSquared(body.getLocation())>64)return false;
         if(closing(address.text()))return true;
+        if(profile.kind().equals("villager"))
+            return deliver(player,profile.id(),"addressed_"+input+"_"+profile.id(),address.text(),input.startsWith("voice_")?"voice":"chat",System.currentTimeMillis());
         if(!delivered.add(profile.id(),player.getUniqueId(),"natural_"+input,System.currentTimeMillis()))return true;
         return plugin.naturalNpcDialogue(profile,player,address.text(),scope,audience,input.startsWith("voice_")?"voice":"text");
     }
@@ -205,6 +246,8 @@ final class NpcConversations implements Listener {
     private boolean deliver(Entity source,UUID target,String event,String text,String channel,long occurredAt){
         var profile=profiles.get(target);Entity entity=live(target);
         if(profile==null||entity==null||!source.getWorld().equals(entity.getWorld())||!NpcDialoguePolicy.nearby(source.getUniqueId(),target,source.getWorld().getUID(),entity.getWorld().getUID(),source.getLocation().distanceSquared(entity.getLocation()),profile.range()))return false;
+        if(profile.kind().equals("villager")&&(!(source instanceof Player speaker)||!hears(speaker,entity,profile)
+                ||!speaker.hasLineOfSight(entity)||!(event.startsWith("addressed_")||event.startsWith("voice_group_")||event.startsWith("chat_group_"))))return false;
         // Preserve existing maid partner (24) / visitor (8) speech boundaries.
         if(channel.equals("voice")&&profile.kind().equals("maid")&&!source.getUniqueId().equals(profile.owner())&&source.getLocation().distanceSquared(entity.getLocation())>64)return false;
         if(source instanceof Player player&&!player.canSee(entity))return false;
@@ -223,7 +266,19 @@ final class NpcConversations implements Listener {
                 payload.addProperty("channel",channel);payload.addProperty("occurredAt",occurredAt);payload.addProperty("receivedAt",System.currentTimeMillis());
                 payload.addProperty("deliveryScope","nearby");
                 payload.addProperty("speakerKind",profiles.containsKey(source.getUniqueId())?"npc":"player");payload.addProperty("trusted",false);
-                if(Boolean.TRUE.equals(binding.input().apply(payload.toString())))return true;
+                if(profile.residentId()!=null){
+                    payload.addProperty("residentId",profile.residentId());
+                    payload.addProperty("world",entity.getWorld().getKey().toString());
+                }
+                if(Boolean.TRUE.equals(binding.input().apply(payload.toString()))){
+                    if(profile.residentId()!=null){
+                        long now=System.currentTimeMillis();
+                        villagerTurns.values().removeIf(turn->turn.expiresAt()<now);
+                        villagerTurns.put(id,new VillagerTurn(entity,(Player)source,entity.getWorld().getUID(),binding.generation(),now+30_000));
+                        while(villagerTurns.size()>128)villagerTurns.remove(villagerTurns.keySet().iterator().next());
+                    }
+                    return true;
+                }
                 warn();return false;
             }
         }catch(Exception failed){warn();return false;}

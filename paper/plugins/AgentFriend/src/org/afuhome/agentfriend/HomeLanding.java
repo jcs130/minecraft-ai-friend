@@ -6,6 +6,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -13,6 +14,7 @@ import org.bukkit.block.Block;
 import org.bukkit.block.data.Lightable;
 import org.bukkit.block.data.Waterlogged;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Entity;
 import org.bukkit.util.BoundingBox;
 
 /** Public home only: bounded native collision checks, no terrain edits or chunk generation. */
@@ -36,7 +38,7 @@ final class HomeLanding {
     private final double halfWidth, height;
     private final Map<Key, Cell> cells = new HashMap<>();
 
-    HomeLanding(Player player, Location anchor) {
+    HomeLanding(Entity player, Location anchor) {
         this.anchor = anchor == null ? null : anchor.clone();
         world = anchor == null ? null : anchor.getWorld();
         halfWidth = Math.max(.3, player.getWidth() / 2);
@@ -51,7 +53,9 @@ final class HomeLanding {
         catch (ScanLimit limit) { return new Issue("scan_limit", "落点安全检查达到上限"); }
     }
 
-    Selection select() {
+    Selection select() { return select(at -> true); }
+
+    Selection select(Predicate<Location> permitted) {
         if (world == null || !finite(anchor)) return new Selection(null, new Issue("world_unavailable", "村庄传送点未就绪"), 0);
         int cx = anchor.getBlockX() >> 4, cz = anchor.getBlockZ() >> 4;
         // At most the original generated chunk may load; never load all search columns.
@@ -59,7 +63,7 @@ final class HomeLanding {
             return new Selection(null, new Issue("chunk_unavailable", "村庄区块未就绪"), 0);
         Issue original;
         try {
-            original = inspect(anchor);
+            original = permitted.test(anchor) ? inspect(anchor) : new Issue("outside_home", "落点超出住房保护范围");
             if (original == null) return new Selection(anchor.clone(), null, cells.size());
             List<Location> candidates = new ArrayList<>();
             for (int dx = -RADIUS; dx <= RADIUS; dx++) for (int dz = -RADIUS; dz <= RADIUS; dz++) {
@@ -79,7 +83,7 @@ final class HomeLanding {
             candidates.sort(Comparator.comparingDouble((Location p) -> p.distanceSquared(anchor))
                     .thenComparingDouble(p -> Math.abs(p.getY() - anchor.getY()))
                     .thenComparingDouble(Location::getX).thenComparingDouble(Location::getZ).thenComparingDouble(Location::getY));
-            for (Location at : candidates) if (inspect(at) == null) return new Selection(at, original, cells.size());
+            for (Location at : candidates) if (permitted.test(at) && inspect(at) == null) return new Selection(at, original, cells.size());
         } catch (ScanLimit limit) {
             return new Selection(null, new Issue("scan_limit", "附近安全检查达到上限，不能确认可用落点"), cells.size());
         }

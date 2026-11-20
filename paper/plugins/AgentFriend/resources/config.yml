@@ -1,5 +1,10 @@
 arena-built: false
 last-run: 0
+legacy-task-npcs:
+  # At startup, retire only AgentFriend's own tagged RPG storyline and life-guild task bodies.
+  # Story notes remain available at their original locations. Life contracts stay on the board.
+  story: false
+  life-guild: false
 waypoints:
   max-per-player: 32
 guild-storage:

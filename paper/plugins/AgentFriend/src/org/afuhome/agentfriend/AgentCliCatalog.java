@@ -187,7 +187,7 @@ final class AgentCliCatalog {
         add(specs,"skillbook.use","magic","item","/mycli skillbook use [背包槽位0–35]","消耗一册研习书增加对应技能熟练度；满级不消耗","本人持有该书且未满 3 级","MC_SKILLBOOK action=use");
         add(specs,"cast.heal","magic","cast","/mycli cast heal","治疗 8 格内所有受伤玩家（含自己）","非旁观者；6 魔力；12 秒冷却；无需瞄准","治疗人数、视觉提示与私有技能事件");
         add(specs,"cast.food","magic","cast","/mycli cast food","恢复饥饿","饥饿未满；非旁观者；MagicSpells 魔力与冷却检查","施法结果");
-        add(specs,"cast.home","magic","teleport","/mycli cast home","归乡到出生村庄","非旁观者；村庄传送可用；6 魔力","成功后 MC_TRAVEL、技能特效和绝对坐标；失败不扣费");
+        add(specs,"cast.home","magic","teleport","/mycli cast home","按个人重生点、登记住房、村庄顺序归乡","非旁观者；目的地有安全落点；6 魔力","成功后 MC_TRAVEL、MC_DESTINATION 和绝对坐标；失败不扣费");
         add(specs,"cast.blink","magic","cast","/mycli cast blink","瞄准安全落点；未瞄准时向前选最远安全地面","非旁观者；25格内安全落点；统一魔力与原冷却","施法结果");
         add(specs,"cast.give","magic","cast","/mycli cast give <物品名>","造物：固定 8 种即时造出；其他物品申请女神审核","非旁观者；固定配方耗魔力；申请需女神在线","物品或申请送达/拒绝原因");
         add(specs,"cast.fireworks","magic","cast","/mycli cast fireworks","释放观赏烟花","非旁观者；冷却检查","粒子与声音");
@@ -317,6 +317,9 @@ final class AgentCliCatalog {
         add(specs,"guild.exam.cancel","adventure","write","/mycli guild exam cancel","主动取消独立考试；市场阶段中断后用exam retry从本阶段重试","已花技能魔力/冷却保留；市场放弃用guild abandon","MC_GUILD_EXAM；旧证书保持");
         add(specs,"guild.certificates","adventure","read","/mycli guild certificates","列出本人已通过的能力证书与18阶冒险者认证","只显示服务器实际验收；未认证不表示不会","MC_GUILD_CERTIFICATES；职业高跃/御空/祝福二三级需要对应基础/进阶证书");
         add(specs,"guild.menu","adventure","gui","/mycli guild menu","打开原版公会任务面板","在线玩家","原版菜单");
+        add(specs,"guild.village","adventure","read","/mycli guild village list [页码]|info <编号>|status","查各村公开委托与本人进度","已加载的活村民，有效委托每页最多12张","MC_VILLAGE_GUILD schemaVersion=1；cards/card/active");
+        add(specs,"guild.village.accept","adventure","write","/mycli guild village accept <vq_编号>","从公会看板接取该村民的原委托","发布者仍可联系，非旁观者，遵循村民委托限制","MC_VILLAGE_GUILD status 与 card");
+        add(specs,"guild.village.deliver","adventure","write","/mycli guild village deliver [vq_编号]","在发出委托的村民身边交付背包物品","只交自己的收集订单，不影响公会旧任务","MC_VILLAGE_GUILD status/counted/card");
         add(specs,"guild.join","adventure","write","/mycli guild join","注册冒险者公会","非旁观者；已入会时显示状态","入会回执");
         add(specs,"guild.status","adventure","read","/mycli guild status","查看本人冒险者段位、声望、晋级入口与在途委托","洞穴与天然遗迹用 tasks list exploration；逐室遗迹用 dungeon list","本人状态与下一步");
         add(specs,"guild.accept","adventure","write","/mycli guild accept <任务ID>","接取一张公会任务；接单可自动入会；tm_map_hunt绑定主手现有目标地图","满足等级/次数限制；同一时间一单；寻宝同一目的地每人一次，复制图不能重复领奖","任务进度或拒绝原因");

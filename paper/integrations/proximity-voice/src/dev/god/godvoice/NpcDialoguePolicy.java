@@ -9,7 +9,10 @@ import java.util.regex.Pattern;
 
 /** Explicit NPC voice identities, never inferred from names or chat text. */
 final class NpcDialoguePolicy {
-    record Profile(UUID id,UUID owner,String kind,String name,String voice,double range,List<String> aliases,List<String> spokenAliases) {
+    record Profile(UUID id,UUID owner,String kind,String name,String voice,double range,List<String> aliases,List<String> spokenAliases,String residentId) {
+        Profile(UUID id,UUID owner,String kind,String name,String voice,double range,List<String> aliases,List<String> spokenAliases) {
+            this(id,owner,kind,name,voice,range,aliases,spokenAliases,null);
+        }
         Profile(UUID id,UUID owner,String kind,String name,String voice,double range,List<String> aliases) {
             this(id,owner,kind,name,voice,range,aliases,List.of());
         }
@@ -54,12 +57,26 @@ final class NpcDialoguePolicy {
         if(!config.has("schema")||config.get("schema").getAsInt()!=1||!config.has("roles"))throw new IllegalArgumentException("NPC_VOICE_CONFIG_INVALID");
         var result=new LinkedHashMap<UUID,Profile>();
         var names=new HashMap<String,UUID>();
+        var residents=new HashSet<String>();
         var roles=config.getAsJsonArray("roles");if(roles.size()>32)throw new IllegalArgumentException("NPC_VOICE_LIMIT");
         for(var value:roles){
-            var row=value.getAsJsonObject();UUID id=UUID.fromString(row.get("id").getAsString()),owner=UUID.fromString(row.get("ownerId").getAsString());
+            var row=value.getAsJsonObject();UUID id=UUID.fromString(row.get("id").getAsString());
             String kind=row.get("kind").getAsString(),name=row.get("name").getAsString(),voice=row.get("voice").getAsString();
+            UUID owner=null;
+            String residentId=null;
+            if(kind.equals("villager")){
+                if(row.has("ownerId")||!row.has("residentId")||!row.get("residentId").isJsonPrimitive()||!row.get("residentId").getAsJsonPrimitive().isString())
+                    throw new IllegalArgumentException("VILLAGER_VOICE_IDENTITY_INVALID");
+                residentId=row.get("residentId").getAsString();
+                if(!residentId.matches("[A-Za-z0-9_-]{1,48}")||!residents.add(residentId))
+                    throw new IllegalArgumentException("VILLAGER_VOICE_IDENTITY_INVALID");
+            }else{
+                if(!Set.of("maid","numen").contains(kind)||row.has("residentId")||!row.has("ownerId"))
+                    throw new IllegalArgumentException("NPC_VOICE_PROFILE_INVALID");
+                owner=UUID.fromString(row.get("ownerId").getAsString());
+            }
             double range=row.has("range")?row.get("range").getAsDouble():24;
-            if(id.equals(owner)||!Set.of("maid","numen").contains(kind)||name.isBlank()||name.length()>48
+            if(id.equals(owner)||name.isBlank()||name.length()>48
                 ||!voice.matches("[A-Za-z0-9_.-]{1,96}")||!Double.isFinite(range)||range<1||range>48)throw new IllegalArgumentException("NPC_VOICE_PROFILE_INVALID");
             var aliases=new ArrayList<String>(); var spokenAliases=new ArrayList<String>();
             for(String field:List.of("aliases","spokenAliases"))if(row.has(field)){
@@ -75,7 +92,7 @@ final class NpcDialoguePolicy {
                     (field.equals("aliases")?aliases:spokenAliases).add(alias);
                 }
             }
-            var profile=new Profile(id,owner,kind,name,voice,range,List.copyOf(aliases),List.copyOf(spokenAliases));
+            var profile=new Profile(id,owner,kind,name,voice,range,List.copyOf(aliases),List.copyOf(spokenAliases),residentId);
             if(result.putIfAbsent(id,profile)!=null)throw new IllegalArgumentException("NPC_VOICE_DUPLICATE_ID");
             for(String label:labels(profile,true)){
                 UUID other=names.putIfAbsent(label.toLowerCase(Locale.ROOT),id);
@@ -98,6 +115,7 @@ final class NpcDialoguePolicy {
         for(var profile:configured.values()){
             for(String label:labels(profile,true))
                 claims.computeIfAbsent(label.toLowerCase(Locale.ROOT),key->new HashSet<>()).add(profile.id());
+            if(profile.owner()==null)continue;
             Path file=folder.resolve(profile.id()+".json");
             try{
                 if(!Files.isRegularFile(file,java.nio.file.LinkOption.NOFOLLOW_LINKS)||Files.size(file)>4096)continue;

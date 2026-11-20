@@ -67,6 +67,8 @@ final class NpcSocial {
     }
 
     private JsonObject ready(UUID body) throws IOException {
+        var profile=residents.profile(body);
+        if(profile!=null&&profile.residentId()!=null)return null; // Villagers use their own actor memory.
         var row = read(directory(body).resolve("relationship-ready.json"));
         var roster = read(root.resolve("relationship-roster.json"));
         if (!"1".equals(value(row, "schemaVersion")) || !"1".equals(value(row, "policyVersion"))

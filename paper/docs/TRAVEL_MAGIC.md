@@ -4,6 +4,8 @@
 
 从 AgentFriend 0.3.81 起，玩家主动发起的非原版瞬移统一通过 AuraSkills 魔力结算。Java、基岩、Mineflayer Agent 使用同一服务端判定；成功后给本人原版标题、粒子、音效和 `MC_TRAVEL id=<ID> mana=<数值> dimension=... x=... y=... z=...`。`mcagent:event` 的 `home` 或 `travel` 事件与本人 `mcagent:state` 魔力更新同步提供给 Agent。未找到目标、落点受阻、保护规则取消、魔力不足时不扣费，也不发送成功特效。
 
+归乡术按有效个人重生点、登记住房、村庄的顺序选目的地。`MC_DESTINATION` 分别显示 `respawn`、`residence` 或 `village`。住房落点受领地边界约束。登记、重生和地图同步见 [艾因格朗特居民的住址与日常](AINCRAD_RESIDENT_LIFE.md)。
+
 | 主动能力 | 魔力 | 入口 |
 | --- | ---: | --- |
 | 归乡术、公共/私人传送点、试炼场入口、公会大厅、生活公会、PvP 大厅或加入匹配 | 6 | 罗盘、`/mycli`、已授权的 Essentials `/warp`、`/home` 等玩家指令 |

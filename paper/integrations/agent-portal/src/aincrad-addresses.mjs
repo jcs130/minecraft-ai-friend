@@ -123,3 +123,27 @@ export function validateAincradAddresses(catalogue) {
 export async function readAincradAddresses(file = aincradAddressesFile) {
   return validateAincradAddresses(JSON.parse(await readFile(file, 'utf8')));
 }
+
+export function withNativeResidences(catalogue, residences) {
+  list(residences, 128, 'residences');
+  const streets = new Map(catalogue.streets.map(street => [street.id, street]));
+  const places = new Map(catalogue.places.map(place => {
+    const {residents: _, ...survey} = place;
+    return [place.id, survey];
+  }));
+  const published = new Set();
+  for (const residence of residences) {
+    exactKeys(residence, ['id', 'kind', 'name', 'streetId', 'streetName', 'number', 'position', 'residents'],
+      ['parentId'], 'residence');
+    const {streetName, ...place} = residence;
+    const street = streets.get(place.streetId), previous = places.get(place.id);
+    if (!street || street.name !== streetName || !['home', 'room'].includes(place.kind)
+        || published.has(place.id) || !Array.isArray(place.residents) || place.residents.length !== 1
+        || !['x', 'y', 'z'].every(key => Number.isSafeInteger(place.position?.[key]))
+        || (place.kind === 'room') !== Object.hasOwn(place, 'parentId')
+        || (previous && !['home', 'room', 'building'].includes(previous.kind))) fail('residence', 'invalid registered address');
+    published.add(place.id);
+    places.set(place.id, {...place, districtId:street.districtId, ...(previous?.activities ? {activities:previous.activities} : {})});
+  }
+  return validateAincradAddresses({...catalogue, places:[...places.values()]});
+}

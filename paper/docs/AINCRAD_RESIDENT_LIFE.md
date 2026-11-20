@@ -12,7 +12,29 @@
 
 入住归属以居民的 `characterId` 为准。`bodyId` 用于原生门、床、背包、领地和执行回执的授权。居民换用 Numen 或车万女仆时沿用原住址，并重新核验新身体的床、路线和权限。网页的房屋标记放在公开门口，实时居民标记仍取现场位置。公开信息只需要住户名、门牌、门口、楼层及公开职业。 [统一身体接入](../../packages/agent-harness-py/integrations/README.md)
 
-## 入住登记和公开导出
+## 游戏服住房登记
+
+每处住房沿用 `plugins/AgentFriend/lands.yml` 的私人领地。验过门口、室内落点和原住户身份后，在对应领地下加 `home`。独立住宅按街道分配门牌号，室内房间按楼栋分配房号，并填写地图上已登记的 `parent-id`。以下 UUID 和坐标为示例。
+
+```yaml
+    home:
+      address-id: surveyed-home-id
+      character-id: 10000000-0000-4000-8000-000000000021
+      body-uuid: 10000000-0000-4000-8000-000000000022
+      street-id: west-camp-lane
+      street-name: 西营巷
+      number: '02'
+      resident: 栗灯
+      profession: 园艺师
+      entrance: [-680, 67, 818]
+      respawn: [-680, 67, 820]
+```
+
+在控制台执行 `mycli admin land reload`。重载会核对门口、落点、领地主人、门牌和角色的唯一性。用 `mycli admin land homes` 查看 WorldGuard 已确认的住房，玩家可用 `/mycli land info <领地ID>` 查地址。地图同步配置打开 `aincradResidences` 后，官网使用这份住房记录显示住户与公开入口。地图同步暂时中断时，官网继续显示上次确认的住址。
+
+住户正常死亡时，原版床、重生锚和有效的个人重生点优先。个人点失效时，游戏在该住户的领地内检查室内落点。找不到安全落点时沿用服务器的重生结果。归乡术依次查个人重生点、登记住房、村庄。它只在安全抵达后扣 6 魔力。
+
+## 勘测目录和原导出工具
 
 从 `paper/integrations/agent-portal` 运行操作员脚本。先核对角色 UUID 和已勘测空屋的地址 ID。把入住请求和专用 SQLite 文件放在本地的私有目录。以下私有请求中的 UUID 和地址仅为格式示例。
 

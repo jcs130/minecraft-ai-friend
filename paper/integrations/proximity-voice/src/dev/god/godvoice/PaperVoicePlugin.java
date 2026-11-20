@@ -21,10 +21,12 @@ import javax.sound.sampled.*;
 import org.bukkit.*;
 import org.bukkit.command.*;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
 import org.bukkit.event.player.*;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 
 /** Optional SVC transport. No model loop, player impersonation, public JSON or forced client mod. */
@@ -65,18 +67,20 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private double distanceCap;
 
     private record PrivateRecipient(Player player, UUID session) {}
+    private record VillagerReply(UUID listener, String event) {}
 
     private final class Job implements SpeechLane.Item {
         final UUID actor,session,request;final String fingerprint,text,voice;final byte[] audio;final long created=System.currentTimeMillis();
         final PrivateRecipient recipient;
         final Map<UUID,Player> audience;
         final double range;
+        final VillagerReply villager;
         AudioPlayer player;SpeechFrames frames;OpusEncoder encoder;boolean cancelled;String cancelReason="PLAYBACK_INTERRUPTED";
         UUID channel;VoiceDelivery delivery;
         boolean waitingForTurn;
-        Job(UUID a,UUID s,UUID r,String f,String t,String v,byte[] b,PrivateRecipient recipient,Map<UUID,Player> audience,double range){
+        Job(UUID a,UUID s,UUID r,String f,String t,String v,byte[] b,PrivateRecipient recipient,Map<UUID,Player> audience,double range,VillagerReply villager){
             actor=a;session=s;request=r;fingerprint=f;text=t;voice=v;audio=b;this.recipient=recipient;
-            this.audience=audience;this.range=range;
+            this.audience=audience;this.range=range;this.villager=villager;
         }
         public String id(){return request.toString();}public long createdAt(){return created;}
     }
@@ -158,6 +162,11 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             }
         }
         snapshot=new VoiceAudience.Snapshot(System.currentTimeMillis(),all);
+        for(var lane:new ArrayList<>(lanes.values())){
+            var current=lane.current();
+            if(current!=null&&current.villager!=null&&!current.cancelled&&!live(current))
+                cancelSpeech(current.actor,"VILLAGER_OR_LISTENER_UNAVAILABLE");
+        }
         turns.update(snapshot, System.currentTimeMillis());
         uploads.expire(System.currentTimeMillis());
     }
@@ -176,7 +185,11 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         for(Job job:lane.removeWaiting(j->true)){job.cancelled=true;terminal(job,"cancelled",reason);outstanding.decrementAndGet();}
         Job active=lane.current();if(active!=null){active.cancelled=true;active.cancelReason=reason;if(active.frames!=null)active.frames.cancel();if(active.player!=null)active.player.stopPlaying();else finish(active,"cancelled",reason);}
     }
-    private boolean live(Job job){return !stopping&&!job.cancelled&&job.session.equals(sessions.get(job.actor))&&Bukkit.getPlayer(job.actor)!=null;}
+    private Entity source(Job job){
+        if(job.villager==null)return job.session.equals(sessions.get(job.actor))?Bukkit.getPlayer(job.actor):null;
+        return npcs.villagerListener(job.actor,job.villager.listener(),job.villager.event())==null?null:npcs.live(job.actor);
+    }
+    private boolean live(Job job){return !stopping&&!job.cancelled&&source(job)!=null;}
     private VoicechatConnection privateConnection(PrivateRecipient recipient){
         Player player=recipient.player();
         UUID id=player.getUniqueId();
@@ -328,6 +341,37 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     public boolean bindHostedNpcVoice(UUID actor,UUID owner,java.util.function.Function<String,Boolean> input){
         return Bukkit.isPrimaryThread()&&npcs!=null&&npcs.bind(actor,owner,input);
     }
+    private boolean villagerBridge(Plugin caller){
+        return Bukkit.isPrimaryThread()&&isEnabled()&&npcs!=null&&caller!=null&&caller.isEnabled()
+                &&Bukkit.getPluginManager().getPlugin("qiandeng-villager-quests")==caller;
+    }
+    /** Registered bridge only. The inbox must enqueue and return immediately on the server thread. */
+    public boolean bindVillagerNpcVoice(Plugin caller,UUID actor,java.util.function.Function<String,Boolean> inbox){
+        return villagerBridge(caller)&&npcs.bindVillager(actor,inbox);
+    }
+    /** Speak only to the player who addressed this body in the original, still current turn. */
+    public String speakVillagerReply(Plugin caller,UUID actor,UUID listener,String heardEventId,String text){
+        if(!villagerBridge(caller))throw new IllegalArgumentException("VILLAGER_VOICE_BRIDGE_REQUIRED");
+        var profile=npcs.profile(actor);
+        if(profile==null||profile.residentId()==null)throw new IllegalArgumentException("VILLAGER_VOICE_IDENTITY_MISMATCH");
+        NpcDialoguePolicy.text(text);
+        if(text.length()>200)throw new IllegalArgumentException("TEXT_REQUIRED_MAX_200");
+        UUID request=NpcDialoguePolicy.speechId(actor,heardEventId);
+        String fingerprint=hash("villager-tts\0"+listener+"\0"+profile.voice()+"\0"+text);
+        var old=ledger.get(actor,request);
+        if(old!=null){
+            if(!old.fingerprint().equals(fingerprint))throw new IllegalArgumentException("REQUEST_ID_REUSED");
+            return npcSpeechStatus(actor,heardEventId);
+        }
+        var player=npcs.villagerListener(actor,listener,heardEventId);
+        if(player==null)throw new IllegalArgumentException("VILLAGER_VOICE_TURN_EXPIRED");
+        var session=sessions.get(listener);
+        if(session==null||privateConnection(new PrivateRecipient(player,session))==null)
+            throw new IllegalArgumentException("VOICE_LISTENER_UNAVAILABLE");
+        submit(new Job(actor,null,request,fingerprint,text,profile.voice(),null,null,
+                Map.of(listener,player),profile.range(),new VillagerReply(listener,heardEventId)));
+        return "{\"state\":\"submitted\",\"requestId\":\""+request+"\",\"actualHearingVerified\":false}";
+    }
     public void publishNpcSpeech(UUID actor,String original,String text,long occurredAt){
         if(Bukkit.isPrimaryThread()&&npcs!=null)npcs.said(actor,original,text,occurredAt);
     }
@@ -402,15 +446,18 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     }
     private void submit(Player p,UUID id,String fingerprint,String text,String voice,byte[] audio,PrivateRecipient recipient,
                         Map<UUID,Player> audience,double range){
-        VoiceLedger.Entry existing=ledger.get(p.getUniqueId(),id);
-        if(existing!=null){if(!existing.fingerprint().equals(fingerprint))throw new IllegalArgumentException("REQUEST_ID_REUSED");reply(p,id,existing.state(),existing.reason());return;}
+        UUID actor=p.getUniqueId(),session=sessions.computeIfAbsent(actor,k->UUID.randomUUID());
+        submit(new Job(actor,session,id,fingerprint,text,voice,audio,recipient,audience,range,null));
+    }
+    private void submit(Job job){
+        UUID actor=job.actor,id=job.request;
+        VoiceLedger.Entry existing=ledger.get(actor,id);
+        if(existing!=null){if(!existing.fingerprint().equals(job.fingerprint))throw new IllegalArgumentException("REQUEST_ID_REUSED");reply(Bukkit.getPlayer(actor),id,existing.state(),existing.reason());return;}
         if(api==null)throw new IllegalArgumentException("VOICE_SERVER_STARTING");
         if(outstanding.incrementAndGet()>maximumSpeech){outstanding.decrementAndGet();throw new IllegalArgumentException("VOICE_QUEUE_FULL");}
-        UUID actor=p.getUniqueId(),session=sessions.computeIfAbsent(actor,k->UUID.randomUUID());
-        Job job=new Job(actor,session,id,fingerprint,text,voice,audio,recipient,audience,range);
         io.execute(()->{
             try{
-                boolean fresh=ledger.reserve(actor,id,fingerprint);
+                boolean fresh=ledger.reserve(actor,id,job.fingerprint);
                 main(()->{
                     finalizingUploads.remove(new VoiceUploads.Key(actor,id));
                     if(!fresh){outstanding.decrementAndGet();VoiceLedger.Entry row=ledger.get(actor,id);reply(Bukkit.getPlayer(actor),id,row.state(),row.reason());return;}
@@ -418,7 +465,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
                     SpeechLane<Job> lane=lanes.computeIfAbsent(actor,k->new SpeechLane<>());
                     String result=lane.offer(job);
                     if(!result.equals("queued")){terminal(job,"failed","VOICE_QUEUE_FULL");outstanding.decrementAndGet();return;}
-                    if(recipient==null)reply(Bukkit.getPlayer(actor),id,"queued","");
+                    if(job.recipient==null)reply(Bukkit.getPlayer(actor),id,"queued","");
                     begin(actor);
                 });
             }catch(Exception failure){outstanding.decrementAndGet();main(()->{finalizingUploads.remove(new VoiceUploads.Key(actor,id));reply(Bukkit.getPlayer(actor),id,"failed",failure instanceof IllegalArgumentException?failure.getMessage():"VOICE_RECEIPT_STORAGE_UNAVAILABLE");});}
@@ -456,11 +503,12 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             catch(IOException failure){main(()->finish(job,"failed","VOICE_RECEIPT_STORAGE_UNAVAILABLE"));}});
     }
     private boolean takeTurnOrWait(Job job,short[] pcm) {
-        Player source=Bukkit.getPlayer(job.actor);
-        if (job.recipient==null && !publicSpeechTurn(source,job.request,Math.min(job.range,Math.min(distanceCap,api.getVoiceChatDistance())),true)) {
+        Entity speaker=source(job);
+        if(speaker==null){finish(job,"cancelled","ACTOR_OR_VOICE_SESSION_CHANGED");return false;}
+        if (job.recipient==null && !publicSpeechTurn(speaker,job.request,Math.min(job.range,Math.min(distanceCap,api.getVoiceChatDistance())),true)) {
             if (!job.waitingForTurn) {
                 job.waitingForTurn=true;
-                reply(source,job.request,"queued","WAITING_FOR_NEARBY_SPEAKER");
+                reply(Bukkit.getPlayer(job.actor),job.request,"queued","WAITING_FOR_NEARBY_SPEAKER");
                 io.execute(()->{try{ledger.transition(job.actor,job.request,job.fingerprint,"queued","WAITING_FOR_NEARBY_SPEAKER");}
                     catch(IOException error){main(()->finish(job,"failed","VOICE_RECEIPT_STORAGE_UNAVAILABLE"));}});
             }
@@ -476,18 +524,18 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         // A real microphone may have opened while the playback receipt was being flushed.
         if(!takeTurnOrWait(job,pcm))return;
         try{
-            Player source=Bukkit.getPlayer(job.actor);job.channel=UUID.randomUUID();
+            Entity speaker=source(job);job.channel=UUID.randomUUID();
             AudioChannel channel;
             if(job.recipient==null){
-                var nearby=api.createEntityAudioChannel(job.channel,api.fromEntity(source));
+                var nearby=api.createEntityAudioChannel(job.channel,api.fromEntity(speaker));
                 if(nearby==null)throw new IllegalStateException("No entity audio channel");
                 nearby.setDistance((float)Math.min(job.range,Math.min(distanceCap,api.getVoiceChatDistance())));
                 if(npcs!=null && npcs.configured(job.actor))nearby.setFilter(listener->{
                     if(job.audience!=null && job.audience.get(listener.getUuid())!=listener.getPlayer())return false;
                     var actors=snapshot.actors();
-                    var speaker=actors.get(job.actor);var observer=actors.get(listener.getUuid());
-                    if(speaker==null || observer==null || !speaker.world().equals(observer.world()))return false;
-                    double dx=speaker.x()-observer.x(),dy=speaker.y()-observer.y(),dz=speaker.z()-observer.z();
+                    var speakerPosition=actors.get(job.actor);var observer=actors.get(listener.getUuid());
+                    if(speakerPosition==null || observer==null || !speakerPosition.world().equals(observer.world()))return false;
+                    double dx=speakerPosition.x()-observer.x(),dy=speakerPosition.y()-observer.y(),dz=speakerPosition.z()-observer.z();
                     return dx*dx+dy*dy+dz*dz<=job.range*job.range;
                 });
                 channel=nearby;
@@ -503,7 +551,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             job.delivery=new VoiceDelivery();deliveries.put(job.channel,job.delivery);
             job.frames=new SpeechFrames(pcm);job.encoder=api.createEncoder();job.player=api.createAudioPlayer(channel,job.encoder,job.frames);
             job.player.setOnStopped(()->{try{job.encoder.close();}finally{main(()->finish(job,job.frames.completed()&&!job.cancelled?"sent":"cancelled",job.frames.completed()&&!job.cancelled?VoiceDelivery.completionReason(job.delivery.summary()):job.cancelReason));}});
-            job.player.startPlaying();if(job.recipient==null)reply(source,job.request,"playing","");
+            job.player.startPlaying();if(job.recipient==null)reply(Bukkit.getPlayer(job.actor),job.request,"playing","");
         }catch(Exception failure){if(job.encoder!=null)job.encoder.close();finish(job,"failed","VOICE_PLAYBACK_UNAVAILABLE");}
     }
     private void finish(Job job,String state,String reason){
@@ -514,7 +562,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     }
     private void terminal(Job job,String state,String reason){
         VoiceDelivery.Summary delivery=job.delivery==null?null:job.delivery.summary();
-        io.execute(()->{try{ledger.transition(job.actor,job.request,job.fingerprint,state,reason,delivery);main(()->{if(job.recipient==null&&job.session.equals(sessions.get(job.actor)))reply(Bukkit.getPlayer(job.actor),job.request,state,reason);});}catch(IOException failure){main(()->error(Bukkit.getPlayer(job.actor),"VOICE_RESULT_UNKNOWN_DO_NOT_REPLAY"));}});
+        io.execute(()->{try{ledger.transition(job.actor,job.request,job.fingerprint,state,reason,delivery);main(()->{if(job.villager==null&&job.recipient==null&&job.session.equals(sessions.get(job.actor)))reply(Bukkit.getPlayer(job.actor),job.request,state,reason);});}catch(IOException failure){main(()->error(Bukkit.getPlayer(job.actor),"VOICE_RESULT_UNKNOWN_DO_NOT_REPLAY"));}});
     }
     private byte[] request(String method,String route,byte[] body,Map<String,String> headers)throws Exception{
         var builder=HttpRequest.newBuilder(URI.create(backend+route)).timeout(Duration.ofSeconds(route.equals("/v1/tts")?100:30)).header("Authorization","Bearer "+token);

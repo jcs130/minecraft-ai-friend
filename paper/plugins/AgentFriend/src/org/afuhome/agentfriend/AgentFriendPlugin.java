@@ -1286,8 +1286,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             if (lands.access().adminCommand(sender, args)) return true;
             if (args.length == 3 && args[2].equalsIgnoreCase("reload")) lands.reload(sender);
             else if (args.length == 3 && args[2].equalsIgnoreCase("audit")) lands.audit(sender);
+            else if (args.length == 3 && args[2].equalsIgnoreCase("homes")) lands.homes(sender);
             else if (args.length == 3 && args[2].equalsIgnoreCase("boards")) lands.access().auditBoards(sender);
-            else sender.sendMessage("mycli admin land reload|audit；编辑 plugins/AgentFriend/lands.yml 后重载。");
+            else sender.sendMessage("mycli admin land reload|audit|homes；编辑 plugins/AgentFriend/lands.yml 后重载。");
             return true;
         }
         if (args.length > 1 && args[0].equalsIgnoreCase("admin") && args[1].equalsIgnoreCase("gift")) {
@@ -1724,7 +1725,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         };
         if (id.isEmpty()) { p.sendMessage(ChatColor.RED + "没有这项技能。输入 /mycli spells 查看精确名称。"); return; }
         if (id.equals("home")) {
-            gotoPlace(p, "village", true);
+            travelMagic.home(p, publicWarp("village"));
             return;
         }
         if (id.equals("heal")) { groupHeal(p); return; }
@@ -1912,9 +1913,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         p.sendMessage(ChatColor.RED + "用法：/mycli goddess skills|learn feather|night|pray <话>");
     }
-    private void gotoPlace(Player p, String raw) { gotoPlace(p, raw, false); }
-
-    private void gotoPlace(Player p, String raw, boolean homeSpell) {
+    private void gotoPlace(Player p, String raw) {
         String id = raw.toLowerCase(Locale.ROOT);
         if ((id.startsWith("personal:") || id.startsWith("shared:")) && waypoints.gotoPoint(p, raw)) return;
         if (id.startsWith("landmark:")) { landmarks.travel(p, raw.substring(raw.indexOf(':') + 1)); return; }
@@ -1931,11 +1930,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if (PUBLIC_PLACES.stream().anyMatch(place -> place.id().equals(id))) {
             Location destination = publicWarp(id);
             if (destination == null) { p.sendMessage(ChatColor.RED + "公共传送点不可用；/mycli waypoint 查看当前有效地点，另选公开目标；持续异常请联系服主。"); return; }
-            if (!homeSpell) { travelPublic(p, id, "公共传送点", destination); return; }
-            if (travelMagic.command(p, "warp " + id, destination, homeSpell ? "home" : id,
-                    homeSpell ? "归乡术" : "公共传送术", TravelMagic.LOCAL_MANA)) {
-                p.sendMessage("MC_DESTINATION id=" + id + " " + LocationOutput.fields(homeSpell ? p.getLocation() : destination));
-            }
+            travelPublic(p, id, "公共传送点", destination);
             return;
         }
         if (id.startsWith("personal:")) {
