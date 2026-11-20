@@ -61,3 +61,10 @@ it('shares normalized material assessment without adding unauthorized fallback',
   const { ctx, bot } = rig(['minecraft:dirt', 'scaffolding']);
   expect(scaffoldNames(ctx, bot)).toEqual(['dirt']);
 });
+it('links the take guide only when carried scaffold materials are actually missing', () => {
+  const { bot, ctx } = rig(['cobblestone']);
+  vi.spyOn(bot.inventory, 'items').mockReturnValue([]);
+  expect(permittedStockFor(bot, ['cobblestone'], '垫脚', ctx).why).toContain('mc_help {skill:"take"}');
+  expect(permittedStockFor(bot, ['cobblestone'], '垫脚', { ...ctx, inventorySynced: () => false }).why)
+    .not.toContain('mc_help');
+});

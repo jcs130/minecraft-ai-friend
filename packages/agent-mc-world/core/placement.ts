@@ -316,7 +316,7 @@ export function permittedStockFor(
   const alternatives = carriedScaffoldCandidates(bot, items);
   const next = alternatives.length
     ? `随身另有可垫候选 ${alternatives.join('、')}，可自行选择是否调整 mc_policy 的 scaffold 名单`
-    : '可用 mc_bag {detail:"slots"} 核对随身槽位；若材料在随身容器里，先开容器并取到随身槽再用';
+    : '可用 mc_bag {detail:"slots"} 核对随身槽位；若材料在随身容器里，先开容器并取到随身槽再用。存取步骤见 mc_help {skill:"take"}';
   return { why: `${missing}；本处未发起放置，区域放置权限未由此核实。${next}` };
 }
 

@@ -12,7 +12,7 @@ export interface StepDecision {
 }
 export function stepDecision(outcome: 'ok'|'noop'|'partial'|'fail'|'skip'|'cut', code?: string,
   progress?: { done: number; total: number }, details?: Partial<StepDecision>): StepDecision {
-  const uncertain = ['container-window-changed','container-window-rollback','inventory-click-sync','use-hand-changed',
+  const uncertain = ['container-window-changed','container-window-rollback','container-transfer-unconfirmed','inventory-click-sync','use-hand-changed',
     'execution-context-changed','fishing-loot-unconfirmed','fishing-reel-unconfirmed','food-consumption-unconfirmed','attack-target-unconfirmed'].includes(code ?? '');
   const conditions: Record<string,string> = {
     'control-no-progress': 'Read the original control receipt and fresh local geometry/pose before choosing another movement. Input duration is not displacement; the cause remains unknown. Do not replay the same input as a confirmed route.',

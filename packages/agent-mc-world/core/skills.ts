@@ -1947,7 +1947,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
  {"skill":"take","item":"furnace","count":1,"from": "open"} 只用于仍开着的自定义容器窗口,不会走向附近的箱子。同一单连续从这个窗口取多类物品,只在最后关窗
                                                  单独 use 查看结束后窗口已关闭；下一单须重新开窗，例如 steps:[{skill:"use",item:"背包显示名"},{skill:"take",item:"furnace",count:1,from:"open"}]
 {"skill":"take","at":[103,63,-31],"all":true}    箱子整箱取;炉子输入槽有原料时只取输出,原料烧完后连剩余燃料一同取。要收回未烧完的原料或燃料,用 item+count 点名。
-                                                 定量取物必须同时写 item 和 count,不默认数量`,
+                                                 定量取物必须同时写 item 和 count。from:"open" 按回执的 completed/remaining（items）核对实收；未确认时先查随身槽和原容器。`,
     parse: parseTake,
     fields: [
       { key: 'item', kind: 'string', hint: '物品英文 id', doc: '定量取物时与 count 一起写' },
