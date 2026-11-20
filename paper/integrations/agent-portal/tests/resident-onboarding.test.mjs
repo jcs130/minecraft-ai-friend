@@ -41,6 +41,25 @@ test('website login requires both local confirmation and the original plugin sec
   assert.equal((await call(f,path+'browser-status',{},locked.secret)).status,401);
 });
 
+test('an explicit website owner controls only the named resident without gaining game account ownership', async t => {
+  const f = await siteFixture(t);
+  const store = f.portal.store;
+  const websiteOwnerId = store.db.prepare('SELECT id FROM owners LIMIT 1').get().id;
+  const explicit = {...capacity('given','numen').slot,characterId:randomUUID(),name:'桐人',websiteOwnerId};
+  const ordinary = {...capacity('other','maid').slot,characterId:randomUUID(),name:'结衣',ownerGameId:explicit.ownerGameId};
+  const relay = new ResidentTurns({...f.config,residentTurns:[explicit,ordinary]},store);
+  assert.deepEqual(relay.list(websiteOwnerId).residents.map(x=>x.id),['given']);
+  assert.deepEqual(store.ownedUuids(websiteOwnerId),[]);
+  assert.deepEqual(relay.list(randomUUID()).residents,[]);
+  const second = randomUUID();
+  store.db.prepare('INSERT INTO owners(id,username,normalized,password_hash,role,created_at) VALUES(?,?,?,?,?,?)')
+    .run(second,'secondowner','secondowner','unused','owner',Date.now());
+  store.db.prepare('INSERT INTO ownerships(owner_id,agent_uuid,proof,created_at) VALUES(?,?,?,?)')
+    .run(second,explicit.ownerGameId,'test',Date.now());
+  assert.deepEqual(relay.list(websiteOwnerId).residents,[]);
+  assert.deepEqual(relay.list(second).residents.map(x=>x.id),['other']);
+});
+
 test('a capacity registered to a player can only be allocated by that website account', async t => {
   const {slot} = capacity('personal','maid');
   const f = await siteFixture(t,{residentCreationSlots:[slot]});
