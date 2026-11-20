@@ -11,12 +11,13 @@ from xml.etree import ElementTree
 from xml.sax.saxutils import unescape
 
 from ..models import NativeAction
-from .base import ArgumentError
+from .base import ArgumentError, rendezvous_arrival
 
 # The body supplies both player names. Only a catalogue ID is model input.
 INVENTORY = {f"inventory_{action}": f"inventory {action}" for action in ("clean", "store", "donate")}
 QUERIES = {
     **{key: command + " --dry-run" for key, command in INVENTORY.items()},
+    "characters": "locate list", "locate_character": "locate info {target}",
     "events": "world events", "exploration": "tasks list exploration", "combat_jobs": "tasks list combat",
     "quest_info": "tasks info {id}", "quest_status": "tasks status", "guild_board": "guild board",
     "ruins": "dungeon list", "ruin_info": "dungeon info {id}", "ruin_status": "dungeon status",
@@ -26,6 +27,7 @@ QUERIES = {
 }
 ACTIONS = {
     **INVENTORY,
+    "meet_character": "locate tp {targetUuid}",
     "accept_quest": "guild accept {id}", "turn_in_quest": "guild claim",
     "travel_ruin": "dungeon travel {id}", "start_ruin": "dungeon start {id}", "claim_ruin": "dungeon claim {id}",
     "travel_trial": "goto arena", "start_trial": "arena start", "create_party": "guild party create",
@@ -67,9 +69,11 @@ def catalogue(peer: str) -> list[NativeAction]:
             "id": {"type": "string", "description": "Exact returned quest or ruin ID, only for operations that require one."}},
             "required": ["kind"], "additionalProperties": False}))
     query_properties = result[1].input_schema["properties"]
-    query_properties["page"] = {"type": "integer", "minimum": 1, "maximum": 100,
-                                "description": "Optional list page for exploration, combat_jobs and ruins. Required with a snapshot ID for detail_page."}
+    query_properties["page"] = {"type": "integer", "minimum": 1,
+                                "description": "Use the directory's returned page count for characters. Pages 1 to 100 for exploration, combat_jobs, ruins and detail_page."}
+    query_properties["target"] = {"type": "string", "description": "locate_character only: exact name or UUID from the skill compass."}
     actions = result[2].input_schema["properties"]
+    actions["targetUuid"] = {"type": "string", "format": "uuid", "description": "meet_character only: use the exact UUID from locate_character. Uses the ordinary RPG travel spell."}
     actions["kind"]["enum"].extend(("prepare_armor", "prepare_ammo"))
     actions["text"] = {"type": "string", "maxLength": 100, "description": "party_chat only. A short message to the current native party."}
     actions["partyId"] = {"type": "string", "description": "party_chat only. Copy partyId from the current native party status."}
@@ -84,6 +88,25 @@ def player_command(name: str, args: dict, account: str, peer: str) -> str:
     template = options.get(kind) if isinstance(kind, str) else None
     if not template or not PLAYER.fullmatch(account or "") or not PLAYER.fullmatch(peer or "") or account.casefold() == peer.casefold():
         raise ArgumentError("Choose an advertised adventure operation with the configured partner.")
+    if kind == "characters":
+        page = args.get("page", 1)
+        if set(args) - {"kind", "page"} or type(page) is not int or not 1 <= page <= 2 ** 31 - 1:
+            raise ArgumentError("Use characters with a positive page number from the directory.")
+        return f"/mycli locate list {page} --json"
+    if kind == "locate_character":
+        target = args.get("target")
+        if set(args) != {"kind", "target"} or not isinstance(target, str) or not re.fullmatch(r"[\w.][\w.-]{0,63}", target):
+            raise ArgumentError("Use locate_character with an exact name or the UUID from characters.")
+        return f"/mycli locate info {target} --json"
+    if kind == "meet_character":
+        target = args.get("targetUuid")
+        try:
+            exact = isinstance(target, str) and str(UUID(target)) == target
+        except ValueError:
+            exact = False
+        if not exact or set(args) != {"kind", "targetUuid"}:
+            raise ArgumentError("Use locate_character first, then pass its targetUuid to meet_character.")
+        return f"/mycli locate tp {target} --json"
     if kind == "party_chat":
         words = args.get("text")
         try:
@@ -260,6 +283,41 @@ def game_result(result, name: str, args: dict, *, account=None, body_id=None, pe
         elif line:
             messages.append(line[:350])
     kind = args["kind"]
+    if kind in {"characters", "locate_character", "meet_character"}:
+        expected = {"characters": "list", "locate_character": "info", "meet_character": "tp"}[kind]
+        rows = [row for tag, row in records if tag == "MC_LOCATE" and isinstance(row, dict) and row.get("action") == expected]
+        row = rows[0] if len(rows) == 1 else {}
+        actor_matches = bool(body_id and row.get("actorUuid") == body_id)
+        if name == ACT:
+            identified = actor_matches and row.get("targetUuid") == args.get("targetUuid")
+            measured = rendezvous_arrival(row.get("actualPosition"), row.get("targetPosition"))
+            if identified and row.get("ok") is True and row.get("status") == "arrived" and row.get("arrivalConfirmed") is True and measured:
+                status, effect = "completed", "confirmed"
+            elif identified and row.get("ok") is False and row.get("status") == "refused":
+                status, effect = "rejected", "refused"
+            else:
+                status, effect = "unknown", "unverified"
+        else:
+            if expected == "list":
+                matches = row.get("page") == args.get("page", 1) and isinstance(row.get("characters"), list)
+            else:
+                character = row.get("character")
+                labels = []
+                if isinstance(character, dict):
+                    aliases = character.get("aliases")
+                    labels = [character.get(key) for key in ("uuid", "name", "displayName")]
+                    if isinstance(aliases, list):
+                        labels.extend(aliases)
+                matches = any(isinstance(label, str) and label.casefold() == str(args.get("target")).casefold() for label in labels)
+            if actor_matches and row.get("ok") is True and matches:
+                status, effect = "completed", "read"
+            elif actor_matches and row.get("ok") is False:
+                status, effect = "rejected", "refused"
+            else:
+                status, effect = "failed", "unavailable"
+        return replace(result, status=status, text=f"{kind}: {row.get('reason') or effect}", data={"adventure": {
+            "kind": kind, "effect": effect, "records": [{"type": "MC_LOCATE", "value": row}] if row else [],
+            "at": 0 if recovered else int(time()), "retryWrite": False}})
     if kind in INVENTORY:
         action = INVENTORY[kind].split()[1]
         receipts = [row for tag, row in records if tag == "MC_INVENTORY_BATCH" and isinstance(row, dict)

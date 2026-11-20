@@ -82,6 +82,38 @@ public final class MaidBodyControlTest {
         MaidBodyControl.validateShape(json("{\"action\":\"dismount\",\"requestId\":\"dismount-1\"}"));
         fault("UNEXPECTED_FIELD",()->MaidBodyControl.validateShape(json("{\"action\":\"dismount\",\"requestId\":\"dismount-1\",\"enabled\":true}")));
         fault("UNEXPECTED_FIELD",()->MaidBodyControl.validateShape(json("{\"action\":\"guard\",\"requestId\":\"guard-1\",\"enabled\":true}")));
+        var meet = new JsonObject();
+        meet.addProperty("action", "rendezvous");
+        meet.addProperty("requestId", "meet-1");
+        fault("INVALID_targetUuid", () -> MaidBodyControl.validateShape(meet));
+        meet.addProperty("targetUuid", "1-1-1-1-1");
+        fault("INVALID_targetUuid", () -> MaidBodyControl.validateShape(meet));
+        meet.addProperty("targetUuid", FIRST.toString());
+        MaidBodyControl.validateShape(meet);
+        var injected = meet.deepCopy();
+        injected.addProperty("x", 1);
+        fault("UNEXPECTED_FIELD", () -> MaidBodyControl.validateShape(injected));
+        check(control.reserve(OWNER, MAID, "meet-1", meet) == null, "reserve the original skill cast once");
+        var effect = new JsonObject();
+        effect.addProperty("arrived", true);
+        effect.addProperty("manaCost", 8);
+        var settled = control.finish(MAID, "meet-1", "completed", effect);
+        check(settled.equals(restarted.reserve(OWNER, MAID, "meet-1", meet)), "retry returns original arrival and cost");
+        meet.addProperty("targetUuid", SECOND.toString());
+        fault("REQUEST_CONFLICT", () -> control.reserve(OWNER, MAID, "meet-1", meet));
+        var release = new JsonObject();
+        release.addProperty("action", "release_rendezvous");
+        release.addProperty("requestId", "release-1");
+        fault("INVALID_targetUuid", () -> MaidBodyControl.validateShape(release));
+        release.addProperty("targetUuid", "1-1-1-1-1");
+        fault("INVALID_targetUuid", () -> MaidBodyControl.validateShape(release));
+        release.addProperty("targetUuid", FIRST.toString());
+        MaidBodyControl.validateShape(release);
+        var socialWalk = walk.deepCopy();
+        socialWalk.addProperty("targetUuid", FIRST.toString());
+        MaidBodyControl.validateShape(socialWalk);
+        check(MaidBodyControl.requiredFields("release_rendezvous").contains("targetUuid")
+                && !MaidBodyControl.requiredFields("walk").contains("targetUuid"), "releasing requires the selected identity; ordinary walks keep their existing shape");
         System.out.println("Native body control: "+checks+" checks passed");
     }
 }

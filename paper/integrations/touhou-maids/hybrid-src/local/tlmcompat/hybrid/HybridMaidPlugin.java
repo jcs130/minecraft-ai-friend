@@ -126,6 +126,12 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     }
     boolean editingMaidInventory(EntityMaid maid){return maid.guiOpening||menus!=null&&menus.editing(maid);}
     boolean guardWeaponReady(EntityMaid maid){return companion!=null&&companion.guardWeaponReady(maid);}
+    boolean travelMana(EntityMaid maid, int cost, boolean spend) {
+        if (local.qdj.maids.brain.ResidentBodyAccess.external(maid.getUUID()))
+            return local.qdj.maids.brain.ResidentBodyAccess.mana(maid.getUUID(), cost, spend);
+        return companion != null && companion.travelMana(maid, cost, spend);
+    }
+    boolean moveForRendezvous(EntityMaid maid, Location landing) { return ownerTravel.transfer(maid, landing); }
     JsonObject lastResidenceLocation(UUID owner,UUID maid){return agentSupport.lastResidenceLocation(owner,maid);}
     void rememberResidenceDeparture(EntityMaid maid){agentSupport.rememberResidenceDeparture(maid);}
     void companionTick(EntityMaid maid){if(companion!=null)companion.tick(maid);}

@@ -36,7 +36,8 @@ final class AgentCliText {
                 JsonObject row = item.getAsJsonObject();
                 lines.add(value(data,"path","/mycli")+" "+value(row, "name", "") + "：" + shortText(value(row, "summary", ""), 60));
             }
-            lines.add("详情："+value(data,"path","/mycli")+" <命令> --help；仅详情标明支持时使用 --json。");
+            lines.add(data.has("searchUsage") ? "按目的找命令："+data.get("searchUsage").getAsString()+"；看用法：/mycli <命令> --help"
+                    : "详情："+value(data,"path","/mycli")+" <命令> --help；仅详情标明支持时使用 --json。");
         } else {
             lines.add(shortText(value(data, "summary", ""), 160));
             String operation = switch (value(data, "operation", "")) {

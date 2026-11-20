@@ -51,6 +51,9 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
     private static final long MAX_REPLY_AGE = 1_500_000_000L;
     private final HybridMaidPlugin plugin;
     private final NativeMaidMagicSupport magic;
+    boolean travelMana(EntityMaid maid, int cost, boolean spend) {
+        return magic != null && magic.travelMana(maid, cost, spend);
+    }
     private final MaidGuardDecision decision;
     private final Consumer<MaidHurtTarget.Pre> beforeMelee;
     private final Consumer<LivingIncomingDamageEvent> beforeDamage;

@@ -96,7 +96,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             Material.LIGHT, Material.SPAWNER, Material.END_PORTAL_FRAME);
     private static final long RUN_COOLDOWN_MS = 180_000L;
     private static final long RUN_TIMEOUT_MS = 360_000L;
-    private static final long TEAM_TELEPORT_COOLDOWN_MS = 20_000L;
+    static final long TEAM_TELEPORT_COOLDOWN_MS = 20_000L;
     private static final long FIREWORKS_COOLDOWN_MS = 10_000L;
     private static final long STARLIGHT_COOLDOWN_MS = 10_000L;
     private static final long GROUP_HEAL_COOLDOWN_MS = 12_000L;
@@ -1051,7 +1051,17 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
             return true;
         }
-        if(sender instanceof Player p&&cliRecovery!=null)cliRecovery.observe(p);
+        if (sender instanceof Player p && cliRecovery != null) {
+            cliRecovery.observe(p);
+            if (args.length >= 2 && args[0].equalsIgnoreCase("help") && args[1].equalsIgnoreCase("find")) {
+                if (args.length == 2 || args.length == 3 && args[2].equals("--json")
+                        || java.util.Arrays.stream(args).anyMatch(s -> s.equals("--help") || s.equals("-h")))
+                    AgentCliCatalog.commandHelp(p, java.util.Arrays.asList(args).contains("--json")
+                            ? new String[]{"help.find", "--json"} : new String[]{"help.find"});
+                else cliRecovery.search(p, java.util.Arrays.copyOfRange(args, 2, args.length));
+                return true;
+            }
+        }
         if(sender instanceof Player p&&nativeRpg.selected()){
             if(trialRescue!=null&&trialRescue.blockCommand(p,args))return true;
             if(nativeRpg.route(p,args))return true;
@@ -1083,6 +1093,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 sender.sendMessage("用法：mycli admin blockaccess status|reload [--json]；查询只读，编辑 block-access.yml 后 reload。"); return true;
             }
             blockAccess.admin(sender, args[2].toLowerCase(Locale.ROOT)); return true;
+        }
+        if (sender instanceof Player p && args.length > 0 && (args[0].equalsIgnoreCase("locate") || args[0].equals("找队友"))
+                && args[args.length-1].equals("--json")) {
+            locateStructured(p, java.util.Arrays.copyOf(args, args.length-1));
+            return true;
         }
         if(sender instanceof Player p && java.util.Arrays.asList(args).contains("--json")) {
             communication.jsonCommand(p,args);return true;
@@ -2061,7 +2076,39 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
     }
 
+    private void locateStructured(Player viewer, String[] args) {
+        var actor = viewer.getUniqueId();
+        var result = CharacterLocationAccess.result(actor, args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "list");
+        if (args.length >= 2 && args[1].equalsIgnoreCase("list") && args.length <= 3) {
+            int page = 1;
+            if (args.length == 3) try { page = Integer.parseInt(args[2]); } catch (NumberFormatException invalid) { page = 0; }
+            result = CharacterLocationAccess.directory(actor, page);
+        } else if (args.length == 3 && args[1].equalsIgnoreCase("info")) {
+            result = CharacterLocationAccess.lookup(actor, args[2]);
+        } else if (args.length == 3 && args[1].equalsIgnoreCase("tp")) {
+            var visible = TeammateDirectory.list(viewer);
+            var matches = args[2].equalsIgnoreCase("nearest")
+                    ? visible.stream().filter(t -> t.body().getWorld().equals(viewer.getWorld()))
+                            .min(Comparator.comparingDouble(t -> t.body().getLocation().distanceSquared(viewer.getLocation()))).stream().toList()
+                    : TeammateDirectory.named(visible, args[2]);
+            if (matches.size() == 1) result = teammateTravel(viewer, matches.getFirst().id());
+            else {
+                try { result.addProperty("targetUuid", UUID.fromString(args[2]).toString()); } catch (IllegalArgumentException ignored) { }
+                result.addProperty("arrivalConfirmed", false);
+                result.addProperty("status", "refused");
+                result.add("actualPosition", CharacterLocationAccess.position(viewer.getLocation()));
+                CharacterLocationAccess.ambiguous(result, viewer, matches);
+            }
+        } else CharacterLocationAccess.fail(result, "invalid_arguments", "/mycli locate --help");
+        viewer.sendMessage("MC_LOCATE " + result);
+    }
+
     private void locate(Player viewer, String[] args) {
+        if ((args.length == 3 && args[1].equalsIgnoreCase("info"))
+                || (args.length == 3 && args[1].equalsIgnoreCase("list"))) {
+            locateStructured(viewer, args);
+            return;
+        }
         if (args.length == 1) { openMenu(viewer, "players"); return; }
         if (args.length == 3 && (args[1].equalsIgnoreCase("tp") || args[1].equals("传送"))) {
             if (args[2].equalsIgnoreCase("nearest")) { teleportNearest(viewer); return; }
@@ -2069,7 +2116,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return;
         }
         if (args.length != 2) {
-            viewer.sendMessage(ChatColor.RED + "用法：/mycli locate [list|nearest|玩家名|off|tp <玩家名|nearest>]"); return;
+            viewer.sendMessage(ChatColor.RED + "用法：/mycli locate list [页码] --json；/mycli locate info <名字或UUID> --json；/mycli locate tp <名字或UUID|nearest> [--json]；持续追踪：/mycli locate <名字或UUID>，停止：/mycli locate off"); return;
         }
         String choice = args[1];
         if (choice.equalsIgnoreCase("off")) { stopTracking(viewer); return; }
@@ -2132,6 +2179,9 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return siteDungeons==null?"":siteDungeons.reinforcementProblem(actor,target,landing);
     }
     private Location safeNear(Player actor, LivingEntity target) {
+        return safeTeammateLanding(target, landing -> teamTravelProblem(actor,target,landing).isEmpty());
+    }
+    static Location safeTeammateLanding(LivingEntity target, java.util.function.Predicate<Location> allowed) {
         Location at = target.getLocation();
         int[][] offsets = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, 1}, {1, -1}, {-1, -1},
                 {2, 0}, {-2, 0}, {0, 2}, {0, -2}, {0, 0}};
@@ -2142,32 +2192,55 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             Block feet = at.getWorld().getBlockAt(x, y, z);
             Location landing=new Location(at.getWorld(),x+.5,y,z+.5,at.getYaw(),0);
             if(safeLanding(feet)&&TeamTravelSafety.insideBorder(landing)
-                &&teamTravelProblem(actor,target,landing).isEmpty())return landing;
+                &&allowed.test(landing))return landing;
         }
         return null;
     }
 
     private void teleportToTeammate(Player viewer, UUID targetId) {
+        teammateTravel(viewer, targetId);
+    }
+
+    private com.google.gson.JsonObject teammateTravel(Player viewer, UUID targetId) {
+        var result = CharacterLocationAccess.result(viewer.getUniqueId(), "tp");
+        result.addProperty("targetUuid", targetId.toString());
+        result.addProperty("status", "refused");
+        result.addProperty("arrivalConfirmed", false);
+        result.add("actualPosition", CharacterLocationAccess.position(viewer.getLocation()));
         var target = TeammateDirectory.find(viewer, targetId);
         if (target == null) {
-            viewer.sendMessage(ChatColor.RED + "[team_target_unavailable] 队友已离线或不可传送；未耗魔。下一步：/mycli locate list"); return;
+            viewer.sendMessage(ChatColor.RED + "[team_target_unavailable] 队友已离线或不可传送；未耗魔。下一步：/mycli locate list");
+            return CharacterLocationAccess.fail(result, "unknown_or_hidden", "/mycli locate list --json");
         }
         if(isDowned(viewer)||viewer.isDead()||viewer.isInsideVehicle()||viewer.isGliding()||viewer.isFlying()){
-            viewer.sendMessage("§e[team_actor_blocked] 当前倒地、死亡、载具或飞行状态不能传送；未传送、未耗魔。下一步：/mycli status");return;
+            viewer.sendMessage("§e[team_actor_blocked] 当前倒地、死亡、载具或飞行状态不能传送；未传送、未耗魔。下一步：/mycli status");
+            return CharacterLocationAccess.fail(result, "team_actor_blocked", "/mycli status");
         }
-        if(target.body().isDead()){viewer.sendMessage("§e[team_target_respawning] 队友正在重生；等重生完成再支援，未耗魔。");return;}
+        if (target.body().isDead()) {
+            viewer.sendMessage("§e[team_target_respawning] 队友正在重生；等重生完成再支援，未耗魔。");
+            return CharacterLocationAccess.fail(result, "team_target_respawning", "/mycli locate info " + targetId + " --json");
+        }
         String problem=teamTravelProblem(viewer,target.body(),target.body().getLocation());
-        if(!problem.isEmpty()){viewer.sendMessage("§e"+problem+" 未传送、未耗魔。");return;}
+        if (!problem.isEmpty()) {
+            result.addProperty("message", problem);
+            viewer.sendMessage("§e" + problem + " 未传送、未耗魔。");
+            String reason = problem.startsWith("[") && problem.indexOf(']') > 1
+                    ? problem.substring(1, problem.indexOf(']')) : "team_activity_unavailable";
+            return CharacterLocationAccess.fail(result, reason, "/mycli locate info " + targetId + " --json");
+        }
         long now = System.currentTimeMillis();
         long wait = teamTeleportAt.getOrDefault(viewer.getUniqueId(), 0L) + TEAM_TELEPORT_COOLDOWN_MS - now;
         if (wait > 0) {
-            viewer.sendMessage(ChatColor.YELLOW + "传送冷却还剩 " + ((wait + 999) / 1000) + " 秒；等待结束再传一次，/mycli locate list 可先核对队友。"); return;
+            result.addProperty("retryAfterSeconds", (wait + 999) / 1000);
+            viewer.sendMessage(ChatColor.YELLOW + "传送冷却还剩 " + ((wait + 999) / 1000) + " 秒；等待结束再传一次，/mycli locate list 可先核对队友。");
+            return CharacterLocationAccess.fail(result, "cooldown", "/mycli locate info " + targetId + " --json");
         }
         Location landing = safeNear(viewer,target.body());
         if (landing == null) {
-            viewer.sendMessage(ChatColor.YELLOW + "[team_no_safe_ground] 队友附近2格内没有可站立的安全地面（需脚下有支撑、身体和头部不被堵住）；请队友移到平地再试。战斗状态和入口平台本身不会禁止支援，未耗魔。"); return;
+            viewer.sendMessage(ChatColor.YELLOW + "[team_no_safe_ground] 队友附近2格内没有可站立的安全地面（需脚下有支撑、身体和头部不被堵住）；请队友移到平地再试。战斗状态和入口平台本身不会禁止支援，未耗魔。");
+            return CharacterLocationAccess.fail(result, "team_no_safe_ground", "/mycli locate info " + targetId + " --json");
         }
-        if (travelMagic.teleport(viewer, landing, "team", "队友传送术", TravelMagic.DISTANT_MANA, () -> {
+        String spellProblem = travelMagic.teleportProblem(viewer, landing, "team", "队友传送术", TravelMagic.DISTANT_MANA, () -> {
             Location arrived=viewer.getLocation();
             var current = TeammateDirectory.find(viewer, targetId);
             return current != null && current.body().getWorld() == arrived.getWorld()
@@ -2176,11 +2249,28 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     &&teamTravelProblem(viewer,target.body(),arrived).isEmpty()
                     &&(dungeon==null||dungeon.enrollReinforcement(viewer,target.body()))
                     &&(siteDungeons==null||siteDungeons.enrollReinforcement(viewer,target.body()));
-        })) {
+        });
+        result.add("actualPosition", CharacterLocationAccess.position(viewer.getLocation()));
+        if (spellProblem.isEmpty()) {
             teamTeleportAt.put(viewer.getUniqueId(), now);
             viewer.sendMessage(ChatColor.GREEN + "已安全抵达 " + target.name() + " 身边。 "
                     + LocationOutput.fields(viewer.getLocation()));
+            result.addProperty("ok", true);
+            result.addProperty("arrivalConfirmed", true);
+            result.addProperty("status", "arrived");
+            result.addProperty("reason", "arrived");
+            result.add("targetPosition", CharacterLocationAccess.position(target.body().getLocation()));
+            return result;
         }
+        if (Set.of("team_admission_unconfirmed", "charge_unconfirmed", "unsafe_destination").contains(spellProblem))
+            result.addProperty("status", "unknown");
+        String next = switch (spellProblem) {
+            case "skill_unavailable" -> "/mycli skills info travel";
+            case "insufficient_mana", "charge_unconfirmed", "spectator" -> "/mycli status";
+            case "protected" -> "/mycli land here";
+            default -> "/mycli locate info " + targetId + " --json";
+        };
+        return CharacterLocationAccess.fail(result, spellProblem, next);
     }
 
     private void trackPlayer(Player viewer, UUID targetId) {

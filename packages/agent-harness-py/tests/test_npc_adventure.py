@@ -178,3 +178,44 @@ def test_inventory_shortcuts(action):
         assert evidence.status == "completed" and evidence.data["adventure"]["receipt"] == row
         mismatch = life.game_result(result, name, {"kind": kind}, body_id="another")
         assert mismatch.status == ("failed" if preview else "unknown") and not mismatch.data["adventure"]["retryWrite"]
+
+
+def test_compass_catalogue_exact_name_and_verified_cross_world_travel():
+    import json
+    uid = "cd861923-2f54-4dd2-8b8f-6cf10fbf9ece"
+    actor = "8d6aa54b-98f7-4147-99d4-fe91ee8cd1fb"
+    def cmd(name, **args):
+        return life.player_command(name, args, "Kirito", "ag_CorMy")
+    assert cmd(life.QUERY, kind="characters", page=2) == "/mycli locate list 2 --json"
+    assert cmd(life.QUERY, kind="characters", page=101) == "/mycli locate list 101 --json"
+    assert cmd(life.QUERY, kind="locate_character", target="肥鱼") == "/mycli locate info 肥鱼 --json"
+    assert cmd(life.ACT, kind="meet_character", targetUuid=uid) == f"/mycli locate tp {uid} --json"
+    with pytest.raises(ValueError):
+        cmd(life.QUERY, kind="locate_character", target="other --op")
+    with pytest.raises(ValueError):
+        cmd(life.ACT, kind="meet_character", targetUuid="Somebody")
+    location = {"dimension": "world_nether", "x": 5, "y": 80, "z": 12}
+    good = {"ok": True, "status": "arrived", "arrivalConfirmed": True, "action": "tp", "actorUuid": actor,
+            "targetUuid": uid, "actualPosition": location, "targetPosition": location}
+    def outcome(row):
+        reply = PortResult("completed", "stdout:\nMC_LOCATE " + json.dumps(row))
+        return life.game_result(reply, life.ACT, {"kind": "meet_character", "targetUuid": uid}, body_id=actor)
+    assert outcome(good).status == "completed"
+    assert outcome(good | {"targetUuid": actor}).status == "unknown"
+    assert outcome(good | {"actorUuid": uid}).status == "unknown"
+    assert outcome(good | {"actualPosition": {}}).status == "unknown"
+    assert outcome(good | {"actualPosition": location | {"x": 9}}).status == "completed"
+    assert outcome(good | {"actualPosition": location | {"x": 9.0001}}).status == "unknown"
+    assert outcome(good | {"status": "refused", "ok": False, "reason": "no_safe_landing"}).status == "rejected"
+    def read(kind, row, **args):
+        reply = PortResult("completed", "stdout:\nMC_LOCATE " + json.dumps(row))
+        return life.game_result(reply, life.QUERY, {"kind": kind, **args}, body_id=actor).status
+    entry = {"uuid": uid, "name": "ag_CorMy", "aliases": ["可米"], **location}
+    page = {"action": "list", "actorUuid": actor, "ok": True, "page": 2, "characters": [entry]}
+    assert read("characters", page, page=2) == "completed"
+    assert read("characters", page, page=1) == "failed"
+    assert read("characters", page | {"actorUuid": uid}, page=2) == "failed"
+    where = {"action": "info", "actorUuid": actor, "ok": True, "character": entry}
+    assert read("locate_character", where, target="可米") == "completed"
+    assert read("locate_character", where, target="肥鱼") == "failed"
+    assert read("locate_character", where | {"ok": False, "reason": "ambiguous_name"}, target="肥鱼") == "rejected"

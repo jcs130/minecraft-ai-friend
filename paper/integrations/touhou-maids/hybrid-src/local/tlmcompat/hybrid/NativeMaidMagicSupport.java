@@ -156,15 +156,9 @@ final class NativeMaidMagicSupport {
             .filter(mob -> protection.allows(owner, mob.getBukkitEntity().getLocation(), ProtectionAction.SPELL_TARGET)).toList();
 
         // This stat snapshot is local to the cast. The RPG player repository only sees players.
-        var stats = new UnifiedPlayer(maid.getUUID(), maid.getName().getString());
-        mage.baseStats().forEach((attribute, base) -> stats.stat(attribute).setBase(base));
-        staff.attributeBonuses().forEach((attribute, bonus) -> stats.stat(attribute).addFlat(bonus));
-        staff.attributeMultipliers().forEach((attribute, bonus) -> stats.stat(attribute).addMultiplier(bonus));
-        double wisdom = stats.stat(VortexAttribute.WISDOM).current();
-        double intelligence = stats.stat(VortexAttribute.INTELLIGENCE).current();
+        var stats = stats(maid, staff);
         long now = System.nanoTime() / 1_000_000L;
-        var mana = manaByMaid.computeIfAbsent(maid.getUUID(), ignored -> new Mana());
-        mana.regenerate(now, Math.max(0, 20 + (wisdom + intelligence) * 4), Math.max(0, .5 + wisdom * .075));
+        var mana = mana(maid, stats, now);
         boolean automaticPolicy = requested == null && policy != null && !targets.isEmpty();
         if (!forecasting && now < mana.nextStaffCast) return new Opportunity("rpg_spell_cooldown", null);
         long readyAt = forecasting ? Math.max(now + GUARD_SAMPLE_MILLIS, mana.nextStaffCast) : now;
@@ -232,6 +226,33 @@ final class NativeMaidMagicSupport {
         if (spell.heal() != null || spell.targetLimit() > 1) return enemies.size() > 1 || !friends.isEmpty() ? 3 : -1;
         if (spell.bleed() != null) return !enemies.isEmpty() && enemies.getFirst().getHealth() >= 12 ? 2 : -1;
         return 1;
+    }
+
+    private UnifiedPlayer stats(EntityMaid maid, CustomItemDefinition staff) {
+        var stats = new UnifiedPlayer(maid.getUUID(), maid.getName().getString());
+        vortex.classSkillService().classProfile(MAGE).filter(profile -> profile.archetype() == VortexClass.MAGE)
+                .ifPresent(profile -> profile.baseStats().forEach((attribute, base) -> stats.stat(attribute).setBase(base)));
+        if (staff != null) {
+            staff.attributeBonuses().forEach((attribute, bonus) -> stats.stat(attribute).addFlat(bonus));
+            staff.attributeMultipliers().forEach((attribute, bonus) -> stats.stat(attribute).addMultiplier(bonus));
+        }
+        return stats;
+    }
+
+    private Mana mana(EntityMaid maid, UnifiedPlayer stats, long now) {
+        double wisdom = stats.stat(VortexAttribute.WISDOM).current();
+        double intelligence = stats.stat(VortexAttribute.INTELLIGENCE).current();
+        var mana = manaByMaid.computeIfAbsent(maid.getUUID(), ignored -> new Mana());
+        mana.regenerate(now, Math.max(0, 20 + (wisdom + intelligence) * 4), Math.max(0, .5 + wisdom * .075));
+        return mana;
+    }
+
+    boolean travelMana(EntityMaid maid, int cost, boolean spend) {
+        if (!vortex.isEnabled() || cost <= 0) return false;
+        var pool = mana(maid, stats(maid, staff(maid)), System.nanoTime() / 1_000_000L);
+        if (pool.current < cost) return false;
+        if (spend) pool.current -= cost;
+        return true;
     }
 
     private int ownerLevel(Player owner) {

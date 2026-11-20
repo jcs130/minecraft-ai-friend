@@ -20,6 +20,7 @@ parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--fixture',type=Path,required=True)
 parser.add_argument('--output',type=Path,required=True)
 parser.add_argument('--expiry-only',action='store_true')
+parser.add_argument('--rendezvous-players',type=Path,help='Online synthetic Mineflayer UUIDs for the non-owner follow test (MaidOwnerQA, MaidSocialOne, MaidSocialTwo)')
 args=parser.parse_args()
 fixture=json.loads(args.fixture.read_bytes());lab=Path(fixture['lab'])
 assert fixture['synthetic'] is True and (lab/'.native-body-qa').read_text()=='SYNTHETIC_NATIVE_BODY_ONLY'
@@ -27,7 +28,11 @@ assert (lab/'.resident-hybrid-qa').read_text()=='SYNTHETIC_RESIDENT_HYBRID_ONLY'
 props=dict(x.split('=',1)for x in (lab/'server.properties').read_text().splitlines()if'='in x)
 assert props['server-ip']=='127.0.0.1'
 url=urllib.parse.urlsplit(fixture['endpoint']);assert url.scheme=='http' and url.hostname=='127.0.0.1' and url.path=='/maid-body'
-assert fixture['maidId'].startswith('10000000-') and fixture['ownerId'].startswith('20000000-')
+assert fixture['maidId'].startswith('10000000-')
+if args.rendezvous_players:
+    assert fixture['ownerId']=='9364ecc2-efa1-370f-ae98-c3f1861d47ce'  # OfflinePlayer:MaidOwnerQA
+else:
+    assert fixture['ownerId'].startswith('20000000-')
 token=Path(fixture['tokenFile']).read_text().strip()
 report={'synthetic':True,'productionChanged':False,'startedAt':time.time(),'checks':[],'observations':{}}
 args.output.parent.mkdir(parents=True,exist_ok=True)
@@ -82,7 +87,10 @@ def settle(request):
         if receipt['status'] not in ['running','accepted'] or time.monotonic()>until:return receipt
         time.sleep(.15)
 try:
-    if args.expiry_only:
+    if args.rendezvous_players:
+        from rendezvous_stage import verify
+        verify(fixture,json.loads(args.rendezvous_players.read_bytes()),c,command,check)
+    elif args.expiry_only:
         c.bind();bound=True;write('stop');epoch=probe('controller')['epoch']
         time.sleep(122)
         check('real_idle_lease_expires_and_stops_body',not probe('controller')['active'] and native()['sitting'])
@@ -98,6 +106,8 @@ try:
         second=Client();code,error=http({'operation':'bind',**second.env});check('second_controller_busy',code==409 and error['code']=='CONTROL_BUSY')
         write('stop');command(f"companiontest position {fixture['maidId']} 180.5 81 100.5")
         context=c.call('context')['data'];check('brain_projection_consistent',context['physicalController']=='native_body' and context['brain']['physicalController']=='native_body' and context['brain']['readOnly'])
+        check('offline_people_are_not_social_targets',context['nearbyPlayers']==[])
+        check('stationed_maid_does_not_offer_social_walk',context['socialWalkAvailable'] is False)
         check('equipment_help_does_not_promise_transfer','transfer put' not in c.call('inventory')['data']['nextStep'])
         code,error=c.raw('brain',choice='native');check('brain_query_cannot_mutate_choice',code==400 and error['code']=='UNEXPECTED_FIELD')
         code,error=c.raw('walk',requestId='bad-'+run,x=181,z=100);check('missing_coordinate_diagnosed',code==400 and error['code']=='INVALID_y')
@@ -109,6 +119,7 @@ try:
         check('duplicate_write_does_not_restore_old_setting',c.call('context')['data']['pickup'] is False)
         target={'x':186.5,'y':81,'z':100.5};rid='walk-'+run
         row=c.call('walk',requestId=rid,**target);check('walk_admission_does_not_claim_arrival',row['status']=='running' and not row['data']['goalCompleted'])
+        check('inflight_navigation_keeps_social_walk_busy',c.call('context')['data']['socialWalkAvailable'] is False)
         done=settle(rid);actual=native()['position'];check('native_walk_reaches_real_world_target',done['status']=='completed' and done['goalCompleted'] and math.dist(actual,[target['x'],target['y'],target['z']])<=.91,actual=actual)
         c.call('walk',requestId=rid,x=186.5,y=81.0,z=100.5);write('stop');check('equivalent_numeric_duplicate_returns_original_result',c.call('receipt',operationId=rid)['data']['observedAt']==done['observedAt'])
         report['observations']['walk']=done

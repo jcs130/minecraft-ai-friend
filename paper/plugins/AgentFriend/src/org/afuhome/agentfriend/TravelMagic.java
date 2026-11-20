@@ -63,18 +63,22 @@ final class TravelMagic implements Listener {
     }
     /** Admission is checked after the real teleport event and before charging or reporting success. */
     boolean teleport(Player player, Location destination, String id, String name, int mana, java.util.function.BooleanSupplier admitted) {
-        if (!plugin.professions().basicAllowed(player,id.equals("home") ? "home" : id.equals("support") ? "support" : "travel")) return false;
+        return teleportProblem(player, destination, id, name, mana, admitted).isEmpty();
+    }
+
+    String teleportProblem(Player player, Location destination, String id, String name, int mana, java.util.function.BooleanSupplier admitted) {
+        if (!plugin.professions().basicAllowed(player,id.equals("home") ? "home" : id.equals("support") ? "support" : "travel")) return "skill_unavailable";
         if (player.getGameMode() == GameMode.SPECTATOR) {
-            player.sendMessage(ChatColor.RED + "旁观者不能使用传送术；请使用对应的生存角色，/mycli status 核对状态。"); return false;
+            player.sendMessage(ChatColor.RED + "旁观者不能使用传送术；请使用对应的生存角色，/mycli status 核对状态。"); return "spectator";
         }
-        if (!plugin.hasMana(player, mana)) return false;
+        if (!plugin.hasMana(player, mana)) return "insufficient_mana";
         Location departure = player.getLocation().clone();
         internal.add(player.getUniqueId());
         boolean moved;
         try { moved = player.teleport(destination); }
         finally { internal.remove(player.getUniqueId()); }
         if (!moved) {
-            player.sendMessage(ChatColor.RED + "传送被保护规则取消；未耗魔。先 /mycli land here 核对权限，再 /mycli waypoint 另选公开安全目标；持续异常联系服主。"); return false;
+            player.sendMessage(ChatColor.RED + "传送被保护规则取消；未耗魔。先 /mycli land here 核对权限，再 /mycli waypoint 另选公开安全目标；持续异常联系服主。"); return "protected";
         }
         Location homeAnchor = homeLandings.get(player.getUniqueId());
         if (homeAnchor != null && !HomeLanding.accepts(player, homeAnchor, player.getLocation())) {
@@ -83,7 +87,7 @@ final class TravelMagic implements Listener {
             try { player.teleport(departure); }
             finally { internal.remove(player.getUniqueId()); }
             player.sendMessage("§e[unsafe_destination] 传送目标被其他插件改为不安全位置，已尝试返回出发点；未耗魔。下一步：/mycli waypoint list");
-            return false;
+            return "unsafe_destination";
         }
         boolean accepted;
         try { accepted = admitted.getAsBoolean(); }
@@ -93,16 +97,16 @@ final class TravelMagic implements Listener {
             boolean returned;
             try { returned=player.teleport(departure); } finally { internal.remove(player.getUniqueId()); }
             player.sendMessage("§e[team_admission_unconfirmed] 参战登记或实际落点未确认，未耗魔；"+(returned?"已返回出发点。":"返回也被取消，请 /mycli status 查询并联系服主。")+"不要重复报名。 ");
-            return false;
+            return "team_admission_unconfirmed";
         }
         if (!plugin.spendMana(player, mana)) {
             plugin.getLogger().severe("Accepted travel could not be charged: " + player.getUniqueId());
             homeLandings.remove(player.getUniqueId());
             player.teleport(departure);
-            return false;
+            return "charge_unconfirmed";
         }
         succeeded(player, departure, id, name, mana);
-        return true;
+        return "";
     }
 
     boolean command(Player player, String command, Location expected, String id, String name, int mana) {

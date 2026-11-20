@@ -164,6 +164,39 @@ def test_quiet_delegation_keeps_thought_for_useful_occasion_and_only_allows_spee
     asyncio.run(run())
 
 
+def test_current_agenda_gets_physical_turn_and_guard_returns_after_it_ends():
+    async def run():
+        actor, context = guarded()
+        actor.allowed_tools.append("body:move")
+        context.capabilities.actions["move"] = ActionSupport(native="walk")
+        context.agenda = {"current": {"goal": "查看旁边的路口"}, "upcoming": []}
+        calls = []
+
+        def choose(request):
+            facts = json.loads(json.loads(request.content)["messages"][1]["content"])
+            calls.append(facts)
+            assert facts["agenda"]["current"]["goal"] == "查看旁边的路口"
+            assert "move" in facts["capabilities"]["actions"]
+            assert "companionOpportunity" not in facts
+            return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(
+                {"steps": [{"tool": "body:move", "args": {"x": 6, "y": 64, "z": 8}}]})}}]})
+
+        client = ModelClient("http://127.0.0.1:1/v1", "synthetic",
+                             http=httpx.AsyncClient(transport=httpx.MockTransport(choose)))
+        try:
+            planner = NpcPlanner(actor, client)
+            planner.next_companion_check_in = 0
+            intent = Intent(id="guard-agenda", agent=actor.id, goal=IDLE_GOAL)
+            assert [step.tool for step in await planner(intent, context)] == ["body:move"]
+            context.snapshot.raw["nativeGuardDelegated"] = False
+            context.agenda["current"] = None
+            assert [step.tool for step in await planner(intent, context)] == ["body:native:guard"]
+            assert len(calls) == 1
+        finally:
+            await client.close()
+    asyncio.run(run())
+
+
 def test_explicit_advice_uses_verified_owner_and_body_binding(tmp_path):
     async def run():
         actor, context = guarded()

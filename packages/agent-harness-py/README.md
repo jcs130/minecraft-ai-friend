@@ -121,6 +121,26 @@ The native endpoint reuses the private companion executor. Its supplied action c
 equipment, follow and other available operations. Public-resident registration and owner inventory
 transfers have separate implementation and authorization requirements.
 
+Maid NPCs receive the skill compass character directory with live UUIDs, names, aliases,
+dimensions and positions. An NPC can choose a one-time meeting with
+`{"steps":[],"companion":{"mode":"approach","targetName":"可米"}}` or continually
+track a character with `{"steps":[],"companion":{"mode":"follow","targetUuid":"<listed uuid>"}}`.
+Ambiguous names require an exact UUID. The host checks the current location again before
+acting. It requests a native walk for a reachable same-dimension leg of up to 96 blocks.
+For longer, cross-dimension or blocked routes the host can use the ordinary travel spell
+when the role allows `body:native:rendezvous` and its bridge advertises that action.
+The original request receipt records the outcome. A drained or disconnected host queries
+that ID before planning further. A failed transfer reports the reason to the next decision.
+After meeting by spell, a follower walks when the companion moves nearby.
+Following binds the selected UUID to native navigation even when the two are already beside
+one another. Finishing a one-time meeting, stopping or changing partners releases the old
+target by UUID. Native work orders and releasing the body restore its prior navigation settings.
+Earlier bridges retain local walking using their visual observation.
+
+A hosted Numen adventurer can query `characters` (optional page) or `locate_character`
+(exact name or UUID) through `adventure_query`. Its `meet_character` action accepts the
+target UUID and uses the same `/mycli locate tp` interface available to regular players.
+
 ## Development
 
 ```sh

@@ -510,6 +510,9 @@ final class DungeonManager implements Listener {
         for (int n = 1; n <= maxFloor(); n++) if (inFloor(at, n)) return n;
         return 0;
     }
+    boolean companionTravelFloor(Location at) {
+        return built && !inLobby(at) && floorAt(at) > 0;
+    }
     boolean companionTrialArrival(Player player, int stage, Location landing) {
         return isParticipant(player) && pausedAt == 0 && floor == stage && committedCurrentRun()
             && inFloor(player.getLocation(), stage) && inFloor(landing, stage);

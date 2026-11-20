@@ -118,6 +118,7 @@ final class AgentCliCatalog {
         add(specs,"skills.prepare","magic","write","/mycli skills prepare <ID>","准备已学职业技能","当前职业；最多四项新主动和一项传承","MC_PROFESSION_RESULT");
         add(specs,"skills.unprepare","magic","write","/mycli skills unprepare <ID>","取消准备，保留学习记录和冷却","当前职业；已学会","MC_PROFESSION_RESULT");
         add(specs,"help","info","read","/mycli help [ID]","查看玩家帮助；有 ID 时查看该命令详情","在线玩家","帮助或 MC_CLI_DETAIL");
+        add(specs,"help.find","info","read","/mycli help find <想做的事> [--json]","按目的查最多三条当前命令、用法和条件","免费；本人查询","MC_CLI_SEARCH；选择后另行执行");
         add(specs,"list","info","read","/mycli list [分类|命令|all] [页码]","分页发现命令；默认只列顶层命令","在线玩家","MC_CLI_LIST、MC_CLI_ITEM");
         add(specs,"explain","info","read","/mycli explain <ID|命令 子命令>","查询用法、前提、效果和回执；绝不执行目标命令","在线玩家","MC_CLI_DETAIL");
         add(specs,"coach","info","read","/mycli coach status|next|guide|lessons|enroll|cancel|menu|later|on|off","本人新手进度；lessons只读，enroll报名特色实练，cancel停止新证明","自动迎新和低频提醒按本人设置；旁观者不参加；暂停提醒不等于取消实练","MC_COACH JSON；原status字段保留，增加onboarding");
@@ -141,7 +142,7 @@ final class AgentCliCatalog {
         add(specs,"protect.batch","safety","read","/mycli protect batch <break|place|container|use> <x,y,z> [x,y,z ...] [--verbose] [--json]","批量聚合保护结果；也可用 --box x1 y1 z1 x2 y2 z2 查询含边界范围","最多64个目标；绝对整数；同维度、眼睛16格内、已加载；重复坐标只查一次","一份MC_PROTECTION_BATCH：counts、groups按精确判定合并，indices为从0开始的闭区间；targets编码box时x最快、再z、再y；不把外包范围当整块禁区；完整规则--verbose，超大详情nextCommand分页");
         add(specs,"goto","travel","teleport","/mycli goto <公共地点ID|arena|guild|personal:名字|shared:分享码>","传送术前往公共、本人或分享地点","安全落点；6 魔力；个人名支持 1–24 位中文字母数字_-；不在活动中","命名地点先返回 MC_WAYPOINT_RESULT status=pending，最终 success/denied；成功 MC_TRAVEL；失败不扣费");
         add(specs,"waypoint","travel","read","/mycli waypoint","只读列出公共、本人命名地点和旧 home","在线玩家；不移动、不扣费","MC_WAYPOINT 绝对坐标和 MC_WAYPOINT_LIST JSON");
-        add(specs,"locate","team","read","/mycli locate list|nearest|玩家名|off|tp <玩家名|nearest>","查在线队友绝对坐标、追踪或安全传送","目标在线且非旁观者","MC_PLAYER 绝对坐标或追踪/传送结果");
+        add(specs,"locate","team","read","/mycli locate list|info|nearest|off|tp","找角色、查位置、开启罗盘追踪或支援传送","使用本人可查的角色目录，支持跨维度查询","list/info 查位置；跟随指针或传送另行选择");
         add(specs,"arena","adventure","read","/mycli arena status|start|rest|next|shop|rewards|stash|leave","试炼塔按层挑战、商店与本人奖励箱；逐室探索的遗迹地下城另用 /mycli dungeon","玩法动作受位置、队伍、冷却检查","MC_DUNGEON、MC_REWARD、MC_STASH 或菜单");
         add(specs,"dungeon","adventure","read","/mycli dungeon <动作>","遗迹地下城：逐室探索、组队挑战与奖励；试炼塔另用arena","查询免费；传送、参战和领取条件见子命令","私有MC_SITE_DUNGEON回执；status核对真实场次与凭据");
         add(specs,"landmark","travel","read","/mycli landmark <动作>","公共地标：查询建筑安全落点，主人可登记和撤回","查询免费；管理需主人权限；实际传送另耗魔力","MC_LANDMARK回执；不会因查询自动登记或传送");
@@ -224,10 +225,11 @@ final class AgentCliCatalog {
         add(specs,"landmark.unpublish","travel","write","/mycli landmark unpublish <领地ID>","撤回地标传送，保留建筑管理权","仅当前领地主人；免费","MC_LANDMARK_RESULT；目录和旧目标立即失效");
         add(specs,"landmark.menu","travel","gui","/mycli landmark menu","打开公共地标和本人建筑管理菜单","Java/基岩原版箱子菜单；聊天命名仅发服务器","原版菜单；传送 pending 须等最终结果及 MC_TRAVEL；失败不扣魔力");
         add(specs,"landmark.cancel","travel","write","/mycli landmark cancel","取消地标菜单的命名输入","仅本人会话；免费","MC_LANDMARK_RESULT");
-        add(specs,"locate.list","team","read","/mycli locate list","列出可见在线队友位置","在线玩家","每人一条 MC_PLAYER 绝对坐标");
+        add(specs,"locate.list","team","read","/mycli locate list [页码] [--json]","列出当前可定位的角色，包括远处玩家、Agent 和已加载的登记居民","查询免费；可跨维度","MC_LOCATE；角色身份与所在维度；按nextCommand翻页，同名选UUID");
+        add(specs,"locate.info","team","read","/mycli locate info <名字或UUID> [--json]","角色在哪里？查坐标、维度和会合下一步","免费，只读；未加载或不可见时没有实时坐标","本人和目标的实际维度及位置；同维可寻路，支援传送另行执行");
         add(specs,"locate.nearest","team","write","/mycli locate nearest","追踪同世界最近队友","同世界有可见非旁观队友","BossBar 方向和距离");
         add(specs,"locate.off","team","write","/mycli locate off","停止追踪队友","在线玩家","停止结果");
-        add(specs,"locate.tp","team","teleport","/mycli locate tp <玩家名|nearest>","队友传送术：安全到伙伴附近，复用罗盘找队友","目标在线可见；8魔力、20秒冷却；有安全落点；双方非副本/PvP参战","成功后 MC_TRAVEL 与绝对坐标；失败不扣费或开始冷却；不代建队/参战");
+        add(specs,"locate.tp","team","teleport","/mycli locate tp <名字|UUID|nearest> [--json]","队友传送术，使用技能罗盘「找队友」中同一颗传送珍珠的规则","8魔力、20秒冷却；按安全落点、PvP 与活动增援准入实时校验","MC_LOCATE：核对targetUuid、arrivalConfirmed和actualPosition；结果未知先查位置；原有MC_TRAVEL仍可用");
         add(specs,"arena.status","adventure","read","/mycli arena status [--json|--verbose]","查询当前入场缺项或战斗下一步；默认短文本","每次start从第1层开始，历史通关不自动跳层；清层自动下楼。传送6魔力、开场免费，已解锁驿站rest需8魔力","MC_TRIAL_STATE；显式JSON/verbose兼容MC_DUNGEON status及救援字段");
         add(specs,"dungeon.list","adventure","read","/mycli dungeon list","发现不同地点的建筑地下城与可用挑战入口","只读免费，不加载新区块、不传送或开场","私有MC_SITE_DUNGEON_LIST/ITEM；info查选中地点，status查本人场次");
         add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查难度、建议等级、装备搭配和当前一步","只读免费；详细路线用--verbose；地点ID从dungeon list读取","默认精炼中文；--json保留原字段并附实时指引，抵达入口不等于进入首室");
@@ -279,7 +281,7 @@ final class AgentCliCatalog {
         add(specs,"inventory.clean","storage","write","/mycli inventory clean [--dry-run] [--json]","自动清理随身背包，合并堆叠并销毁普通石土、腐肉等白名单杂物","预览用 --dry-run；保留快捷栏、穿戴、带标记物品","MC_INVENTORY_BATCH 预览看 plannedFreedSlots 和拟销毁清单 discarded，此时 freedSlots=0。执行后看 freedSlots 和实际销毁清单 discarded");
         add(specs,"inventory.store","storage","item","/mycli inventory store [--dry-run] [--json]","自动把随身普通余物转移到本人十页远程个人箱，不用选格","保留快捷栏、穿戴、特殊物品和常用补给；成功远程一批2魔力","MC_INVENTORY_BATCH 预览看 plannedItems 和 plannedFreedSlots，此时 moved=0、freedSlots=0。执行后看 moved 和 freedSlots，容量不足留下的件数见 leftForCapacity");
         add(specs,"inventory.donate","storage","item","/mycli inventory donate [--dry-run] [--json]","自动把随身富余普通武器、护甲、补给和材料捐进分类公会共享箱","只从自己背包转出，保留常用补给及特色装备；可先预览","MC_INVENTORY_BATCH moved、items、leftForUnavailableChest");
-        add(specs,"inventory.tidy","storage","write","/mycli inventory tidy [--dry-run] [--discard-common] [--json]","合并主背包普通堆叠；显式discard-common才销毁普通石头、泥土、黏土等杂物","保留快捷栏、装备、特殊元数据及背包之外所有物品；先关GUI和光标物品，PvP/恢复中禁止；默认不销毁","MC_INVENTORY_TIDY；dry-run只预览；报告释放槽位和逐类销毁数量，不出售、不发钱");
+        add(specs,"inventory.tidy","storage","write","/mycli inventory tidy [--dry-run] [--discard-common] [--json]","整理背包、合并主背包普通堆叠；显式discard-common才销毁普通石头、泥土、黏土等杂物","保留快捷栏、装备、特殊元数据及背包之外所有物品；先关GUI和光标物品，PvP/恢复中禁止；默认不销毁","MC_INVENTORY_TIDY；dry-run只预览；报告释放槽位和逐类销毁数量，不出售、不发钱");
         add(specs,"inventory.tidy.stash","storage","write","/mycli inventory tidy stash [--dry-run] [--discard-common] [--json]","把10页个人箱的装备排前、普通杂物放后，并合并同类堆叠","默认保留物品；带 --discard-common 可直接销毁白名单普通杂物。先用 --dry-run 查看逐类数量；整理后重新查槽位","MC_INVENTORY_TIDY；返回释放格数、待入箱奖励和下一步");
         add(specs,"inventory.tidy.stash.auto","storage","write","/mycli inventory tidy stash auto on|off|status [--json]","本人开箱时自动合并并把装备排在前面","默认关闭；按本人UUID持久保存，最多60秒一次；status只读","MC_INVENTORY_TIDY；自动整理保留全部物品，开箱后重新查槽位");
         add(specs,"inventory.tidy.stash.auto.status","storage","read","/mycli inventory tidy stash auto status [--json]","查看个人箱的自动排序设置","只读","MC_INVENTORY_TIDY enabled");
@@ -460,7 +462,7 @@ final class AgentCliCatalog {
     }
     static List<AgentCliRecovery.Card> recoveryCards(List<SpellGuide.Entry> spells,boolean nativeRpg) {
         return catalogSpecs(spells,nativeRpg).values().stream()
-            .filter(spec->!Set.of("help","list","explain","spells","status.full").contains(spec.id()))
+            .filter(spec->!spec.id().startsWith("admin.")&&!Set.of("help","help.find","list","explain","spells","status.full").contains(spec.id()))
             .map(spec->new AgentCliRecovery.Card(spec.id(),spec.usage(),spec.summary(),spec.requires())).toList();
     }
     /** Standard --help/-h discovery never runs the requested gameplay command. */
@@ -513,6 +515,7 @@ final class AgentCliCatalog {
                 if(!compatibility.contains(child)&&specs.containsKey(child))children.putIfAbsent(child,specs.get(child));
             }
             out.addProperty("path",path);
+            if(id.isEmpty())out.addProperty("searchUsage","/mycli help find <想做的事> [--json]");
             if(!children.isEmpty()&&!(id.equals("cast")&&words.size()>matched)){
                 // Parameterised leaf commands (e.g. cast heal) are matched above. Unknown
                 // subcommands must not silently fall back to a parent help page.
@@ -558,7 +561,7 @@ final class AgentCliCatalog {
         String key=prefix.isEmpty()?id:id.substring(prefix.length());
         return order.contains(key)?order.indexOf(key):order.size();
     }
-    private static boolean jsonSupported(String id){return Set.of("inventory.clean","inventory.store","inventory.donate").contains(id)||id.equals("arena.stash.summary")||id.startsWith("inventory.tidy")||Set.of("arena.wallet","arena.loot","arena.shop.list","arena.shop.buy","arena.recycle","arena.recycle.list","arena.recycle.quote","arena.recycle.sell","arena.recycle.status").contains(id)|| id.startsWith("trade.auction")||id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return Set.of("help.find","locate.list","locate.info","locate.tp","inventory.clean","inventory.store","inventory.donate").contains(id)||id.equals("arena.stash.summary")||id.startsWith("inventory.tidy")||Set.of("arena.wallet","arena.loot","arena.shop.list","arena.shop.buy","arena.recycle","arena.recycle.list","arena.recycle.quote","arena.recycle.sell","arena.recycle.status").contains(id)|| id.startsWith("trade.auction")||id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
@@ -670,6 +673,7 @@ final class AgentCliCatalog {
         if(id.startsWith("challenge"))query="/mycli challenge status；/mycli challenge result [场次UUID]";
         if(id.equals("arena.stash.summary"))query=PersonalStashOverview.QUERY;
         if(id.startsWith("admin.blockaccess."))query="mycli admin blockaccess status --json";
+        if(id.startsWith("locate."))query="/mycli locate info <目标UUID> --json；核对本人和目标的实际维度及位置";
         if(id.startsWith("protect"))query="原命令重新查询当前权限；详情在原命令后加 --verbose；查询不代表操作完成";
         if(id.startsWith("archive"))query="/mycli archive info <作品UUID>；/mycli archive list；物品操作核对本人背包，结果未知不重放";
         if(id.startsWith("tasks"))query="/mycli tasks status；/mycli progress guild 1";

@@ -1,5 +1,13 @@
 # AgentFriend：Paper 1.20.6 服务端扩展
 
+## 角色位置与会合
+
+玩家可在技能罗盘的“找队友”里查看角色、持续追踪或施放队友传送术。普通客户端和服务端托管身体共用可公开定位的角色目录。目录包含在线玩家、在线的 Numen 玩家身体和已加载的登记伙伴。观察账号、隐身角色及当前无法定位的身体会从结果中过滤。
+
+Agent 可以先用 `/mycli help find 可米在哪 --json` 查用法，或直接用 `/mycli locate info 可米 --json` 获得维度、位置和原 UUID。用 `/mycli locate list --json` 分页查人，按 `nextCommand` 翻页。遇到同名角色时，根据候选的维度和坐标选定 UUID；执行 `teleportCommand` 后以 `MC_LOCATE` 的 `arrivalConfirmed` 和实际落点核实。跨维度也能定位。离线、未加载或隐藏时回 `unknown_or_hidden`。
+
+传送沿用技能罗盘的学习条件、8 魔力、20 秒冷却、安全落点和活动准入。公开别名配置在 `character-directory.aliases`，键为已核实的身体 UUID。完整语法与查询示例见 [Agent CLI 指南](../../docs/MYCLI_AGENT_CLI.md)。
+
 ## 0.4.15候选：住房验收与特色实练
 
 `builder_home`按现存地面、墙、屋顶、外窗、完整通行门、完整床和本人施工七项验收，不能铺12块木板领奖；`life status/claim`均重查并说明怎么修。`coach lessons`提供大背包真实往返、CLI查询、感知、恢复、出行和通路六项自愿教学，原三证实习和毕业保留。无需修改Agent客户端。详见[规则](../../docs/STARTER_HOUSE_TRAINING.md)、纯结构测试`tests/org/afuhome/agentfriend/StarterHouseValidatorTest.java`及独立存档实操`starter-house-stage.mjs`。

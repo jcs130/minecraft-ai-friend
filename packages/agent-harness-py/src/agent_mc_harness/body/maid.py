@@ -39,7 +39,7 @@ from ..models import (
     Scope,
     WorldRef,
 )
-from .base import ArgumentError, BaseBody, new_request_id, obj, xyz
+from .base import ArgumentError, BaseBody, new_request_id, obj, rendezvous_arrival, xyz
 from .numen import classify_envelope
 
 UUID = re.compile(r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
@@ -109,6 +109,16 @@ def workshop_completed(receipt: dict, request_id: str) -> bool:
             and isinstance(detail.get("itemId"), str) and bool(detail["itemId"])
             and type(detail.get("count")) is int and detail["count"] > 0
             and detail.get("inventory") in {"chest", "backpack"})
+
+
+def rendezvous_completed(receipt, request_id, target):
+    detail = receipt.get("observation")
+    if not (receipt.get("operationId") == request_id and receipt.get("action") == "rendezvous"
+            and receipt.get("status") == "completed" and receipt.get("goalCompleted") is True
+            and isinstance(detail, dict) and detail.get("arrived") is True and target
+            and detail.get("targetUuid") == target):
+        return False
+    return rendezvous_arrival(detail.get("actualPosition"), detail.get("targetPosition"))
 
 
 def fishing_completed(receipt: dict) -> bool:
@@ -192,6 +202,10 @@ class MaidBody(BaseBody):
         acts: dict[str, ActionSupport] = {}
         for verb, (native, args, is_async) in VERBS.items():
             if native in actions and (native != "make" or self.workshop):
+                if verb == "move" and self._native:
+                    args = (*args, "dimension")
+                    if "release_rendezvous" in actions:
+                        args = (*args, "targetUuid")
                 acts[verb] = ActionSupport(native=f"mc_maids {native}", args=list(args), async_=is_async,
                                            notes="mode setting, not arrival/completion" if verb in ("follow", "stay", "sit") else None)
         props = self._schema.get("properties", {})
@@ -374,10 +388,15 @@ class MaidBody(BaseBody):
                 raise ArgumentError("action ownerId must match the bound owner")
             if {"controllerId", "generation", "operation"}.intersection(args):
                 raise ArgumentError("controller fields belong to the transport")
+            if name == "release_rendezvous" and not UUID.fullmatch(obj(args, "targetUuid", str)):
+                raise ArgumentError("Release requires the UUID of the previously selected companion.")
             if self.maid_id and name not in ("list", "nearby", "resources", "resource-pack") and "maidId" not in args:
                 args["maidId"] = self.maid_id
         else:
             native, names, _ = VERBS[action.verb]
+            if action.verb == "follow" and action.args:
+                raise ArgumentError("body:follow takes no arguments and follows the owner. "
+                                    "Choose companion with a name or UUID from the skill compass to approach someone else.")
             args = {"action": native, "maidId": self.maid_id}
             for key in names:
                 if key in action.args:
@@ -390,6 +409,13 @@ class MaidBody(BaseBody):
                 obj(action.args, "spellId", str)
             if action.verb == "move":
                 args["x"], args["y"], args["z"] = xyz(action.args)
+                if self._native and "dimension" in action.args:
+                    args["dimension"] = obj(action.args, "dimension", str)
+                if "targetUuid" in action.args:
+                    target = obj(action.args, "targetUuid", str)
+                    if not self._native or "release_rendezvous" not in self._actions or not UUID.fullmatch(target):
+                        raise ArgumentError("Use a current compass UUID and a native bridge with targeted navigation.")
+                    args["targetUuid"] = target
             if action.verb == "craft":
                 obj(action.args, "workshopId", str)
                 obj(action.args, "recipeId", str)
@@ -429,6 +455,9 @@ class MaidBody(BaseBody):
             data = reply.get("data") or {}
             if data.get("status") != "completed" or data.get("goalCompleted") is not True:
                 status = "accepted"
+        if args["action"] == "rendezvous" and status == "completed" and not rendezvous_completed(
+                reply.get("data") or {}, request_id, args.get("targetUuid")):
+            status = "unknown"
         if args["action"] == "make" and status == "completed" and not workshop_completed(reply.get("data") or {}, request_id):
             status = "unknown"
         if args["action"] == "fish" and status == "completed" and not fishing_completed(reply.get("data") or {}):
@@ -494,6 +523,9 @@ class MaidBody(BaseBody):
             if verified:
                 return self.settle(request_id, verified, data["observation"]["state"], {"maidAction": "cast", "reply": reply}) or previous
         status = reply_status(data, bool(result.get("isError")))
+        if data.get("action") == "rendezvous" and status == "completed" and not rendezvous_completed(
+                data, request_id, original.args.get("targetUuid") if original else None):
+            return previous
         if data.get("action") == "make" and status == "completed" and not workshop_completed(data, request_id):
             return previous
         if data.get("action") == "fish" and status == "completed" and not fishing_completed(data):
