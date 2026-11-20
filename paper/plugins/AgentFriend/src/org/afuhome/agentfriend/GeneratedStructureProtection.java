@@ -44,7 +44,9 @@ final class GeneratedStructureProtection implements Listener {
     private record ChunkKey(UUID world, long position) { }
     private record StartKey(ChunkKey chunk, String structure) { }
     private record Building(ProtectionArea envelope, List<ProtectionArea> pieces) { }
-    private record Hit(ProtectionArea area, boolean unknown) { }
+    private record Hit(ProtectionArea area, boolean unknown) {
+        String reason() { return area != null ? "generated_structure" : unknown ? "unknown_generated_structure_bounds" : null; }
+    }
     private record Cached(List<Building> buildings, boolean unknown, long at) { }
     private final AgentFriendPlugin plugin;
     private final File file;
@@ -133,7 +135,7 @@ final class GeneratedStructureProtection implements Listener {
         LevelChunk chunk = level.getChunkSource().getChunkNow(x, z);
         if (chunk == null) return new Cached(List.of(), true, System.currentTimeMillis());
         reads++;
-        Map<String, Building> found = new LinkedHashMap<>();
+        Map<StartKey, Building> found = new LinkedHashMap<>();
         boolean unknown = false;
         Map<Structure, it.unimi.dsi.fastutil.longs.LongSet> references = new LinkedHashMap<>();
         chunk.getAllReferences().forEach((structure, positions) -> references.put(structure, new it.unimi.dsi.fastutil.longs.LongOpenHashSet(positions)));
@@ -158,7 +160,7 @@ final class GeneratedStructureProtection implements Listener {
                     building = building(world, key, start); starts.put(startKey, building);
                     while (starts.size() > 128) starts.remove(starts.keySet().iterator().next());
                 }
-                found.put(building.envelope.id(), building);
+                found.put(startKey, building);
             }
         }
         Cached result = new Cached(List.copyOf(found.values()), unknown, System.currentTimeMillis());
@@ -167,12 +169,21 @@ final class GeneratedStructureProtection implements Listener {
         return result;
     }
     private Hit hit(Location at) {
-        if (!enabled || at == null || at.getWorld() == null) return new Hit(null, false);
+        return hit(at, null);
+    }
+    private Hit hit(Location at, String exemptEnvelopeId) {
+        if (!enabled) return new Hit(null, false);
+        if (at == null || at.getWorld() == null) return new Hit(null, true);
         try {
             Cached cached = read(at.getWorld(), at.getBlockX() >> 4, at.getBlockZ() >> 4);
+            boolean matchedExemption = false;
             for (Building b : cached.buildings) {
                 if (!b.envelope.contains(at)) continue;
-                for (ProtectionArea piece : b.pieces) if (piece.contains(at)) return new Hit(b.envelope, false);
+                if (b.pieces.stream().noneMatch(piece -> piece.contains(at))) continue;
+                // An exemption names one native start, not all overlapping buildings.
+                // A second start with an indistinguishable ID is also protected.
+                if (!b.envelope.id().equals(exemptEnvelopeId) || matchedExemption) return new Hit(b.envelope, false);
+                matchedExemption = true;
             }
             return new Hit(null, cached.unknown);
         } catch (RuntimeException | LinkageError failure) {
@@ -183,8 +194,10 @@ final class GeneratedStructureProtection implements Listener {
             return new Hit(null, true);
         }
     }
-    String reason(Location at) { Hit h = hit(at); return h.area != null ? "generated_structure" : h.unknown ? "unknown_generated_structure_bounds" : null; }
+    String reason(Location at) { return hit(at).reason(); }
+    String temporaryConflict(Location at, String expectedId) { return hit(at, expectedId).reason(); }
     ProtectionArea protectionArea(Location at) { return hit(at).area; }
+    ProtectionArea protectionArea(Location at, String exemptEnvelopeId) { return hit(at, exemptEnvelopeId).area; }
     private boolean crop(Material type) { return crops && (Tag.CROPS.isTagged(type) || Set.of(Material.SUGAR_CANE, Material.BAMBOO, Material.CACTUS, Material.MELON, Material.PUMPKIN).contains(type)); }
     private boolean plant(Material type) { return crops && (Tag.CROPS.isTagged(type) || type == Material.SUGAR_CANE || type == Material.BAMBOO_SAPLING); }
     boolean deniesEdit(Block block) { return !crop(block.getType()) && reason(block.getLocation()) != null; }
@@ -197,9 +210,16 @@ final class GeneratedStructureProtection implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void broken(BlockBreakEvent e) {
         if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return; if (deniesEdit(e.getBlock())) { e.setCancelled(true); deny(e.getPlayer(), "break", e.getBlock()); } }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void placed(BlockPlaceEvent e) {
-        if (plugin.bypassBlockProtection(e.getPlayer(), e.getBlock().getLocation())) return;
-        if ((!plant(e.getBlock().getType()) || !crop(e.getBlockReplacedState().getType()) && !e.getBlockReplacedState().getType().isAir()) && reason(e.getBlock().getLocation()) != null) {
-            e.setCancelled(true); deny(e.getPlayer(), "place", e.getBlock());
+        Location at = e.getBlockPlaced().getLocation();
+        var sites = plugin.siteDungeons();
+        boolean temporary = !(e instanceof BlockMultiPlaceEvent) && sites != null && sites.temporaryPlacement(e);
+        if (!temporary && plugin.bypassBlockProtection(e.getPlayer(), at)) return;
+        if (!temporary && plant(e.getBlockPlaced().getType()) && (crop(e.getBlockReplacedState().getType()) || e.getBlockReplacedState().getType().isAir())) return;
+        String exempt = temporary ? sites.temporaryStructureId() : null;
+        Hit conflict = hit(at, exempt);
+        if (conflict.reason() != null) {
+            e.setCancelled(true);
+            plugin.protectionAdvisor().deniedPlacement(e.getPlayer(), at, conflict.reason(), temporary, exempt, conflict.area());
         }
     }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true) public void multi(BlockMultiPlaceEvent e) {
