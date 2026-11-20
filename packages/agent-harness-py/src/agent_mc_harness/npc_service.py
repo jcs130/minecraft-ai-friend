@@ -28,6 +28,7 @@ from .resident_turns import ResidentTurnsClient
 from .resident_slots import BirthRegistry, activate, slot_templates
 from .resident_numen import admit_numen
 from .resident_protocol import social_receipt
+from .runtime import intent_health
 from .social import SocialWorld, publish_json, read_json
 from .status_file import StatusFile
 
@@ -317,8 +318,10 @@ async def serve(path: Path):
                                         "memory": host.memory.status,
                                         "dialogueMemory": recall_modes.get(host.role.id),
                                         "socialGraphiti": social_graph.last.get(str(host.role.body_id)) if social_graph else None,
+                                        "lastTransfer": host.companions.last_transfer if host.companions else None,
                                         "unknownRequests": len(host.journal.unresolved(str(host.role.body_id))),
-                                        "intents": [{"id": i.id, "state": i.state, "reason": i.reason} for i in list(host.runtime.intents.values())[-8:]]})
+                                        "intents": [intent_health(intent, host.journal, str(host.role.body_id))
+                                                    for intent in list(host.runtime.intents.values())[-8:]]})
                 if holding[index] and task.done() and not status["roles"][-1]["unknownRequests"]:
                     await host.close()
                     row = status["roles"][-1]

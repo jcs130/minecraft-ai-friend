@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash, randomBytes, randomUUID} from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import puppeteer from 'puppeteer-core';
@@ -9,7 +10,14 @@ let executablePath;
 for(const file of [process.env.PORTAL_BROWSER_EXECUTABLE,'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe','/usr/bin/chromium'].filter(Boolean))try{await fs.access(file);executablePath=file;break;}catch{}
 test('administrator edits NPC profile in actual mobile/desktop browser without layout overflow or accidental replay',{skip:!executablePath},async t=>{
   let browser;t.after(async()=>browser?.close());
-  const f=await siteFixture(t),service=new NpcAdmin(f.portal.store);
+  const workerKey='rwt_'+randomBytes(32).toString('base64url');
+  const f=await siteFixture(t,{residentTurns:[{
+    id:'yui',name:'结衣',bodyKind:'maid',bodyId:randomUUID(),characterId:randomUUID(),ownerGameId:randomUUID(),
+    workerHash:createHash('sha256').update(workerKey).digest('hex')
+  }]}),service=new NpcAdmin(f.portal.store);
+  const report=async completedActions=>fetch(f.origin+'/api/v1/resident-turns/yui/check',{method:'POST',
+    headers:{Authorization:'Bearer '+workerKey,'Content-Type':'application/json'},
+    body:JSON.stringify({activity:{turnHash:'123456789abc',planningStatus:'completed',completedActions,failedActions:0,pendingActions:0}})});
   service.poll({catalogue:{schemaVersion:1,observedAt:new Date().toISOString(),residents:[{id:'10000000-0000-0000-0000-000000000011',revision:0,loaded:true,profession:'ranger',currentBrain:'qwen',
     profile:{name:'桐人',persona:'敏捷剑士，喜欢与伙伴一起探索，记住自己的旅途。',brain:'qwen',voice:'none',appearance:'original',autonomous:true,mapVisible:true},brains:[{id:'qwen',model:'qwen3.8-flash'}],voices:['none'],models:[{id:'original',label:'角色原外观'}]}]},results:[]});
   browser=await puppeteer.launch({executablePath,headless:true,args:['--no-first-run','--no-default-browser-check'],userDataDir:path.join(f.root,'npc-browser')});
@@ -21,7 +29,12 @@ test('administrator edits NPC profile in actual mobile/desktop browser without l
   const status=await page.evaluate(async password=>{
     const session=await (await fetch('/api/v1/session')).json();const result=await fetch('/api/v1/sessions',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({username:'fixture-admin',password})});return result.status;
   },testPassword);assert.equal(status,200);
+  assert.equal((await report(0)).status,200);
   await page.reload();await page.waitForSelector('article.resident');
+  assert.match(await page.$eval('#resident-activity',e=>e.textContent),/结衣 · 规划结束.*游戏动作回执 · 完成 0/);
+  assert.equal((await report(1)).status,200);
+  await page.click('#refresh');
+  await page.waitForFunction(()=>document.querySelector('#resident-activity').textContent.includes('游戏动作回执 · 完成 1'));
   for(const width of [390,844,1366]){
     await page.setViewport({width,height:900});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'width '+width);
