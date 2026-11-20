@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.112
+
+Ambient sound investigations now yield to pending travel, building or supply goals after a short probe. Fresh evidence can reopen the search. Tunnel recovery reports available carried scaffold stock before suggesting another attempt.
+
 ## 0.5.7-rc.160-preview.111
 
 Expose bounded, confirmed changes to carried inventory through world events, current facts and the existing read-only bag tool. Named reads return the current carried quantity independently of historical containers.
