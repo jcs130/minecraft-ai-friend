@@ -98,6 +98,8 @@ try:
         second=Client();code,error=http({'operation':'bind',**second.env});check('second_controller_busy',code==409 and error['code']=='CONTROL_BUSY')
         write('stop');command(f"companiontest position {fixture['maidId']} 180.5 81 100.5")
         context=c.call('context')['data'];check('brain_projection_consistent',context['physicalController']=='native_body' and context['brain']['physicalController']=='native_body' and context['brain']['readOnly'])
+        check('offline_people_are_not_social_targets',context['nearbyPlayers']==[])
+        check('stationed_maid_does_not_offer_social_walk',context['socialWalkAvailable'] is False)
         check('equipment_help_does_not_promise_transfer','transfer put' not in c.call('inventory')['data']['nextStep'])
         code,error=c.raw('brain',choice='native');check('brain_query_cannot_mutate_choice',code==400 and error['code']=='UNEXPECTED_FIELD')
         code,error=c.raw('walk',requestId='bad-'+run,x=181,z=100);check('missing_coordinate_diagnosed',code==400 and error['code']=='INVALID_y')
@@ -109,6 +111,7 @@ try:
         check('duplicate_write_does_not_restore_old_setting',c.call('context')['data']['pickup'] is False)
         target={'x':186.5,'y':81,'z':100.5};rid='walk-'+run
         row=c.call('walk',requestId=rid,**target);check('walk_admission_does_not_claim_arrival',row['status']=='running' and not row['data']['goalCompleted'])
+        check('inflight_navigation_keeps_social_walk_busy',c.call('context')['data']['socialWalkAvailable'] is False)
         done=settle(rid);actual=native()['position'];check('native_walk_reaches_real_world_target',done['status']=='completed' and done['goalCompleted'] and math.dist(actual,[target['x'],target['y'],target['z']])<=.91,actual=actual)
         c.call('walk',requestId=rid,x=186.5,y=81.0,z=100.5);write('stop');check('equivalent_numeric_duplicate_returns_original_result',c.call('receipt',operationId=rid)['data']['observedAt']==done['observedAt'])
         report['observations']['walk']=done

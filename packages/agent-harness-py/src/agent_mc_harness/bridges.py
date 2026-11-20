@@ -106,6 +106,8 @@ class NativeMaidBridge:
                 error = None
             if error in {"CONTROL_CHANGED", "CONTROL_EXPIRED", "CONTROL_BUSY", "RESIDENT_CONTROLLER_ACTIVE"}:
                 self._fence()
+            if response.status_code == 400 and error == "DIMENSION_MISMATCH":
+                raise MaidRequestRejected("maid_dimension_changed_before_dispatch")
             if (response.status_code == 400 and isinstance(error, str) and
                     (error.startswith("INVALID_") or error in {"UNSUPPORTED_ACTION", "UNEXPECTED_FIELD", "REQUEST_ID_MISMATCH"})):
                 raise MaidRequestRejected("native_action_rejected_before_dispatch")

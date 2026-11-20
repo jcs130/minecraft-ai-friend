@@ -92,6 +92,8 @@ class NativeServer:
         else:
             assert args["requestId"] == payload["requestId"]
             rid = args["requestId"]
+            if action == "walk" and args.get("dimension", "minecraft:overworld") != "minecraft:overworld":
+                return httpx.Response(400, json={"error": "DIMENSION_MISMATCH"})
             if rid not in self.receipts:
                 self.writes.append(args)
                 self.receipts[rid] = {"operationId": rid, "action": action, "status": "applied"}
@@ -348,6 +350,45 @@ def test_offline_owner_original_identity_and_actual_receipt(run: Any) -> None:
         finally:
             await body.destroy()
         assert server.controller is None and server.calls[-1]["operation"] == "release"
+    run(scenario())
+
+
+def test_maid_follow_never_silently_discards_a_target(run: Any) -> None:
+    async def scenario() -> None:
+        server = NativeServer()
+        body = make(server)
+        await body.spawn()
+        try:
+            for key in ("name", "target", "uuid"):
+                response = await body.act(BodyAction(verb="follow", args={key: OTHER}, request_id="wrong-follow-" + key))
+                assert response.status == "rejected" and "body:move" in response.text
+            assert not server.writes
+            response = await body.act(BodyAction(verb="follow", request_id="owner-follow-001"))
+            assert response.status == "completed"
+            assert [write["action"] for write in server.writes] == ["follow"]
+        finally:
+            await body.destroy()
+
+    run(scenario())
+
+
+def test_social_walk_rejects_stale_dimension_before_movement(run: Any) -> None:
+    async def scenario() -> None:
+        server = NativeServer()
+        body = make(server)
+        await body.spawn()
+        try:
+            dest = {"x": 7, "y": 65, "z": 3, "dimension": "minecraft:the_nether"}
+            result = await body.act(BodyAction(verb="move", args=dest, request_id="stale-follow-001"))
+            assert result.status == "rejected" and result.terminal
+            assert not server.writes
+            dest["dimension"] = "minecraft:overworld"
+            result = await body.act(BodyAction(verb="move", args=dest, request_id="current-follow-002"))
+            assert result.status == "accepted"
+            assert server.writes[-1]["dimension"] == "minecraft:overworld"
+        finally:
+            await body.destroy()
+
     run(scenario())
 
 

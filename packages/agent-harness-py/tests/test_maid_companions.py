@@ -1,0 +1,209 @@
+from datetime import timedelta
+
+import pytest
+
+from agent_mc_harness.maid_companions import MaidCompanions, parse_choice, walk_available
+from agent_mc_harness.models import BodySnapshot, utcnow
+
+
+OVERWORLD = "minecraft:overworld"
+NETHER = "minecraft:the_nether"
+ALICE = "cd861923-2f54-4dd2-8b8f-6cf10fbf9ece"
+BOB = "8d6aa54b-98f7-4147-99d4-fe91ee8cd1fb"
+
+
+def pos(x):
+    return {"x": x, "y": 64, "z": 0}
+
+
+def follow_step(**args):
+    return {"tool": "body:follow", "args": args}
+
+
+SPEECH = {"tool": "body:chat", "args": {"text": "过来啦！"}}
+
+
+@pytest.mark.parametrize("mode,field", [("approach", "uuid"), ("follow", "targetUuid")])
+def test_real_mixed_choice_echoes_only_produce_one_social_intention(mode, field):
+    selection = {"mode": mode, "targetUuid": ALICE}
+    plan = {"companion": selection, "steps": [SPEECH, follow_step(**{field: ALICE})]}
+    assert parse_choice(plan, [{"uuid": ALICE}]) == selection
+    assert parse_choice({"steps": plan["steps"]}, [{"uuid": ALICE}]) == {"mode": "follow", "targetUuid": ALICE}
+
+
+def test_only_explicit_choice_can_reinterpret_empty_native_owner_follow():
+    assert parse_choice({"steps": [follow_step()]}, [{"uuid": ALICE}]) is None
+    assert parse_choice({"steps": [SPEECH]}, []) is None
+    stop = {"mode": "stop"}
+    assert parse_choice({"companion": stop, "steps": []}, []) == stop
+
+
+@pytest.mark.parametrize("plan", [
+    {"steps": [follow_step(uuid=BOB)]},
+    {"steps": [follow_step(uuid=ALICE), follow_step(uuid=ALICE)]},
+    {"steps": [follow_step(uuid=ALICE, cooldown=0)]},
+    {"steps": [follow_step(uuid=ALICE), {"tool": "body:attack"}]},
+    {"steps": [follow_step(uuid=ALICE), SPEECH, SPEECH, SPEECH]},
+    {"steps": [follow_step(uuid=ALICE)], "unknown": True},
+    {"companion": {"mode": "summon", "targetUuid": ALICE}, "steps": []},
+    {"companion": {"mode": "approach", "targetUuid": ALICE}, "steps": [follow_step(uuid=BOB)]},
+    {"companion": {"mode": "approach", "targetUuid": ALICE}, "steps": [follow_step(uuid=None)]},
+    {"companion": {"mode": "approach", "targetUuid": ALICE}, "steps": [{"tool": "body:move"}]},
+    {"companion": {"mode": "stop"}, "steps": [follow_step()]},
+    {"companion": {"mode": "approach", "targetUuid": BOB}, "steps": []},
+])
+def test_invalid_social_choices_never_create_body_actions(plan):
+    with pytest.raises(ValueError):
+        parse_choice(plan, [{"uuid": ALICE}])
+
+
+def player(uid=ALICE, x=10, name="Alice", dimension=OVERWORLD):
+    return {"uuid": uid, "name": name, "position": pos(x), "dimension": dimension}
+
+
+def scene(*players, x=0, dimension=OVERWORLD, life="alive", age=0):
+    return BodySnapshot(life_state=life, position=pos(x), dimension=dimension,
+                        sampled_at=utcnow() - timedelta(seconds=age),
+                        raw={"nearbyPlayers": list(players), "socialWalkAvailable": True})
+
+
+@pytest.fixture
+def loop():
+    now = [0]
+    return MaidCompanions(clock=lambda: now[0]), now
+
+
+@pytest.mark.parametrize("snapshot", [
+    scene(player(dimension=NETHER)), scene(player(x=25)), scene(player(), life="unloaded"),
+    scene(player(), life="dead"), scene(player(), age=60), scene(player(), age=-15),
+    scene(player(x=float("inf"))), scene(player(x=float("nan"))), scene(player(x=True)),
+    scene(player(uid="Alice")), scene(player(name="")), scene({"uuid": ALICE}),
+    BodySnapshot(life_state="alive", position=pos(0), dimension=OVERWORLD, raw={"chat": player()}),
+    None
+])
+def test_never_select_from_unusable_or_invented_evidence(loop, snapshot):
+    tracking, _ = loop
+    assert tracking.context(snapshot)["nearbyPlayers"] == []
+    assert not tracking.choose("follow", ALICE, snapshot)
+    assert tracking.next_step(snapshot) is None
+
+
+def test_model_may_choose_any_observed_player_independent_of_name_and_owner(loop):
+    tracking, now = loop
+    obs = scene(player(name="Same"), player(BOB, x=12, name="Same"))
+    ids = [p["uuid"] for p in tracking.context(obs)["nearbyPlayers"]]
+    assert ids == [ALICE, BOB]
+    assert not tracking.choose("follow", "Same", obs)
+    assert tracking.choose("follow", BOB, obs)
+    assert tracking.next_step(obs).args == {**pos(12), "dimension": OVERWORLD}
+    assert tracking.choose("approach", ALICE, obs)
+    assert tracking.next_step(obs) is None
+    now[0] += 3
+    assert tracking.next_step(obs).args == {**pos(10), "dimension": OVERWORLD}
+    assert not tracking.choose("follow", "someone else", obs)
+    assert tracking.context(obs)["selection"]["uuid"] == ALICE
+    assert tracking.choose("stop", None, obs)
+    assert not tracking.active and tracking.next_step(obs) is None
+
+
+def test_approach_requires_observed_proximity(loop):
+    tracking, now = loop
+    obs = scene(player())
+    assert tracking.choose("approach", ALICE, obs)
+    assert tracking.next_step(obs).tool == "body:move"
+    assert tracking.context(obs)["status"] == "tracking"
+    now[0] += 5
+    assert tracking.next_step(scene(player(x=15), x=7)).args == {**pos(15), "dimension": OVERWORLD}
+    arrived = tracking.context(scene(player(x=15), x=13))
+    assert arrived["selection"] is None and arrived["status"] == "arrived"
+
+
+def test_follow_resumes_as_target_moves_with_hysteresis(loop):
+    tracking, now = loop
+    assert tracking.choose("follow", ALICE, scene(player(x=2)))
+    assert tracking.status == "alongside" and tracking.active
+    assert tracking.next_step(scene(player(x=4))) is None
+    assert tracking.next_step(scene(player(x=7))).args == {**pos(7), "dimension": OVERWORLD}
+    now[0] += 3
+    assert tracking.next_step(scene(player(x=12), x=2)).args == {**pos(12), "dimension": OVERWORLD}
+    assert tracking.next_step(scene(player(x=13), x=11)) is None
+    assert tracking.status == "alongside" and tracking.active
+    # A change from following to a one-time approach should close the remaining gap.
+    assert tracking.choose("approach", ALICE, scene(player(x=15), x=11))
+    now[0] += 3
+    assert tracking.next_step(scene(player(x=15), x=11)).args == {**pos(15), "dimension": OVERWORLD}
+
+
+def test_target_lost_avoids_stale_destination_and_switches_world(loop):
+    tracking, now = loop
+    obs = scene(player())
+    assert tracking.choose("follow", ALICE, obs)
+    assert tracking.next_step(obs)
+    now[0] = 5
+    assert tracking.next_step(scene()) is None and tracking.status == "out_of_sight"
+    now[0] = 12
+    assert tracking.next_step(scene(player(x=15))).args == {**pos(15), "dimension": OVERWORLD}
+    now[0] = 13
+    assert tracking.next_step(scene()) is None
+    now[0] = 29
+    assert tracking.next_step(scene()) is None
+    assert not tracking.active and tracking.status == "target_lost"
+    assert tracking.choose("follow", ALICE, obs)
+    assert tracking.next_step(scene(dimension=NETHER)) is None and not tracking.active
+
+
+def test_no_blind_retry_during_work_danger_or_unknown_receipt(loop):
+    tracking, now = loop
+    obs = scene(player())
+    assert tracking.choose("follow", ALICE, obs)
+    assert tracking.next_step(obs, busy=True) is None
+    assert tracking.next_step(obs)
+    now[0] += 500
+    assert tracking.next_step(obs, busy=True) is None
+    assert tracking.active and tracking.attempts == 1
+
+
+@pytest.mark.parametrize("activity", [
+    {"socialWalkAvailable": False}, {"resident": {"sleeping": True}}, {"resident": {"downed": True}},
+    {"resident": {"activeRequest": "original-request"}}, {"resident": {"leased": True}},
+    {"resident": {"thinking": True}}, {"resident": {"recovery": "unknown_no_replay_query_original_request"}},
+    {"resident": {"expedition": {"pendingTravelRequestId": "pending"}}},
+    {"resident": {"combat": {"targetId": "mob"}}}, {"resident": {"expedition": {"state": "inspect_original_travel"}}},
+])
+def test_existing_native_activities_take_priority(loop, activity):
+    tracking, _ = loop
+    obs = scene(player())
+    obs.raw.update(activity)
+    if "resident" in obs.raw:
+        obs.raw["resident"]["loaded"] = True
+    assert tracking.choose("follow", ALICE, obs)
+    assert tracking.next_step(obs) is None
+    assert tracking.next_step(scene(player())).tool == "body:move"
+
+
+def test_native_auto_defence_task_remains_walkable_for_available_resident():
+    obs = scene(player())
+    obs.raw.update(taskId="touhou_little_maid:attack", resident={"loaded": True, "leased": False,
+                   "thinking": False, "activeRequest": "none", "combat": {}, "expedition": {}})
+    assert walk_available(obs)
+    del obs.raw["socialWalkAvailable"]
+    assert not walk_available(obs)
+
+
+def test_unreachable_destination_yields_and_suppresses_rapid_reselection(loop):
+    tracking, now = loop
+    obs = scene(player())
+    assert tracking.choose("follow", ALICE, obs)
+    assert tracking.next_step(obs)
+    now[0] = 20
+    assert tracking.choose("follow", ALICE, obs)
+    assert tracking.next_step(obs) is None
+    now[0] = 30
+    assert tracking.next_step(obs)
+    now[0] = 60
+    assert tracking.next_step(obs) is None
+    assert tracking.status == "path_unavailable" and not tracking.active
+    assert tracking.context(obs)["nearbyPlayers"] == []
+    assert not tracking.choose("follow", ALICE, obs)
+    now[0] = 160
+    assert tracking.choose("follow", ALICE, obs)

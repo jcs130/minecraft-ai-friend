@@ -6,14 +6,17 @@ import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskFishing;
 import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule;
 import com.google.gson.*;
 import java.util.*;
+import java.util.function.Predicate;
 import local.tlmcompat.core.CompatibilityException;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.ai.behavior.BehaviorUtils;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 
 /** Native world operations, main thread only. No fake players, OP, commands or fabricated inventory. */
 final class NativeMaidBodyActions {
@@ -30,7 +33,12 @@ final class NativeMaidBodyActions {
     private final Set<UUID> guards=new HashSet<>();
     private final Map<UUID,String> resumeGuards=new HashMap<>();
     private int receiptTick;
-    NativeMaidBodyActions(HybridMaidPlugin plugin,MaidBodyControl control){this.plugin=plugin;this.control=control;}
+    private final Predicate<Player> socialParticipant;
+    NativeMaidBodyActions(HybridMaidPlugin plugin,MaidBodyControl control){
+        this.plugin=plugin;
+        this.control=control;
+        this.socialParticipant=participantFilter(plugin);
+    }
     boolean following(UUID id){return follows.contains(id);}
     boolean companion(UUID id){return companions.contains(id);}
     boolean guarding(UUID id){return guards.contains(id);}
@@ -206,7 +214,9 @@ final class NativeMaidBodyActions {
             data.addProperty("nativeCompanionDelegated",companion(id));
             if(plugin.unifiedBody(id))data.addProperty("inferenceOwner","unified_npc_host");
             var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
+            data.addProperty("socialWalkAvailable", maid != null && socialWalkAvailable(maid));
             if(maid!=null){
+                data.add("nearbyPlayers", nearbyPlayers(maid));
                 var fishingState=data.has("fishing") ? data.getAsJsonObject("fishing") : MaidCompanionActions.fishing(maid);
                 String block = busy(id) || plugin.workshops().busy(id) || plugin.editingMaidInventory(maid)
                         ? "maid_busy" : fishingContextBlock(maid,owner);
@@ -224,6 +234,56 @@ final class NativeMaidBodyActions {
         if(action.equals("brain"))externalBrain(data,id);
         return reply(true,data,null);
     }
+    private boolean socialWalkAvailable(EntityMaid maid) {
+        UUID id = maid.getUUID();
+        String task = maid.getTask().getUid().toString();
+        return maid.isAlive() && !maid.isRemoved() && !maid.isSleeping() && !maid.isMaidInSittingPose()
+                && !maid.isPassenger() && !maid.isVehicle() && !maid.isNoAi() && maid.canBrainMoving()
+                && (maid.getTarget() == null || !maid.getTarget().isAlive())
+                && (MaidCompanionActions.IDLE.equals(task) || task.equals(maid.getPersistentData().getString("qiandengji_auto_defence_task")))
+                && !busy(id) && !plugin.workshops().busy(id) && !plugin.editingMaidInventory(maid);
+    }
+
+    private static Predicate<Player> participantFilter(HybridMaidPlugin plugin) {
+        var agentFriend = Bukkit.getPluginManager().getPlugin("AgentFriend");
+        if (agentFriend == null) return player -> true;
+        // The game owns the changing Eye registrations and photo service identity.
+        try {
+            var observer = agentFriend.getClass().getDeclaredMethod("isObserver", Player.class);
+            if (observer.trySetAccessible()) return player -> {
+                try { return !Boolean.TRUE.equals(observer.invoke(agentFriend, player)); }
+                catch (ReflectiveOperationException unavailable) { return false; }
+            };
+        } catch (ReflectiveOperationException unavailable) {
+            plugin.getLogger().warning("AgentFriend observer roster unavailable for social navigation");
+        }
+        return player -> false;
+    }
+
+    private JsonArray nearbyPlayers(EntityMaid maid) {
+        double range = 24;
+        var result = new JsonArray();
+        var players = maid.level().getEntitiesOfClass(ServerPlayer.class, maid.getBoundingBox().inflate(range),
+                player -> player.isAlive() && !player.isSpectator() && !player.isInvisible()
+                        && maid.distanceToSqr(player) <= range * range && player.getBukkitEntity().isVisibleByDefault()
+                        && player.getBukkitEntity().getMetadata("vanished").stream().noneMatch(value -> value.asBoolean())
+                        && socialParticipant.test(player.getBukkitEntity()));
+        players.stream().sorted(Comparator.comparingDouble(maid::distanceToSqr))
+                .filter(maid::hasLineOfSight).limit(16).forEach(player -> {
+                    var row = new JsonObject();
+                    row.addProperty("uuid", player.getStringUUID());
+                    row.addProperty("name", player.getGameProfile().getName());
+                    row.addProperty("dimension", maid.level().dimension().location().toString());
+                    var position = new JsonObject();
+                    position.addProperty("x", player.getX());
+                    position.addProperty("y", player.getY());
+                    position.addProperty("z", player.getZ());
+                    row.add("position", position);
+                    result.add(row);
+                });
+        return result;
+    }
+
     private void externalBrain(JsonObject brain,UUID id){
         boolean unified=plugin.unifiedBody(id);
         brain.addProperty("physicalController","native_body");

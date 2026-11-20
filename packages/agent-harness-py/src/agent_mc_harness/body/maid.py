@@ -192,6 +192,8 @@ class MaidBody(BaseBody):
         acts: dict[str, ActionSupport] = {}
         for verb, (native, args, is_async) in VERBS.items():
             if native in actions and (native != "make" or self.workshop):
+                if verb == "move" and self._native:
+                    args = (*args, "dimension")
                 acts[verb] = ActionSupport(native=f"mc_maids {native}", args=list(args), async_=is_async,
                                            notes="mode setting, not arrival/completion" if verb in ("follow", "stay", "sit") else None)
         props = self._schema.get("properties", {})
@@ -378,6 +380,9 @@ class MaidBody(BaseBody):
                 args["maidId"] = self.maid_id
         else:
             native, names, _ = VERBS[action.verb]
+            if action.verb == "follow" and action.args:
+                raise ArgumentError("body:follow takes no arguments and follows the owner. "
+                                    "Use body:move with the visible player's fresh coordinates to approach someone else.")
             args = {"action": native, "maidId": self.maid_id}
             for key in names:
                 if key in action.args:
@@ -390,6 +395,8 @@ class MaidBody(BaseBody):
                 obj(action.args, "spellId", str)
             if action.verb == "move":
                 args["x"], args["y"], args["z"] = xyz(action.args)
+                if self._native and "dimension" in action.args:
+                    args["dimension"] = obj(action.args, "dimension", str)
             if action.verb == "craft":
                 obj(action.args, "workshopId", str)
                 obj(action.args, "recipeId", str)

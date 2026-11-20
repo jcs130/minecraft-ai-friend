@@ -121,6 +121,15 @@ The native endpoint reuses the private companion executor. Its supplied action c
 equipment, follow and other available operations. Public-resident registration and owner inventory
 transfers have separate implementation and authorization requirements.
 
+The NPC host can choose a walking companion when a native maid reports `socialWalkAvailable`.
+Its model sees nearby visible players and can approach one once, follow as they move, switch
+companions, or end the walk. For example, a decision can return
+`{"steps":[],"companion":{"mode":"follow","targetUuid":"<uuid from nearbyPlayers>"}}`.
+The host checks a fresh observation before walking and submits each leg to the native navigator.
+Arrival uses the measured distance to the person. A target who disappears from view receives
+no further navigation requests until seen again. Selection ends after 15 seconds out of sight.
+The maid's owner, inventory rights and ordinary owner-follow action retain their existing meanings.
+
 ## Development
 
 ```sh
