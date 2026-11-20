@@ -39,6 +39,11 @@ jobs:
           java -cp "$RUNNER_TEMP/dungeon-readiness" org.afuhome.agentfriend.DungeonLoadoutRulesTest
           node --check paper/probe/rpg-usability/dungeon-readiness.mjs
           node --check paper/probe/inventory-tidy/stage.mjs
+      - name: Check villager commission rules (caps, evidence, rewards, bridge schema)
+        run: |
+          curl --fail --silent --show-error --location --retry 2 https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar --output "$RUNNER_TEMP/vq-gson.jar"
+          javac -encoding UTF-8 --release 21 -proc:none -cp "$RUNNER_TEMP/vq-gson.jar" -d "$RUNNER_TEMP/villager-quests" paper/plugins/VillagerQuests/src/org/qiandengji/villagerquests/core/*.java paper/plugins/VillagerQuests/tests/org/qiandengji/villagerquests/core/CoreRulesTest.java
+          java -ea -cp "$RUNNER_TEMP/villager-quests:$RUNNER_TEMP/vq-gson.jar" org.qiandengji.villagerquests.core.CoreRulesTest packages/agent-harness-py/schemas/villager_quest.schema.json
       - name: Check player menu navigation and single-use responses
         run: |
           python paper/ops/test-player-ui.py
@@ -194,6 +199,8 @@ jobs:
       - run: python paper/self-host/selfhost.py build --directory "$RUNNER_TEMP/paper-inputs" --output "$RUNNER_TEMP/plugin-build"
       - name: Compile the independent read-only observation plugin
         run: python paper/integrations/world-observer/build.py --server "$RUNNER_TEMP/paper-inputs" --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/observer-build"
+      - name: Compile standalone villager quests and run its rules
+        run: python paper/plugins/VillagerQuests/build.py --server "$RUNNER_TEMP/paper-inputs" --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/villager-quests-build"
       - name: Check bounded CLI help and query contracts
         run: python paper/plugins/AgentFriend/tests/run_cli_tests.py --inputs "$RUNNER_TEMP/paper-inputs" --build "$RUNNER_TEMP/plugin-build" --output "$RUNNER_TEMP/cli-tests"
       - name: Dungeon examination completion regression

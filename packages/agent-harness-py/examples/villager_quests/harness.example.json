@@ -1,0 +1,15 @@
+{
+  "port": 19122,
+  "model": "codingplan-qwen3.7-plus",
+  "modelBaseUrl": "http://127.0.0.1:4000/v1",
+  "modelTimeoutSeconds": 11.0,
+  "tokenFile": "/path/to/private/villager-harness.key",
+  "modelTokenFile": "/path/to/private/villager-dialogue.key",
+  "profiles": [
+    {
+      "residentId": "qinghe",
+      "bodyUuid": "10000000-0000-0000-0000-000000000018",
+      "persona": "你是住在村庄麦田附近的农夫青禾。"
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+# 千灯纪村民委托 qiandeng-villager-quests 0.1.2
+# Defaults are conservative and safe to load on a test server. Never put an API key in this file in Git:
+# use the environment variable named by llm.http.apiKeyEnv instead.
+
+# Same shape and numbers as the bridge's policy (packages/agent-harness-py/examples/villager_quests/policy.example.json).
+# Keep villagers/targets/maxQuantity/deadlineMinutes in sync with the bridge's config/villager-quests.json, or the
+# bridge will reject commissions this plugin hands to heroes.
+policy:
+  targets:
+    slay: ["minecraft:zombie", "minecraft:skeleton", "minecraft:spider"]
+    gather: ["minecraft:wheat", "minecraft:bread"]
+  maxQuantity: {easy: 5, normal: 10, hard: 20}
+  # Rewards come ONLY from this table, by difficulty. Commission text, model output and the bridge's outbox
+  # amounts are never used.
+  rewards:
+    easy: {emeralds: 2, vortexXp: 20, fame: 2}
+    normal: {emeralds: 4, vortexXp: 50, fame: 4}
+    hard: {emeralds: 8, vortexXp: 120, fame: 8}
+  deadlineMinutes: {min: 10, max: 1440}
+  maxOpenTotal: 6
+  maxActivePerPlayer: 1
+
+# Villager ids must match ^[A-Za-z0-9_-]{1,48}$ and be the same ids the bridge policy uses.
+villagers:
+  qinghe:
+    name: 麦田的青禾
+    npcId: '7'                 # Citizens NPC id (/npc id). Right-clicking that NPC opens its board / delivers held items.
+    # For an existing vanilla villager, replace npcId with entityUuid (canonical UUID). Sneak + interact opens
+    # commissions or delivers the held items. Ordinary interact still trades. The villager keeps native AI.
+    types: [slay, gather]
+    maxOpen: 1                 # open commissions at once (open + accepted + with heroes)
+    dailyQuota: 3              # commissions per rolling 24 h
+    location: {world: world, x: -547, y: 67, z: -445}   # used when Citizens is absent or the NPC is not spawned
+    areaRadius: 32
+    persona: 住在起始之城外麦田边的年轻农妇，说话温和，有点胆小。
+    triggers:
+      nightRaid: {enabled: true, radius: 48, minHostiles: 6, difficulty: easy, deadlineMinutes: 60}
+      requests:
+        - {type: gather, target: "minecraft:wheat", quantity: 5, difficulty: easy, deadlineMinutes: 120, chance: 0.1, reason: 磨坊的麦子快用完了}
+
+triggers:
+  checkIntervalSeconds: 300
+
+# Commissions nobody accepts within handoffAfterMinutes go to the resident heroes through the bridge spool.
+# 0 = straight to heroes; set enabled: false to keep everything player-only.
+heroes:
+  enabled: false
+  handoffAfterMinutes: 10
+  speakBridgeOffered: false    # the plugin already announced the commission
+  bodies: {}
+  #  "6f0c1d2e-3a4b-4c5d-8e9f-001122334455": 桐人   # Numen body UUID -> display name
+
+bridge:
+  # Same directory the Python bridge uses (SpoolIntake root): inbox/, signals.jsonl, outbox.jsonl.
+  # Relative paths are inside this plugin's data folder.
+  spoolDir: villager-quests-spool
+
+llm:
+  # none | mifan (米饭 DeepSeek plugin, DeepSeekApi.chat) | http (OpenAI-compatible endpoint)
+  provider: none
+  timeoutSeconds: 15
+  temperature: 0.8
+  maxTokens: 300
+  dailyCallsPerVillager: 20    # over budget -> fixed templates
+  minIntervalSeconds: 10      # across the server, one model call at a time; excess demand uses a template
+  mifan:
+    role: 委托编剧             # chatSystem key in plugins/DeepSeek/config.yml
+  http:
+    # DeepSeek official: https://api.deepseek.com/chat/completions
+    # 硅基流动:          https://api.siliconflow.cn/v1/chat/completions
+    endpoint: http://127.0.0.1:4000/v1/chat/completions
+    model: codingplan-qwen3.7-plus
+    apiKeyEnv: VILLAGER_QUESTS_LLM_KEY
+    requireApiKey: true        # false only for a trusted deployment that intentionally accepts requests without a key
+    apiKey: ""                 # discouraged; leave empty in Git
+    jsonMode: true             # response_format=json_object; turn off if the provider rejects it
+    # enableThinking: false    # Optional Qwen/LiteLLM argument. Omit for generic OpenAI providers.
+
+# Independent character conversation. Requires the native villager profile in QiandengVoice with the
+# same UUID and residentId. Address the villager in nearby chat/SVC. Replies are private to the speaker.
+# The character's persona and up to four recent exchanges with that speaker inform the reply.
+dialogue:
+  enabled: false
+  provider: harness
+  harness:
+    endpoint: http://127.0.0.1:19122/v1/villager/decide
+    apiKeyEnv: VILLAGER_HARNESS_KEY
+  # The HTTP provider is available for deliberate compatibility use.
+  endpoint: http://127.0.0.1:4000/v1/chat/completions
+  model: codingplan-qwen3.7-plus
+  apiKeyEnv: VILLAGER_DIALOGUE_LLM_KEY
+  requireApiKey: true
+
+speech:
+  radius: 32
+  deliverRadius: 6
+  format: "&a{text}"
+  privateFormat: "&7[委托] &f{text}"
+
+rewards:
+  emeraldItems: true
+  # Console commands run once per paid reward. Placeholders: {player} {uuid} {questId} {emeralds} {vortexXp} {fame}.
+  # A command whose numeric placeholder is 0 is skipped. Empty by default: fill in the real Vortex/fame commands
+  # after checking them on the test server.
+  commands: []

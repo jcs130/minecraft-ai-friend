@@ -82,3 +82,11 @@ Windows 常驻入口为 `service/media-supervisor.ps1`。`-Python` 必须指向�
 测试专用 `QiandengVoiceQA.jar` 提供控制台音频夹具，绝不能装进正式服。构建产物和第三方 JAR 不入 Git。
 
 完整验收、候选边界及正式维护见 [附近语音方案与实测](../../docs/PROXIMITY_VOICE.md)。
+
+## 原版村民的附近对话
+
+在 `npc-voices.json` 为需要说话的村民登记实体 UUID、`kind: "villager"` 和对应的 `residentId`，并选择已有 TTS 音色及距离。村民的稳定角色 ID 由村民委托插件写入原版实体的 `qiandeng-villager-quests:resident-id`，与身份档案逐字匹配。语音插件只接受有 AI 的已登记村民。
+
+`qiandeng-villager-quests` 可在主线程调用 `bindVillagerNpcVoice(plugin, bodyUuid, inbox)`，每 1–2 秒续期。回调只需把事件 JSON 压入自己的有界队列。玩家在可见范围内点名或对着登记村民说话时，附近文字或 SVC 转写事件带 `eventId`、`speakerId`、`residentId`、`listenerId` 和世界。角色的记忆与模型由调用方维护。
+
+调用 `speakVillagerReply(plugin, bodyUuid, speakerUuid, eventId, text)` 播放本次对话的回复。30 秒内需要原村民、原玩家连接和相同维度，距离及视线也会复查。音频从实体位置发出，仅送原提问者。重复提交同一事件可查询原回执，无法替换已经提交的台词。SVC 听觉以实际客户端验证为准。

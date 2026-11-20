@@ -1,0 +1,18 @@
+{
+  "villagers": {
+    "qinghe": {"name": "麦田的青禾", "npcId": "7", "types": ["slay", "gather"], "maxOpen": 1, "dailyQuota": 3},
+    "alan": {"name": "旅人阿岚", "npcId": "8", "types": ["gather"], "maxOpen": 1, "dailyQuota": 2}
+  },
+  "targets": {
+    "slay": ["minecraft:zombie", "minecraft:skeleton", "minecraft:spider"],
+    "gather": ["minecraft:wheat", "minecraft:bread"]
+  },
+  "maxQuantity": {"easy": 5, "normal": 10, "hard": 20},
+  "rewards": {
+    "easy": {"emeralds": 2, "vortexXp": 20, "fame": 2},
+    "normal": {"emeralds": 4, "vortexXp": 50, "fame": 4},
+    "hard": {"emeralds": 8, "vortexXp": 120, "fame": 8}
+  },
+  "deadlineMinutes": {"min": 10, "max": 1440},
+  "maxOpenTotal": 6
+}

@@ -53,7 +53,24 @@ async function publishState() {
     }catch{/* Missing NPC observations are unknown, never old positions. Players still update. */}
   }
   const state = { schemaVersion: 1, sequence: ledger.sequence, observedAt: new Date().toISOString(), players, npcs, maps: settings.maps };
-  await send('/api/v1/internal/world-map/state', JSON.stringify(state), 'application/json');
+  if (settings.aincradResidences === true) {
+    try {
+      const line = (await command('mycli admin land homes', 8000)).split(/\r?\n/)
+        .find(row => row.startsWith('MC_LAND_HOMES '));
+      const data = line && JSON.parse(line.slice('MC_LAND_HOMES '.length));
+      if (data?.schemaVersion === 1 && data.ready === true && Array.isArray(data.residences)) {
+        state.residences = data.residences;
+      }
+    } catch { /* Keep the last confirmed directory when the land registry is unavailable. */ }
+  }
+  try {
+    await send('/api/v1/internal/world-map/state', JSON.stringify(state), 'application/json');
+  } catch (error) {
+    if (error.message !== 'MAP_RESIDENCE_FORMAT' || !Object.hasOwn(state, 'residences')) throw error;
+    delete state.residences;
+    console.warn('World map kept the last confirmed residence directory: MAP_RESIDENCE_FORMAT');
+    await send('/api/v1/internal/world-map/state', JSON.stringify(state), 'application/json');
+  }
   return players.length;
 }
 async function files(directory = webRoot, prefix = '') {

@@ -50,6 +50,7 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -92,6 +93,7 @@ final class LifeGuildBuildings implements Listener {
     private final LifeGuildManager lifeGuild;
     private final World world;
     private final NamespacedKey hostKey;
+    private final boolean hostsRetired;
     private final Map<String, Plot> plots = new HashMap<>();
     private final Map<String, Material> fabric = new HashMap<>();
     private final Map<Inventory, String> menus = new HashMap<>();
@@ -103,6 +105,7 @@ final class LifeGuildBuildings implements Listener {
         this.lifeGuild = lifeGuild;
         world = Bukkit.getWorld("world");
         hostKey = new NamespacedKey(plugin, "life_guild_npc");
+        hostsRetired = plugin.getConfig().getBoolean("legacy-task-npcs.life-guild");
         if (world != null) try {
             readHouseBounds();
             for (Hall hall : HALLS) if (built(hall)) {
@@ -124,7 +127,10 @@ final class LifeGuildBuildings implements Listener {
                     + "; edits fail closed until the world backup is inspected or restored.");
         }
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        if (ready) Bukkit.getScheduler().runTaskTimer(plugin, this::ensureHosts, 40L, 2400L);
+        if (hostsRetired) Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            for (World loaded : Bukkit.getWorlds()) loaded.getEntitiesByClass(Villager.class).forEach(this::retireHost);
+        }, 1L);
+        else if (ready) Bukkit.getScheduler().runTaskTimer(plugin, this::ensureHosts, 40L, 2400L);
     }
 
     private static String path(Hall hall) { return "life-buildings." + hall.id(); }
@@ -452,7 +458,7 @@ final class LifeGuildBuildings implements Listener {
         return new Location(world, plot.x() + dx + .5, plot.y() + 1, plot.z() + .5, 180, 0);
     }
     private void ensureHosts() {
-        if (!ready || world == null) return;
+        if (hostsRetired || !ready || world == null) return;
         for (Hall hall : HALLS) {
             Plot plot = plots.get(hall.id());
             if (plot == null || !built(hall)) continue;
@@ -486,7 +492,25 @@ final class LifeGuildBuildings implements Listener {
         GuildHostTrades.ensure(found);
         return found;
     }
+    private void retireHost(Entity entity) {
+        if (!(entity instanceof Villager)) return;
+        String contract = entity.getPersistentDataContainer().get(hostKey, PersistentDataType.STRING);
+        if (contract == null) return;
+        for (Hall hall : HALLS) {
+            if (hall.left().contract().equals(contract)
+                    || (hall.right() != null && hall.right().contract().equals(contract))) {
+                entity.remove();
+                return;
+            }
+        }
+    }
+
+    @EventHandler public void onEntitiesLoad(EntitiesLoadEvent event) {
+        if (hostsRetired) event.getEntities().forEach(this::retireHost);
+    }
+
     private Villager findHost(String contract) {
+        if (hostsRetired) return null;
         for (Hall hall : HALLS) {
             Plot plot = plots.get(hall.id());
             if (plot == null || !built(hall)) continue;
@@ -504,11 +528,22 @@ final class LifeGuildBuildings implements Listener {
         data.addProperty("kind", "locations");
         data.addProperty("dimension", "minecraft:overworld");
         JsonArray list = new JsonArray();
+        JsonArray buildings = new JsonArray();
         for (Hall hall : HALLS) {
             Plot plot = plots.get(hall.id());
             if (plot == null || !built(hall)) continue;
             player.sendMessage(ChatColor.GOLD + hall.name() + ChatColor.WHITE + " @ "
                     + plot.x() + " " + plot.y() + " " + (plot.z() + 6));
+            if (hostsRetired) {
+                JsonObject item = new JsonObject();
+                item.addProperty("buildingId", hall.id());
+                item.addProperty("building", hall.name());
+                item.addProperty("entranceX", plot.x());
+                item.addProperty("entranceY", plot.y() + 1);
+                item.addProperty("entranceZ", plot.z() + 6);
+                buildings.add(item);
+                continue;
+            }
             for (Host host : new Host[]{hall.left(), hall.right()}) {
                 if (host == null) continue;
                 Location at = hostLocation(hall, plot, host);
@@ -527,7 +562,11 @@ final class LifeGuildBuildings implements Listener {
                 list.add(item);
             }
         }
-        if (list.isEmpty()) player.sendMessage(ChatColor.YELLOW + "生活公会专属建筑尚未开放，任务可继续从罗盘接取。");
+        if (hostsRetired) {
+            data.add("buildings", buildings);
+            data.addProperty("nextCommand", "/mycli life board");
+            player.sendMessage(ChatColor.YELLOW + "在罗盘的生活公会或 /mycli life board 查看委托。");
+        } else if (list.isEmpty()) player.sendMessage(ChatColor.YELLOW + "生活公会专属建筑尚未开放，任务可继续从罗盘接取。");
         data.add("npcs", list);
         lifeGuild.send(player, data);
     }
@@ -543,8 +582,9 @@ final class LifeGuildBuildings implements Listener {
                     : icon(icons[index], "§e" + hall.name(), "§7入口 " + plot.x() + " "
                             + (plot.y() + 1) + " " + (plot.z() + 6) + "；点击前往"));
         }
-        inventory.setItem(22, icon(Material.ARROW, "§7返回生活公会", "§7也可以步行拜访导师"));
-        inventory.setItem(24, icon(Material.MAP, "§b导师与职业坐标", "§7列出七位导师的精确位置"));
+        inventory.setItem(22, icon(Material.ARROW, "§7返回生活公会", hostsRetired ? "§7查看生活委托" : "§7也可以步行拜访导师"));
+        inventory.setItem(24, hostsRetired ? icon(Material.MAP, "§b生活公会坐标", "§7列出各公会入口")
+                : icon(Material.MAP, "§b导师与职业坐标", "§7列出七位导师的精确位置"));
     }
     void visitSlot(Player player, int slot) {
         int index = switch (slot) { case 10 -> 0; case 12 -> 1; case 14 -> 2; case 16 -> 3; default -> -1; };
@@ -594,7 +634,7 @@ final class LifeGuildBuildings implements Listener {
         player.openInventory(menu);
     }
     @EventHandler(priority = EventPriority.HIGHEST) public void onHostInteract(PlayerInteractEntityEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND) return;
+        if (hostsRetired || event.getHand() != EquipmentSlot.HAND) return;
         String contract = event.getRightClicked().getPersistentDataContainer()
                 .get(hostKey, PersistentDataType.STRING);
         if (contract == null) return;

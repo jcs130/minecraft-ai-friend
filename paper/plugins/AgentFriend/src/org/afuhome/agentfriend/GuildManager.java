@@ -474,6 +474,7 @@ final class GuildManager implements Listener {
             case "hall", "大厅" -> plugin.guildHallTeleport(player);
             case "board", "list", "看板" -> board(player);
             case "menu", "菜单" -> plugin.openGuildMenu(player);
+            case "village", "村民委托" -> VillageGuildCommissions.command(player, args);
             case "join", "register", "注册" -> join(player);
             case "status", "rank", "状态", "等级" -> status(player);
             case "exam", "考试", "训练" -> plugin.skillAssessments().command(player,args);
@@ -490,7 +491,11 @@ final class GuildManager implements Listener {
             }
             case "accept", "接单" -> {
                 if (args.length < 3) player.sendMessage(ChatColor.YELLOW + "用法：/mycli guild accept <任务ID>");
-                else accept(player, args[2].toLowerCase(Locale.ROOT));
+                else {
+                    String id = args[2].toLowerCase(Locale.ROOT);
+                    if (VillageGuildCommissions.id(id)) VillageGuildCommissions.accept(player, id);
+                    else accept(player, id);
+                }
             }
             case "abandon", "放弃" -> abandon(player);
             case "claim", "交付", "领取" -> claim(player);
@@ -531,6 +536,7 @@ final class GuildManager implements Listener {
 
     private void board(Player player) {
         status(player);
+        VillageGuildCommissions.list(player);
         plugin.taskMarket().list(player);
         player.sendMessage(ChatColor.GOLD + "【今日 · " + plugin.dailyBoard().boardDate() + " · 动态委托】");
         for (DailyBoardManager.Card card : plugin.dailyBoard().cards()) {
@@ -1529,7 +1535,8 @@ final class GuildManager implements Listener {
         int rank = effectiveRank(player);
         inventory.setItem(0, icon(Material.BOOK, "§6冒险者档案", "公会段位：" + adventurerRankName(player),
                 "声望：" + fame(player), member(player) ? "点击查看当前任务" : "点击注册入会"));
-        inventory.setItem(7, icon(Material.CLOCK, "§6今日动态委托", "每日 05:00 更新", "下方是常驻委托"));
+        ItemStack village = VillageGuildCommissions.tab(player);
+        inventory.setItem(7, village == null ? icon(Material.CLOCK, "§6今日动态委托", "每日 05:00 更新", "下方是常驻委托") : village);
         inventory.setItem(6,icon(Material.WRITABLE_BOOK,"§b训练与公会晋级",adventurerRankName(player),"小段确认晋升，跨大段参加实操；也可单独考技能证书"));
         inventory.setItem(8, icon(Material.BRICKS, "§6任务市场 · 千灯纪委托", "远征探索、工程、红石与多阶段生活任务", "点击查看任务与本人能力记录"));
         inventory.setItem(9,icon(Material.WRITABLE_BOOK,"§6玩家委托","收购、结伴讨伐与探索；报酬先托管"));
@@ -1572,6 +1579,7 @@ final class GuildManager implements Listener {
 
     void click(Player player, int slot) {
         if (slot == 0) { if (member(player)) status(player); else join(player); }
+        else if (slot == 7) VillageGuildCommissions.open(player);
         else if (slot == 8) plugin.taskMarket().openMenu(player);
         else if (slot == 9) plugin.playerContracts().open(player,1);
         else if(slot==6)plugin.skillAssessments().command(player,new String[]{"guild","exam","menu"});

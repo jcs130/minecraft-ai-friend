@@ -15,7 +15,7 @@ from pydantic.alias_generators import to_camel
 
 BODY_PROTOCOL: Literal["agent-mc-body/v1"] = "agent-mc-body/v1"
 
-BodyKind = Literal["numen", "maid", "mineflayer"]
+BodyKind = Literal["numen", "maid", "mineflayer", "villager"]
 
 ActionVerb = Literal[
     "move", "follow", "stop", "look", "chat", "interact", "use_item", "attack", "mine", "collect", "place",

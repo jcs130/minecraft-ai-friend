@@ -12,7 +12,7 @@
 
 export const BODY_PROTOCOL = 'agent-mc-body/v1' as const;
 
-export type BodyKind = 'mineflayer' | 'numen' | 'maid';
+export type BodyKind = 'mineflayer' | 'numen' | 'maid' | 'villager';
 
 /** Body-neutral action verbs. Anything body-specific goes through `native`. */
 export const ACTION_VERBS = [

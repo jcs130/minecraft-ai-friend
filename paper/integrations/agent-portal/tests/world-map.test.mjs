@@ -107,7 +107,9 @@ test('address search matches names, doors and street or resident labels', () => 
 });
 test('public address directory, fixed house markers and streets stay visible without live state', async t => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'qd-map-addresses-'));
-  const service = createWorldMapService({ dataDir: root, publicDir: root, tokenHash: 'f'.repeat(64) });
+  const token = 'srv_' + 'a'.repeat(43);
+  const config = { dataDir: root, publicDir: root, tokenHash: createHash('sha256').update(token).digest('hex') };
+  const service = createWorldMapService(config);
   await fs.writeFile(path.join(root, 'aincrad-addresses.json'), JSON.stringify(fixtureAddresses));
   await new Promise(resolve => service.server.listen(0, '127.0.0.1', resolve));
   t.after(async () => { await new Promise(resolve => service.server.close(resolve)); await fs.rm(root, { recursive: true, force: true }); });
@@ -129,6 +131,25 @@ test('public address directory, fixed house markers and streets stay visible wit
   assert.deepEqual(markers['aincrad-streets'].markers.east.line, fixtureAddresses.streets[0].path);
   assert.equal(markers['aincrad-rooms'].defaultHidden, true);
   assert.deepEqual(await (await fetch(origin + '/world-map/maps/overworld/live/markers.json')).json(), {});
+
+  const {districtId, residents, ...survey} = fixtureAddresses.places[0];
+  const home = {...survey, streetName:'东巷', residents:[{name:'结衣', profession:'园艺师'}]};
+  const publish = (sequence, residences) => fetch(origin + '/api/v1/internal/world-map/state', {
+    method:'PUT', headers:{Authorization:'Bearer ' + token, 'Content-Type':'application/json'},
+    body:JSON.stringify({...snapshot(sequence, new Date().toISOString()), residences})
+  });
+  assert.equal((await publish(1, [home])).status, 200);
+  const current = await (await fetch(addressRoute)).json();
+  assert.deepEqual(current.places[0].residents, home.residents);
+  assert.equal(Object.hasOwn(current.places[0], 'streetName'), false);
+  assert.equal((await publish(2, [{...home, respawn:{x:8,y:64,z:8}}])).status, 400);
+  assert.equal((await publish(2, [home, {...home, id:'east-duplicate'}])).status, 400);
+  assert.equal((await publish(2, undefined)).status, 200);
+  assert.deepEqual((await createWorldMapService(config).map.addresses()).places[0].residents, home.residents);
+  const updatedMarkers = await (await fetch(origin + '/world-map/maps/aincrad/live/markers.json')).json();
+  assert.match(updatedMarkers['aincrad-addresses'].markers['east-01'].detail, /结衣/);
+  assert.equal((await publish(3, [])).status, 200);
+  assert.deepEqual((await (await fetch(addressRoute)).json()).places[0], {...survey, districtId});
 });
 test('public file paths cannot reach private data, hidden files, SQL/PHP or live markers', () => {
   for (const key of ['../portal.sqlite', 'assets/../../accounts.json', '/assets/a.png', 'assets/.hidden.json', 'assets/a\\b.js', 'maps/overworld/live/players.json', 'sql.php', 'state.json', 'config.json', 'assets/code.exe', 'maps/unknown/settings.json']) assert.throws(() => mapFileKey(key));

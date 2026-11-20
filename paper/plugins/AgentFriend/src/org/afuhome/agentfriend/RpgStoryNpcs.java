@@ -11,6 +11,7 @@ import org.bukkit.entity.*;
 import org.bukkit.event.*;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
+import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -23,20 +24,33 @@ final class RpgStoryNpcs implements Listener {
     private final File registryFile;
     private final YamlConfiguration registry;
     private final BiConsumer<Player,String> interaction;
+    private final boolean retired;
     private RpgStoryContent content;
     RpgStoryNpcs(AgentFriendPlugin plugin,RpgStoryContent content,BiConsumer<Player,String> interaction)throws Exception{
         this.plugin=plugin;this.content=content;this.interaction=interaction;
         roleKey=new NamespacedKey(plugin,"rpg_story_npc");registryFile=new File(plugin.getDataFolder(),"rpg-story-npcs.yml");
         registry=new YamlConfiguration();if(registryFile.exists())registry.load(registryFile);
+        retired=plugin.getConfig().getBoolean("legacy-task-npcs.story");
         Bukkit.getPluginManager().registerEvents(this,plugin);
-        Bukkit.getScheduler().runTaskLater(plugin,this::ensureLoaded,20L);
+        Bukkit.getScheduler().runTaskLater(plugin,()->{
+            if(retired) for(World world:Bukkit.getWorlds()) world.getEntitiesByClass(Villager.class).forEach(this::retire);
+            else ensureLoaded();
+        },20L);
     }
+    boolean retired(){return retired;}
     void reload(RpgStoryContent next){content=next;ensureLoaded();}
-    LivingEntity entity(String id){String uid=registry.getString("npcs."+id+".uuid","");try{var e=Bukkit.getEntity(UUID.fromString(uid));return e instanceof LivingEntity living&&id.equals(living.getPersistentDataContainer().get(roleKey,PersistentDataType.STRING))?living:null;}catch(IllegalArgumentException unavailable){return null;}}
+    LivingEntity entity(String id){if(retired)return null;String uid=registry.getString("npcs."+id+".uuid","");try{var e=Bukkit.getEntity(UUID.fromString(uid));return e instanceof LivingEntity living&&id.equals(living.getPersistentDataContainer().get(roleKey,PersistentDataType.STRING))?living:null;}catch(IllegalArgumentException unavailable){return null;}}
     Location target(String id){var e=entity(id);if(e!=null)return e.getLocation();var n=content.npc(id);World w=n==null?null:Bukkit.getWorld(n.world());return w==null?null:new Location(w,n.x(),n.y(),n.z());}
-    boolean nearby(Player p,String id){var e=entity(id);return e!=null&&e.isValid()&&!e.isDead()&&e.getWorld().equals(p.getWorld())&&e.getLocation().distanceSquared(p.getLocation())<=64;}
+    boolean nearby(Player p,String id){
+        if(retired){
+            Location site=target(id);
+            return site!=null&&site.getWorld().equals(p.getWorld())&&site.distanceSquared(p.getLocation())<=64;
+        }
+        var e=entity(id);
+        return e!=null&&e.isValid()&&!e.isDead()&&e.getWorld().equals(p.getWorld())&&e.getLocation().distanceSquared(p.getLocation())<=64;
+    }
     String id(Entity e){return e.getPersistentDataContainer().getOrDefault(roleKey,PersistentDataType.STRING,"");}
-    private void ensureLoaded(){if(!content.enabled)return;for(var n:content.npcs)ensure(n);}
+    private void ensureLoaded(){if(retired||!content.enabled)return;for(var n:content.npcs)ensure(n);}
     private void ensure(RpgStoryContent.Npc n){
         World w=Bukkit.getWorld(n.world());if(w==null||!w.isChunkLoaded(((int)Math.floor(n.x()))>>4,((int)Math.floor(n.z()))>>4))return;
         if(!plugin.npcEntityReadiness().ready("story:"+n.id(),new Location(w,n.x(),n.y(),n.z()),()->ensure(n)))return;
@@ -68,16 +82,29 @@ final class RpgStoryNpcs implements Listener {
         if(current instanceof Villager v){try{v.setProfession(Villager.Profession.valueOf(n.profession()));}catch(IllegalArgumentException invalid){plugin.getLogger().warning("Unknown story NPC profession retained: "+n.id());}}
     }
     private boolean save(){try{File tmp=new File(registryFile.getParentFile(),registryFile.getName()+".tmp");registry.save(tmp);try{Files.move(tmp.toPath(),registryFile.toPath(),StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);}catch(AtomicMoveNotSupportedException unsupported){Files.move(tmp.toPath(),registryFile.toPath(),StandardCopyOption.REPLACE_EXISTING);}return true;}catch(Exception error){return false;}}
+    private void retire(Entity entity){
+        if(!(entity instanceof Villager)) return;
+        String role=id(entity);
+        if(content.npc(role)!=null&&entity.getUniqueId().toString().equals(registry.getString("npcs."+role+".uuid","")))entity.remove();
+    }
+    @EventHandler public void loadEntities(EntitiesLoadEvent event){
+        if(retired)event.getEntities().forEach(this::retire);
+    }
     @EventHandler(ignoreCancelled=true)public void load(ChunkLoadEvent event){
-        if(content.npcs.stream().anyMatch(n->n.world().equals(event.getWorld().getName())&&((int)Math.floor(n.x())>>4)==event.getChunk().getX()&&((int)Math.floor(n.z())>>4)==event.getChunk().getZ()))Bukkit.getScheduler().runTaskLater(plugin,this::ensureLoaded,5L);
+        if(!retired&&content.npcs.stream().anyMatch(n->n.world().equals(event.getWorld().getName())&&((int)Math.floor(n.x())>>4)==event.getChunk().getX()&&((int)Math.floor(n.z())>>4)==event.getChunk().getZ()))Bukkit.getScheduler().runTaskLater(plugin,this::ensureLoaded,5L);
     }
     @EventHandler(priority=EventPriority.HIGHEST)public void interact(PlayerInteractEntityEvent event){
+        if(retired)return;
         String id=id(event.getRightClicked());if(id.isEmpty()||content.npc(id)==null)return;event.setCancelled(true);
         if(event.getHand()==EquipmentSlot.HAND)try{interaction.accept(event.getPlayer(),id);}catch(IllegalArgumentException|IllegalStateException denied){plugin.communication().error(event.getPlayer(),"STORY_ACTION_DENIED",denied.getMessage(),false,"/mycli world story status");}
     }
     JsonObject view(String id){var n=content.npc(id);if(n==null)return null;var out=new JsonObject();out.addProperty("id",n.id());out.addProperty("name",n.name());out.addProperty("role",n.role());
-        var e=entity(id);var at=target(id);out.addProperty("loaded",e!=null);out.addProperty("positionSource",e==null?"registered_spawn":"live_entity");
-        if(at!=null){out.addProperty("world",at.getWorld().getKey().toString());out.addProperty("x",at.getX());out.addProperty("y",at.getY());out.addProperty("z",at.getZ());}out.addProperty("talkRange",8);out.addProperty("nextAction",e==null?"这是登记位置；走近后重查，实体仍缺失请联系服主，不要挖掘寻找。":"走到人物8格内选择话题交谈。");out.addProperty("nextCommand",e==null?"/mycli world story info "+id:"/mycli world story talk "+id);return out;
+        var e=entity(id);var at=target(id);out.addProperty("loaded",e!=null);out.addProperty("positionSource",retired?"story_site":e==null?"registered_spawn":"live_entity");
+        if(at!=null){out.addProperty("world",at.getWorld().getKey().toString());out.addProperty("x",at.getX());out.addProperty("y",at.getY());out.addProperty("z",at.getZ());}
+        out.addProperty("talkRange",8);
+        out.addProperty("nextAction",retired?"到剧情地点8格内，用旅途手记选择话题。":e==null?"这是登记位置；走近后重查，实体仍缺失请联系服主，不要挖掘寻找。":"走到人物8格内选择话题交谈。");
+        out.addProperty("nextCommand",retired||e!=null?"/mycli world story talk "+id:"/mycli world story info "+id);
+        return out;
     }
-    JsonArray places(){var out=new JsonArray();for(var n:content.npcs){var row=view(n.id());row.addProperty("kind","rpg_npc");out.add(row);}return out;}
+    JsonArray places(){var out=new JsonArray();for(var n:content.npcs){var row=view(n.id());row.addProperty("kind",retired?"rpg_story_site":"rpg_npc");out.add(row);}return out;}
 }

@@ -38,6 +38,7 @@ import org.bukkit.event.inventory.*;
 import org.bukkit.event.player.*;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
+import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -65,7 +66,7 @@ final class LandManager implements Listener {
     record Land(String id, String title, World world, BlockVector3 min, BlockVector3 max,
                         UUID owner, Set<UUID> members, boolean visitorUse, boolean guild,
                         String projectTask, String projectRun, boolean landmark, Set<BlockVector3> publicContainers,
-                        boolean publicFacility) { }
+                        boolean publicFacility, LandHome home) { }
 
     LandManager(AgentFriendPlugin plugin) {
         this.plugin = plugin;
@@ -122,6 +123,8 @@ final class LandManager implements Listener {
                 throw new IllegalArgumentException("lands 需要 1..128 项；删除领地请显式设置 enabled: false");
             Map<String, Land> proposed = new LinkedHashMap<>();
             Set<String> disabled = new HashSet<>();
+            Set<String> homeIds = new HashSet<>(), homeNumbers = new HashSet<>();
+            Set<UUID> homeCharacters = new HashSet<>(), homeBodies = new HashSet<>();
             for (String id : definitions.getKeys(false)) {
                 if (!id.matches("[a-z0-9][a-z0-9_-]{0,39}")) throw new IllegalArgumentException("无效的领地 ID：" + id);
                 ConfigurationSection s = definitions.getConfigurationSection(id);
@@ -174,8 +177,18 @@ final class LandManager implements Listener {
                     publicContainers.add(p);
                 }
                 if (publicContainers.size() > 16) throw new IllegalArgumentException(id + " 最多登记 16 格公共储物方块");
+                LandHome home = null;
+                if (s.contains("home")) {
+                    ConfigurationSection entry = s.getConfigurationSection("home");
+                    if (entry == null || guild || publicFacility || !world.getKey().toString().equals("minecraft:aincrad"))
+                        throw new IllegalArgumentException(id + " 的住房需要艾因格朗特私人领地");
+                    home = LandHome.read(entry, owner, min, max);
+                    if (!homeIds.add(home.id()) || !homeNumbers.add(home.numberScope())
+                            || !homeCharacters.add(home.characterId()) || !homeBodies.add(owner))
+                        throw new IllegalArgumentException(id + " 的门牌、住户或身体已登记住房");
+                }
                 Land land = new Land(id, title, world, min, max, owner, Set.copyOf(members), bool(s, "visitor-use", false), guild,
-                        task, run, landmark, Set.copyOf(publicContainers), publicFacility);
+                        task, run, landmark, Set.copyOf(publicContainers), publicFacility, home);
                 for (Land other : proposed.values()) if (intersects(land, other))
                     throw new IllegalArgumentException(id + " 与 " + other.id() + " 重叠，需先划清边界");
                 proposed.put(id, land);
@@ -270,7 +283,7 @@ final class LandManager implements Listener {
             if (land != null) return land;
             UUID owner = region.getOwners().getUniqueIds().stream().findFirst().orElse(null);
             return new Land(id, id, at.getWorld(), region.getMinimumPoint(), region.getMaximumPoint(), owner,
-                    Set.copyOf(region.getMembers().getUniqueIds()), false, id.equals(GUILD), "", "", false, Set.of(), false);
+                    Set.copyOf(region.getMembers().getUniqueIds()), false, id.equals(GUILD), "", "", false, Set.of(), false, null);
         }
         return null;
     }
@@ -362,7 +375,7 @@ final class LandManager implements Listener {
         if (world == null) return "world_unavailable";
         var a = site.box().min(); var b = site.box().max();
         Land proposed = new Land(id, id, world, BlockVector3.at(a.x(), a.y(), a.z()), BlockVector3.at(b.x(), b.y(), b.z()),
-                new UUID(0, 1), Set.of(), true, false, task, run, true, Set.of(), false);
+                new UUID(0, 1), Set.of(), true, false, task, run, true, Set.of(), false, null);
         for (Land land : lands.values()) if (intersects(proposed, land)) return "land_overlap:" + land.id();
         if (reservedIds.contains(id)) return "land_id_reserved";
         return "available";
@@ -692,6 +705,69 @@ final class LandManager implements Listener {
         return data;
     }
     void audit(CommandSender sender){JsonObject data=new JsonObject();data.addProperty("schemaVersion",1);data.addProperty("ready",ready);data.addProperty("count",lands.size());JsonArray entries=new JsonArray();lands.values().stream().sorted(Comparator.comparing(Land::id)).forEach(l->entries.add(info(l,null)));data.add("lands",entries);sender.sendMessage("MC_LAND_AUDIT "+data);}
+    private boolean homeProtected(Land land) {
+        RegionManager manager = manager(land.world());
+        ProtectedRegion region = manager == null ? null : manager.getRegion(PREFIX + land.id());
+        return region instanceof ProtectedCuboidRegion
+                && region.getMinimumPoint().equals(land.min()) && region.getMaximumPoint().equals(land.max())
+                && region.getOwners().getUniqueIds().equals(Set.of(land.owner()));
+    }
+
+    Land registeredHome(UUID body) {
+        if (!ready) return null;
+        return lands.values().stream().filter(land -> land.home() != null && land.owner().equals(body))
+                .findFirst().orElse(null);
+    }
+
+    Location homeAnchor(Land land) {
+        BlockVector3 point = land.home().respawn();
+        return new Location(land.world(), point.x() + .5, point.y(), point.z() + .5);
+    }
+
+    boolean homeAllows(Land land, Location at, Entity body) {
+        double half = Math.max(.3, body.getWidth() / 2);
+        return at != null && at.getWorld() == land.world() && homeProtected(land)
+                && at.getX() - half >= land.min().x() && at.getX() + half <= land.max().x() + 1.0
+                && at.getZ() - half >= land.min().z() && at.getZ() + half <= land.max().z() + 1.0
+                && at.getY() >= land.min().y() && at.getY() + Math.max(1.8, body.getHeight()) <= land.max().y() + 1.0;
+    }
+
+    Location homeRespawn(Entity body) {
+        Land land = registeredHome(body.getUniqueId());
+        if (land == null || !homeProtected(land)) return null;
+        return new HomeLanding(body, homeAnchor(land)).select(at -> homeAllows(land, at, body)).destination();
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onHomeWorldLoad(WorldLoadEvent event) {
+        if (!ready && event.getWorld().getKey().toString().equals("minecraft:aincrad"))
+            Bukkit.getScheduler().runTask(plugin, () -> { if (!ready) reload(Bukkit.getConsoleSender()); });
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onHomeRespawn(PlayerRespawnEvent event) {
+        Player player = event.getPlayer();
+        if (event.getRespawnReason() != PlayerRespawnEvent.RespawnReason.DEATH || event.isBedSpawn() || event.isAnchorSpawn()
+                || plugin.isObserver(player) || plugin.isDowned(player) || plugin.pvpParticipant(player)
+                || plugin.dungeonParticipant(player) || registeredHome(player.getUniqueId()) == null
+                || player.getRespawnLocation() != null) return;
+        Location landing = homeRespawn(player);
+        if (landing != null) event.setRespawnLocation(landing);
+    }
+
+    void homes(CommandSender sender) {
+        JsonObject data = new JsonObject();
+        JsonArray entries = new JsonArray();
+        List<Land> homes = lands.values().stream().filter(land -> land.home() != null)
+                .sorted(Comparator.comparing(land -> land.home().id())).toList();
+        boolean confirmed = ready && homes.stream().allMatch(this::homeProtected);
+        if (confirmed) for (Land land : homes) entries.add(land.home().publicEntry(land.title()));
+        data.addProperty("schemaVersion", 1);
+        data.addProperty("ready", confirmed);
+        data.add("residences", entries);
+        sender.sendMessage("MC_LAND_HOMES " + data);
+    }
+
     void command(Player player,String[] args){
         if(access.command(player,args))return;
         String action=args.length>1?args[1].toLowerCase(Locale.ROOT):"here";
@@ -705,6 +781,11 @@ final class LandManager implements Listener {
         if(land==null){machine(player,"MC_LAND_INFO",data);return;}
         JsonObject details=data.getAsJsonObject("land");JsonObject header=new JsonObject();header.addProperty("schemaVersion",1);header.addProperty("ready",ready);header.addProperty("status","claimed");for(String key:List.of("id","title","owner","ownerUuid","role","publicFacility","accessProfile"))header.add(key,details.get(key));machine(player,"MC_LAND_INFO",header);
         JsonObject permissions=details.getAsJsonObject("permissions").deepCopy();for(String key:List.of("id","world","min","max","publicFacility","accessProfile"))permissions.add(key,details.get(key));machine(player,"MC_LAND_PERMISSIONS",permissions);
+        if (ready && land.home() != null && homeProtected(land)) {
+            LandHome home = land.home();
+            player.sendMessage("§6住址 " + home.address() + " · 住户 " + home.resident());
+            machine(player, "MC_LAND_HOME", home.publicEntry(land.title()));
+        }
         access.hint(player,land);
     }
     private ItemStack icon(Material material,String title,String... lore){ItemStack item=new ItemStack(material);ItemMeta meta=item.getItemMeta();meta.setDisplayName(title);meta.setLore(Arrays.asList(lore));item.setItemMeta(meta);return item;}
