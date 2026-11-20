@@ -24,6 +24,21 @@ Regression coverage uses the pinned native Mineflayer inventory plugin and
 frames. This establishes the protocol failure mode; it does not identify an
 unrecorded live packet sequence or prove improved gameplay after deployment.
 
+## Moving items through an open container
+
+The `take` and `stow` step decisions use `unit: "items"` for an attempted
+open-window transfer. They match the selected container contents against the
+player-slot change. A closed-window receipt records `completed` and `remaining`
+as quantities. For example, taking up to 12 when the container has 5 produces
+`status: "partial", completed: 5, remaining: 7`. A one-sided change leaves the
+amount unknown. Read `next_safe_read` and the original container before retrying.
+
+Consecutive steps can keep the same container open. Such an intermediate step
+may report temporary changes in both halves of the window, with `status: "unknown"`
+and null quantities pending close. A dependent next step can still use the window.
+When these steps move the same item in opposite directions, the final net count
+alone cannot certify either transfer separately.
+
 ## Occupied offhand replacement
 
 Modern player-inventory offhand equipment uses one confirmed exchange, rather

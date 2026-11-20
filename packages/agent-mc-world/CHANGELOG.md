@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.113
+
+Open-container take and stow report quantities matched on both the container and carried sides. Partial transfers expose the amount still needed. A retained window reports provisional observations until close, and uncertain transfers point to a read instead of a repeat click. Item selectors keep the selected stack as their source. Missing scaffold materials link to the take guide.
+
 ## 0.5.7-rc.160-preview.112
 
 Ambient sound investigations now yield to pending travel, building or supply goals after a short probe. Fresh evidence can reopen the search. Tunnel recovery reports available carried scaffold stock before suggesting another attempt.

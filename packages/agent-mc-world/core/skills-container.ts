@@ -43,6 +43,7 @@ import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { withdrawStack } from './container-withdraw.ts';
 import { observedEntity } from './perception-sight.ts';
 import { enchantOnceConfirmed } from './enchantment-confirm.ts';
+import type { StepDecision } from './step-decision.ts';
 
 const { goals } = pathfinderPkg;
 
@@ -643,8 +644,8 @@ export async function skillStow(
   if (call.at !== undefined && call.into === 'open') {
     throw new SkillBlocked('stow 的 at 与 into:open 只能选一个');
   }
-  if (invCountIn(playerInvIn(bot, bot.currentWindow ?? bot.inventory), itemPredOf(bot, item, pick)) === 0) throw noSuchItem(bot, item, pick);
   if (call.into === 'open') return stowIntoOpenWindow(bot, call, ctx);
+  if (invCountIn(playerInvIn(bot, bot.currentWindow ?? bot.inventory), itemPredOf(bot, item, pick)) === 0) throw noSuchItem(bot, item, pick);
   const found = call.at === undefined ? findContainers(bot, 32) : (() => {
     const cell = resolveAt(bot, call.at!);
     const block = bot.blockAt(new Vec3(cell.x, cell.y, cell.z));
@@ -792,6 +793,79 @@ export async function skillCompact(bot: Bot, ctx: SkillContext): Promise<string>
     + (afterFree === 0 ? '；已无可合并的物品，需把多余装备取到其他仓库才能继续收奖励' : '；重新打开奖励箱可领取待入箱奖励');
 }
 
+interface OpenTransferReceipt {
+  ok: boolean;
+  text: string;
+  decision?: Partial<StepDecision>;
+  code?: SkillBlocked['code'];
+}
+
+function noOpenTransfer(item: string, count: number, text: string): OpenTransferReceipt {
+  return { ok: false, text, decision: { status: 'blocked', unit: 'items', completed: 0, remaining: count,
+    retryable: false, next_safe_read: { tool: 'mc_bag', arguments: { item, detail: 'slots' } } } };
+}
+
+function containerCount(win: NonNullable<Bot['currentWindow']>, pred: InvPred): number {
+  return win.slots.slice(0, win.inventoryStart)
+    .reduce((total, item) => total + (item && pred(item.name, item) ? item.count : 0), 0);
+}
+
+type TransferDirection = 'take' | 'stow';
+// Only provisional transfers in this exact window can affect its later reconciliation.
+const retainedTransfers = new WeakMap<NonNullable<Bot['currentWindow']>, Array<{ item: string; direction: TransferDirection }>>();
+
+function openTransferReceipt(
+  item: string, requested: number, attempted: number, containerDelta: number, carriedDelta: number | null,
+  direction: TransferDirection, retained: boolean, failure: string | null, bot: Bot, win: NonNullable<Bot['currentWindow']>,
+): OpenTransferReceipt {
+  const verb = direction === 'take' ? '取出' : '存入';
+  const next = { tool: 'mc_bag', arguments: { item, detail: 'slots' } };
+  // A simultaneous pickup or use can change carried stock without moving an item in this container.
+  const moved = Math.min(carriedDelta ?? 0, containerDelta, attempted, requested);
+  const prior = retainedTransfers.get(win) ?? [];
+  const opposite = prior.some(entry => entry.direction !== direction && (matchItemName(item, entry.item, bot.registry)
+    || matchItemName(entry.item, item, bot.registry)));
+  if (retained && moved > 0) {
+    prior.push({ item, direction });
+    retainedTransfers.set(win, prior);
+  }
+  if (moved <= 0 || retained || opposite) {
+    const pending = retained && moved > 0;
+    const explanation = pending ? `当前窗口暂见双方变化 ${moved} 个，窗口保持打开；关窗后再核对最终数量`
+      : opposite ? '同一窗口已对该物品做过反向操作，最终净数无法证明本步数量'
+      : '未确认容器与随身槽有对应的数量变化';
+    const text = `已尝试${verb}${zhName(item)}；${explanation}${failure ? '（' + failure + '）' : ''}。勿直接重发。`;
+    return {
+      ok: pending, text, code: 'container-transfer-unconfirmed',
+      decision: {
+        status: 'unknown', reason: 'container-transfer-unconfirmed', completed: null, remaining: null,
+        unit: 'items', retryable: false, next_safe_read: next,
+        continue_when: '先核对随身和原容器的实际数量，再决定是否需要补取或补存。',
+      },
+    };
+  }
+  const remaining = requested - moved;
+  const text = direction === 'take' ? `从当前窗口取出${zhName(item)}×${moved}` : `往当前打开的容器存了${zhName(item)}×${moved}`;
+  const source = direction === 'take' ? `包里多了 ${moved} 个` : '关窗后已核对随身减少';
+  return {
+    ok: true,
+    text: text + (remaining ? `（请求 ${requested}，已确认 ${moved}，差 ${remaining}）` : '') + '；' + source,
+    decision: {
+      status: remaining ? 'partial' : 'completed', completed: moved, remaining,
+      unit: 'items', retryable: false, next_safe_read: next,
+    },
+  };
+}
+
+function finishOpenTransfer(first: OpenTransferReceipt, ctx: SkillContext): void {
+  if (!first.ok) throw new SkillBlocked(first.text, [], 'local', first.code, first.decision);
+  if (first.decision) ctx.recordDecision?.(first.decision);
+  if (first.decision?.status === 'partial') {
+    ctx.partial?.(`已确认 ${first.decision.completed} 个，还差 ${first.decision.remaining} 个；先核对再补足`);
+  }
+  if (first.decision?.status === 'unknown') ctx.partial?.('当前为留窗读数，本步的最终数量待关窗核对');
+}
+
 export async function stowIntoOpenWindow(
   bot: Bot, call: Extract<SkillCall, { skill: 'stow' }>, ctx: SkillContext,
 ): Promise<string> {
@@ -823,7 +897,7 @@ export async function stowIntoOpenWindow(
   }
   const entries: Array<{
     stepIndex: number | null; item: string; pick?: string; pred: InvPred;
-    before: number; wanted: number; moved: number; failure: string | null;
+    before: number; wanted: number; requested: number; attempted: number; containerDelta: number; moved: number; failure: string | null;
   }> = [];
   const lastIndex = plan.at(-1)?.stepIndex ?? batch?.index;
   let retained = lastIndex !== undefined && consumesOpenWindow(batch?.steps[lastIndex + 1]);
@@ -835,9 +909,10 @@ export async function stowIntoOpenWindow(
       const entry = {
         stepIndex: step.stepIndex, item: step.call.item, pick: step.call.pick, pred,
         before: invCountIn(view, pred), wanted: Math.min(step.call.count, invCountIn(view, pred)),
-        moved: 0, failure: null as string | null,
+        requested: step.call.count, attempted: 0, containerDelta: 0, moved: 0, failure: null as string | null,
       };
       entries.push(entry);
+      const containerBefore = containerCount(win, pred);
       while (entry.moved < entry.wanted) {
         checkAbort(ctx);
         requireSameWindow(bot, win);
@@ -847,18 +922,22 @@ export async function stowIntoOpenWindow(
         const old = invCountIn(view, pred);
         try {
           if (entry.pick && typeof bot.clickWindow === 'function') {
+            entry.attempted = entry.moved + amount;
             await transferInventoryStackConfirmed(bot, win, next.slot, 0, win.inventoryStart, amount, ctx);
           } else if (entry.pick && next.count === 1) {
             const empty = win.slots.slice(0, win.inventoryStart).findIndex((it) => it === null);
             if (empty < 0) { entry.failure = '容器没有空格了'; break; }
+            entry.attempted = entry.moved + 1;
             await moveExactSlot(bot, next.slot, empty);
           } else {
+            entry.attempted = entry.moved + amount;
             await bot.transfer({ window: win, itemType: next.type, metadata: next.metadata ?? null,
-              count: amount, sourceStart: win.inventoryStart, sourceEnd: win.inventoryEnd,
+              count: amount, sourceStart: entry.pick ? next.slot : win.inventoryStart,
+              sourceEnd: entry.pick ? next.slot + 1 : win.inventoryEnd,
               destStart: 0, destEnd: win.inventoryStart });
           }
         } catch (err) {
-          if (err instanceof Aborted || (isInventoryClickError(err) && !ctx.aborted()) || (err instanceof SkillBlocked && err.code === 'container-window-changed')) throw err;
+          if (err instanceof Aborted || isInventoryClickError(err) || (err instanceof SkillBlocked && err.code === 'container-window-changed')) throw err;
           entry.failure = zhErrorText((err as Error).message);
           break;
         }
@@ -867,6 +946,8 @@ export async function stowIntoOpenWindow(
         if (delta <= 0) { entry.failure = '窗口里一格都没动'; break; }
         entry.moved += delta;
       }
+      requireSameWindow(bot, win);
+      entry.containerDelta = containerCount(win, pred) - containerBefore;
     }
     transfersCompleted = true;
   } finally {
@@ -874,37 +955,34 @@ export async function stowIntoOpenWindow(
       && entries.every((entry) => entry.moved > 0 && entry.failure === null);
     if (bot.currentWindow === win && !retained && inventoryClickState(bot).phase === 'ready') bot.closeWindow(win);
   }
-  let first: { text: string; ok: boolean } | null = null;
+  let first: OpenTransferReceipt | null = null;
   let completed = false;
   let allOk = true;
   try {
     for (const entry of entries) {
-      let result: { text: string; ok: boolean };
+      let result: OpenTransferReceipt;
       if (entry.wanted <= 0) {
-        result = { ok: false, text: noSuchItem(bot, entry.item, entry.pick).message };
-      } else if (entry.moved <= 0) {
-        result = { ok: false, text: `当前窗口没有存进${zhName(entry.item)}:${entry.failure ?? '可能已经满了或服务端拒绝了'}` };
+        result = noOpenTransfer(entry.item, entry.requested, noSuchItem(bot, entry.item, entry.pick).message);
+      } else if (entry.attempted <= 0) {
+        result = noOpenTransfer(entry.item, entry.requested, `当前窗口没有存进${zhName(entry.item)}:${entry.failure ?? '可能已经满了或服务端拒绝了'}`);
       } else {
         const conf = await awaitInvConfirm(() => {
-          if (!retained) return invCount(bot, entry.pred);
+          if (!retained) return inventoryReadConfirmed(bot) ? invCount(bot, entry.pred) : entry.before;
           if (bot.currentWindow !== win) throw new SkillBlocked('存物对账时容器窗口已关闭或被替换，不能确认本次存入',
             [], 'local', 'container-window-changed');
           return invCountIn(view, entry.pred);
         }, entry.before, -1, ctx, retained ? WINDOW_SETTLE_MS : 0);
-        result = conf.status === 'confirmed'
-          ? { ok: true, text: `往当前打开的容器存了${zhName(entry.item)}×${conf.moved}`
-            + (retained ? '；当前窗口玩家槽已稳定减少，保持窗口供下一步使用' : '') }
-          : { ok: false, text: `窗口里尝试存${zhName(entry.item)}×${entry.moved},${retained ? '当前窗口玩家槽' : '关窗后背包'}没确认减少(${conf.status});不能算存成` };
+        result = openTransferReceipt(entry.item, entry.requested, entry.attempted, entry.containerDelta,
+          conf.status === 'confirmed' ? conf.moved : null, 'stow', retained, entry.failure, bot, win);
       }
       allOk &&= result.ok;
       if (entry.stepIndex === null) first = result;
-      else batch?.absorb(entry.stepIndex, `(跟第 ${batch.index + 1} 步同一次开窗)${result.text}`, result.ok);
+      else batch?.absorb(entry.stepIndex, `(跟第 ${batch.index + 1} 步同一次开窗)${result.text}`, result.ok, result.decision);
     }
-    if (!first?.ok) throw new SkillBlocked(first!.text, [], 'local',
-      retained ? 'container-window-rollback' : undefined);
+    finishOpenTransfer(first!, ctx);
     completed = true;
     if (retained && allOk) ctx.holdWindow?.(win);
-    return first.text;
+    return first!.text;
   } finally {
     if (bot.currentWindow === win && (!completed || !allOk || ctx.aborted()) && inventoryClickState(bot).phase === 'ready') bot.closeWindow(win);
   }
@@ -1166,7 +1244,7 @@ export async function takeFromOpenWindow(
   }
   const entries: Array<{
     stepIndex: number | null; item: string; pick?: string; pred: InvPred;
-    before: number; wanted: number; moved: number; failure: string | null;
+    before: number; wanted: number; attempted: number; containerDelta: number; moved: number; failure: string | null;
     observed: ReturnType<typeof containerStacks>;
   }> = [];
   const lastIndex = plan.at(-1)?.stepIndex ?? batch?.index;
@@ -1180,10 +1258,11 @@ export async function takeFromOpenWindow(
       const entry = {
         stepIndex: step.stepIndex, item, pick: step.call.pick, pred,
         before: invCountIn(view, pred), wanted: step.call.count ?? 1,
-        moved: 0, failure: null as string | null,
+        attempted: 0, containerDelta: 0, moved: 0, failure: null as string | null,
         observed: containerStacks(win, bot.registry as never),
       };
       entries.push(entry);
+      const containerBefore = containerCount(win, pred);
       while (entry.moved < entry.wanted) {
         checkAbort(ctx);
         requireSameWindow(bot, win);
@@ -1196,14 +1275,16 @@ export async function takeFromOpenWindow(
           if (entry.pick && stack.count === 1) {
             const destination = win.slots.findIndex((it, i) => i >= win.inventoryStart && i < win.inventoryEnd && it === null);
             if (destination < 0) { entry.failure = '背包里没有空格了'; break; }
+            entry.attempted = entry.moved + 1;
             await moveExactSlot(bot, source, destination);
           } else {
+            entry.attempted = entry.moved + amount;
             await bot.transfer({ window: win, itemType: stack.type, metadata: stack.metadata ?? null,
-              count: amount, sourceStart: 0, sourceEnd: win.inventoryStart,
+              count: amount, sourceStart: entry.pick ? source : 0, sourceEnd: entry.pick ? source + 1 : win.inventoryStart,
               destStart: win.inventoryStart, destEnd: win.inventoryEnd });
           }
         } catch (err) {
-          if (err instanceof Aborted || (err instanceof SkillBlocked && err.code === 'container-window-changed')) throw err;
+          if (err instanceof Aborted || isInventoryClickError(err) || (err instanceof SkillBlocked && err.code === 'container-window-changed')) throw err;
           entry.failure = zhErrorText((err as Error).message);
           break;
         }
@@ -1212,70 +1293,56 @@ export async function takeFromOpenWindow(
         if (delta <= 0) { entry.failure = '窗口里一格都没动'; break; }
         entry.moved += delta;
       }
+      requireSameWindow(bot, win);
+      entry.containerDelta = containerBefore - containerCount(win, pred);
     }
     transfersCompleted = true;
   } finally {
     retained &&= transfersCompleted && !ctx.aborted()
       && entries.every((entry) => entry.moved > 0 && entry.failure === null);
-    if (bot.currentWindow === win && !retained) {
+    if (bot.currentWindow === win && !retained && inventoryClickState(bot).phase === 'ready') {
       bot.closeWindow(win);
       // 服务端自定义大背包关窗后若立即打开地面箱，后一窗口偶发超时。
       // 等关窗同步过一拍，再让同一任务后续的 stow 开下一个容器。
       await sleep(WINDOW_SETTLE_MS);
     }
   }
-  let first: { text: string; ok: boolean; server: boolean } | null = null;
+  let first: OpenTransferReceipt | null = null;
   let completed = false;
   let allOk = true;
   try {
     for (const entry of entries) {
-      let result: { text: string; ok: boolean; server: boolean };
-      if (entry.moved <= 0) {
-        // Some server-backed windows apply the click only when closed. The window
-        // mirror may report no movement even though the confirmed player bag gained
-        // the item; use the final inventory ledger before declaring a failed take.
+      let result: OpenTransferReceipt;
+      if (entry.attempted === 0) {
         const bagKnown = inventoryReadConfirmed(bot);
-        const gained = bagKnown ? Math.max(0, invCount(bot, entry.pred) - entry.before) : 0;
-        result = gained > 0
-          ? { ok: true, server: false,
-            text: `关窗后包里多了${zhName(entry.item)}×${gained}(窗口点击回执延迟)` }
-          : { ok: false, server: false,
-            text: `当前窗口没取到${itemAsked(entry.item, entry.pick)}${entry.failure ? `:${entry.failure}` : ''}`
+        result = noOpenTransfer(entry.item, entry.wanted,
+            `当前窗口没取到${itemAsked(entry.item, entry.pick)}${entry.failure ? `:${entry.failure}` : ''}`
               + itemIdHint(bot, entry.item, entry.observed.items)
               + `;实际容器里有:${contentsText(entry.observed.items, true).split('、').slice(0, 8).join('、')}`
               + `${entry.observed.items.length > 8 ? '等' : ''}`
               + (bagKnown
                 ? `;包里已有该物品×${entry.before}。以当前开窗和背包为准，别据旧公告重复取；改取窗口现有物品或做别的事`
-                : '；背包玩家槽未完整同步，已有数量待核对；先以当前窗口内容为准') };
+                : '；背包玩家槽未完整同步，已有数量待核对；先以当前窗口内容为准'));
       } else {
         const conf = await awaitInvConfirm(() => {
-          if (!retained) return invCount(bot, entry.pred);
+          if (!retained) return inventoryReadConfirmed(bot) ? invCount(bot, entry.pred) : entry.before;
           if (bot.currentWindow !== win) throw new SkillBlocked('取物对账时容器窗口已关闭或被替换，不能确认本次取出',
             [], 'local', 'container-window-changed');
           return invCountIn(view, entry.pred);
         }, entry.before, 1, ctx, retained ? WINDOW_SETTLE_MS : 0);
-        const head = `从当前窗口取出${zhName(entry.item)}×${entry.moved}`
-          + (entry.moved < entry.wanted ? `(要 ${entry.wanted} 个${entry.failure ? `,${entry.failure}` : ''})` : '');
-        result = conf.status === 'rolled-back'
-          ? { ok: false, server: true, text: `${head};但被服务端收回了,包里没多` }
-          : conf.status === 'timeout'
-            ? retained
-              ? { ok: false, server: false, text: `${head};当前窗口玩家槽未确认增加，不能继续依赖取物的步骤` }
-              : { ok: true, server: false, text: `${head};关窗后包里的账还没跟着变(服务端没回灌确认),以包里为准` }
-            : { ok: true, server: false, text: `${head};${retained ? '当前窗口玩家槽稳定增加' : '包里多了'} ${conf.moved} 个`
-              + (retained ? '，保持窗口供下一步使用' : '') };
+        result = openTransferReceipt(entry.item, entry.wanted, entry.attempted, entry.containerDelta,
+          conf.status === 'confirmed' ? conf.moved : null, 'take', retained, entry.failure, bot, win);
       }
       allOk &&= result.ok;
       if (entry.stepIndex === null) first = result;
-      else batch?.absorb(entry.stepIndex, `(跟第 ${batch.index + 1} 步同一次开窗)${result.text}`, result.ok);
+      else batch?.absorb(entry.stepIndex, `(跟第 ${batch.index + 1} 步同一次开窗)${result.text}`, result.ok, result.decision);
     }
-    if (!first?.ok) throw new SkillBlocked(first!.text, [], first!.server ? 'server' : 'local',
-      retained ? 'container-window-rollback' : undefined);
+    finishOpenTransfer(first!, ctx);
     completed = true;
     if (retained && allOk) ctx.holdWindow?.(win);
-    return first.text;
+    return first!.text;
   } finally {
-    if (bot.currentWindow === win && (!completed || !allOk || ctx.aborted())) bot.closeWindow(win);
+    if (bot.currentWindow === win && (!completed || !allOk || ctx.aborted()) && inventoryClickState(bot).phase === 'ready') bot.closeWindow(win);
   }
 }
 

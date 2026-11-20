@@ -60,7 +60,7 @@ export type TargetDiag =
 export class SkillBlocked extends Error {
   readonly scene: string[];
   /** 机器可读原因；调用方不靠中文回执做重复失败判定。 */
-  readonly code?: 'target-not-visible' | 'target-not-ready' | 'container-window-changed' | 'container-window-rollback' | 'inventory-click-sync' | 'use-hand-changed' | 'resource-unavailable'
+  readonly code?: 'target-not-visible' | 'target-not-ready' | 'container-window-changed' | 'container-window-rollback' | 'container-transfer-unconfirmed' | 'inventory-click-sync' | 'use-hand-changed' | 'resource-unavailable'
     | 'fishing-loot-unconfirmed' | 'fishing-reel-unconfirmed' | 'fishing-no-bite' | 'execution-context-changed' | 'pathfinder-no-path' | 'pathfinder-planning-stalled' | 'navigation-location-changed' | 'control-no-progress' | 'container-full' | 'protection-denied' | 'interaction-hand-unavailable' | 'food-consumption-unconfirmed' | 'attack-target-unconfirmed' | 'route-obstructed' | 'route-timeout' | 'placement-retry-cached';
   readonly decision?: Partial<StepDecision>;
   /**
@@ -298,8 +298,10 @@ export interface SkillContext {
     taskId?: number;
     steps: readonly SkillCall[];
     index: number;
-    absorb(stepIndex: number, receipt: string, ok?: boolean): void;
+    absorb(stepIndex: number, receipt: string, ok?: boolean, decision?: Partial<StepDecision>): void;
   };
+  /** Actual amounts for the current step; never inferred from the text or from click acceptance. */
+  recordDecision?: (decision: Partial<StepDecision>) => void;
   /** 登记部分完成：技能正常返回，任务终态为部分完成，gap 说明未完成的量。 */
   partial?: (gap: string) => void;
   /**
