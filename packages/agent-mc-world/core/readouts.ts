@@ -16,6 +16,7 @@ import { zhName } from './names.ts';
 import { PLAYER_SLOTS } from './precheck.ts';
 import { narrateInventorySync } from './inventory-window-sync.ts';
 import { itemCustomName } from './item-display.ts';
+import { carriedItemVariant } from './carried-inventory.ts';
 import { readDurability, readEnchants, type ItemLike, type EnchantRegistry } from './item-facts.ts';
 
 /** Both Java numbering schemes refer to the same stack in the player's own inventory. */
@@ -31,7 +32,9 @@ export function inventorySlotReadout(
       && displayName?.trim().toLowerCase() !== wanted) return [];
     const windowSlot = index + 9;
     const inventorySlot = windowSlot >= 36 ? windowSlot - 36 : windowSlot;
+    const variant = carriedItemVariant(it, displayName);
     return [{ windowSlot, inventorySlot, name: it.name, count: it.count,
+      ...(variant ? {variant} : {}),
       displayName: displayName ?? null, durability: readDurability(it),
       enchantments: readEnchants(it, registry ?? undefined) }];
   });

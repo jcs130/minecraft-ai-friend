@@ -415,6 +415,7 @@ export function narrateWorldSegments(
   s: WorldSnapshot,
   near?: string | null,
   prevBag?: ItemStack[] | null,
+  inventoryDetail: 'full' | 'current' = 'full',
 ): SnapshotSegment[] {
   const p = s.position;
   const segs: SnapshotSegment[] = [];
@@ -469,13 +470,13 @@ export function narrateWorldSegments(
   const body = `${health}，${food}${oxygen}。`;
   segs.push({ key: 'body', text: body, cmp: body });
 
-  const bagFull = s.inventory.length > 0
+  const bagFull = inventoryDetail === 'current' ? '' : s.inventory.length > 0
     ? `包里有：${narrateInventory(s.inventory)}。`
     : '包里什么都没有。';
   let gear: string;
   if (s.invSynced) {
     const held = s.heldItem ? `手里拿着${s.heldItemDisplayName ?? zhName(s.heldItem)}` : '两手空空';
-    gear = `${held}。${prevBag ? narrateBagChange(prevBag, s.inventory) : bagFull}${narrateCursor(s)}`;
+    gear = `${held}。${inventoryDetail === 'full' && prevBag ? narrateBagChange(prevBag, s.inventory) : bagFull}${narrateCursor(s)}`;
   } else {
     gear = narrateInventorySync(s.inventorySync);
   }
@@ -484,7 +485,7 @@ export function narrateWorldSegments(
     text: gear,
     cmp: s.invSynced ? `${s.heldItem ?? 'bare'}:${s.heldItemDisplayName ?? ''}|${bagFull}|${narrateCursor(s)}` : gear,
   });
-  const inventoryIds = s.invSynced
+  const inventoryIds = inventoryDetail === 'current' && s.invSynced ? '物品 ID 及槽位按需查询 mc_bag {detail:"slots"}。' : s.invSynced
     ? `当前随身物品 ID：${inventoryIdentityText(s.inventory) || '空'}。数量见背包读数；调用技能使用这些实际 ID，不推测别名。`
     : '当前随身物品 ID 暂不可用：库存尚未确认。';
   segs.push({ key: 'inventoryIds', text: inventoryIds, cmp: inventoryIds });

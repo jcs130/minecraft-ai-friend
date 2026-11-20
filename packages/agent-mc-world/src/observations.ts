@@ -1,4 +1,5 @@
 /** Read-only native observation helpers; import does not connect or start a model loop. */
+export { CarriedInventoryObserver, carriedInventoryText, type CarriedInventoryReading } from '../core/carried-inventory.ts';
 export {itemCustomName} from '../core/item-display.ts';
 export { observedEntityIdentity, observedEntityLabel, type EntityIdentity } from '../core/entity-identity.ts';
 export {entitySnapshot,type EntitySnapshotSource} from '../core/entity-snapshot.ts';

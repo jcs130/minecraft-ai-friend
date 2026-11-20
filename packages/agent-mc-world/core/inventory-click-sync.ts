@@ -74,6 +74,7 @@ export function assertInventoryClicksReady(bot: Bot): void {
 }
 
 function canonical(value: unknown): unknown {
+  if (typeof value === 'bigint') return { int64: value.toString() };
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
@@ -84,14 +85,16 @@ function canonical(value: unknown): unknown {
 
 /** Stack compatibility includes component patches; count and slot do not identify the item. */
 export function sameInventoryStack(a: unknown, b: unknown): boolean {
-  const kind = (value: unknown): string => {
-    const item = value as { type: number; metadata?: number | null; nbt?: unknown;
-      components?: unknown[]; removedComponents?: unknown[] };
-    return JSON.stringify(canonical({ type: item.type, metadata: item.metadata ?? null, nbt: item.nbt ?? null,
-      components: [...(item.components ?? [])].map(canonical).sort((x, y) => JSON.stringify(x).localeCompare(JSON.stringify(y))),
-      removedComponents: [...(item.removedComponents ?? [])].sort() }));
-  };
-  return kind(a) === kind(b);
+  return inventoryStackKind(a) === inventoryStackKind(b);
+}
+
+/** Canonical native material and components, independent of slot and quantity. */
+export function inventoryStackKind(value: unknown): string {
+  const item = value as { type: number; metadata?: number | null; nbt?: unknown;
+    components?: unknown[]; removedComponents?: unknown[] };
+  return JSON.stringify(canonical({ type: item.type, metadata: item.metadata ?? null, nbt: item.nbt ?? null,
+    components: [...(item.components ?? [])].map(canonical).sort((x, y) => JSON.stringify(x).localeCompare(JSON.stringify(y))),
+    removedComponents: [...(item.removedComponents ?? [])].sort() }));
 }
 
 function stackKey(value: unknown): string {

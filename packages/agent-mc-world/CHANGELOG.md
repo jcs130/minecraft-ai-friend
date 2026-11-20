@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.111
+
+Expose bounded, confirmed changes to carried inventory through world events, current facts and the existing read-only bag tool. Named reads return the current carried quantity independently of historical containers.
+
 ## 0.5.7-rc.160-preview.110
 
 Server extensions can match an inventory transfer command to its system receipt. The next body step starts after the reported items appear in the player's inventory. An unconfirmed transfer reports the missing evidence and is never resubmitted automatically.

@@ -14,7 +14,7 @@ describe('source-owned execution context', () => {
     expect(executionFactParts(facts,[],false)).toEqual([]);
     expect(facts.parts).toHaveLength(4);
     const rig=methodHarness('1.21.1');
-    try { expect(executionFactKeys(rig.world.requestFacts(),['gear'],false)).toEqual(['gear','equip','inventoryIds']); }
+    try { expect(executionFactKeys(rig.world.requestFacts(),['gear'],false)).toEqual(['gear','equip','inventoryIds','carriedInventory']); }
     finally {rig.close();}
   });
 

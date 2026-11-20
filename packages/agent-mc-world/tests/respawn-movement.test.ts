@@ -103,6 +103,17 @@ it('publishes death as an observed outcome with the same native episode, never g
   expect(call[3].meta.death.id).toBe(call[3].execution.id);
 });
 
+it('replays a real player window refill; the first synchronized inventory after respawn is a new baseline', () => {
+  const r=rig();
+  r.world.reportWorldDelta();
+  r.full(3); r.world.reportWorldDelta();
+  const frames=()=>r.world.emit.mock.calls.map((c:any[])=>c[3]?.meta?.carriedInventory).filter(Boolean);
+  expect(frames().at(-1)).toMatchObject({kind:'delta',changes:[{name:'oak_log',before:8,after:3}]});
+  r.die(); r.bot._client.emit('respawn',{}); r.full(1); r.health(20); r.position(120); r.world.reportWorldDelta();
+  expect(r.world.inventoryReading(r.world.snapshot()).reading).toMatchObject({kind:'baseline',usedSlots:1,changes:[]});
+  expect(frames().filter((frame:any)=>frame.changes.some((row:any)=>row.before===3&&row.after===1))).toEqual([]);
+});
+
 it('cancels a pending server query on native respawn without reusing it in the same connection', () => {
   const r = rig();
   const lane = r.world.serverQueries as ServerQueryLane;
