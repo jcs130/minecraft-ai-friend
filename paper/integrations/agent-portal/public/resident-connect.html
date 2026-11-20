@@ -10,7 +10,7 @@
 <body><main>
   <a class="brand" href="/">千灯纪</a>
   <h1 id="title">授权居民插件</h1>
-  <p id="intro">使用千灯纪账号授权后，回到 N.E.K.O. 或 Cortico 插件，就可以新建或连接你的女仆和 Numen。</p>
+  <p id="intro">可以在官网新建车万女仆，也可以授权本机的 N.E.K.O. 或 Cortico 创建或连接居民。</p>
   <p id="install" hidden><a href="/downloads.html#resident">下载居民插件</a></p>
   <p id="status" role="status">正在读取网站身份…</p>
   <form id="login" hidden>
@@ -21,20 +21,20 @@
     <p><a href="/#connections" target="_blank" rel="noopener noreferrer">到官网注册或找回密码 ↗</a>，完成后返回此页。</p>
   </form>
   <section id="authorize" hidden>
-    <h2>授权本机插件</h2><p>填入授权码后，你的插件可以查看已有居民、为你新建角色，并连接你在插件里选中的一个身体。</p>
+    <h2>授权本机插件</h2><p>填入授权码后，插件可以查看你的居民、使用可用名额新建角色，并连接你选中的一个身体。</p>
     <button id="authorize-code">获取插件授权码</button>
-    <p><a id="manage-residents" href="/resident-connect.html?flow=connect">管理已有居民连接</a></p>
+    <p><a href="/resident-connect.html?flow=create&amp;bodyKind=maid">新建居民</a> · <a id="manage-residents" href="/resident-connect.html?flow=connect">管理已有居民连接</a></p>
   </section>
   <form id="browser-approve" hidden>
     <h2>授权桌面插件</h2>
-    <p>确认后，此插件可以查看你的居民、新建角色，并连接你在插件里选中的一个身体。请核对登录账号，输入你亲自在本机插件中看到的数字。</p>
+    <p>确认后，插件可以查看你的居民、使用可用名额新建角色，并连接你选中的一个身体。请核对登录账号，输入你亲自在本机插件中看到的数字。</p>
     <label>插件显示的 6 位数字<input id="browser-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" required></label>
     <button>确认授权</button>
   </form>
   <section id="legacy" hidden>
     <h2>角色与身体</h2>
     <label>接入方式<select id="flow"><option value="create">新建角色</option><option value="connect">连接已有角色</option></select></label>
-    <label>身体类型<select id="kind"><option value="maid">车万女仆</option><option value="numen">Numen</option></select></label>
+    <label id="kind-label">身体类型<select id="kind"><option value="maid">车万女仆</option><option value="numen">Numen</option></select></label>
     <p id="availability" role="status"></p>
     <form id="create" hidden>
       <label>角色名<input id="name" maxlength="24" autocomplete="off" required></label>
