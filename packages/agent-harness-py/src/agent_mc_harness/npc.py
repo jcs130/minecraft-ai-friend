@@ -574,6 +574,14 @@ class NpcPlanner:
                 "short, agree on the public entrance or another activity. Never repeat a failed transfer on the same evidence. "
                 "Speak briefly when you meet. Do not repeat invitations or report unverified outcomes.",
                 "currentParty": context.party_context}
+            if context.personal_craft_stage and "body:craft" not in tools:
+                options = [("body:native:adventure_query", {"kind": "ruins"}),
+                           ("body:native:adventure_query", {"kind": "plan_invitation"}), ("body:native:survey", {})]
+                facts["adventuring"]["currentCraftStage"] = {**context.personal_craft_stage,
+                    "constraint": "This contract counts your own crafting at the guild. This body's current tools "
+                                  "cannot deliver that guild event. Keep the contract and choose another activity. "
+                                  "An item from a chest, teammate or inventory does not complete this stage.",
+                    "otherActivities": [{"tool": tool, "args": args} for tool, args in options if tool in tools]}
             message = (context.party_context or {}).get("message")
             if message:
                 facts["goal"] = ("Your verified teammate sent the private party message in adventuring.currentParty.message. "
@@ -896,6 +904,7 @@ class NpcHost:
         self.last_activity_scene = None
         self.desktop_request_id = None
         self.next_roster_check = 0.0
+        self.next_quest_check = 0.0
         self.next_outing_check = 0.0
         self.next_rendezvous_attempt: dict[str, float] = {}
         self.checked_party_event = None
@@ -1004,6 +1013,7 @@ class NpcHost:
         dialogue = [self.pending_dialogue[key] for key in intent.source_events if key in self.pending_dialogue]
         context.dialogue = dialogue
         context.proposed_agenda = None
+        context.personal_craft_stage = None
         if self.role.body_kind == "maid" and intent.goal == IDLE_GOAL and not dialogue:
             context.nearby_speech_on_cooldown = self.journal.contacted_recently(body_id, "speech", COMPANION_CHECK_IN_SECONDS)
         inbox_at_start = set(self.pending_dialogue)
@@ -1093,6 +1103,17 @@ class NpcHost:
             notice, team, opening = self._party_turn(body_id, context)
             if opening and opening.tool == "body:native:adventure_query":
                 return [opening]
+            if (not notice and not opening and context.snapshot and context.snapshot.life_state == "alive"
+                    and context.capabilities and context.capabilities.supports("native", adventure.QUERY)
+                    and "body:native:adventure_query" in self.role.allowed_tools and not danger(context.snapshot)):
+                quest = self.journal.last_adventure(body_id, "quest_status", "accept_quest", "turn_in_quest")
+                sampled = quest.get("at", 0)
+                if quest.get("kind") == "quest_status" and 0 <= time.time() - sampled <= adventure.QUEST_OBSERVATION_SECONDS:
+                    context.personal_craft_stage = adventure.unfinished_craft_stage(quest)
+                elif time.monotonic() >= self.next_quest_check:
+                    self.next_quest_check = time.monotonic() + adventure.QUEST_OBSERVATION_SECONDS
+                    self.next_plan = time.monotonic() + 3
+                    return [Step(tool="body:native:adventure_query", args={"kind": "quest_status"})]
         steps = [opening] if opening else await self.planner(intent, context)
         if steps is None:
             return None
