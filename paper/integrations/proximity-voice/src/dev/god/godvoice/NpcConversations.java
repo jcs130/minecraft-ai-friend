@@ -16,7 +16,7 @@ import org.bukkit.inventory.EquipmentSlot;
 /** Scoped text/ASR input for registered NPCs. No model, controller or new player connection. */
 final class NpcConversations implements Listener {
     private final PaperVoicePlugin plugin;
-    private final Map<UUID,NpcDialoguePolicy.Profile> profiles;
+    private volatile Map<UUID,NpcDialoguePolicy.Profile> profiles;
     // The native speech adapter renews every five game ticks, including during silence.
     static final long BINDING_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
     record Binding(Entity entity,Function<String,Boolean> input,long renewedAt){
@@ -29,7 +29,13 @@ final class NpcConversations implements Listener {
     private static final Set<String> CLOSINGS=Set.of("好","好的","嗯","嗯嗯","收到","明白了","知道了","谢谢","谢谢你","辛苦了","再见","拜拜","回头聊");
     private long lastWarning;
     NpcConversations(PaperVoicePlugin plugin,Path file)throws Exception {
-        this.plugin=plugin;profiles=Files.exists(file)?NpcDialoguePolicy.profiles(JsonParser.parseString(Files.readString(file)).getAsJsonObject()):Map.of();
+        this.plugin=plugin;
+        Map<UUID,NpcDialoguePolicy.Profile> configured=Files.exists(file)?NpcDialoguePolicy.profiles(JsonParser.parseString(Files.readString(file)).getAsJsonObject()):Map.of();
+        profiles=configured;
+        if(!configured.isEmpty()){
+            Path names=file.resolveSibling("resident-names");
+            Bukkit.getScheduler().runTaskTimerAsynchronously(plugin,()->profiles=NpcDialoguePolicy.residentNames(configured,names),1,100);
+        }
         Bukkit.getPluginManager().registerEvents(this,plugin);
     }
     boolean configured(UUID id){return profiles.containsKey(id);}
@@ -69,7 +75,7 @@ final class NpcConversations implements Listener {
     JsonArray catalogue(){
         var rows=new JsonArray();for(var p:profiles.values()){
             var row=new JsonObject();row.addProperty("id",p.id().toString());row.addProperty("ownerId",p.owner().toString());
-            row.addProperty("kind",p.kind());row.addProperty("name",p.name());row.addProperty("voice",p.voice());row.addProperty("range",p.range());rows.add(row);
+            row.addProperty("kind",p.kind());row.addProperty("name",p.name());row.addProperty("displayName",p.display());row.addProperty("voice",p.voice());row.addProperty("range",p.range());rows.add(row);
         }return rows;
     }
     boolean bind(UUID id,UUID owner,Function<String,Boolean> input){
@@ -161,7 +167,7 @@ final class NpcConversations implements Listener {
         if(profile.kind().equals("maid")&&player.getLocation().distanceSquared(body.getLocation())>64)return false;
         if(closing(address.text()))return true;
         if(!delivered.add(profile.id(),player.getUniqueId(),"natural_"+input,System.currentTimeMillis()))return true;
-        return plugin.naturalNpcDialogue(profile,player,address.text(),scope,audience);
+        return plugin.naturalNpcDialogue(profile,player,address.text(),scope,audience,input.startsWith("voice_")?"voice":"text");
     }
 
     boolean naturalMaidChat(Player actor,String text,Set<UUID> recipients){

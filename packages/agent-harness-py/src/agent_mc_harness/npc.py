@@ -24,11 +24,13 @@ from .conversation import COMPANION_SPEECH_POLICY, CONVERSATION_POLICY, WHALE_SP
 from .body import adventure
 from .journal import ActionJournal, work_key
 from .models import BodyEvent, Scope
+from .resident_protocol import social_communication, speech_receipt
 from .runtime import HarnessRuntime, Intent, PlanContext, Step, step_support
 from .social import stamped_contact, timestamp
 
 IDLE_GOAL = "Choose one useful activity grounded in the current scene; rest silently when none is needed."
 DANGER_GOAL = "React to a fresh danger observation."
+DESKTOP_GOAL = "Your desktop character requested a fresh observation. Decide what to say or do through this body."
 DIALOGUE_GOAL = "Decide whether current dialogue is addressed to you and needs a reply; listening silently is valid. Continue useful activity."
 NATIVE_DIALOGUE_TTL_MS = 120_000
 COMPANION_CHECK_IN_SECONDS = 180
@@ -329,6 +331,7 @@ class NpcPlanner:
         self.last_route: dict[str, Any] = {}
         self.fast = fast
         self.resident_turns = resident_turns
+        self.social_receipts = {}
         self.next_meal = 0.0
         self.next_catch = 0.0
         self.next_guard_review = 0.0
@@ -336,16 +339,23 @@ class NpcPlanner:
         self.companion_anchor: tuple[str, tuple[float, float, float]] | None = None
         self.last_adventure_ending = 0
 
-    async def decision(self, kind, payload, timeout):
+    async def decision(self, kind, payload, timeout, *, desktop_only=False):
         if self.resident_turns:
             response = await self.resident_turns.offer(kind, payload["messages"])
             if response is not None:
                 return response, "desktop"
+        if desktop_only:
+            return None, "desktop"
         async with self.semaphore:
             return await self.model.request("/chat/completions", payload, timeout), self.role.provider
 
     async def answer_dialogue(self, text: str, relationship: dict | None, *, public: bool) -> str:
+        return (await self.prepare_dialogue(text, relationship, public=public))["reply"]
+
+    async def prepare_dialogue(self, text, relationship, *, public, row=None):
         facts = {"message": text}
+        if self.resident_turns and row:
+            facts["communication"] = social_communication(self.role, row)
         if relationship is not None:
             facts["socialRelationship"] = relationship
             facts["sharedPast"] = relationship["evidence"]
@@ -358,16 +368,22 @@ class NpcPlanner:
                        "没有发生的事件、未确认的约定和权限不可当成事实。"
                        "这轮仅回复文字。返回只含 reply 的 JSON，最多 140 字。"},
                       {"role": "user", "content": json.dumps(facts, ensure_ascii=False)}]}
-        response, _ = await self.decision("dialogue", request, 35)
+        response, provider = await self.decision("dialogue", request, 35)
         answer = json.loads(response["choices"][0]["message"]["content"])
         reply = answer.get("reply") if isinstance(answer, dict) else None
         if (not isinstance(reply, str) or not 1 <= len(reply.strip()) <= 140
                 or not reply.isprintable() or "§" in reply):
             raise ValueError("invalid_dialogue_reply")
-        return (whale_speech(reply) or "我在，慢慢说。") if style else reply.strip()
+        result = {"reply": (whale_speech(reply) or "我在，慢慢说。") if style else reply.strip()}
+        if provider == "desktop" and "residentCommunication" in response:
+            result["replyMode"] = response["residentCommunication"]["mode"]
+        return result
 
     async def __call__(self, intent: Intent, context: PlanContext):
         role = self.role
+        requested = intent.desktop_request_id if intent.goal == DESKTOP_GOAL else None
+        if intent.goal == DESKTOP_GOAL and (not requested or not context.snapshot or context.snapshot.life_state != "alive" or danger(context.snapshot)):
+            return []
         caps = context.capabilities
         now = time.monotonic()
         addressed = [event for event in context.dialogue if addressed_dialogue(event, str(role.body_id), (role.name, role.id))]
@@ -414,6 +430,12 @@ class NpcPlanner:
             tools.remove("body:native:survey")
         if check_in:
             tools = ["body:chat"]
+        elif (self.resident_turns and intent.goal == IDLE_GOAL and not context.dialogue
+              and not (context.party_context or {}).get("message")):
+            if not adventure.partner_nearby(role.adventure_partner, context) and "body:chat" in tools:
+                tools.remove("body:chat")
+            if role.activity_review_seconds is None and already_guarding(current_native_state(context)):
+                tools = [name for name in tools if name not in {"body:stay", "body:stop", "body:native:sit"}]
         schemas, native_catalogue = {}, []
         for action in caps.native_actions if caps else []:
             if "body:native:" + action.name not in tools:
@@ -453,10 +475,15 @@ class NpcPlanner:
                                   "limits": caps.limits} if caps else None}
         if context.activity_review is not None:
             facts["activityReview"] = context.activity_review
+        if requested:
+            facts["desktopRequestId"] = requested
+        if self.resident_turns:
+            facts["communicationReceipts"] = [*context.communication_receipts, *self.social_receipts.values()]
         agenda_policy = ""
         can_schedule = (intent.goal == IDLE_GOAL and not context.dialogue and not check_in and context.agenda is not None
                         and not context.agenda["current"] and not context.agenda["upcoming"])
         owner_planning = context.agenda is not None and any(e.data.get("speakerId") == str(role.owner_id) for e in addressed)
+        desktop_planning = bool(requested and context.agenda is not None)
         response_shape = 'Return JSON {"steps":[{"tool":"body:...","args":{}}]}. At most 3 steps. '
         if can_schedule:
             response_shape = ('This is a planning turn. Pick a feasible continuing duty from your character and the scene, '
@@ -473,7 +500,7 @@ class NpcPlanner:
             if owner_planning:
                 agenda_policy += (' If the owner is asking to reschedule, you may replace the remaining windows in agenda, '
                                   'or return an empty agenda to cancel an existing schedule. Omit agenda for ordinary dialogue.')
-            if can_schedule or owner_planning:
+            if can_schedule or owner_planning or desktop_planning:
                 agenda_policy += ('Plan your next activities in an "agenda" array of 1–6 ordered '
                                   'non-overlapping windows within 24 real hours. Each has integer afterMinutes, forMinutes, '
                                   'a short goal and observable evidence. Choose feasible activities consistent with your character.')
@@ -595,7 +622,10 @@ class NpcPlanner:
         if len(payload["messages"][1]["content"]) > 60000:
             raise ValueError("npc_observation_budget_exceeded")
         started = time.monotonic()
-        response, provider = await self.decision("plan", payload, 40)
+        response, provider = await self.decision("plan", payload, 40, desktop_only=bool(requested))
+        if response is None:
+            self.last_route = {"provider": "desktop", "reason": "desktop_request_unanswered"}
+            return []
         self.last_route = {"provider": provider, "model": role.model if provider != "desktop" else None, "responseId": response.get("id"),
                            "seconds": round(time.monotonic() - started, 3)}
         if check_in:
@@ -611,11 +641,14 @@ class NpcPlanner:
         elif isinstance(plan, list):
             # The same bounded step validator still applies to a bare list.
             plan = {"steps": plan}
-        if not isinstance(plan, dict) or "steps" not in plan or set(plan) - ({"steps", "agenda"} if can_schedule or owner_planning else {"steps"}):
+        if not isinstance(plan, dict) or "steps" not in plan or set(plan) - ({"steps", "agenda"} if can_schedule or owner_planning or desktop_planning else {"steps"}):
             raise ValueError("npc_plan_schema")
         steps = reviewed_steps(role, context, plan["steps"])
+        delivery = response.get("residentCommunication", {}) if provider == "desktop" else {}
+        if (source := delivery.get("sourceEventId")) and source in intent.source_events:
+            intent.source_events = [source]
         if "agenda" in plan:
-            if owner_planning and plan["agenda"] == []:
+            if (owner_planning or desktop_planning) and plan["agenda"] == []:
                 if context.agenda["current"] or context.agenda["upcoming"]:
                     context.proposed_agenda = []
             else:
@@ -783,7 +816,7 @@ class NpcHost:
         self.social = social
         self.social_graph = social_graph
         self.companion_adventure = companion_adventure
-        self.runtime = HarnessRuntime(body=body, planner=self._plan, memory=memory, journal=journal, execute=True)
+        self.runtime = HarnessRuntime(body=body, planner=self._plan, memory=memory, journal=journal, execute=True, private_mailbox=True)
         self.wake = asyncio.Event()
         self.pending_dialogue: dict[str, BodyEvent] = {}
         self.unsubscribe = body.subscribe(self._event)
@@ -792,6 +825,7 @@ class NpcHost:
         self.next_plan = 0.0
         self.last_danger = False
         self.last_activity_scene = None
+        self.desktop_request_id = None
         self.next_roster_check = 0.0
         self.next_outing_check = 0.0
         self.next_rendezvous_attempt: dict[str, float] = {}
@@ -860,7 +894,10 @@ class NpcHost:
         if team:
             context.party_context = dict(team)
             if notice:
-                context.party_context["message"] = {"from": peer, "text": notice["text"], "replyChannel": "party_only"}
+                context.party_context["message"] = {"from": peer, "text": notice["text"], "eventId": notice["eventId"],
+                                                    "replyChannel": "party_only"}
+                if notice.get("speakerId"):
+                    context.party_context["message"]["speakerId"] = notice["speakerId"]
             elif team["phase"] == "assembling" and not self.journal.contacted_recently(body_id, "party-opening:" + team["partyId"], 86400):
                 opening = Step(tool="body:native:adventure_action",
                                args={"kind": "party_chat", "partyId": team["partyId"], "text": adventure.PARTY_OPENING})
@@ -908,7 +945,7 @@ class NpcHost:
             now = time.time()
             since, last, purpose, changed = self.journal.observe_activity(body_id, mode, cue, now)
             if (mode == "waiting" and not dialogue and not changed and last is not None
-                    and intent.goal != DANGER_GOAL and 0 <= now - last < self.role.activity_review_seconds):
+                    and intent.goal not in (DANGER_GOAL, DESKTOP_GOAL) and 0 <= now - last < self.role.activity_review_seconds):
                 return []
             context.activity_review = {"activity": mode, "elapsedSeconds": max(0, int(now - since)),
                                        "waitPurpose": purpose, "sceneChanged": changed,
@@ -936,7 +973,11 @@ class NpcHost:
         results = []
         inventory_added = False
         for action, receipt in self.journal.recent(body_id):
-            if action.verb in {"chat", "observe"} or action.name == "ack":
+            if action.verb == "chat":
+                if len(context.communication_receipts) < 4:
+                    context.communication_receipts.append(speech_receipt(receipt))
+                continue
+            if action.verb == "observe" or action.name == "ack":
                 continue
             result = {"action": action.name or action.verb, "requestId": receipt.request_id,
                       "status": receipt.status, "terminal": receipt.terminal, "text": receipt.text[:450]}
@@ -986,11 +1027,11 @@ class NpcHost:
             renewed_purpose = None
             # Model latency can span a player order, combat, a dimension change or an already accepted trip.
             # Keep the inbox untouched when a physical decision has lost its supporting observation.
-            if context.proposed_agenda is not None or any(s.tool not in {"body:chat", "body:observe", "body:inventory"} for s in steps):
+            if context.proposed_agenda is not None or (intent.desktop_request_id and steps) or any(s.tool not in {"body:chat", "body:observe", "body:inventory"} for s in steps):
                 latest = await self.body.snapshot()
                 new_order = any(k not in inbox_at_start and addressed_dialogue(e, body_id, (self.role.name, self.role.id))
                                 for k, e in self.pending_dialogue.items())
-                if self.pausing or new_order or activity_scene(latest) != scene:
+                if self.pausing or new_order or activity_scene(latest) != scene or (intent.desktop_request_id and danger(latest)):
                     self.next_plan = 0
                     return []
                 steps = reviewed_steps(self.role, context.model_copy(update={"snapshot": latest}), [s.model_dump() for s in steps])
@@ -1074,7 +1115,7 @@ class NpcHost:
             self.next_plan = 0.0
             self.wake.set()
             return
-        if self.role.social_memory and (event.kind == "whisper" or event.data.get("channel") == "private"):
+        if event.kind == "whisper" or event.data.get("channel") == "private":
             return  # Private replies use the identity-bound mailbox, never nearby body:chat.
         if event.kind in ("dialogue", "whisper", "chat") and event.data.get("speakerId") != str(self.role.body_id):
             key = str(event.data.get("eventId") or event.request_id or event.at.isoformat())
@@ -1092,6 +1133,25 @@ class NpcHost:
         self.runtime.start()
         if self.memory and callable(getattr(self.memory, "start", None)):
             self.memory.start()
+        turns = self.planner.resident_turns if isinstance(self.planner, NpcPlanner) else None
+        checker = asyncio.create_task(self._watch_desktop(turns)) if turns else None
+        try:
+            await self._actor_loop(identity)
+        finally:
+            if checker:
+                checker.cancel()
+                await asyncio.gather(checker, return_exceptions=True)
+
+    async def _watch_desktop(self, turns):
+        while not self.closed and not self.pausing:
+            requested = await turns.check()
+            if requested != self.desktop_request_id:
+                self.desktop_request_id = requested
+                if requested:
+                    self.wake.set()
+            await asyncio.sleep(2)
+
+    async def _actor_loop(self, identity):
         while not self.closed:
             self.wake.clear()
             if self.pausing:
@@ -1138,6 +1198,7 @@ class NpcHost:
                     events = [direct]
                 self._expire_dialogue(identity.body_id, events)
                 acknowledged = [event for event in events if self.journal.handled(identity.body_id, event)]
+                desktop_ready = bool(self.desktop_request_id and snapshot and snapshot.life_state == "alive" and not threatened)
                 if self.role.body_kind == "numen":
                     # Numen's durable event poll has no separate inbox ack RPC.
                     # Completed speech or deliberate listening consumes this input.
@@ -1151,17 +1212,20 @@ class NpcHost:
                                                    steps=[step.model_dump() for step in ack_steps])
                     for event in acknowledged:
                         self.pending_dialogue.pop(event, None)
-                elif activity_changed or threatened and not self.last_danger or now >= self.next_plan:
-                    goal = DIALOGUE_GOAL if events else DANGER_GOAL if threatened else IDLE_GOAL
+                elif desktop_ready or activity_changed or threatened and not self.last_danger or now >= self.next_plan:
+                    goal = DIALOGUE_GOAL if events else DANGER_GOAL if threatened else DESKTOP_GOAL if desktop_ready else IDLE_GOAL
                     intent = self.runtime.submit_intent(goal, agent=self.role.id)
                     intent.source_events = events
+                    if goal == DESKTOP_GOAL:
+                        intent.desktop_request_id, self.desktop_request_id = self.desktop_request_id, None
                     if self.role.adventure_advice:
                         message = self.pending_dialogue.get(direct) if direct else None
                         if message and message.data.get("speakerId") == str(self.role.owner_id):
                             intent.recall_query = message.text[:500] or None
                         elif not events and goal == IDLE_GOAL:
                             intent.recall_query = "一起完成的委托、副本、探险和之前商量过的目的地"
-                    self.next_plan = now + self.role.interval_seconds
+                    if goal != DESKTOP_GOAL:
+                        self.next_plan = now + self.role.interval_seconds
                 self.last_danger = threatened
             # Completed history is bounded in memory; durable receipts and memories remain on disk.
             settled = [key for key, value in self.runtime.intents.items() if value.state in ("completed", "failed", "cancelled")]

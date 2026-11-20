@@ -26,6 +26,8 @@ final class NpcSocial {
     private final Path root;
     private record Pending(Player player, long at, UUID world, Set<Player> audience, boolean automatic) {}
     private final Map<UUID, Pending> pending = new HashMap<>();
+    private record AudioResult(NpcDialoguePolicy.Profile profile,UUID conversation,String speech,Path target,long at) {}
+    private final Map<UUID,AudioResult> audio=new java.util.concurrent.ConcurrentHashMap<>();
     private final AtomicBoolean polling = new AtomicBoolean();
 
     NpcSocial(PaperVoicePlugin plugin, NpcConversations residents) {
@@ -50,7 +52,7 @@ final class NpcSocial {
                 while (buffer.hasRemaining()) channel.write(buffer);
                 channel.force(true);
             }
-            Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE);
+            Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
         } finally {
             Files.deleteIfExists(temp);
         }
@@ -166,10 +168,10 @@ final class NpcSocial {
     }
 
     UUID queue(UUID body, Player speaker, String message, boolean privateDialogue) throws IOException {
-        return enqueue(body,speaker,message,privateDialogue?"private":"public",null,false);
+        return enqueue(body,speaker,message,privateDialogue?"private":"public",null,false,"text");
     }
 
-    boolean natural(NpcDialoguePolicy.Profile profile, Player speaker, String message, String scope, Set<UUID> viewers) {
+    boolean natural(NpcDialoguePolicy.Profile profile, Player speaker, String message, String scope, Set<UUID> viewers,String medium) {
         try {
             if(ready(profile.id())==null)return false;
             Set<Player> audience=new HashSet<>();
@@ -177,7 +179,7 @@ final class NpcSocial {
                 Player current=Bukkit.getPlayer(viewer);
                 if(current!=null)audience.add(current);
             }
-            enqueue(profile.id(),speaker,message,scope,Set.copyOf(audience),true);
+            enqueue(profile.id(),speaker,message,scope,Set.copyOf(audience),true,medium);
         }catch(IllegalArgumentException busy){
             // The explicitly addressed resident already owns this dialogue lane.
         }catch(IOException unavailable){
@@ -186,7 +188,7 @@ final class NpcSocial {
         return true;
     }
 
-    private UUID enqueue(UUID body, Player speaker, String message, String scope, Set<Player> audience, boolean automatic) throws IOException {
+    private UUID enqueue(UUID body, Player speaker, String message, String scope, Set<Player> audience, boolean automatic,String medium) throws IOException {
         var entity = residents.live(body);
         if (!Bukkit.isPrimaryThread() || Bukkit.getPlayer(speaker.getUniqueId()) != speaker || ready(body) == null
                 || entity == null || body.equals(speaker.getUniqueId()))
@@ -207,6 +209,13 @@ final class NpcSocial {
         row.addProperty("id", request.toString());
         row.addProperty("maidId", body.toString());
         row.addProperty("speakerId", speaker.getUniqueId().toString());
+        row.addProperty("speakerName", speaker.getName());
+        row.addProperty("medium",medium);
+        var modes=new JsonArray();
+        modes.add("native");
+        modes.add("text");
+        if(plugin.socialVoiceReady(residents.profile(body),speaker))modes.add("speech");
+        row.add("replyModes",modes);
         row.addProperty("message", message);
         row.addProperty("channel", scope);
         row.addProperty("at", now);
@@ -219,6 +228,10 @@ final class NpcSocial {
     private void poll() {
         if (!polling.compareAndSet(false, true)) return;
         try {
+            for(var result:audio.values()){
+                if(System.currentTimeMillis()-result.at()>REPLY_WINDOW_MS)audio.remove(result.conversation());
+                else try{updateAudio(result);}catch(IOException|RuntimeException unavailable){/* Original receipt remains queryable. */}
+            }
             for (var profile : residents.profiles()) {
                 Path folder = directory(profile.id());
                 if (!Files.isDirectory(folder)) continue;
@@ -268,34 +281,72 @@ final class NpcSocial {
                 && (!source.automatic() || source.world().equals(source.player().getWorld().getUID()))
                 && System.currentTimeMillis() - source.at() <= REPLY_WINDOW_MS) {
             String reply = value(answer, "reply");
+            String mode = NpcDialoguePolicy.replyMode(submitted,answer);
             boolean valid = "prepared".equals(value(answer, "status")) && !reply.isBlank() && reply.codePointCount(0, reply.length()) <= 140
-                    && reply.codePoints().noneMatch(cp -> Character.isISOControl(cp) || cp == 0xA7);
+                    && mode!=null && reply.codePoints().noneMatch(cp -> Character.isISOControl(cp) || cp == 0xA7);
             var body = residents.live(profile.id());
             if (valid && (privateDialogue && !source.automatic() || residents.hears(source.player(), body, profile))) {
                 String line=(privateDialogue ? "[私聊] " : "[附近] ")
-                    +(source.automatic()?profile.display():profile.name())+"："+reply;
-                source.player().sendMessage(line);
+                    +profile.display()+"："+reply;
+                boolean caption=!mode.equals("speech");
+                if(caption)source.player().sendMessage(line);
                 Map<UUID,Player> heard=new HashMap<>();
                 heard.put(source.player().getUniqueId(),source.player());
                 if(!privateDialogue) for (Player nearby : body.getWorld().getPlayers()) {
                     if (nearby!=source.player() && (source.audience()==null||source.audience().stream().anyMatch(captured->captured==nearby))
                             && residents.hears(nearby, body, profile)){
-                        nearby.sendMessage(line);
+                        if(caption)nearby.sendMessage(line);
                         heard.put(nearby.getUniqueId(),nearby);
                     }
                 }
                 submitted.addProperty("status", "answered");
                 submitted.addProperty("reply", reply);
                 submitted.addProperty("completedAt", System.currentTimeMillis());
-                if(profile.kind().equals("numen")){
-                    try{plugin.speakHostedReply(profile,request,reply,source.player(),privateDialogue,heard);}
-                    catch(RuntimeException unavailable){plugin.getLogger().warning("Hosted social reply audio unavailable for request "+request);}
+                submitted.addProperty("replyMode",mode);
+                submitted.addProperty("captionRecipients",caption?heard.size():0);
+                submitted.addProperty("hearingVerified",false);
+                if(!mode.equals("text")){
+                    String speech=null;
+                    try{speech=plugin.speakSocialReply(profile,request,reply,source.player(),privateDialogue,heard);}
+                    catch(RuntimeException unavailable){plugin.getLogger().fine("Social reply audio unavailable for request "+request);}
+                    if(speech!=null)submitted.addProperty("speechRequestId",speech);
+                    else if(!caption)submitted.addProperty("status","failed");
                 }
             } else if(!source.automatic()) source.player().sendMessage(profile.name() + "暂时无法回复。");
         }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try { write(target, submitted); }
+            try {
+                write(target, submitted);
+                if(submitted.has("speechRequestId") && audio.size()<256)
+                    audio.put(request,new AudioResult(profile,request,value(submitted,"speechRequestId"),target,System.currentTimeMillis()));
+            }
             catch (IOException failure) { plugin.getLogger().fine("NPC outcome pending inspection for " + request); }
         });
+    }
+
+    private void updateAudio(AudioResult original) throws IOException {
+        var profile=original.profile();
+        String speech=original.speech();
+        String state;
+        JsonObject detail;
+        if(profile.kind().equals("numen")){
+            var row=JsonParser.parseString(plugin.npcSpeechStatus(profile.id(),"social_"+original.conversation())).getAsJsonObject();
+            if(!speech.equals(value(row,"requestId")))return;
+            state=value(row,"state");detail=row.getAsJsonObject("delivery");
+        }else{
+            Path folder=plugin.getDataFolder().toPath().resolveSibling("QiandengjiMaidBridge").resolve("speech-receipts");
+            var row=read(folder.resolve(profile.id()+"_"+speech+".json"));
+            if(!profile.id().toString().equals(value(row,"maidId"))||!profile.owner().toString().equals(value(row,"actorId"))
+                    ||!speech.equals(value(row,"operationId"))||!"speech".equals(value(row,"action")))return;
+            state=value(row,"status");detail=row.getAsJsonObject("observation");
+        }
+        if(!Set.of("sent","failed","skipped","cancelled","unknown","unavailable").contains(state))return;
+        var result=read(original.target());
+        if(!original.conversation().toString().equals(value(result,"id")) || !speech.equals(value(result,"speechRequestId")))return;
+        var voice=new JsonObject();voice.addProperty("requestId",speech);voice.addProperty("state",state);
+        if(detail!=null&&detail.has("packetOffers"))voice.addProperty("packetOffers",detail.get("packetOffers").getAsInt());
+        result.add("voice",voice);
+        write(original.target(),result);
+        audio.remove(original.conversation());
     }
 }

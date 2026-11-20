@@ -316,7 +316,19 @@ export function createPortal(config, options = {}) {
             || /^\/api\/v1\/internal\/photos\/[a-f0-9-]{36}$/.test(pathname)) ? cloud : null;
         if (authority) try { authority.authorize(req); trustedSync = true; } catch { /* Spend the public budget before the normal denial. */ }
       }
-      if (pathname.startsWith('/api/') && !trustedSync) rate('api:' + digest(rateAddress(req, config)), 300, 60000);
+      if (pathname.startsWith('/api/') && !trustedSync) {
+        const principal = residentTurns.pollingPrincipal(req,pathname);
+        rate(principal ? 'resident:' + principal : 'api:' + digest(rateAddress(req, config)), 300, 60000);
+      }
+      const onboarding = /^\/api\/v1\/resident-onboarding\/(pair|list|create|connect)$/.exec(pathname);
+      if (onboarding) {
+        if (onboarding[1] === 'pair') rate('resident-pair:'+digest(rateAddress(req,config)),24,60000);
+        await residentTurns.onboarding(req,res,onboarding[1],jsonBody,respond); return;
+      }
+      if (pathname === '/api/v1/resident-turns/pair') {
+        rate('resident-pair:'+digest(rateAddress(req,config)),24,60000);
+        await residentTurns.exchange(req,res,jsonBody,respond); return;
+      }
       if (pathname.startsWith('/api/v1/resident-turns/') && await residentTurns.machine(req, res, pathname, jsonBody, respond)) return;
       if (req.method === 'GET' && pathname === '/api/v1/downloads') return respond(res, 200, { skill: agentSkill, packages: publicDownloads(config) });
       if(req.method==='POST' && pathname==='/api/v1/internal/npcs/poll') {
@@ -503,7 +515,8 @@ export function createPortal(config, options = {}) {
         rate('write:' + digest(rateAddress(req, config)), 80, 60000);
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
-      if (pathname.startsWith('/api/v1/resident-turns') && residentTurns.browser(req, res, pathname, browserAuth, respond)) return;
+      if ((pathname.startsWith('/api/v1/resident-turns') || pathname === '/api/v1/resident-onboarding/code')
+          && await residentTurns.browser(req, res, pathname, browserAuth, respond, jsonBody)) return;
       if(await hostingRoutes({req,res,pathname,backend:hostedAgents,browserAuth,world,jsonBody,respond,rate,
         agentFor:async(owner,id)=>{
           const agent=(await game.roster()).find(row=>row.id===id);

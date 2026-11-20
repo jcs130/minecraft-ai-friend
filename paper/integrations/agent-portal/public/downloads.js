@@ -30,6 +30,12 @@
       document.querySelector('#skill-checksum').textContent = 'SHA256：' + data.skill.sha256;
     }
     const packages = Array.isArray(data.packages) ? data.packages : [];
+    const residents = packages.filter(row => row.category === 'resident' && row.available && local(row.url));
+    const section = document.querySelector('#resident');
+    if (section) {
+      section.hidden = !residents.length;
+      section.querySelector('#resident-downloads').replaceChildren(...residents.map(card));
+    }
     document.querySelector('#desktop-client-downloads')?.replaceChildren(...packages.filter(row => row.category === 'desktop-client').map(card));
     document.querySelector('#android-client-downloads')?.replaceChildren(...packages.filter(row => row.category === 'android-client').map(card));
     document.querySelector('#game-client-downloads').replaceChildren(...packages.filter(row => row.category === 'game-client' && !row.id.startsWith('maids-client-')).map(card));

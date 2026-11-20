@@ -309,8 +309,8 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         return Map.copyOf(result);
     }
     public String npcVoiceProfiles(){return npcs==null?"[]":npcs.catalogue().toString();}
-    boolean naturalNpcDialogue(NpcDialoguePolicy.Profile profile,Player speaker,String text,String scope,Set<UUID> recipients){
-        return social!=null&&social.natural(profile,speaker,text,scope,recipients);
+    boolean naturalNpcDialogue(NpcDialoguePolicy.Profile profile,Player speaker,String text,String scope,Set<UUID> recipients,String medium){
+        return social!=null&&social.natural(profile,speaker,text,scope,recipients,medium);
     }
     public boolean acceptNaturalMaidChat(Player speaker,String text,Set<UUID> recipients){
         return npcs!=null&&npcs.naturalMaidChat(speaker,text,recipients);
@@ -369,15 +369,36 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private void submit(Player p,UUID id,String fingerprint,String text,String voice,byte[] audio,PrivateRecipient recipient){
         submit(p,id,fingerprint,text,voice,audio,recipient,null,distanceCap);
     }
-    void speakHostedReply(NpcDialoguePolicy.Profile profile,UUID conversation,String reply,Player requester,
-                          boolean privateDialogue,Map<UUID,Player> textAudience){
-        if(!(npcs.live(profile.id()) instanceof Player speaker) || !npcs.hostedReady(speaker))return;
+    boolean socialVoiceReady(NpcDialoguePolicy.Profile profile,Player requester){
+        var session=sessions.get(requester.getUniqueId());
+        if(session==null||privateConnection(new PrivateRecipient(requester,session))==null)return false;
+        if(profile.kind().equals("numen"))
+            return npcs.live(profile.id()) instanceof Player speaker && npcs.hostedReady(speaker) && validVoice(profile.voice());
+        var bridge=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");
+        if(bridge==null||!bridge.isEnabled())return false;
+        try{
+            return Boolean.TRUE.equals(bridge.getClass().getMethod("canRenderResidentReply",UUID.class,UUID.class,Player.class)
+                .invoke(bridge,profile.id(),profile.owner(),requester));
+        }catch(ReflectiveOperationException unavailable){return false;}
+    }
+    String speakSocialReply(NpcDialoguePolicy.Profile profile,UUID conversation,String reply,Player requester,
+                            boolean privateDialogue,Map<UUID,Player> textAudience){
+        if(profile.kind().equals("maid")){
+            var bridge=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");
+            if(bridge==null||!bridge.isEnabled())return null;
+            try{
+                return (String)bridge.getClass().getMethod("renderResidentReply",UUID.class,UUID.class,UUID.class,String.class,Set.class)
+                    .invoke(bridge,profile.id(),profile.owner(),conversation,reply,Set.copyOf(textAudience.keySet()));
+            }catch(ReflectiveOperationException unavailable){return null;}
+        }
+        if(!(npcs.live(profile.id()) instanceof Player speaker) || !npcs.hostedReady(speaker))return null;
         var listener=new PrivateRecipient(requester,sessions.get(requester.getUniqueId()));
-        if(privateDialogue && (listener.session()==null || privateConnection(listener)==null))return;
+        if(privateDialogue && (listener.session()==null || privateConnection(listener)==null))return null;
         // The social request is single-use. A private reply can never fall back to a nearby channel.
         var id=NpcDialoguePolicy.speechId(profile.id(),"social_"+conversation);
         var fingerprint=hash("social-tts\0"+conversation+"\0"+privateDialogue+"\0"+requester.getUniqueId()+"\0"+profile.voice()+"\0"+reply);
         submit(speaker,id,fingerprint,reply,profile.voice(),null,privateDialogue?listener:null,Map.copyOf(textAudience),profile.range());
+        return id.toString();
     }
     private void submit(Player p,UUID id,String fingerprint,String text,String voice,byte[] audio,PrivateRecipient recipient,
                         Map<UUID,Player> audience,double range){

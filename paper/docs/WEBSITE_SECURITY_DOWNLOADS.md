@@ -70,6 +70,22 @@ CSRF 保护跨站请求，不能阻止直接访问网站的自动化登录；保
 node scripts/download-manifest.mjs --base-url https://your-bucket.oss-cn-hongkong.aliyuncs.com/releases/ --include-packages --package-directory /absolute/reviewed-packages
 ```
 
+发布居民身体插件时，三份安装包的审核记录在 `src/resident-downloads.json`。可以直接使用产出的安装包。需要从当前源码重建时，在仓库根目录执行以下命令，并将 N.E.K.O. SDK 指向提交 `fb2a2e731a8c954478d08678b0c8cf40e8145a54` 的检出目录。下列命令共用一个已经存在的输出目录。
+
+```sh
+python packages/agent-harness-py/integrations/pack_neko_resident.py --neko-sdk /absolute/neko-sdk --out /absolute/resident-packages/qiandengji-resident-0.2.0.neko-plugin
+npm --prefix packages/agent-harness-py/integrations/cortico-resident run pack:api5 -- /absolute/resident-packages
+npm --prefix packages/agent-harness-py/integrations/cortico-resident run pack:api6 -- /absolute/resident-packages
+```
+
+在 `paper/integrations/agent-portal` 校验目录中的三份安装包：
+
+```sh
+node scripts/download-manifest.mjs --resident-packages --base-url https://your-bucket.oss-cn-hongkong.aliyuncs.com/releases/ --package-directory /absolute/resident-packages
+```
+
+清单列出这三份文件的 SHA256、大小、对象键和下载响应头。对象上传并验证后，将已就绪的 `resident-neko`、`resident-cortico-api5`、`resident-cortico-api6` 加入现有 `downloads.enabledPackages`。授权页会展示「下载居民插件」，下载页的居民栏只展示已启用的安装包。现有玩家客户端使用原下载条目。
+
 脚本流式校验全部文件，不上传、不读取云密钥，也不发布整个目录。只有所有对象的远端大小、SHA256 和匿名 GET/HEAD 已确认后，才在网站开启对应 ID。保留上游地址作备份。关闭 `baseUrl` 即恢复原 Skill 本地下载；清空 enabledPackages 使扩展包恢复未开放状态。
 
 此次只读检查：现有香港 ECS 配置 100 Mbps / 按流量计费，一次 3,867,516 字节 Skill 下载耗时约 0.73 秒（约 5.3 MB/s）。这不能代表其他地区或运营商；没有据此断言所有线路正常或承诺 OSS 必然提速。OSS 能分离网站出口，实际速度须上线后按目标网络复测。专用 OSS 的存储与下载流量按量计费，尚未开启 CDN 或传输加速。

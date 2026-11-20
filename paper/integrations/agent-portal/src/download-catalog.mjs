@@ -4,6 +4,7 @@ import offlineDownloads from './offline-downloads.json' with { type: 'json' };
 import maidClientDownloads from './maid-client-downloads.json' with { type: 'json' };
 import androidClientDownloads from './android-client-downloads.json' with { type: 'json' };
 import desktopClientDownloads from './desktop-client-downloads.json' with { type: 'json' };
+import residentDownloads from './resident-downloads.json' with { type: 'json' };
 
 // Mirror original published bytes, not the current developer checkout. Large
 // binaries stay in OSS; this repository contains only their reviewed manifest.
@@ -38,6 +39,7 @@ const originalReleases = [
     includes: '约 1.11 GB，含 Node、固定后端、依赖和观战资源；仍需自己的 N.E.K.O 与可用模型。' }),
 ];
 export const packageReleases = Object.freeze([
+  ...residentDownloads.map(row => Object.freeze(row)),
   ...desktopClientDownloads.map(row => Object.freeze(row)),
   ...androidClientDownloads.map(row => Object.freeze(row)),
   ...maidClientDownloads.map(row => Object.freeze(row)),

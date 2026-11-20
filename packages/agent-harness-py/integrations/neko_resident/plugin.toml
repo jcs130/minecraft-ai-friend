@@ -1,8 +1,8 @@
 [plugin]
 id = "neko_resident"
 name = "千灯纪居民"
-description = "使用千灯纪官网授权，让当前角色为一位女仆或 Numen 居民规划日程和行动。"
-version = "0.1.0"
+description = "让本机角色使用千灯纪的女仆或 Numen 身体，安排日程、行动、收发文字及回应游戏语音。"
+version = "0.2.0"
 entry = "plugin.plugins.neko_resident:ResidentPlugin"
 
 [plugin.author]
@@ -14,7 +14,18 @@ supported = ">=0.1.0,<0.3.0"
 
 [plugin_runtime]
 enabled = true
-auto_start = false
+auto_start = true
+
+[plugin.ui]
+enabled = true
+
+[[plugin.ui.panel]]
+id = "main"
+title = "连接千灯纪居民"
+entry = "ui/panel.tsx"
+mode = "hosted-tsx"
+context = "resident_connection"
+permissions = ["state:read", "action:call"]
 
 [resident]
 role = ""
