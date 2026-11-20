@@ -32,6 +32,10 @@ def main():
     plugin = (root / "src/org/afuhome/agentfriend/AgentFriendPlugin.java").read_text(encoding="utf-8")
     native = method(plugin, "void nativeSiteCompleted(Player p,String site,String run)")
     complete = method(site, "private void complete(Run r)")
+    if "siteRewardSlot(" in complete:
+        policy = (root / "src/org/afuhome/agentfriend/SiteRewardPolicy.java").read_text(encoding="utf-8")
+        complete += "\n" + method(site, "private String siteRewardSlot(")
+        complete += "\nstatic class SiteRewardPolicy {" + method(policy, "static String status(") + "}"
     guidance = method(site, "private static void outcomeGuidance(Map<String,Object> data)") if "private static void outcomeGuidance(Map<String,Object> data)" in site else "private static void outcomeGuidance(Map<String,Object> data){}"
     durable = method(exams, "private static boolean durableSurvey(Run r)")
     durable += "\n" + (method(exams, "private static boolean durableRecord(Run r)") if "private static boolean durableRecord(Run r)" in exams else "private static boolean durableRecord(Run r){return durableSurvey(r);}")
@@ -68,6 +72,10 @@ public class ExamCompletionProbe {
   __DURABLE__
   __LIFECYCLE__
  }
+ static class Receipt extends HashMap<String,Object> {
+  Receipt(Map<String,Object> values){super(values);}
+  String getString(String key,String fallback){return (String)getOrDefault(key,fallback);}
+ }
  static class Config {
   Map<String,String> values=new HashMap<>();Map<String,Map<String,Object>> receipts=new HashMap<>();int writes;
   String getString(String k){return values.get(k);}void set(String k,Object v){values.put(k,String.valueOf(v));}
@@ -81,7 +89,7 @@ public class ExamCompletionProbe {
  static class Run {String id=UUID.randomUUID().toString();Site site=new Site();long started=200;int stage=3;boolean altarTactics;Mode mode=new Mode();Map<UUID,Integer> attendance=new LinkedHashMap<>();Map<Integer,Set<UUID>> roomAttendance=new HashMap<>();}
  static class Manager {
   static final String ROOT="site-dungeons";Plugin plugin=new Plugin();int ends,applications,announcements;
-  String day(){return "2030-01-01";}Object receipt(UUID id,String site){return plugin.config.receipts.get(ROOT+".receipts."+id+"."+site);}
+  String day(){return "2030-01-01";}Receipt receipt(UUID id,String site){var data=plugin.config.receipts.get(ROOT+".receipts."+id+"."+site);return data==null?null:new Receipt(data);}
   static String circleProof(UUID id){return ROOT+".healing-circle-proofs."+id;}boolean circleReward(UUID id){return plugin.config.values.containsKey(circleProof(id));}
   void announceCircleReward(Player p,Run r){check(circleReward(p.getUniqueId())&&ends>0);announcements++;}
   void atomic(Runnable work){work.run();}void applyCompletion(Player p,String id,Object saved){applications++;plugin.nativeSiteCompleted(p,id,(String)((Map<?,?>)saved).get("run"));}
