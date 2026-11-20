@@ -68,7 +68,7 @@ const base = {
     qa_combo: task('多阶段工程',[step('build','qa_combo_initial',4),step('redstone','qa_combo',1)]),
     qa_resume: task('重启在途工程',[step('build','qa_resume',2)]),
     qa_life: task('多阶段生活',[
-      {title:'制作木板',description:'亲手合成一次橡木板',goal:'craft',item:'OAK_PLANKS',target:1},
+      {title:'制作木板',description:'亲手合成两次橡木板',goal:'craft',item:'OAK_PLANKS',target:2},
       {title:'分享面包',description:'实际向公共箱交付两个面包',goal:'donate',item:'BREAD',chest:'supplies',target:2},
     ],'personal'),
   },
@@ -177,9 +177,13 @@ try {
   await rcon('minecraft:fill 1060 100 1000 1063 100 1000 minecraft:stone_bricks');
   check('composite final reward',/委托交付成功/.test(await ask(a,'/mycli guild claim')));
   await tp(a,1002.5,100,1003.5); await accept(a,'qa_life');
-  await rcon('minecraft:give '+a.username+' minecraft:oak_log 1'); await sleep(300);
+  await rcon('minecraft:give '+a.username+' minecraft:oak_planks 8');
+  await verify(a,false);
+  await rcon('minecraft:give '+a.username+' minecraft:oak_log 2'); await sleep(300);
   const recipe=a.recipesFor(a.registry.itemsByName.oak_planks.id,null,1,null)[0];
   assert.ok(recipe); await a.craft(recipe,1,null); await sleep(200);
+  await verify(a,false); // Taking four planks is one crafting action.
+  await a.craft(recipe,1,null); await sleep(200);
   check('real craft stage',/阶段已交付/.test(await ask(a,'/mycli guild claim')));
   await rcon('minecraft:give '+a.username+' minecraft:bread 2'); await sleep(300);
   await rcon('minecraft:forceload add -473 -491');

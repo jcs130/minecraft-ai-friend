@@ -2,22 +2,28 @@ package org.afuhome.agentfriend;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Statistic;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.CraftItemEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.PlayerStatisticIncrementEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.inventory.CraftingInventory;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -135,6 +141,13 @@ final class GuildManager implements Listener {
     private final AgentFriendPlugin plugin;
     private final DungeonManager dungeon;
     private final DungeonExpeditions expeditions;
+    private final Map<UUID, ShiftCraft> shiftCrafts = new HashMap<>();
+
+    private static final class ShiftCraft {
+        final Material product;
+        boolean credited;
+        ShiftCraft(Material product) { this.product = product; }
+    }
 
     GuildManager(AgentFriendPlugin plugin, DungeonManager dungeon) {
         this.plugin = plugin;
@@ -844,13 +857,37 @@ final class GuildManager implements Listener {
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onDynamicCraft(org.bukkit.event.inventory.CraftItemEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player) || event.getCurrentItem() == null) return;
+    public void onCraftClick(CraftItemEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        UUID id = player.getUniqueId();
+        shiftCrafts.remove(id);
+        if (!event.isShiftClick() || event.getCurrentItem() == null) return;
         Contract quest = active(player);
-        if (quest != null && quest.goal() == Goal.CRAFT
-                && event.getCurrentItem().getType().name().equals(quest.siteId())) advance(player, quest);
-        else if (quest != null && quest.goal() == Goal.CRAFT && plugin.taskMarket().isMarket(quest.id()))
-            plugin.taskMarket().worldRejected(player,Goal.CRAFT,event.getCurrentItem().getType().name(),"WRONG_ITEM_OR_SITE");
+        if (quest == null || quest.goal() != Goal.CRAFT) return;
+        // One packet shift-click may extract several batches. Give that click one credit at its first extraction.
+        ShiftCraft click = new ShiftCraft(event.getCurrentItem().getType());
+        shiftCrafts.put(id, click);
+        Bukkit.getScheduler().runTask(plugin, () -> shiftCrafts.remove(id, click));
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDynamicCraft(PlayerStatisticIncrementEvent event) {
+        if (event.getStatistic() != Statistic.CRAFT_ITEM || event.getNewValue() <= event.getPreviousValue()) return;
+        Player player = event.getPlayer();
+        Material product = event.getMaterial();
+        if (product == null || !(player.getOpenInventory().getTopInventory() instanceof CraftingInventory)) return;
+        // The result slot awards this statistic on extraction for both packet clicks and native menu actions.
+        // One crafted batch advances the contract once, regardless of how many items the recipe produces.
+        Contract quest = active(player);
+        if (quest == null || quest.goal() != Goal.CRAFT) return;
+        ShiftCraft click = shiftCrafts.get(player.getUniqueId());
+        if (click != null && click.product == product) {
+            if (click.credited) return;
+            click.credited = true;
+        }
+        if (product.name().equals(quest.siteId())) advance(player, quest);
+        else if (plugin.taskMarket().isMarket(quest.id()))
+            plugin.taskMarket().worldRejected(player, Goal.CRAFT, product.name(), "WRONG_ITEM_OR_SITE");
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
