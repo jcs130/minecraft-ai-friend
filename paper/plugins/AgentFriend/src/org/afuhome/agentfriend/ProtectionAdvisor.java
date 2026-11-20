@@ -109,8 +109,20 @@ final class ProtectionAdvisor implements Listener {
         result.addProperty("x", x);
         result.addProperty("y", y);
         result.addProperty("z", z);
-        String reason;
-        try { reason = forcedReason != null ? forcedReason : inspect(player, action, x, y, z); }
+        Location at = new Location(player.getWorld(), x, y, z);
+        boolean temporary = false;
+        String exempt = null, reason = forcedReason;
+        try {
+            if (reason == null) reason = unreadable(player, x, y, z);
+            if (reason == null) {
+                Block block = at.getBlock();
+                var sites = plugin.siteDungeons();
+                temporary = action.equals("place") && sites != null && sites.temporaryPlacement(player, at,
+                        block.getType(), player.getInventory().getItemInMainHand().getType());
+                if (temporary) exempt = sites.temporaryStructureId();
+                reason = inspect(player, action, block, temporary, exempt);
+            }
+        }
         catch (RuntimeException | LinkageError unavailable) { reason = "unknown_worldguard"; }
         if (reason == null) {
             result.addProperty("status", "allow_likely");
@@ -130,7 +142,7 @@ final class ProtectionAdvisor implements Listener {
                 plugin.guildStorage().ownershipFields(result);
             plugin.lands().fields(result, new Location(player.getWorld(), x, y, z));
         }
-        if (reason != null) enrich(player, result, new Location(player.getWorld(), x, y, z));
+        if (reason != null) enrich(player, result, at, temporary, exempt);
         return result;
     }
 
@@ -206,6 +218,10 @@ final class ProtectionAdvisor implements Listener {
 
     /** Appends guidance only. The cancelling event and the old reason remain authoritative. */
     void enrich(Player player, JsonObject data, Location at, ProtectionArea... forced) {
+        enrich(player, data, at, false, null, forced);
+    }
+
+    private void enrich(Player player, JsonObject data, Location at, boolean temporary, String exempt, ProtectionArea... forced) {
         String action = data.get("action").getAsString(), reason = data.get("reason").getAsString();
         data.addProperty("actionLabel", actionLabel(action));
         JsonArray commands = new JsonArray();
@@ -243,8 +259,8 @@ final class ProtectionAdvisor implements Listener {
             add(areas, (action.equals("place") ? plugin.trialRoad().deniesPlace(block) : plugin.trialRoad().deniesBreak(block)) || reason.equals("trial_road") ? plugin.trialRoad().protectionArea(at) : null);
             add(areas, plugin.arenaProtectionArea(at)); add(areas, plugin.pvpProtectionArea(at));
             add(areas, plugin.dungeon().protectionArea(at));
-            if (plugin.siteDungeons() != null) add(areas, plugin.siteDungeons().protectionArea(at));
-            if (plugin.generatedStructures() != null) add(areas, plugin.generatedStructures().protectionArea(at));
+            if (!temporary && plugin.siteDungeons() != null) add(areas, plugin.siteDungeons().protectionArea(at));
+            if (plugin.generatedStructures() != null) add(areas, plugin.generatedStructures().protectionArea(at, exempt));
         }
         if (action.equals("container") && at.getWorld().isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4))
             add(areas, plugin.lands().containerArea(player, at.getBlock()));
@@ -366,11 +382,17 @@ final class ProtectionAdvisor implements Listener {
     }
 
     void denied(Player player, String action, Location at, String reason, ProtectionArea... forced) {
+        denied(player, action, at, reason, false, null, forced);
+    }
+    void deniedPlacement(Player player, Location at, String reason, boolean temporary, String exempt, ProtectionArea area) {
+        denied(player, "place", at, reason, temporary, exempt, area);
+    }
+    private void denied(Player player, String action, Location at, String reason, boolean temporary, String exempt, ProtectionArea... forced) {
         JsonObject data = new JsonObject(); data.addProperty("schemaVersion", 1); data.addProperty("kind", "building");
         data.addProperty("action", action); data.addProperty("status", "deny"); data.addProperty("allowed", false); data.addProperty("reason", reason);
         data.addProperty("world", at.getWorld().getKey().toString());
         data.addProperty("x", at.getBlockX()); data.addProperty("y", at.getBlockY()); data.addProperty("z", at.getBlockZ());
-        plugin.lands().fields(data, at); enrich(player, data, at, forced);
+        plugin.lands().fields(data, at); enrich(player, data, at, temporary, exempt, forced);
         if (!explain(player, data)) return;
         send(player, data); chatReceipt(player, "MC_PROTECTION", data);
     }
@@ -393,7 +415,7 @@ final class ProtectionAdvisor implements Listener {
     JsonObject observe(Player player,String action,int x,int y,int z) {
         return evaluate(player, action, x, y, z, null);
     }
-    private String inspect(Player player,String action,int x,int y,int z) {
+    private String unreadable(Player player,int x,int y,int z) {
         if (y < player.getWorld().getMinHeight() || y >= player.getWorld().getMaxHeight())
             return "unknown_invalid_y";
         Location eye = player.getEyeLocation();
@@ -401,10 +423,13 @@ final class ProtectionAdvisor implements Listener {
         if (dx * dx + dy * dy + dz * dz > MAX_DISTANCE * MAX_DISTANCE)
             return "unknown_out_of_range";
         if (!player.getWorld().isChunkLoaded(x >> 4, z >> 4)) return "unknown_unloaded_chunk";
-        Block block = player.getWorld().getBlockAt(x, y, z);
-        if(BlockAccessRules.blockAction(action)&&!plugin.trustedBlockEditor(player)
+        return null;
+    }
+
+    private String inspect(Player player, String action, Block block, boolean temporary, String exempt) {
+        if(!temporary&&BlockAccessRules.blockAction(action)&&!plugin.trustedBlockEditor(player)
                 &&plugin.siteDungeons()!=null&&plugin.siteDungeons().activityArea(block.getLocation()))return "site_dungeon";
-        if (BlockAccessRules.blockAction(action) && plugin.bypassBlockProtection(player, block.getLocation())) return null;
+        if (!temporary && BlockAccessRules.blockAction(action) && plugin.bypassBlockProtection(player, block.getLocation())) return null;
         if (plugin.lands().access() != null) {
             if (action.equals("use") && plugin.lands().access().isBoard(block)) return null;
             if (!action.equals("use") && !action.equals("container") && plugin.lands().access().protectsBoard(block)) return "land_notice_board";
@@ -435,8 +460,13 @@ final class ProtectionAdvisor implements Listener {
         if (plugin.deniesArenaEdit(block)) return "arena";
         if (plugin.dungeon().deniesEdit(block.getLocation())) return "dungeon";
         if (plugin.pvpProtectionArea(block.getLocation()) != null) return "pvp_arena";
-        if (plugin.siteDungeons() != null && plugin.siteDungeons().protectionArea(block.getLocation()) != null) return "site_dungeon";
-        if (plugin.generatedStructures() != null && plugin.generatedStructures().deniesEdit(block)) return plugin.generatedStructures().reason(block.getLocation());
+        if (!temporary && plugin.siteDungeons() != null && plugin.siteDungeons().protectionArea(block.getLocation()) != null) return "site_dungeon";
+        var generated = plugin.generatedStructures();
+        if (temporary) {
+            if (generated == null) return "unknown_generated_structure_bounds";
+            String conflict = generated.temporaryConflict(block.getLocation(), exempt);
+            if (conflict != null) return conflict;
+        } else if (generated != null && generated.deniesEdit(block)) return generated.reason(block.getLocation());
         try {
             boolean allowed = plugin.lands().stateAllows(player, action, block.getLocation());
             if (!allowed) return "worldguard";
