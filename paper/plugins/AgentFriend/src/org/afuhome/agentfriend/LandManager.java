@@ -276,12 +276,20 @@ final class LandManager implements Listener {
     }
 
     boolean contains(Location at) { return find(at) != null; }
+    boolean readyForDungeonEdits(World world) {
+        if (!ready || world == null) return false;
+        try { return manager(world) != null; }
+        catch (RuntimeException | LinkageError unavailable) { return false; }
+    }
     boolean publicContainer(Location at) {
         Land land = find(at);
         return ready && land != null && (land.publicFacility() || land.publicContainers().contains(
                 BlockVector3.at(at.getBlockX(), at.getBlockY(), at.getBlockZ())));
     }
     List<String> ids() { return lands.keySet().stream().sorted().toList(); }
+    boolean canRegisterWildRuin(ProtectionArea area) {
+        return ready && lands.values().stream().noneMatch(land -> WildRuinResets.overlaps(area, protectionArea(land)));
+    }
     Land definition(String id) { return ready ? lands.get(id) : null; }
     List<Land> definitions() { return ready ? lands.values().stream().sorted(Comparator.comparing(Land::id)).toList() : List.of(); }
     LandAccess access() { return access; }

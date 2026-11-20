@@ -13,8 +13,10 @@ record ProtectionArea(String id, String name, World world, int minX, int minY, i
         return new ProtectionArea(id, name, world, minX, minY, minZ, maxX, maxY, maxZ, "cuboid");
     }
     boolean contains(Location at) {
-        return at != null && world.equals(at.getWorld()) && at.getBlockX() >= minX && at.getBlockX() <= maxX
-                && at.getBlockY() >= minY && at.getBlockY() <= maxY && at.getBlockZ() >= minZ && at.getBlockZ() <= maxZ;
+        return at != null && world.equals(at.getWorld()) && containsBlock(at.getBlockX(), at.getBlockY(), at.getBlockZ());
+    }
+    boolean containsBlock(int x,int y,int z) {
+        return x >= minX && x <= maxX && y >= minY && y <= maxY && z >= minZ && z <= maxZ;
     }
     String range() { return "(" + minX + "," + minY + "," + minZ + ") 至 (" + maxX + "," + maxY + "," + maxZ + ")"; }
     JsonObject json() {
