@@ -6,6 +6,8 @@ import sqlite3
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+HOSTED_STOP = 'hosted:stop'
+
 
 def background_task(text: str) -> str | None:
     stopped = re.match(r'The script stopped at line \d+ \((numen(?:_hosted)?\.[\w.]+)\).*?; (t\d+) keeps running\.', text)
@@ -48,6 +50,7 @@ class NativeTasks:
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.execute('PRAGMA synchronous=FULL')
         self.db.execute('CREATE TABLE IF NOT EXISTS calls (id TEXT PRIMARY KEY, body TEXT, fingerprint TEXT, epoch TEXT, task TEXT, status TEXT, text TEXT)')
+        self.db.execute('CREATE TABLE IF NOT EXISTS hosted_stops (id TEXT PRIMARY KEY, boot TEXT NOT NULL, pause_epoch INTEGER NOT NULL, pause_confirmed INTEGER NOT NULL DEFAULT 0)')
         self.db.commit()
 
     def get(self, request: str, epoch: str | None):
@@ -70,6 +73,26 @@ class NativeTasks:
         with self.db:
             self.db.execute("UPDATE calls SET task=?,status=?,text=? WHERE id=? AND body=? AND status IN ('unknown','accepted')",
                             (task, status, text, request, self.body))
+
+    def begin_stop(self, request: str, boot: str, pause_epoch: int):
+        # Use the original fence, not the native task connection. Draining old
+        # walks during this pause must not wait for the stop that is draining them.
+        with self.db:
+            self.db.execute('INSERT INTO calls VALUES (?,?,?,?,NULL,?,?)',
+                            (request, self.body, HOSTED_STOP, f'{boot}:{pause_epoch}', 'unknown',
+                             'Stop recorded; the original pause has not yet been confirmed.'))
+            self.db.execute('INSERT INTO hosted_stops(id,boot,pause_epoch) VALUES (?,?,?)',
+                            (request, boot, pause_epoch))
+
+    def stop_fence(self, request: str):
+        return self.db.execute('SELECT s.boot,s.pause_epoch,s.pause_confirmed FROM hosted_stops s '
+                               'JOIN calls c ON c.id=s.id WHERE c.body=? AND s.id=?',
+                               (self.body, request)).fetchone()
+
+    def confirm_stop(self, request: str):
+        with self.db:
+            self.db.execute('UPDATE hosted_stops SET pause_confirmed=1 WHERE id=? AND id IN '
+                            '(SELECT id FROM calls WHERE body=?)', (request, self.body))
 
     def pending(self, epoch: str):
         return [row[0] for row in self.db.execute(

@@ -23,9 +23,10 @@ from .memory.remote import RemoteGraphMemory
 from .memory.router import MemoryRouter
 from .memory.social_graph import SocialGraph
 from .npc import FastSelector, ModelClient, NpcHost, NpcPlanner, load_roles
+from .numen_connection import can_reopen, run_with_connection
 from .resident_turns import ResidentTurnsClient
 from .resident_slots import BirthRegistry, activate, slot_templates
-from .resident_numen import admit_numen, run_with_connection
+from .resident_numen import admit_numen
 from .resident_protocol import social_receipt
 from .social import SocialWorld, publish_json, read_json
 from .status_file import StatusFile
@@ -146,10 +147,12 @@ async def serve(path: Path):
         if delay:
             await asyncio.sleep(delay)
         if not maintenance() and not handoff(host.role):
-            if settings.get("residentCreationSlots", {}).get(host.role.id, {}).get("numenAdmission"):
-                await prepare_numen(host.role)
-                if not maintenance():
-                    await run_with_connection(host)
+            if host.role.body_kind == "numen":
+                if settings.get("residentCreationSlots", {}).get(host.role.id, {}).get("numenAdmission"):
+                    await prepare_numen(host.role)
+                    if maintenance() or handoff(host.role):
+                        return
+                await run_with_connection(host)
             else:
                 await host.run()
 
@@ -329,7 +332,7 @@ async def serve(path: Path):
                 # One unloaded body must not interrupt other characters' active
                 # actions. Re-open only that actor with its original journals.
                 for index,task in enumerate(tasks[:len(holding)]):
-                    if task.done() and not holding[index]:
+                    if task.done() and not holding[index] and can_reopen(hosts[index]):
                         if yielded.pop(index, None) is None:
                             await hosts[index].close()
                         hosts[index]=build(roles[index])

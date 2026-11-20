@@ -1219,6 +1219,12 @@ class NpcHost:
             self.wake.set()
 
     async def run(self):
+        if self.role.body_kind == "numen":
+            # The initial attach fences the old driver. Only requests already in
+            # the journal *before* that attach can be superseded by this fence.
+            for action in self.journal.unresolved(str(self.role.body_id)):
+                if action.verb == "stop":
+                    self.body.restore_request(action)
         await self.body.spawn()
         identity = self.body.identity()
         if not identity or identity.body_id != str(self.role.body_id) or identity.scope.character != str(self.role.character_id):
