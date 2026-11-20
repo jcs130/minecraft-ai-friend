@@ -37,6 +37,11 @@ final class SiteDungeonManager implements Listener {
     private static final int GLOBAL_MOBS=48,PARTY_LIMIT=40,HISTORY_LIMIT=256,MAX_FAILURES=3;
     private static final long REJOIN_MS=300_000,TIMEOUT_MS=1_800_000;
     private static final Gson JSON=new Gson();
+    private record BossSkill(EntityType type,String name,DungeonEnemyMoves.Move move) { }
+    private static final Map<String,BossSkill> BOSS_SKILLS=Map.of(
+        "undead_crypt",new BossSkill(EntityType.VINDICATOR,"亡骸守墓者",DungeonEnemyMoves.Move.GRAVE_CLEAVE),
+        "frost_keep",new BossSkill(EntityType.STRAY,"寒霜守望者",DungeonEnemyMoves.Move.FROST_LINE),
+        "ember_foundry",new BossSkill(EntityType.WITHER_SKELETON,"熔火监工",DungeonEnemyMoves.Move.FORGE_SWEEP));
     private static final Set<Material> HAZARDS=Set.of(Material.LAVA,Material.WATER,Material.FIRE,Material.SOUL_FIRE,
             Material.MAGMA_BLOCK,Material.CACTUS,Material.SWEET_BERRY_BUSH,Material.CAMPFIRE,Material.SOUL_CAMPFIRE,Material.POWDER_SNOW);
     private record Room(String name,int x,int y,int z,int radius,List<DungeonWaveCatalog.Enemy> enemies,List<List<Integer>> spawnPoints,String hint) {
@@ -207,21 +212,24 @@ final class SiteDungeonManager implements Listener {
         UUID id=player.getUniqueId();
         long now=System.currentTimeMillis();
         var config=plugin.getConfig();
+        int level=plugin.combatRpg()==null?1:plugin.combatRpg().level(player);
+        String today=day();
         var site=sites.values().stream()
             .filter(s->s.conquestFloor==0 && Bukkit.getWorld(s.world)!=null && !blockedCheckpoints.contains(s.id)
                 && !runs.containsKey(s.id) && receipt(id,s.id)==null
+                && !plugin.dungeonEdits().dirty("site-"+s.id) && !plugin.dungeonEdits().failed("site-"+s.id)
+                && !today.equals(config.getString(ROOT+".claimed."+id+"."+s.id))
                 && now-config.getLong(ROOT+".cooldowns."+s.id,0)>=120_000)
-            .min(Comparator.comparing((Site s)->config.contains(ROOT+".outcomes."+id+"."+s.id)
-                    || config.contains(ROOT+".claimed."+id+"."+s.id))
-                .thenComparingInt(s->DungeonAdvice.preparation(s.id,s.minimumLevel).recommendedLevel())
-                .thenComparingLong(s->config.getLong(ROOT+".outcomes."+id+"."+s.id+".endedAt",0))
-                .thenComparing(Site::id));
+            .map(s->new DungeonAdvice.Outing(s.id,DungeonAdvice.preparation(s.id,s.minimumLevel).recommendedLevel(),
+                config.contains(ROOT+".claimed."+id+"."+s.id),config.getLong(ROOT+".outcomes."+id+"."+s.id+".endedAt",0)))
+            .min(DungeonAdvice.Outing.orderFor(level));
         if(site.isEmpty())return Map.of();
-        Site s=site.get();
+        Site s=sites.get(site.get().id());
         var guide=advice(player,s.id);
         return Map.of("id",s.id,"name",s.name,"state",guide.get("state"),"infoCommand","/mycli dungeon info "+s.id,
             "nextCommand",guide.get("nextCommand"),"missingEquipment",guide.get("missingEquipment"),
-            "recommendedLevel",guide.get("recommendedLevel"),"approachMana",8);
+            "recommendedLevel",guide.get("recommendedLevel"),"approachMana",8,"firstRoom",s.rooms.getFirst().name,
+            "tactic",DungeonAdvice.preparation(s.id,s.minimumLevel).party());
     }
     boolean hasActiveRuns(){return !runs.isEmpty()||!blockedCheckpoints.isEmpty();}
     boolean emptyForRestore(String id) {
@@ -541,19 +549,24 @@ final class SiteDungeonManager implements Listener {
         case "missing_or_unloaded_enemy_retry_required"->"标记敌人异常消失，本室不能当作击杀通关";
         default->reason;
     };}
-    private String rewardStatus(Run r,UUID id,String reason){
+    private String siteRewardSlot(Run r,UUID id,String day){
         var pending=receipt(id,r.site.id);
-        if(pending!=null&&r.id.equals(pending.getString("run")))return "ready";
-        if(r.id.equals(plugin.getConfig().getString(ROOT+".claimed-runs."+id+"."+r.site.id)))return "claimed";
+        return SiteRewardPolicy.status(r.id,day,pending==null?null:pending.getString("run",""),
+                plugin.getConfig().getString(ROOT+".claimed-runs."+id+"."+r.site.id),
+                plugin.getConfig().getString(ROOT+".claimed."+id+"."+r.site.id));
+    }
+    private String rewardStatus(Run r,UUID id,String reason){
+        String slot=siteRewardSlot(r,id,day());
+        if(slot.equals("ready")||slot.equals("claimed"))return slot;
         if(!reason.equals("completed"))return "run_incomplete";
         if(r.attendance.getOrDefault(id,0)==0)return "missing_participation";
-        if(day().equals(plugin.getConfig().getString(ROOT+".claimed."+id+"."+r.site.id)))return "daily_limit";
-        return "not_returned";
+        return slot.equals("eligible")?"not_returned":slot;
     }
     private Map<String,Object> outcome(Run r,UUID id,String reason){
         Map<String,Object> data=new LinkedHashMap<>(attendanceState(r,id));String reward=rewardStatus(r,id,reason);
         data.put("id",r.site.id);data.put("name",r.site.name);data.put("run",r.id);data.put("reason",reason);data.put("endedAt",System.currentTimeMillis());
         data.put("startedAt",r.started);data.put("clearedRooms",r.stage);data.put("difficulty",r.mode.id);data.put("rewardStatus",reward);
+        if(reward.equals("previous_reward_pending")) data.put("earlierRewardRun",receipt(id,r.site.id).getString("run",""));
         data.putAll(checkpointState(r));
         data.put("lifecycle","ended");data.put("active",false);data.put("participant",false);data.put("rescueActive",false);data.put("exitPolicy","standing_stay_downed_recover");
         data.put("resets",r.resets);data.put("lastResetReason",r.lastResetReason);
@@ -567,6 +580,14 @@ final class SiteDungeonManager implements Listener {
         List<String> commands=List.of(info);
         if(reward.equals("ready")&&id.matches("[a-z0-9_]{1,32}")){
             next="用 /mycli dungeon claim "+id+" 领取；奖励进入个人箱";commands=List.of("/mycli dungeon claim "+id);
+        }else if(reward.equals("previous_reward_pending")&&id.matches("[a-z0-9_]{1,32}")){
+            if(Boolean.FALSE.equals(data.get("earlierRewardStillPending"))){
+                next="上次的待领奖已处理，本场没有另发奖励。下次挑战前可在遗迹列表查看可领地点。";
+                commands=List.of("/mycli dungeon list");
+            }else{
+                next="上次的奖励占用本地点的待领栏，本场没有另发。用 /mycli dungeon claim "+id+" 领取上次奖励。";
+                commands=List.of("/mycli dungeon claim "+id);
+            }
         }else if(reward.equals("claimed")){
             next="用 /mycli arena rewards 查看奖励，/mycli arena stash 打开个人箱";commands=List.of("/mycli arena rewards","/mycli arena stash");
         }else if(reward.equals("daily_limit")&&"completed".equals(data.get("reason"))){
@@ -585,11 +606,15 @@ final class SiteDungeonManager implements Listener {
         Map<String,Object> data=new LinkedHashMap<>(chosen.getValues(false));
         data.put("lifecycle","ended");data.put("active",false);data.put("participant",false);data.put("rescueActive",false);data.put("exitPolicy","standing_stay_downed_recover");
         // Project current guidance without rewriting historical facts or granting proof.
+        if("previous_reward_pending".equals(data.get("rewardStatus"))){
+            var pending=receipt(id,Objects.toString(data.get("id"),""));
+            data.put("earlierRewardStillPending",pending!=null&&Objects.equals(data.get("earlierRewardRun"),pending.getString("run","")));
+        }
         outcomeGuidance(data);return data;
     }
     private void explainOutcome(Player p,Map<String,Object> data){
         String reward=Objects.toString(data.get("rewardStatus"),"run_incomplete");
-        String detail=switch(reward){case "ready"->"已生成待领奖凭据";case "claimed"->"本轮奖励已领取到个人箱";case "daily_limit"->"今日该处已经领奖，重复挑战不再发奖";case "missing_participation"->"参战登记不足，未生成凭据";case "not_returned"->"历史记录没有本场待领奖凭据，请查询当前状态，不要按旧提示返程";default->"本轮未完成，未生成新凭据";};
+        String detail=switch(reward){case "ready"->"已生成待领奖凭据";case "claimed"->"本轮奖励已领取到个人箱";case "daily_limit"->"今日该处已经领奖，重复挑战不再发奖";case "missing_participation"->"参战登记不足，未生成凭据";case "previous_reward_pending"->"通关时仍有上一场的待领奖，本轮未另发";case "not_returned"->"历史记录没有本场待领奖凭据，请查询当前状态，不要按旧提示返程";default->"本轮未完成，未生成新凭据";};
         Site site=sites.get(Objects.toString(data.get("id"),""));p.sendMessage("§e【"+(site==null?"遗迹远征":label(site))+"·结算】"+Objects.toString(data.get("name"),data.get("id").toString())+"："+endLabel(Objects.toString(data.get("reason")))+"；"+detail+"（参战 "+data.get("attendance")+"/"+data.get("requiredRooms")+"）。");
         if(data.get("missingRooms") instanceof List<?> missing&&!missing.isEmpty())p.sendMessage("§e缺席房间："+String.join("、",missing.stream().map(Object::toString).toList())+"。");
         p.sendMessage("§a下一步："+data.get("nextAction"));
@@ -800,7 +825,7 @@ final class SiteDungeonManager implements Listener {
         require(receiptCount()<1024,"pending_receipt_capacity");
         if(!loadout(p,"start",s))return;
         Run r=new Run(s,mode);r.altarTactics=s.id.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled();
-        r.enemyMoves=s.id.equals("undead_crypt")&&plugin.dungeonEnemyMoves().enabled();
+        r.enemyMoves=BOSS_SKILLS.containsKey(s.id)&&plugin.dungeonEnemyMoves().enabled();
         r.checkpoint=p.getLocation().clone();r.party.add(p.getUniqueId());r.attendance.put(p.getUniqueId(),0);runs.put(s.id,r);
         try{persist();}catch(RuntimeException failure){runs.remove(s.id);throw failure;}
         reconcile(r);
@@ -1061,18 +1086,21 @@ final class SiteDungeonManager implements Listener {
                 String enemyName=spec.name().isEmpty()?(mob.getCustomName()==null?mob.getType().name():ChatColor.stripColor(mob.getCustomName())):spec.name();
                 mob.setCustomName("§c"+r.site.name+" · "+enemyName);mob.setCustomNameVisible(true);
                 r.mobs.put(mob.getUniqueId(),spec);
-                if(r.enemyMoves&&r.stage==r.site.rooms.size()-1&&spec.type()==EntityType.VINDICATOR&&spec.name().equals("亡骸守墓者"))
-                    registerGraveCleave(r,room,mob);
+                if(r.enemyMoves&&r.stage==r.site.rooms.size()-1){
+                    var boss=BOSS_SKILLS.get(r.site.id);
+                    if(boss!=null&&boss.type()==spec.type()&&boss.name().equals(spec.name()))
+                        registerBossMove(r,room,mob,boss.move());
+                }
             }
             r.phase="fighting";r.invalid=false;r.attempt++;observeRoom(r);persist();notice(r,"§c"+room.name+"："+room.enemies.size()+"个标记敌人（本室第"+r.attempt+"次出怪）。在室内参战、实际命中或援助队友会记录；不要求最后一刻留在室内。");
         }catch(RuntimeException e){clean(r);r.phase="moving";throw e;}
     }
-    private void registerGraveCleave(Run r,Room room,Mob mob){
+    private void registerBossMove(Run r,Room room,Mob mob,DungeonEnemyMoves.Move move){
         var scope=new DungeonEnemyMoves.Scope(
             ()->runs.get(r.site.id)==r&&r.room()==room&&r.phase.equals("fighting")&&r.pausedAt==0&&r.fault.isEmpty()
                 &&!r.invalid&&r.mobs.containsKey(mob.getUniqueId()),
             ()->present(r).stream().filter(p->room.contains(p.getLocation())).toList(),room::contains);
-        plugin.dungeonEnemyMoves().register(mob,DungeonEnemyMoves.Move.GRAVE_CLEAVE,scope);
+        plugin.dungeonEnemyMoves().register(mob,move,scope);
     }
     private void tickAltar(Run r,List<Player> present,long now){
         if(!r.altarTactics||r.stage!=r.site.rooms.size()-1||!plugin.nativeRpg().healingCircleEnabled())return;
@@ -1113,7 +1141,7 @@ final class SiteDungeonManager implements Listener {
                 plugin.skillAssessments().siteCompleted(participant,r.site.id,r.id,r.started);
             String rewardDay=day();
             boolean bossParticipant=r.roomAttendance.getOrDefault(r.site.rooms.size()-1,Set.of()).contains(id);
-            boolean grantLoot=!rewardDay.equals(plugin.getConfig().getString(ROOT+".claimed."+id+"."+r.site.id))&&receipt(id,r.site.id)==null;
+            boolean grantLoot=siteRewardSlot(r,id,rewardDay).equals("eligible");
             boolean grantCircle=r.altarTactics&&bossParticipant&&!circleReward(id)&&plugin.nativeRpg().healingCircleEnabled();
             if(!grantLoot&&!grantCircle)continue;
             atomic(()->{
@@ -1211,7 +1239,7 @@ final class SiteDungeonManager implements Listener {
         for(String id:saved.getKeys(false))try{
             Site site=site(id);var c=saved.getConfigurationSection(id);Run r=new Run(site,Mode.parse(c.getString("mode","normal")));
             r.altarTactics=id.equals(AltarPoison.SITE)&&c.getBoolean("altarTactics",false);
-            r.enemyMoves=id.equals("undead_crypt")&&c.getBoolean("enemyMoves",false);
+            r.enemyMoves=BOSS_SKILLS.containsKey(id)&&c.getBoolean("enemyMoves",false);
             r.id=c.getString("id",r.id);UUID.fromString(r.id);
             require(definition(site).equals(c.getString("definition")),"definition_changed_checkpoint_preserved");
             r.stage=c.getInt("stage");require(r.stage>=0&&r.stage<=site.rooms.size(),"invalid_checkpoint");r.started=c.getLong("started");

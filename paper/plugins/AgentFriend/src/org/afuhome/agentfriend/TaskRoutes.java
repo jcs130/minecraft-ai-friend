@@ -123,6 +123,8 @@ final class TaskRoutes implements Listener {
         row.addProperty("route", task.route()); row.addProperty("beginner", task.beginner());
         row.addProperty("status", market.offerState(task, p)); row.addProperty("minRank", task.minRank());
         row.addProperty("stages", task.steps().size()); row.addProperty("fame", task.fame());
+        var points = plugin.guild().rankPointPreview(p, task.contract(0));
+        if (points != null) row.addProperty("rankPointsOnCompletion", points.gain());
         row.addProperty("emeralds", task.emeralds()); row.addProperty("nextCommand", "/mycli tasks info " + task.id()); return row;
     }
     private void list(Player p, Request q, boolean machine) {
@@ -148,6 +150,8 @@ final class TaskRoutes implements Listener {
     }
     private JsonObject detail(Player p, TaskMarketManager.Task task) {
         JsonObject out = base("info"); out.add("task", card(p, task));
+        String pointHint = plugin.guild().rankPointHint(p, task.contract(0));
+        if (!pointHint.isEmpty()) out.addProperty("rankPointsHint", pointHint);
         out.addProperty("title", task.title());
         out.addProperty("description", TaskGuidance.description(task.description()));
         out.addProperty("beneficiary", task.beneficiary()); out.addProperty("repeat", task.project() || task.repeatOnce() ? "once" : task.repeatDestination() ? "destination" : "daily");
@@ -200,9 +204,11 @@ final class TaskRoutes implements Listener {
     }
     private void human(Player p, JsonObject out) {
         if (out.has("task")) p.sendMessage("§6【委托】" + out.getAsJsonObject("task").get("title").getAsString() + "：" + out.get("description").getAsString());
+        if (out.has("rankPointsHint")) p.sendMessage("§a" + out.get("rankPointsHint").getAsString());
         if (out.has("items")) for (var element : out.getAsJsonArray("items")) {
             var row = element.getAsJsonObject();
-            p.sendMessage("§b" + row.get("title").getAsString() + (row.has("status") ? " [" + TaskRouteCatalog.stateText(row.get("status").getAsString()) + "] " + row.get("id").getAsString() : " §7" + row.get("nextCommand").getAsString()));
+            String points = row.has("rankPointsOnCompletion") ? " · 预计晋级分 +" + row.get("rankPointsOnCompletion").getAsInt() : "";
+            p.sendMessage("§b" + row.get("title").getAsString() + (row.has("status") ? " [" + TaskRouteCatalog.stateText(row.get("status").getAsString()) + "] " + row.get("id").getAsString() : " §7" + row.get("nextCommand").getAsString()) + points);
         }
         if (out.has("steps")) for (var element : out.getAsJsonArray("steps")) {
             var step = element.getAsJsonObject(); p.sendMessage("§f" + step.get("stage").getAsInt() + ". " + step.get("condition").getAsString() + "（" + step.get("target").getAsInt() + "）");
@@ -270,6 +276,8 @@ final class TaskRoutes implements Listener {
         var task = market.find(p, id); if (task == null) return;
         Inventory inv = Bukkit.createInventory(null, 27, "委托详情 · " + task.title());
         List<String> lines = new ArrayList<>(); lines.add(task.description());
+        String pointHint = plugin.guild().rankPointHint(p, task.contract(0));
+        if (!pointHint.isEmpty()) lines.add(pointHint);
         for (var step : task.steps()) {
             lines.add(TaskGuidance.step(step.goal(), step.description()) + (step.exploration() == null ? " ×" + step.target() : ""));
             if (step.exploration() != null) {

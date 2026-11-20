@@ -31,7 +31,9 @@ final class SkillAssessments implements Listener {
     private List<Runnable> sampleNotices;
     private static final String[] RANKS={"青铜","黑铁","白银","黄金","白金","钻石"};
     private static final String[] DIVISIONS={"III","II","I"};
-    private record Menu(UUID owner,List<String> ids,String detail,boolean promotion) { }
+    private record Menu(UUID owner,List<String> ids,String detail,boolean promotion,int targetGrade) {
+        Menu(UUID owner,List<String> ids,String detail,boolean promotion) { this(owner,ids,detail,promotion,-1); }
+    }
     private static final class Ally {
         final UUID id,world;final AssessmentCatalog.Point start;
         AssessmentCatalog.Point previous;long sampled,until;double movement;boolean resistance;
@@ -40,7 +42,7 @@ final class SkillAssessments implements Listener {
     private static final class Run {
         UUID id;AssessmentCatalog.Definition definition;AssessmentCatalog.Grade grade;
         String market="",state="active",reason="prepare_skill",castSkill="",lease="";
-        long started,castAt,expires;int castLevel;
+        long started,castAt,expires;int castLevel,rankRulesVersion;
         SkillTrajectory trajectory;
         JsonObject proofs=new JsonObject(),savedMeasurements=new JsonObject();
         final Map<UUID,Ally> allies=new LinkedHashMap<>();
@@ -59,6 +61,11 @@ final class SkillAssessments implements Listener {
     }
     private boolean available() {return catalog!=null&&ledger.ready()&&validLedger;}
     boolean promotionsEnabled() {return catalog!=null&&catalog.promotions;}
+    boolean rankPointLedgerReady() { return available() && promotionsEnabled(); }
+    boolean legacyPointCreditAllowed(Player p) {
+        JsonObject a=academy(p.getUniqueId());
+        return !a.has("rankPointsStarted") || !a.get("rankPointsStarted").getAsBoolean();
+    }
     boolean reload() {
         try {
             AssessmentCatalog next=AssessmentCatalog.load(plugin.getDataFolder()),previous=catalog;catalog=next;
@@ -74,6 +81,8 @@ final class SkillAssessments implements Listener {
                 JsonObject profile=entry.getValue().getAsJsonObject();if(!profile.has("academy"))continue;
                 JsonObject a=profile.getAsJsonObject("academy");
                 if(a.has("grade")&&(a.get("grade").getAsInt()<0||a.get("grade").getAsInt()>17))throw new IllegalArgumentException("grade");
+                if(a.has("rankPointsStarted")&&(!a.get("rankPointsStarted").isJsonPrimitive()||!a.getAsJsonPrimitive("rankPointsStarted").isBoolean()))
+                    throw new IllegalArgumentException("rank points migration flag");
                 if(a.has("certificates")&&(a.getAsJsonObject("certificates").size()>32||a.getAsJsonObject("certificates").keySet().stream().anyMatch(s->!s.matches("[a-z0-9_]{2,40}"))))throw new IllegalArgumentException("certificates");
                 if(a.has("history")&&a.getAsJsonArray("history").size()>16)throw new IllegalArgumentException("history");
                 if(a.has("active")) {
@@ -107,7 +116,17 @@ final class SkillAssessments implements Listener {
         JsonObject a=academy(p.getUniqueId());return a.has("grade")?a.get("grade").getAsInt():legacy*3;
     }
     String gradeName(Player p) {int g=readGrade(p);return RANKS[g/3]+" "+DIVISIONS[g%3];}
-    boolean busy(Player p) {Run r=runs.get(p.getUniqueId());return r!=null&&r.market.isEmpty()&&Set.of("active","ready").contains(r.state);}
+    private Run observed(Player p) {
+        Run r=runs.get(p.getUniqueId());
+        if(r!=null || !available()) return r;
+        JsonObject a=academy(p.getUniqueId());
+        if(!a.has("active")) return null;
+        r=decode(a.getAsJsonObject("active"));
+        if(r.state.equals("active")&&!durableRecord(r)){r.state="interrupted";r.reason="server_restart";}
+        return r;
+    }
+    private boolean occupiesExamSlot(Run r) {return r!=null&&r.market.isEmpty()&&(Set.of("active","ready").contains(r.state)||canResume(r));}
+    boolean busy(Player p) {return occupiesExamSlot(observed(p));}
     private static boolean durableSurvey(Run r) {
         return r.definition.primitive().equals("contract_record")&&r.definition.proofs().contains("survey");
     }
@@ -135,9 +154,17 @@ final class SkillAssessments implements Listener {
         }
         return "ready";
     }
-    private String promotionGate(Player p,AssessmentCatalog.Grade g) {
+    private String promotionGate(Player p,AssessmentCatalog.Grade g,boolean usesRankPoints) {
         if(!promotionsEnabled()||g==null)return "promotion_unavailable";
-        if(g.index()!=grade(p)+1)return "grade_changed";
+        int grade=readGrade(p);
+        if(g.index()!=grade+1)return "grade_changed";
+        if(usesRankPoints) {
+            if(!available())return "data_unavailable";
+            if(!plugin.guild().hasJoined(p))return "guild_registration_required";
+            if(p.getGameMode()!=GameMode.SURVIVAL||p.isDead()||plugin.isDowned(p)||plugin.isObserver(p))return "survival_required";
+            if(plugin.guild().rankPoints(p,grade)<GuildRankPoints.target(g.index()))return "rank_points_required";
+            if(g.index()%3!=0)return "ready";
+        }
         if(plugin.guild().reputation(p)<g.fame())return "fame_required:"+g.fame();
         if(g.index()%3==0&&!plugin.guild().promotionHistoryMet(g.index()/3,p))return "history_required";
         for(List<String> group:g.prerequisites())if(group.stream().noneMatch(id->hasCertificate(p,id)))return "certificate_required:"+String.join("|",group);
@@ -148,13 +175,14 @@ final class SkillAssessments implements Listener {
     private void start(Player p,String id,boolean promotion) {
         AssessmentCatalog.Definition d=definition(id);String deny=eligibility(p,d);
         if(!deny.equals("ready")){reply(p,deny,d);return;}
-        if(busy(p)||!plugin.getConfig().getString("guild-players."+p.getUniqueId()+".active.id","").isEmpty()) {reply(p,"task_slot_busy",d);return;}
-        AssessmentCatalog.Grade g=promotion&&grade(p)<17?catalog.grades.get(grade(p)+1):null;
+        if(busy(p)||plugin.guild().hasActiveContract(p)) {reply(p,"task_slot_busy",d);return;}
+        int grade=readGrade(p);
+        AssessmentCatalog.Grade g=promotion&&grade<17?catalog.grades.get(grade+1):null;
         if(promotion) {
-            deny=promotionGate(p,g);
+            deny=promotionGate(p,g,true);
             if(!deny.equals("ready")||!g.fresh().contains(id)){reply(p,deny.equals("ready")?"choose_promotion_topic":deny,d);return;}
         }
-        Run r=newRun(d,"");r.grade=g;
+        Run r=newRun(d,"");r.grade=g;r.rankRulesVersion=g==null?0:1;
         if(!save(p,r)){reply(p,"data_unavailable",d);return;}
         runs.put(p.getUniqueId(),r);
         supplies.automaticPhoto(p,d,r.id,result->supplyReply(p,result,plugin.communication().compact(p)));
@@ -185,8 +213,7 @@ final class SkillAssessments implements Listener {
             p.sendMessage("§b能力阶段已开始："+d.title()+"；/mycli guild exam status 查看当前目标。技能须在本阶段开始后施放。");
             if(d.primitive().equals("native_lesson")&&!d.proofs().contains("native_cast")){plugin.featureTutorials().enroll(p);plugin.traversalPractice().command(p,"start");reuseTraining(p,r);}
         }
-        if(r!=null&&durableRecord(r)&&r.state.equals("interrupted")&&Set.of("logout","server_restart").contains(r.reason)
-                &&System.currentTimeMillis()<r.expires&&definition(r.definition.id())!=null&&definition(r.definition.id()).enabled()) {
+        if(r!=null&&canResume(r)) {
             // Upgrade recovery for old releases: restore only durable records
             // interrupted by logout/shutdown, never cancelled/expired/movement.
             // Its original run, frozen requirements, proofs and deadline remain.
@@ -194,6 +221,10 @@ final class SkillAssessments implements Listener {
             if(!save(p,r)){r.state="interrupted";r.reason=prior;}
         }
         return r;
+    }
+    private boolean canResume(Run r) {
+        return r.state.equals("interrupted") && durableRecord(r) && Set.of("logout","server_restart").contains(r.reason)
+                && System.currentTimeMillis()<r.expires && definition(r.definition.id())!=null && definition(r.definition.id()).enabled();
     }
     void cast(Player p,String id) {
         Run r=current(p);if(r==null||!r.state.equals("active")||!r.definition.skills().contains(id))return;
@@ -387,16 +418,18 @@ final class SkillAssessments implements Listener {
     private boolean submit(Player p,Run r) {
         if(r.state.equals("submitted")){p.sendMessage("§e本次考试已交付；/mycli guild certificates 查看证书，不会重复发放。");show(p);return true;}
         if(!r.state.equals("ready")){reply(p,"practice_incomplete",r.definition);show(p);return false;}
-        if(r.grade!=null) {String gate=promotionGate(p,r.grade);if(!gate.equals("ready")){reply(p,gate,r.definition);return false;}}
+        int fromGrade=readGrade(p);
+        if(r.grade!=null) {String gate=promotionGate(p,r.grade,r.rankRulesVersion==1);if(!gate.equals("ready")){reply(p,gate,r.definition);return false;}}
         JsonObject active=record(r);active.addProperty("state","submitted");active.addProperty("reason","submitted");active.addProperty("submittedAt",System.currentTimeMillis());
         JsonObject proof=active.deepCopy();proof.remove("definition");proof.addProperty("assessmentId",r.definition.id());proof.addProperty("version",r.definition.version());
         UUID id=p.getUniqueId();
         if(!ledger.write(data->{JsonObject a=academy(data,id);
-            if(!a.has("active")||!a.getAsJsonObject("active").get("runId").getAsString().equals(r.id.toString()))throw new IllegalStateException("run changed");
+            if(!a.has("active")||!a.getAsJsonObject("active").get("runId").getAsString().equals(r.id.toString())
+                    ||!a.getAsJsonObject("active").get("state").getAsString().equals("ready"))throw new IllegalStateException("run changed");
             if(!a.has("certificates"))a.add("certificates",new JsonObject());
             if(a.getAsJsonObject("certificates").size()>=32&&!a.getAsJsonObject("certificates").has(r.definition.id()))throw new IllegalStateException("certificate capacity");
             a.getAsJsonObject("certificates").add(r.definition.id(),proof.deepCopy());
-            if(r.grade!=null){if(!a.has("grade")||a.get("grade").getAsInt()!=r.grade.index()-1)throw new IllegalStateException("grade changed");a.addProperty("grade",r.grade.index());}
+            if(r.grade!=null)advanceGrade(a,fromGrade,r.grade.index());
             a.add("active",active);history(a,proof);
         })) {reply(p,"data_unavailable",r.definition);return false;}
         r.state="submitted";r.reason="submitted";
@@ -428,7 +461,7 @@ final class SkillAssessments implements Listener {
         o.addProperty("marketToken",r.market);o.addProperty("state",r.state);o.addProperty("reason",r.reason);o.addProperty("startedAt",r.started);
         o.addProperty("expiresAt",r.expires);o.addProperty("castAt",r.castAt);o.addProperty("castSkill",r.castSkill);o.addProperty("castLevel",r.castLevel);o.addProperty("flightLease",r.lease);
         o.addProperty("executionSource","unknown_client");o.add("measurements",measurements(r));o.add("proofs",r.proofs.deepCopy());
-        if(r.grade!=null)o.add("promotion",AssessmentCatalog.JSON.toJsonTree(r.grade));return o;
+        if(r.grade!=null){o.add("promotion",AssessmentCatalog.JSON.toJsonTree(r.grade));if(r.rankRulesVersion!=0)o.addProperty("rankRulesVersion",r.rankRulesVersion);}return o;
     }
     private Run decode(JsonObject o) {
         if(o.toString().length()>24000)throw new IllegalArgumentException("run size");Run r=new Run();r.id=UUID.fromString(o.get("runId").getAsString());
@@ -439,6 +472,7 @@ final class SkillAssessments implements Listener {
         r.proofs=o.getAsJsonObject("proofs").deepCopy();r.savedMeasurements=o.getAsJsonObject("measurements").deepCopy();
         r.combatSupport=r.savedMeasurements.has("combatSupport")?r.savedMeasurements.get("combatSupport").getAsDouble():0;
         if(o.has("promotion")){r.grade=AssessmentCatalog.JSON.fromJson(o.get("promotion"),AssessmentCatalog.Grade.class);
+            if(o.has("rankRulesVersion")){r.rankRulesVersion=o.get("rankRulesVersion").getAsInt();if(r.rankRulesVersion!=1)throw new IllegalArgumentException("promotion rules");}
             if(r.grade.index()<1||r.grade.index()>17||r.grade.prerequisites().size()>8||r.grade.fresh().size()>12||!r.grade.fresh().contains(r.definition.id()))throw new IllegalArgumentException("promotion record");}
         return r;
     }
@@ -447,17 +481,33 @@ final class SkillAssessments implements Listener {
         if(!r.allies.isEmpty()){JsonArray a=new JsonArray();for(Ally ally:r.allies.values()){JsonObject entry=new JsonObject();entry.addProperty("uuid",ally.id.toString());entry.addProperty("distance",Math.round(ally.movement*100)/100.0);a.add(entry);}o.add("beneficiaries",a);}
         o.addProperty("combatSupport",r.combatSupport);return o;
     }
+    private JsonObject standing(Player p) {
+        int grade = readGrade(p);
+        JsonObject out = new JsonObject();
+        out.addProperty("available", available());
+        out.addProperty("gradeIndex", grade);
+        out.addProperty("division", 3-grade%3);
+        out.addProperty("gradeName", RANKS[grade/3]+" "+DIVISIONS[grade%3]);
+        JsonObject academy = academy(p.getUniqueId());
+        out.addProperty("certificateCount", academy.has("certificates") ? academy.getAsJsonObject("certificates").size() : 0);
+        return out;
+    }
+
     JsonObject summary(Player p) {
-        JsonObject out=new JsonObject();out.addProperty("available",available());out.addProperty("gradeIndex",readGrade(p));out.addProperty("division",3-readGrade(p)%3);
-        out.addProperty("gradeName",gradeName(p));Run r=runs.get(p.getUniqueId());
+        JsonObject out=standing(p);Run r=runs.get(p.getUniqueId());
         if(r!=null){out.addProperty("examId",r.definition.id());out.addProperty("runId",r.id.toString());out.addProperty("state",r.state);out.addProperty("reason",r.reason);out.addProperty("nextAction",next(r));
+            out.addProperty("purpose",r.grade==null?"certificate":"promotion");
+            if (r.state.equals("submitted") && promotionsEnabled() && readGrade(p) < 17) {
+                out.addProperty("nextAction", r.grade == null ? "证书已入档。查看下一段晋级所缺的委托和考题。" : "本场晋级已入档。查看下一段条件。");
+                out.addProperty("nextCommand", "/mycli guild exam promotion");
+            }
             if(durableSurvey(r)&&r.state.equals("active")) {
                 JsonObject contract=plugin.taskMarket().progressState(p);
                 if(contract.has("guidance")){JsonObject g=contract.getAsJsonObject("guidance");out.addProperty("reason",g.get("phase").getAsString());out.addProperty("phase",g.get("phase").getAsString());out.addProperty("summary",g.get("summary").getAsString());out.addProperty("nextAction",g.get("nextAction").getAsString());out.addProperty("nextCommand",g.get("nextCommand").getAsString());}
                 else {out.addProperty("reason","awaiting_contract");out.addProperty("phase","choose_contract");out.addProperty("nextAction","选择当前可接的调查委托，先从入门走查开始；普通走查不需要藏宝图。");out.addProperty("nextCommand","/mycli guild exam status");}
             }
         }
-        JsonObject a=academy(p.getUniqueId());out.addProperty("certificateCount",a.has("certificates")?a.getAsJsonObject("certificates").size():0);return out;
+        return out;
     }
     private String next(Run r) {
         if(r.state.equals("submitted"))return "/mycli guild certificates";
@@ -505,7 +555,7 @@ final class SkillAssessments implements Listener {
         JsonObject out=new JsonObject();JsonArray steps=new JsonArray();
         out.addProperty("title",r.definition.title());out.addProperty("currentCommand","/mycli guild exam status");
         if(r.definition.proofs().contains("survey")) {
-            String active=plugin.getConfig().getString("guild-players."+p.getUniqueId()+".active.id","");
+            String active=plugin.guild().hasActiveContract(p)?plugin.guild().activeId(p):"";
             guideStep(steps,"prepare","核对考试路线","摄影无需空地图或主背包空位，成片自动入个人奖励箱。普通走查不用藏宝图；选择原图寻宝路线时，可领取真正的遗迹探险图。","/mycli guild exam supplies list");
             guideStep(steps,"contract","选择有效委托",active.isEmpty()?"按contractOptions中available的准确ID接单，推荐入门走查；不必先找到神庙。寻宝则主手拿带目标的图，guild map确认，再接tm_map_hunt。":"你正在做 "+active+"；保留这张委托，按下方currentContract的冻结条件继续，不用重接。",active.isEmpty()?"/mycli guild exam status":"/mycli guild status");
             guideStep(steps,"survey","实地调查","亲自走过不同地点，满足区域数、行进距离、有效行进时间；有建筑/群系/高差要求时也必须满足。重复绕圈、站着等待和传送不计路线。","/mycli guild verify");
@@ -530,8 +580,7 @@ final class SkillAssessments implements Listener {
         if (!d.primitive().equals("contract_record") || d.proofs().stream().noneMatch(s -> Set.of("survey", "project", "supply").contains(s))) return;
         JsonObject options = plugin.taskMarket().assessmentContracts(p, d.proofs());
         out.add("contractOptions", options);
-        String active = plugin.getConfig().getString("guild-players."+p.getUniqueId()+".active.id", "");
-        if (!active.isEmpty()) {JsonObject current=plugin.taskMarket().progressState(p);
+        if (plugin.guild().hasActiveContract(p)) {JsonObject current=plugin.taskMarket().progressState(p);
             out.addProperty("nextCommand",current.has("guidance")?current.getAsJsonObject("guidance").get("nextCommand").getAsString():"/mycli guild status");return;}
         for (var item : options.getAsJsonArray("items")) {
             JsonObject row = item.getAsJsonObject();
@@ -569,6 +618,7 @@ final class SkillAssessments implements Listener {
         send(p,"MC_GUILD_EXAM",out);
     }
     void jsonQuery(Player p,String[] args) {
+        if(args.length==3&&(args[2].equalsIgnoreCase("promotion")||args[2].equalsIgnoreCase("rank"))){promotion(p,true);return;}
         if(args.length>=3&&args[2].equalsIgnoreCase("supplies")){suppliesCommand(p,args,true);return;}
         if(args.length==3&&args[2].equalsIgnoreCase("guide")){guideReply(p,true);return;}
         if(args.length==3&&args[2].equalsIgnoreCase("status")){show(p,true);return;}
@@ -594,11 +644,20 @@ final class SkillAssessments implements Listener {
     }
     private void reply(Player p,String reason,AssessmentCatalog.Definition d) {
         JsonObject out=new JsonObject();out.addProperty("type","error");out.addProperty("ok",false);out.addProperty("reason",reason);
-        out.addProperty("nextCommand",reason.equals("guild_registration_required")?"/mycli guild join":reason.equals("task_slot_busy")?"/mycli guild exam status":"/mycli guild exam promotion");
+        out.addProperty("nextCommand",reason.equals("guild_registration_required")?"/mycli guild join":reason.equals("task_slot_busy")?(busy(p)?"/mycli guild exam status":"/mycli guild status"):
+                reason.equals("rank_points_required")?contractCommand(p):"/mycli guild exam promotion");
+        if(reason.equals("rank_points_required")){
+            int from=readGrade(p),points=plugin.guild().rankPoints(p,from),target=GuildRankPoints.target(from+1);
+            out.addProperty("rankPoints",points);out.addProperty("rankPointsTarget",target);out.addProperty("rankPointsRemaining",Math.max(0,target-points));
+            var hint=pointsHint(p);
+            out.addProperty("nextCommand",hint.command());
+            out.addProperty("errorMessage","本阶晋级分 "+points+"/"+target+"。"+hint.message());
+        }
         if(reason.equals("guild_registration_required"))out.addProperty("errorMessage","尚未登记冒险者；先免费登记，再报名考试。");
         if(d!=null)out.addProperty("examId",d.id());send(p,"MC_GUILD_EXAM",out);
         if(reason.equals("guild_registration_required")){p.sendMessage("§e[考试] 尚未登记冒险者。免费登记：/mycli guild join");return;}
         if(plugin.communication().compact(p))return;
+        if(reason.equals("rank_points_required")){p.sendMessage("§e"+out.get("errorMessage").getAsString()+" · "+out.get("nextCommand").getAsString());return;}
         p.sendMessage("§e未开始/未交付："+reason+"。"+(reason.equals("go_to_start")&&d!=null&&d.course()!=null?"请正常前往出发台 "+d.course().world()+" "+d.course().start()+"，落地后开考。":
                 reason.equals("task_slot_busy")?"先 /mycli guild status 或 guild exam status 查看当前任务；交付或主动放弃后再开考。":
                 reason.startsWith("certificate_required")?"/mycli guild certificates 查看已取得证书；/mycli guild exam list 选择所缺能力题。":
@@ -614,14 +673,139 @@ final class SkillAssessments implements Listener {
         }
         out.add("certificates",list);send(p,"MC_GUILD_CERTIFICATES",out);
     }
-    private void promotion(Player p) {
-        int grade=grade(p);JsonObject out=summary(p);out.addProperty("type","promotion");out.addProperty("fame",plugin.guild().reputation(p));
-        p.sendMessage("§6冒险者 "+gradeName(p)+"；声望 "+plugin.guild().reputation(p)+"。小段晋级需要本人选择并完成考试，不自动跳段。");
-        if(catalog!=null&&grade<17){var g=catalog.grades.get(grade+1);out.add("nextGrade",AssessmentCatalog.JSON.toJsonTree(g));String gate=promotionGate(p,g);out.addProperty("eligibility",gate);
-            out.addProperty("fameRemaining",Math.max(0,g.fame()-plugin.guild().reputation(p)));
-            if(g.index()%3==0)out.addProperty("historyRequirement",plugin.guild().promotionHistoryAdvice(g.index()/3));
-            p.sendMessage("§e下一阶："+RANKS[g.index()/3]+" "+DIVISIONS[g.index()%3]+"，最低声望 "+g.fame()+"；"+g.description()+"；当前："+gate);
-            p.sendMessage("§b现场考试任选 "+String.join("、",g.fresh())+"；/mycli guild exam start promotion <题目ID>。旧大段已映射同段III，声望/技能点/奖励保持。");}
+    private static String gradeLabel(int grade) { return RANKS[grade/3]+" "+DIVISIONS[grade%3]; }
+
+    static void advanceGrade(JsonObject academy,int expectedGrade,int target) {
+        int stored=academy.has("grade") ? academy.get("grade").getAsInt() : expectedGrade;
+        if(target<1 || target>GuildRankPoints.LAST_GRADE || stored!=expectedGrade || target!=expectedGrade+1)
+            throw new IllegalStateException("grade changed");
+        academy.addProperty("grade",target);
+        academy.addProperty("rankPointsStarted",true);
+    }
+
+    private void confirmDivision(Player p,int target) {
+        int grade=readGrade(p);
+        if(!rankPointLedgerReady() || !plugin.guild().hasJoined(p)){
+            reply(p,rankPointLedgerReady()?"guild_registration_required":"promotion_unavailable",null);return;
+        }
+        if(target<1 || target>GuildRankPoints.LAST_GRADE || target%3==0){reply(p,"choose_promotion_topic",null);return;}
+        boolean already=target==grade;
+        if(!already) {
+            if(target!=grade+1){reply(p,"grade_changed",null);return;}
+            String gate=promotionGate(p,catalog.grades.get(target),true);
+            if(!gate.equals("ready")){reply(p,gate,null);return;}
+            if(busy(p)||plugin.guild().hasActiveContract(p)){reply(p,"task_slot_busy",null);return;}
+            if(plugin.pvpParticipant(p)||plugin.dungeonParticipant(p)){reply(p,"activity_active",null);return;}
+            if(!ledger.write(data->advanceGrade(academy(data,p.getUniqueId()),grade,target))){reply(p,"data_unavailable",null);return;}
+            plugin.guild().mirrorPromotion(p,target/3);
+        }
+        JsonObject out=new JsonObject();
+        out.addProperty("type","promotion_result");out.addProperty("purpose","promotion");out.addProperty("ok",true);
+        out.addProperty("gradeIndex",target);out.addProperty("applied",!already);out.addProperty("reason",already?"already_promoted":"promoted");
+        out.addProperty("nextCommand","/mycli guild exam promotion");send(p,"MC_GUILD_EXAM",out);
+        if(!plugin.communication().compact(p))p.sendMessage("§a"+(already?"已登记此段位：":"晋级成功：")+gradeLabel(target));
+    }
+
+    private String contractCommand(Player p) {
+        return plugin.guild().hasActiveContract(p)?"/mycli guild status":"/mycli guild board";
+    }
+
+    private GuildAdventureGuide.Hint pointsHint(Player p) {
+        if(plugin.guild().hasActiveContract(p))
+            return new GuildAdventureGuide.Hint("查看在办委托的进度和本单预计晋级分","/mycli guild status");
+        TaskMarketManager market=plugin.taskMarket();
+        if(market!=null)for(var task:market.offers()){
+            if(!market.offerState(task,p).equals("available"))continue;
+            var award=plugin.guild().rankPointPreview(p,task.contract(0));
+            if(award!=null&&award.gain()>0)
+                return new GuildAdventureGuide.Hint("可接「"+task.title()+"」，整单交付预计 +"+award.gain()+" 晋级分；先查看任务条件","/mycli tasks info "+task.id());
+        }
+        return new GuildAdventureGuide.Hint("查看今日公会看板，选择可接且预计晋级分大于 0 的委托；全为 0 时等待轮换","/mycli guild board");
+    }
+
+    static AssessmentCatalog.Grade displayedGrade(AssessmentCatalog.Grade grade) {
+        if(grade.index()%3==0)return grade;
+        return new AssessmentCatalog.Grade(grade.index(),0,List.of(),List.of(),
+                "本阶积满 "+GuildRankPoints.target(grade.index())+" 晋级分，在公会晋级页确认升段。");
+    }
+
+    private JsonObject promotionInfo(Player p) {
+        int grade=readGrade(p);
+        JsonObject out=standing(p);
+        out.addProperty("type","promotion");out.addProperty("fame",plugin.guild().reputation(p));
+        Run run=observed(p);
+        if(run!=null){
+            JsonObject exam=new JsonObject();
+            exam.addProperty("runId",run.id.toString());exam.addProperty("examId",run.definition.id());
+            exam.addProperty("state",run.state);exam.addProperty("purpose",run.grade==null?"certificate":"promotion");
+            if(run.grade!=null)exam.addProperty("rankRulesVersion",run.rankRulesVersion);
+            out.add("currentOrLastExam",exam);
+        }
+        if(!rankPointLedgerReady() || grade==GuildRankPoints.LAST_GRADE){
+            out.addProperty("eligibility",rankPointLedgerReady()?"max_grade":"promotion_unavailable");return out;
+        }
+        AssessmentCatalog.Grade g=catalog.grades.get(grade+1);
+        boolean major=g.index()%3==0;
+        out.add("nextGrade",AssessmentCatalog.JSON.toJsonTree(displayedGrade(g)));
+        if(!major)out.add("optionalPracticalTopics",AssessmentCatalog.JSON.toJsonTree(g.fresh()));
+        out.addProperty("promotionMode",major?"practical_exam":"confirm");
+        int points=plugin.guild().rankPoints(p,grade),threshold=GuildRankPoints.target(g.index());
+        out.addProperty("rankPoints",points);out.addProperty("rankPointsTarget",threshold);
+        out.addProperty("rankPointsRemaining",Math.max(0,threshold-points));
+        out.addProperty("fameRemaining",major?Math.max(0,g.fame()-plugin.guild().reputation(p)):0);
+        if(major)out.addProperty("historyRequirement",plugin.guild().promotionHistoryAdvice(g.index()/3));
+        String gate=promotionGate(p,g,true),command,action;
+        out.addProperty("eligibility",gate);
+        if(occupiesExamSlot(run)){
+            command=run.state.equals("ready")?"/mycli guild exam submit":"/mycli guild exam status";
+            action=run.grade==null?"先完成在办的能力证书考试":"继续已报名的晋级考试";
+        }else if(gate.equals("history_required")){
+            JsonArray missing=plugin.guild().missingPromotionHistory(p,g.index()/3);
+            out.add("missingHistory",missing);
+            command=contractCommand(p);action="完成所缺的公会履历";
+            if(!missing.isEmpty()){
+                var step=missing.get(0).getAsJsonObject();command=step.get("nextCommand").getAsString();action=step.get("requirement").getAsString();
+            }
+        }else if(gate.equals("rank_points_required")){
+            var hint=pointsHint(p);command=hint.command();action=hint.message();
+        }else if(gate.startsWith("fame_required:")||plugin.guild().hasActiveContract(p)){
+            command=contractCommand(p);action=plugin.guild().hasActiveContract(p)?"查看并完成在办委托":"在委托板选择适合本阶的委托";
+        }else if(gate.startsWith("certificate_required:")){
+            command="/mycli guild exam info "+gate.substring("certificate_required:".length()).split("\\|")[0];action="查看所缺能力证书的考题";
+        }else if(gate.equals("ready")&&major){
+            String topic=g.fresh().stream().filter(id->eligibility(p,definition(id)).equals("ready")).findFirst().orElse("");
+            command=topic.isEmpty()?"/mycli guild exam info "+g.fresh().getFirst():"/mycli guild exam start promotion "+topic;
+            action="选择并完成一场新的晋级实操";
+        }else if(gate.equals("ready")&&(plugin.pvpParticipant(p)||plugin.dungeonParticipant(p))){
+            out.addProperty("eligibility","activity_active");command="/mycli guild exam promotion";action="当前战斗活动结束后再确认晋级";
+        }else if(gate.equals("ready")){
+            command="/mycli guild exam start promotion "+g.index();action="确认晋升至 "+gradeLabel(g.index());
+        }else if(gate.equals("guild_registration_required")){
+            command="/mycli guild join";action="先免费登记冒险者";
+        }else if(gate.equals("distinct_certificates_required")){
+            command="/mycli guild certificates";action="核对本段所需的不同证书";
+        }else{
+            command="/mycli guild exam promotion";action="回到生存状态后查看晋级条件";
+        }
+        out.addProperty("nextCommand",command);out.addProperty("nextAction",action);return out;
+    }
+
+    private void promotion(Player p) { promotion(p,plugin.communication().compact(p)); }
+    private void promotion(Player p,boolean machine) {
+        JsonObject out=promotionInfo(p);
+        if(!machine){
+            p.sendMessage("§6冒险者 "+out.get("gradeName").getAsString()+" · 公会声望 "+out.get("fame").getAsInt());
+            if(out.has("nextGrade")){
+                int index=out.getAsJsonObject("nextGrade").get("index").getAsInt();
+                p.sendMessage("§e下一阶 "+gradeLabel(index)+" · 晋级分 "+out.get("rankPoints")+"/"+out.get("rankPointsTarget")+"，还差 "+out.get("rankPointsRemaining")+" 分");
+                if(index%3==0)p.sendMessage("§e大段实操 · 最低声望 "+out.getAsJsonObject("nextGrade").get("fame")+" · "+out.get("historyRequirement").getAsString());
+                if(out.has("missingHistory"))for(var entry:out.getAsJsonArray("missingHistory")){
+                    var step=entry.getAsJsonObject();p.sendMessage("§e尚缺："+step.get("requirement").getAsString()+"。"
+                            +(step.has("instruction")?step.get("instruction").getAsString()+"。":"")+step.get("nextCommand").getAsString());
+                }
+                p.sendMessage("§b"+out.get("nextAction").getAsString()+" · "+out.get("nextCommand").getAsString());
+            }else p.sendMessage(rankPointLedgerReady()?"§a已达最高段位":"§e晋级暂未开放");
+        }
         send(p,"MC_GUILD_EXAM",out);
     }
     void command(Player p,String[] args) {
@@ -630,7 +814,14 @@ final class SkillAssessments implements Listener {
             case "menu" -> menu(p,false);
             case "list" -> {for(var d:catalog==null?List.<AssessmentCatalog.Definition>of():catalog.definitions.values().stream().sorted(Comparator.comparing(AssessmentCatalog.Definition::id)).toList())p.sendMessage("§e"+d.id()+" · "+d.title()+" ["+(d.enabled()?"开放":"待勘察场地")+"] "+d.description());promotion(p);}
             case "info" -> {AssessmentCatalog.Definition d=args.length>3?definition(args[3]):null;if(d==null){reply(p,"unknown_exam",null);break;}info(p,d,plugin.communication().compact(p));}
-            case "start" -> {if(args.length<4){reply(p,"choose_exam",null);break;}boolean promotion=args[3].equals("promotion");if(promotion&&args.length<5){promotion(p);break;}start(p,args[promotion?4:3],promotion);}
+            case "start" -> {
+                if(args.length<4){reply(p,"choose_exam",null);break;}
+                boolean promotion=args[3].equalsIgnoreCase("promotion");
+                if(promotion&&args.length==4){promotion(p);break;}
+                if(args.length!=(promotion?5:4)){reply(p,"invalid_arguments",null);break;}
+                if(promotion&&args[4].matches("[0-9]{1,2}"))confirmDivision(p,Integer.parseInt(args[4]));
+                else start(p,args[promotion?4:3],promotion);
+            }
             case "status" -> show(p);
             case "guide" -> {if(args.length==3){if(plugin.communication().compact(p))guideReply(p,true);else guideMenu(p);}else reply(p,"invalid_arguments",null);}
             case "supplies" -> suppliesCommand(p,args,plugin.communication().compact(p));
@@ -638,17 +829,25 @@ final class SkillAssessments implements Listener {
             case "submit" -> {Run r=current(p);if(r==null)reply(p,"no_exam",null);else if(!r.market.isEmpty())p.sendMessage("§e此题属于市场委托；请 /mycli guild claim 交付，不能独立重复结算。");else submit(p,r);}
             case "cancel" -> {Run r=current(p);if(r==null)break;if(!r.market.isEmpty()){p.sendMessage("§e请 /mycli guild abandon 放弃市场委托；不会暗中释放当前阶段。");break;}r.state="cancelled";r.reason="player_cancelled";save(p,r);show(p);}
             case "retry" -> {Run r=current(p);if(r==null||r.market.isEmpty()||!r.state.equals("interrupted")){reply(p,"retry_market_interrupted_only",null);break;}String gate=eligibility(p,r.definition);if(!gate.equals("ready")){reply(p,gate,r.definition);break;}Run next=newRun(r.definition,r.market);if(save(p,next)){runs.put(p.getUniqueId(),next);show(p);}}
-            default -> p.sendMessage("§e/mycli guild exam list|info <ID>|start <ID>|start promotion <ID>|status|submit|cancel|retry；guild certificates 查看证书。");
+            default -> p.sendMessage("§e/mycli guild exam promotion 查看分数和下一步；start promotion <目标段位数字或实操ID> 晋级；start <ID> 考证。");
         }
     }
     private void menu(Player p,boolean promotion) {
         List<String> ids=catalog==null?List.of():catalog.definitions.keySet().stream().sorted().toList();
-        if(promotion&&grade(p)<17)ids=catalog.grades.get(grade(p)+1).fresh();
-        Inventory inv=Bukkit.createInventory(null,45,promotion?"晋级考试 · 选择专长":"公会 · 训练与考试");
+        JsonObject progress=promotion?promotionInfo(p):null;
+        int target=promotion&&progress.has("nextGrade")?progress.getAsJsonObject("nextGrade").get("index").getAsInt():-1;
+        if(promotion)ids=target>0&&target%3==0?catalog.grades.get(target).fresh():List.of();
+        Inventory inv=Bukkit.createInventory(null,45,promotion?"公会 · 冒险者晋级":"公会 · 训练与考试");
         for(int i=0;i<ids.size();i++){var d=definition(ids.get(i));inv.setItem(i,icon(Material.WRITABLE_BOOK,d.title(),d.description(),d.enabled()?"点击查看条件，自行确认开考":"场地待勘察，暂不能开考",hasCertificate(p,d.id())?"已有证书，可重练":"未认证"));}
-        inv.setItem(36,icon(Material.EXPERIENCE_BOTTLE,gradeName(p)+" · 晋级考试","查看下一阶，并选择现场专长题"));inv.setItem(37,icon(Material.BOOK,"我的能力证书"));
+        if(target>0){
+            String points="晋级分 "+progress.get("rankPoints")+"/"+progress.get("rankPointsTarget")+" · 还差 "+progress.get("rankPointsRemaining")+" 分";
+            inv.setItem(22,icon(Material.EXPERIENCE_BOTTLE,gradeLabel(target),points,"公会声望 "+progress.get("fame"),progress.get("nextAction").getAsString()));
+            if(target%3!=0)inv.setItem(11,icon(Material.EMERALD,"确认晋级 "+gradeLabel(target),points,"积分达标后点击一次确认"));
+            inv.setItem(24,icon(Material.WRITABLE_BOOK,"查看公会委托","进行中的委托可在公会菜单继续或交付"));
+        }
+        inv.setItem(36,icon(Material.EXPERIENCE_BOTTLE,gradeName(p)+" · 冒险者晋级","查看本阶分数、小段确认与大段考题"));inv.setItem(37,icon(Material.BOOK,"我的能力证书"));
         inv.setItem(38,icon(Material.CLOCK,"当前考试指引与材料","按步骤操作；材料领取、相机和任务入口"));inv.setItem(40,icon(Material.BARRIER,"关闭"));
-        menus.put(inv,new Menu(p.getUniqueId(),List.copyOf(ids),"",promotion));p.openInventory(inv);
+        menus.put(inv,new Menu(p.getUniqueId(),List.copyOf(ids),"",promotion,target));p.openInventory(inv);
     }
     private ItemStack icon(Material type,String name,String... lore) {ItemStack item=new ItemStack(type);var meta=item.getItemMeta();meta.setDisplayName(name);meta.setLore(List.of(lore));item.setItemMeta(meta);return item;}
     private void guideReply(Player p,boolean machine) {
@@ -699,10 +898,16 @@ final class SkillAssessments implements Listener {
                 default -> guideReply(p,plugin.communication().compact(p));
             }});return;
         }
-        if(!m.detail.isEmpty()){if(slot==11)start(p,m.detail,m.promotion);else if(slot==15)menu(p,m.promotion);return;}
+        if(!m.detail.isEmpty()){if(slot==11){
+            if(m.promotion&&readGrade(p)+1!=m.targetGrade){reply(p,"grade_changed",null);return;}
+            start(p,m.detail,m.promotion);
+        }else if(slot==15)menu(p,m.promotion);return;}
+        if(m.promotion&&slot==11&&m.targetGrade>0&&m.targetGrade%3!=0){confirmDivision(p,m.targetGrade);return;}
+        if(m.promotion&&slot==22){promotion(p);return;}
+        if(m.promotion&&slot==24){plugin.openGuildMenu(p);return;}
         if(slot<m.ids.size()){String id=m.ids.get(slot);var d=definition(id);Inventory inv=Bukkit.createInventory(null,27,d.title()+" · 确认开考");
             inv.setItem(4,icon(Material.BOOK,d.title(),d.description(),"条件："+eligibility(p,d),"限时"+d.timeout()+"秒；技能消耗照常；不自动花点"));
-            inv.setItem(11,icon(Material.EMERALD,"主动开始考试"));inv.setItem(15,icon(Material.ARROW,"返回"));menus.put(inv,new Menu(p.getUniqueId(),List.of(),id,m.promotion));p.openInventory(inv);
+            inv.setItem(11,icon(Material.EMERALD,"主动开始考试"));inv.setItem(15,icon(Material.ARROW,"返回"));menus.put(inv,new Menu(p.getUniqueId(),List.of(),id,m.promotion,m.targetGrade));p.openInventory(inv);
         }else if(slot==36){promotion(p);menu(p,true);}else if(slot==37)certificates(p);else if(slot==38)guideMenu(p);
     }
     @EventHandler(priority=EventPriority.HIGHEST) public void drag(InventoryDragEvent e) {if(menus.containsKey(e.getView().getTopInventory()))e.setCancelled(true);}

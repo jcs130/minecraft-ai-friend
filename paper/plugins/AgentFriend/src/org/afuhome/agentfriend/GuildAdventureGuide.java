@@ -45,7 +45,7 @@ final class GuildAdventureGuide {
             if (activeContract && route < 3) continue;
             Hint hint = switch (route) {
                 case 0 -> joined
-                        ? new Hint("委托交付积累公会声望；到下一阶前先查实际晋级条件。公会段位与职业等级分开。",
+                        ? new Hint("交付委托积累公会声望和晋级分。同一阶换做不同委托更有收益，可以先看下一阶还差多少。",
                                 promotions ? "/mycli guild exam promotion" : "/mycli guild status")
                         : new Hint("想积累冒险履历，可以免费登记冒险者公会。", "/mycli guild join");
                 case 1 -> cave(available);

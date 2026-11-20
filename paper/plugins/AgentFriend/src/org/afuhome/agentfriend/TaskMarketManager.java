@@ -524,7 +524,7 @@ final class TaskMarketManager implements Listener {
         if (plugin.guild().readRank(player) < task.minRank()) return "rank_required";
         String qualification = plugin.professions().taskDenial(player, task.definition());
         if (!qualification.equals("available")) return qualification;
-        if (!plugin.getConfig().getString(activePath(player) + ".id", "").isEmpty()) return "another_contract_active";
+        if (plugin.guild().hasActiveContract(player)) return "another_contract_active";
         if (plugin.skillAssessments() != null && plugin.skillAssessments().busy(player)
                 && !plugin.skillAssessments().canAttachContract(player, task.id())) return "exam_contract_incompatible";
         if (task.steps.stream().anyMatch(s -> s.map != null)) {

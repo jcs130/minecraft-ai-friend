@@ -131,7 +131,9 @@ final class TaskProgressGuidance {
             case MARK_KILLS -> "先按本单要求给敌人施加印记，印记有效期间由玩家击杀；本人留在同一世界的目标32格内并保持技能资格，只施放印记不算击杀。";
             case PARRY -> "先施放本单要求的格挡或防护技能，让保护目标承受敌人实际攻击并产生有效减伤；普通举盾或空挥不补职业减伤记录。";
             case HEALING -> "用本单要求的治疗能力，治疗两分钟内被怪物打伤的队友；按实际恢复的有效怪物伤量计数。治疗自己、摔伤或满血施法不补该进度。";
-            case FLOOR -> "参加试炼场多层挑战，通关本单指定第 " + q.floor() + " 层；野外地下城清场不能替代试炼楼层记录。";
+            case FLOOR -> q.id().equals("trial_seven")
+                    ? "从试炼塔第6层随队进入第7层驿站，落地后即可交单。驿站供休整，单独传送到驿站没有本场行程记录。"
+                    : "参加初始村试炼塔，随队清完第 " + q.floor() + " 层后即可交单。可继续挑战后续楼层。";
             case PARTY_FLOOR -> "至少两名队友共同通关试炼场" + (q.floor() > 0 ? "第 " + q.floor() + " 层" : "允许的楼层") + "；本单若要求带新人，还需符合队友等级条件。";
             case FAST_FLOOR -> "接单后保持禁食，通关试炼场第 " + q.floor() + " 层；这是不进食约束。已有进食记录须先核对状态，再由本人决定是否重接。";
             case NO_DEATH -> "接单后保持零死亡，通关试炼场第 " + q.floor() + " 层；已经死亡须先核对状态，再由本人决定是否重接。";
@@ -160,7 +162,7 @@ final class TaskProgressGuidance {
             case EXPLORE -> "先 /mycli guide explore 查本单地点 " + subject + " 的登记参考点与实际入口路线；参考中心不等于入口，不在无证据处反复竖挖。";
             case ERUDITE -> "核对历史累计完成的 " + q.target() + " 种不同能力维度委托，如感知、战斗、协作；不是去不同世界或学习技能。历史不足时先 /mycli guild status 核对认证进度；该槽只能接一单，核对后再自行选择是否换单，历史成绩保留。";
             case PRAYER_ROAD -> "先 /mycli goddess pray 向女神问路，再从本次祈愿位置走到200格外；只聊天或查询不会代替祈愿与行走记录。";
-            case PILGRIMAGE -> "从接单位置徒步远行至少500格，再步行返回出发点附近；途中传送或死亡重生会重置远方标记，先保存出发坐标并保持补给。";
+            case PILGRIMAGE -> PilgrimageRoute.DESCRIPTION+" 公会档案可查起点与当前路段；途中传送、重生或搭乘载具后，回起点重新出发。";
             case BRIDGE, ROAD, BUILD, REDSTONE -> "在本单登记场地内按冻结条件施工；用 /mycli guild verify 验收真实增量。查询状态不会扫描施工或替代验收。";
         };
     }

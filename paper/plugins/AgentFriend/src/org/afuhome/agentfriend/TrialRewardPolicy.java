@@ -20,6 +20,29 @@ final class TrialRewardPolicy {
         int gear() { return uncommon + rare + excellent + legendary; }
     }
 
+    record Daily(int clears, int peakCoins, boolean itemsIssued, boolean legacyPaid) {
+        static final Daily EMPTY = new Daily(0, 0, false, false);
+        // An old game-day receipt has no run ID or trustworthy difficulty.
+        static final Daily LEGACY_PAID = new Daily(1, 0, true, true);
+    }
+
+    record Payout(Daily next, boolean items, int coins, String reason) { }
+
+    static Payout payout(Daily prior, boolean firstClear, int gap, int baseCoins) {
+        if (prior.legacyPaid()) return new Payout(prior, false, 0, "daily_limit");
+        if (!firstClear && gap >= 2) return new Payout(prior, false, 0, "practice");
+        int coins = gap == 0 ? baseCoins : Math.max(1, baseCoins * (gap == 1 ? 60 : 30) / 100);
+        boolean items = !prior.itemsIssued() && (firstClear || gap == 0);
+        if (coins == 0 && !items) return new Payout(prior, false, 0, "practice");
+        int increase = Math.max(0, coins - prior.peakCoins());
+        int reward = increase + (prior.clears() == 1 ? coins / 2 : 0);
+        Daily next = new Daily(Math.min(2, prior.clears() + 1), Math.max(prior.peakCoins(), coins),
+                prior.itemsIssued() || items, false);
+        String reason = items ? "daily_items" : increase > 0 && prior.clears() > 0 ? "difficulty_upgrade"
+                : reward > 0 ? "coins_only" : "daily_limit";
+        return new Payout(next, items, reward, reason);
+    }
+
     /** Exact percentage points per clear eligible for rewards, before the difficulty penalty. */
     static Rates rates(int floor, int difficulty) {
         if (floor < 1 || floor > FINAL_FLOOR || difficulty < 0 || difficulty > 2)

@@ -248,7 +248,7 @@ final class AgentCliCatalog {
         add(specs,"pvp.board","adventure","read","/mycli pvp board","查看积分榜","在线玩家","私人 MC_PVP_RANK 列表");
         add(specs,"arena.start","adventure","write","/mycli arena start [confirm [确认编号]]","与集合平台上的队友开始试炼；缺装时先点名","首次有警告时全队留在原地；核对成员后在45秒内使用回执中的 nextCommand","MC_TRIAL_ASSEMBLY 给出名单、缺装、能否确认入场及实际到场人数");
         add(specs,"arena.entrance","adventure","read","/mycli arena entrance [--json]","查询主世界三个按钮、坐标与开场步骤","入口桥走进围墙后可免费开场。缺装者可在发起人确认后同行","显式JSON返回MC_TRIAL_BUTTONS");
-        add(specs,"arena.difficulty","adventure","write","/mycli arena difficulty [auto|normal|adventure|apocalypse]","按冒险者公会等级自动匹配，或手动选择下次本人发起试炼的难度；高等级打低难度奖励减少","在线玩家；多人由按钮发起者决定，奖励按各自等级结算","私有 MC_DUNGEON_DIFFICULTY 回执，含推荐档位与选择模式");
+        add(specs,"arena.difficulty","adventure","write","/mycli arena difficulty [auto|normal|adventure|apocalypse]","按公会等级和通关履历推荐，自动档照顾队内新手；发起者可手动选档","入场锁定全队难度；全员通关过第10/15层可获强化，奖励按个人结算","私有 MC_DUNGEON_DIFFICULTY 回执，含推荐档位与选择模式");
         add(specs,"arena.rest","adventure","teleport","/mycli arena rest [confirm [确认编号]]","从已解锁的检查点进入深层驿站","首次有警告时先核对名单，可以确认缺装入场；每名成功入场者 8 魔力","MC_TRIAL_ASSEMBLY 和实际传送回执");
         add(specs,"arena.next","adventure","write","/mycli arena next","查询自动下楼状态；在驿站可触发 10 秒后出发","挑战进行中；驿站需已清场","倒计时/状态");
         add(specs,"arena.shop","adventure","gui","/mycli arena shop","打开入口或第七层余额商店；旧实体绿宝石交易可用 shop merchant","在试炼入口或第七层驿站","原版菜单或拒绝原因");
@@ -263,7 +263,7 @@ final class AgentCliCatalog {
         add(specs,"arena.recycle.sell","storage","item","/mycli arena recycle sell <quoteId>","按报价回收装备并存入个人余额","报价未过期且完整物品组件未变","私有成交与余额回执");
         add(specs,"arena.rewards","storage","gui","/mycli arena rewards","打开本人个人奖励箱","基础远程存箱已可用；成功远程开页2魔力，实体箱旁免费，无需学习或先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.rewards.list","storage","read","/mycli arena rewards list","只读查看待入箱奖励；首次开箱前及箱满时都可能有","在线玩家","MC_REWARD、MC_REWARD_SUMMARY");
-        add(specs,"arena.rewards.take","storage","item","/mycli arena rewards take <0–7|9–17|all>","领取尚未入箱的奖励；箱内物品用 stash take","背包有空位；远程成功领取 2 魔力，实体箱旁免费","领取结果与远程 MC_STORAGE_MAGIC");
+        add(specs,"arena.rewards.take","storage","item","/mycli arena rewards take <0–17|all>","领取尚未入箱的奖励；箱内物品用 stash take","背包有空位；远程成功领取 2 魔力，实体箱旁免费","领取结果与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.stash","storage","gui","/mycli arena stash","本人540格个人箱；Agent可直接putslot存、list查、take取，无需开界面","基础远程存箱已可用；成功远程开页2魔力，实体箱旁免费，无需学习或先传送","原版箱子菜单与远程 MC_STORAGE_MAGIC");
         add(specs,"arena.stash.summary","storage","read",PersonalStashOverview.COMMAND+" [--json]","免费总览十页个人箱的剩余格数、物品件数、武器防具、消耗品与所在页","仅本人；随时远程查询；未入箱的奖励另计","MC_STASH_OVERVIEW 含 categories、freeSlots、pendingRewardEntries、nextCommand");
         add(specs,"arena.stash.pages","storage","gui","/mycli arena stash pages","原版菜单选择10页个人箱","每页54格；无需学习，成功远程开页2魔力","原版分页选择菜单");
@@ -303,9 +303,9 @@ final class AgentCliCatalog {
         add(specs,"guild.exam","adventure","read","/mycli guild exam <动作>","能力认证与晋级考试；查询、报名和交付分开","先查题目与本人状态；start才报名，submit才交付","MC_GUILD_EXAM；专项证书与新手毕业独立");
         add(specs,"guild.exam.supplies","adventure","read","/mycli guild exam supplies <动作>","考试材料：先查询，再明确领取或取回","只读查询免费；claim/take会转移本人的真实材料","MC_GUILD_EXAM；地图和奖励不重复发放");
         add(specs,"guild.exam.list","adventure","read","/mycli guild exam list","查看实操题库、场地开放情况与下一阶晋级缺项","生存角色；先guild join登记","MC_GUILD_EXAM；声望不自动跳段");
-        add(specs,"guild.exam.promotion","adventure","read","/mycli guild exam promotion","查询下一阶需要的声望、资历与实操考试","先登记公会；按返回的缺项行动","MC_GUILD_EXAM；查询不报名、不晋级");
+        add(specs,"guild.exam.promotion","adventure","read","/mycli guild exam promotion [--json]","查本阶晋级分、目标段位和下一步；小段可确认晋升，大段需实操","先登记公会，按本人的 nextCommand 行动","MC_GUILD_EXAM 含积分缺口及晋级方式");
         add(specs,"guild.exam.info","adventure","read","/mycli guild exam info <ID>","查看题目、技能与资源准备、航点和验收要求","查询免费；自然前往已勘察起点","MC_GUILD_EXAM，含冻结版本与绝对目标");
-        add(specs,"guild.exam.start","adventure","write","/mycli guild exam start <ID>","主动开始一项能力考试；start promotion <ID>参加下一阶晋级","一人一场；学习准备施法由本人操作；只收技能本身魔力","MC_GUILD_EXAM；市场SKILL_ASSESSMENT使用guild claim交付");
+        add(specs,"guild.exam.start","adventure","write","/mycli guild exam start <ID>","开能力考试；start promotion 后跟目标阶序号可确认小段，跟课程 ID 可开晋级实操","先用 guild exam promotion 取得本人的准确命令","MC_GUILD_EXAM；市场SKILL_ASSESSMENT使用guild claim交付");
         add(specs,"guild.exam.status","adventure","read","/mycli guild exam status [--json]","查本人考试、匹配且可接的委托与准确下一步；区分考证和晋级","只接收本人或实际附身对象；推荐不自动接单","MC_GUILD_EXAM；contractOptions含真实拒绝原因和nextCommand");
         add(specs,"guild.exam.guide","adventure","gui","/mycli guild exam guide [--json]","考试分步指引：准备、接单、实地调查、拍照、返程和交付","普通玩家打开原版菜单；Agent或--json读取步骤，不接单不发奖","MC_GUILD_EXAM；guide.steps/currentContract/supplies，实际冻结要求");
         add(specs,"guild.exam.supplies.list","adventure","read","/mycli guild exam supplies list [--json]","查摄影直接成片规则和可选遗迹探险图","只读；摄影无需空地图；遗迹图每人每目的地一次","MC_GUILD_EXAM type=supplies；本人材料清单");
@@ -561,7 +561,7 @@ final class AgentCliCatalog {
         String key=prefix.isEmpty()?id:id.substring(prefix.length());
         return order.contains(key)?order.indexOf(key):order.size();
     }
-    private static boolean jsonSupported(String id){return Set.of("help.find","locate.list","locate.info","locate.tp","inventory.clean","inventory.store","inventory.donate").contains(id)||id.equals("arena.stash.summary")||id.startsWith("inventory.tidy")||Set.of("arena.wallet","arena.loot","arena.shop.list","arena.shop.buy","arena.recycle","arena.recycle.list","arena.recycle.quote","arena.recycle.sell","arena.recycle.status").contains(id)|| id.startsWith("trade.auction")||id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return Set.of("help.find","locate.list","locate.info","locate.tp","inventory.clean","inventory.store","inventory.donate").contains(id)||id.equals("arena.stash.summary")||id.startsWith("inventory.tidy")||Set.of("arena.wallet","arena.loot","arena.shop.list","arena.shop.buy","arena.recycle","arena.recycle.list","arena.recycle.quote","arena.recycle.sell","arena.recycle.status").contains(id)|| id.startsWith("trade.auction")||id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.promotion","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);

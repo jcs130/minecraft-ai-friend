@@ -3019,7 +3019,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 inv.setItem(20, item(Material.DIAMOND_SWORD, "§5末日试炼", "高强度挑战；更好的战利品和余额"));
                 inv.setItem(21, item(Material.COMPASS, "§b自动匹配难度",
                         "你的公会等级：" + adventurerRankName(p) + "；推荐：" + dungeon.recommendedDifficultyLabel(p),
-                        "按发起者等级选全队难度；低档重复奖励会减少"));
+                        "自动档照顾队内新手；高档通关可得更多金币"));
             }
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("expeditions")) {
@@ -3071,7 +3071,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             String current = "当前选择：" + selected + (mode.equals("auto") ? "（自动）" : "（手动）");
             inv.setItem(10, item(Material.COMPASS, "§b自动匹配" + (mode.equals("auto") ? " §a✔" : ""),
                     "你的公会等级：" + adventurerRankName(p),
-                    "推荐：" + dungeon.recommendedDifficultyLabel(p), "开场时按发起者等级决定"));
+                    "个人推荐：" + dungeon.recommendedDifficultyLabel(p), "自动档按入场队员最低推荐匹配"));
             inv.setItem(11, item(Material.WOODEN_SWORD, "§a普通" + (mode.equals("manual") && selected.equals("普通") ? " §a✔" : ""),
                     "首次挑战适用；生命 ×1.15，伤害 ×1.10"));
             inv.setItem(12, item(Material.IRON_SWORD, "§6冒险" + (mode.equals("manual") && selected.equals("冒险") ? " §a✔" : ""),
@@ -3080,7 +3080,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                     "高强度挑战；生命 ×2.5，伤害 ×1.85", "稀有奖励和余额提高"));
             inv.setItem(15, item(Material.WRITTEN_BOOK, "§e" + current,
                     "推荐：" + dungeon.recommendedDifficultyLabel(p),
-                    "按下开始的人决定全队难度", "高等级刷低档时重复奖励会减少"));
+                    "全员通关过第10/15层可开启强化", "冒险最多强化一级，末日最多两级"));
             inv.setItem(16, dungeon.hasActiveRun()
                     ? item(Material.BARRIER, "§c已有队伍在挑战", "当前：" + dungeon.activeDifficultyLabel() + "；请等本轮结束")
                     : item(Material.LIME_CONCRETE, "§a开始" + selected + "试炼",

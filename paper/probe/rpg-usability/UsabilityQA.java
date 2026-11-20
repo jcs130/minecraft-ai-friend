@@ -79,15 +79,16 @@ public final class UsabilityQA extends JavaPlugin implements org.bukkit.event.Li
             case "trialcredit"->{
                 int n=Integer.parseInt(args[2]);if(n<1||n>20)throw new IllegalArgumentException("bounded trial reward");
                 var af=(JavaPlugin)Bukkit.getPluginManager().getPlugin("AgentFriend");
-                Object before=af.getConfig().get("dungeon-active-run");
                 try{
-                    af.getConfig().set("dungeon-active-run.id","qa-"+p.getUniqueId());af.getConfig().set("dungeon-active-run.floor",2);
                     var dungeonMethod=af.getClass().getDeclaredMethod("dungeon");dungeonMethod.setAccessible(true);Object dungeon=dungeonMethod.invoke(af);
                     var economyField=dungeon.getClass().getDeclaredField("economy");economyField.setAccessible(true);Object economy=economyField.get(dungeon);
-                    var credit=economy.getClass().getDeclaredMethod("creditDifficulty",java.util.UUID.class,int.class);credit.setAccessible(true);
-                    sender.sendMessage("QA trialCredit="+credit.invoke(economy,p.getUniqueId(),n));
+                    var record=economy.getClass().getDeclaredMethod("recordTrialCoins",java.util.UUID.class,String.class,int.class,int.class);record.setAccessible(true);
+                    var deliver=economy.getClass().getDeclaredMethod("deliverTrialCoins",Player.class);deliver.setAccessible(true);
+                    long before=(long)vortex.qiandengjiVault().balance(p);
+                    record.invoke(economy,p.getUniqueId(),"qa-"+p.getUniqueId(),2,n);
+                    af.saveConfig();deliver.invoke(economy,p);
+                    sender.sendMessage("QA trialCredit="+((long)vortex.qiandengjiVault().balance(p)-before));
                 }catch(Exception error){throw new IllegalStateException(error);}
-                finally{af.getConfig().set("dungeon-active-run",before);}
             }
             case "mana"->{double n=Double.parseDouble(args[2]);if(!Double.isFinite(n)||n<0||n>500)throw new IllegalArgumentException("bounded mana");vortex.qiandengjiMana().setMana(p.getUniqueId(),n);}
             case "xp"->{long n=Long.parseLong(args[2]);if(n<0||n>10000)throw new IllegalArgumentException("bounded xp");vortex.playerProfileService().grantExperience(p,n,"isolated-usability-fixture");}

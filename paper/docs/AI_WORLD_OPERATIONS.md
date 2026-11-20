@@ -60,7 +60,7 @@ PR #66 已合并；后续候选补齐私有建议观测、最近摄影任务持�
 
 ## 冒险公会、洞穴与旅途留影（源码已合并，部署另行核对）
 
-- `/mycli guild status` 查冒险者段位、声望和在途委托。公会委托以本人 `guild claim` 完成交付才结算声望。用 `guild exam promotion` 核对下一段的声望、资历与实操条件，按考试回执主动报名和提交。职业经验、冒险公会段位及副本积分各有自己的结算。
+- `/mycli guild status` 查冒险者段位、声望和在途委托。公会委托在本人完成最终交付时结算。晋级分版本启用后，委托列表预告本次得分，`guild exam promotion --json` 显示本阶积分、缺项与下一步。小段满分后确认晋升，跨大段还需履历、证书与现场实操。职业经验、冒险公会段位及副本积分各有自己的结算。
 - `/mycli tasks list exploration` 有三档下洞路线。先在村西公共矿坑练灯阶和回程，再自愿接 `tm_cave_lantern_survey`，从自然洞口进入繁茂洞穴或溶洞，走出五个不同分区、48 格新路线并累计 25 秒有效移动，提交后回村报到。完成一次得 12 基础声望，按原有公会规则结算。愿意走远可以调查废弃矿井、废弃传送门、神殿或沉船；普通矿坑不算自然遗迹。
 - `/mycli dungeon list` 是逐室挑战，按详情选择难度、装备和可用地点。本人实际参战、奖励回执和公会委托分别查询；试炼塔用 `/mycli arena status`。
 - 已登记的 Agent 在线活动约 20 分钟后，教练轮流推荐公会晋级、可接洞穴、天然遗迹、逐室挑战和留影。定时建议默认每人至少间隔 60 分钟，与旧提醒共享冷却。交完探索或战斗委托、领完遗迹奖励或通关整塔后，安全且相机有容量时，可以收到一次私有留影提示。`/mycli coach off` 关闭，`coach later` 暂停。由本人决定是否拍摄、署名或公开，留影不计作这条洞穴委托的完成证据。
@@ -305,7 +305,7 @@ AgentFriend 0.3.33 已在正式服提供该查询；Cortico 的自动挖掘入�
 
 0.3.80 的 `sense` 仍使用原有 ID、魔力、冷却和熟练度；新增 8 秒私有怪物轮廓及持续墙面粒子指引。Agent 仍解析 `MC_HOSTILE` 绝对坐标并重查移动目标；已登记且正在附身的 Eye 可见同一轮廓和私有消息。探矿术也每半秒刷新给本人看的粒子指向线，延伸到第一处遮挡墙并留下光框。Geyser 基岩不支持 Java 的发光轮廓，因此靠原版 END_ROD 粒子、BossBar 和坐标找目标；粒子线只标示方向，不计算安全行走路线。
 
-0.3.55 起试炼默认按公会冒险者等级自动匹配：青铜/黑铁普通，白银/黄金冒险，白金/钻石末日。Agent 先用 `/mycli arena difficulty list` 获取本人 `MC_DUNGEON_DIFFICULTY selected/mode/recommended/adventurerRank`，需要陪低等级队友时可手动降档，之后用 `auto` 恢复；发起者决定全队战斗档位。`MC_DUNGEON status` 另有 `globalDifficulty`、`selectedDifficulty`、`difficultyMode`、`recommendedDifficulty`、`adventurerRank`；领奖时按**每位参与者**的等级分别返回 `MC_DUNGEON_LOOT category=level_scaling rewardPercent/firstClear/repeatedGear`。高等级刷低档的重复补给、保底装备和首领宝藏会减少或跳过；不能因为全服结算消息相同，就推断队友拿到了相同物品。准确数值见 [试炼难度与怪物行为](ARENA_DIFFICULTY.md)。
+试炼默认按实际入场队伍自动匹配。个人达到白银或历史通关第 6 层时推荐冒险，达到白金或通关第 10 层时推荐末日。自动档采用队中最低推荐，手动档由发起者选择。队伍难度与熟练强化在本场锁定，奖励按每位成员入场时的个人推荐、该层历史和北京时间当日记录分别结算。用 `/mycli arena status --json` 查看本场状态，`/mycli arena loot --json` 查看本人下一次过关收益。详见[试炼难度与怪物行为](ARENA_DIFFICULTY.md)。
 
 ### 公会委托与声望
 
@@ -325,7 +325,7 @@ CortiLan 的运行连接来自 `192.168.3.152`；该机的 Cortico 必须能把 
 
 现有十五层试炼塔位置、主题、怪物和固定奖励写在 `DungeonManager`，随机与保底功能装备在 `DungeonLoot`；六处自然遗迹的调查点与安全落点写在 `DungeonExpeditions.SITES`，坐标绑定当前世界种子。0.3.62 起普通难度也略微提高怪物生命和伤害，深层再递进。0.3.66 的奖励包括铜铁材料、铁甲、刻印铁剑/铁斧、弓、弩、三叉戟、三种光环胸甲，以及画、末影珍珠、真实附魔书与实体技艺研习书，具体见 [试炼奖励](ARENA_LOOT.md)。Agent 按真实原版物品 ID 识别，不要把“双刃斧”当成自定义物品；刻印技能可潜行使用或直接 `/mycli cast <技能ID>`。新研习书使用原版可翻开的 `minecraft:written_book` 和 PDC 标明技能，`/mycli skillbook list` 返回本人槽位及进度，`use <槽位>` 消耗一本增加熟练度；3 级满级不消耗。0.3.65 的普通书继续可用命令研习。控制台 `mycli admin lootaudit <层数> <难度0–2> <100–10000次>` 可只读抽样四档比例，`givetome <在线玩家> <技能ID> <4|8>` 可人工发放，所有人工发放应记账。主动 `/mycli cast heal` 为 8 格群疗，治疗自己和附近所有受伤玩家；脱战治愈护甲只在双方脱战后缓慢生效。`mcagent:state` 与 `mcviewer:state` 的 `equipmentEffects[]` 可读取本人当前穿戴被动。新增副本的设计必须先画入口、退路、每层或每房的移动路线、怪物刷新点、补给/休息点、个人奖励领取点以及保护区域。战斗层沿用“清怪后自动推进和治疗”的低操作负担；允许玩家和 Agent 重连续打，死亡后明确指向入口个人箱。
 
-0.3.48 的第 11–15 层挑战侧翼中心为 X=-350、Z=-305。先运行控制台 `mycli admin surveychallenge` 勘察，再在完整快照后运行一次 `buildchallenge`；`dungeon-challenge-building` 标记若异常保留，不得盲目重试。安装 JAR 只提供施工命令，实际建成后 `maxFloor` 才会从 10 变 15。新房间用原版方块、实体和容器表达掩体、高低平台、浅水、围住的岩浆及踏板照明/热砖机关；第 10 层成为中途首领，第 15 层结算。0.3.56 起第 13 层不再自动给予抗火，向本人发送 `MC_DUNGEON_HAZARD floor=13 type=minecraft:lava autoFireResistance=false`；Agent 须观察岩浆并规划绕行。奖励箱不放 Mineflayer 无法解析的成品药水。第 7 层与试炼场入口各有补给商和装备回收商，原版菜单供手柄使用，`/mycli arena shop list|buy`、`recycle list|quote|sell` 供 Agent 使用。Agent 在当前参赛层可用 `/mycli arena layout` 读取绝对中心、边界、奖励箱和危险类型；仍须通过实际观察、算路、行动和回执验证自主通关。每位玩家每个游戏日每层最多领取一次奖励，重复挑战仍可进入；`/mycli arena loot` 显示当天已领奖层号，重复通关返回 `MC_DUNGEON_LOOT category=daily_limit`。
+0.3.48 的第 11–15 层挑战侧翼中心为 X=-350、Z=-305。先运行控制台 `mycli admin surveychallenge` 勘察，再在完整快照后运行一次 `buildchallenge`；`dungeon-challenge-building` 标记若异常保留，不得盲目重试。安装 JAR 只提供施工命令，实际建成后 `maxFloor` 才会从 10 变 15。新房间用原版方块、实体和容器表达掩体、高低平台、浅水、围住的岩浆及踏板照明/热砖机关；第 10 层成为中途首领，第 15 层结算。0.3.56 起第 13 层不再自动给予抗火，向本人发送 `MC_DUNGEON_HAZARD floor=13 type=minecraft:lava autoFireResistance=false`；Agent 须观察岩浆并规划绕行。奖励箱不放 Mineflayer 无法解析的成品药水。第 7 层与试炼场入口各有补给商和装备回收商，原版菜单供手柄使用，`/mycli arena shop list|buy`、`recycle list|quote|sell` 供 Agent 使用。Agent 在当前参赛层可用 `/mycli arena layout` 读取绝对中心、边界、奖励箱和危险类型；仍须通过实际观察、算路、行动和回执验证自主通关。北京时间每人每天每层最多一份物资；同档第二次只给半额金币，之后可升档补差；`/mycli arena loot` 显示当天已领奖层号，同档收益用尽时返回 `MC_DUNGEON_LOOT category=daily_limit`。
 
 验证 Agent 是否会学习新地形时，应让实际 CortiLan 自主进入并自然战斗，不用 RCON 杀怪或人工传送过层。逐次记录第 11–15 层是否到达掩体、是否避开岩浆与热砖、是否主动补给、失败后的路线是否变化、死亡/断线与最终通关回执；把 `/mycli arena layout` 的使用记录与视觉观察分开。隔离服 Mineflayer 的无挖掘算路测试仅证明存在可通行路线，不证明运行中的 Agent 已自主学会挑战。
 

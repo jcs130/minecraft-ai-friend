@@ -23,7 +23,8 @@ def main():
         *sorted((inputs / "libraries").rglob("*.jar")), *sorted((inputs / "plugins").glob("*.jar"))]))
     root = Path(__file__).resolve().parent
     tests = ["AgentCliContractTest", "AgentCliTextTest", "JourneyCatalogTest", "NativeCliCatalogTest",
-             "AgentCliRecoveryTest", "GuildAdventureGuideTest", "AdventureChoiceTest", "AtomicConfigFileTest",
+             "AgentCliRecoveryTest", "GuildAdventureGuideTest", "GuildRankPointsTest", "GuildPromotionLedgerTest",
+             "AdventureChoiceTest", "AtomicConfigFileTest",
              "DurableConfigFilesTest", "EconomyPresentationTest", "StashGuidanceCatalogTest", "DungeonEnchantmentsTest",
              "WeaponSkillRollsTest"]
     suffix = ".exe" if os.name == "nt" else ""

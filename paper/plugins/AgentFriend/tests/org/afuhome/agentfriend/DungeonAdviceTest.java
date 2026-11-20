@@ -10,6 +10,16 @@ public final class DungeonAdviceTest {
     static void state(String expected,Object... pairs){var out=advice(pairs);check(expected.equals(out.get("state")),expected);check(!(boolean)out.get("waitAtEntrance"),"no endless entrance waiting");}
     static void invalid(String... args){try{DungeonAdvice.parse(args);throw new AssertionError("accepted invalid args "+Arrays.toString(args));}catch(IllegalArgumentException expected){checks++;}}
     public static void main(String[] args){
+        var mine=new DungeonAdvice.Outing("deep_mineworks",9,true,100);
+        var frost=new DungeonAdvice.Outing("frost_keep",13,false,0);
+        var forge=new DungeonAdvice.Outing("ember_foundry",14,false,0);
+        check(List.of(mine,frost,forge).stream().min(DungeonAdvice.Outing.orderFor(5)).orElseThrow()==mine,"new adventurer gets reachable route first");
+        check(List.of(mine,frost,forge).stream().min(DungeonAdvice.Outing.orderFor(17)).orElseThrow()==forge,"veteran gets new level-appropriate route");
+        var untriedMine=new DungeonAdvice.Outing("deep_mineworks",9,false,0);
+        check(List.of(new DungeonAdvice.Outing("old",10,true,80),untriedMine).stream().min(DungeonAdvice.Outing.orderFor(10)).orElseThrow()==untriedMine,"unclaimed expedition before a replay");
+        check(DungeonAdvice.preparation("ember_foundry",1).party().contains("侧后方"),"forge boss response");
+        check(DungeonAdvice.preparation("frost_keep",1).party().contains("横移"),"frost boss response");
+        check(DungeonAdvice.preparation("void_citadel",20).recommendedLevel()>=20,"recommendation honors configured minimum");
         state("travel");state("ready","atFirstRoom",true);state("approach","atSite",true);
         state("approach","nearApproach",true);
         check(advice("nearApproach",true).get("nextCommand").equals("/mycli dungeon info undead_crypt"),"nearby discovery never asks for repeated paid travel");

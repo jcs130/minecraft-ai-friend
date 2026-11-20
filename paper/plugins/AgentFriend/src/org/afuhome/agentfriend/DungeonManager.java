@@ -112,6 +112,7 @@ final class DungeonManager implements Listener {
     private static final String BOSS_CLEARS = "dungeon-boss-clears.";
     private static final String FINAL_CLEARS = "dungeon-final-clears.";
     private static final String DAILY_CLAIMS = "dungeon-daily-claims.";
+    private static final String FLOOR_PAYOUTS = "dungeon-floor-payouts.";
     private static final String DIFFICULTY_CHOICE = "dungeon-difficulty.";
     private static final String DEATH_GUIDE = "dungeon-death-guide.";
     private static final int MAX_BONUS_QUEUE = 1024;
@@ -137,12 +138,12 @@ final class DungeonManager implements Listener {
     private static final Material[] REWARD_TYPES = {
             Material.EMERALD, Material.IRON_INGOT, Material.BREAD,
             Material.EXPERIENCE_BOTTLE, Material.GOLDEN_APPLE,
-            Material.LAPIS_LAZULI, Material.ARROW, Material.DIAMOND};
+            Material.LAPIS_LAZULI, Material.ARROW, Material.DIAMOND, Material.COPPER_INGOT};
     private record Loot(Material material, int amount) { }
     private record Theme(String name, Material floor, Material wall, Material pillar,
                          EntityType[] mobs, Loot[] rewards) { }
     private enum Difficulty {
-        NORMAL("normal", "普通", 1.15, 1.10, 0, 0, 0),
+        NORMAL("normal", "普通", 1.15, 1.10, 0, 0, 1),
         ADVENTURE("adventure", "冒险", 1.7, 1.4, 0.025, 2, 2),
         APOCALYPSE("apocalypse", "末日", 2.5, 1.85, 0.05, 4, 5);
         final String id, label;
@@ -165,7 +166,6 @@ final class DungeonManager implements Listener {
             return new RewardScale(gap, gap == 0 ? 100 : gap == 1 ? 60 : 30);
         }
         int stack(int amount) { return Math.max(1, (amount * percent + 99) / 100); }
-        int wallet(int amount) { return amount * percent / 100; }
         boolean bonusRoll() { return gap == 0 || ThreadLocalRandom.current().nextInt(100) < percent; }
     }
     private static final List<Theme> THEMES = List.of(
@@ -252,9 +252,12 @@ final class DungeonManager implements Listener {
     private boolean enemyMoves;
     private int floor;
     private Difficulty difficulty = Difficulty.NORMAL;
+    private int challengeTier;
+    private final Map<UUID, Difficulty> entryRecommendations = new HashMap<>();
+    private UUID tacticalTarget;
     private long runStartedAt;
     private String runId = UUID.randomUUID().toString();
-    private record RunCheckpoint(String run, int floor, String difficulty, boolean paused,
+    private record RunCheckpoint(String run, int floor, String difficulty, int challengeTier, boolean paused,
                                  boolean cleared, Set<UUID> participants) { }
     private record LootReceipt(Player recipient, String message) { }
     private RunCheckpoint committedRun;
@@ -323,7 +326,12 @@ final class DungeonManager implements Listener {
         if (!reinforcementProblem(actor,target,actor.getLocation()).isEmpty()) return false;
         if (isParticipant(actor)) return true;
         participants.add(actor.getUniqueId());
-        try { persistRun(); } catch (RuntimeException failure) { participants.remove(actor.getUniqueId()); throw failure; }
+        boolean newlyRated = entryRecommendations.putIfAbsent(actor.getUniqueId(), recommendedDifficulty(actor)) == null;
+        try { persistRun(); } catch (RuntimeException failure) {
+            participants.remove(actor.getUniqueId());
+            if (newlyRated) entryRecommendations.remove(actor.getUniqueId());
+            throw failure;
+        }
         joinedMessage(actor);
         return committedCurrentRun();
     }
@@ -356,7 +364,7 @@ final class DungeonManager implements Listener {
     private boolean sameWorld(Location at) { return at != null && at.getWorld() != null && at.getWorld().equals(world()); }
 
     private RunCheckpoint checkpoint() {
-        return new RunCheckpoint(runId, floor, difficulty.id, pausedAt > 0, cleared, Set.copyOf(participants));
+        return new RunCheckpoint(runId, floor, difficulty.id, challengeTier, pausedAt > 0, cleared, Set.copyOf(participants));
     }
 
     private boolean committedCurrentRun() {
@@ -385,6 +393,10 @@ final class DungeonManager implements Listener {
             var config = plugin.getConfig();
             config.set(RUN_STATE + ".floor", floor);
             config.set(RUN_STATE + ".difficulty", difficulty.id);
+            config.set(RUN_STATE + ".challenge-tier", challengeTier);
+            Map<String, String> recommendations = new HashMap<>();
+            entryRecommendations.forEach((id, rank) -> recommendations.put(id.toString(), rank.id));
+            config.set(RUN_STATE + ".entry-recommendations", recommendations);
             config.set(RUN_STATE + ".wave", activeWave.stream().map(DungeonWaveCatalog.Enemy::saved).toList());
             config.set(RUN_STATE + ".enemy-moves", enemyMoves ? true : null);
             config.set(RUN_STATE + ".participants", participants.stream().map(UUID::toString).toList());
@@ -446,6 +458,16 @@ final class DungeonManager implements Listener {
         floor = savedFloor;
         Difficulty savedDifficulty = Difficulty.parse(plugin.getConfig().getString(RUN_STATE + ".difficulty", "normal"));
         difficulty = savedDifficulty == null ? Difficulty.NORMAL : savedDifficulty;
+        challengeTier = Math.clamp(plugin.getConfig().getInt(RUN_STATE + ".challenge-tier", 0), 0, difficulty.ordinal());
+        var recommendations = plugin.getConfig().getConfigurationSection(RUN_STATE + ".entry-recommendations");
+        entryRecommendations.clear();
+        if (recommendations != null) for (String key : recommendations.getKeys(false)) {
+            Difficulty rank = Difficulty.parse(recommendations.getString(key, ""));
+            if (rank != null) {
+                try { entryRecommendations.put(UUID.fromString(key), rank); }
+                catch (IllegalArgumentException invalid) { plugin.getLogger().warning("Ignored an invalid trial entrant UUID."); }
+            }
+        }
         List<?> savedWave = plugin.getConfig().getList(RUN_STATE + ".wave");
         activeWave = savedFloor == REST_FLOOR ? List.of() : difficulty == Difficulty.NORMAL || savedWave == null || savedWave.isEmpty()
                 ? waveCatalog.wave(savedFloor, THEMES.get(savedFloor - 1).mobs(), difficulty != Difficulty.NORMAL) : DungeonWaveCatalog.parse(savedWave);
@@ -460,7 +482,7 @@ final class DungeonManager implements Listener {
         active = true;
         runRevision = plugin.getConfig().getLong(RUN_STATE + ".revision", 0);
         if (runRevision > 0) {
-            committedRun = new RunCheckpoint(runId, floor, difficulty.id, savedPause > 0, cleared, Set.copyOf(participants));
+            committedRun = new RunCheckpoint(runId, floor, difficulty.id, challengeTier, savedPause > 0, cleared, Set.copyOf(participants));
         }
         if (!committedCurrentRun()) persistRun();
         plugin.getLogger().info("Dungeon run checkpoint restored: floor=" + floor
@@ -597,7 +619,7 @@ final class DungeonManager implements Listener {
     private EntryOffer currentOffer(Player starter, int targetFloor, List<Admission> assembly) {
         EntryOffer offer = entryOffers.get(starter.getUniqueId());
         return offer != null && offer.until() > System.currentTimeMillis() && offer.floor() == targetFloor
-            && offer.world().equals(starter.getWorld().getUID()) && offer.difficulty().equals(chosenDifficulty(starter).id)
+            && offer.world().equals(starter.getWorld().getUID()) && offer.difficulty().equals(entryDifficulty(starter, assembly).id)
             && offer.members().equals(memberChecks(assembly)) ? offer : null;
     }
     String menuOffer(Player player) {
@@ -622,13 +644,13 @@ final class DungeonManager implements Listener {
         if (!accepted && (issues || confirmation != null)) {
             if (offer == null) {
                 offer = new EntryOffer(UUID.randomUUID(), System.currentTimeMillis() + ENTRY_REVIEW_MS,
-                    starter.getWorld().getUID(), targetFloor, chosenDifficulty(starter).id, memberChecks(assembly));
+                    starter.getWorld().getUID(), targetFloor, entryDifficulty(starter, assembly).id, memberChecks(assembly));
                 entryOffers.put(starter.getUniqueId(), offer);
             }
             var receipt = assemblyReceipt(assembly, "confirmation_required", false, targetFloor);
             addOffer(receipt, offer);
             String command = receipt.get("nextCommand").getAsString();
-            starter.sendMessage("§e[试炼集结] 尚未传送。请核对" + chosenDifficulty(starter).label + "难度的入场名单：");
+            starter.sendMessage("§e[试炼集结] 尚未传送。请核对" + entryDifficulty(starter, assembly).label + "难度的入场名单：");
             for (Admission entry : assembly) {
                 String message = "[试炼集结] " + entry.player().getName() + "：" + (entry.ready() ? "准备就绪"
                     : entry.detail() + (entry.mayEnter() ? "；确认后可带缺装入场" : "；确认后仍留在原地"));
@@ -710,7 +732,7 @@ final class DungeonManager implements Listener {
     }
 
     String[] assemblyMenuLore(Player viewer) {
-        List<String> lines = new ArrayList<>(List.of("在围墙内集合，发起人决定全队难度", "装备不齐可二次确认入场；观战角色不参赛"));
+        List<String> lines = new ArrayList<>(List.of("在围墙内集合，自动档照顾队内新手", "装备不齐可二次确认入场；观战角色不参赛"));
         var assembly = platformAssembly();
         for (Admission entry : assembly.stream().limit(8).toList())
             lines.add(entry.player().getName() + "：" + (entry.ready() ? "已就绪" : entry.detail()));
@@ -740,6 +762,7 @@ final class DungeonManager implements Listener {
     private void enrollPlayersOnCurrentFloor() {
         if (!active) return;
         List<Player> joined = new ArrayList<>();
+        List<UUID> newlyRated = new ArrayList<>();
         for (Player player : ResidentCli.online()) {
             if (player.isDead() || (player.getGameMode() != GameMode.SURVIVAL
                     && player.getGameMode() != GameMode.ADVENTURE)
@@ -757,11 +780,17 @@ final class DungeonManager implements Listener {
                 continue;
             }
             participants.add(player.getUniqueId());
+            if (entryRecommendations.putIfAbsent(player.getUniqueId(), recommendedDifficulty(player)) == null)
+                newlyRated.add(player.getUniqueId());
             gearWarningAt.remove(player.getUniqueId());
             joined.add(player);
         }
         if (joined.isEmpty()) return;
-        try { persistRun(); } catch (RuntimeException failure) { joined.forEach(p -> participants.remove(p.getUniqueId())); throw failure; }
+        try { persistRun(); } catch (RuntimeException failure) {
+            joined.forEach(p -> participants.remove(p.getUniqueId()));
+            newlyRated.forEach(entryRecommendations::remove);
+            throw failure;
+        }
         for (Player player : joined) {
             player.sendMessage(ChatColor.GREEN + "你已加入第 " + floor + " 层试炼队伍；本层清怪后会随队自动进入下一层。"
                     + (cleared ? "本层奖励已结算，从下一层开始获得奖励。" : "本层通关后可领取个人奖励。"));
@@ -806,6 +835,13 @@ final class DungeonManager implements Listener {
         if (participant && committedCurrentRun()) {
             out.addProperty("run", runId);
             out.addProperty("revision", runRevision);
+            out.addProperty("runDifficulty", difficulty.id);
+            out.addProperty("challengeTier", challengeTier);
+            TrialChallenge.Tactic tactic = currentTactic();
+            if (tactic != TrialChallenge.Tactic.NONE) {
+                out.add("tacticalObjective", JSON.toJsonTree(Map.of("type", tactic.name().toLowerCase(Locale.ROOT),
+                        "targetUuid", tacticalTarget.toString(), "name", tactic.name, "hint", tactic.hint)));
+            }
             if(enemyMoves){var moves=plugin.dungeonEnemyMoves().hazards(player);if(!moves.isEmpty())out.add("enemyMoves",JSON.toJsonTree(moves));}
         }
         var outcome = ownOutcome(player);
@@ -825,6 +861,7 @@ final class DungeonManager implements Listener {
         if (onLobbyPlatform(player)) {
             var roster = platformAssembly();
             var receipt = assemblyReceipt(roster, "preview", false, 1);
+            receipt.addProperty("difficulty", entryDifficulty(player, roster).id);
             var offer = currentOffer(player, 1, roster);
             if (!active && offer != null) {
                 addOffer(receipt, offer);
@@ -881,7 +918,11 @@ final class DungeonManager implements Listener {
         }
         if(options.has("ruin")){
             var ruin=options.getAsJsonObject("ruin");
-            player.sendMessage("§a[遗迹远征] "+ruin.get("name").getAsString()+" 目前空闲。路线和战备："+ruin.get("infoCommand").getAsString());
+            var link=net.kyori.adventure.text.Component.text("[查看路线]",net.kyori.adventure.text.format.NamedTextColor.YELLOW)
+                .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand(ruin.get("infoCommand").getAsString()));
+            player.sendMessage(net.kyori.adventure.text.Component.text("[遗迹远征] "+ruin.get("name").getAsString()
+                +" · 建议Lv."+ruin.get("recommendedLevel").getAsInt()+" · "+ruin.get("tactic").getAsString()+" ")
+                .append(link));
         }
     }
     void command(Player player, String[] args) {
@@ -936,6 +977,7 @@ final class DungeonManager implements Listener {
                         + " canStart=" + guide.get("canStart").getAsBoolean()
                         + " activityType=trial_tower activityLabel=试炼塔"
                         + " globalDifficulty=" + (active ? difficulty.id : "none")
+                        + " challengeTier=" + (active ? challengeTier : 0)
                         + " selectedDifficulty=" + chosenDifficulty(player).id
                         + " difficultyMode=" + difficultyMode(player)
                         + " recommendedDifficulty=" + recommendedDifficulty(player).id
@@ -988,11 +1030,38 @@ final class DungeonManager implements Listener {
     }
 
     private Difficulty recommendedDifficulty(Player player) {
-        int rank = plugin.adventurerRank(player);
-        return rank >= 4 ? Difficulty.APOCALYPSE : rank >= 2 ? Difficulty.ADVENTURE : Difficulty.NORMAL;
+        return Difficulty.values()[TrialChallenge.recommended(plugin.adventurerRank(player), clearedMilestone(player))];
+    }
+
+    private Difficulty rewardReference(Player player) {
+        if (!isParticipant(player)) return recommendedDifficulty(player);
+        Difficulty entry = entryRecommendations.get(player.getUniqueId());
+        // Checkpoints from before adaptive matchmaking used only the guild rank.
+        return entry != null ? entry : Difficulty.values()[TrialChallenge.recommended(plugin.adventurerRank(player), 0)];
+    }
+
+    private int clearedMilestone(Player player) {
+        UUID id = player.getUniqueId();
+        var config = plugin.getConfig();
+        if (config.contains(DAILY_CLAIMS + id + "." + FINAL_FLOOR) || config.getInt(FINAL_CLEARS + id) > 0) return FINAL_FLOOR;
+        if (config.contains(DAILY_CLAIMS + id + "." + BOSS_FLOOR) || config.getInt(BOSS_CLEARS + id) > 0) return BOSS_FLOOR;
+        return config.contains(DAILY_CLAIMS + id + "." + BASE_FLOORS)
+                || player.getPersistentDataContainer().has(checkpointKey, PersistentDataType.BYTE) ? BASE_FLOORS : 0;
+    }
+
+    private Difficulty partyDifficulty(Player starter, List<Player> entrants) {
+        Difficulty manual = Difficulty.parse(plugin.getConfig().getString(DIFFICULTY_CHOICE + starter.getUniqueId(), "auto"));
+        return manual != null ? manual : entrants.stream().map(this::recommendedDifficulty)
+                .min(Difficulty::compareTo).orElse(Difficulty.NORMAL);
+    }
+
+    private Difficulty entryDifficulty(Player starter, List<Admission> assembly) {
+        return partyDifficulty(starter, assembly.stream().filter(Admission::mayEnter).map(Admission::player).toList());
     }
     String recommendedDifficultyLabel(Player player) { return recommendedDifficulty(player).label; }
-    String selectedDifficultyLabel(Player player) { return chosenDifficulty(player).label; }
+    String selectedDifficultyLabel(Player player) {
+        return onLobbyPlatform(player) ? entryDifficulty(player, platformAssembly()).label : chosenDifficulty(player).label;
+    }
     String selectedDifficultyMode(Player player) { return difficultyMode(player); }
     boolean hasActiveRun() { return active; }
     void waveConfig(CommandSender sender, boolean reload) {
@@ -1014,8 +1083,8 @@ final class DungeonManager implements Listener {
     private void chooseDifficulty(Player player, String[] args) {
         if (args.length == 2 || args.length == 3 && args[2].equalsIgnoreCase("list")) {
             player.sendMessage(ChatColor.GOLD + "试炼难度：普通（生命 ×1.15 / 伤害 ×1.10）、冒险（生命 ×1.7 / 伤害 ×1.4）、末日（生命 ×2.5 / 伤害 ×1.85）。"
-                    + "默认按冒险者等级自动匹配；高等级打低难度，重复物资和装备会减少。"
-                    + "每游戏日每层仍只领一次。开场前由按钮发起者决定全队难度。"
+                    + "自动档看公会等级和历史通关层数，按队伍最低推荐匹配；全员通关过第10/15层可开启强化。"
+                    + "北京时间每日每层至多一份物资，同档第二次只发半额金币（取整），升档可补差。发起者也可手动指定整场难度。"
                     + "你的等级：" + plugin.adventurerRankName(player) + "；推荐：" + recommendedDifficulty(player).label
                     + "；当前选择：" + chosenDifficulty(player).label + "（" + difficultyMode(player) + "）。");
             player.sendMessage("MC_DUNGEON_DIFFICULTY selected=" + chosenDifficulty(player).id
@@ -1024,7 +1093,7 @@ final class DungeonManager implements Listener {
                     + " adventurerRank=" + plugin.adventurerRank(player)
                     + " available=auto,normal,adventure,apocalypse active=" + active
                     + " runDifficulty=" + (active ? difficulty.id : "none")
-                    + " dailyLimitPerFloor=1");
+                    + " dailyItemAwardsPerFloor=1 dailyCoinClearsPerFloor=2 rewardZone=Asia/Shanghai");
             return;
         }
         boolean auto = args.length == 3 && args[2].equalsIgnoreCase("auto");
@@ -1036,13 +1105,11 @@ final class DungeonManager implements Listener {
         plugin.getConfig().set(DIFFICULTY_CHOICE + player.getUniqueId(), auto ? "auto" : choice.id);
         plugin.saveConfig();
         player.sendMessage(ChatColor.GREEN + (auto ? "已启用自动匹配；当前推荐" + recommendedDifficulty(player).label
-                + "。你发起下一场试炼时按当时冒险者等级选择全队难度。"
+                + "。开场时按入场队员的最低推荐匹配。"
                 : "已选择" + choice.label + "难度；你发起下一场试炼时全队采用该难度。"));
         if (!auto && choice.ordinal() < recommendedDifficulty(player).ordinal()) {
-            RewardScale scale = RewardScale.forRun(recommendedDifficulty(player), choice);
-            player.sendMessage(ChatColor.YELLOW + "你的冒险者等级推荐" + recommendedDifficulty(player).label
-                    + "；重复挑战" + choice.label + "时奖励按 " + scale.percent() + "% 结算，"
-                    + "重复保底装备和首领宝藏不再掉落。");
+            player.sendMessage(ChatColor.YELLOW + "推荐挑战" + recommendedDifficulty(player).label
+                    + "。本层历史首通保留解锁与物资；之后低一档只发六折金币，低两档只记通关。");
         }
         player.sendMessage("MC_DUNGEON_DIFFICULTY selected=" + chosenDifficulty(player).id
                 + " mode=" + difficultyMode(player) + " recommended=" + recommendedDifficulty(player).id
@@ -1104,8 +1171,7 @@ final class DungeonManager implements Listener {
         List<Player> group = reviewEntry(starter, assembly, 1, confirmation);
         if (group.isEmpty()) return;
         participants.clear(); mobs.clear();
-        difficulty = chosenDifficulty(starter);
-        if (enterFloor(1, group) == 0) {
+        if (enterFloor(1, group, starter) == 0) {
             reportAssembly(starter, assembly, false, 1, true);
             starter.sendMessage(ChatColor.RED + "【试炼塔】入口传送失败，本场未启动；/mycli status 查魔力，/mycli arena status 核对入口；站在安全处再试，持续失败联系服主。"); return;
         }
@@ -1149,8 +1215,7 @@ final class DungeonManager implements Listener {
         List<Player> group = reviewEntry(starter, assembly, REST_FLOOR, confirmation);
         if (group.isEmpty()) return;
         participants.clear(); mobs.clear();
-        difficulty = chosenDifficulty(starter);
-        if (enterFloor(REST_FLOOR, group) == 0) {
+        if (enterFloor(REST_FLOOR, group, starter) == 0) {
             reportAssembly(starter, assembly, false, REST_FLOOR, true);
             starter.sendMessage(ChatColor.RED + "驿站传送失败，挑战未启动；/mycli status 查魔力与状态，/mycli arena status 查驿站条件；持续失败联系服主。"); return;
         }
@@ -1195,10 +1260,10 @@ final class DungeonManager implements Listener {
     private void sendStart(Player player, Player starter) {
         player.sendMessage("MC_DUNGEON_START difficulty=" + difficulty.id
                 + " starter=" + starter.getName() + " partySize=" + participants.size()
-                + " floor=" + floor + attribution(player));
+                + " floor=" + floor + " challengeTier=" + challengeTier + attribution(player));
     }
 
-    private int enterFloor(int number, List<Player> group) {
+    private int enterFloor(int number, List<Player> group, Player starter) {
         if ((number == BLAZE_FLOOR || number == LAVA_FLOOR) && !group.isEmpty()) clearFloorFire(number);
         Set<UUID> arrived = new HashSet<>();
         Set<UUID> disconnected = new HashSet<>();
@@ -1227,6 +1292,17 @@ final class DungeonManager implements Listener {
             } else player.sendMessage(ChatColor.RED + "传送未成功，你没有进入本层队伍；/mycli arena status 核对场次，不要隔层追怪；把楼层和时间告知服主检查落点。");
         }
         if (arrived.isEmpty()) return 0;
+        if (starter != null) {
+            List<Player> entrants = group.stream().filter(p -> arrived.contains(p.getUniqueId())).toList();
+            entryRecommendations.clear();
+            entrants.forEach(player -> entryRecommendations.put(player.getUniqueId(), recommendedDifficulty(player)));
+            difficulty = partyDifficulty(starter, entrants);
+            int weakestClear = entrants.stream().mapToInt(this::clearedMilestone).min().orElse(0);
+            challengeTier = TrialChallenge.tier(difficulty.ordinal(), weakestClear);
+            for (Player player : entrants) player.sendMessage(ChatColor.GOLD + "本场锁定" + difficulty.label
+                    + "难度，熟练强化 " + challengeTier + "/2。中途入队和下楼沿用本场难度。");
+        }
+        tacticalTarget = null;
         for (UUID id : participants) {
             Player player = ResidentCli.find(id);
             if (!arrived.contains(id) && player != null && player.isOnline() && !player.isDead()
@@ -1249,6 +1325,8 @@ final class DungeonManager implements Listener {
         if (cleared) announce(ChatColor.GOLD + "这里可使用工作台与商人，领取个人箱奖励。"
                 + "三分钟后自动下楼，或按绿色按钮／输入 /mycli arena next 提前出发。");
         persistRun();
+        if(number==REST_FLOOR && starter==null && plugin.guild()!=null)
+            for(Player player:group)if(arrived.contains(player.getUniqueId()))plugin.guild().onRestStationArrival(player);
         return arrived.size();
     }
     private boolean sendToFloor(Player player, Location landing, int number) {
@@ -1357,7 +1435,7 @@ final class DungeonManager implements Listener {
                 List<Player> group = participants.stream().map(ResidentCli::find)
                         .filter(p -> p != null && p.isOnline() && !p.isDead()
                                 && inFloor(p.getLocation(), floor)).toList();
-                if (enterFloor(floor + 1, group) == 0)
+                if (enterFloor(floor + 1, group, null) == 0)
                     finish(false, "advance_failed", "自动下楼失败；已赢得的奖励保存在个人箱子里。");
             }
             return;
@@ -1480,6 +1558,10 @@ final class DungeonManager implements Listener {
 
     @EventHandler public void onParticipantJoin(PlayerJoinEvent event) {
         UUID id = event.getPlayer().getUniqueId();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            Player player = ResidentCli.find(id);
+            if (player != null && player.isOnline()) economy.deliverTrialCoins(player);
+        }, 30L);
         scheduleDeathGuide(id, 30L);
         if (!active || !participants.contains(id)) return;
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -1515,8 +1597,10 @@ final class DungeonManager implements Listener {
                     : new int[][]{{-6,-5},{6,-5},{-6,5},{6,5},{0,7},{0,-7},
                             {-8,0},{8,0},{-10,-8},{10,-8},{-10,8},{10,8}};
         if (activeWave.isEmpty()) activeWave = waveCatalog.wave(floor, theme.mobs(), difficulty != Difficulty.NORMAL);
+        TrialChallenge.Tactic tactic = TrialChallenge.tactic(floor, challengeTier);
+        tacticalTarget = null;
         for (int i = 0; i < activeWave.size(); i++) {
-            int[] spot = spots[i];
+            int[] spot = spots[i % spots.length];
             Location at = center(floor).add(spot[0], 0, spot[1]);
             // Raised platforms are deliberate terrain; spawn atop their surface.
             while (at.getBlock().getType().isSolid() && at.getY() < Y[floor - 1] + 5)
@@ -1580,6 +1664,12 @@ final class DungeonManager implements Listener {
             if (e instanceof Mob mob) {
                 if (difficulty != Difficulty.NORMAL) configured.equip(mob, 1);
                 applyDifficulty(mob);
+                if (tacticalTarget == null && activeWave.size() > 1 && tacticalRole(tactic, mob.getType())) {
+                    tacticalTarget = mob.getUniqueId();
+                    String name = mob.getCustomName();
+                    mob.setCustomName(ChatColor.GOLD + tactic.name + (name == null ? "" : " · " + name));
+                    mob.setCustomNameVisible(true);
+                }
             }
             mobs.add(e.getUniqueId());
             if(enemyMoves&&floor==3&&difficulty!=Difficulty.NORMAL&&e instanceof Mob mob
@@ -1590,7 +1680,24 @@ final class DungeonManager implements Listener {
                     + ", type=" + e.getType() + ", at=" + LocationOutput.fields(e.getLocation()));
         }
         announce(ChatColor.RED + "第 " + floor + "/" + maxFloor() + " 层〔" + difficulty.label + "〕：" + theme.name()
-                + "，" + activeWave.size() + " 只怪物！女巫与远程怪需优先处理。");
+                + "，" + activeWave.size() + " 只怪物！" + (tacticalTarget == null ? "" : tactic.hint));
+    }
+
+    private static boolean tacticalRole(TrialChallenge.Tactic tactic, EntityType type) {
+        return switch (tactic) {
+            case WARD -> type == EntityType.HUSK || type == EntityType.ZOMBIE || type == EntityType.VINDICATOR
+                    || type == EntityType.WITHER_SKELETON;
+            case RALLY -> type == EntityType.STRAY || type == EntityType.SKELETON || type == EntityType.PILLAGER;
+            case NONE -> false;
+        };
+    }
+
+    private TrialChallenge.Tactic currentTactic() {
+        if (!active || !spawned || cleared || pausedAt > 0 || tacticalTarget == null || !mobs.contains(tacticalTarget))
+            return TrialChallenge.Tactic.NONE;
+        Entity target = Bukkit.getEntity(tacticalTarget);
+        return target != null && target.isValid() && !target.isDead() && inFloor(target.getLocation(), floor)
+                ? TrialChallenge.tactic(floor, challengeTier) : TrialChallenge.Tactic.NONE;
     }
 
     private void registerFrostLine(Mob mob){
@@ -1608,9 +1715,9 @@ final class DungeonManager implements Listener {
         if (mob.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null) {
             double deepFloor = 1.0 + Math.max(0, floor - 7) * 0.04;
             double max = mob.getAttribute(Attribute.GENERIC_MAX_HEALTH).getBaseValue()
-                    * difficulty.health * deepFloor;
+                    * difficulty.health * deepFloor * (1.0 + 0.12 * challengeTier);
             mob.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(max);
-            mob.setHealth(max);
+            mob.setHealth(mob.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue());
         }
         if (mob.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED) != null)
             mob.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).setBaseValue(
@@ -1702,15 +1809,21 @@ final class DungeonManager implements Listener {
         if (trialMob(event.getEntity()) && trialMob(attacker(event.getDamager()))) {
             event.setCancelled(true);
             lastMobDamage.put(event.getEntity().getUniqueId(), "blocked_friendly_" + event.getCause());
+        } else if (mobs.contains(event.getEntity().getUniqueId()) && !event.getEntity().getUniqueId().equals(tacticalTarget)
+                && currentTactic() == TrialChallenge.Tactic.WARD) {
+            event.setDamage(event.getDamage() * 0.70);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onTrialOutgoingDamage(EntityDamageByEntityEvent event) {
-        if (!trialMob(attacker(event.getDamager()))
+        Entity source = attacker(event.getDamager());
+        if (!trialMob(source)
                 || !validParticipantTarget(event.getEntity() instanceof LivingEntity living ? living : null)) return;
+        boolean rallied = mobs.contains(source.getUniqueId()) && !source.getUniqueId().equals(tacticalTarget)
+                && currentTactic() == TrialChallenge.Tactic.RALLY;
         event.setDamage(event.getDamage() * difficulty.damage
-                * (1.0 + Math.max(0, floor - 7) * 0.025));
+                * (1.0 + Math.max(0, floor - 7) * 0.025) * (1.0 + 0.05 * challengeTier) * (rallied ? 1.20 : 1.0));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -1861,9 +1974,10 @@ final class DungeonManager implements Listener {
         DungeonLoot.Bonus next = DungeonLoot.equipmentPreview(index);
         String nextName = ChatColor.stripColor(next.item().getItemMeta().getDisplayName());
         long gameDay = world().getFullTime() / 24000L;
+        String date = java.time.LocalDate.now(DailyShop.ZONE).toString();
         List<String> claimedFloors = new ArrayList<>();
         for (int n = 1; n <= maxFloor(); n++)
-            if (plugin.getConfig().getLong(DAILY_CLAIMS + id + "." + n, Long.MIN_VALUE) == gameDay)
+            if (dailyPayout(id, n, date, gameDay).clears() > 0)
                 claimedFloors.add(Integer.toString(n));
         int[] available = new int[DungeonLoot.EQUIPMENT_CYCLE];
         int[] stored = new int[DungeonLoot.EQUIPMENT_CYCLE];
@@ -1883,20 +1997,23 @@ final class DungeonManager implements Listener {
             collection.add(DungeonLoot.equipmentId(piece), counts);
         }
         Difficulty preview = isParticipant(player) ? difficulty : chosenDifficulty(player);
+        Difficulty reference = isParticipant(player) ? rewardReference(player) : recommendedDifficulty(player);
         player.sendMessage(ChatColor.GOLD + "试炼轮换装备已查到 " + owned + "/" + DungeonLoot.EQUIPMENT_CYCLE
                 + " 种（随身、个人箱十页及待入箱）。下一件轮换预览：" + nextName
                 + "。第 6、10 层的首通会推进轮换，冒险及末日符合领奖条件时可继续收集。");
-        player.sendMessage(ChatColor.AQUA + "普通重复挑战掉补给和材料；冒险及末日从第 4 层起有装备奖池，第 8 层起可能出卓越，"
-                + "末日第 12 层起可能出传奇。第 10、15 层首通宝藏各一份。每游戏日每层最多一次，深层更容易获得高品质装备。");
+        player.sendMessage(ChatColor.AQUA + "普通档匹配本人难度时可领当日补给和材料；冒险及末日从第 4 层起有装备奖池，第 8 层起可能出卓越，"
+                + "末日第 12 层起可能出传奇。北京时间每日零点刷新，每人每层至多一份物资；同档第二次只发半额金币（取整），之后只记通关。升档可补金币差额。");
         player.sendMessage(ChatColor.AQUA + "当前按" + preview.label + "预览。"
                 + lootChanceSummary(4, preview) + lootChanceSummary(8, preview) + lootChanceSummary(15, preview)
                 + "几率为难度折扣及保底前。逐层查询：/mycli arena loot --json。");
         player.sendMessage(ChatColor.GRAY + "已领取 " + claimedFloors.size() + " 层；装备位置用 /mycli arena stash list <1–10>，待入箱用 /mycli arena rewards list。");
         if (json) {
             var detail = new com.google.gson.JsonObject();
-            detail.addProperty("schemaVersion", 1);
+            detail.addProperty("schemaVersion", 2);
             detail.addProperty("difficulty", preview.id);
-            detail.addProperty("rewardPercent", RewardScale.forRun(recommendedDifficulty(player), preview).percent());
+            detail.addProperty("rewardDate", date);
+            detail.addProperty("rewardZone", DailyShop.ZONE.getId());
+            detail.addProperty("rewardPercent", RewardScale.forRun(reference, preview).percent());
             if (preview != Difficulty.NORMAL) {
                 detail.addProperty("rareMisses", rareGearMisses(id, preview));
                 detail.addProperty("rarePityAfterMisses", TrialRewardPolicy.pityAfter(preview.ordinal()));
@@ -1905,8 +2022,22 @@ final class DungeonManager implements Listener {
             detail.addProperty("rotationPiecesTotal", DungeonLoot.EQUIPMENT_CYCLE);
             detail.add("rotation", collection);
             var rates = new java.util.LinkedHashMap<Integer, TrialRewardPolicy.Rates>();
-            for (int n = 1; n <= maxFloor(); n++)
-                if (n != REST_FLOOR) rates.put(n, TrialRewardPolicy.rates(n, preview.ordinal()));
+            var nextPayouts = new com.google.gson.JsonObject();
+            int previewTier = isParticipant(player) ? challengeTier : TrialChallenge.tier(preview.ordinal(), clearedMilestone(player));
+            int gap = RewardScale.forRun(reference, preview).gap();
+            for (int n = 1; n <= maxFloor(); n++) {
+                if (n == REST_FLOOR) continue;
+                rates.put(n, TrialRewardPolicy.rates(n, preview.ordinal()));
+                var payout = TrialRewardPolicy.payout(dailyPayout(id, n, date, gameDay),
+                        !plugin.getConfig().contains(DAILY_CLAIMS + id + "." + n), gap, fullFloorCoins(n, preview, previewTier));
+                var row = new com.google.gson.JsonObject();
+                row.addProperty("coins", payout.coins());
+                row.addProperty("itemsEligible", payout.items());
+                row.addProperty("reason", payout.reason());
+                nextPayouts.add(Integer.toString(n), row);
+            }
+            detail.addProperty("previewParty", isParticipant(player) ? "current_run" : "solo");
+            detail.add("nextPayoutByFloor", nextPayouts);
             detail.add("baseRatesPercent", JSON.toJsonTree(rates));
             player.sendMessage("MC_TRIAL_LOOT " + detail);
         }
@@ -1915,7 +2046,8 @@ final class DungeonManager implements Listener {
                 + " nextName=" + DungeonLoot.equipmentId(index)
                 + " bossClears=" + clears
                 + " pendingItems=" + queuedItems(id) + " gameDay=" + gameDay
-                + " claimedFloors=" + String.join(",", claimedFloors) + " dailyLimitPerFloor=1 enchantments=random_on_reward enchantmentSchemaVersion=1 rewardProfile=village_training_v3 normalRepeatEquipment=false normalLegendary=false");
+                + " claimedFloors=" + String.join(",", claimedFloors) + " rewardDate=" + date
+                + " dailyItemAwardsPerFloor=1 dailyCoinClearsPerFloor=2 enchantments=random_on_reward enchantmentSchemaVersion=1 rewardProfile=village_training_v4 normalRepeatEquipment=false normalLegendary=false");
     }
 
     private String lootChanceSummary(int floor, Difficulty preview) {
@@ -1954,8 +2086,25 @@ final class DungeonManager implements Listener {
                 + " chestY=" + (Y[room - 1] + 1) + " chestZ=" + chestZ(room));
     }
 
+    private static int fullFloorCoins(int floor, Difficulty difficulty, int tier) {
+        return (difficulty.walletBonus + tier) * (floor >= 11 ? 2 : 1);
+    }
+
+    private TrialRewardPolicy.Daily dailyPayout(UUID owner, int layer, String date, long gameDay) {
+        String path = FLOOR_PAYOUTS + owner + "." + layer;
+        var config = plugin.getConfig();
+        if (date.equals(config.getString(path + ".date")))
+            return new TrialRewardPolicy.Daily(config.getInt(path + ".clears"),
+                    config.getInt(path + ".peakCoins"), config.getBoolean(path + ".itemsIssued"), config.getBoolean(path + ".legacyPaid"));
+        if (!config.contains(path) && config.getLong(DAILY_CLAIMS + owner + "." + layer, Long.MIN_VALUE) == gameDay)
+            return TrialRewardPolicy.Daily.LEGACY_PAID;
+        return TrialRewardPolicy.Daily.EMPTY;
+    }
+
     private int rewardFloor() {
         List<LootReceipt> receipts = new ArrayList<>();
+        String date = java.time.LocalDate.now(DailyShop.ZONE).toString();
+        long gameDay = world().getFullTime() / 24000L;
         int credited = 0;
         int partySize = 0;
         for (UUID id : participants) {
@@ -1965,127 +2114,133 @@ final class DungeonManager implements Listener {
         for (UUID id : participants) {
             Player p = ResidentCli.find(id);
             if (p == null || p.isDead() || !inFloor(p.getLocation(), floor)) continue;
-            // A real clear counts for an accepted contract even when today's
-            // loot was already claimed. The clear callback runs once per room.
-            plugin.guildFloorCleared(p, floor, partySize);
-            long gameDay = world().getFullTime() / 24000L;
-            String claimPath = DAILY_CLAIMS + id + "." + floor;
-            if (plugin.getConfig().getLong(claimPath, Long.MIN_VALUE) == gameDay) {
-                p.sendMessage(ChatColor.YELLOW + "第 " + floor + " 层今天已领奖；明天（游戏日 "
-                        + (gameDay + 1) + "）可再次获得奖励。仍可继续挑战和使用商人。");
-                receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=daily_limit gameDay="
-                        + gameDay + " nextDay=" + (gameDay + 1) + " credited=false"));
+            String path = FLOOR_PAYOUTS + id + "." + floor;
+            if (runId.equals(plugin.getConfig().getString(path + ".run"))) {
+                economy.deliverTrialCoins(p);
                 continue;
             }
+            // Practice still counts for exploration and accepted contracts.
+            plugin.guildFloorCleared(p, floor, partySize);
+            String claimPath = DAILY_CLAIMS + id + "." + floor;
             boolean firstClear = !plugin.getConfig().contains(claimPath);
-            Difficulty recommended = recommendedDifficulty(p);
+            Difficulty recommended = rewardReference(p);
             RewardScale scale = RewardScale.forRun(recommended, difficulty);
-            if (scale.gap() > 0) p.sendMessage(ChatColor.YELLOW + "你的冒险者等级是"
-                    + plugin.adventurerRankName(p) + "，推荐" + recommended.label + "试炼；本层"
-                    + difficulty.label + "奖励按 " + scale.percent() + "% 结算。首次通关解锁与剧情奖励保留，"
-                    + "重复装备仅在匹配难度中发放。");
+            var prior = dailyPayout(id, floor, date, gameDay);
+            int baseCoins = fullFloorCoins(floor, difficulty, challengeTier);
+            var payout = TrialRewardPolicy.payout(prior, firstClear, scale.gap(), baseCoins);
+            if (prior == TrialRewardPolicy.Daily.LEGACY_PAID)
+                p.sendMessage(ChatColor.YELLOW + "本层已有旧版当日领奖记录。北京时间次日零点恢复完整奖励。");
             receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=level_scaling"
                     + " adventurerRank=" + plugin.adventurerRank(p)
                     + " recommendedDifficulty=" + recommended.id
-                    + " runDifficulty=" + difficulty.id + " rewardPercent=" + scale.percent()
-                    + " firstClear=" + firstClear + " repeatedGear=" + (scale.gap() == 0
+                    + " runDifficulty=" + difficulty.id + " rewardPercent=" + (!firstClear && scale.gap() >= 2 ? 0 : scale.percent())
+                    + " firstClear=" + firstClear + " repeatedGear=" + (payout.items() && scale.gap() == 0
                             && TrialRewardPolicy.milestone(floor, difficulty.ordinal(), false))));
-            for (Loot loot : THEMES.get(floor - 1).rewards()) {
-                String path = rewardPath(id, loot.material());
-                plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0)
-                        + scale.stack(loot.amount()));
-            }
-            if (scale.bonusRoll()) {
-                int misses = rareGearMisses(id, difficulty);
-                DungeonLoot.Bonus bonus = DungeonLoot.roll(floor, misses, difficulty.ordinal());
-                if (TrialRewardPolicy.rates(floor, difficulty.ordinal()).rare() > 0) {
-                    String pityPath = RARE_GEAR_MISSES + id + "." + difficulty.id;
-                    plugin.getConfig().set(pityPath,
-                            bonus != null && bonus.rare() ? 0
-                                    : Math.min(TrialRewardPolicy.pityAfter(difficulty.ordinal()), misses + 1));
-                    // The old counter was shared. Carry it over once to the
-                    // first difficulty that actually rolls for rare gear.
-                    if (plugin.getConfig().getInt(RARE_MISSES + id, 0) != 0)
-                        plugin.getConfig().set(RARE_MISSES + id, 0);
-                }
-                if (bonus != null) storeBonus(p, plugin.engraveTrialReward(p, bonus, floor), receipts);
-            } else {
-                receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor
-                        + " category=bonus_skipped reason=below_recommended_difficulty"));
-            }
-            List<DungeonLoot.Bonus> supplies = firstClear ? DungeonLoot.supplies(floor) : List.of();
-            if (!supplies.isEmpty()) {
-                List<ItemStack> guaranteed = bonusItems(id);
-                for (DungeonLoot.Bonus supply : supplies) {
-                    ItemStack item = supply.item().clone();
-                    item.setAmount(scale.stack(item.getAmount()));
-                    guaranteed.add(item);
-                    p.sendMessage(ChatColor.GREEN + "本层补给：" + supply.label()
-                            + (item.getAmount() == supply.item().getAmount() ? "" : "（按等级调整为 ×" + item.getAmount() + "）")
-                            + "，已存入个人箱子。");
-                    receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=supply item=minecraft:"
-                            + item.getType().name().toLowerCase(Locale.ROOT)
-                            + " count=" + item.getAmount()));
-                }
-                plugin.getConfig().set(BONUS_ITEMS + id, guaranteed);
-            }
-            int setIndex = Math.max(0, plugin.getConfig().getInt(EQUIPMENT_INDEX + id, 0));
-            DungeonLoot.Bonus milestone = TrialRewardPolicy.milestone(floor, difficulty.ordinal(), firstClear)
-                    && (scale.gap() == 0 || firstClear)
-                    ? DungeonLoot.milestone(floor, setIndex,difficulty.ordinal()) : null;
-            if (milestone != null) {
-                List<ItemStack> guaranteed = bonusItems(id);
-                guaranteed.add(milestone.item());
-                plugin.getConfig().set(BONUS_ITEMS + id, guaranteed);
-                if (floor == 6 || floor == BOSS_FLOOR)
-                    plugin.getConfig().set(EQUIPMENT_INDEX + id, setIndex + 1);
-                p.sendMessage((milestone.rare() ? ChatColor.LIGHT_PURPLE : ChatColor.GREEN)
-                        + "本层保底装备：" + milestone.label() + "，已存入个人箱子。"
-                        + (floor == 6 || floor == BOSS_FLOOR ? " /mycli arena loot 可查套装进度。" : ""));
-                receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=milestone item=minecraft:"
-                        + milestone.item().getType().name().toLowerCase(Locale.ROOT)
-                            + " equipmentIndex=" + (floor == 6 || floor == BOSS_FLOOR ? setIndex : -1)
-                            + DungeonLoot.enchantmentFields(milestone.item())));
-            }
+            if (payout.items()) grantFloorItems(p, firstClear, scale, receipts);
             if (floor == 3) plugin.teachArenaSkills(p);
-            if (floor == BASE_FLOORS && expanded) {
+            if (floor == BASE_FLOORS && expanded && !p.getPersistentDataContainer().has(checkpointKey, PersistentDataType.BYTE)) {
                 p.getPersistentDataContainer().set(checkpointKey, PersistentDataType.BYTE, (byte) 1);
                 p.saveData();
                 p.sendMessage(ChatColor.GOLD + "已解锁第七层灯火驿站直达；今后可在罗盘或 /mycli arena rest 进入。");
             }
-            if (floor == BOSS_FLOOR && (scale.gap() == 0 || firstClear)) {
-                int clears = plugin.getConfig().getInt(BOSS_CLEARS + id, -1);
-                if (clears < 0) clears = hasBossRelic(id, p) ? 1 : 0;
-                plugin.getConfig().set(BOSS_CLEARS + id, clears + 1);
-                if (clears == 0) storeBossCache(p, DungeonLoot.bossCache(0, difficulty.ordinal()), "boss", receipts);
-            }
-            if (floor == FINAL_FLOOR && (scale.gap() == 0 || firstClear)) {
-                int clears = plugin.getConfig().getInt(FINAL_CLEARS + id, 0);
-                plugin.getConfig().set(FINAL_CLEARS + id, clears + 1);
-                if (clears == 0) storeBossCache(p, DungeonLoot.finalCache(0, difficulty.ordinal()), "final_boss", receipts);
-            }
-            if (difficulty.walletBonus > 0) {
-                int bonusBalance = difficulty.walletBonus * (floor >= 11 ? 2 : 1);
-                int creditedBalance = economy.creditDifficulty(id, scale.wallet(bonusBalance));
-                p.sendMessage(ChatColor.GREEN + difficulty.label + "难度奖励：金币 +" + creditedBalance
-                        + "；可在入口商人购买补给，不占背包。");
-                receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=difficulty_wallet difficulty="
-                        + difficulty.id + " amount=" + creditedBalance));
-            }
             plugin.getConfig().set(claimPath, gameDay);
-            plugin.saveConfig();
-            p.sendTitle(ChatColor.GOLD + "第 " + floor + " 层过关", ChatColor.YELLOW + "奖励已存入个人箱子", 5, 55, 10);
-            p.sendMessage(ChatColor.GOLD + "可在本层或地面大厅开个人箱。免费查余量、武器及补给：" + PersonalStashOverview.COMMAND);
-            credited++;
+            plugin.getConfig().set(path + ".date", date);
+            plugin.getConfig().set(path + ".run", runId);
+            plugin.getConfig().set(path + ".clears", payout.next().clears());
+            plugin.getConfig().set(path + ".peakCoins", payout.next().peakCoins());
+            plugin.getConfig().set(path + ".itemsIssued", payout.next().itemsIssued());
+            plugin.getConfig().set(path + ".legacyPaid", payout.next().legacyPaid() ? true : null);
+            String coinRequest = economy.recordTrialCoins(id, runId, floor, payout.coins());
+            plugin.saveConfig(); // Commit items, entitlement and the stable coin request together.
+            boolean coinsPaid = economy.deliverTrialCoins(p).contains(coinRequest);
+            boolean rewarded = coinsPaid || payout.items();
+            receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=" + payout.reason()
+                    + " rewardDate=" + date + " runId=" + runId + " challengeTier=" + challengeTier
+                    + " coinsDue=" + payout.coins() + " itemsEligible=" + payout.items() + " credited=" + rewarded
+                    + " coinsConfirmed=" + coinsPaid));
+            String summary = payout.items() ? "本层奖励已存入个人箱子" : coinsPaid ? "本层金币 +" + payout.coins()
+                    : payout.coins() > 0 ? "本层金币待结算，原凭据已保存"
+                    : payout.reason().equals("practice") ? "本层练习，推荐挑战" + recommended.label + "或其他遗迹" : "本层今日奖励已领，可挑战其他遗迹";
+            p.sendTitle(ChatColor.GOLD + "第 " + floor + " 层过关", ChatColor.YELLOW + summary, 5, 55, 10);
+            p.sendMessage(ChatColor.GOLD + summary + (payout.items() ? "。免费查余量、武器及补给：" + PersonalStashOverview.COMMAND : "。"));
+            if (rewarded) credited++;
         }
-        // Publish reward attribution only after the actual awards and clear checkpoint are durable.
         persistRun();
-        for (LootReceipt receipt : receipts) {
-            receipt.recipient().sendMessage(receipt.message() + attribution(receipt.recipient()));
-        }
-        plugin.getLogger().info("Dungeon floor reward: floor=" + floor + ", difficulty=" + difficulty.id
-                + ", credited=" + credited);
+        for (LootReceipt receipt : receipts) receipt.recipient().sendMessage(receipt.message() + attribution(receipt.recipient()));
+        plugin.getLogger().info("Dungeon floor reward: floor=" + floor + ", difficulty=" + difficulty.id + ", credited=" + credited);
         return credited;
+    }
+
+    private void grantFloorItems(Player p, boolean firstClear, RewardScale scale, List<LootReceipt> receipts) {
+        UUID id = p.getUniqueId();
+        for (Loot loot : THEMES.get(floor - 1).rewards()) {
+            String path = rewardPath(id, loot.material());
+            plugin.getConfig().set(path, plugin.getConfig().getInt(path, 0)
+                    + scale.stack(loot.amount()));
+        }
+        if (scale.bonusRoll()) {
+            int misses = rareGearMisses(id, difficulty);
+            DungeonLoot.Bonus bonus = DungeonLoot.roll(floor, misses, difficulty.ordinal());
+            if (TrialRewardPolicy.rates(floor, difficulty.ordinal()).rare() > 0) {
+                String pityPath = RARE_GEAR_MISSES + id + "." + difficulty.id;
+                plugin.getConfig().set(pityPath,
+                        bonus != null && bonus.rare() ? 0
+                                : Math.min(TrialRewardPolicy.pityAfter(difficulty.ordinal()), misses + 1));
+                // The old counter was shared. Carry it over once to the
+                // first difficulty that actually rolls for rare gear.
+                if (plugin.getConfig().getInt(RARE_MISSES + id, 0) != 0)
+                    plugin.getConfig().set(RARE_MISSES + id, 0);
+            }
+            if (bonus != null) storeBonus(p, plugin.engraveTrialReward(p, bonus, floor), receipts);
+        } else {
+            receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor
+                    + " category=bonus_skipped reason=below_recommended_difficulty"));
+        }
+        List<DungeonLoot.Bonus> supplies = firstClear ? DungeonLoot.supplies(floor) : List.of();
+        if (!supplies.isEmpty()) {
+            List<ItemStack> guaranteed = bonusItems(id);
+            for (DungeonLoot.Bonus supply : supplies) {
+                ItemStack item = supply.item().clone();
+                item.setAmount(scale.stack(item.getAmount()));
+                guaranteed.add(item);
+                p.sendMessage(ChatColor.GREEN + "本层补给：" + supply.label()
+                        + (item.getAmount() == supply.item().getAmount() ? "" : "（按等级调整为 ×" + item.getAmount() + "）")
+                        + "，已存入个人箱子。");
+                receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=supply item=minecraft:"
+                        + item.getType().name().toLowerCase(Locale.ROOT)
+                        + " count=" + item.getAmount()));
+            }
+            plugin.getConfig().set(BONUS_ITEMS + id, guaranteed);
+        }
+        int setIndex = Math.max(0, plugin.getConfig().getInt(EQUIPMENT_INDEX + id, 0));
+        DungeonLoot.Bonus milestone = TrialRewardPolicy.milestone(floor, difficulty.ordinal(), firstClear)
+                && (scale.gap() == 0 || firstClear)
+                ? DungeonLoot.milestone(floor, setIndex,difficulty.ordinal()) : null;
+        if (milestone != null) {
+            List<ItemStack> guaranteed = bonusItems(id);
+            guaranteed.add(milestone.item());
+            plugin.getConfig().set(BONUS_ITEMS + id, guaranteed);
+            if (floor == 6 || floor == BOSS_FLOOR)
+                plugin.getConfig().set(EQUIPMENT_INDEX + id, setIndex + 1);
+            p.sendMessage((milestone.rare() ? ChatColor.LIGHT_PURPLE : ChatColor.GREEN)
+                    + "本层保底装备：" + milestone.label() + "，已存入个人箱子。"
+                    + (floor == 6 || floor == BOSS_FLOOR ? " /mycli arena loot 可查套装进度。" : ""));
+            receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=milestone item=minecraft:"
+                    + milestone.item().getType().name().toLowerCase(Locale.ROOT)
+                        + " equipmentIndex=" + (floor == 6 || floor == BOSS_FLOOR ? setIndex : -1)
+                        + DungeonLoot.enchantmentFields(milestone.item())));
+        }
+        if (floor == BOSS_FLOOR && (scale.gap() == 0 || firstClear)) {
+            int clears = plugin.getConfig().getInt(BOSS_CLEARS + id, -1);
+            if (clears < 0) clears = hasBossRelic(id, p) ? 1 : 0;
+            plugin.getConfig().set(BOSS_CLEARS + id, clears + 1);
+            if (clears == 0) storeBossCache(p, DungeonLoot.bossCache(0, difficulty.ordinal()), "boss", receipts);
+        }
+        if (floor == FINAL_FLOOR && (scale.gap() == 0 || firstClear)) {
+            int clears = plugin.getConfig().getInt(FINAL_CLEARS + id, 0);
+            plugin.getConfig().set(FINAL_CLEARS + id, clears + 1);
+            if (clears == 0) storeBossCache(p, DungeonLoot.finalCache(0, difficulty.ordinal()), "final_boss", receipts);
+        }
     }
 
     private void storeBonus(Player player, DungeonLoot.Bonus bonus, List<LootReceipt> receipts) {
@@ -2224,7 +2379,9 @@ final class DungeonManager implements Listener {
                 plugin.getLogger().warning("Trial return remains pending for " + id + ": " + failure.getClass().getSimpleName());
                 player.sendMessage(ChatColor.YELLOW + "【试炼塔·返程待确认】奖励和返程记录已保留，服务器会自动核对重试；无需重新挑战。");
             }
+            return;
         }
+        if (onLobbyPlatform(player)) showOuting(player,outing(player,true));
     }
 
     private String rescueKey() { return "tower:" + runId; }
@@ -2340,7 +2497,7 @@ final class DungeonManager implements Listener {
                 int slot = Integer.parseInt(args[3]);
                 if (slot >= 0 && slot < REWARD_TYPES.length) delivered = claimStandard(player, id, REWARD_TYPES[slot]);
                 else if (slot >= 9 && slot < 18) delivered = claimBonus(player, id, slot - 9);
-                else player.sendMessage("奖励槽位为 0–7 或 9–17；先用 /mycli arena rewards list 查看。");
+                else player.sendMessage("奖励槽位为 0–17；先用 /mycli arena rewards list 查看。");
                 if (delivered) chargeRemoteStash(player);
             } catch (NumberFormatException invalid) {
                 player.sendMessage("用法：/mycli arena rewards take <槽位|all>");
@@ -2893,6 +3050,10 @@ final class DungeonManager implements Listener {
     @EventHandler public void onDungeonMobDeath(EntityDeathEvent event) {
         if (!active || !mobs.contains(event.getEntity().getUniqueId())
                 || !event.getEntity().getPersistentDataContainer().has(mobKey, PersistentDataType.BYTE)) return;
+        if (event.getEntity().getUniqueId().equals(tacticalTarget)) {
+            tacticalTarget = null;
+            announce(ChatColor.GREEN + TrialChallenge.tactic(floor, challengeTier).name + "已击破，其余敌人的阵型效果已解除。");
+        }
         if (event.getEntity().getUniqueId().equals(bossId)) {
             pruneBossBarAudience();
             finishBossBar();

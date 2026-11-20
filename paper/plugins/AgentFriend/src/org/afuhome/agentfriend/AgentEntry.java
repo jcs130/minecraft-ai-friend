@@ -138,7 +138,12 @@ final class AgentEntry {
             if(active)missing.add(life.has("missingAdvice")?life.get("missingAdvice").getAsString():flag(life,"ready")?"尚需 life claim 交付":"继续实际行动："+life.get("instruction").getAsString());
             life.add("missingConditions",missing);rows.add(life);
             JsonObject academy=plugin.skillAssessments().summary(p);academy.addProperty("section","guild");academy.addProperty("kind","assessment");academy.addProperty("title","能力认证与晋级考试");
-            academy.addProperty("nextCommand","/mycli guild exam status");academy.add("missingConditions",academy.has("nextAction")?commands(academy.get("nextAction").getAsString()):new JsonArray());rows.add(academy);
+            if (!academy.has("nextCommand")) {
+                boolean idleMember = !academy.has("examId") && plugin.guild().hasJoined(p)
+                        && plugin.skillAssessments().rankPointLedgerReady() && academy.get("gradeIndex").getAsInt() < GuildRankPoints.LAST_GRADE;
+                academy.addProperty("nextCommand", idleMember ? "/mycli guild exam promotion" : "/mycli guild exam status");
+            }
+            academy.add("missingConditions",academy.has("nextAction")?commands(academy.get("nextAction").getAsString()):new JsonArray());rows.add(academy);
         }
         if(filter.equals("all")||filter.equals("challenge")) {
             JsonObject challenge=plugin.lifeChallenges().summary(p);challenge.addProperty("section","challenge");rows.add(challenge);

@@ -29,6 +29,13 @@ public final class TrialRewardPolicyTest {
     }
 
     public static void main(String[] args) {
+        dailyRewards();
+        String today="2026-11-20", yesterday="2026-11-19";
+        require(SiteRewardPolicy.status("run2",today,null,"run1",yesterday).equals("eligible"), "new day fresh site");
+        require(SiteRewardPolicy.status("run2",today,null,"run1",today).equals("daily_limit"), "one expedition award per site/day");
+        require(SiteRewardPolicy.status("run1",today,"run1",null,null).equals("ready"), "restart retains original receipt");
+        require(SiteRewardPolicy.status("run1",today,null,"run1",yesterday).equals("claimed"), "claimed run replay next day");
+        require(SiteRewardPolicy.status("run2",today,"run1",null,null).equals("previous_reward_pending"), "preserve earlier pending reward");
         for (int difficulty = 0; difficulty <= 2; difficulty++) {
             var previous = TrialRewardPolicy.rates(1, difficulty);
             for (int floor = 1; floor <= 15; floor++) {
@@ -66,5 +73,48 @@ public final class TrialRewardPolicyTest {
         require(TrialRewardPolicy.rates(15, 2).excellent() == 5, "apocalypse summit excellent");
         require(TrialRewardPolicy.rates(15, 2).legendary() == 2, "apocalypse summit legendary");
         System.out.println("PASS " + checks + " reward distribution and progression checks");
+    }
+
+    private static void dailyRewards() {
+        var empty = TrialRewardPolicy.Daily.EMPTY;
+        var first = TrialRewardPolicy.payout(empty, true, 2, 1);
+        require(first.items() && first.coins() == 1, "historical first clear keeps supplies and progression");
+        var training = TrialRewardPolicy.payout(empty, false, 2, 1);
+        require(training.next().equals(empty) && !training.items() && training.coins() == 0,
+                "practice cannot consume another difficulty's daily award");
+        var low = TrialRewardPolicy.payout(empty, false, 1, 3);
+        require(!low.items() && low.coins() == 1 && low.next().clears() == 1, "below recommendation earns only discounted gold");
+        var upgrade = TrialRewardPolicy.payout(low.next(), false, 0, 7);
+        require(upgrade.items() && upgrade.coins() == 9, "upgrade pays six gold difference plus three second-clear gold");
+        var third = TrialRewardPolicy.payout(upgrade.next(), false, 0, 7);
+        require(!third.items() && third.coins() == 0, "ordinary third repeat earns nothing");
+        var late = TrialRewardPolicy.payout(third.next(), false, 0, 14);
+        require(!late.items() && late.coins() == 7, "later upgrade only raises the full-clear entitlement");
+        for (int base = 1; base <= 14; base++) {
+            var a = TrialRewardPolicy.payout(empty, false, 0, base);
+            var b = TrialRewardPolicy.payout(a.next(), false, 0, base);
+            var c = TrialRewardPolicy.payout(b.next(), false, 0, base);
+            require(a.items() && a.coins() == base, "first matched clear issues one loot roll and full gold");
+            require(!b.items() && b.coins() == base / 2, "second matched clear issues only half gold rounded down");
+            require(!c.items() && c.coins() == 0 && c.next().equals(b.next()), "later clears keep capped entitlement");
+            var migrated = TrialRewardPolicy.payout(TrialRewardPolicy.Daily.LEGACY_PAID, false, 0, base);
+            require(migrated.coins() == 0 && !migrated.items(), "legacy paid floor cannot be replayed");
+        }
+        // Four clears at different tiers in arbitrary order. The entire day is bounded
+        // by one physical package and 1.5 times the hardest challenge actually completed.
+        for (int a : new int[]{1, 3, 7}) for (int b : new int[]{1, 3, 7})
+            for (int c : new int[]{1, 3, 7}) for (int d : new int[]{1, 3, 7}) {
+                var state = empty;
+                int coins = 0, itemAwards = 0, hardest = 0;
+                for (int base : new int[]{a, b, c, d}) {
+                    var result = TrialRewardPolicy.payout(state, false, 0, base);
+                    state = result.next();
+                    coins += result.coins();
+                    if (result.items()) itemAwards++;
+                    hardest = Math.max(hardest, base);
+                }
+                require(itemAwards == 1 && coins >= hardest && coins <= hardest + hardest / 2,
+                        "gear or coins inflated by difficulty switching");
+            }
     }
 }
