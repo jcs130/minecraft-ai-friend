@@ -198,13 +198,24 @@ class ActionJournal:
         """, (body,))
         return [text[:100] for (text,) in rows if isinstance(text, str) and text.strip()]
 
-    def last_adventure(self, body: str, kind: str) -> dict:
+    def last_adventure(self, body: str, kind: str, *other_kinds: str) -> dict:
+        kinds = (kind, *other_kinds)
+        placeholders = ",".join("?" for _ in kinds)
         row = self.db.execute("SELECT receipt FROM dispatch WHERE body=? AND receipt IS NOT NULL "
                               "AND json_extract(action,'$.name') IN ('adventure_query','adventure_action') "
-                              "AND json_extract(action,'$.args.kind')=? ORDER BY rowid DESC LIMIT 1", (body, kind)).fetchone()
+                              f"AND json_extract(action,'$.args.kind') IN ({placeholders}) ORDER BY rowid DESC LIMIT 1",
+                              (body, *kinds)).fetchone()
         data = json.loads(row[0]).get("data") if row else None
         evidence = data.get("adventure") if isinstance(data, dict) else None
         return evidence if isinstance(evidence, dict) else {}
+
+    def inventory_after(self, body: str, request_id: str) -> list[dict]:
+        row = self.db.execute("""
+            SELECT receipt FROM dispatch WHERE body=? AND json_extract(action,'$.verb')='inventory'
+            AND json_extract(receipt,'$.status')='completed'
+            AND rowid>(SELECT rowid FROM dispatch WHERE id=? AND body=?) ORDER BY rowid DESC LIMIT 1
+        """, (body, request_id, body)).fetchone()
+        return ((json.loads(row[0]).get("data") or {}).get("inventory") or []) if row else []
 
     def close(self) -> None:
         self.db.close()

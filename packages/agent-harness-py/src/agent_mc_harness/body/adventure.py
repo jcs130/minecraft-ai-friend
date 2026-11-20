@@ -42,6 +42,7 @@ PARTY_LINE = re.compile(r"(?:[^\[\]<>:\r\n»]{1,96} » )?\[Party\] (?:[★☆] )
 ARMOR = {"head": "头盔", "chest": "胸甲", "legs": "护腿", "feet": "靴子"}
 PARTY_OPENING = "我们组好队了，在哪个入口会合？分开时用 /mycli guild party chat 加上想说的话，我也能收到。"
 INVITE_INTERVAL = 30 * 60
+QUEST_OBSERVATION_SECONDS = 600
 SURVEY_LUA = """local n=numen_hosted
 local map=n.scan.map({radius=8})
 local pos=map.center
@@ -74,7 +75,9 @@ def catalogue(peer: str) -> list[NativeAction]:
     query_properties["target"] = {"type": "string", "description": "locate_character only: exact name or UUID from the skill compass."}
     actions = result[2].input_schema["properties"]
     actions["targetUuid"] = {"type": "string", "format": "uuid", "description": "meet_character only: use the exact UUID from locate_character. Uses the ordinary RPG travel spell."}
-    actions["kind"]["enum"].extend(("prepare_armor", "prepare_ammo"))
+    actions["kind"]["enum"].extend(("prepare_armor", "prepare_ammo", "craft_torches"))
+    actions["expectedProgress"] = {"type": "integer", "minimum": 0,
+                                   "description": "craft_torches only. Copy the unfinished torch stage's current progress. Crafts one batch of 4 from your backpack."}
     actions["text"] = {"type": "string", "maxLength": 100, "description": "party_chat only. A short message to the current native party."}
     actions["partyId"] = {"type": "string", "description": "party_chat only. Copy partyId from the current native party status."}
     actions["slot"] = {"type": "string", "enum": list(ARMOR), "description": "prepare_armor only. Choose a missing armor slot."}
@@ -191,8 +194,13 @@ def permission_lua(account: str) -> str:
 def game_lua(line: str, account: str) -> str:
     fallback = ""
     if line == "/mycli tasks status --json":
-        # A paginated reply may arrive outside mc.run's output capture.
-        fallback = "if #r.output==0 then print('QD_GUILD_STATUS'); r=numen_hosted.mc.run('/mycli guild status') end; "
+        # Large task records may be paged outside mc.run's capture. This ordinary
+        # player read also returns the current guild stage, directly in chat.
+        fallback = ("if #r.output==0 or r.output[1]:find('MC_PAGE ',1,true) then "
+                    "local progress=numen_hosted.mc.run('/mycli progress --json'); "
+                    "for _,row in ipairs(progress.output) do "
+                    "if row:find('MC_ADVENTURE ',1,true)==1 then print(row); return end end; "
+                    "if #r.output==0 then print('QD_GUILD_STATUS'); r=numen_hosted.mc.run('/mycli guild status') end end; ")
     return (permission_lua(account) + "local r=numen_hosted.mc.run(" + json.dumps(line, ensure_ascii=False) + "); " + fallback +
             "for _,line in ipairs(r.output) do print(line) end")
 
@@ -413,6 +421,37 @@ def game_result(result, name: str, args: dict, *, account=None, body_id=None, pe
     status = "rejected" if refused else "failed" if effect in {"incomplete", "unavailable", "unverified"} else "completed"
     text = f"{kind}: {effect}" + (f" — {explanation}" if explanation else "")
     return replace(result, status=status, text=text, data={"adventure": evidence})
+
+
+def unfinished_craft_stage(evidence):
+    observed = evidence.get("at")
+    if (evidence.get("kind") != "quest_status" or evidence.get("effect") != "read"
+            or type(observed) is not int or not 0 <= time() - observed <= QUEST_OBSERVATION_SECONDS):
+        return None
+    for record in evidence.get("records", ()):
+        row = record.get("value") if isinstance(record, dict) else None
+        if not isinstance(row, dict):
+            continue
+        if record.get("type") == "MC_TASKS" and row.get("type") == "status":
+            guild = row.get("adventure")
+        elif record.get("type") == "MC_ADVENTURE":
+            guild = row.get("guild")
+        else:
+            continue
+        if not isinstance(guild, dict) or guild.get("status") != "active":
+            continue
+        market = guild.get("market")
+        if (not isinstance(market, dict) or market.get("available") is not True or market.get("goal") != "CRAFT"
+                or market.get("ready") is not False or not guild.get("activeId") or market.get("id") != guild["activeId"]):
+            continue
+        stage, progress, target = (market.get(key) for key in ("stage", "progress", "target"))
+        if not all(type(n) is int for n in (stage, progress, target)) or stage < 1 or not 0 <= progress < target:
+            continue
+        guidance = market.get("guidance")
+        return {"contractId": guild["activeId"], "stage": stage, "stageTitle": market.get("stageTitle"),
+                "progress": progress, "target": target,
+                "requirement": guidance.get("nextAction") if isinstance(guidance, dict) else None, "observedAt": observed}
+    return None
 
 
 def partner_nearby(peer, context) -> bool:

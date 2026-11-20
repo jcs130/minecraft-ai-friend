@@ -95,6 +95,7 @@ class PlanContext(BaseModel):
     recheck_nearby_speech: bool = False
     recent_companion_speech: list[str] = Field(default_factory=list, max_length=8)
     party_context: dict[str, Any] | None = None
+    personal_craft_stage: dict[str, Any] | None = None
     companion_adventure: dict[str, Any] | None = None
     maid_companions: dict[str, Any] | None = None
     companion_choice: dict[str, str] | None = None

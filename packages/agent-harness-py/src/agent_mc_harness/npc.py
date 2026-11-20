@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .agenda import schedule
 from .companion_adventure import mentions_activity
 from .conversation import COMPANION_SPEECH_POLICY, CONVERSATION_POLICY, WHALE_SPEECH_POLICY, names_listener, repeats_companion_speech, whale_speech
-from .body import adventure
+from .body import adventure, commission_craft
 from .journal import ActionJournal, work_key
 from .maid_companions import WALK_TIMEOUT, MaidCompanions, nearby_maid_listener, parse_choice, walk_available
 from .models import BodyEvent, Scope
@@ -581,6 +581,21 @@ class NpcPlanner:
                 "short, agree on the public entrance or another activity. Never repeat a failed transfer on the same evidence. "
                 "Speak briefly when you meet. Do not repeat invitations or report unverified outcomes.",
                 "currentParty": context.party_context}
+            if context.personal_craft_stage and "body:craft" not in tools:
+                options = [("body:native:adventure_query", {"kind": "ruins"}),
+                           ("body:native:adventure_query", {"kind": "plan_invitation"}), ("body:native:survey", {})]
+                facts["adventuring"]["currentCraftStage"] = {**context.personal_craft_stage,
+                    "constraint": "The guild counts personal crafting. Taking a finished item does not count. "
+                                  "If this stage has no supported action, keep it and choose another activity.",
+                    "otherActivities": [{"tool": tool, "args": args} for tool, args in options if tool in tools]}
+                stage = facts["adventuring"]["currentCraftStage"]
+                if commission_craft.eligible(stage) and "body:native:adventure_action" in tools:
+                    stage["materials"] = "One carried stick and one coal or charcoal. If short, check your backpack and the guild's /mycli guild shared notice for an open public supply chest, or choose another activity."
+                    if not stage.get("previousAttempt"):
+                        stage["craftOption"] = {"tool": "body:native:adventure_action",
+                                                "args": {"kind": commission_craft.KIND, "expectedProgress": stage["progress"]}}
+                    else:
+                        stage["constraint"] += " Read the original result and current guild progress before taking another action."
             message = (context.party_context or {}).get("message")
             if message:
                 facts["goal"] = ("Your verified teammate sent the private party message in adventuring.currentParty.message. "
@@ -907,6 +922,7 @@ class NpcHost:
         self.last_activity_scene = None
         self.desktop_request_id = None
         self.next_roster_check = 0.0
+        self.next_quest_check = 0.0
         self.next_outing_check = 0.0
         self.next_rendezvous_attempt: dict[str, float] = {}
         self.checked_party_event = None
@@ -1015,6 +1031,7 @@ class NpcHost:
         dialogue = [self.pending_dialogue[key] for key in intent.source_events if key in self.pending_dialogue]
         context.dialogue = dialogue
         context.proposed_agenda = None
+        context.personal_craft_stage = None
         if self.role.body_kind == "maid" and intent.goal == IDLE_GOAL and not dialogue:
             context.nearby_speech_on_cooldown = self.journal.contacted_recently(body_id, "speech", COMPANION_CHECK_IN_SECONDS)
         inbox_at_start = set(self.pending_dialogue)
@@ -1112,6 +1129,20 @@ class NpcHost:
             notice, team, opening = self._party_turn(body_id, context)
             if opening and opening.tool == "body:native:adventure_query":
                 return [opening]
+            if (not notice and not opening and context.snapshot and context.snapshot.life_state == "alive"
+                    and context.capabilities and context.capabilities.supports("native", adventure.QUERY)
+                    and "body:native:adventure_query" in self.role.allowed_tools and not danger(context.snapshot)):
+                quest = self.journal.last_adventure(body_id, "quest_status", "accept_quest", "turn_in_quest", commission_craft.KIND)
+                sampled = quest.get("at", 0)
+                if quest.get("kind") == "quest_status" and 0 <= time.time() - sampled <= adventure.QUEST_OBSERVATION_SECONDS:
+                    context.personal_craft_stage = adventure.unfinished_craft_stage(quest)
+                    prior = commission_craft.previous_attempt(context.personal_craft_stage, self.journal, body_id)
+                    if prior:
+                        context.personal_craft_stage["previousAttempt"] = prior
+                elif quest.get("kind") == commission_craft.KIND or time.monotonic() >= self.next_quest_check:
+                    self.next_quest_check = time.monotonic() + adventure.QUEST_OBSERVATION_SECONDS
+                    self.next_plan = time.monotonic() + 3
+                    return [Step(tool="body:native:adventure_query", args={"kind": "quest_status"})]
         steps = [opening] if opening else await self.planner(intent, context)
         if steps is None:
             return None
@@ -1194,6 +1225,10 @@ class NpcHost:
         for step in steps:
             action = step.action("check_00000")
             if self.role.adventure_partner:
+                if step.tool == "body:native:adventure_action" and step.args.get("kind") == commission_craft.KIND:
+                    stage = context.personal_craft_stage
+                    if not commission_craft.eligible(stage) or stage.get("previousAttempt") or step.args.get("expectedProgress") != stage["progress"]:
+                        continue
                 if step.tool == "body:native:adventure_action" and step.args.get("kind") == "meet_partner":
                     # Each refused or unverified transfer requires fresh world evidence before a later write.
                     recovery = (context.party_context or {}).get("lastMeetingAttempt", {})

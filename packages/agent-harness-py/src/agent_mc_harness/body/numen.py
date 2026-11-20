@@ -52,7 +52,7 @@ from ..models import (
     Scope,
     WorldRef,
 )
-from . import adventure, loadout
+from . import adventure, commission_craft, loadout
 from .base import ArgumentError, BaseBody, obj, xyz
 from .native_tasks import NativeTasks, background_task, finished_tasks
 
@@ -722,6 +722,18 @@ class NumenBody(BaseBody):
 
     async def _adventure(self, name, args, request_id):
         account = self.identity().name
+        if name == adventure.ACT and args.get("kind") == commission_craft.KIND:
+            progress = args.get("expectedProgress")
+            if set(args) != {"kind", "expectedProgress"} or type(progress) is not int or progress < 0:
+                raise ArgumentError("Copy expectedProgress from the unfinished torch stage.")
+            read_id = "quest_" + hashlib.sha256(request_id.encode()).hexdigest()[:32]
+            read = await self.port.call("lua", {"code": adventure.game_lua("/mycli progress --json", account)}, read_id)
+            code = commission_craft.craft_lua(read, progress, account)
+            if code is None:
+                return PortResult("rejected", "No personal torch craft sent. Read quest_status for the current stage.",
+                                  {"adventure": {"kind": commission_craft.KIND, "effect": "stage_unconfirmed",
+                                                 "progressBefore": progress, "at": int(time.time()), "retryWrite": False}})
+            return commission_craft.measured(await self.port.call("lua", {"code": code}, request_id), progress, request_id)
         if name == adventure.ACT and args.get("kind") == "prepare_ammo":
             if set(args) - {"kind", "allowPurchase"}:
                 raise ArgumentError("prepare_ammo takes optional allowPurchase only")
@@ -856,6 +868,9 @@ class NumenBody(BaseBody):
             return self.settle(request_id, "failed", "Previous stop superseded by a new driver fence; original delivery unknown.",
                                {"historicalOutcome": "unknown", "supersededByFence": fence}) or previous
         action = self._adventures.get(request_id)
+        if (action and action.name == adventure.ACT and action.args.get("kind") == commission_craft.KIND
+                and self.port.transport == "numen-hosted-mcp" and not self.port.recorded(request_id)):
+            return self.settle(request_id, "rejected", "Only the commission read may have been sent. No craft dispatched.") or previous
         if (action and action.name == adventure.ACT and action.args.get("kind") in adventure.COORDINATION
                 and self.port.transport == "numen-hosted-mcp" and not self.port.recorded(request_id)):
             # A drain or crash may interrupt the read before dispatching the write.
@@ -870,6 +885,8 @@ class NumenBody(BaseBody):
         if mapped is not None and action is not None:
             if action.name == adventure.SURVEY:
                 mapped = adventure.survey_result(mapped, recovered=True)
+            elif action.name == adventure.ACT and action.args.get("kind") == commission_craft.KIND:
+                mapped = commission_craft.measured(mapped, action.args["expectedProgress"], request_id, recovered=True)
             elif action.args.get("kind") in {"prepare_armor", "prepare_ammo"}:
                 slot = "ammo" if action.args["kind"] == "prepare_ammo" else action.args.get("slot")
                 mapped = loadout.armor_result(mapped, slot, recovered=True)

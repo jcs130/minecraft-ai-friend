@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 from types import SimpleNamespace
 
@@ -44,6 +45,82 @@ def test_quest_lifecycle_and_catalogue_paging_use_server_formats():
             command(life.QUERY, "exploration", **args)
     with pytest.raises(ArgumentError):
         command(life.QUERY, "detail_page", id="some_task", page=1)
+
+
+@pytest.mark.parametrize("tag", ["MC_TASKS", "MC_ADVENTURE"])
+def test_personal_crafting_advice_uses_the_current_unfinished_server_stage(tag):
+    market = {"id": "tm_lamp", "stage": 2, "stageTitle": "Light the way", "available": True,
+              "goal": "CRAFT", "ready": False, "target": 3, "progress": 1,
+              "guidance": {"nextAction": "亲手合成 TORCH"}}
+    def receipt(**changes):
+        guild = {"activeId": "tm_lamp", "status": "active", "market": {**market, **changes}}
+        row = {"type": "status", "adventure": guild} if tag == "MC_TASKS" else {"guild": guild}
+        response = PortResult("completed", "stdout:\n" + tag + " " + json.dumps(row))
+        return life.game_result(response, life.QUERY, {"kind": "quest_status"}).data["adventure"]
+
+    live = receipt()
+    assert life.unfinished_craft_stage(live) == {
+        "contractId": "tm_lamp", "stage": 2, "stageTitle": "Light the way", "progress": 1,
+        "target": 3, "requirement": "亲手合成 TORCH", "observedAt": live["at"]}
+    for changes in ({"available": False}, {"ready": True}, {"goal": "DONATE"},
+                    {"progress": 3}, {"id": "tm_other"}, {"progress": True}):
+        assert life.unfinished_craft_stage(receipt(**changes)) is None
+    assert life.unfinished_craft_stage({**live, "effect": "unavailable"}) is None
+    assert life.unfinished_craft_stage({**live, "at": 0}) is None
+
+
+def test_idle_host_samples_self_and_offers_capable_activities_to_the_planner(tmp_path):
+    from simbody import SimBody
+    from test_server_npc import role
+    from agent_mc_harness.models import ActionReceipt
+    from agent_mc_harness.npc import IDLE_GOAL, NpcHost, NpcPlanner
+
+    async def run():
+        body = SimBody()
+        await body.spawn()
+        cfg = role(adventure_partner="QaFriend", allowed_tools=["body:native:survey", "body:native:adventure_query"])
+        captured = []
+        async def answer(path, data, timeout):
+            captured.append(json.loads(data["messages"][1]["content"]))
+            return {"choices": [{"message": {"content": '{"steps":[]}'}}]}
+        journal = ActionJournal(tmp_path / "quests.sqlite")
+        host = NpcHost(cfg, body, NpcPlanner(cfg, SimpleNamespace(request=answer)), None, journal)
+        caps = body.capabilities()
+        caps.native_actions = life.catalogue("QaFriend")
+        context = PlanContext(snapshot=await body.snapshot(), capabilities=caps)
+        host.next_roster_check = time.monotonic() + 180
+        intent = host.runtime.submit_intent(IDLE_GOAL, agent=cfg.id)
+        try:
+            assert [s.args for s in await host._plan(intent, context)] == [{"kind": "quest_status"}]
+            await host._plan(intent, context)
+            assert "currentCraftStage" not in captured[-1]["adventuring"]
+            market = {"id": "tm_sample", "goal": "CRAFT", "available": True, "stage": 1,
+                      "progress": 0, "target": 1, "ready": False, "guidance": {"nextAction": "亲手合成 TORCH"}}
+            message = "MC_ADVENTURE " + json.dumps({"guild": {"activeId": "tm_sample", "status": "active", "market": market}})
+            request_id = "qa_quest_observe"
+            journal.begin(str(cfg.body_id), BodyAction(verb="native", name=life.QUERY, args={"kind":"quest_status"}, request_id=request_id))
+            evidence = life.game_result(PortResult("completed", "stdout:\n"+message), life.QUERY, {"kind":"quest_status"})
+            journal.settle(str(cfg.body_id), ActionReceipt(verb="native", status="completed", request_id=request_id,
+                                                          terminal=True, data=evidence.data))
+            await host._plan(intent, context)
+            advice = captured[-1]["adventuring"]["currentCraftStage"]
+            assert (advice["contractId"], advice["progress"], advice["target"], advice["requirement"]) == (
+                "tm_sample", 0, 1, "亲手合成 TORCH")
+            assert advice["otherActivities"] == [
+                {"tool":"body:native:adventure_query", "args":{"kind":"ruins"}},
+                {"tool":"body:native:adventure_query", "args":{"kind":"plan_invitation"}},
+                {"tool":"body:native:survey", "args":{}}]
+            # A later body action supersedes the sample even within one clock second.
+            submit_id = "qa_quest_submit"
+            journal.begin(str(cfg.body_id), BodyAction(verb="native", name=life.ACT, args={"kind": "turn_in_quest"}, request_id=submit_id))
+            journal.settle(str(cfg.body_id), ActionReceipt(verb="native", status="completed", request_id=submit_id, terminal=True,
+                           data={"adventure": {"kind": "turn_in_quest", "effect": "confirmed", "at": evidence.data["adventure"]["at"]}}))
+            await host._plan(intent, context)
+            assert "currentCraftStage" not in captured[-1]["adventuring"]
+        finally:
+            await host.close()
+            journal.close()
+    asyncio.run(run())
 
 
 def test_partial_and_unrelated_feedback_cannot_confirm_a_write():
