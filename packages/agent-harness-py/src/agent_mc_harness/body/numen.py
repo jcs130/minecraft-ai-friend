@@ -936,5 +936,9 @@ class NumenBody(BaseBody):
 
     def health(self):
         h = super().health()
+        if h.connected and self.port.transport == "numen-hosted-mcp" and getattr(self.port, "lost", False):
+            h.connected = False
+            h.lifecycle = "error"
+            h.last_error = "hosted_control_unavailable"
         h.extra = {"transport": self.port.transport, "generation": self.port.generation(), "lifeState": self._life}
         return h

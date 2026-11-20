@@ -48,6 +48,75 @@ def test_hosted_leases_and_original_receipts(tmp_path):
         assert [c['epoch']for c in session.calls if c['op']in('attach','transition')]==[1,2,3,4,5]
     asyncio.run(run())
 
+def test_lost_session_reads_the_original_blocked_move_without_taking_control(tmp_path, monkeypatch):
+    from contextlib import asynccontextmanager
+
+    async def run():
+        session = Session()
+        p = port(tmp_path, session)
+        await p.open()
+        rid = "interrupted-walk"
+        original = session.call_tool
+
+        async def broken(tool, args):
+            session.calls.append(args)
+            raise ConnectionError("original transport closed")
+
+        session.call_tool = broken
+        try:
+            assert (await p.call("lua", {"code": "walk()"}, rid)).status == "unknown"
+            p.lost = True
+            fresh_calls = []
+            reply_id = "other-request"
+
+            async def read(tool, args):
+                fresh_calls.append(args)
+                assert args["op"] == "result" and args["id"] == rid
+                value = dict(id=reply_id, state="blocked", message=json.dumps(
+                    dict(success=False, message="this turn was cut off: EXTERNAL; nothing else ran")))
+                return SimpleNamespace(isError=False, structuredContent=value)
+
+            @asynccontextmanager
+            async def fresh():
+                yield SimpleNamespace(call_tool=read)
+
+            monkeypatch.setattr(p, "_mcp_session", fresh)
+            with pytest.raises(ValueError, match="original_request_mismatch"):
+                await p.result(rid)
+            assert (await p.result(rid)).status == "unknown" and len(fresh_calls) == 1
+            p.next_receipt_probe[rid] = 0
+            reply_id = rid
+            result = await p.result(rid)
+            assert result.status == "rejected" and "nothing else ran" in result.text
+            assert (await p.result(rid)).status == "rejected" and len(fresh_calls) == 2
+            assert fresh_calls[0]["boot"] == p.boot and fresh_calls[0]["epoch"] == p.epoch
+            fresh_write = await p.call("lua", {"code": "walk()"}, "new-after-fence")
+            assert fresh_write.status == "rejected" and not p.recorded("new-after-fence")
+            assert sum(c["op"] == "call" for c in session.calls) == 1 and p.lost
+        finally:
+            session.call_tool = original
+            await p.close()
+    asyncio.run(run())
+
+
+def test_lost_hosted_lease_is_not_reported_as_a_ready_body(tmp_path):
+    from agent_mc_harness import Scope
+    from agent_mc_harness.body.numen import NumenBody
+
+    async def run():
+        p = port(tmp_path, Session())
+        body = NumenBody(p, scope=Scope(realm="isolation", account="owner", agent="companion"), poll_seconds=60)
+        try:
+            await body.spawn()
+            assert body.health().connected
+            p.lost = True
+            assert not body.health().connected and body.health().lifecycle == "error"
+        finally:
+            await body.destroy()
+        assert body.health().lifecycle == "destroyed"
+    asyncio.run(run())
+
+
 def test_hosted_partial_envelope_is_not_automatic_success(tmp_path):
     p=port(tmp_path,Session())
     try:
