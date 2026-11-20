@@ -148,7 +148,7 @@ async def run_test(root, neko):
         assert not result.get("is_error"), result
         return result["output"]
 
-    async def packet_for(id):
+    async def packet_for(id, instruction=None):
         async with asyncio.timeout(12):
             while True:
                 packet = await incoming.get()
@@ -156,7 +156,10 @@ async def run_test(root, neko):
                 if parts and id in parts[0].get("text", ""):
                     assert packet["target_lanlan"] == "桐人桌面" and packet["visibility"] == []
                     assert packet["ai_behavior"] == "respond"
-                    return json.loads(parts[0]["text"].split("\n", 1)[1])
+                    prompt, scene = parts[0]["text"].split("\n", 1)
+                    if instruction:
+                        assert instruction in prompt
+                    return json.loads(scene)
 
     host, servers = new_host(), []
     try:
@@ -185,6 +188,8 @@ async def run_test(root, neko):
         async with asyncio.timeout(12):
             while len(registry) < 5:
                 await asyncio.sleep(.05)
+        speech_schema = registry["qd_resident_communicate"]["parameters"]
+        assert "mode" not in speech_schema["required"] and "scope" in speech_schema["required"]
         panel = (await host.get_ui_context("resident_connection"))["state"]
         assert (panel["connected"], panel["role"], panel["resident"]) == (True, "桐人桌面", "桐人")
         assert code not in str(panel) and secret not in str(panel)
@@ -211,15 +216,48 @@ async def run_test(root, neko):
                 "mode": "speech", "text": "听见了。", "sourceEventId": "voice-42"}}}]
             turn = {"id": "qa-proactive", "until": int(time.time() * 1000) + 20000, "resident": resident, "kind": "plan",
                     "scene": {"communication": {"version": 1, "messages": [], "outputs": [{"mode": "native", "scope": "nearby"}]}}}
-            await packet_for("qa-proactive")
-            args = {"id": "qa-proactive", "scope": "nearby", "mode": "native", "text": "看一看附近。"}
-            assert (await callback(client, "communicate", **args, sourceEventId=""))["detail"] == "source_not_offered"
+            await packet_for("qa-proactive", "本轮公布的 mode/scope 为 native/nearby。")
+            args = {"id": "qa-proactive", "scope": "nearby", "text": "看一看附近。"}
+            assert (await callback(client, "communicate", **args, mode="native", sourceEventId=""))["detail"] == "source_not_offered"
+            for mode in ("text", "speech"):
+                refusal = await callback(client, "communicate", **args, mode=mode)
+                assert refusal == {"accepted": False, "reason": "output_not_offered", "detail": "mode_not_offered",
+                                   "offeredModes": ["native"]}
+            assert (await callback(client, "communicate", **{**args, "scope": "private"}))["offeredModes"] == []
+            assert len(replies) == 1
             assert (await callback(client, "communicate", **args))["accepted"]
             assert replies[-1] == {"id": "qa-proactive", "answer": {"communication": {"mode": "native", "text": args["text"]}}}
+            turn = {"id": "qa-private", "until": int(time.time() * 1000) + 20000, "resident": resident, "kind": "dialogue",
+                    "scene": {"communication": {"version": 1, "outputs": [
+                        {"mode": "native", "scope": "nearby"},
+                        {"mode": "text", "scope": "private", "sourceEventId": "private-42"},
+                    ]}}}
+            await packet_for("qa-private")
+            args = {"id": "qa-private", "text": "我收到了。", "scope": "private"}
+            assert (await callback(client, "communicate", **args))["offeredModes"] == []
+            assert (await callback(client, "communicate", **{**args, "scope": "nearby"},
+                                   sourceEventId="private-42"))["offeredModes"] == []
+            assert len(replies) == 2
+            assert (await callback(client, "communicate", **args, sourceEventId="private-42"))["accepted"]
+            assert replies[-1]["answer"]["communication"] == {"mode": "text", "text": args["text"], "sourceEventId": "private-42"}
+            turn = {"id": "qa-two-modes", "until": int(time.time() * 1000) + 20000, "resident": resident, "kind": "plan",
+                    "scene": {"communication": {"version": 1, "outputs": [
+                        {"mode": "native", "scope": "nearby"}, {"mode": "text", "scope": "nearby"},
+                    ]}}}
+            await packet_for("qa-two-modes")
+            args = {"id": "qa-two-modes", "text": "晚上好。", "scope": "nearby"}
+            refusal = await callback(client, "communicate", **args)
+            assert refusal["detail"] == "mode_required" and refusal["offeredModes"] == ["text", "native"]
+            assert len(replies) == 3
+            assert (await callback(client, "communicate", **args, mode="text"))["accepted"]
+            assert replies[-1]["answer"]["communication"] == {"mode": "text", "text": args["text"]}
             tools = [{"tool": "body:observe", "parameters": {"type": "object"}}]
             turn = {"id": "qa-plan", "until": int(time.time() * 1000) + 20000, "resident": resident, "kind": "plan",
-                    "scene": {"bodyTools": tools}}
-            await packet_for("qa-plan")
+                    "scene": {"bodyTools": tools, "communication": {"version": 1, "messages": [], "outputs": []}}}
+            await packet_for("qa-plan", "本轮没有公布发言输出，请跳过发言。")
+            refusal = await callback(client, "communicate", id="qa-plan", scope="nearby", text="有人吗？")
+            assert refusal["detail"] == "no_output_for_audience" and refusal["offeredModes"] == []
+            assert len(replies) == 4
             assert (await callback(client, "capabilities", id="qa-plan", tool="body:observe"))["bodyTools"] == tools
             assert not (await callback(client, "body_action", id="qa-plan", tool="body:other", arguments={}))["accepted"]
             assert (await callback(client, "body_action", id="qa-plan", tool="body:observe", arguments={}))["accepted"]
@@ -241,7 +279,7 @@ async def run_test(root, neko):
         assert (await host.get_ui_context("resident_connection"))["state"]["resident"] == "清夏"
         await host.trigger("pair_resident", {"code": code, "uiToken": panel_token})
         assert (await host.get_ui_context("resident_connection"))["state"]["resident"] == "桐人"
-        print("PASS packaged Hosted UI, current role discovery, official grant, select/create and legacy pairing, persistent role, speech and begin.")
+        print("PASS packaged Hosted UI, official grant, create/reconnect, persistent role, exact speech routes and begin.")
     finally:
         await host.shutdown(timeout=12)
         await shutdown_http_client()
