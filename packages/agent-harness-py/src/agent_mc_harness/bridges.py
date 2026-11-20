@@ -33,7 +33,7 @@ class ControlChanged(RuntimeError):
 
 
 class MaidRequestRejected(RuntimeError):
-    """The native server rejected this call before dispatching its action."""
+    """A request refused by the native endpoint or its local transport."""
 
     def __init__(self, reason: str, *, original_request: bool = False) -> None:
         super().__init__(reason)
@@ -168,7 +168,13 @@ class NativeMaidBridge:
             raise ValueError("maid_body_transport_fields_are_reserved")
         if not maid_read_only(arguments) and (not request_id or arguments.get("requestId") != request_id):
             raise ValueError("maid_body_request_id_mismatch")
-        envelope = await self._request("call", name=name, arguments=dict(arguments), requestId=request_id, timeout=timeout)
+        import httpx
+        try:
+            envelope = await self._request("call", name=name, arguments=dict(arguments), requestId=request_id, timeout=timeout)
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as error:
+            # This direct POST never acquired a connection. Read/write errors after
+            # sending still require the server receipt for the original request.
+            raise MaidRequestRejected("maid_body_not_dispatched_no_connection") from error
         result = envelope.get("result")
         if not isinstance(result, dict) or not isinstance(result.get("content"), list):
             raise RuntimeError("maid_body_invalid_result_query_original_receipt")

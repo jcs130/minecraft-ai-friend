@@ -368,6 +368,33 @@ def test_duplicate_concurrent_submission_and_parameter_conflict(run: Any) -> Non
     run(scenario())
 
 
+@pytest.mark.parametrize("error_type", [httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout])
+def test_guard_without_a_transport_connection_is_terminal(error_type, run):
+    async def scenario():
+        server = NativeServer()
+        server.actions.append("guard")
+        body = make(server)
+        await body.spawn()
+        try:
+            def before_send(request):
+                raise error_type("no connection for this request", request=request)
+
+            async with httpx.AsyncClient(transport=httpx.MockTransport(before_send)) as offline:
+                original = body.bridge.http
+                body.bridge.http = offline
+                try:
+                    action = BodyAction(verb="native", name="guard", request_id="no-connection-guard")
+                    result = await body.act(action)
+                finally:
+                    body.bridge.http = original
+            assert result.terminal and result.status == "rejected" and "not_dispatched" in result.text
+            assert (await body.result(action.request_id)) == result
+            assert not server.writes
+        finally:
+            await body.destroy()
+    run(scenario())
+
+
 def test_dropped_reply_and_rebuilt_adapter_only_query_original_request(run: Any) -> None:
     async def scenario() -> None:
         server = NativeServer()
