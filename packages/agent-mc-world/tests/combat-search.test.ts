@@ -65,3 +65,36 @@ it('offers exploration from an attested remaining count without guessing an enem
   expect(combatSearchCandidates(bot,{...field,searchObjective:{...field.searchObjective,remaining:0}},true,true)).toEqual([]);
   bot.blockAt=()=>null;expect(combatSearchCandidates(bot,field,true,true)).toEqual([]);
 });
+
+it('counts native outcomes, isolates evidence by area and permits a fresh hearing episode',()=>{
+  const {bot,field}=rig(),history=new CombatSearchHistory();
+  const hint=field.clues![0];
+  if(hint.source!=='sound-packet')throw Error('sound fixture expected');
+  history.observe('world/1',field,0);
+  const choice=combatSearchCandidates(bot,field,true,true)[0];
+  if(choice.kind!=='search')throw Error('search fixture expected');
+  history.submitted(10,choice,field);history.terminal(99,true);
+  expect(history.allowSound(hint,true)).toBe(true);
+  history.terminal(10,false);
+  expect(history.allowSound(hint,true)).toBe(true);
+  for(let id=11;id<=13;id++){
+    history.submitted(id,choice,field);history.terminal(id,true);
+    expect(history.allowSound(hint,true)).toBe(false);
+    expect(history.allowSound(hint,false)).toBe(id<13);
+  }
+  expect(history.allowSound({...hint,kind:'战斗声'},true)).toBe(true);
+  history.observe('world/1',{...field,clues:[],sampledAtMs:5000},0);
+  expect(history.allowSound(hint,true)).toBe(false);
+  const lastSeen={source:'last-seen' as const,key:'separately-identified-witch',position:[0,64,-5] as [number,number,number],seenAt:900,expiresAt:9000};
+  const stronger=combatSearchCandidates(bot,{...field,clues:[hint,lastSeen]},true,true,h=>history.allowSound(h,true));
+  expect(stronger[0]).toMatchObject({kind:'search',source:'last-seen'});
+  const later={...hint,heardAt:9001,expiresAt:17001};
+  history.observe('world/1',{...field,clues:[later],sampledAtMs:9002},0);
+  expect(history.allowSound(later,true)).toBe(true);
+  history.submitted(14,choice,{...field,clues:[later]});history.terminal(14,true);
+  history.observe('world/1',{...field,self:{...field.self,position:[100,64,0]},clues:[later],sampledAtMs:9003},0);
+  expect(history.allowSound(later,true)).toBe(true);
+  history.submitted(15,choice,{...field,clues:[later]});history.terminal(15,true);
+  history.observe('world/2',{...field,clues:[later],sampledAtMs:9004},0);
+  expect(history.allowSound(later,true)).toBe(true);
+});

@@ -676,7 +676,8 @@ function gotoArrivalNote(call: Extract<SkillCall, { skill: 'goto' }>, target: Ce
     ? `;本次满足目标 ${cellText(target)} 的 1 格邻域条件，未精确站上目标格；精确站位用 exact:true` : '';
 }
 
-async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispatch?: ChatDispatch): Promise<string> {
+async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispatch?: ChatDispatch,
+  inventoryCommand?: import('./command-inventory-arrival.ts').InventoryCommandDispatch): Promise<string> {
   const bodyBlocked = nativeBodyBlockedReason(bot, call.skill);
   if (bodyBlocked) throw new SkillBlocked(bodyBlocked);
   // A dispatched travel can change worlds within one task. Freeze each operation, not the whole task.
@@ -1081,7 +1082,10 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       const next = ctx.batch?.steps[(ctx.batch.index ?? 0) + 1];
       const needsWindow = call.text.startsWith('/') && consumesOpenWindow(next);
       const beforeWindow = bot.currentWindow;
-      sendChat(bot, call.text, chatDispatch, ctx.batch ? { taskId: ctx.batch.taskId, stepIndex: ctx.batch.index } : undefined);
+      const send = () => sendChat(bot, call.text, chatDispatch, ctx.batch ? { taskId: ctx.batch.taskId, stepIndex: ctx.batch.index } : undefined);
+      const arrival = call.text.startsWith('/') ? inventoryCommand?.(bot, call.text, send, ctx.signal) : undefined;
+      if (arrival) return await arrival;
+      send();
       publishViewerCastCommand(bot, call.text);
       if (needsWindow && bot.currentWindow !== beforeWindow && storageWindow(bot.currentWindow)) {
         ctx.holdWindow?.(bot.currentWindow!);
@@ -1270,7 +1274,7 @@ interface QueuedTask {
    * 被更早一步顺手做掉的步 → 那一步的回执。挂在任务上而不是 ctx 上,是因为战斗
    * 挂起会重建 ctx:东西已经进箱子了,恢复后那一步再跑一遍只会报「包里没有X」。
    */
-  absorbed?: Map<number, { receipt: string; ok: boolean }>;
+  absorbed?: Map<number, { receipt: string; ok: boolean; decision?: Partial<StepDecision> }>;
   /** 冻结断点的拥有者；仅同一组可恢复。战斗通过 busyWith 持有断点，深坠 hold 的释放不得恢复它。 */
   frozenBy?: QueueFreezeOwner;
   /** 等待这个逻辑任务的安全检查点；排队请求不立即夺手。 */
@@ -1965,6 +1969,7 @@ interface ExecutorOptions {
   policy?: SkillContext['policy'];
   /** 普通放置逐块取得许可；用于执行器外部持有的数量保留账。 */
   permitResourcePlacement?: ResourcePlacementGate;
+  inventorySynced?: SkillContext['inventorySynced'];
   /** 试算的只读材料判据;不占串行闸 */
   previewResourcePlacement?: ResourcePlacementPreview;
   /** 路线试算(goto 的 dryRun 与受阻现场的三种走法用) */
@@ -2004,6 +2009,7 @@ interface ExecutorOptions {
   serverFeedbackSince?: SkillContext['serverFeedbackSince'];
   /** Called only at actual chat transport dispatch, never while merely queued. */
   chatDispatch?: ChatDispatch;
+  inventoryCommand?: import('./command-inventory-arrival.ts').InventoryCommandDispatch;
   /** 个人重生点那一格(World 持有);受理刻的重生锚闸与技能回执共读一份 */
   spawnAnchor?: SkillContext['spawnAnchor'];
   /** 蓝图施工面(World 持有);build 的蓝图形态、两道受理刻的闸与采集搭车共读一份 */
@@ -5354,6 +5360,7 @@ export class Executor {
       clock: (ms) => this.clock(ms),
       policy: this.opts.policy,
       permitResourcePlacement: this.opts.permitResourcePlacement,
+      inventorySynced: this.opts.inventorySynced,
       previewResourcePlacement: this.opts.previewResourcePlacement,
       reserveHits: [],
       probeRoutes: this.opts.probeRoutes,
@@ -5566,8 +5573,11 @@ export class Executor {
         const absorbed = task.absorbed?.get(i);
         if (absorbed !== undefined) {
           const line = `${stepLabel(i)}: ${absorbed.receipt}`;
-          land(i, absorbed.ok ? 'ok' : 'fail', absorbed.ok ? null : absorbed.receipt, line);
-          if (absorbed.ok) results.push(line);
+          const outcome = !absorbed.ok ? 'fail'
+            : absorbed.decision?.status === 'partial' || absorbed.decision?.status === 'unknown' ? 'partial' : 'ok';
+          land(i, outcome, outcome === 'ok' ? null : absorbed.receipt, line, undefined, absorbed.decision, absorbed.receipt);
+          if (outcome === 'partial') partialSteps.push(line);
+          else if (absorbed.ok) results.push(line);
           else {
             blockedSteps.push(line);
             firstWhy ??= absorbed.receipt;
@@ -5794,11 +5804,13 @@ export class Executor {
         // 这一步能不能顺手把后面几步也做掉(目前只有 stow 用):它自己看剩下的步
         ctx.batch = {
           steps, index: i, taskId: id,
-          absorb: (n, receipt, ok = true) => { (task.absorbed ??= new Map()).set(n, { receipt, ok }); },
+          absorb: (n, receipt, ok = true, decision) => { (task.absorbed ??= new Map()).set(n, { receipt, ok, decision }); },
         };
         windowStep = i + 1;
         /** 这一步登记的缺口(build 放不满);null = 没登记过 */
         let gapNote: string | null = null;
+        let skillDecision: Partial<StepDecision> = {};
+        ctx.recordDecision = (decision) => { skillDecision = decision; };
         ctx.partial = (gap) => { gapNote = gap; };
         const opensForNext = (call.skill === 'use' || (call.skill === 'chat' && call.text.startsWith('/')))
           && consumesOpenWindow(steps[i + 1]);
@@ -5824,7 +5836,7 @@ export class Executor {
             || ['chat', 'observe', 'probe', 'look', 'wait'].includes(call.skill) ? null : sampleEffect(bot, effectCell);
           let skillResult: string;
           try {
-            skillResult = await runSkill(bot, run, ctx, this.opts.chatDispatch).finally(() => releaseTread?.());
+            skillResult = await runSkill(bot, run, ctx, this.opts.chatDispatch, this.opts.inventoryCommand).finally(() => releaseTread?.());
             if (run.skill === 'observe') observations.set(i, JSON.parse(skillResult));
           }
           finally {
@@ -5912,12 +5924,13 @@ export class Executor {
           // 技能登记了缺口 = 做了一部分:回执与任务终态都要说,别混进「完成」。
           // 例外:她**显式声明**的期望已达成时裁决权在期望(存量口径,与「技能报受阻
           // 但期望已达成」对称)——缺口的读数仍留在句子里,只是终态不再按半成算。
-          const gap: string | null = verdict?.met && call.expect !== undefined ? null : gapNote;
+          const quantitativeGap = skillDecision.unit === 'items' && skillDecision.status !== 'completed';
+          const gap: string | null = verdict?.met && call.expect !== undefined && !quantitativeGap ? null : gapNote;
           // 达成也回显:她拿不到正向确认时,重发是唯一可用的确认手段
           const line = `${stepHead(i, startedAt)}: ${result}${ranFree}${carriedNote}`
             + `${verdict ? `;${verdictNote(expect!, verdict, readAt)}` : ''}`
             + `${gap ? `;${gap}` : ''}`;
-          land(i, gap ? 'partial' : 'ok', gap, line, undefined, undefined, result);
+          land(i, gap ? 'partial' : 'ok', gap, line, undefined, skillDecision, result);
           if (call.skill === 'tunnel' && !call.spiral && at && bot.entity?.position) {
             const end = bot.entity.position;
             this.noteVerticalTunnelTraversal(
@@ -5974,7 +5987,7 @@ export class Executor {
             || call.skill === 'craft'
             // Being near a target cannot prove a safe landing or overturn its failure.
             || call.skill === 'land' || call.skill === 'flight' && call.land !== false
-            || blocked?.code === 'container-window-rollback' || blocked?.code === 'use-hand-changed'
+            || blocked?.code === 'container-window-rollback' || blocked?.code === 'container-transfer-unconfirmed' || blocked?.code === 'use-hand-changed'
             || blocked?.code === 'execution-context-changed'
             || isInventoryClickError(err);
           if (!opensForNext && !operationUnconfirmed && verdict?.met

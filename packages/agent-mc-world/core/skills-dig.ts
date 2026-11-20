@@ -560,13 +560,9 @@ export async function skillTunnel(bot: Bot, call: Extract<SkillCall, { skill: 't
       const below = blockAtCell(bot, under);
       if (!below) return stop(`落脚 (${under.x}, ${under.y}, ${under.z}) 的区块还没加载出来。`);
       if (LIQUIDS.has(below.name)) return stop(`下一级台阶底下 (${under.x}, ${under.y}, ${under.z}) 碰上${zhName(below.name)},停在这。`);
-      if (below.boundingBox !== 'block' && !(await keep.footing(under))) {
-        // 螺旋垫的是井筒里侧邻格,要一个贴得住的参照面;塔垫的是自己脚下那一格
-        // (跳起来放,参照是脚底那一块),悬空里上行只有塔走得通
-        return stop(
-          `下一级台阶 (${next.x}, ${next.y}, ${next.z}) 底下塌空,垫也没垫上(${keep.why('footing')}),`
-          + '楼梯断在这一格。同一段路走塔(at 放正上方、不带 spiral)垫的是自己脚下那一格,不吃邻格的参照面',
-        );
+      if (below.boundingBox !== 'block' && !(await keep.footing(under,
+        '若脚下有实心支撑，可另行试算直塔（at 放正上方、不带 spiral）'))) {
+        return stop(`下一级台阶 (${next.x}, ${next.y}, ${next.z}) 底下塌空,垫也没垫上(${keep.why('footing')})，楼梯断在这一格。`);
       }
       for (const cc of carve) await digCell(cc);
       try {

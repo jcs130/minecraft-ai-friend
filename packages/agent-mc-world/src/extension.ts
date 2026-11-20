@@ -3,6 +3,7 @@ export { metaOf, entityCustomName, entityIdentityNote } from '../core/animal-sta
 export { bindEntityIdentityResolver, observedEntityIdentity, observedEntityLabel,
   type EntityIdentity, type EntityIdentityResolver } from '../core/entity-identity.ts';
 export { chatDeliveryMessage } from '../core/chat-delivery.ts';
+export type { InventoryArrivalMatcher } from '../core/command-inventory-arrival.ts';
 export type { ChatDeliveryReceipt, ChatDeliveryRejection, ChatAudienceEvidence } from './contracts/chat-delivery.ts';
 export { publishViewerCastCommand, observeViewerCastCommands } from '../core/command-events.ts';
 export { BREAK_ACL_CHANNEL } from '../core/break-permissions.ts';
@@ -92,7 +93,7 @@ export { planInventoryOrganization, inventoryOrganizationPlanView, planInventory
 export { PHOTOGRAPHY_DEFAULTS } from '../core/photo-image.ts';
 export { ObservedCommandCatalog, type ObservedCommandUsage, type CommandRouteMismatch } from '../core/observed-command-catalog.ts';
 export { foodRiskReference, type FoodRiskReference } from '../core/nutrition.ts';
-export { ServerQueryLane, SERVER_QUERY_TOOL, serverQueryTool, type ServerQueryDefinition, type ServerQueryContext,
+export { ServerQueryLane, SERVER_QUERY_TOOL, SERVER_QUERY_RECEIPT_TOOL, serverQueryTool, serverQueryContextNotice, type ServerQueryDefinition, type ServerQueryContext,
   type ServerQueryReceipt } from '../core/server-query.ts';
 
 export {attachProximityVoice, inspectVoiceWav} from './proximity-voice.ts';

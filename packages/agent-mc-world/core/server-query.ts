@@ -44,8 +44,7 @@ export function serverQueryTool(definitions: readonly ServerQueryDefinition[]): 
     // receipt reads from sends, including after catalogue compaction.
     anyOf: [
       { maxProperties: 0 },
-      { type: 'object', additionalProperties: false, required: ['requestId'],
-        properties: { requestId: SERVER_QUERY_TOOL.parameters.properties.requestId } },
+      SERVER_QUERY_RECEIPT_TOOL.parameters,
       ...[...groups.values()].map(group => ({ type: 'object', additionalProperties: false,
         required: ['query', ...(Number(group.schema.minItems) > 0 ? ['arguments'] : [])],
         properties: { query: { type: 'string', enum: group.ids }, arguments: group.schema } })),
@@ -93,34 +92,47 @@ export type ServerQueryReceipt = {
   reason?: string;
 };
 
+export const SERVER_QUERY_RECEIPT_TOOL = {
+  name: 'mc_query_receipt',
+  tags: ['read'],
+  description: 'Read a previously returned server query receipt by its exact requestId. Never sends a command. Unknown IDs have unknown results.',
+  parameters: { type: 'object', additionalProperties: false, required: ['requestId'],
+    properties: { requestId: { type: 'string', minLength: 1, maxLength: 128 } } },
+} satisfies Omit<ToolDef, 'handler'>;
+
+const queryFields = {
+  query: { type: 'string', minLength: 1, maxLength: 128 },
+  arguments: { type: 'array', maxItems: 16, items: { type: 'string', maxLength: 256 } },
+};
+
 export const SERVER_QUERY_TOOL = {
   name: 'mc_query',
   tags: ['read'],
   description: '{} lists registered read-only queries and their argument contracts. '
-    + '{query,arguments?:string[]} sends one and briefly awaits its reply; {requestId} reads the same receipt. '
+    + '{query,arguments?:string[]} sends one; omit requestId. Read an existing result through mc_query_receipt. '
     + 'Required subject IDs must come from observed server data. No body slot or chat wait is used. '
     + 'A fast matched reply returns directly; otherwise sent means awaiting a reply, not completed. Only listed queries are supported. '
     + 'At most one query is pending; identical requests reuse its receipt and terminal receipts for five seconds. '
     + 'Timeout means the result is unknown; there is no automatic retry. Replies have no request nonce and are only correlated server feedback, '
     + 'not proof of a uniquely identified request or completion of a gameplay goal.',
   parameters: {
-    type: 'object', additionalProperties: false,
-    properties: {
-      query: { type: 'string', minLength: 1, maxLength: 128 },
-      arguments: { type: 'array', maxItems: 16, items: { type: 'string', maxLength: 256 } },
-      requestId: { type: 'string', minLength: 1, maxLength: 128 },
-    },
+    type: 'object', properties: queryFields,
+    // Close each variant separately. Old clients can still read with {requestId},
+    // without advertising that field as an input to a new query.
+    anyOf: [{ maxProperties: 0 }, SERVER_QUERY_RECEIPT_TOOL.parameters,
+      { type: 'object', additionalProperties: false, required: ['query'], properties: queryFields }],
   },
 } satisfies Omit<ToolDef, 'handler'>;
 
 /** Full replies remain in the query receipt and event ledger. Broadcast only a source-bound
  * lookup notice to other readers; failures/incomplete reads keep their full diagnostics. */
-export function serverQueryContextNotice(data: Record<string, unknown> | undefined): string | null {
+export function serverQueryContextNotice(data: Record<string, unknown> | undefined, receiptTool = 'mc_query_receipt'): string | null {
   const reply=data?.reply as {ok?:boolean;dataTruncated?:boolean}|undefined;
   if(data?.phase!=='replied'||data.outcomeUnknown!==false||reply?.ok!==true||reply.dataTruncated)return null;
   const notice=JSON.stringify({source:'server-query-notice',requestId:data.requestId,query:data.query,
     arguments:data.arguments,phase:data.phase,observedAt:data.endedAt,requestNonce:false,goal_completed:false,
-    detail:'Full result belongs to the original query receipt. Read the same requestId through the World query tool if relevant; do not send a new query. This notice is not current inventory or goal completion.'});
+    next_safe_read:receiptRead(data.requestId, receiptTool),
+    detail:'Full result belongs to the original query receipt. This notice is not current inventory or goal completion.'});
   return notice.length<=2000?notice:null;
 }
 
@@ -146,6 +158,7 @@ type Record_ = {
 };
 
 const failure = (message: string): ToolOutcome => ({ text: message, failed: true, data: { goal_completed: false } });
+const receiptRead = (requestId: unknown, tool = SERVER_QUERY_RECEIPT_TOOL.name) => ({ tool, arguments: { requestId } });
 /** Return a bounded repair path in the failed receipt itself; never infer or send a command. */
 function queryInputFailure(message: string, definitions: readonly ServerQueryDefinition[]): ToolOutcome {
   const ids = [...new Set(definitions.map(item => item.id))];
@@ -174,6 +187,17 @@ export class ServerQueryLane {
   constructor(options: { now?: () => number; onTerminal?: (outcome: ToolOutcome) => void } = {}) {
     this.now = options.now ?? Date.now;
     this.onTerminal = options.onTerminal;
+  }
+
+  readReceipt(args: Record<string, unknown>): ToolOutcome {
+    this.expire();
+    if (!args || Object.keys(args).length !== 1 || typeof args.requestId !== 'string' ||
+        !args.requestId.length || args.requestId.length > 128) {
+      return failure('Provide only the requestId from the original query receipt. No query was sent.');
+    }
+    const record = this.records.get(args.requestId);
+    return record ? this.outcome(record) : { text: 'Unknown or expired requestId; its server result is unknown. No query was sent.',
+      data: { requestId: args.requestId, found: false, outcomeUnknown: true, requestNonce: false, goal_completed: false } };
   }
 
   /** Optional short read window, independent of the body queue and the query's
@@ -223,10 +247,16 @@ export class ServerQueryLane {
       return { text: 'Available read-only server queries. The observed phase and original requestId identify the read; it does not complete a goal. '
         + 'If still sent, read that requestId later. Timeout is unknown, with no automatic retry.\n' + JSON.stringify(data), data };
     }
-    if (keys.length === 1 && typeof args.requestId === 'string' && args.requestId.length > 0 && args.requestId.length <= 128) {
-      const record = this.records.get(args.requestId);
-      return record ? this.outcome(record) : { text: 'Unknown or expired requestId; its server result is unknown. No query was sent.',
-        data: { requestId: args.requestId, found: false, outcomeUnknown: true, requestNonce: false, goal_completed: false } };
+    if (keys.length === 1 && 'requestId' in args) return this.readReceipt(args);
+    if ('requestId' in args && typeof args.query === 'string' && keys.every(k => ['query','arguments','requestId'].includes(k))) {
+      const known = typeof args.requestId === 'string' && this.records.has(args.requestId);
+      const definition = definitions.find(item => item.id === args.query);
+      const recovery = { goal_completed: false, requestedQuerySent: false,
+        ...(known ? {next_safe_read: receiptRead(args.requestId)} : {}),
+        ...(definition ? {queryDefinition: queryContract(definition)} : {next_discovery: {tool: 'mc_query', arguments: {}}}) };
+      const message = known ? 'A stored receipt and a query were supplied together. Read the original result with next_safe_read, or send a fresh query with query and its arguments only.'
+        : 'This requestId has no stored receipt. For a new query send query and its arguments only; never generate an ID.';
+      return {text: message + ' No query was sent.\n' + JSON.stringify(recovery), failed: true, data: recovery};
     }
     if (keys.some(key => key !== 'query' && key !== 'arguments') || typeof args.query !== 'string'
       || args.query.length === 0 || args.query.length > 128 || (args.arguments !== undefined
@@ -246,7 +276,8 @@ export class ServerQueryLane {
     if (this.pending) {
       if (this.pending.key === key) return this.outcome(this.pending, { reused: true });
       return { text: 'Another server query is awaiting its reply. No new query was sent; read the pending requestId first.',
-        data: { busy: true, requestId: this.pending.receipt.requestId, phase: 'sent', goal_completed: false, requestNonce: false } };
+        data: { busy: true, requestId: this.pending.receipt.requestId,
+          next_safe_read: receiptRead(this.pending.receipt.requestId), phase: 'sent', goal_completed: false, requestNonce: false } };
     }
     for (const record of [...this.records.values()].reverse()) {
       if (record.key === key && record.endedAtMs !== undefined && this.now() - record.endedAtMs < REUSE_MS) {
@@ -379,7 +410,8 @@ export class ServerQueryLane {
   }
 
   private outcome(record: Record_, extra: Record<string, unknown> = {}): ToolOutcome {
-    const data: Record<string, unknown> = { ...JSON.parse(JSON.stringify(record.receipt)), ...extra };
+    const data: Record<string, unknown> = { ...JSON.parse(JSON.stringify(record.receipt)), ...extra,
+      ...(record.receipt.phase === 'sent' ? {next_safe_read: receiptRead(record.receipt.requestId)} : {}) };
     const messages: Record<ServerQueryReceipt['phase'], string> = {
       sent: '已发送，待回复。Read requestId later; sending does not prove completion.',
       replied: 'A matching server reply was observed. Correlation has no request nonce and does not prove a unique request or a gameplay goal.',

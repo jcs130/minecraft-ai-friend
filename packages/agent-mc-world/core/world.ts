@@ -52,7 +52,7 @@ import { readMapDat } from './level-dat.ts';
 import { readMapId } from './item-facts.ts';
 import { Vec3 } from 'vec3';
 import { ServerFeedbackLedger, parseServerActionDenial } from './server-feedback.ts';
-import { ServerQueryLane, SERVER_QUERY_TOOL, serverQueryTool, serverQueryContextNotice, type ServerQueryDefinition } from './server-query.ts';
+import { ServerQueryLane, SERVER_QUERY_TOOL, SERVER_QUERY_RECEIPT_TOOL, serverQueryTool, serverQueryContextNotice, type ServerQueryDefinition } from './server-query.ts';
 import { supervisorEventView } from '../src/client/event-context.ts';
 import { executionFeedbackContext } from '../src/client/execution-context.ts';
 import type { Bot } from 'mineflayer';
@@ -164,7 +164,7 @@ import {
   bearing, biomeAt, bodyInWater, canSeeEntity, classifyEntity, dayNightTransition, hazardTouch, isRaining,
   droppedStackOf, narrateWorld, narrateWorldSegments, scanMatureCrops, snapshotFingerprint, snapshotFromBot,
   standCellsAround, worldDelta, DIRECTION_ZH, WATER_BLOCKS,
-  type BlockReader, type ItemStack, type WorldSnapshot,
+  type BlockReader, type WorldSnapshot,
 } from './terrain.ts';
 import {
   accessFrom, applyAccess, applySettings, ensureOps, FLAT_PRESETS, grantOp, isOp,
@@ -202,6 +202,8 @@ import { DeathBook } from './deaths.ts';
 import { isOwnDeathTranslation } from './death-cause.ts';
 import { ExploreBook } from './explored.ts';
 import { ServerActionWait } from './server-action-wait.ts';
+import { CommandInventoryArrival, type InventoryArrivalMatcher } from './command-inventory-arrival.ts';
+import { CarriedInventoryObserver, carriedInventoryText } from './carried-inventory.ts';
 import { zhDimension, zhEntity, zhName } from './names.ts';
 import { offlineUuid } from './client-launch.ts';
 import {
@@ -227,7 +229,7 @@ const BLUEPRINT_INVENTORY_SETTLE_MS = 500;
 // Capability discovery is independent of an optional observation's lifetime.
 // Declarations do not enter the factual text and never stand in for fresh data.
 const REQUEST_FACT_KEYS = ['place','vehicle','flight','clock','realclock','body','gear','inventoryIds','equip','life','structure','terrain','players',
-  'sample','queue','taskProgress','goals','foodReserve','options','travelOptions','methods','identity','deathLifecycle','recoveryState','temporaryScaffolds',
+  'sample','queue','taskProgress','goals','foodReserve','carriedInventory','options','travelOptions','methods','identity','deathLifecycle','recoveryState','temporaryScaffolds',
   'bodyRestriction','serverFeedback','lastTask','journey','hud','availability','observationBoundary','bodyAvailability'] as const;
 const EXECUTION_FACT_KEYS = ['sample', 'identity', 'place', 'body', 'queue', 'taskProgress',
   'deathLifecycle', 'bodyRestriction', 'serverFeedback', 'lastTask', 'availability',
@@ -2274,6 +2276,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   KNOWLEDGE_TOOL,
   OPTIONS_TOOL,
   SERVER_QUERY_TOOL,
+  SERVER_QUERY_RECEIPT_TOOL,
   PROXIMITY_VOICE_TOOL,
   ...PERCEPTION_TOOLS,
   RAILWAY_TOOL_DECL,
@@ -2701,14 +2704,17 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       'Read inventory now, or compare requirements (required = total needed, keep = amount you choose to retain) to current stock. Shows how many of the 36 slots are used, what is in them, '
       + 'what is in your hand, and what armour you are wearing. Read-only and instant — '
       + 'it never moves you, never touches the world and never touches the work queue. '
-      + 'Set item to a material ID, Chinese material name, or exact custom display name to locate it in your inventory, the currently open container, and last observed chest records; '
+      + 'Set item to a material ID, Chinese material name, or exact custom display name to count current carried stock. Use detail:"storage" with item to also locate equipment, open container and historical chest records. '
       + 'closed virtual backpacks are not included, and chest records are historical until reopened. '
       + 'Use detail:"slots" for both identifiers of each carried stack: inventorySlot for player inventory 0–35, windowSlot for the player window 9–44. Use the field required by the transfer. item optionally filters stacks; freeSlots always covers the entire carried inventory. '
+      + 'Use detail:"changes" for the latest confirmed net change across carried slots, or item alone for a typed current carried quantity. '
       + 'Ask this instead of re-submitting a task to find out what you are carrying. '
       + 'Once per turn: asking again in the same turn returns a one-line pointer to the answer above.',
     parameters: { type: 'object', properties: {
       item: { type: 'string', description: 'Optional focused stock lookup by material ID, Chinese material name, or exact custom display name.' },
-      detail: { type: 'string', enum: ['summary', 'slots'], description: 'Default summary; slots reads only the current self inventory slot table (9–44), not chest slot numbers.' },
+      detail: { type: 'string', enum: ['summary', 'slots', 'changes','storage'], description: 'Default summary; slots reads the player window (9–44); changes returns latest net changes; storage with item also looks up historical containers.' },
+      offset: {type:'integer',minimum:0,maximum:71,description:'For a changes continuation, copy the offset and revision from next_safe_read.'},
+      revision: {type:'string',maxLength:64,description:'Inventory-change revision returned with a continuation.'},
       requirements: { type: 'array', minItems: 1, description: 'Targeted planning read, instead of item/detail. Material IDs count all stack variants. Keep amounts are your assumptions for this query.',
         items: { type: 'object', additionalProperties: false, required: ['item', 'required'], properties: {
           item: { type: 'string', description: 'Exact registered material ID.' },
@@ -2876,6 +2882,39 @@ export class MinecraftWorld implements World {
   protected rangedGeneration = 0;
   protected worldTimer: ReturnType<typeof setInterval> | null = null;
   protected lastReported: WorldSnapshot | null = null;
+  private carriedInventory?: CarriedInventoryObserver;
+  private carriedInventoryBody?: WeakRef<Bot>;
+  private carriedInventoryEpisode?: string;
+
+  private inventoryReading(snap: WorldSnapshot | null, publish = false) {
+    const bot = this.bridge?.bot as (Bot & {deathLifecycle?: import('./death-lifecycle.ts').DeathLifecycle}) | null | undefined;
+    const life = bot?.deathLifecycle;
+    if (bot !== this.carriedInventoryBody?.deref() || life?.episodeId !== this.carriedInventoryEpisode) {
+      this.carriedInventory = undefined;
+      this.carriedInventoryBody = bot ? new WeakRef(bot) : undefined;
+      this.carriedInventoryEpisode = life?.episodeId;
+    }
+    const slots = bot?.inventory?.slots;
+    if (this.bridge?.connected === false || !snap?.invSynced || !slots || slots.length < 45 || (life && life.phase !== 'alive')) return undefined;
+    this.carriedInventory ??= new CarriedInventoryObserver();
+    return this.carriedInventory.read(slots, new Date().toISOString(), publish);
+  }
+
+  /** Keep hand, cursor and worn equipment in routine requests. Full stacks are available on demand. */
+  private currentWorldSegments(snap: WorldSnapshot) {
+    const text = carriedInventoryText(this.inventoryReading(snap)?.reading);
+    return [...narrateWorldSegments(snap, this.nearMarkNote(snap.position), null, 'current'),
+      {key:'carriedInventory' as const,text,cmp:text}];
+  }
+
+  private carriedItem(item: string, synced: boolean) {
+    const bot = this.bridge?.bot;
+    const slots = bot?.inventory?.slots;
+    const read = synced && this.bridge?.connected !== false && slots && slots.length >= 45 ? inventorySlotReadout(slots,item,bot.registry) : null;
+    return {protocol:'agent-mc/carried-item/v1',scope:'self',item,synced:!!read,
+      count:read ? read.occupied.reduce((sum, entry) => sum + entry.count,0) : null,
+      stacks:read?.occupied.length ?? null,freeSlots:read?.freeSlots ?? null};
+  }
   protected spatialRealm: string | null = null;
   protected lastTickTime: number | null = null;
   protected lastLowHealthAt = 0;
@@ -3614,7 +3653,7 @@ export class MinecraftWorld implements World {
     const snap = this.snapshot({ scanBlocks: false });
     if (!snap) return this.unavailableRequestFacts('snapshot-unavailable');
     const parts: FactPart[] = [{ key: 'sample', text: `[Minecraft 当前读数；采样 ${snap.realTime}]` },
-      ...narrateWorldSegments(snap, this.nearMarkNote(snap.position)).map(({ key, text }) => ({ key, text })),
+      ...this.currentWorldSegments(snap).map(({key,text})=>({key,text})),
       { key: 'queue', text: renderQueue(this.executor?.status() ?? { running: null, waiting: [] }) },
       { key: 'taskProgress', text: this.taskProgressReading.read(this.executor?.status() ?? { running: null, waiting: [] }) },
       { key: 'goals', text: goalSnapshotLine(this.goalTable().list) },
@@ -3645,7 +3684,7 @@ export class MinecraftWorld implements World {
         const state = { episodeId: lifecycle.episodeId ?? null, dimension: normalizeDimension(snap.dimension),
           position: { x: snap.position.x, y: snap.position.y, z: snap.position.z },
           health: snap.health, food: snap.food, inventorySynced: snap.invSynced,
-          inventory: snap.invSynced ? snap.inventory.slice(0, 40).map(item => ({ name: item.name, count: item.count })) : null };
+          carriedSlotsUsed: snap.invSynced ? snap.inventory.length : null, inventorySource:'carriedInventory' };
         parts.push(withFactState({ key: 'recoveryState', text: JSON.stringify({ sampledAt: snap.realTime, ...state }) }, state));
       }
     }
@@ -3677,7 +3716,7 @@ export class MinecraftWorld implements World {
         + (current ? '' : '这是历史旅途线索，当前已过期或离开近场；可考虑回访，但须重新观察，不能据此判定当前位置仍可立即探访。') });
     } else parts.push({ key: 'journey', text: movementPolicy + '\n当前没有活动旅途观察；mc_policy 可查询和调整行走/垫脚/主动战斗策略。' });
     return { text: parts.map(part => part.text).filter(Boolean).join('\n'), parts, partKeys: REQUEST_FACT_KEYS,
-      partDependencies: { gear: ['equip', 'inventoryIds'], equip: ['gear'], inventoryIds: ['gear'] },
+      partDependencies: { gear: ['equip', 'inventoryIds', 'carriedInventory'], equip: ['gear'], inventoryIds: ['gear'] },
       decisionBoundary: JSON.stringify([this.connectionGeneration, this.decisionPositionEpoch,
         (bot as Bot & { deathLifecycle?: { episodeId?: string; phase?: string } })?.deathLifecycle?.episodeId ?? null,
         readWorldIdentity(bot).key, normalizeDimension(snap.dimension)]),
@@ -3695,7 +3734,7 @@ export class MinecraftWorld implements World {
           task: queue?.running ? { id: queue.running.id, step: queue.running.step,
             index: queue.running.stepIndex, total: queue.running.stepCount, elapsedMs: queue.running.elapsedMs } : null,
           queued: queue?.waiting.length ?? 0 },
-        constraints: { body: this.bodyInhibitReason, support: snap.standingOn, grounded: snap.onGround },
+        constraints: { body: this.bodyInhibitReason, support: snap.standingOn, supportSource: 'world.footing.block', grounded: snap.onGround },
         lastTask: last ? { kind: last.kind, at: last.at, text: last.text.length <= 160 ? last.text
           : last.text.slice(0, 50) + '…[abridged]…' + last.text.slice(-100) } : null,
       } },
@@ -4362,6 +4401,10 @@ export class MinecraftWorld implements World {
     this.executor = new Executor({
       getBot: () => this.bridge?.bot ?? null,
       chatDispatch: (text, send, context) => this.dispatchServerChat(text, send, context),
+      inventoryCommand: (bot, command, send, signal) => {
+        const match = this.extensionInventoryArrival(command);
+        if (match) return this.commandInventoryArrival.send(bot, match, this.serverQueryMessageSequence, send, signal);
+      },
       admissionCheck: steps => this.extensionAdmission(steps),
       report: (r) => this.onTaskReport(r),
       log,
@@ -4385,6 +4428,7 @@ export class MinecraftWorld implements World {
         defaults: () => this.policyDefaults(),
       },
       permitResourcePlacement: (item, intent) => this.permitBlueprintResourcePlacement(item, intent),
+      inventorySynced: () => this.bridge?.invSynced === true,
       previewResourcePlacement: (item) => this.previewBlueprintResourcePlacement(item),
       probeRoutes: (target, goal, profiles) => this.bridge?.probeRoutes(target, goal, profiles) ?? null,
       probeTarget: (target, options) => this.bridge?.probeTarget(target, options) ?? null,
@@ -4849,6 +4893,8 @@ export class MinecraftWorld implements World {
   protected extensionMessage(_text: string): boolean { return false; }
   /** Server-position feedback after player/private chat provenance exclusions. */
   protected extensionServerFeedback(_text: string): void {}
+  /** A server pack can opt exact transfer commands into receipt and inventory verification. */
+  protected extensionInventoryArrival(_command: string): InventoryArrivalMatcher | undefined { return undefined; }
   /** Optional routing evidence; the common core does not assume a server's chat radius or prefixes. */
   protected extensionChatAudience(_text: string, _serverRenderedText?: string, _direction: 'incoming'|'outgoing'='outgoing'): import('../src/contracts/chat-delivery.ts').ChatAudienceEvidence | undefined { return undefined; }
   private chatAudienceMeta(audience: import('../src/contracts/chat-delivery.ts').ChatAudienceEvidence | undefined): Record<string, unknown> {
@@ -4867,6 +4913,7 @@ export class MinecraftWorld implements World {
     const handlers: Record<string, ToolDef['handler']> = {
       mc_voice: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.proximityVoice.call(args); },
       mc_query: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.queryServer(args,ctx.signal); },
+      mc_query_receipt: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.serverQueries.readReceipt(args); },
       mc_tool_help: async (args, ctx) => { ctx.signal?.throwIfAborted(); return readToolHelp(this.tools(), args); },
       mc_knowledge: async (args, ctx) => {
         ctx.signal?.throwIfAborted();
@@ -5078,8 +5125,12 @@ export class MinecraftWorld implements World {
       },
       mc_check: async (args) => this.toolLog('mc_check', args, this.runCheck(args)),
       mc_bag: async (args, ctx) => {
+        if ((args.offset !== undefined || args.revision !== undefined) && args.detail !== 'changes')
+          return {failed:true,text:'库存变化分页仅可用于 detail:"changes"。'};
+        if (typeof args.item === 'string' && !/^[^\p{Cc}\p{Cf}]{1,64}$/u.test(args.item.trim().replace(/^minecraft:/i,'')))
+          return {failed:true,text:'[物资查询] 物品名格式不对。'};
         if (args.requirements !== undefined) {
-          if (args.item !== undefined || args.detail === 'slots') return { failed: true, text: 'requirements 是独立的材料核算查询；槽号或单件定位请用另一次查询。' };
+          if (args.item !== undefined || (args.detail && args.detail !== 'summary')) return { failed: true, text: 'requirements 是独立的材料核算查询；槽号或单件定位请用另一次查询。' };
           try {
             const data = readMaterialBudget(this.bridge?.bot ?? undefined, this.bridge?.invSynced === true, args.requirements);
             const text = JSON.stringify(data);
@@ -5089,7 +5140,21 @@ export class MinecraftWorld implements World {
             return { failed: true, text: String(err instanceof Error ? err.message : err) };
           }
         }
-        const readout=this.bagReadout(typeof args.item === 'string' ? args.item : undefined,args.detail==='slots');
+        if (args.detail === 'changes') {
+          if (args.item !== undefined) return {failed:true,text:'changes 核对随身库存净变化。定位某物品请单独提供 item。'};
+          let reading = this.inventoryReading(this.snapshot({scanBlocks:false}))?.reading;
+          if (reading && (args.offset !== undefined || args.revision !== undefined)) {
+            const page = this.carriedInventory?.page(reading,args.revision,args.offset);
+            if (!page) return {failed:true,text:'库存变化版本或偏移已失效。重新查 detail:"changes" 获取当前读数。',
+              data:{next_safe_read:{tool:'mc_bag',arguments:{detail:'changes'}}}};
+            reading=page;
+          }
+          return {text:carriedInventoryText(reading), data:reading ? {...reading} : {protocol:'agent-mc-carried-inventory/v1',kind:'unknown',usedSlots:null,freeSlots:null,
+            next_safe_read:{tool:'mc_bag',arguments:{detail:'slots'}}}};
+        }
+        if (args.detail === 'storage' && !(typeof args.item === 'string' && args.item.trim()))
+          return {failed:true,text:'查容器库存记录请提供 item。'};
+        const readout=this.bagReadout(typeof args.item === 'string' ? args.item : undefined,args.detail==='slots',args.detail==='storage');
         const result=this.readOnce('mc_bag',ctx,()=>readout);
         return readout.data ? {text:typeof result==='string'?result:result.text,data:readout.data} : result;
       },
@@ -5606,12 +5671,13 @@ export class MinecraftWorld implements World {
   }
 
   /** mc_bag:背包现读。与快照走同一份渲染口径(见 readouts.renderBagReadout) */
-  protected bagReadout(item?: string, slots=false): { stamp: string; text: string; data?: Record<string,unknown> } {
+  protected bagReadout(item?: string, slots=false, storageHistory=false): { stamp: string; text: string; data?: Record<string,unknown> } {
     const snap = this.snapshot({ scanBlocks: false });
     if (!snap) {
       return {
         stamp: bagStamp(null),
         text: `[mc_bag] 看不了背包：${this.unavailableConnectionText()}`,
+        ...(item?.trim() && !slots ? {data:this.carriedItem(item, false)} : {}),
       };
     }
     if(slots){
@@ -5623,8 +5689,16 @@ export class MinecraftWorld implements World {
       const text=JSON.stringify(data);
       return {stamp:`slots:${text}`,text,data};
     }
-    const records = this.chestBook().chestsIn(snap.dimension);
     if (item?.trim()) {
+      const data=this.carriedItem(item,snap.invSynced);
+      const risk=foodRiskReference(item.trim());
+      const riskText=risk ? `\n[物品风险参考，未核服务器/组件覆盖] Java ${risk.source.version}：${risk.caution}` : '';
+      if (!storageHistory) {
+        const text = data.synced ? `本人随身 ${item} ×${data.count}，占 ${data.stacks} 格，空 ${data.freeSlots} 格。`
+          : '本人随身库存未同步，数量与空格未知。';
+        return {stamp:JSON.stringify(data), text:text + riskText,data};
+      }
+      const records = this.chestBook().chestsIn(snap.dimension);
       const bot = this.bridge?.bot;
       const win = bot?.currentWindow;
       const opened = win && !selectionMenuTitle(win.title)
@@ -5632,10 +5706,9 @@ export class MinecraftWorld implements World {
             items: containerStacks(win, bot.registry as never).items }
         : null;
       const text = renderStoredItemReadout(snap, records, item, opened, bot?.registry);
-      const risk = foodRiskReference(item.trim());
-      const riskText = risk ? `\n[物品风险参考，未核服务器/组件覆盖] Java ${risk.source.version}：${risk.caution}` : '';
-      return { stamp: `${bagStamp(snap)}|stock:${item}|${text}${riskText}`, text: text + riskText };
+      return { stamp: `${bagStamp(snap)}|stock:${item}|${text}${riskText}`, text: text + riskText, data };
     }
+    const records = this.chestBook().chestsIn(snap.dimension);
     const storage = renderStorageReadout(snap, records);
     const foodReserve = this.currentFoodReserve(snap, true);
     return {
@@ -7151,6 +7224,7 @@ export class MinecraftWorld implements World {
   }
 
   protected onSpawn(): void {
+    this.carriedInventory = undefined;
     this.serverQueries.reset('游戏连接代次已改变，原查询结果未知');
     this.pendingDeathCause = null;
     this.deathRespawnConfirmation = null;
@@ -7197,6 +7271,7 @@ export class MinecraftWorld implements World {
     });
     const snap = this.snapshot();
     this.lastReported = snap;
+    this.inventoryReading(snap);
     this.lastTickTime = snap?.timeOfDay ?? null;
     this.lastHealth = null;
     this.activeEffects.clear();
@@ -7236,6 +7311,7 @@ export class MinecraftWorld implements World {
    * 不重走 onSpawn：世界和连接未变，快照基线与暂态仍有效。
    */
   protected onRespawn(): void {
+    this.carriedInventory = undefined;
     this.serverQueries.reset('重生或维度已改变，原查询结果未知');
     this.pendingDeathCause = null;
     this.setBodyInhibited(null);
@@ -7480,6 +7556,7 @@ export class MinecraftWorld implements World {
       const toWorld = readWorldIdentity(bot).key;
       this.requestFactsCache = null;
       this.lastReported = null;
+      this.carriedInventory = undefined;
       this.lastPosForTeleport = null;
       this.snapshotArmedAt = null;
       this.journeyBlocks = null;
@@ -7879,6 +7956,7 @@ export class MinecraftWorld implements World {
               independentQueryReply = this.serverQueries.receive(reply, queryGeneration, bot.username || this.chatName(), querySequence);
               if (!independentQueryReply && !extensionConsumed) unchangedQueryFeedback = this.serverActionWait.noteFeedback(reply);
               this.extensionServerFeedback(reply);
+              this.commandInventoryArrival.observe(bot, querySequence, reply);
             }
             // A correlated read result belongs to its query receipt, not to the
             // unrelated body task that happened to be running at arrival.
@@ -8787,6 +8865,7 @@ export class MinecraftWorld implements World {
   protected lastSetSpawnAt = 0;
   protected lastServerFeedback: { text: string; at: number } | null = null;
   protected readonly serverActionWait = new ServerActionWait();
+  private readonly commandInventoryArrival = new CommandInventoryArrival();
   /** 个人重生点(床/重生锚)。重连后未核实为 undefined，spawnReset 确认失效为 null。 */
   protected personalSpawn: SpawnTarget | null | undefined = undefined;
   /** 自己发起的传送:这段时间里 forcedMove 不急报,反射也不抢寻路。 */
@@ -9025,6 +9104,7 @@ export class MinecraftWorld implements World {
     const snap = this.snapshot();
     if (!snap) return;
     this.lastWorldEmitAt = Date.now();
+    const inventory = this.inventoryReading(snap, true);
     if (!this.lastReported) {
       this.lastReported = snap;
       return;
@@ -9036,6 +9116,8 @@ export class MinecraftWorld implements World {
       !this.bridge?.spawnPositionPending,
     );
     if (notes.length === 0) {
+      if (inventory?.changed && inventory.reading.kind === 'delta') this.emit('minecraft.world', '[Minecraft] ' + carriedInventoryText(inventory.reading), false,
+        {trigger:'piggyback',meta:{carriedInventory:inventory.reading}});
       // 首份身体、经验读数只建立基线；位置仍从上次已报告的落点累计。
       this.lastReported = {
         ...this.lastReported,
@@ -9049,8 +9131,9 @@ export class MinecraftWorld implements World {
       'minecraft.world',
       `[Minecraft] ${notes.join(';')}`,
       false,
-      inventoryOnly || this.executor?.currentTask || this.combat?.active
-        ? { trigger: 'piggyback' } : undefined,
+      { ...(inventoryOnly || this.executor?.currentTask || this.combat?.active
+        ? { trigger: 'piggyback' as const } : {}),
+        ...(inventory?.changed ? { meta: {carriedInventory:inventory.reading} } : {}) },
     );
     // Transient unconfirmed inventory must not erase the last confirmed comparison
     // baseline, or a health/food update before window_items would hide death losses.
@@ -9558,11 +9641,8 @@ export class MinecraftWorld implements World {
     const anchorDue = this.snapshotBaseline === null
       || this.snapshotAnchorPending
       || now - this.lastSnapshotFullAt >= this.cfg.world.snapshotAnchorSec * 1000;
-    const near = this.nearMarkNote(snap.position);
     const segs = [
-      // 位置相对路标的描述参与 place 段比对。背包相对上一份已发快照只报变化，
-      // 全量锚则报告完整背包。
-      ...narrateWorldSegments(snap, near, anchorDue ? null : this.snapshotBagBase),
+      ...this.currentWorldSegments(snap),
       { key: 'respawn' as const, text: respawn, cmp: respawn },
       { key: 'queue' as const, text: queue, cmp: queue },
       { key: 'goals' as const, text: goals, cmp: goals },
@@ -9570,16 +9650,8 @@ export class MinecraftWorld implements World {
       { key: 'blueprints' as const, text: blueprints, cmp: blueprints },
       { key: 'foodReserve' as const, text: foodReserve, cmp: foodReserve },
     ];
-    // 请求用事实必须自足：增量背包仅属于事件，不能拿来替换历史快照。
-    // 复用刚取得的 snap，不追加扫描；即使这拍变化被抑制，采样时间仍是本次读数。
-    const fullSegments = anchorDue ? segs : [
-      ...narrateWorldSegments(snap, near, null),
-      ...segs.filter((segment) => segment.key === 'queue'
-        || segment.key === 'goals' || segment.key === 'marks' || segment.key === 'foodReserve'
-        || segment.key === 'respawn' || segment.key === 'blueprints'),
-    ];
     const parts = [{ key: 'sample', text: `[Minecraft 当前读数；采样 ${snap.realTime}]` },
-      ...fullSegments.map(({ key, text }) => ({ key, text })),
+      ...segs.map(({key,text})=>({key,text})),
       { key: 'taskProgress', text: this.taskProgressReading.read(this.executor?.status() ?? { running: null, waiting: [] }) },
       { key: 'explored', text: this.explored.summary(normalizeDimension(snap.dimension)) }];
     const journey=this.journeyObserver.reading(this.journeyScope(),String(this.connectionGeneration),now);
@@ -9592,7 +9664,7 @@ export class MinecraftWorld implements World {
     // 按变化量发:与上一拍比没有实质变化、人也没挪窝,这一拍整条不发(基线不动,
     // 下一次真变了照样按段差分)。全量锚那一拍不受这道闸管,漂移由它兜住。
     // 队列状态一起进比对键 —— 手上在做什么变了就是实质变化。
-    const quietKey = `${snapshotFingerprint(snap)}|${queue}` +
+    const quietKey = `${snapshotFingerprint(snap)}|${queue}|${segs.find(s=>s.key==='carriedInventory')!.cmp}` +
       `|spawn:${this.personalSpawn ? `${this.personalSpawn.x},${this.personalSpawn.y},${this.personalSpawn.z}` : this.personalSpawn === null ? 'none' : 'unknown'}` +
       // 两张暂态表也进比对键:表变了就是实质变化,那一拍该发
       `|goals:${goals}|marks:${marks}|foodReserve:${foodReserve}|blueprints:${blueprints}`;
@@ -9605,9 +9677,6 @@ export class MinecraftWorld implements World {
     const dirty = anchorDue ? segs : segs.filter((g) => this.snapshotBaseline?.get(g.key) !== g.cmp);
     if (dirty.length === 0) return null;
     this.snapshotBaseline = new Map(segs.map((g) => [g.key, g.cmp]));
-    // 背包基线与段基线同刻推进:下一份增量差的就是这一份印出去的东西。
-    // 没同步完的那份不作数(空清单不是有效基线,与 worldDelta 同一口径)
-    if (snap.invSynced) this.snapshotBagBase = snap.inventory;
     if (anchorDue) {
       this.snapshotAnchorPending = false;
       this.lastSnapshotFullAt = now;
@@ -9628,8 +9697,6 @@ export class MinecraftWorld implements World {
   protected requestFactsCache: WorldRequestFacts | null = null;
   /** 上一条真发出去的快照的实质指纹与站位(跳拍闸的基准) */
   protected snapshotQuiet: { key: string; pos: { x: number; y: number; z: number } } | null = null;
-  /** 上一份真发出去的快照里的背包(gear 段增量的基准);null=还没有基线,下一份整份印 */
-  protected snapshotBagBase: ItemStack[] | null = null;
   /** 上一份全量快照的时刻;snapshotAnchorSec 兜底的基准 */
   protected lastSnapshotFullAt = 0;
   /** 置位后下一份快照强制全量(截断刷新环境提示词、重连 spawn 时置位) */

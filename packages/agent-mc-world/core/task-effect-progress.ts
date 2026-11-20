@@ -1,9 +1,11 @@
 import type { ObservedEffect } from '../src/contracts/observed-effect.ts';
+import type { StepDecision } from './step-decision.ts';
 
 export interface TaskEffectStep {
   outcome: string;
   skill?: string;
   observedEffect?: ObservedEffect;
+  decision?: Partial<StepDecision>;
 }
 /** Measured client-visible effects, independent of a task terminal or goal success. */
 export interface TaskEffectProgress {
@@ -25,10 +27,24 @@ export function taskEffectProgress(steps: readonly TaskEffectStep[]): TaskEffect
   const unknown = physical.filter(s => !s.observedEffect || s.observedEffect.status === 'unknown');
   const movement = ['goto', 'follow', 'walk', 'swim', 'control', 'flight', 'ride', 'transit'];
   const work = physical.filter(s => !movement.includes(s.skill ?? s.observedEffect?.skill ?? ''));
-  const observation = (list: readonly TaskEffectStep[]) => list.some(s => s.observedEffect?.status === 'changed') ? 'changed' as const
-    : list.length > 0 && list.every(s => s.observedEffect?.status === 'unchanged') ? 'unchanged' as const : 'unknown' as const;
+  const observation = (statuses: Array<ObservedEffect['status'] | undefined>) => statuses.includes('changed') ? 'changed' as const
+    : statuses.length > 0 && statuses.every(status => status === 'unchanged') ? 'unchanged' as const : 'unknown' as const;
+  const quantitativeTransfer = (s: TaskEffectStep | undefined) => s?.decision?.unit === 'items'
+    && (s.skill === 'take' || s.skill === 'stow');
+  const workStatus = (s: TaskEffectStep, index: number) => {
+    // Opening/closing a GUI is visible even when the attempted transfer is unconfirmed.
+    if (quantitativeTransfer(s)) {
+      return s.decision?.completed == null ? 'unknown' : s.decision.completed > 0 ? 'changed' : 'unchanged';
+    }
+    const effect = s.observedEffect;
+    if (s.skill === 'use' && quantitativeTransfer(work[index + 1]) && effect?.changed.window
+      && !effect.changed.inventory && !effect.changed.target && !effect.changed.position) {
+      return 'unchanged';
+    }
+    return effect?.status;
+  };
   return { protocol: 'agent-mc-task-effect-progress/v1',
-    observation: observation(physical), workObservation: observation(work), workSteps: work.length,
+    observation: observation(physical.map(s => s.observedEffect?.status)), workObservation: observation(work.map(workStatus)), workSteps: work.length,
     workNoopSteps: work.filter(s => s.outcome === 'noop').length,
     measuredSteps: measured.length, unknownSteps: unknown.length,
     noopSteps: physical.filter(s => s.outcome === 'noop').length, goalVerified: false };

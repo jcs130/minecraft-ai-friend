@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import type { Bot } from 'mineflayer';
 import type { SkillContext } from '../core/skill-context.ts';
 import { assessScaffoldMaterials } from '../core/scaffold-material.ts';
@@ -34,9 +34,37 @@ it('keeps explicit disable and unverified offline configuration separate', () =>
   expect(renderPolicyEnv(settings)).toContain('不垫脚');
   expect(renderPolicyEnv(rig(['scaffolding']).settings)).toContain('尚未核验');
 });
+it('offers actual stable carried alternatives without changing policy or reserving a block', () => {
+  const { ctx, bot, settings } = rig(['netherrack', 'cobblestone']);
+  const permit = vi.fn();
+  const stock = permittedStockFor(bot, scaffoldNames(ctx, bot), '垫脚', { ...ctx, permitResourcePlacement: permit });
+  expect(stock).toHaveProperty('why', expect.stringContaining('随身另有可垫候选 dirt'));
+  expect(stock).toHaveProperty('why', expect.stringContaining('区域放置权限未由此核实'));
+  expect(permit).not.toHaveBeenCalled();
+  expect(settings.scaffold).toEqual(['netherrack', 'cobblestone']);
+});
+it('keeps an unsynced inventory and a resource denial distinct from missing stock', () => {
+  const { ctx, bot } = rig(['dirt']);
+  const permit = vi.fn(() => ({ok:false as const, reason:'已为在建蓝图保留'}));
+  const items = vi.spyOn(bot.inventory,'items');
+  const selection = (synced:boolean) => permittedStockFor(bot,['dirt'],'垫脚',{
+    ...ctx, inventorySynced:() => synced, permitResourcePlacement:permit,
+  });
+  expect(selection(false)).toHaveProperty('why', expect.stringContaining('数量未知'));
+  expect(items).not.toHaveBeenCalled();
+  expect(permit).not.toHaveBeenCalled();
+  expect(selection(true)).toEqual({why:'已为在建蓝图保留'});
+});
 it('shares normalized material assessment without adding unauthorized fallback', () => {
   expect(assessScaffoldMaterials(['minecraft:dirt', 'dirt', 'sand', 'scaffolding', 'missing'], registry).accepted).toEqual(['dirt']);
   expect(assessScaffoldMaterials(['missing'], registry).accepted).toEqual([]);
   const { ctx, bot } = rig(['minecraft:dirt', 'scaffolding']);
   expect(scaffoldNames(ctx, bot)).toEqual(['dirt']);
+});
+it('links the take guide only when carried scaffold materials are actually missing', () => {
+  const { bot, ctx } = rig(['cobblestone']);
+  vi.spyOn(bot.inventory, 'items').mockReturnValue([]);
+  expect(permittedStockFor(bot, ['cobblestone'], '垫脚', ctx).why).toContain('mc_help {skill:"take"}');
+  expect(permittedStockFor(bot, ['cobblestone'], '垫脚', { ...ctx, inventorySynced: () => false }).why)
+    .not.toContain('mc_help');
 });

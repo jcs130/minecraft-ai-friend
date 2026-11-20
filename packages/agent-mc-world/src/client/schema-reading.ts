@@ -1,5 +1,15 @@
 /** Request-only schema annotations; full declarations remain available for help and generation. */
 export const CONTEXT_SCHEMA_ANNOTATIONS: readonly string[] = Object.freeze(['x-agent-mc-skill-contracts']);
+
+/** Model-facing send/index view for hosts that also grant the separate receipt reader.
+ * External SDK/MCP callers retain the original three-form validation contract. */
+export function serverQuerySendParameters(parameters: Record<string, unknown>): Record<string, unknown> {
+  if (!object(parameters.properties) || !object(parameters.properties.query)) return parameters;
+  const { requestId: _legacyReceipt, ...properties } = parameters.properties;
+  const anyOf = Array.isArray(parameters.anyOf) ? parameters.anyOf.filter(branch =>
+    !(object(branch) && Array.isArray(branch.required) && branch.required.includes('requestId'))) : undefined;
+  return { ...parameters, additionalProperties: false, properties, ...(anyOf ? {anyOf} : {}) };
+}
 const maps = new Set(['properties', 'patternProperties', '$defs', 'definitions', 'dependencies', 'dependentSchemas']);
 const arrays = new Set(['allOf', 'anyOf', 'oneOf', 'prefixItems']);
 const children = new Set(['items', 'additionalProperties', 'unevaluatedProperties', 'propertyNames', 'contains',

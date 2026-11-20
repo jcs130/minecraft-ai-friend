@@ -5,12 +5,89 @@ import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { clearOffHandConfirmed, equipHandConfirmed, equipSlotConfirmed, unequipSlotConfirmed } from '../core/equipment.ts';
 import { skillEquip } from '../core/skills-craft.ts';
+import { CommandInventoryArrival } from '../core/command-inventory-arrival.ts';
 import { takeWornItem, wornItemNamed } from '../src/equipment-access.ts';
 import { invItemNamed } from '../core/inventory.ts';
 import { skillAnvil } from '../core/skills-interact.ts';
 import { installInventoryClickSync, INVENTORY_CLICK_CONFIRM_MS } from '../core/inventory-click-sync.ts';
 
 const require = createRequire(import.meta.url);
+
+function transferListenerCounts(bot: Bot): number[] {
+  return [
+    bot.inventory.listenerCount('updateSlot'),
+    ...(['end', 'death', 'respawn', 'windowOpen', 'windowClose'] as const).map(event => bot.listenerCount(event)),
+  ];
+}
+
+it.each([[169, 177], [177, 169]])('lets dependent equip run only after inventory (%i ms) and receipt (%i ms)', async (bagMs, replyMs) => {
+  vi.useFakeTimers();
+  const rig = equipmentServer({ version: '1.21.1' });
+  const originalListeners = transferListenerCounts(rig.bot);
+  const lane = new CommandInventoryArrival();
+  const send = vi.fn(() => {
+    setTimeout(() => rig.seed(25, 'iron_helmet'), bagMs);
+    setTimeout(() => lane.observe(rig.bot, 2, 'TRANSFER 92 iron_helmet 1'), replyMs);
+  });
+  // Without a transfer barrier the original next step fails against this exact pre-update bag.
+  await expect(skillEquip(rig.bot, { skill: 'equip', item: 'iron_helmet' })).rejects.toThrow('包里没有');
+  const transfer = lane.send(rig.bot, line => line === 'TRANSFER 92 iron_helmet 1'
+    ? { item: 'iron_helmet', moved: 1 } : null, 1, send);
+  const equipped = transfer.then(() => skillEquip(rig.bot, { skill: 'equip', item: 'iron_helmet' }));
+  await vi.advanceTimersByTimeAsync(175);
+  expect(rig.server.slots[5]).toBeNull();
+  await vi.runAllTimersAsync();
+  await equipped;
+  expect(rig.server.slots[5]?.name).toBe('iron_helmet');
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(transferListenerCounts(rig.bot)).toEqual(originalListeners);
+});
+
+it('ignores stale, wrong-body and unmatched replies and frees listeners on timeout and cancellation', async () => {
+  vi.useFakeTimers();
+  const rig = equipmentServer({ version: '1.21.1' });
+  rig.seed(25, 'iron_helmet');
+  const lane = new CommandInventoryArrival();
+  const match = (line: string) => line === 'mine' ? { item: 'iron_helmet', moved: 1 } : null;
+  const send = vi.fn();
+  const listeners = transferListenerCounts(rig.bot);
+  const first = lane.send(rig.bot, match, 4, send);
+  const failed = expect(first).rejects.toThrow('未在期限内收到匹配');
+  lane.observe(rig.bot, 4, 'mine');
+  lane.observe({} as Bot, 6, 'mine');
+  lane.observe(rig.bot, 7, 'other');
+  await vi.advanceTimersByTimeAsync(3_000);
+  await failed;
+  expect(transferListenerCounts(rig.bot)).toEqual(listeners);
+  const controller = new AbortController();
+  const cancelled = lane.send(rig.bot, match, 7, send, controller.signal);
+  lane.observe(rig.bot, 8, 'mine'); // A pre-existing helmet cannot satisfy a fresh increment.
+  controller.abort();
+  await expect(cancelled).rejects.toThrow('aborted');
+  expect(transferListenerCounts(rig.bot)).toEqual(listeners);
+  expect(send).toHaveBeenCalledTimes(2);
+});
+
+it('does not treat a late unnumbered reply as a second inventory gain', async () => {
+  vi.useFakeTimers();
+  const rig = equipmentServer({ version: '1.21.1' });
+  const lane = new CommandInventoryArrival();
+  const match = () => ({ item: 'iron_helmet', moved: 1 });
+  const send = vi.fn();
+  const first = lane.send(rig.bot, match, 10, send);
+  rig.seed(25, 'iron_helmet');
+  const timedOut = expect(first).rejects.toThrow('未在期限内收到匹配');
+  await vi.advanceTimersByTimeAsync(3_000);
+  await timedOut;
+  expect(send).toHaveBeenCalledTimes(1);
+  // A separate caller requests the same slot after the first item has already arrived.
+  const second = lane.send(rig.bot, match, 10, send);
+  lane.observe(rig.bot, 11, 'unattributed late reply');
+  const noSecondGain = expect(second).rejects.toThrow('库存增量尚未核实');
+  await vi.advanceTimersByTimeAsync(3_000);
+  await noSecondGain;
+  expect(send).toHaveBeenCalledTimes(2);
+});
 const dependency = (name: string) => require(require.resolve(name, { paths: [require.resolve('mineflayer')] }));
 
 function equipmentServer(options: { denySwap?: boolean; denyPickup?: boolean; denyHandSwap?: boolean; denyAnyHandSwap?: boolean; silent?: boolean; version?: string } = {}) {

@@ -82,8 +82,9 @@ it.each(['unconfirmed', 'reference-disappears', 'no-reference', 'deferred', 'den
       if (mode === 'denied') {
         await expect(upkeep.footing(cell)).rejects.toThrow('服务端保护预检 deny');
       } else {
-        expect(await upkeep.footing(cell)).toBe(false);
+        expect(await upkeep.footing(cell, '试算直塔')).toBe(false);
         const reason = upkeep.why('footing');
+        expect(reason.includes('试算直塔')).toBe(mode === 'no-reference');
         if (mode === 'no-reference') expect(reason).toMatch(/放置时没有可贴的实心面，本次未发包/);
         else if (mode === 'deferred') expect(reason).toContain('同场景失败缓存');
         else expect(reason).toMatch(/填充 \(-63, 81, -78\).*未确认放置成功.*回读：air/);
@@ -95,6 +96,47 @@ it.each(['unconfirmed', 'reference-disappears', 'no-reference', 'deferred', 'den
 );
 
 afterEach(() => vi.useRealTimers());
+
+it.each(['deny','unknown','cached','transient'] as const)('keeps a tower placement outcome distinct: %s', async mode => {
+  const r=rig();
+  const ctx={aborted:()=>false, escape:{active:false}, policy:{get:()=>({scaffold:['netherrack']})}} as SkillContext;
+  Object.assign(r.bot,{lookAt:vi.fn()});
+  vi.mocked(r.bot.setControlState).mockImplementation((key,on)=>{
+    if(key==='jump')r.bot.entity.position.y=on?65.2:64;
+  });
+  const block=mode==='cached' ? new PlacementRetryDeferred({x:0,y:64,z:0},100,900)
+    : new SkillBlocked(`服务端放置保护预检 ${mode}: (0, 64, 0) fixture`, [], 'server');
+  const place=vi.mocked(r.bot.placeBlock);
+  try {
+    if(mode==='transient'){
+      place.mockRejectedValueOnce(new Error('timing')).mockImplementationOnce(async()=>{r.cells.set('0,64,0','netherrack');});
+      await expect(new Upkeep(r.bot,ctx).climb()).resolves.toBe(true);
+      expect(place).toHaveBeenCalledTimes(2);
+    }else{
+      place.mockRejectedValue(block);
+      const attempt=new Upkeep(r.bot,ctx).climb();
+      if(mode==='cached')await expect(attempt).rejects.toMatchObject({message:block.message,source:'local',code:'placement-retry-cached'});
+      else await expect(attempt).rejects.toBe(block);
+      expect(place).toHaveBeenCalledTimes(1);
+    }
+    expect(r.bot.setControlState).toHaveBeenLastCalledWith('jump',false);
+  } finally { r.exec.shutdown(); }
+});
+
+it.each([{rise:16,spiral:true},{rise:12,spiral:false}])('reports the shared stock gate for a $rise-block climb without dispatching a placement', async ({rise,spiral}) => {
+  const r = rig();
+  const ctx = {aborted:()=>false, escape:{active:false},
+    policy:{get:()=>({scaffold:['netherrack','cobblestone']})}} as SkillContext;
+  vi.spyOn(r.bot.inventory,'items').mockReturnValue([]);
+  try {
+    const result = skillTunnel(r.bot,{skill:'tunnel',at:[0,64+rise,0],spiral},ctx);
+    await expect(result).rejects.toThrow('若材料在随身容器里，先开容器并取到随身槽再用');
+    await expect(result).rejects.not.toThrow('直塔');
+    expect(r.bot.placeBlock).not.toHaveBeenCalled();
+    expect(r.bot.equip).not.toHaveBeenCalled();
+    expect(r.bot.moves).toEqual([]);
+  } finally { r.exec.shutdown(); }
+});
 
 it('previews the actual rising diagonal step and its lower floor before taking a step', async () => {
   const r = rig();

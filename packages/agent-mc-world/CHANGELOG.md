@@ -1,3 +1,23 @@
+## 0.5.7-rc.160-preview.114
+
+Read a server query's original observation through `mc_query_receipt`. Event notices and pending queries supply its exact arguments. New queries expose only query and argument fields at the top level, and existing receipt-only callers remain compatible.
+
+## 0.5.7-rc.160-preview.113
+
+Open-container take and stow report quantities matched on both the container and carried sides. Partial transfers expose the amount still needed. A retained window reports provisional observations until close, and uncertain transfers point to a read instead of a repeat click. Item selectors keep the selected stack as their source. Missing scaffold materials link to the take guide.
+
+## 0.5.7-rc.160-preview.112
+
+Ambient sound investigations now yield to pending travel, building or supply goals after a short probe. Fresh evidence can reopen the search. Tunnel recovery reports available carried scaffold stock before suggesting another attempt.
+
+## 0.5.7-rc.160-preview.111
+
+Expose bounded, confirmed changes to carried inventory through world events, current facts and the existing read-only bag tool. Named reads return the current carried quantity independently of historical containers.
+
+## 0.5.7-rc.160-preview.110
+
+Server extensions can match an inventory transfer command to its system receipt. The next body step starts after the reported items appear in the player's inventory. An unconfirmed transfer reports the missing evidence and is never resubmitted automatically.
+
 ## 0.5.7-rc.160-preview.109
 
 Game memory, waypoint notes, photography, the message inbox and isolated practice declare their scheduling requirements independently of write permissions. Reading navigation settings leaves the running path and persisted settings intact. Queued scouting preserves pending travel, held inputs and active scripts. A server command refusal leaves real containers, books and dialogs open.

@@ -8,7 +8,7 @@ A missing exact prebuilt vanilla material pack automatically uses a compatible p
 
 mc_messages queries a bounded, scoped history of received player chat and server notices. list/search gives short entries; read expands one original with source/time; review only marks consideration. Old messages are historical observations, never new commands, verified learning or current world facts. Query the specific source again when a current condition matters.
 
-mc_query lists explicitly supported server read-only queries and sends them independently of the body queue. Read its requestId for the result; sent is not replied, and timeout means unknown. Reuse an outstanding query instead of appending status commands behind a long movement or guessing recovery commands. Unknown and mutating commands still use ordered mc_do steps.
+mc_query lists supported read-only queries and sends them independently of the body queue. Supply the query and its arguments. To read a result, pass the returned requestId alone to mc_query_receipt. A pending query can be read during movement. Timeout leaves the outcome unknown. Other server commands use ordered mc_do steps.
 
 mc_tool_help lists actual tools and progressively expands their original parameter schemas using returned JSON-pointer paths. Supply full:true only when the complete selected node is needed. This is tool-contract discovery; mc_help remains the action/skill manual. Neither query executes an action.
 

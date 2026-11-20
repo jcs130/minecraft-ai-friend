@@ -7,6 +7,23 @@ The Java native backend does not yet implement this action.
 
 ## Basic use
 
+Read current carried stock with `mc_bag {"item":"netherrack"}`. Its typed
+`data.count` covers the 36 carried slots. An unsynchronized count is null.
+Use `detail:"slots"` for exact stack and slot identifiers or `detail:"storage"`
+with an item to include separately labeled equipment, open-container and historical chest observations.
+
+The `carriedInventory` request-facts section and `mc_bag {"detail":"changes"}`
+summarize net changes between confirmed observations. World events expose the
+same shape in `meta.carriedInventory`. A fresh body begins with a baseline.
+The latest change retains its observation time until another change occurs.
+At most eight variant-level differences are returned, with an omitted count.
+Follow the returned offset and revision to read more of the same observation.
+The read fails explicitly if the current revision changed in the meantime.
+The counted space excludes all containers, crafting slots, worn armor and offhand.
+Moving a stack from the main inventory to the hotbar leaves its total unchanged.
+Store and drop can both reduce a carried count. This observation cannot attribute
+the destination or establish successful disposal.
+
 ```json
 {"steps":[{"skill":"organize"}]}
 ```

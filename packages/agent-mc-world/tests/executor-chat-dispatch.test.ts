@@ -6,6 +6,7 @@ import { Vec3 } from 'vec3';
 import { Executor, sendChat, type TaskReport, type ChatDispatchContext } from '../core/executor.ts';
 import { configureChatDedup } from '../core/chat-dedup.ts';
 import { ServerActionWait } from '../core/server-action-wait.ts';
+import type { InventoryCommandDispatch } from '../core/command-inventory-arrival.ts';
 
 const require = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 const registry = require('minecraft-data')('1.21.1');
@@ -13,7 +14,7 @@ const executors: Executor[] = [];
 
 afterEach(() => { for (const executor of executors.splice(0)) executor.shutdown(); vi.useRealTimers(); });
 
-function harness() {
+function harness(inventoryCommand?: InventoryCommandDispatch) {
   const wait = new ServerActionWait();
   const reports: TaskReport[] = [];
   const chat = vi.fn((_text: string) => { wait.noteFeedback('请等待 10 秒'); });
@@ -30,10 +31,28 @@ function harness() {
   const dispatch = vi.fn((text: string, send: () => void, _context?: ChatDispatchContext) => wait.dispatchChat(text, send));
   let id = 0;
   const exec = new Executor({ getBot: () => bot, report: r => reports.push(r), log: log as never,
-    nextId: () => ++id, fleeHealth: () => 0, chatDispatch: dispatch });
+    nextId: () => ++id, fleeHealth: () => 0, chatDispatch: dispatch, inventoryCommand });
   executors.push(exec);
   return { wait, reports, chat, bot, dispatch, exec };
 }
+
+it('holds a dependent body step at a recognized transfer and dispatches the command only once', async () => {
+  vi.useFakeTimers();
+  let finish!: (text: string) => void;
+  const r = harness((_bot, command, send) => {
+    if (command !== '/example take 1') return;
+    send();
+    return new Promise(resolve => { finish = resolve; });
+  });
+  const admitted = r.exec.submitDetailed([{ skill: 'chat', text: '/example take 1' },
+    { skill: 'chat', text: 'Inventory received', needs: [1] }], 'append');
+  await vi.advanceTimersByTimeAsync(177);
+  expect(r.chat.mock.calls.map(call => call[0])).toEqual(['/example take 1']);
+  finish('inventory confirmed');
+  await vi.advanceTimersByTimeAsync(100);
+  expect(r.chat.mock.calls.map(call => call[0])).toEqual(['/example take 1', 'Inventory received']);
+  expect(r.reports.find(report => report.taskId === admitted.taskId && report.kind === 'done')?.text).toContain('inventory confirmed');
+});
 
 it('starts reply correlation only when a chat queued for over three seconds is sent', async () => {
   vi.useFakeTimers(); vi.setSystemTime(1_000);
