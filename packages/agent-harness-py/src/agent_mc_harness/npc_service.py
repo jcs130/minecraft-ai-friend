@@ -228,6 +228,7 @@ async def serve(path: Path):
         transport = settings["bodies"][role.id]
         scope = role.scope(settings["serverId"])
         controller = str(UUID(transport["controllerId"]))
+        journal = ActionJournal(state / role.id / "actions.sqlite3")
         if role.body_kind == "maid":
             bridge = NativeMaidBridge(transport["endpoint"], Path(transport["tokenFile"]).read_text().strip(),
                                       owner_id=str(role.owner_id), maid_id=str(role.body_id), controller_id=controller)
@@ -237,12 +238,12 @@ async def serve(path: Path):
                 transport = {**transport, "tokenFile": state / role.id / "numen" / "hosted.token"}
             port = HostedMcpPort({**transport, "name": transport["name"], "bodyId":str(role.body_id),
                                   "ownerId":str(role.owner_id), "serverId":settings["serverId"],
-                                  "journalDirectory":str(state / role.id / "numen")})
+                                  "journalDirectory":str(state / role.id / "numen")}, action_journal=journal)
             body = NumenBody(port, scope=scope, server_id=settings["serverId"], name=role.name, owner_id=str(role.owner_id),
                              item_use_ids=tuple(role.native_items), adventure_partner=role.adventure_partner)
         memory = open_role_memory(state / role.id, connection)
         return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1, resident_turns=turns.get(role.id)),
-                       memory, ActionJournal(state / role.id / "actions.sqlite3"), social=social, social_graph=social_graph,
+                       memory, journal, social=social, social_graph=social_graph,
                        companion_adventure=CompanionAdventure(*source, role.owner_id) if role.adventure_advice and source else None)
     yielded = {}
     def attach(role):

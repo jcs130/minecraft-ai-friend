@@ -24,7 +24,7 @@ class HostedMcpPort:
     transport = "numen-hosted-mcp"
     dialect = "numen-hosted-0.1.5"
 
-    def __init__(self, config, *, session=None):
+    def __init__(self, config, *, session=None, action_journal=None):
         self.cfg = config
         url = urlsplit(config["endpoint"])
         if url.scheme != "http" or url.hostname != "127.0.0.1" or url.path != "/mcp" or url.username or url.query or url.fragment:
@@ -58,6 +58,8 @@ class HostedMcpPort:
         self._initial_fence = None
         self.closing = False
         self.next_receipt_probe = {}
+        self.next_vacancy_probe = None
+        self.action_journal = action_journal
         self.ledger = NativeTasks(Path(config["journalDirectory"]) / "hosted-tasks.sqlite3", self.body)
 
     async def rpc(self, op, **values):
@@ -165,16 +167,61 @@ class HostedMcpPort:
             self.disconnected.set()
         elif (str(error) == "HOSTED_REQUEST_REFUSED_QUERY_ORIGINAL" and self._initial_fence
               and not self.closing):
-            # Both expiry and an active handoff can refuse our heartbeat. Check
-            # once for a vacant, idle *known* generation. No attach or renewal
-            # occurs here; the native fence still arbitrates any subsequent open.
+            # Both expiry and an active handoff can refuse our heartbeat.
             try:
                 async with asyncio.timeout(3):
                     facts = await self.rpc("facts")
-            except Exception:
+            except Exception as read_error:
+                if self._transient_facts_error(read_error):
+                    self.next_vacancy_probe = asyncio.get_running_loop().time() + 15
                 return
             if self._vacant(facts, {self.owned_epoch, self.epoch}):
                 self.disconnected.set()
+
+    async def _recheck_vacancy(self):
+        # The old MCP stream can be unusable after a stall. A new read-only
+        # session asks about the original fence, without attaching or renewing.
+        now = asyncio.get_running_loop().time()
+        if self.closing or self.next_vacancy_probe is None or now < self.next_vacancy_probe:
+            return
+        self.next_vacancy_probe = None
+        try:
+            async with asyncio.timeout(6), self._mcp_session() as session:
+                facts = await self._request(session, "facts")
+        except Exception as error:
+            if self._transient_facts_error(error):
+                self.next_vacancy_probe = asyncio.get_running_loop().time() + 15
+            return
+        if (self.closing or facts.get("epoch") != self.owned_epoch or facts.get("ready") is not True
+                or not self._vacant(facts, {self.owned_epoch})):
+            return
+        if self._unfinished_local_work():
+            # The original receipt poll may still settle a physically finished
+            # call. Keep this body fenced until that outcome has been recorded.
+            self.next_vacancy_probe = asyncio.get_running_loop().time() + 15
+            return
+        self.disconnected.set()
+
+    @staticmethod
+    def _transient_facts_error(error):
+        if isinstance(error, BaseExceptionGroup):
+            return all(HostedMcpPort._transient_facts_error(child) for child in error.exceptions)
+        from anyio import BrokenResourceError, ClosedResourceError, EndOfStream
+        from httpx import TransportError
+        return isinstance(error, (OSError, TransportError, BrokenResourceError, ClosedResourceError, EndOfStream))
+
+    def _unfinished_local_work(self):
+        if self.action_journal and self.action_journal.unresolved(self.body):
+            return True
+        for request, connection in self.ledger.unsettled():
+            if self.action_journal is None or connection in {self.task_connection, self.boot} or (connection or "").startswith(self.boot + ":"):
+                return True
+            # Earlier versions sometimes retained an uncertain transport row
+            # after an original action was separately reconciled by the host.
+            receipt = self.action_journal.receipt(self.body, request)
+            if not receipt or receipt.request_id != request or not receipt.terminal or receipt.status in {"accepted", "unknown"}:
+                return True
+        return False
 
     async def _heartbeat_once(self):
         # The queue drain can take longer than a lease. Renew our deliberate
@@ -192,7 +239,7 @@ class HostedMcpPort:
         # bound to the same configured body. The injected session is for tests.
         if self.lost and not self.disconnected.is_set():
             raise RuntimeError("CONTROL_CHANGED")
-        port = HostedMcpPort(self.cfg, session=self._provided_session)
+        port = HostedMcpPort(self.cfg, session=self._provided_session, action_journal=self.action_journal)
         port.previous_states = {(self.owned_epoch, self.lease_mode), (self.epoch, self.requested_mode)}
         return port
 
@@ -405,6 +452,10 @@ class HostedMcpPort:
                     break
 
     async def events(self):
+        if self.next_vacancy_probe is not None:
+            await self._recheck_vacancy()
+            if self.disconnected.is_set():
+                return []
         rows = self._inbox(await self.rpc("observe"))
         # Reconsider an event that raced the Lua reply on the next read.
         self._record_finishes(rows)
