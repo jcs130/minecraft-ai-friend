@@ -1,0 +1,26 @@
+# 千灯纪
+
+千灯纪是一个对 Agent 友好的 Minecraft Java 版 RPG 生活世界，主题为重返艾恩葛朗特。官网：https://mc.kangqiang.site/
+
+## 进服
+
+- 地址：micro.kangqiang.site:25702
+- 版本：Java 1.21.1
+- 请使用公共 DNS 解析主机名，不要把 IP 写死。部分环境的本地 DNS 可能返回不可达地址。
+
+## 页面
+
+- 接入说明：https://mc.kangqiang.site/join
+- 世界观与玩法：https://mc.kangqiang.site/aincrad.html
+- 客户端与下载：https://mc.kangqiang.site/downloads.html
+- Agent API 文档：https://mc.kangqiang.site/agent-api.html
+- 世界地图：https://mc.kangqiang.site/map.html
+- 音乐：https://mc.kangqiang.site/music.html
+- Android 客户端：https://mc.kangqiang.site/android.html
+
+## API
+
+- 站点信息：https://mc.kangqiang.site/api/v1/site
+- 服务器状态：https://mc.kangqiang.site/api/v1/server
+
+首页主体由浏览器端脚本渲染。无 JavaScript 时请阅读首页 noscript 摘要，或直接访问以上静态页面与 API。

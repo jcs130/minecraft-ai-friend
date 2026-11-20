@@ -58,7 +58,7 @@ test('reviewed public media redirects GET, Range and HEAD to immutable OSS witho
   const page = await fetch(origin + '/');
   const csp = page.headers.get('content-security-policy');
   assert.match(csp, /media-src 'self' https:\/\/public-assets\.example;/);
-  assert.match(csp, /script-src 'self';/); assert.match(csp, /connect-src 'self';/);
+  assert.match(csp, /script-src 'self'( 'sha256-[A-Za-z0-9+/=]+')*;/); assert.doesNotMatch(csp, /unsafe-inline/); assert.match(csp, /connect-src 'self';/);
   assert.equal((await fetch(origin + '/media/' + reviewedMedia.find(row => row.filename !== video.filename).filename, { redirect: 'manual' })).status, 404);
   assert.equal((await fetch(origin + '/media/portal.sqlite', { redirect: 'manual' })).status, 404);
   assert.equal((await fetch(origin + '/media/https:%2f%2finternal%2fsecret.mp4', { redirect: 'manual' })).status, 404);
