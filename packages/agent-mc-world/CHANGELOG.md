@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.115
+
+Equipment and inventory lookups accept the qualified vanilla IDs returned by transfers. Qualified IDs match an exact inventory identity, including when checking armor already worn. Display names and category selectors remain available for ordinary queries.
+
 ## 0.5.7-rc.160-preview.114
 
 Read a server query's original observation through `mc_query_receipt`. Event notices and pending queries supply its exact arguments. New queries expose only query and argument fields at the top level, and existing receipt-only callers remain compatible.

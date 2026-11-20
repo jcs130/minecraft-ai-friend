@@ -68,6 +68,8 @@ export function chestBlockName(rec: ChestRecord): string {
 
 /** 已注册 ID 只匹配自身；未注册的类别名按 `_query` 后缀匹配。 */
 export function matchItemName(query: string, name: string, reg?: NameRegistry | null): boolean {
+  const qualified = qualifiedItemKey(reg, query);
+  if (qualified !== null) return name === query || name === qualified;
   return matchMaterialName(reg, query, name);
 }
 
@@ -75,6 +77,17 @@ export function matchItemName(query: string, name: string, reg?: NameRegistry | 
 export interface NameRegistry {
   itemsByName?: Record<string, unknown>;
   blocksByName?: Record<string, unknown>;
+}
+
+/** A qualified item selector always denotes an exact ID. Only a vanilla item
+ * present in this connection's item registry can also use Prismarine's bare key. */
+export function qualifiedItemKey(reg: NameRegistry | null | undefined, query: string): string | null {
+  if (!/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(query)) return null;
+  if (query.startsWith('minecraft:')) {
+    const bare = query.slice('minecraft:'.length);
+    if (reg?.itemsByName && Object.hasOwn(reg.itemsByName, bare)) return bare;
+  }
+  return query;
 }
 
 /** 名字是否存在于当前注册表。 */
