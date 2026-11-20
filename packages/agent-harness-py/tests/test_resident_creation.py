@@ -74,7 +74,8 @@ def test_new_character_joins_service_and_recovers_its_identity_while_portal_is_o
     monkeypatch.setattr(npc_service.NpcHost,"run",idle)
     monkeypatch.setattr(npc_service,"MaidBody", Native)
     monkeypatch.setattr(npc_service,"NumenBody", Native)
-    monkeypatch.setattr(npc_service,"HostedMcpPort",lambda cfg: SimpleNamespace(disconnected=asyncio.Event(), lost=False))
+    monkeypatch.setattr(npc_service,"HostedMcpPort",lambda cfg, *, action_journal: SimpleNamespace(
+        disconnected=asyncio.Event(), lost=False, action_journal=action_journal))
     monkeypatch.setattr(npc_service,"NativeMaidBridge",lambda *args, **kwargs: None)
 
     async def run():
