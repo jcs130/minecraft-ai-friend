@@ -1,6 +1,6 @@
 # 村民派发任务系统：实现方案
 
-> 配套文档：[设计文档](design.md)。状态：2026-11-20。MVP 的 Python 部分已经在本分支实现，只做过本地单元测试；Bukkit 侧的编剧器插件**还没写**。正式服没有任何改动。
+> 配套文档：[设计文档](design.md)。状态：2026-11-20。MVP 的 Python 桥接层和 Bukkit 侧插件 `qiandeng-villager-quests` 都已在代码仓库实现，只做过本地单元测试、离线往返测试和本机 Paper 1.21.1 冒烟；**没有在 Youer 上跑过**。正式服没有任何改动。
 
 ## 阶段总览
 
@@ -52,18 +52,22 @@ await bridge.on_snapshot("kirito", await body.snapshot())  # 只更新"已备齐
 await bridge.tick()                               # 超时 → expired，并取消意图
 ```
 
-### 1.2 Bukkit 编剧器插件 `qiandeng-villager-quests`（待写，下一个 PR）
+### 1.2 Bukkit 插件 `qiandeng-villager-quests`（已实现，见 [插件 README](../../paper/plugins/VillagerQuests/README.md)）
 
-建议放在 `paper/plugins/VillagerQuests/`，结构参照 `paper/plugins/AgentFriend`：
+2026-11-20 用户确认：**村民的委托玩家也可以接**。因此插件自己维护一块委托板：玩家先接；`heroes.handoffAfterMinutes`（默认 10 分钟）内没人接的 `slay`/`gather` 委托，才写进桥接层 inbox 交给英雄。
 
 | 位置 | 作用 |
 |---|---|
-| `src/.../VillagerQuestsPlugin.java` | 读取配置；每 5 分钟（可配置）在**异步线程**跑一次触发器 |
-| `src/.../Triggers.java` | `night_raid`：统计村庄半径内的敌对生物；`shortage`：检查补给箱 |
-| `src/.../Author.java` | 调用 `cn.handyplus.deep.seek.api.DeepSeekApi.chat("委托编剧", prompt)`；解析 `[委托]{...}`；补上配置里的 `issuer`；原子写入 `inbox/<commissionId>.json` |
-| `src/.../Signals.java` | 监听 `EntityDeathEvent`（MVP）和 `MythicMobDeathEvent`（扩展），killer 在英雄名单里时，向 `signals.jsonl` 追加一行 |
-| `src/.../Outbox.java` | 轮询 `outbox.jsonl`：让村民说出 `text`；`rewardGrant` 交给 AgentFriend 或 Vortex 发放，以 `questId` 去重 |
-| `plugin.yml` | `softdepend: [Citizens, DeepSeek, MythicMobs, AgentFriend, VortexRPG]` |
+| `paper/plugins/VillagerQuests/src/.../core/` | 不依赖 Bukkit 的规则层：`Policy`（与桥接层同形的上限和奖励表，另加每人接取上限）、`Board`（上板、接取/放弃、转交英雄、证据、奖励账本、持久化）、`StoryParser`（模型回复的严格 JSON 解析）、`Text`（清洗）、`Spool`（inbox / signals.jsonl / outbox.jsonl）、`StoryAuthor`（米饭反射调用和 OpenAI 兼容 HTTP） |
+| `.../VillagerQuestsPlugin.java` | 读配置；主线程 2 秒一轮（过期、转交、补发奖励、读 outbox、保存）；触发器默认 5 分钟一轮；模型调用和文件读写在单独的后台线程 |
+| `.../Listeners.java` | `EntityDeathEvent`（凶手或 15 秒内最后伤害者）、右键村民 NPC 交付、`PlayerMoveEvent`（到达）、菜单点击 |
+| `.../QuestCommand.java` | `/vq`（别名 `/委托`）：菜单、list、accept、abandon、status、deliver；管理员 trigger、handoff、cancel、reload、info |
+| `.../Villagers.java` | Citizens 反射（`getNPCRegistry().getById`），没有 Citizens 时用配置坐标；村民在附近喊话 |
+| `.../Rewards.java`、`TaskCards.java` | 奖励发放（绿宝石物品 + 管理员配置的控制台命令）；AgentFriend 任务卡适配接口（AgentFriend 目前没有公开 API，空实现 + TODO） |
+| `tests/.../CoreRulesTest.java` | 218 项规则检查，并按 `villager_quest.schema.json` 校验插件写出的 Commission / QuestSignal；CI 在 `public-source.yml` 里跑 |
+| `tests/run_bridge_roundtrip.py` | 插件写 inbox → Python `quests once` 派给英雄 → 插件写击杀信号 → 桥接层判完成 → 插件读 outbox，确认按表欠奖励且只欠一次 |
+
+**本 PR 选的默认值（可以改）：** 独立插件（方便回滚）；模型默认关闭，可选 `mifan`（米饭 `DeepSeekApi.chat`）或 `http`（DeepSeek 官方 / 硅基流动等 OpenAI 兼容接口，密钥走环境变量）；模型只写标题和故事，类型、目标、数量、奖励都由规则决定。
 
 Maven 依赖（米饭官方 API 页）：
 
@@ -228,7 +232,7 @@ Schema 是 `packages/agent-harness-py/schemas/villager_quest.schema.json`，由 
 
 ## 未决问题
 
-1. 编剧器插件用 Java 单独写，还是并进 AgentFriend？独立插件更容易回滚，并进去能直接复用奖励队列。
-2. 委托最后要不要都物化成 AgentFriend 卡片，由它统一验收？这样玩家也能接村民委托。
-3. Flash 模型的确切 ID 和价格以提供商为准。是用官方 DeepSeek API 还是硅基流动？
+1. ~~编剧器插件单独写还是并进 AgentFriend？~~ 先单独写（`qiandeng-villager-quests`），AgentFriend 有公开 API 后再接任务卡。
+2. ~~玩家能不能接？~~ 能（2026-11-20 用户确认）。插件自己的委托板先给玩家，超时没人接再交给英雄。
+3. Flash 模型的确切 ID 和价格以提供商为准。官方 DeepSeek 和硅基流动都能通过 `llm.provider: http` 配置，选哪个还没定。
 4. Numen 身体的击杀归属，需要在测试服上确认。

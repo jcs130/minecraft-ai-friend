@@ -1,0 +1,21 @@
+name: qiandeng-villager-quests
+main: org.qiandengji.villagerquests.VillagerQuestsPlugin
+version: 0.1.0
+api-version: '1.21'
+description: 千灯纪村民委托：村民按规则发委托，玩家与常驻英雄都可接取，只凭服务器证据验收，奖励按配置表发放。
+authors: [Zhongli Li]
+softdepend: [Citizens, DeepSeek, AgentFriend]
+folia-supported: false
+commands:
+  vq:
+    description: 村民委托
+    usage: /vq [list|accept <编号>|abandon|status|deliver]
+    aliases: [委托, villagerquests]
+    permission: villagerquests.use
+permissions:
+  villagerquests.use:
+    description: 查看与接取村民委托
+    default: true
+  villagerquests.admin:
+    description: 手动触发、转交、取消委托和重载配置
+    default: op
