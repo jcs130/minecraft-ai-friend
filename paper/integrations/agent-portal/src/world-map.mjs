@@ -2,6 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { MapTileCdn, MAP_TILE_MANIFEST_LIMIT } from './world-map-tile-cdn.mjs';
+import { validateAincradAddresses } from './aincrad-addresses.mjs';
+import { directoryIndex, placeAddress } from '../public/world-map-model.js';
 
 export const MAP_FILE_LIMIT = 8 * 1024 * 1024;
 export const MAP_FRESH_MS = 20000;
@@ -28,6 +30,8 @@ export function validateMapAvatar(bytes) {
 const fail = (status, reason) => Object.assign(new Error(reason), { status, reason });
 const mapIds = new Set(['overworld', 'nether', 'end', 'aincrad']);
 const dimensions = { overworld: 'minecraft:overworld', nether: 'minecraft:the_nether', end: 'minecraft:the_end', aincrad: 'minecraft:aincrad' };
+// The live producer uses ResidentConfig's native profession keys.
+const residentProfessions = new Set(['guardian', 'ranger', 'mage', 'healer', 'artisan', 'farmer', 'knight', 'cleric', 'engineer', 'beastmaster']);
 const services = /^(?:goddess|live|ag_photolens|cortieye|corticam)$/i;
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.conf': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.prbm': 'application/octet-stream', '.webmanifest': 'application/manifest+json' };
 
@@ -62,7 +66,7 @@ export function validateMapState(value, now = Date.now()) {
   const npcs=npcRows.map(r=>{
     if(r?.kind!=='npc'||typeof r.name!=='string'||!r.name.trim()||[...r.name].length>24||/[\x00-\x1f\x7f]/.test(r.name)
        ||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(r.uuid)||npcIds.has(r.uuid)
-       ||!['guardian','ranger','mage','healer','artisan','farmer'].includes(r.profession)||!Object.values(dimensions).includes(r.dimension)
+       ||!residentProfessions.has(r.profession)||!Object.values(dimensions).includes(r.dimension)
        ||!['x','y','z','yaw','pitch'].every(k=>Number.isFinite(r[k]))||Math.abs(r.x)>30000000||Math.abs(r.z)>30000000||Math.abs(r.y)>100000)throw fail(400,'MAP_NPC_FORMAT');
     npcIds.add(r.uuid);return Object.fromEntries(['uuid','name','kind','profession','dimension','x','y','z','yaw','pitch'].map(k=>[k,r[k]]));
   });
@@ -85,10 +89,40 @@ async function readBody(req, limit) {
   return Buffer.concat(chunks);
 }
 
+function addressMarkers(directory) {
+  if (!directory) return {};
+  const safe = value => value.replace(/[&<>]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[char]);
+  const sets = {
+    'aincrad-streets': { label: '艾恩葛朗特街道', toggleable: true, markers: Object.create(null) },
+    'aincrad-addresses': { label: '艾恩葛朗特门牌与地点', toggleable: true, markers: Object.create(null) },
+    'aincrad-rooms': { label: '艾恩葛朗特地下城房间', toggleable: true, defaultHidden: true, markers: Object.create(null) }
+  };
+  for (const street of directory.streets) {
+    const points = street.path;
+    if (!points.length) continue;
+    const position = points[Math.floor(points.length / 2)];
+    sets['aincrad-streets'].markers[street.id] = { type: 'line', label: street.name, detail: safe(street.name),
+      position, line: points, lineWidth: 3, lineColor: { r: 231, g: 191, b: 113, a: 0.86 }, maxDistance: 700 };
+  }
+  const index = directoryIndex(directory);
+  for (const place of directory.places) {
+    const group = place.kind === 'dungeon-room' ? 'aincrad-rooms' : 'aincrad-addresses';
+    const address = placeAddress(place, index);
+    const residents = (place.residents || []).map(resident => resident.name).join('、');
+    sets[group].markers[place.id] = {
+      type: 'poi', label: place.name, detail: [place.name, address, residents].filter(Boolean).map(safe).join('<br>'),
+      position: place.position, anchor: { x: 25, y: 45 }, classes: ['atlas-address-pin', 'atlas-address-pin-' + place.kind],
+      maxDistance: 420
+    };
+  }
+  return Object.fromEntries(Object.entries(sets).filter(([, set]) => Object.keys(set.markers).length));
+}
+
 export class WorldMap {
   constructor(config, { now = Date.now } = {}) {
     this.enabled = config.worldMap?.enabled === true;
     this.root = path.resolve(config.dataDir, 'world-map'); this.now = now;
+    this.publicDir = config.publicDir;
     this.queue = Promise.resolve(); this.stateCache = null;
     this.tileCdn = config.worldMap?.tileCdn ? new MapTileCdn(config.worldMap.tileCdn, async () => {
       const file = await this.checkedFile('.tile-cdn.json');
@@ -125,6 +159,15 @@ export class WorldMap {
     const stale = !state || this.now() - Date.parse(state.observedAt) > MAP_FRESH_MS;
     return { schemaVersion: 1, available: !!state && !stale, stale, observedAt: state?.observedAt || null, source: 'minecraft.rcon-readonly',
       freshForMs: MAP_FRESH_MS, players: stale ? [] : state.players, npcs: stale ? [] : (state.npcs||[]), maps: state?.maps || [], readOnly: true };
+  }
+  addresses() {
+    if (this.addressBook === undefined) {
+      this.addressBook = this.publicDir
+        ? fs.readFile(path.join(this.publicDir, 'aincrad-addresses.json'), 'utf8')
+            .then(source => validateAincradAddresses(JSON.parse(source))).catch(() => null)
+        : Promise.resolve(null);
+    }
+    return this.addressBook;
   }
   async acceptState(value) {
     const checked = validateMapState(value, this.now());
@@ -168,13 +211,23 @@ export class WorldMap {
     }
     if (!['GET', 'HEAD'].includes(req.method)) throw fail(405, 'METHOD_NOT_ALLOWED');
     if (pathname === '/api/v1/world-map') { respond(res, 200, await this.state()); return true; }
+    if (pathname === '/world-map/aincrad-addresses.json') {
+      const directory = await this.addresses();
+      if (!directory) throw fail(404, 'MAP_ADDRESSES_UNAVAILABLE');
+      respond(res, 200, directory);
+      return true;
+    }
     if (pathname === '/world-map') { res.writeHead(308, { Location: '/world-map/' }); res.end(); return true; }
     const live = /^\/world-map\/maps\/(overworld|nether|end|aincrad)\/live\/(players|markers)\.json$/.exec(pathname);
     if (live) {
+      if (live[2] === 'markers') {
+        respond(res, 200, live[1] === 'aincrad' ? addressMarkers(await this.addresses()) : {});
+        return true;
+      }
       const state = await this.state();
-      respond(res, 200, live[2] === 'players' ? { players: [...state.players,...state.npcs].filter(row => row.dimension === dimensions[live[1]]).map(row => ({
+      respond(res, 200, { players: [...state.players,...state.npcs].filter(row => row.dimension === dimensions[live[1]]).map(row => ({
         uuid: row.uuid, name: row.name, foreign: row.kind === 'npc', position: { x: row.x, y: row.y, z: row.z }, rotation: { pitch: row.pitch, yaw: row.yaw, roll: 0 }
-      })) } : {}); return true;
+      })) }); return true;
     }
     const key = mapFileKey(pathname === '/world-map/' ? 'index.html' : pathname.slice('/world-map/'.length));
     const head = /^maps\/(?:overworld|nether|end|aincrad)\/assets\/playerheads\/([a-f0-9-]{36})\.png$/.exec(key);

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="千灯纪的真实世界地图，查看在线居民与 Agent 所在的位置，跟随他们的旅程。">
+  <meta name="description" content="千灯纪的真实世界地图，查找艾恩葛朗特街巷和居民住址，查看在线位置。">
   <title>千灯舆图 · 千灯纪</title>
   <link rel="icon" href="/assets/lantern.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/site-shell.css">
@@ -22,16 +22,35 @@
         <iframe id="world-map-frame" title="千灯纪交互地图，可拖动、缩放及切换二维或三维视角" src="/world-map/#overworld" allow="fullscreen" loading="eager"></iframe>
         <div class="atlas-follow" id="follow-bar" hidden><span id="follow-label"></span><div class="atlas-follow-actions"><a id="follow-live" class="atlas-live" href="/#live">观看直播 ↗</a><button id="stop-follow" type="button">取消跟随</button></div></div>
       </section>
-      <aside class="atlas-sidebar" aria-label="世界与在线居民">
+      <aside class="atlas-sidebar" aria-label="世界、住址与在线居民">
         <label class="atlas-field" for="world-select">所在世界</label>
         <select id="world-select"><option value="overworld">主世界</option><option value="nether">下界</option><option value="end">末地</option><option value="aincrad">艾恩葛朗特</option></select>
         <button id="map-spawn" class="atlas-home" type="button">⌂ 回到初始视角</button>
-        <div class="atlas-list-title"><h2>在线居民</h2><span id="player-count">—</span></div>
-        <label class="sr-only" for="player-search">搜索居民</label>
-        <input id="player-search" type="search" placeholder="搜索居民或 Agent" autocomplete="off" maxlength="32">
-        <div id="map-player-list" class="atlas-players"></div>
-        <p id="map-empty" class="atlas-empty">正在读取在线位置…</p>
-        <div class="atlas-legend"><span>●</span> 点选居民以持续跟随。位置来自游戏服，约 5 秒更新。</div>
+        <div class="atlas-modes" role="group" aria-label="地图内容">
+          <button type="button" id="show-addresses" aria-controls="address-panel" aria-pressed="false">艾恩葛朗特住址</button>
+          <button type="button" id="show-players" aria-controls="online-panel" aria-pressed="true">在线居民</button>
+        </div>
+        <section id="address-panel" hidden aria-labelledby="addresses-title">
+          <div class="atlas-list-title"><h2 id="addresses-title">街巷与门牌</h2><span id="address-count" aria-live="polite"></span></div>
+          <label class="sr-only" for="address-search">搜索住址</label>
+          <input type="search" id="address-search" placeholder="搜索门牌、居民或地点" maxlength="72" autocomplete="off">
+          <div class="atlas-address-filters">
+            <label for="address-district">街区<select id="address-district"><option value="">全部街区</option></select></label>
+            <label for="address-street">街道<select id="address-street"><option value="">全部街道</option></select></label>
+          </div>
+          <button type="button" id="locate-street" class="atlas-locate atlas-street-button" hidden>定位这条街</button>
+          <p id="address-selection" class="atlas-note" aria-live="polite" hidden></p>
+          <div id="address-list" class="atlas-address-list"></div>
+          <p id="address-empty" class="atlas-empty" role="status">正在读取住址…</p>
+        </section>
+        <section id="online-panel" aria-labelledby="online-title">
+          <div class="atlas-list-title"><h2 id="online-title">在线居民</h2><span id="player-count">—</span></div>
+          <label class="sr-only" for="player-search">搜索居民</label>
+          <input id="player-search" type="search" placeholder="搜索居民或 Agent" autocomplete="off" maxlength="32">
+          <div id="map-player-list" class="atlas-players"></div>
+          <p id="map-empty" class="atlas-empty">正在读取在线位置…</p>
+          <div class="atlas-legend"><span>●</span> 点选居民以持续跟随。位置来自游戏服，约 5 秒更新。</div>
+        </section>
         <p class="atlas-note" id="map-coverage">地形显示已生成的地表；未生成或未制图的区域保持未知。地图断线时保留地形，并移除过期的玩家标记。</p>
         <p class="atlas-updated" id="map-updated"></p>
       </aside>

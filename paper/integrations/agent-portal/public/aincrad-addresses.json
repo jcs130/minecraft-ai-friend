@@ -1,0 +1,724 @@
+{
+  "version": 1,
+  "world": "minecraft:aincrad",
+  "districts": [
+    {
+      "id": "town-of-beginnings",
+      "name": "起始之城"
+    },
+    {
+      "id": "expedition-sites",
+      "name": "远征场地"
+    }
+  ],
+  "streets": [
+    {
+      "id": "west-camp-lane",
+      "districtId": "town-of-beginnings",
+      "name": "西营巷",
+      "path": [
+        {
+          "x": -672,
+          "y": 67,
+          "z": 824
+        },
+        {
+          "x": -672,
+          "y": 67,
+          "z": 822
+        },
+        {
+          "x": -670,
+          "y": 67,
+          "z": 822
+        },
+        {
+          "x": -670,
+          "y": 67,
+          "z": 823
+        },
+        {
+          "x": -665,
+          "y": 67,
+          "z": 823
+        },
+        {
+          "x": -665,
+          "y": 67,
+          "z": 830
+        }
+      ]
+    },
+    {
+      "id": "gate-walk",
+      "districtId": "town-of-beginnings",
+      "name": "城门步道",
+      "path": [
+        {
+          "x": -583,
+          "y": 67,
+          "z": 919
+        },
+        {
+          "x": -583,
+          "y": 67,
+          "z": 920
+        },
+        {
+          "x": -583,
+          "y": 68,
+          "z": 921
+        },
+        {
+          "x": -583,
+          "y": 68,
+          "z": 922
+        },
+        {
+          "x": -583,
+          "y": 69,
+          "z": 923
+        },
+        {
+          "x": -583,
+          "y": 69,
+          "z": 934
+        }
+      ]
+    },
+    {
+      "id": "west-gate-road",
+      "districtId": "town-of-beginnings",
+      "name": "城门西道",
+      "path": [
+        {
+          "x": -610,
+          "y": 67,
+          "z": 918
+        },
+        {
+          "x": -583,
+          "y": 67,
+          "z": 918
+        }
+      ]
+    }
+  ],
+  "places": [
+    {
+      "id": "kirito-home",
+      "kind": "home",
+      "districtId": "town-of-beginnings",
+      "name": "桐人的家",
+      "position": {
+        "x": -672,
+        "y": 67,
+        "z": 825
+      },
+      "residents": [
+        {
+          "name": "桐人",
+          "profession": "游侠"
+        }
+      ],
+      "streetId": "west-camp-lane",
+      "number": "01"
+    },
+    {
+      "id": "town-arrival",
+      "kind": "landmark",
+      "districtId": "town-of-beginnings",
+      "name": "起始之城主城路标",
+      "position": {
+        "x": -582.5,
+        "y": 69,
+        "z": 934.5
+      },
+      "streetId": "gate-walk"
+    },
+    {
+      "id": "town-return-gate",
+      "kind": "landmark",
+      "districtId": "town-of-beginnings",
+      "name": "主世界回程门",
+      "position": {
+        "x": -583,
+        "y": 67,
+        "z": 919
+      },
+      "streetId": "gate-walk"
+    },
+    {
+      "id": "western-camp-north-building",
+      "kind": "building",
+      "districtId": "town-of-beginnings",
+      "name": "西营北屋",
+      "position": {
+        "x": -679,
+        "y": 67,
+        "z": 817
+      }
+    },
+    {
+      "id": "western-camp-southwest-building",
+      "kind": "building",
+      "districtId": "town-of-beginnings",
+      "name": "西营西南屋",
+      "position": {
+        "x": -690,
+        "y": 67,
+        "z": 846
+      }
+    },
+    {
+      "id": "dungeon-aincrad-01",
+      "kind": "building",
+      "districtId": "expedition-sites",
+      "name": "艾恩葛朗特·第一层攻略",
+      "position": {
+        "x": 856,
+        "y": 69,
+        "z": -1144
+      }
+    },
+    {
+      "id": "dungeon-aincrad-01-room-01",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-aincrad-01",
+      "number": "01",
+      "name": "第一阶段·前哨侦察",
+      "position": {
+        "x": 856,
+        "y": 69,
+        "z": -1144
+      }
+    },
+    {
+      "id": "dungeon-aincrad-01-room-02",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-aincrad-01",
+      "number": "02",
+      "name": "第二阶段·迷宫守卫",
+      "position": {
+        "x": 844,
+        "y": 69,
+        "z": -1160
+      }
+    },
+    {
+      "id": "dungeon-aincrad-01-room-03",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-aincrad-01",
+      "number": "03",
+      "name": "第三阶段·狗头人领主",
+      "position": {
+        "x": 832,
+        "y": 69,
+        "z": -1176
+      }
+    },
+    {
+      "id": "dungeon-corsair-cove",
+      "kind": "building",
+      "districtId": "expedition-sites",
+      "name": "黑帆海盗湾",
+      "position": {
+        "x": 8216,
+        "y": 75,
+        "z": 8203
+      }
+    },
+    {
+      "id": "dungeon-corsair-cove-room-01",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-corsair-cove",
+      "number": "01",
+      "name": "登船前哨",
+      "position": {
+        "x": 8216,
+        "y": 75,
+        "z": 8203
+      }
+    },
+    {
+      "id": "dungeon-corsair-cove-room-02",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-corsair-cove",
+      "number": "02",
+      "name": "炮舱争夺",
+      "position": {
+        "x": 8244,
+        "y": 86,
+        "z": 8206
+      }
+    },
+    {
+      "id": "dungeon-corsair-cove-room-03",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-corsair-cove",
+      "number": "03",
+      "name": "黑帆船长",
+      "position": {
+        "x": 8230,
+        "y": 82,
+        "z": 8199
+      }
+    },
+    {
+      "id": "dungeon-deep-mineworks",
+      "kind": "building",
+      "districtId": "expedition-sites",
+      "name": "深岩失落矿城",
+      "position": {
+        "x": 9745,
+        "y": 178,
+        "z": 8736
+      }
+    },
+    {
+      "id": "dungeon-deep-mineworks-room-01",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-deep-mineworks",
+      "number": "01",
+      "name": "矿城外站",
+      "position": {
+        "x": 9745,
+        "y": 178,
+        "z": 8736
+      }
+    },
+    {
+      "id": "dungeon-deep-mineworks-room-02",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-deep-mineworks",
+      "number": "02",
+      "name": "深岩工坊",
+      "position": {
+        "x": 9774,
+        "y": 181,
+        "z": 8716
+      }
+    },
+    {
+      "id": "dungeon-deep-mineworks-room-03",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-deep-mineworks",
+      "number": "03",
+      "name": "矿脉暴君",
+      "position": {
+        "x": 9758,
+        "y": 181,
+        "z": 8759
+      }
+    },
+    {
+      "id": "dungeon-ember-foundry",
+      "kind": "building",
+      "districtId": "expedition-sites",
+      "name": "熔火铸造厂",
+      "position": {
+        "x": 10245,
+        "y": 104,
+        "z": 8197
+      }
+    },
+    {
+      "id": "dungeon-ember-foundry-room-01",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-ember-foundry",
+      "number": "01",
+      "name": "铸造入口",
+      "position": {
+        "x": 10245,
+        "y": 104,
+        "z": 8197
+      }
+    },
+    {
+      "id": "dungeon-ember-foundry-room-02",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-ember-foundry",
+      "number": "02",
+      "name": "炉心回廊",
+      "position": {
+        "x": 10265,
+        "y": 104,
+        "z": 8217
+      }
+    },
+    {
+      "id": "dungeon-ember-foundry-room-03",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-ember-foundry",
+      "number": "03",
+      "name": "熔火监工",
+      "position": {
+        "x": 10265,
+        "y": 104,
+        "z": 8197
+      }
+    },
+    {
+      "id": "dungeon-frost-keep",
+      "kind": "building",
+      "districtId": "expedition-sites",
+      "name": "霜落古堡",
+      "position": {
+        "x": 9753,
+        "y": 94,
+        "z": 8211
+      }
+    },
+    {
+      "id": "dungeon-frost-keep-room-01",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-frost-keep",
+      "number": "01",
+      "name": "霜落门厅",
+      "position": {
+        "x": 9753,
+        "y": 94,
+        "z": 8211
+      }
+    },
+    {
+      "id": "dungeon-frost-keep-room-02",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-frost-keep",
+      "number": "02",
+      "name": "冰封侧廊",
+      "position": {
+        "x": 9739,
+        "y": 100,
+        "z": 8221
+      }
+    },
+    {
+      "id": "dungeon-frost-keep-room-03",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-frost-keep",
+      "number": "03",
+      "name": "寒霜守望者",
+      "position": {
+        "x": 9746,
+        "y": 99,
+        "z": 8201
+      }
+    },
+    {
+      "id": "dungeon-jungle-covenant",
+      "kind": "building",
+      "districtId": "expedition-sites",
+      "name": "翠藤古神祭坛",
+      "position": {
+        "x": 8212,
+        "y": 80,
+        "z": 8717
+      }
+    },
+    {
+      "id": "dungeon-jungle-covenant-room-01",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-jungle-covenant",
+      "number": "01",
+      "name": "翠藤前殿",
+      "position": {
+        "x": 8212,
+        "y": 80,
+        "z": 8717
+      }
+    },
+    {
+      "id": "dungeon-jungle-covenant-room-02",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-jungle-covenant",
+      "number": "02",
+      "name": "古神石廊",
+      "position": {
+        "x": 8222,
+        "y": 80,
+        "z": 8747
+      }
+    },
+    {
+      "id": "dungeon-jungle-covenant-room-03",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-jungle-covenant",
+      "number": "03",
+      "name": "毒藤祭仪师",
+      "position": {
+        "x": 8205,
+        "y": 81,
+        "z": 8736
+      }
+    },
+    {
+      "id": "dungeon-sky-watch",
+      "kind": "building",
+      "districtId": "expedition-sites",
+      "name": "云上守望塔",
+      "position": {
+        "x": 8750,
+        "y": 133,
+        "z": 8734
+      }
+    },
+    {
+      "id": "dungeon-sky-watch-room-01",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-sky-watch",
+      "number": "01",
+      "name": "云阶前哨",
+      "position": {
+        "x": 8750,
+        "y": 133,
+        "z": 8734
+      }
+    },
+    {
+      "id": "dungeon-sky-watch-room-02",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-sky-watch",
+      "number": "02",
+      "name": "高塔回廊",
+      "position": {
+        "x": 8749,
+        "y": 133,
+        "z": 8744
+      }
+    },
+    {
+      "id": "dungeon-sky-watch-room-03",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-sky-watch",
+      "number": "03",
+      "name": "逐风守卫",
+      "position": {
+        "x": 8749,
+        "y": 133,
+        "z": 8768
+      }
+    },
+    {
+      "id": "dungeon-sunken-dynasty",
+      "kind": "building",
+      "districtId": "expedition-sites",
+      "name": "失落王朝陵墓",
+      "position": {
+        "x": 9217,
+        "y": 78,
+        "z": 8204
+      }
+    },
+    {
+      "id": "dungeon-sunken-dynasty-room-01",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-sunken-dynasty",
+      "number": "01",
+      "name": "黄沙前庭",
+      "position": {
+        "x": 9217,
+        "y": 78,
+        "z": 8204
+      }
+    },
+    {
+      "id": "dungeon-sunken-dynasty-room-02",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-sunken-dynasty",
+      "number": "02",
+      "name": "王朝墓道",
+      "position": {
+        "x": 9237,
+        "y": 78,
+        "z": 8219
+      }
+    },
+    {
+      "id": "dungeon-sunken-dynasty-room-03",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-sunken-dynasty",
+      "number": "03",
+      "name": "沙冕守陵人",
+      "position": {
+        "x": 9221,
+        "y": 78,
+        "z": 8219
+      }
+    },
+    {
+      "id": "dungeon-tide-sanctum",
+      "kind": "building",
+      "districtId": "expedition-sites",
+      "name": "潮汐沉没圣所",
+      "position": {
+        "x": 8710,
+        "y": 73,
+        "z": 8202
+      }
+    },
+    {
+      "id": "dungeon-tide-sanctum-room-01",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-tide-sanctum",
+      "number": "01",
+      "name": "潮汐外庭",
+      "position": {
+        "x": 8710,
+        "y": 73,
+        "z": 8202
+      }
+    },
+    {
+      "id": "dungeon-tide-sanctum-room-02",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-tide-sanctum",
+      "number": "02",
+      "name": "海晶回廊",
+      "position": {
+        "x": 8742,
+        "y": 78,
+        "z": 8230
+      }
+    },
+    {
+      "id": "dungeon-tide-sanctum-room-03",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-tide-sanctum",
+      "number": "03",
+      "name": "深海祭司",
+      "position": {
+        "x": 8742,
+        "y": 78,
+        "z": 8198
+      }
+    },
+    {
+      "id": "dungeon-void-citadel",
+      "kind": "building",
+      "districtId": "expedition-sites",
+      "name": "虚空回响城",
+      "position": {
+        "x": 9217,
+        "y": 122,
+        "z": 8705
+      }
+    },
+    {
+      "id": "dungeon-void-citadel-room-01",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-void-citadel",
+      "number": "01",
+      "name": "虚空前庭",
+      "position": {
+        "x": 9217,
+        "y": 122,
+        "z": 8705
+      }
+    },
+    {
+      "id": "dungeon-void-citadel-room-02",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-void-citadel",
+      "number": "02",
+      "name": "紫珀卫所",
+      "position": {
+        "x": 9237,
+        "y": 122,
+        "z": 8725
+      }
+    },
+    {
+      "id": "dungeon-void-citadel-room-03",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-void-citadel",
+      "number": "03",
+      "name": "回响执政官",
+      "position": {
+        "x": 9237,
+        "y": 122,
+        "z": 8705
+      }
+    },
+    {
+      "id": "dungeon-winter-manor",
+      "kind": "building",
+      "districtId": "expedition-sites",
+      "name": "永夜诅咒庄园",
+      "position": {
+        "x": 10246,
+        "y": 77,
+        "z": 8735
+      }
+    },
+    {
+      "id": "dungeon-winter-manor-room-01",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-winter-manor",
+      "number": "01",
+      "name": "永夜门廊",
+      "position": {
+        "x": 10246,
+        "y": 77,
+        "z": 8735
+      }
+    },
+    {
+      "id": "dungeon-winter-manor-room-02",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-winter-manor",
+      "number": "02",
+      "name": "低语书厅",
+      "position": {
+        "x": 10277,
+        "y": 81,
+        "z": 8712
+      }
+    },
+    {
+      "id": "dungeon-winter-manor-room-03",
+      "kind": "dungeon-room",
+      "districtId": "expedition-sites",
+      "parentId": "dungeon-winter-manor",
+      "number": "03",
+      "name": "诅咒庄园主",
+      "position": {
+        "x": 10275,
+        "y": 89,
+        "z": 8744
+      }
+    }
+  ]
+}

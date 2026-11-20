@@ -19,6 +19,17 @@ select,input[type=search]{display:block;width:100%;min-width:0;border:1px solid 
 /* Component display rules must not override an unavailable action's hidden state. */
 .atlas-follow-actions [hidden]{display:none}
 .atlas-empty{padding:20px 0;font-size:13px;line-height:1.8;color:#a8b6aa}.atlas-legend{padding-top:18px;margin-top:20px;border-top:1px solid #8a9d8533;font-size:12px;line-height:1.9;color:#a8b6aa}.atlas-legend span{color:#e4c58c;padding-right:4px}.atlas-note,.atlas-updated{font-size:11px;line-height:1.9;color:#81958b}.atlas-footer{display:flex;gap:20px;justify-content:space-between;font-size:11px;line-height:1.8;color:#81958b;padding-top:12px}.atlas-footer a{text-decoration:none;white-space:nowrap}
+.atlas-sidebar [hidden]{display:none}
+.atlas-modes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.75fr);gap:4px;padding:4px;margin:0 0 20px;border:1px solid #8a9d8533;border-radius:10px;background:#101c19}
+.atlas-modes button{min-height:44px;padding:6px 7px;border:0;border-radius:7px;background:transparent;color:#c2d0c5;font-size:12px}
+.atlas-modes button[aria-pressed="true"]{background:#294638;color:#fff0cc}
+.atlas-address-filters{display:grid;gap:8px;margin:10px 0;color:#a8b6aa;font-size:12px}
+.atlas-address-filters select{margin-top:5px}
+.atlas-address-list{display:grid;gap:10px;margin:12px 0}
+.atlas-address{display:grid;gap:7px;width:100%;min-width:0;padding:13px;border:1px solid #839c8038;border-radius:10px;text-align:left;background:#1a2d25;color:#e6e9df;overflow-wrap:anywhere}
+.atlas-address:hover,.atlas-address[aria-current="location"]{background:#263b2f;border-color:#ac9362}
+.atlas-address strong{font-size:14px}.atlas-address small{font-size:12px;color:#b9c7b5;line-height:1.45}
+.atlas-address .atlas-address-kind{color:#e4c58c}.atlas-street-button{width:100%}
 @media(max-width:760px){.atlas{padding:0 12px 18px}.atlas-heading{padding:18px 4px;flex-wrap:wrap;gap:10px}.atlas-heading h1{font-size:23px}.atlas-status{font-size:11px}.atlas-layout{grid-template-columns:1fr;height:auto;min-height:0}.atlas-canvas{height:65dvh;min-height:420px}.atlas-sidebar{padding:18px;border-left:0;border-top:1px solid #8a9d8533}.atlas-players{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}.atlas-follow{align-items:stretch;flex-direction:column;gap:10px;padding:12px 14px}.atlas-follow-actions{display:grid;grid-template-columns:1fr 1fr}.atlas-footer{display:block;font-size:10px}.atlas-footer a{display:block;margin-top:8px}}
 /* Shared with the same-origin BlueMap frame. Keep the map itself unobstructed. */
 :root{--theme-bg:#152720f2;--theme-bg-hover:#294638;--theme-bg-light:#3a5144;--theme-fg:#eeeade;--theme-fg-light:#cdbb92}
@@ -36,3 +47,4 @@ select,input[type=search]{display:block;width:100%;min-width:0;border:1px solid 
 #map-container .bm-marker-player img{width:40px;height:40px;object-fit:cover;image-rendering:auto;border:2px solid #e2c68b;border-radius:50%;background:#1c3028;box-shadow:0 3px 14px #0009}
 #map-container .bm-marker-player .bm-player-name{font:500 12px/1.5 system-ui,sans-serif;border-radius:6px;padding:3px 8px;background:#13261eeb;border:1px solid #cdbb9255;white-space:nowrap}
 #map-container .bm-marker-player[distance-data=med] img,#map-container .bm-marker-player[distance-data=far] img{width:28px;height:28px}
+#map-container .atlas-address-pin-home .bm-marker-poi-icon{filter:drop-shadow(0 0 4px #e4c58c)}
