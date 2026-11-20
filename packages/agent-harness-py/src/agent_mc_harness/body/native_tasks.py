@@ -50,6 +50,7 @@ class NativeTasks:
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.execute('PRAGMA synchronous=FULL')
         self.db.execute('CREATE TABLE IF NOT EXISTS calls (id TEXT PRIMARY KEY, body TEXT, fingerprint TEXT, epoch TEXT, task TEXT, status TEXT, text TEXT)')
+        self.db.execute('CREATE TABLE IF NOT EXISTS early_task_finishes (request TEXT, event TEXT, task TEXT, tool TEXT, status TEXT, detail TEXT, PRIMARY KEY(request,event,task,tool))')
         self.db.execute('CREATE TABLE IF NOT EXISTS hosted_stops (id TEXT PRIMARY KEY, boot TEXT NOT NULL, pause_epoch INTEGER NOT NULL, pause_confirmed INTEGER NOT NULL DEFAULT 0)')
         self.db.commit()
 
@@ -71,8 +72,39 @@ class NativeTasks:
 
     def save(self, request: str, status: str, text: str, task: str | None):
         with self.db:
-            self.db.execute("UPDATE calls SET task=?,status=?,text=? WHERE id=? AND body=? AND status IN ('unknown','accepted')",
-                            (task, status, text, request, self.body))
+            updated = self.db.execute("UPDATE calls SET task=?,status=?,text=? WHERE id=? AND body=? AND status IN ('unknown','accepted')",
+                                      (task, status, text, request, self.body))
+            if updated.rowcount and status not in ('unknown', 'accepted'):
+                self.db.execute('DELETE FROM early_task_finishes WHERE request=?', (request,))
+
+    def remember_early_finish(self, request, epoch, event, task, tool, status, detail):
+        # A task number can recur after a server restart. Bind the observation
+        # only to calls *already reserved* for this body in this task window.
+        with self.db:
+            stored = self.db.execute("INSERT OR IGNORE INTO early_task_finishes SELECT id,?,?,?,?,? FROM calls "
+                                     "WHERE body=? AND id=? AND epoch=? AND status='unknown' AND task IS NULL "
+                                     "AND fingerprint!=? AND NOT EXISTS "
+                                     "(SELECT 1 FROM calls WHERE body=? AND epoch=? AND task=?) RETURNING request",
+                                     (event, task, tool, status, detail, self.body, request, epoch, HOSTED_STOP,
+                                      self.body, epoch, task))
+            return stored.fetchone() is not None
+
+    def bind_background(self, request, epoch, task, launch):
+        saved = self.get(request, epoch)
+        if not saved or saved['status'] not in ('unknown', 'accepted'):
+            return saved
+        if saved['execution_id'] not in (None, task):
+            return saved
+        name = re.match(r'The script stopped at line \d+ \((numen(?:_hosted)?\.[\w.]+)\)', launch)
+        if not name:
+            return saved
+        finishes = self.db.execute('SELECT status,detail FROM early_task_finishes WHERE request=? AND task=? AND tool=?',
+                                   (request, task, name[1])).fetchall()
+        if len(finishes) == 1:
+            self.save(request, *finishes[0], task)
+        elif not finishes and saved['data']['connection'] == epoch and saved['execution_id'] is None:
+            self.save(request, 'accepted', launch, task)
+        return self.get(request, epoch)
 
     def begin_stop(self, request: str, boot: str, pause_epoch: int):
         # Use the original fence, not the native task connection. Draining old
@@ -98,12 +130,14 @@ class NativeTasks:
         return [row[0] for row in self.db.execute(
             "SELECT id FROM calls WHERE body=? AND epoch=? AND status IN ('accepted','unknown')", (self.body, epoch))]
 
-    def finish(self, epoch: str, task: str, status: str, text: str, *, tool=None):
+    def finish(self, epoch: str, task: str, status: str, text: str, *, tool=None, eligible=None):
         rows = self.db.execute("SELECT id,fingerprint,text FROM calls WHERE body=? AND epoch=? AND task=? AND status='accepted'",
                                (self.body, epoch, task)).fetchall()
         if len(rows) != 1:
             return []
         request, fingerprint, launch = rows[0]
+        if eligible is not None and request not in eligible:
+            return []
         if tool is not None and not re.match(r'The script stopped at line \d+ \(' + re.escape(tool) + r'\)', launch):
             return []
         self.save(request, 'completed' if status == 'done' else 'failed', text, task)

@@ -186,6 +186,124 @@ class WalkingSession(Session):
         return SimpleNamespace(isError=False, structuredContent=value)
 
 
+@pytest.mark.parametrize("reopen", [False, True])
+def test_original_lost_attack_reply_reconciles_an_evicted_finish(tmp_path, reopen):
+    async def run():
+        game = WalkingSession()
+        game.tool = "numen_hosted.fight.attack"
+        game.launch = "The script stopped at line 1 (numen_hosted.fight.attack) after 2 calls; t3 keeps running."
+        game.drop_call_reply = True
+        p = port(tmp_path, game)
+        await p.open()
+        try:
+            assert (await p.call("lua", {"code": "attack()"}, "actual_attack")).status == "unknown"
+            game.finish("early", game.tool, "stopped", 105)
+            await p.events()
+            game.rows.clear()  # The native inbox only presents its newest entries.
+            if reopen:
+                p.lost = True
+                await p.close()
+                p = port(tmp_path, game)
+                await p.open()
+            outcome = await p.result("actual_attack")
+            assert (outcome.status, outcome.execution_id, outcome.text) == ("failed", "t3", "stopped walk")
+            assert (await p.result("actual_attack")).status == "failed"
+            assert sum(c["op"] == "call" for c in game.calls) == 1
+        finally:
+            await p.close()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("unrelated", ["before_window", "wrong_tool", "wrong_task", "ambiguous", "concurrent"])
+def test_early_finish_needs_one_original_request_and_exact_native_match(tmp_path, unrelated):
+    async def run():
+        game = WalkingSession()
+        game.drop_call_reply = True
+        p = port(tmp_path, game)
+        await p.open()
+        try:
+            await p.call("lua", {"code": "walk()"}, "real_walk")
+            if unrelated == "concurrent":
+                await p.call("lua", {"code": "another_walk()"}, "concurrent_walk")
+            game.finish("first", "numen_hosted.fight.attack" if unrelated == "wrong_tool" else game.tool,
+                        "done", 99 if unrelated == "before_window" else 105)
+            if unrelated == "wrong_task":
+                game.rows[0]["text"] = game.rows[0]["text"].replace('id="t3"', 'id="t4"')
+            if unrelated == "ambiguous":
+                game.finish("different-event", game.tool, "stopped", 106)
+            await p.events()
+            game.rows.clear()
+            p.lost = True
+            await p.close()
+            p = port(tmp_path, game)
+            await p.open()
+            assert (await p.result("real_walk")).status == "unknown"
+            assert sum(c["op"] == "call" for c in game.calls) == (2 if unrelated == "concurrent" else 1)
+        finally:
+            await p.close()
+    asyncio.run(run())
+
+
+def test_ambiguous_early_finish_can_still_be_read_after_the_original_launch_is_bound(tmp_path):
+    async def run():
+        game = WalkingSession()
+        game.drop_call_reply = True
+        p = port(tmp_path, game)
+        await p.open()
+        try:
+            await p.call("lua", {"code": "walk()"}, "real_walk")
+            await p.call("lua", {"code": "guide()"}, "other_read")
+            game.finish("early", game.tool, "done", 105)
+            await p.events()
+            assert (await p.result("real_walk")).status == "accepted"
+            await p.events()
+            assert (await p.result("real_walk")).status == "completed"
+        finally:
+            await p.close()
+    asyncio.run(run())
+
+
+def test_a_pre_dispatch_event_cannot_be_adopted_by_a_later_original(tmp_path):
+    async def run():
+        game = WalkingSession()
+        game.drop_call_reply = True
+        p = port(tmp_path, game)
+        await p.open()
+        try:
+            game.finish("prior", game.tool, "done", 105)
+            await p.events()
+            saved = game.rows.pop()
+            await p.events()
+            await p.call("lua", {"code": "walk()"}, "later_walk")
+            assert (await p.result("later_walk")).status == "accepted"
+            game.rows.append(saved)
+            await p.events()
+            assert (await p.result("later_walk")).status == "accepted"
+        finally:
+            await p.close()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("drop_reply", [True, False])
+def test_contradictory_finishes_in_one_native_snapshot_do_not_settle_a_call(tmp_path, drop_reply):
+    async def run():
+        game = WalkingSession()
+        game.drop_call_reply = drop_reply
+        p = port(tmp_path, game)
+        await p.open()
+        try:
+            await p.call("lua", {"code": "walk()"}, "conflicting_walk")
+            game.finish("one", game.tool, "done", 105)
+            game.finish("two", game.tool, "stopped", 106)
+            await p.events()
+            game.rows.pop()
+            await p.events()
+            assert (await p.result("conflicting_walk")).status in ("accepted", "unknown")
+        finally:
+            await p.close()
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize("drop_reply", [False, True])
 def test_pause_reconciles_original_walk_including_lost_launch_reply(tmp_path, drop_reply):
     async def run():
