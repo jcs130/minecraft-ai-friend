@@ -61,6 +61,17 @@ def test_published_argument_free_read_echo_does_not_prevent_meeting(tool):
             parse_choice({"steps":steps,"companion":choice}, [{"uuid":ALICE}], read_echoes=available)
 
 
+def test_real_follow_can_echo_both_matching_identity_fields():
+    people = [{"uuid":ALICE,"name":"Alice","aliases":["伙伴"]}, {"uuid":BOB,"name":"Bob","aliases":["伙伴"]}]
+    selection = {"mode":"follow", "targetUuid":ALICE, "travel":"auto"}
+    for label in ("Alice", "伙伴"):
+        plan = {"companion":{**selection, "targetName":label}, "steps":[SPEECH, {"tool":"body:native:guard","args":{}}]}
+        assert parse_choice(plan, people) == selection
+    for label in ("Bob", "unlisted"):
+        with pytest.raises(ValueError):
+            parse_choice({"companion":{**selection, "targetName":label}, "steps":[]}, people)
+
+
 @pytest.mark.parametrize("plan", [
     {"steps": [follow_step(uuid=BOB)]},
     {"steps": [follow_step(uuid=ALICE), follow_step(uuid=ALICE)]},

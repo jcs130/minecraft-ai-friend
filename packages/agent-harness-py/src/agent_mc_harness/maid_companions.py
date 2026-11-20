@@ -128,13 +128,16 @@ def parse_choice(plan, characters: list[dict], *, read_echoes: set[str] | None =
         choice = plan["companion"]
         if choice == {"mode": "stop"} and not echoed and "body:native:guard" not in incidental:
             return choice
-        if (not isinstance(choice, dict) or set(choice) - {"travel"} not in ({"mode", "targetUuid"}, {"mode", "targetName"})
-                or choice["mode"] not in ("approach", "follow") or choice.get("travel", "auto") not in ("auto", "walk", "teleport")):
+        if (not isinstance(choice, dict) or set(choice) - {"mode", "targetUuid", "targetName", "travel"}
+                or not {"targetUuid", "targetName"}.intersection(choice) or choice.get("mode") not in ("approach", "follow")
+                or choice.get("travel", "auto") not in ("auto", "walk", "teleport")):
             raise ValueError("invalid_companion_choice")
         if "targetName" in choice:
             name = choice["targetName"]
             matches = [p["uuid"] for p in characters if isinstance(name, str) and any(
                 label.casefold() == name.casefold() for label in (p["name"], *p.get("aliases", ())))]
+            if "targetUuid" in choice:
+                matches = [uid for uid in matches if uid == choice["targetUuid"]]
             if len(matches) != 1:
                 raise ValueError("choose_one_character_uuid_from_the_directory")
             choice = {k: v for k, v in choice.items() if k != "targetName"} | {"targetUuid": matches[0]}
