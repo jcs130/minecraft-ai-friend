@@ -202,7 +202,8 @@ def test_unreachable_destination_yields_and_suppresses_rapid_reselection(loop):
     now[0] = 60
     assert tracking.next_step(obs) is None
     assert tracking.status == "path_unavailable" and not tracking.active
-    assert tracking.context(obs)["characters"] == []
+    retained = tracking.context(obs)["characters"]
+    assert len(retained) == 1 and retained[0]["uuid"] == ALICE and retained[0]["retryAfterSeconds"] == 90
     assert not tracking.choose("follow", ALICE, obs)
     now[0] = 160
     assert tracking.choose("follow", ALICE, obs)
@@ -212,6 +213,69 @@ def compass(*characters, dimension=OVERWORLD, x=0):
     result = scene(dimension=dimension, x=x)
     result.raw["characterDirectory"] = list(characters)
     return result
+
+
+def test_targeted_navigation_selects_and_releases_only_the_current_character(loop):
+    tracking, now = loop
+    def sample(held, *players):
+        result = compass(*players)
+        result.raw["socialNavigationTargetUuid"] = held
+        return result
+    near = sample("", player(x=2), player(BOB, x=4))
+    assert tracking.choose("follow", ALICE, near)
+    first = tracking.next_step(near)
+    assert first.tool == "body:move" and first.args["targetUuid"] == ALICE
+    held = sample(ALICE, player(x=2), player(BOB, x=4))
+    assert tracking.next_step(held) is None
+    assert tracking.choose("follow", BOB, held)
+    release = tracking.next_step(held)
+    assert release.tool == "body:native:release_rendezvous" and release.args == {"targetUuid": ALICE}
+    now[0] = 5
+    assert tracking.next_step(sample("", player(BOB, x=9))).args["targetUuid"] == BOB
+    active = sample(BOB, player(BOB, x=2))
+    assert tracking.next_step(active) is None
+    assert tracking.choose("stop", None, active)
+    assert tracking.next_step(active).args == {"targetUuid": BOB}
+    assert tracking.next_step(active) is None
+    assert tracking.next_step(sample("", player(BOB))) is None
+
+
+def test_approach_and_disappeared_targets_restore_prior_native_navigation(loop):
+    tracking, now = loop
+    here = compass(player(x=2))
+    here.raw["socialNavigationTargetUuid"] = ALICE
+    assert tracking.choose("approach", ALICE, here)
+    assert not tracking.active and tracking.next_step(here).tool == "body:native:release_rendezvous"
+    assert tracking.choose("follow", ALICE, here)
+    assert tracking.next_step(here) is None
+    missing = compass()
+    missing.raw["socialNavigationTargetUuid"] = ALICE
+    assert tracking.next_step(missing) is None
+    now[0] += 16
+    assert tracking.next_step(missing).args == {"targetUuid": ALICE}
+
+
+def test_selecting_the_original_owner_keeps_native_follow_without_repeated_registration(loop):
+    tracking, now = loop
+    near = compass(player(x=2))
+    near.raw.update(socialNavigationTargetUuid="", ownerId=ALICE)
+    assert tracking.choose("follow", ALICE, near)
+    for elapsed in (0, 4, 32, 64):
+        now[0] = elapsed
+        assert tracking.next_step(near) is None
+    assert tracking.active and tracking.status == "alongside"
+
+
+def test_target_moving_while_walking_does_not_look_like_repeated_path_failure(loop):
+    tracking, now = loop
+    initial = compass(player(x=10))
+    assert tracking.choose("follow", ALICE, initial)
+    assert tracking.next_step(initial, can_teleport=True).tool == "body:move"
+    now[0] = 31
+    assert tracking.next_step(initial, can_teleport=True).tool == "body:move"
+    now[0] = 35
+    replacement = tracking.next_step(compass(player(x=16)), can_teleport=True)
+    assert replacement.tool == "body:move" and replacement.args["x"] == 16
 
 
 def test_compass_selects_by_name_beyond_sight_and_paths_to_current_position(loop):
@@ -276,10 +340,13 @@ def test_failed_remote_result_gives_planner_the_reason_and_no_new_charge(loop):
 def test_explicit_overland_travel_uses_bounded_legs_without_charging_and_forbids_other_dimension(loop):
     tracking, now = loop
     obs = compass(player(x=950))
+    obs.raw["socialNavigationTargetUuid"] = ""
     assert tracking.choose("approach", ALICE, obs, travel="walk")
-    assert tracking.next_step(obs, can_teleport=True).args["x"] == 32
+    assert tracking.next_step(obs, can_teleport=True).args == {**pos(32),"dimension": OVERWORLD,"targetUuid": ALICE}
     now[0] += 8
-    assert tracking.next_step(compass(player(x=950), x=32), can_teleport=True).args["x"] == 64
+    second = compass(player(x=950), x=32)
+    second.raw["socialNavigationTargetUuid"] = ALICE
+    assert tracking.next_step(second, can_teleport=True).args == {**pos(64),"dimension": OVERWORLD,"targetUuid": ALICE}
     now[0] += 8
     assert tracking.next_step(compass(player(dimension=NETHER)), can_teleport=True) is None
     assert tracking.status == "different_dimension_requires_rendezvous"

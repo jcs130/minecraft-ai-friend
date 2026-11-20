@@ -75,6 +75,18 @@ final class NativeMaidBodyActions {
         try{maid=plugin.ownedLoaded(owner,id);}catch(CompatibilityException unavailable){return blocked(owner,id,input,unavailable.code());}
         // Validate the whole action before reserving or changing the world.
         Vec3 target=null;String value=null;
+        UUID socialTarget = input.has("targetUuid") ? MaidBodyControl.uuid(input, "targetUuid") : null;
+        if (action.equals("release_rendezvous")) {
+            control.reserve(owner,id,request,input);
+            UUID heldTarget = selectedCompanion(maid);
+            boolean held = heldTarget != null && heldTarget.equals(socialTarget);
+            if (held && walks.containsKey(id)) finishWalk(id, maid, "cancelled", "companion_released", false);
+            else if (held) { stop(maid); restore(maid); }
+            var result = new JsonObject();
+            result.addProperty("effectsApplied", held);
+            result.addProperty("selectionReleased", held || heldTarget == null);
+            return reply(true,control.finish(id,request,"applied",result),null);
+        }
         boolean physical=!Set.of("ack","speak").contains(action);
         if(physical&&(walks.containsKey(id)||fishing.containsKey(id))&&!Set.of("stop","stay","sit","follow").contains(action))return blocked(owner,id,input,"maid_busy");
         if(physical&&!Set.of("stop","stay").contains(action)){
@@ -87,10 +99,12 @@ final class NativeMaidBodyActions {
             case "walk"->{
                 if(input.has("dimension")&&!MaidBodyControl.string(input,"dimension").equals(maid.level().dimension().location().toString()))throw new MaidBodyControl.Fault(400,"DIMENSION_MISMATCH");
                 target=new Vec3(number(input,"x"),number(input,"y"),number(input,"z"));
+                if (socialTarget != null && !NativeMaidRendezvous.walkingNear(id, socialTarget,
+                        new org.bukkit.Location(maid.getBukkitEntity().getWorld(),target.x,target.y,target.z)))
+                    return blocked(owner,id,input,"team_target_moved_or_unavailable");
                 if(maid.position().distanceTo(target)>96||target.y<maid.level().getMinBuildHeight()||target.y>=maid.level().getMaxBuildHeight())return blocked(owner,id,input,"walk_out_of_range");
                 var pos=BlockPos.containing(target);if(!maid.level().hasChunkAt(pos))return blocked(owner,id,input,"destination_unloaded");
-                var path=maid.getNavigation().createPath(pos,0);
-                if(!maid.level().getWorldBorder().isWithinBounds(pos)||!maid.getNavigation().isStableDestination(pos)||path==null||!path.canReach())return blocked(owner,id,input,"path_blocked");
+                if(!maid.level().getWorldBorder().isWithinBounds(pos)||!canWalkTo(maid,pos))return blocked(owner,id,input,"path_blocked");
             }
             case "equip"->{int slot=integer(input,"slot");String hand=MaidBodyControl.string(input,"hand");if(!Set.of("main","off","head","chest","legs","feet").contains(hand))throw new MaidBodyControl.Fault(400,"INVALID_hand");value=hand+" "+slot;
                 try{plugin.nativeEquipmentValidate(maid,value);}catch(CompatibilityException refused){return blocked(owner,id,input,refused.code());}}
@@ -116,6 +130,8 @@ final class NativeMaidBodyActions {
                 if (arrived) {
                     var rebound = plugin.ownedLoaded(owner,id);
                     plugin.nativeQuiesce(rebound);
+                    restore(rebound);
+                    if (!targetId.equals(owner)) anchor(rebound, rebound.blockPosition(), targetId);
                     guards.remove(id); companions.remove(id); resumeGuards.remove(id); follows.remove(id);
                     control.invalidateCallbacks(id);
                 }
@@ -157,6 +173,7 @@ final class NativeMaidBodyActions {
             if(physical){
                 if(fishing.containsKey(id))finishFishing(maid,id,"cancelled","mode_changed",null,false);
                 if(walks.containsKey(id)&&action.equals("follow"))finishWalk(id,maid,"cancelled","mode_changed",false);
+                if (!walks.containsKey(id) && selectedCompanion(maid) != null) restore(maid);
                 plugin.nativeQuiesce(maid);companions.remove(id);guards.remove(id);resumeGuards.remove(id);control.invalidateCallbacks(id);
             }
             var observed=new JsonObject();observed.addProperty("effectsApplied",false);
@@ -168,9 +185,9 @@ final class NativeMaidBodyActions {
                     observed.addProperty("meaning","original body left its vehicle; no vehicle or inventory was removed");
                 }
                 case "walk"->{
-                    restore(maid);var saved=new CompoundTag();maid.getSchedulePos().save(saved);saved.putBoolean("bodyHome",maid.isHomeModeEnable());saved.putBoolean("bodySitting",maid.isMaidInSittingPose());saved.putString("bodySchedule",maid.getSchedule().name());saved.putString("bodyTask",maid.getTask().getUid().toString());
-                    maid.getPersistentData().put(ANCHOR,saved);stop(maid);maid.setHomeModeEnable(true);maid.setInSittingPose(false);maid.setSchedule(MaidSchedule.ALL);maid.setTask(TaskManager.getIdleTask());
-                    var pos=BlockPos.containing(target);var schedule=maid.getSchedulePos();schedule.setDimension(maid.level().dimension().location());schedule.setWorkPos(pos);schedule.setIdlePos(pos);schedule.setSleepPos(pos);schedule.setConfigured(true);schedule.restrictTo(maid);
+                    restore(maid);
+                    var pos=BlockPos.containing(target);
+                    anchor(maid, pos, owner.equals(socialTarget) ? null : socialTarget);
                     follows.remove(id);walks.put(id,new Walk(owner,request,target,maid.position(),maid.level().dimension().location().toString(),System.currentTimeMillis()+30_000));
                     BehaviorUtils.setWalkAndLookTargetMemories(maid,pos,.7f,0);observed.addProperty("effectsApplied",true);observed.addProperty("arrived",false);observed.add("actualPosition",position(maid));
                     return reply(true,control.finish(id,request,"running",observed),null);
@@ -237,6 +254,8 @@ final class NativeMaidBodyActions {
             var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
             data.addProperty("socialWalkAvailable", maid != null && socialWalkAvailable(maid));
             if(maid!=null){
+                UUID selected = selectedCompanion(maid);
+                data.addProperty("socialNavigationTargetUuid", selected == null ? "" : selected.toString());
                 data.add("nearbyPlayers", nearbyPlayers(maid));
                 NativeMaidRendezvous.describe(id, data);
                 var fishingState=data.has("fishing") ? data.getAsJsonObject("fishing") : MaidCompanionActions.fishing(maid);
@@ -379,11 +398,26 @@ final class NativeMaidBodyActions {
             if(failure==null&&!arrived&&System.currentTimeMillis()>walk.until)failure="walk_timeout";
             try{
                 if(failure!=null||arrived){finishWalk(id,maid,arrived?"completed":"failed",failure==null?"arrived":failure,arrived);continue;}
-                if(maid.getNavigation().isDone()||!maid.getBrain().hasMemoryValue(MemoryModuleType.WALK_TARGET))BehaviorUtils.setWalkAndLookTargetMemories(maid,BlockPos.containing(walk.target),.7f,0);
+                var goal=BlockPos.containing(walk.target);
+                var navigation=maid.getNavigation();
+                var memory=maid.getBrain().getMemory(MemoryModuleType.WALK_TARGET).orElse(null);
+                if (selectedCompanion(maid) != null) {
+                    // TLM may replace this walk with an ordinary idle stroll between server ticks.
+                    // Preserve the chosen leg and allow the native path to cross its previous idle radius.
+                    int radius = (int)Math.ceil(maid.position().distanceTo(walk.target)) + 4;
+                    if (maid.getRestrictRadius() < radius) maid.restrictTo(goal, radius);
+                    if (memory == null || !goal.equals(memory.getTarget().currentBlockPosition()))
+                        BehaviorUtils.setWalkAndLookTargetMemories(maid,goal,.7f,0);
+                    var path = navigation.getPath();
+                    if (navigation.isDone() || path == null || !goal.equals(path.getTarget())) {
+                        var next = navigation.createPath(goal,0);
+                        if (next != null && next.canReach()) navigation.moveTo(next,.7);
+                    }
+                } else if(navigation.isDone()||memory==null)BehaviorUtils.setWalkAndLookTargetMemories(maid,goal,.7f,0);
             }catch(Exception error){walks.remove(id);if(maid!=null){stop(maid);restore(maid);}plugin.getLogger().warning("Native body walk result uncertain; query original request");}
         }
         // Recover only our temporary navigation anchor after a normal or abnormal server restart.
-        for(var id:control.ids())if(!walks.containsKey(id)){var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));if(maid!=null&&maid.getPersistentData().contains(ANCHOR)){stop(maid);restore(maid);}}
+        for(var id:control.ids())if(!walks.containsKey(id)){var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));if(maid!=null&&maid.getPersistentData().contains(ANCHOR)&&(!control.active(id)||selectedCompanion(maid)==null)){stop(maid);restore(maid);}}
     }
 
     private String fishingContextBlock(EntityMaid maid, UUID owner) {
@@ -463,10 +497,49 @@ final class NativeMaidBodyActions {
     void cancel(UUID id,String reason)throws Exception {var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));companions.remove(id);guards.remove(id);resumeGuards.remove(id);if(fishing.containsKey(id))finishFishing(maid,id,"cancelled",reason,null,false);if(maid!=null)plugin.nativeQuiesce(maid);if(walks.containsKey(id))finishWalk(id,maid,"cancelled",reason,false);else if(maid!=null){stop(maid);restore(maid);}follows.remove(id);}
     private void finishWalk(UUID id,EntityMaid maid,String status,String reason,boolean arrived)throws Exception {
         var walk=walks.remove(id);var observed=new JsonObject();observed.addProperty("reason",reason);observed.addProperty("arrived",arrived);
-        if(maid!=null){stop(maid);restore(maid);observed.add("actualPosition",position(maid));observed.addProperty("distanceMoved",maid.position().distanceTo(walk.start));observed.addProperty("remainingDistance",maid.position().distanceTo(walk.target));}
+        if(maid!=null){stop(maid);if(!arrived||!control.active(id)||selectedCompanion(maid)==null)restore(maid);else maid.getSchedulePos().restrictTo(maid);observed.add("actualPosition",position(maid));observed.addProperty("distanceMoved",maid.position().distanceTo(walk.start));observed.addProperty("remainingDistance",maid.position().distanceTo(walk.target));}
         control.finish(id,walk.request,status,observed);
     }
     private static void stop(EntityMaid maid){maid.getNavigation().stop();maid.setTarget(null);maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);maid.getBrain().eraseMemory(MemoryModuleType.PATH);maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);}
+    private static UUID selectedCompanion(EntityMaid maid) {
+        var saved = maid.getPersistentData().getCompound(ANCHOR);
+        return saved.hasUUID("companion") ? saved.getUUID("companion") : null;
+    }
+    private static boolean canWalkTo(EntityMaid maid, BlockPos pos) {
+        boolean held = selectedCompanion(maid) != null && maid.isHomeModeEnable();
+        BlockPos previousCenter = maid.getRestrictCenter();
+        int previousRadius = (int) maid.getRestrictRadius();
+        try {
+            if (held) {
+                maid.setHomeModeEnable(false);
+                maid.restrictTo(BlockPos.ZERO, com.github.tartaricacid.touhoulittlemaid.config.subconfig.MaidConfig.MAID_NON_HOME_RANGE.get());
+            }
+            var path = maid.getNavigation().createPath(pos,0);
+            return maid.getNavigation().isStableDestination(pos) && path != null && path.canReach();
+        } finally {
+            if (held) {
+                maid.setHomeModeEnable(true);
+                maid.restrictTo(previousCenter, previousRadius);
+            }
+        }
+    }
+    private static void anchor(EntityMaid maid, BlockPos pos, UUID companion) {
+        var saved=new CompoundTag();
+        var schedule=maid.getSchedulePos();
+        schedule.save(saved);
+        saved.putBoolean("bodyHome",maid.isHomeModeEnable());
+        saved.putBoolean("bodySitting",maid.isMaidInSittingPose());
+        saved.putString("bodySchedule",maid.getSchedule().name());
+        saved.putString("bodyTask",maid.getTask().getUid().toString());
+        if (companion != null) saved.putUUID("companion",companion);
+        maid.getPersistentData().put(ANCHOR,saved);
+        stop(maid);
+        maid.setHomeModeEnable(true);maid.setInSittingPose(false);
+        maid.setSchedule(MaidSchedule.ALL);maid.setTask(TaskManager.getIdleTask());
+        schedule.setDimension(maid.level().dimension().location());
+        schedule.setWorkPos(pos);schedule.setIdlePos(pos);schedule.setSleepPos(pos);
+        schedule.setConfigured(true);schedule.restrictTo(maid);
+    }
     private static void restore(EntityMaid maid){if(!maid.getPersistentData().contains(ANCHOR))return;var saved=maid.getPersistentData().getCompound(ANCHOR);
         maid.getSchedulePos().load(saved,maid);maid.setHomeModeEnable(saved.getBoolean("bodyHome"));maid.setInSittingPose(saved.getBoolean("bodySitting"));
         maid.setSchedule(MaidSchedule.valueOf(saved.getString("bodySchedule")));var task=TaskManager.getTaskMap().get(ResourceLocation.parse(saved.getString("bodyTask")));if(task!=null)maid.setTask(task);maid.getPersistentData().remove(ANCHOR);}

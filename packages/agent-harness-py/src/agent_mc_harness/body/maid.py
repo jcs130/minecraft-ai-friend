@@ -204,6 +204,8 @@ class MaidBody(BaseBody):
             if native in actions and (native != "make" or self.workshop):
                 if verb == "move" and self._native:
                     args = (*args, "dimension")
+                    if "release_rendezvous" in actions:
+                        args = (*args, "targetUuid")
                 acts[verb] = ActionSupport(native=f"mc_maids {native}", args=list(args), async_=is_async,
                                            notes="mode setting, not arrival/completion" if verb in ("follow", "stay", "sit") else None)
         props = self._schema.get("properties", {})
@@ -386,13 +388,15 @@ class MaidBody(BaseBody):
                 raise ArgumentError("action ownerId must match the bound owner")
             if {"controllerId", "generation", "operation"}.intersection(args):
                 raise ArgumentError("controller fields belong to the transport")
+            if name == "release_rendezvous" and not UUID.fullmatch(obj(args, "targetUuid", str)):
+                raise ArgumentError("Release requires the UUID of the previously selected companion.")
             if self.maid_id and name not in ("list", "nearby", "resources", "resource-pack") and "maidId" not in args:
                 args["maidId"] = self.maid_id
         else:
             native, names, _ = VERBS[action.verb]
             if action.verb == "follow" and action.args:
                 raise ArgumentError("body:follow takes no arguments and follows the owner. "
-                                    "Use body:move with the visible player's fresh coordinates to approach someone else.")
+                                    "Choose companion with a name or UUID from the skill compass to approach someone else.")
             args = {"action": native, "maidId": self.maid_id}
             for key in names:
                 if key in action.args:
@@ -407,6 +411,11 @@ class MaidBody(BaseBody):
                 args["x"], args["y"], args["z"] = xyz(action.args)
                 if self._native and "dimension" in action.args:
                     args["dimension"] = obj(action.args, "dimension", str)
+                if "targetUuid" in action.args:
+                    target = obj(action.args, "targetUuid", str)
+                    if not self._native or "release_rendezvous" not in self._actions or not UUID.fullmatch(target):
+                        raise ArgumentError("Use a current compass UUID and a native bridge with targeted navigation.")
+                    args["targetUuid"] = target
             if action.verb == "craft":
                 obj(action.args, "workshopId", str)
                 obj(action.args, "recipeId", str)

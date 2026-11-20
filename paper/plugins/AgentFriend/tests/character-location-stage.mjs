@@ -100,6 +100,7 @@ try {
     actor.chat('/mycli skills info team');
     actor.lastCommand = Date.now();
     const readable = await waitFor(() => actor.lines.slice(start).find(line => line.includes('队友传送术') && line.includes('用法')), 'readable skill text');
+    receipts.push({command: '/mycli skills info team', result: {message: readable}});
     check('player skill details cover position lookup, walking, cross-world travel and a UUID target', readable.includes('/mycli locate info') && readable.includes('走过去') && readable.includes('跨维度') && readable.includes('UUID'));
   }
   check('directory, info and three searches leave the character in place', JSON.stringify(await position(actor.username)) === JSON.stringify(before) && actor.game.dimension.endsWith('overworld'));
@@ -132,6 +133,7 @@ try {
     await twin.clickWindow(pearl, 0, 0);
     await waitFor(() => twin.lines.some(line => line.includes('已安全抵达')) && twin.game.dimension.endsWith('the_nether'), 'compass-only cross-world teleport');
     const arrivedByCompass = await position(twin.username);
+    receipts.push({command: 'compass: select ' + row.uuid, result: {player: twin.username, targetUuid: row.uuid, dimension: twin.game.dimension, position: arrivedByCompass}});
     check('clicking the vanilla compass button reaches the same physical target', Math.hypot(arrivedByCompass[0]-row.x,arrivedByCompass[1]-row.y,arrivedByCompass[2]-row.z) < 4);
     const alias = await query(actor, '/mycli locate info 指路小伙伴 --json');
     check('configured public alias resolves the original player body', alias.character.uuid === row.uuid);

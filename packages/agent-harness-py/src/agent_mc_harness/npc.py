@@ -247,7 +247,8 @@ def reviewed_steps(role: NpcRole, context: PlanContext, values: Any) -> list[Ste
             raise ValueError("model_cannot_change_body_or_request_identity")
         if role.body_kind == "maid" and step.tool == "body:follow" and step.args:
             raise ValueError("body_follow_means_owner_use_companion_with_a_name_or_uuid_from_the_skill_compass")
-        if step.tool == "body:native:rendezvous":
+        if (step.tool in {"body:native:rendezvous", "body:native:release_rendezvous"}
+                or role.body_kind == "maid" and step.tool in {"body:move", "body:native:walk"} and "targetUuid" in step.args):
             raise ValueError("choose_companion_from_the_skill_compass_before_travel")
         if step.tool == "body:attack" and step.args.get("target", "hostile") != "hostile":
             raise ValueError("npc_cannot_attack_players_or_passive_entities")
@@ -379,7 +380,7 @@ class NpcPlanner:
                     self.last_route = {"layer": "native-policy", "reason": "guard_continuing",
                                        "adventureState": context.companion_adventure["state"]}
                     return []
-        tools = [tool for tool in role.allowed_tools if tool != "body:native:rendezvous" and not step_support(Step(tool=tool), caps)]
+        tools = [tool for tool in role.allowed_tools if tool not in {"body:native:rendezvous", "body:native:release_rendezvous"} and not step_support(Step(tool=tool), caps)]
         if check_in:
             tools = ["body:chat"]
         schemas, native_catalogue = {}, []
@@ -524,7 +525,7 @@ class NpcPlanner:
             "Keep your own role and existing partnership in mind when choosing whom to accompany. "
             "A greeting alone does not require following. A request is something to weigh for yourself. "
             'To meet someone once, output {"steps":[],"companion":{"mode":"approach","targetUuid":"<listed uuid>"}}. '
-            'Use targetName for an exact name or alias. Follow tracks a moving partner. Choose optional travel auto, walk, or teleport. Walking uses the native pathfinder; distance, blocked routes and dimensions may require the paid travel spell when teleportAvailable. '
+            'Use targetName for an exact name or alias. If you decide to travel together (跟我走、一路同行), choose follow to keep pace when the person moves after arrival. Use approach for a one-time meeting. Choose optional travel auto, walk, or teleport. Walking uses the native pathfinder; distance, blocked routes and dimensions may require the paid travel spell when teleportAvailable. '
             'Use {"steps":[],"companion":{"mode":"stop"}} to end your selection. '
             "When your current choice still fits, omit companion. For a new choice return companion with empty steps. "
             "Do not issue body:follow or announce arrival alongside a choice. A walk receipt describes a leg of the trip. "
@@ -1154,7 +1155,7 @@ class NpcHost:
                         elif not events and goal == IDLE_GOAL:
                             intent.recall_query = "一起完成的委托、副本、探险和之前商量过的目的地"
                     self.next_plan = now + self.role.interval_seconds
-                elif self.companions and self.companions.active and not events:
+                elif self.companions and not events:
                     move = self.companions.next_step(snapshot, busy=not social_walk_available(snapshot),
                                                      can_teleport=self._can_rendezvous(self.body.capabilities()))
                     if move:

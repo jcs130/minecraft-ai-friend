@@ -66,7 +66,10 @@ public final class MaidRendezvousAccess {
         Player resident = ResidentCli.find(actor.getUniqueId());
         Player owner = actor instanceof org.bukkit.entity.Tameable tame && tame.getOwner() instanceof Player p ? p : null;
         for (var at : new Location[]{from, to}) {
-            if (server.namedTravelActivityArea(at, "arena")
+            if (server.pvp() != null && server.pvp().namedTravelArea(at)) return "team_pvp_escrow";
+            boolean encounter = server.dungeon().companionTravelFloor(at)
+                    || server.siteDungeons() != null && server.siteDungeons().activeCircleSite(at);
+            if (encounter
                     && !(resident != null && CompanionTravelAccess.companionCombatPosition(resident, at))
                     && !(owner != null && CompanionTravelAccess.companionCombatPosition(owner, at))) return "team_activity_admission";
         }

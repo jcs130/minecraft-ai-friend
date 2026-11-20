@@ -361,7 +361,7 @@ def test_maid_follow_never_silently_discards_a_target(run: Any) -> None:
         try:
             for key in ("name", "target", "uuid"):
                 response = await body.act(BodyAction(verb="follow", args={key: OTHER}, request_id="wrong-follow-" + key))
-                assert response.status == "rejected" and "body:move" in response.text
+                assert response.status == "rejected" and "skill compass" in response.text
             assert not server.writes
             response = await body.act(BodyAction(verb="follow", request_id="owner-follow-001"))
             assert response.status == "completed"

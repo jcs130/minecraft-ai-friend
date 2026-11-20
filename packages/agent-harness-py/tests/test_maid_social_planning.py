@@ -5,10 +5,12 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 import httpx
+import pytest
 from test_native_maid import MAID, OTHER, OWNER, NativeServer, make
 
 from agent_mc_harness.journal import ActionJournal
-from agent_mc_harness.npc import IDLE_GOAL, ModelClient, NpcHost, NpcPlanner, NpcRole
+from agent_mc_harness.models import BodyAction
+from agent_mc_harness.npc import IDLE_GOAL, ModelClient, NpcHost, NpcPlanner, NpcRole, reviewed_steps
 from agent_mc_harness.runtime import Intent, PlanContext
 
 
@@ -22,7 +24,8 @@ class VisiblePlayers(NativeServer):
         self.players = [peer(OWNER, "Owner", 6), peer(OTHER, "Visitor", 16)]
         self.available = True
         self.directory = None
-        self.actions.append("rendezvous")
+        self.navigation_target = None
+        self.actions.extend(("rendezvous", "release_rendezvous"))
 
     def __call__(self, request):
         response = super().__call__(request)
@@ -36,6 +39,8 @@ class VisiblePlayers(NativeServer):
                            canMove=True, homeMode=False, passenger=False)
         if self.directory is not None:
             row["data"]["characterDirectory"] = self.directory
+        if self.navigation_target is not None:
+            row["data"]["socialNavigationTargetUuid"] = self.navigation_target
         content["text"] = json.dumps(row)
         return httpx.Response(response.status_code, json=envelope)
 
@@ -143,4 +148,24 @@ def test_model_can_choose_a_remote_name_and_recovers_the_original_travel_receipt
             world.receipts[rid]["observation"]["targetPosition"] = at
             assert (await body.result(rid)).status == "completed"
             assert [w["action"] for w in world.writes] == ["rendezvous"]
+    asyncio.run(run())
+
+
+def test_host_targeted_walk_reaches_native_bridge_but_direct_model_arguments_cannot(tmp_path):
+    def answer(world, facts):
+        return {"steps": [], "companion": {"mode": "follow", "targetUuid": OTHER}}
+    async def run():
+        async with setup(tmp_path, answer) as (world, body, plan):
+            world.directory = [peer(OTHER, "Visitor", 9)]
+            world.navigation_target = ""
+            steps = await plan()
+            assert steps[0].args["targetUuid"] == OTHER
+            who = NpcRole(id="qa_role", name="QA", owner_id=UUID(OWNER), character_id=UUID(MAID), body_id=UUID(MAID),
+                          body_kind="maid", provider="tokenplan", model="test", persona="test", allowed_tools=["body:move"])
+            with pytest.raises(ValueError, match="choose_companion"):
+                reviewed_steps(who, PlanContext(capabilities=body.capabilities()), [steps[0].model_dump()])
+            await body.act(steps[0].action("selected-peer-navigation"))
+            assert len(world.writes) == 1 and world.writes[0]["targetUuid"] == OTHER
+            missing = await body.act(BodyAction(verb="native", name="release_rendezvous", request_id="no-target-release"))
+            assert missing.status == "rejected" and len(world.writes) == 1
     asyncio.run(run())

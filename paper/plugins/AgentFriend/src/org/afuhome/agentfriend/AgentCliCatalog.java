@@ -229,7 +229,7 @@ final class AgentCliCatalog {
         add(specs,"locate.info","team","read","/mycli locate info <名字或UUID> [--json]","角色在哪里？查坐标、维度和会合下一步","免费，只读；未加载或不可见时没有实时坐标","本人和目标的实际维度及位置；同维可寻路，支援传送另行执行");
         add(specs,"locate.nearest","team","write","/mycli locate nearest","追踪同世界最近队友","同世界有可见非旁观队友","BossBar 方向和距离");
         add(specs,"locate.off","team","write","/mycli locate off","停止追踪队友","在线玩家","停止结果");
-        add(specs,"locate.tp","team","teleport","/mycli locate tp <名字|UUID|nearest> [--json]","支援传送到伙伴身边，使用技能罗盘的同一条路径","8魔力、20秒冷却；按安全落点、PvP 与活动增援准入实时校验","MC_LOCATE：核对targetUuid、arrivalConfirmed和actualPosition；结果未知先查位置；原有MC_TRAVEL仍可用");
+        add(specs,"locate.tp","team","teleport","/mycli locate tp <名字|UUID|nearest> [--json]","队友传送术，使用技能罗盘「找队友」中同一颗传送珍珠的规则","8魔力、20秒冷却；按安全落点、PvP 与活动增援准入实时校验","MC_LOCATE：核对targetUuid、arrivalConfirmed和actualPosition；结果未知先查位置；原有MC_TRAVEL仍可用");
         add(specs,"arena.status","adventure","read","/mycli arena status [--json|--verbose]","查询当前入场缺项或战斗下一步；默认短文本","每次start从第1层开始，历史通关不自动跳层；清层自动下楼。传送6魔力、开场免费，已解锁驿站rest需8魔力","MC_TRIAL_STATE；显式JSON/verbose兼容MC_DUNGEON status及救援字段");
         add(specs,"dungeon.list","adventure","read","/mycli dungeon list","发现不同地点的建筑地下城与可用挑战入口","只读免费，不加载新区块、不传送或开场","私有MC_SITE_DUNGEON_LIST/ITEM；info查选中地点，status查本人场次");
         add(specs,"dungeon.info","adventure","read","/mycli dungeon info <ID>","查难度、建议等级、装备搭配和当前一步","只读免费；详细路线用--verbose；地点ID从dungeon list读取","默认精炼中文；--json保留原字段并附实时指引，抵达入口不等于进入首室");

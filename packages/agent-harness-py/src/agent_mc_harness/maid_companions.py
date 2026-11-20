@@ -156,6 +156,7 @@ class MaidCompanions:
         self.last_origin: Point | None = None
         self.attempts = 0
         self.remote_sent = False
+        self.release_requested: str | None = None
         self.last_transfer: dict | None = None
         self.missing_since: float | None = None
         self.blocked_until: dict[str, float] = {}
@@ -195,8 +196,11 @@ class MaidCompanions:
                 self._clear("arrived")
             else:
                 self.status = "alongside"
-                self.last_goal = self.last_origin = None
-                self.attempts = 0
+                raw = snapshot.raw or {}
+                if ("socialNavigationTargetUuid" not in raw or raw.get("socialNavigationTargetUuid") == player.uuid
+                        or raw.get("ownerId") == player.uuid):
+                    self.last_goal = self.last_origin = None
+                    self.attempts = 0
         elif self.status != "alongside" or player.distance is None or player.distance > FOLLOW_AGAIN_RANGE:
             self.status = "tracking"
 
@@ -212,9 +216,9 @@ class MaidCompanions:
         return {
             "source": source,
             "characters": [{"uuid": p.uuid, "name": p.name, "aliases": list(p.aliases), "distance": round(p.distance, 1) if p.distance is not None else None,
-                            "dimension": p.dimension, "position": dict(zip("xyz", p.position, strict=True))}
-                              for p in sorted(visible.values(), key=lambda p: (p.distance if p.distance is not None else math.inf, p.uuid))
-                              if p.uuid not in self.blocked_until],
+                            "dimension": p.dimension, "position": dict(zip("xyz", p.position, strict=True)),
+                            **({"retryAfterSeconds": math.ceil(self.blocked_until[p.uuid] - now)} if p.uuid in self.blocked_until else {})}
+                              for p in sorted(visible.values(), key=lambda p: (p.distance if p.distance is not None else math.inf, p.uuid))],
             "selection": {"mode": self.mode, "travel": self.travel, "uuid": self.target, "name": self.name} if self.active else None,
             "status": self.status,
             "lastTransfer": self.last_transfer,
@@ -264,9 +268,24 @@ class MaidCompanions:
 
     def next_step(self, snapshot: BodySnapshot | None, *, busy: bool = False, can_teleport: bool = False) -> Step | None:
         """Only emit a new walk when the host has no competing or uncertain body action."""
+        if snapshot is None or not -1 <= time.time() - snapshot.sampled_at.timestamp() <= 5:
+            return None
+        raw = snapshot.raw if isinstance(snapshot.raw, dict) else {}
+        tagged = "socialNavigationTargetUuid" in raw
+        held = raw.get("socialNavigationTargetUuid")
+        if not self.active and not held:
+            self.release_requested = None
+            return None
         visible = _players(snapshot)
         self._observe(snapshot, visible)
-        if busy or self.status != "tracking" or self.target not in visible or not walk_available(snapshot):
+        if held != self.release_requested or held == self.target:
+            self.release_requested = None
+        if held and held != self.target and not busy and self.release_requested != held:
+            self.release_requested = held
+            return Step(tool="body:native:release_rendezvous", args={"targetUuid": held})
+        register = (tagged and self.mode == "follow" and self.status == "alongside" and held != self.target
+                    and self.target != raw.get("ownerId"))
+        if busy or (self.status != "tracking" and not register) or self.target not in visible or not walk_available(snapshot):
             return None
         now = self.clock()
         player = visible[self.target]
@@ -275,8 +294,12 @@ class MaidCompanions:
         if elapsed < STEP_INTERVAL:
             return None
         remote = player.distance is None or player.distance > WALK_RANGE
+        if not remote and self.last_goal is not None and math.dist(self.last_goal, player.position) > 4:
+            # The previous path may have been cancelled because the person moved.
+            # That outcome is not evidence that walking to the new position is blocked.
+            self.attempts = 0
         no_progress = self.attempts >= 2 and self.last_origin and math.dist(origin, self.last_origin) < 1.5
-        use_spell = self.travel == "teleport" or (self.travel == "auto" and can_teleport and (remote or no_progress))
+        use_spell = not register and (self.travel == "teleport" or (self.travel == "auto" and can_teleport and (remote or no_progress)))
         if use_spell:
             if self.remote_sent:
                 self.status = "check_original_rendezvous_receipt"
@@ -305,4 +328,7 @@ class MaidCompanions:
             return None
         self.attempts += 1
         self.last_walk, self.last_origin, self.last_goal = now, origin, destination
-        return Step(tool="body:move", args={**dict(zip("xyz", destination, strict=True)), "dimension": snapshot.dimension})
+        args = {**dict(zip("xyz", destination, strict=True)), "dimension": snapshot.dimension}
+        if tagged and "characterDirectory" in raw:
+            args["targetUuid"] = player.uuid
+        return Step(tool="body:move", args=args)

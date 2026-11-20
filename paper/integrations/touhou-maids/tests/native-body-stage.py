@@ -20,6 +20,7 @@ parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--fixture',type=Path,required=True)
 parser.add_argument('--output',type=Path,required=True)
 parser.add_argument('--expiry-only',action='store_true')
+parser.add_argument('--rendezvous-players',type=Path,help='Online synthetic Mineflayer UUIDs for the non-owner follow test (MaidOwnerQA, MaidSocialOne, MaidSocialTwo)')
 args=parser.parse_args()
 fixture=json.loads(args.fixture.read_bytes());lab=Path(fixture['lab'])
 assert fixture['synthetic'] is True and (lab/'.native-body-qa').read_text()=='SYNTHETIC_NATIVE_BODY_ONLY'
@@ -27,7 +28,11 @@ assert (lab/'.resident-hybrid-qa').read_text()=='SYNTHETIC_RESIDENT_HYBRID_ONLY'
 props=dict(x.split('=',1)for x in (lab/'server.properties').read_text().splitlines()if'='in x)
 assert props['server-ip']=='127.0.0.1'
 url=urllib.parse.urlsplit(fixture['endpoint']);assert url.scheme=='http' and url.hostname=='127.0.0.1' and url.path=='/maid-body'
-assert fixture['maidId'].startswith('10000000-') and fixture['ownerId'].startswith('20000000-')
+assert fixture['maidId'].startswith('10000000-')
+if args.rendezvous_players:
+    assert fixture['ownerId']=='9364ecc2-efa1-370f-ae98-c3f1861d47ce'  # OfflinePlayer:MaidOwnerQA
+else:
+    assert fixture['ownerId'].startswith('20000000-')
 token=Path(fixture['tokenFile']).read_text().strip()
 report={'synthetic':True,'productionChanged':False,'startedAt':time.time(),'checks':[],'observations':{}}
 args.output.parent.mkdir(parents=True,exist_ok=True)
@@ -82,7 +87,10 @@ def settle(request):
         if receipt['status'] not in ['running','accepted'] or time.monotonic()>until:return receipt
         time.sleep(.15)
 try:
-    if args.expiry_only:
+    if args.rendezvous_players:
+        from rendezvous_stage import verify
+        verify(fixture,json.loads(args.rendezvous_players.read_bytes()),c,command,check)
+    elif args.expiry_only:
         c.bind();bound=True;write('stop');epoch=probe('controller')['epoch']
         time.sleep(122)
         check('real_idle_lease_expires_and_stops_body',not probe('controller')['active'] and native()['sitting'])

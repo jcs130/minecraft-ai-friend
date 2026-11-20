@@ -8,7 +8,7 @@ import tempfile
 BASE = "c866fe087da112eff6284b4fb4edd8bc761063e1f2df8f5d37cc7b8710e1864c"
 VERSION = "0.4.54-character-rendezvous"
 FAMILIES = ("AgentFriendPlugin", "AgentCliCatalog", "AgentCliRecovery", "AgentCliRecoveryService",
-            "AgentCliText", "CharacterLocationAccess", "MaidRendezvousAccess", "SpellGuide", "TeammateDirectory", "TravelMagic")
+            "AgentCliText", "CharacterLocationAccess", "DungeonManager", "MaidRendezvousAccess", "SpellGuide", "TeammateDirectory", "TravelMagic")
 
 
 def main():

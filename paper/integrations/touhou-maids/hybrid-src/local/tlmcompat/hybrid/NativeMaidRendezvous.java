@@ -97,6 +97,23 @@ final class NativeMaidRendezvous {
         return result;
     }
 
+    static boolean walkingNear(UUID id, UUID targetId, Location destination) {
+        try {
+            var target = service("CharacterLocationAccess").getMethod("target", UUID.class, UUID.class)
+                    .invoke(null, id, targetId);
+            if (!(target instanceof LivingEntity body) || body.getWorld() != destination.getWorld()) return false;
+            Location at = body.getLocation();
+            if (at.distanceSquared(destination) <= 16) return true;
+            if (!(Bukkit.getEntity(id) instanceof LivingEntity caster) || caster.getWorld() != at.getWorld()) return false;
+            Location origin = caster.getLocation();
+            if (origin.distanceSquared(at) <= 96 * 96 || origin.distanceSquared(destination) > 36 * 36) return false;
+            var leg = at.toVector().subtract(origin.toVector()).normalize().multiply(32);
+            return origin.add(leg).distanceSquared(destination) <= 16;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError unavailable) {
+            return false;
+        }
+    }
+
     private static boolean atOrigin(EntityMaid actual, Location origin) {
         if (actual == null) return false;
         Location at = actual.getBukkitEntity().getLocation();

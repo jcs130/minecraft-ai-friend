@@ -11,22 +11,22 @@ final class MaidBodyControl {
     static final String PROTOCOL="qiandengji-maid-body/v1";
     static final long LEASE_MILLIS=120_000;
     static final Set<String> READS=Set.of("list","context","inventory","tasks","brain","receipt","inbox","spells","workshop");
-    static final Set<String> WRITES=Set.of("rendezvous","walk","stop","stay","sit","follow","guard","companion","cast","task","equip","pickup","schedule","speak","ack","dismount","make","fish","bag_clean","bag_store","bag_donate");
+    static final Set<String> WRITES=Set.of("release_rendezvous","rendezvous","walk","stop","stay","sit","follow","guard","companion","cast","task","equip","pickup","schedule","speak","ack","dismount","make","fish","bag_clean","bag_store","bag_donate");
     static final Set<String> BAG_ACTIONS=Set.of("bag_clean","bag_store","bag_donate");
     static Set<String> fields(String action){
         var keys=new HashSet<>(Set.of("action","maidId","requestId"));
-        keys.addAll(switch(action){case "rendezvous"->Set.of("targetUuid");case "walk"->Set.of("x","y","z","dimension");case "receipt"->Set.of("operationId","operationAction");
+        keys.addAll(switch(action){case "rendezvous","release_rendezvous"->Set.of("targetUuid");case "walk"->Set.of("x","y","z","dimension","targetUuid");case "receipt"->Set.of("operationId","operationAction");
             case "task"->Set.of("taskId");case "equip"->Set.of("hand","slot");case "schedule"->Set.of("schedule");
             case "cast"->Set.of("spellId");case "pickup"->Set.of("enabled");case "speak"->Set.of("text");case "ack"->Set.of("eventId");
             case "bag_clean","bag_store","bag_donate"->Set.of("dryRun");
             case "make"->Set.of("workshopId","recipeId","quantity","inventory");default->Set.of();});return keys;
     }
-    static Set<String> requiredFields(String action){var fields=new HashSet<>(fields(action));fields.removeAll(Set.of("maidId","dimension","operationAction","quantity","dryRun"));if(!WRITES.contains(action))fields.remove("requestId");return fields;}
+    static Set<String> requiredFields(String action){var fields=new HashSet<>(fields(action));fields.removeAll(Set.of("maidId","dimension","operationAction","quantity","dryRun"));if(action.equals("walk"))fields.remove("targetUuid");if(!WRITES.contains(action))fields.remove("requestId");return fields;}
     static void validateShape(JsonObject input){String action=string(input,"action");
         if(!READS.contains(action)&&!WRITES.contains(action))throw new Fault(400,"UNSUPPORTED_ACTION");keys(input,fields(action));
         if(input.has("dryRun")&&(!input.get("dryRun").isJsonPrimitive()||!input.getAsJsonPrimitive("dryRun").isBoolean()))throw new Fault(400,"INVALID_dryRun");
         for(String field:new TreeSet<>(requiredFields(action)))if(!input.has(field))throw new Fault(400,"INVALID_"+field);
-        if (action.equals("rendezvous")) uuid(input, "targetUuid");
+        if (input.has("targetUuid")) uuid(input, "targetUuid");
         for(String field:List.of("maidId","requestId","operationId","operationAction","taskId","hand","schedule","text","dimension","eventId","targetUuid","spellId","workshopId","recipeId","inventory"))if(input.has(field))string(input,field);
     }
     static final class Fault extends RuntimeException {
