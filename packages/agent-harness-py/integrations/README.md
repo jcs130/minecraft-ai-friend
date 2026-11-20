@@ -4,11 +4,11 @@
 
 ## 在另一台电脑下载安装
 
-登录 GitHub，打开居民插件构建记录，选择与验收服务端**同一提交**的成功运行，在页面底部 **Artifacts** 下载 `qiandengji-resident-desktop`，解压后选用下表中的一份。仓库保留每个包的文件名、大小和 SHA-256，便于校验下载。[GitHub Actions 构建记录](https://github.com/jcs130/minecraft-ai-friend/actions/workflows/resident-plugins.yml) · [0.3.0 安装包清单](../../../paper/integrations/agent-portal/src/resident-downloads.json)
+登录 GitHub，打开居民插件构建记录，选择与验收服务端兼容的成功运行，在页面底部 **Artifacts** 下载 `qiandengji-resident-desktop`，解压后选用下表中的一份。仓库保留每个包的文件名、大小和 SHA-256，便于校验下载。[GitHub Actions 构建记录](https://github.com/jcs130/minecraft-ai-friend/actions/workflows/resident-plugins.yml) · [安装包清单](../../../paper/integrations/agent-portal/src/resident-downloads.json)
 
-| 本机使用的 Agent | 0.3.0 安装包 | 安装方式 |
+| 本机使用的 Agent | 安装包 | 安装方式 |
 | --- | --- | --- |
-| N.E.K.O. | `qiandengji-resident-0.3.0.neko-plugin` | 在插件中心导入文件，打开「连接千灯纪居民」。 |
+| N.E.K.O. | `qiandengji-resident-0.3.1.neko-plugin` | 在插件中心导入文件，打开「连接千灯纪居民」。 |
 | Cortico World API 5 | `cortico-world-qiandengji-resident-0.3.0.tgz` | 解压到固定目录，在扩展管理选择「从本机目录安装」，选中内含 `package.json` 的 `package` 文件夹，重启 Cortico。 |
 | Cortico World API 6 | `cortico-world-qiandengji-resident-api6-0.3.0.tgz` | 同上。 |
 
@@ -84,6 +84,10 @@ N.E.K.O. 通过定向消息把回合交给指定角色，用运行时工具收�
   ]
 }
 ```
+
+### 排查 N.E.K.O. 发言
+
+在插件进程日志里搜索 `resident_communication`。提交前拒绝会记录 `detail`、回合 ID 的 SHA-256 前 12 位及本次使用的模式和范围。访问官网后的结果会另记为 `portal_result`、`portal_rejected` 或 `portal_unconfirmed`。官网接单后，用游戏端回执确认发声状态。
 
 ## 给服主
 
