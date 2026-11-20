@@ -144,7 +144,6 @@ export class ResidentTurns {
     respond(res, 200, this.grant(r, row.owner, req.portalOrigin.origin));
   }
   create(owner, input) {
-    if (this.maidOnlyCreation && input.bodyKind !== 'maid') throw denied(403,'MAID_ONLY');
     if (typeof input.requestId !== 'string' || !uuid.test(input.requestId) || !['maid','numen'].includes(input.bodyKind)
         || typeof input.name !== 'string' || !/^[\p{L}\p{N}_· -]{1,24}$/u.test(input.name) || !input.name.trim()
         || typeof (input.persona ?? '') !== 'string' || (input.persona ?? '').length > 1000) throw denied(400, 'INVALID_RESIDENT_PROFILE');
@@ -154,6 +153,7 @@ export class ResidentTurns {
       let born = db.prepare('SELECT * FROM resident_births WHERE owner=? AND request=?').get(owner, input.requestId);
       if (born && (name !== born.name || persona !== born.persona || input.bodyKind !== born.kind)) throw denied(409,'CREATION_REQUEST_CHANGED');
       if (!born) {
+        if (this.maidOnlyCreation && input.bodyKind !== 'maid') throw denied(403,'MAID_ONLY');
         const slot = [...this.roles.values()].find(r => this.canCreate(owner,r) && r.bodyKind === input.bodyKind
           && !db.prepare('SELECT 1 FROM resident_births WHERE role=? OR body=?').get(r.id,r.bodyId));
         if (!slot) throw denied(409,'NO_BODY_CAPACITY');

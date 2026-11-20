@@ -85,6 +85,20 @@ test('maid-only production allows both website and plugin creation while preserv
   assert.equal(db.prepare('SELECT count(*) AS n FROM resident_births').get().n,1);
 });
 
+test('maid-only rollout keeps the original owner and request receipt for an earlier Numen creation', async t => {
+  const f = await siteFixture(t,{residentCreationSlots:[capacity('prior-numen','numen').slot]});
+  const store = f.portal.store;
+  const owner = store.db.prepare('SELECT id FROM owners LIMIT 1').get().id;
+  const profile = {requestId:randomUUID(),bodyKind:'numen',name:'旧友',persona:'巡查营地。'};
+  const original = new ResidentTurns(f.config,store).create(owner,profile);
+  const updated = new ResidentTurns({...f.config,residentCreationMode:'maid-only'},store);
+  assert.deepEqual(updated.create(owner,profile),original);
+  assert.throws(() => updated.create(owner,{...profile,name:'另一位'}),e => e.reason === 'CREATION_REQUEST_CHANGED');
+  assert.throws(() => updated.create(randomUUID(),profile),e => e.reason === 'MAID_ONLY');
+  assert.throws(() => updated.create(owner,{...profile,requestId:randomUUID()}),e => e.reason === 'MAID_ONLY');
+  assert.equal(store.db.prepare('SELECT count(*) AS n FROM resident_births').get().n,1);
+});
+
 test('a capacity registered to a player can only be allocated by that website account', async t => {
   const {slot} = capacity('personal','maid');
   const f = await siteFixture(t,{residentCreationSlots:[slot]});
