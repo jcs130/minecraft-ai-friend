@@ -19,6 +19,12 @@ it('validates documented MCP calls against advertised contracts and keeps discov
   try {
     await server.connect(left); await client.connect(right);
     const tools = (await client.listTools()).tools;
+    // Clients can show just the start of a tool description before expanding it.
+    for (const catalogue of [runtime.tools(), tools]) {
+      const lead = (name: string) => catalogue.find(tool => tool.name === name)?.description?.slice(0, 160);
+      expect(lead('mc_do')).toMatch(/task ID.*acceptance.*terminal minecraft\.task/i);
+      expect(lead('mc_script')).toMatch(/async JavaScript.*\{api:"authoring"\}/i);
+    }
     const markdown = readFileSync(new URL('../docs/mcp.md', import.meta.url), 'utf8');
     const examples = [...markdown.matchAll(/```json\s*\n([\s\S]*?)\n```/g)].map(match => JSON.parse(match[1]))
       .filter(value => typeof value.name === 'string' && value.arguments);
