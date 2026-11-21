@@ -363,6 +363,7 @@ interface BowReleased {
 interface BowHit {
   kind: 'hit';
   weapon?: RangedWeaponKind;
+  projectileId?: number;
   shotId: number;
   targetId: number;
   ownerToken: unknown;
@@ -595,6 +596,7 @@ export class BowController {
     const hit: BowHit = {
       kind: 'hit', shotId: shot.shotId, targetId, ownerToken: shot.ownerToken, at,
       ...(shot.weapon === undefined ? {} : { weapon: shot.weapon }),
+      ...(projectileId === undefined ? {} : { projectileId }),
     };
     this.opts.emit?.(hit);
     return hit;

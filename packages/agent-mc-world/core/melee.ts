@@ -8,7 +8,7 @@ import { fatalDamageText, ownKillCredit } from './mob-death.ts';
 import { sleep, type TaskAttackLease } from './skill-context.ts';
 import { canSeeEntity, headInWater } from './terrain.ts';
 import {
-  HYBRID_MELEE_AT, HYBRID_RANGED_AT, KITE_MAX_RANGE, KITE_MIN_RANGE, bestRangedWeapon, hasRangedLos, hasUsableArrows,
+  HYBRID_MELEE_AT, HYBRID_RANGED_AT, KITE_MAX_RANGE, KITE_MIN_RANGE, hasRangedLos, hasReadyRangedWeapon,
   type BowShotResult, type RangedTarget,
 } from './ranged.ts';
 import { type AttackMode } from './skills.ts';
@@ -183,9 +183,11 @@ export function rangedTargetOf(entity: NonNullable<Bot['entities'][string]>): Ra
   };
 }
 
-export function forcedRangedIssue(bot: Bot, target: RangedTarget): string | null {
-  if (!bestRangedWeapon(bot)) return '包里没有可用的弓';
-  if (!hasUsableArrows(bot)) return '包里没有普通箭';
+export function forcedRangedIssue(bot: Bot, target: RangedTarget, preference?: string): string | null {
+  if (!hasReadyRangedWeapon(bot, preference)) {
+    const weapon = preference ? `指定远程武器 ${preference}` : '自动远程武器';
+    return `当前${weapon}不可用；核对耐久、弹药或附魔`;
+  }
   if (!hasRangedLos(bot, target)) return '目标被方块挡住,没有射线';
   return null;
 }
@@ -193,17 +195,20 @@ export function forcedRangedIssue(bot: Bot, target: RangedTarget): string | null
 export function rangedBlockedText(result: Exclude<BowShotResult, { kind: 'released' }>): string {
   if (result.reason === 'no_arrow') return '普通箭用完了';
   if (result.reason === 'no_los') return '目标被方块挡住,没有射线';
-  if (result.reason === 'no_solution') return '这段距离没有可用的弓箭弹道';
-  if (result.reason === 'too_close') return '目标贴得太近,弓拉不开安全距离';
-  if (result.cause === 'bow_lost') return '可用的弓不在手边了';
+  if (result.reason === 'no_solution') return '这段距离没有可用的远程弹道';
+  if (result.reason === 'too_close') return '目标贴得太近，无法安全远程出手';
+  if (result.cause === 'bow_lost') return '选用的远程武器不再可用';
+  if (result.cause === 'charge_unconfirmed') return '未确认弩已装填，停止发射';
+  if (result.cause === 'launch_unconfirmed') return '未观察到发射证据，出手结果未知';
   if (result.cause === 'bot_lost') return '连接断了';
   if (result.cause === 'target_lost') return '目标离开视野了';
-  return '这一箭在放出前被取消了';
+  return '这次远程出手在发射前被取消了';
 }
 
 export function attackStats(stats: TaskAttackLease): string {
-  return `挥击 ${stats.swings} 次命中 ${stats.meleeHits} 次,放箭 ${stats.arrows} 支命中 ${stats.rangedHits} 支` +
-    `${stats.hurts > 0 ? `,期间挨打 ${stats.hurts} 次` : ''}`;
+  const thrown = stats.tridents ? `，投出三叉戟 ${stats.tridents} 支` : '';
+  return `挥击 ${stats.swings} 次命中 ${stats.meleeHits} 次，弓或弩发射 ${stats.arrows} 次${thrown}，观察到远程命中 ${stats.rangedHits} 次` +
+    `${stats.hurts > 0 ? `，期间挨打 ${stats.hurts} 次` : ''}`;
 }
 
 export function pressRanged(
@@ -294,14 +299,16 @@ export async function skillAttack(
   entityId?: number,
   weaponName?: string,
 ): Promise<string> {
+  const forcedRanged = mode === 'ranged' || mode === 'kite';
+  const rangedPreference = forcedRanged ? weaponName : undefined;
+  const allowAutoRanged = mode === 'auto' && weaponName === undefined;
   const selectedWeapon = () => weaponName === undefined ? bestWeapon(bot)
     : meleeWeapons(bot).find(item => item.name === weaponName) ?? null;
   const requireSelectedWeapon = (): void => {
     if (weaponName === undefined) return;
-    if (mode === 'ranged' || mode === 'kite') throw new SkillBlocked('attack.weapon 是近战武器；不能与 ranged/kite 混用');
     if (!inventoryReadConfirmed(bot) || (bot as Bot & {deathLifecycle?:{inventorySynced?:boolean}}).deathLifecycle?.inventorySynced === false)
       throw new SkillBlocked('当前背包尚未确认，不能核对指定武器');
-    if (!selectedWeapon()) throw new SkillBlocked(`指定近战武器 ${weaponName} 不可用；没有换用其他武器或空手攻击`, [], 'local', 'resource-unavailable');
+    if (!forcedRanged && !selectedWeapon()) throw new SkillBlocked(`指定近战武器 ${weaponName} 不可用；没有换用其他武器或空手攻击`, [], 'local', 'resource-unavailable');
   };
   requireSelectedWeapon();
   if (!isKnownTarget(bot, target)) {
@@ -315,9 +322,8 @@ export async function skillAttack(
     if (!inventoryReadConfirmed(bot) || synced === false)
       throw new SkillBlocked('当前背包读数尚未确认，不能判定武器可用；先等服务器完整槽位，不按旧库存或空包开战');
     if (!bestWeapon(bot) && !ctx.attack.ranged?.ready(bot)) {
-      const bow = bestRangedWeapon(bot);
       throw new SkillBlocked(`当前没有可选近战武器，主手为 ${bot.heldItem?.name ?? '空手'}；`
-        + (bow ? `有 ${bow.name}${hasUsableArrows(bot) ? '和普通箭，但远程控制器暂不可用' : '，但没有普通箭'}` : '没有可用的弓和普通箭组合')
+        + (hasReadyRangedWeapon(bot) ? '有合用的远程装备，但远程控制器暂不可用' : '没有可用远程装备')
         + '；auto 未改为空手挥击，未开始攻击。补给后重新核对实际背包与主手；法术和避险可单独选择');
     }
   }
@@ -338,13 +344,12 @@ export async function skillAttack(
       throw new SkillBlocked(`点名实体 entityId=${entityId} 已失效；未改打其他实体，重新观察`, [], 'local', 'attack-target-unconfirmed');
     }
     // Ordinary brief occlusion keeps the existing 1.5-second tracking grace.
-    // Recheck sight immediately before a physical swing or bow preparation.
+    // Recheck sight immediately before a physical swing or ranged preparation.
     if (requireSight && !canSeeEntity(bot, entity)) throw new SkillBlocked(`点名实体 entityId=${entityId} 已被遮挡；未继续攻击，重新观察`, [], 'local', 'attack-target-unconfirmed');
   };
   const ranged = ctx.attack.ranged;
-  const forcedRanged = mode === 'ranged' || mode === 'kite';
   if (forcedRanged) {
-    const issue = forcedRangedIssue(bot, rangedTargetOf(entity));
+    const issue = forcedRangedIssue(bot, rangedTargetOf(entity), rangedPreference);
     if (!ranged || issue) {
       throw new SkillBlocked(`${issue ?? '远程控制器现在不可用'};${mode} 不会改用近战`);
     }
@@ -361,11 +366,12 @@ export async function skillAttack(
   let inMelee = false;
   let strafeLeft = false;
   let strafeAt = 0;
-  let weapon: HybridWeapon = forcedRanged || (mode === 'auto' && ranged?.ready(bot) && !bestWeapon(bot)) ? 'ranged' : 'melee';
+  let weapon: HybridWeapon = forcedRanged || (allowAutoRanged && ranged?.ready(bot) && !bestWeapon(bot)) ? 'ranged' : 'melee';
   let desperate = false;
   let retreatFailed = false;
   let chaseWithoutProgress = 0;
   let rangedRetryAfter = 0;
+  let tridentInFlightUntil = 0;
   let outOfSightSince = 0;
   const equipMelee = async (): Promise<void> => {
     ranged?.abort();
@@ -421,7 +427,7 @@ export async function skillAttack(
   try {
     if (weapon === 'melee') await equipMelee();
     while (!stats.dead && !blasted && entity.isValid && Date.now() < deadline) {
-      // 某些寻路/弓回执会立即返回；每轮让出一个游戏 tick，避免空转饿死协议 keepalive。
+      // 某些寻路或远程回执会立即返回；每轮让出一个游戏 tick，避免空转饿死协议 keepalive。
       await sleep(50);
       checkAbort(ctx);
       if (stats.disconnected) throw new SkillBlocked(`连接断了,主动攻击已取消;${attackStats(stats)}`);
@@ -482,7 +488,11 @@ export async function skillAttack(
         continue;
       }
       const d = entity.position.distanceTo(bot.entity.position);
-      const rangedReady = Date.now() >= rangedRetryAfter && Boolean(ranged?.ready(bot));
+      const rangedReady = (forcedRanged || allowAutoRanged) && Date.now() >= rangedRetryAfter && Boolean(ranged?.ready(bot, rangedPreference));
+      if (weapon === 'ranged' && !rangedReady && Date.now() < tridentInFlightUntil) {
+        pressRanged(bot, d, mode, strafeLeft);
+        continue;
+      }
       if (!desperate && mode === 'auto' && weapon === 'ranged' && !rangedReady && !bestWeapon(bot)) {
         throw new SkillBlocked(`远程武器已不可用，且没有可切换的近战武器；未改为空手攻击;${attackStats(stats)}`);
       }
@@ -501,7 +511,7 @@ export async function skillAttack(
         dropGoal(bot, 'task', '改用远程,寻路器让位', ctx.diag);
         if (!rangedReady || !ranged) {
           if (forcedRanged) {
-            throw new SkillBlocked(`${forcedRangedIssue(bot, rangedTargetOf(entity)) ?? '远程控制器现在不可用'};${mode} 不会改用近战;${attackStats(stats)}`);
+            throw new SkillBlocked(`${forcedRangedIssue(bot, rangedTargetOf(entity), rangedPreference) ?? '远程控制器现在不可用'};${mode} 不会改用近战;${attackStats(stats)}`);
           }
           weapon = 'melee';
           await equipMelee();
@@ -516,23 +526,28 @@ export async function skillAttack(
         checkNamedTarget(true);
         const motion = pressRanged(bot, d, mode, strafeLeft);
         // Explicit kite asks for spacing first. Auto/ranged may shoot while
-        // making room; the hybrid weapon preference is not a bow range limit.
+        // making room; the hybrid weapon preference is not a projectile range limit.
         // A blocked retreat is not a reason to withhold a valid shot forever.
-        // The bow controller still verifies LOS, ballistics and the attack lease.
+        // The ranged controller still verifies LOS, ballistics and the attack lease.
         if (mode === 'kite' && d < KITE_MIN_RANGE && motion.retreating) {
           await sleep(50);
           continue;
         }
-        const result = await ranged.shoot(rangedTargetOf(entity), stats.token);
+        const result = await ranged.shoot(rangedTargetOf(entity), stats.token, rangedPreference);
         checkAbort(ctx);
         // Count an actual release even if death arrives before its RPC settles.
-        // A cancelled draw is still zero arrows; neither result proves our kill.
-        if (result.kind === 'released') stats.arrows += 1;
+        // A cancelled preparation is zero launches; a launch does not prove a kill.
+        if (result.kind === 'released') {
+          if (result.weapon === 'trident') {
+            stats.tridents = (stats.tridents ?? 0) + 1;
+            tridentInFlightUntil = result.hitWindow.until;
+          } else stats.arrows += 1;
+        }
         if (stats.dead) break;
         if (result.kind === 'released') {
           continue;
         }
-        // 拉弓时目标已被移除(前一支箭打掉了水晶):交给循环后的结算
+        // 准备远程武器期间目标已消失，交给循环后的结算。
         if (result.cause === 'target_lost' && !entity.isValid) break;
         if (forcedRanged) {
           throw new SkillBlocked(`${rangedBlockedText(result)};${mode} 不会改用近战;${attackStats(stats)}`);
@@ -543,7 +558,7 @@ export async function skillAttack(
         ) {
           throw new SkillBlocked(`${rangedBlockedText(result)};${attackStats(stats)}`);
         }
-        // 选武器仍会选弓的距离上不改近战,射不出就受阻
+        // 仍会选远程的距离上不改近战,射不出就受阻
         const away = entity.position.distanceTo(bot.entity.position);
         if (!bestWeapon(bot)) {
           throw new SkillBlocked(`${rangedBlockedText(result)};没有可切换的近战武器，未改为空手攻击;${attackStats(stats)}`);
@@ -554,7 +569,7 @@ export async function skillAttack(
               `${attackStats(stats)}${underwaterOxygenNote(bot)}`,
           );
         }
-        // 自动模式下无射线等即时失败，先尝试靠近，别在同一位置立即切回弓。
+        // 自动模式下无射线等即时失败，先尝试靠近，别在同一位置立即切回远程。
         rangedRetryAfter = Date.now() + 5_000;
         weapon = 'melee';
         await equipMelee();
@@ -642,13 +657,14 @@ export async function skillAttack(
       deathObservedAt: typeof stats.deathObservedAt === 'number' ? new Date(stats.deathObservedAt).toISOString() : null,
       ownKillCredit: stats.fatalDamage ? ownKillCredit(bot, stats.fatalDamage) : null,
       ...(stats.fatalDamage ? { fatalDamage: stats.fatalDamage } : {}),
-      attempts: { meleeSwings: stats.swings, arrowsReleased: stats.arrows },
+      attempts: { meleeSwings: stats.swings, arrowsReleased: stats.arrows,
+        ...(stats.tridents ? { tridentsThrown: stats.tridents } : {}) },
       observedHits: { melee: stats.meleeHits, ranged: stats.rangedHits }, goalVerified: false };
     try { ctx.recordObservation?.({ ...evidence }); } catch { /* A failed evidence sink never changes the native verdict. */ }
   }
   if (blasted) {
     // A nearby explosion is observed, but it does not identify who caused it.
-    return `${zhEntity(target)}在原位炸了(放箭 ${stats.arrows} 支,挥击 ${stats.swings} 次)${underwaterOxygenNote(bot)}`;
+    return `${zhEntity(target)}在原位炸了(${attackStats(stats)})${underwaterOxygenNote(bot)}`;
   }
   if (crystal && !entity.isValid) {
     const away = Math.round(entity.position.distanceTo(bot.entity.position));

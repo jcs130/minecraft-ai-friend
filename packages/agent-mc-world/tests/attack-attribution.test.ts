@@ -19,13 +19,45 @@ function fixture(distance = 2) {
     lookAt: vi.fn(async () => {}), attack: vi.fn() });
   Object.assign(r.bot.world, { raycast: () => null });
   r.bot.entities[7] = enemy as never;
-  const ranged = { ready: () => true, shoot: vi.fn(), abort: vi.fn() };
+  const ranged = { ready: vi.fn(() => true), shoot: vi.fn(), abort: vi.fn() };
   let id = 0;
   const exec = new Executor({ getBot: () => r.bot as never, nextId: () => ++id, report: value => reports.push(value), log: r.host.log, ranged });
   const died = () => { exec.noteCombatTargetDead(7); enemy.isValid = false; };
   Object.assign(r.bot.pathfinder, { goto: vi.fn(async () => { r.bot.entity.position.x += 1; died(); }) });
   return { r, exec, enemy, reports, ranged, died, close: () => { exec.shutdown(); r.close(); } };
 }
+
+it('passes a native direct projectile ID before entityHurt and retains legacy bow correlation', () => {
+  const f = methodHarness('1.21.1');
+  try {
+    const targetId = 7, arrowId = 9, tridentId = 12, ownId = f.bot.entity.id;
+    Object.assign(f.bot.entities, { [arrowId]: { name: 'arrow' }, [tridentId]: { name: 'trident' } });
+    const legacyRanged = vi.fn(() => false);
+    const noteMelee = vi.fn();
+    const noteHit = vi.fn((_targetId: number, _at: number, directId?: number) => directId === tridentId ? { kind: 'hit' } : null);
+    Object.assign(f.exec, { claimsCombat: (id: number) => id === targetId, acceptsRangedHit: legacyRanged, noteCombatTargetHurt: noteMelee });
+    Object.assign(f.world, { rangedBot: f.bot, ranged: { noteHit } });
+    f.bot._client.on('damage_event', ({ entityId, sourceCauseId }) =>
+      f.bot.emit('entityHurt', { id: entityId }, { id: sourceCauseId - 1 }));
+    (f.world as unknown as { hookBotEvents(bot: unknown): void }).hookBotEvents(f.bot);
+    const damage = (direct: number, cause = ownId) => f.bot._client.emit('damage_event', {
+      entityId: targetId, sourceCauseId: cause + 1, sourceDirectId: direct + 1,
+    });
+    damage(tridentId);
+    expect(noteHit.mock.calls).toEqual([[targetId, expect.any(Number), tridentId]]);
+    expect(legacyRanged).not.toHaveBeenCalled();
+    expect(noteMelee).not.toHaveBeenCalled();
+    noteHit.mockClear();
+    legacyRanged.mockReturnValue(true);
+    damage(arrowId, 33);
+    expect(noteHit).not.toHaveBeenCalled();
+    damage(arrowId);
+    expect(noteHit.mock.calls).toEqual([[targetId, expect.any(Number), arrowId], [targetId, expect.any(Number)]]);
+    expect(noteMelee).not.toHaveBeenCalled();
+    damage(ownId);
+    expect(noteMelee.mock.calls).toEqual([[targetId]]);
+  } finally { f.close(); }
+});
 
 describe('native target death versus own combat credit', () => {
   it.each([true, false])('retains the server-identified shooter when the death status comes first (own=%s)', async own => {
@@ -116,6 +148,27 @@ describe('native target death versus own combat credit', () => {
       expect(result.text).not.toContain('打死了');
       expect(result.steps?.[0].observation).toMatchObject({ targetState: 'death-observed', ownKillCredit: null,
         attempts: { meleeSwings: 1 }, observedHits: { melee: 1 } });
+    } finally { f.close(); }
+  });
+  it('supplies an exact ranged preference to the controller and records trident throws separately', async () => {
+    const f = fixture();
+    try {
+      const trident = { name: 'trident', type: f.r.bot.registry.itemsByName.trident.id, count: 1 };
+      const items = f.r.bot.inventory.items();
+      Object.assign(f.r.bot.inventory, { items: () => [...items, trident] });
+      f.ranged.shoot.mockImplementation(async () => {
+        const at = Date.now();
+        f.ranged.ready.mockReturnValue(false);
+        setTimeout(f.died, 350);
+        return { kind: 'released', shotId: 1, weapon: 'trident', hitWindow: { from: at, until: at + 1500 } };
+      });
+      f.exec.submit([{ skill: 'attack', target: 'skeleton', entityId: 7, mode: 'ranged', weapon: 'trident' }]);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(f.ranged.shoot).toHaveBeenCalledWith(expect.objectContaining({ id: 7 }), expect.anything(), 'trident');
+      const result = f.reports.find(r => r.kind === 'done');
+      expect(result?.steps?.[0].observation).toMatchObject({ ownKillCredit: null,
+        attempts: { meleeSwings: 0, arrowsReleased: 0, tridentsThrown: 1 } });
+      expect(f.r.bot.attack).not.toHaveBeenCalled();
     } finally { f.close(); }
   });
   it.each(['released', 'blocked'] as const)('preserves actual bow dispatch when death races a %s result', async kind => {

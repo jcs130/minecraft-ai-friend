@@ -9,7 +9,7 @@ export interface AttackEvidence {
   deathObservedAt: string | null;
   ownKillCredit: boolean | null;
   fatalDamage?: MobDeathReceipt;
-  attempts: { meleeSwings: number; arrowsReleased: number };
+  attempts: { meleeSwings: number; arrowsReleased: number; tridentsThrown?: number };
   /** Existing target-hurt associations, separate from attempted dispatch and final kill credit. */
   observedHits: { melee: number; ranged: number };
   goalVerified: false;

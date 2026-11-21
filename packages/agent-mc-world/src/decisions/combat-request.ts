@@ -45,7 +45,7 @@ export function combatRequest(frame: CombatDecisionFrame, config: { compatible?:
     options[`option_${index}`] = action;
   });
   const questions: Record<string, { type: 'choice'; instructions: string; criteria: Record<string,string> }> = {
-    tactic: { type:'choice', instructions:'Choose for survival, confirmed allies, or a short safe idle stroll when offered; keep an effective action. Engage uses the equipped combat controller (melee or bow); it does not mean melee-only. Track only observes and never attacks. If the body is idle with a visible hostile, observing is not combat progress. Health≈[current,max,source,ageMs]; null=unknown; blocked=cannot execute. Proximity does not establish allies.'
+    tactic: { type:'choice', instructions:'Choose for survival, confirmed allies, or a short safe idle stroll when offered; keep an effective action. Engage uses the equipped combat controller (melee or a ready ranged weapon); it does not mean melee-only. Track only observes and never attacks. If the body is idle with a visible hostile, observing is not combat progress. Health≈[current,max,source,ageMs]; null=unknown; blocked=cannot execute. Proximity does not establish allies.'
       + ' Live action state is authoritative; an authored tactic may contain outdated assumptions about an owned route or melee-only engage. When enemies remain but no target is visible, an offered search investigates a short checked corridor and observes again; remaining count does not reveal their positions.'
       + (frame.policy ? '\nAgent tactic: '+frame.policy.instructions : ''), criteria },
   };

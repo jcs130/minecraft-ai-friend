@@ -10,6 +10,8 @@ function rig(names: string[], held: string | null = names[0] ?? null) {
     heldItem: items.find(i => i.name === held) ?? null,
     entity: { position: new Vec3(0, 64, 0) },
     entities: { 2: { id: 2, name: 'zombie', position: new Vec3(1, 64, 0) } },
+    world: { raycast: () => null },
+    supportFeature: (name: string) => name === 'itemsWithComponents',
     equip: vi.fn(), attack: vi.fn(), activateItem: vi.fn() };
   return bot;
 }
@@ -42,6 +44,16 @@ describe('explicit melee admission exposes current equipment', () => {
       [{ skill: 'attack', target: 'zombie', mode: 'melee' }], deps)).toEqual([]);
     expect(precheckSteps(rig(['bow', 'arrow']) as never,
       [{ skill: 'attack', target: 'zombie', mode: 'auto' }], deps)).toEqual([]);
+  });
+  it('uses the selected ranged equipment for automatic and explicit admission', () => {
+    const crossbow = rig(['crossbow', 'arrow']);
+    expect(precheckSteps(crossbow as never, [{ skill: 'attack', target: 'zombie' }], deps)).toEqual([]);
+    expect(precheckSteps(crossbow as never, [{ skill: 'attack', target: 'zombie', mode: 'ranged', weapon: 'crossbow' }], deps)).toEqual([]);
+    const bow = rig(['bow', 'arrow']);
+    expect(precheckSteps(bow as never, [{ skill: 'attack', target: 'zombie', mode: 'ranged', weapon: 'crossbow' }], deps)[0]?.note)
+      .toMatchObject({ level: 'hard', rule: 'attack.noRangedWeapon' });
+    const trident = rig(['trident']);
+    expect(precheckSteps(trident as never, [{ skill: 'attack', target: 'zombie', mode: 'ranged', weapon: 'trident' }], deps)).toEqual([]);
   });
   it('does not hide the missing target fact', () => {
     const bot = rig(['bow', 'arrow']); bot.entities = {} as typeof bot.entities;

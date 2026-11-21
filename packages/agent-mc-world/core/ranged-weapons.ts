@@ -49,36 +49,40 @@ export function readyToThrowTrident(bot: Bot, item: ItemLike, explicit: boolean)
 export function selectRangedWeapon(bot: Bot, preference?: string, distance?: number): RangedWeapon | null {
   const wanted = preference?.replace(/^minecraft:/, '');
   const items = bot.inventory.items();
-  const normalAmmo = items.some(item => item.name === 'arrow' && item.count > 0);
-  const hasCrossbowAmmo = hasCrossbowArrows(bot, items);
   const held = bot.heldItem;
+  let normalAmmo: boolean | undefined, crossbowAmmo: boolean | undefined;
   let selected: RangedWeapon | null = null;
   let priority = -Infinity, durability = 0;
   for (const item of items) {
-    if (wanted && item.name !== wanted) continue;
+    const kind = item.name;
+    if ((wanted && kind !== wanted) || (kind !== 'bow' && kind !== 'crossbow' && kind !== 'trident')) continue;
     const left = readDurability(item)?.left ?? 0;
     if ((item.count ?? 1) <= 0 || left <= 0) continue;
     let score = 0, chargeMs: number;
-    if (item.name === 'bow' && normalAmmo) {
+    if (kind === 'bow') {
+      normalAmmo ??= items.some(stack => stack.name === 'arrow' && stack.count > 0);
+      if (!normalAmmo) continue;
       chargeMs = 1_000;
       score = 3;
-    } else if (item.name === 'crossbow') {
+    } else if (kind === 'crossbow') {
       const loaded = crossbowCharge(bot, item);
       if (loaded === 'arrow') { chargeMs = 0; score = 9; }
-      else if (loaded === 'empty' && hasCrossbowAmmo) {
+      else if (loaded === 'empty') {
+        crossbowAmmo ??= hasCrossbowArrows(bot, items);
+        if (!crossbowAmmo) continue;
         const quick = readEnchants(item, bot.registry).find(e => e.name === 'quick_charge')?.level ?? 0;
         const level = Number.isInteger(quick) ? Math.max(0, Math.min(3, quick)) : 0;
         // Include one server tick before releasing, then wait for the slot update.
         chargeMs = (26 - 5 * level) * 50;
         score = (distance !== undefined && distance >= 18) || level >= 2 ? 5 : 2;
       } else continue;
-    } else if (item.name === 'trident' && readyToThrowTrident(bot, item, wanted === 'trident')) {
+    } else if (readyToThrowTrident(bot, item, wanted === 'trident')) {
       chargeMs = 600;
       score = distance !== undefined && distance <= 14 ? 5 : 1;
     } else continue;
     if (held?.type === item.type && held?.slot === item.slot) score += 1;
     if (score > priority || (score === priority && left > durability)) {
-      selected = { item, kind: item.name as RangedWeaponKind, chargeMs };
+      selected = { item, kind, chargeMs };
       priority = score;
       durability = left;
     }
