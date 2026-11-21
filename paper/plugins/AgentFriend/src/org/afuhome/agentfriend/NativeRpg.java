@@ -85,6 +85,18 @@ final class NativeRpg {
         try {return backend().getClass().getMethod(method,types).invoke(backend(),args);}
         catch(Exception error){throw new IllegalStateException("RPG资料暂不可用；稍后查询 /mycli status，不要重复执行。");}
     }
+    JsonObject originalRoleProgress(UUID id) {
+        try {
+            return JsonParser.parseString((String)call("originalRoleProgress", new Class<?>[]{UUID.class}, id)).getAsJsonObject();
+        } catch (RuntimeException unavailable) {
+            var out = new JsonObject();
+            out.addProperty("available", false);
+            out.addProperty("backend", "vortex");
+            out.addProperty("reason", "profile_provider_unavailable");
+            return out;
+        }
+    }
+
     JsonObject state(Player p) {
         try{return JsonParser.parseString((String)call("selfState",new Class<?>[]{Player.class},p)).getAsJsonObject();}
         catch(RuntimeException unavailable){var out=new JsonObject();out.addProperty("available",false);out.addProperty("backend","vortex");return out;}

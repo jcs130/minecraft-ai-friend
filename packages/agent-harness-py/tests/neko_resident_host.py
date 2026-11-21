@@ -82,12 +82,14 @@ async def run_test(root, neko):
     async def onboarding(operation: str, payload: dict, request: Request):
         if operation == "browser-start":
             assert not request.headers.get("Authorization")
+            assert payload == {"bodyRead": True}
             return {"id": browser_id, "secret": browser_secret, "code": digits, "expiresAt": time.time() * 1000 + 60000}
         if operation == "browser-status":
             assert request.headers["Authorization"] == "Bearer " + browser_secret
             if not browser_approved:
                 return {"state": "pending"}
-            return {"state": "authorized", "onboardingToken": onboard, "expiresAt": time.time() * 1000 + 60000}
+            until = time.time() * 1000 + 60000
+            return {"state": "authorized", "onboardingToken": onboard, "expiresAt": until, "bodyReadExpiresAt": until}
         if operation == "pair":
             if payload.get("code") != new_code:
                 raise HTTPException(403)
@@ -102,6 +104,18 @@ async def run_test(root, neko):
         target = next(row for row in (resident, maid) if row["id"] == payload["id"])
         assert operation == "connect" and payload["characterId"] == target["characterId"] and target["state"] == "available"
         return {"endpoint": origin + endpoint.replace(resident["id"], target["id"]), "token": secret, "resident": target}
+
+    @api.get("/api/v1/character-bodies")
+    async def bodies(request: Request):
+        assert request.headers["Authorization"] == "Bearer " + onboard
+        return {"available": True, "characters": [{"characterId": resident["characterId"], "name": "桐人",
+                "activeKind": "numen", "status": "ready", "pendingRequestId": "prior-42"}]}
+
+    @api.get("/api/v1/character-bodies/{character}/switch/prior-42")
+    async def body_receipt(character: str, request: Request):
+        assert request.headers["Authorization"] == "Bearer " + onboard and character == resident["characterId"]
+        return {"characterId": character, "requestId": "prior-42", "status": "completed",
+                "activeKind": "numen", "targetKind": "numen"}
 
     @api.post("/api/v1/resident-turns/pair")
     async def pair(payload: dict, request: Request):
@@ -171,7 +185,7 @@ async def run_test(root, neko):
         assert panel_token and not panel["state"]["connected"] and panel["state"]["role"] == "桐人桌面"
         assert {"open_resident_website", "pair_resident"}.issubset({a["id"] for a in panel["actions"]})
         await host.trigger("resident_browser_login", {"op": "start", "uiToken": panel_token})
-        assert browser_trace.read_text(encoding="utf-8") == origin + "/resident-connect.html?flow=browser#" + browser_id
+        assert browser_trace.read_text(encoding="utf-8") == origin + "/resident-connect.html?flow=browser&bodyRead=1#" + browser_id
         waiting = (await host.get_ui_context("resident_connection"))["state"]
         assert waiting["browserCode"] == digits and browser_secret not in str(waiting)
         await host.trigger("resident_browser_login", {"op": "status", "uiToken": panel_token})
@@ -180,6 +194,13 @@ async def run_test(root, neko):
         await host.trigger("resident_browser_login", {"op": "status", "uiToken": panel_token})
         panel = (await host.get_ui_context("resident_connection"))["state"]
         assert panel["authorized"] and not panel["connected"] and onboard not in str(panel) and not panel["browserCode"]
+        assert panel["bodyReadable"]
+        await host.trigger("read_character_body", {"op": "list", "uiToken": panel_token})
+        await host.trigger("read_character_body", {"op": "receipt", "characterId": resident["characterId"],
+                                                  "requestId": "prior-42", "uiToken": panel_token})
+        viewed = (await host.get_ui_context("resident_connection"))["state"]
+        assert viewed["bodyView"]["characters"][0]["characterId"] == resident["characterId"]
+        assert viewed["bodyReceipt"]["requestId"] == "prior-42" and onboard not in str(viewed)
         assert panel["catalog"]["availableBodies"] == ["maid"] and panel["localRoles"] == ["桐人桌面", "空"]
         await host.trigger("manage_residents", {"op": "connect", "id": resident["id"], "characterId": resident["characterId"], "uiToken": panel_token})
         async with asyncio.timeout(12):

@@ -1,5 +1,6 @@
 import { operatorPlaySteps } from './operator-play.ts';
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { inspectToolCall } from '../contracts/call-capability.ts';
 import { resolveWorkReferences, type WorkReference } from '../contracts/work-state.ts';
 import { inspectReportReview, selectExecutionWait, type ReportRecord, type ReviewProposal,
@@ -25,6 +26,7 @@ import { createHash } from 'node:crypto';
 import { PROTOCOL, type CallOptions, type ContextBudget, type ExecutionReceipt, type TurnReceipt } from '../contracts/protocol.ts';
 import { CurrentFacts, prepareContext } from './context.ts';
 import { RequestLedger } from './request-ledger.ts';
+import { MineflayerHandoffSession, type MineflayerHandoffPort } from './body-handoff.ts';
 import { GameMemoryBook } from '../../core/game-memory.ts';
 import { GameMemoryService } from '../../core/game-memory-service.ts';
 import { TrajectoryScoreError } from '../../core/jitrl-trajectory.ts';
@@ -64,6 +66,8 @@ export interface MinecraftClientOptions {
    * are hidden from tools()/MCP/context and refused by call() unless CallOptions.bodyKey is this exact `key` object.
    * Absent by default (everything exposed). */
   bodyGate?: MinecraftBodyGate;
+  /** Optional private, generation-bound port for switching this Mineflayer character's controller. */
+  bodyHandoff?: MineflayerHandoffPort;
   log: Logger;
 }
 
@@ -72,6 +76,7 @@ export interface MinecraftBodyGate { key: object; expose: (toolName: string) => 
 export type MinecraftEventObserver = (event: EventEnvelope, facts: () => WorldRequestFacts | null) => void;
 
 export type ClientEnvironment = World & {
+  sendHandoffWitness?(playerUuid:string,channel:string,nonce:string):Promise<void>;
   requestFacts?(): unknown;
   refreshFacts?(signal: AbortSignal): Promise<void>;
   connectionReadiness?(): { ready: boolean; phase: string; disconnectStopsBody?: boolean } | null;
@@ -97,6 +102,7 @@ export class MinecraftAgentClient {
   private closingTurn = false;
   private readonly endedTurns = new Map<string, TurnReceipt>();
   private readonly requests: RequestLedger;
+  private handoff?: MineflayerHandoffSession;
   private readonly calls = new Map<string, { signature: string; controller: AbortController; promise: Promise<ToolOutcome>; pending: boolean }>();
   private readonly executions = new Map<string, ExecutionReceipt>();
   private readonly executionGenerations = new Map<string, number>();
@@ -116,6 +122,10 @@ export class MinecraftAgentClient {
       : new MinecraftClientWorld({ cfg: options.cfg, dataDir: options.dataDir,
         timezone: options.timezone ?? 'UTC', botName: options.agentName ?? options.cfg.username }),
     readonly binding: { profile: string; toolPrefix: 'mc' | 'mymc' } = { profile: 'minecraft', toolPrefix: 'mc' }) {
+    if (options.bodyHandoff) {
+      if (options.cfg.provider === 'java-client') throw Error('Body handoff requires a Mineflayer client');
+      this.handoff = new MineflayerHandoffSession(options.bodyHandoff);
+    }
     this.journal = new AgentJournal(options.dataDir, 1024, world.id);
     this.commandRepetition = new CommandRepetitionGuard(options.commandRepetitionLimit);
     this.motionReview = new MotionReviewGate(options.motionRepetitionLimit);
@@ -179,6 +189,8 @@ export class MinecraftAgentClient {
 
   get profile() { return this.binding.profile; }
   private recordExecution(receipt: ExecutionReceipt, generation = this.epoch): void {
+    if (this.handoff && receipt.kind !== 'observation' && receipt.terminal)
+      this.requests.recordBodyTerminal(this.executionScope(generation),receipt);
     this.learning.execution(receipt);
     const key = `${receipt.kind}:${receipt.id}`, previous = this.executions.get(key);
     // A very fast background operation can finish before its admission RPC returns.
@@ -187,6 +199,89 @@ export class MinecraftAgentClient {
     this.executionGenerations.set(key,generation);
   }
   get toolPrefix() { return this.binding.toolPrefix; }
+  private get bodyScope() { return JSON.stringify([this.handoff!.characterId,this.handoff!.generation]); }
+  private executionScope(epoch: number) { return JSON.stringify([this.bodyScope,this.journal.run,epoch]); }
+  private managedPlayerFacts() {
+    const facts=this.world.requestFacts?.() as WorldRequestFacts | null;
+    const identity=facts?.decisionStability?.identity;
+    const state=facts?.decision?.state;
+    const age=Date.now()-(facts?.decision?.sampledAtMs??NaN);
+    if (!this.handoff || !Array.isArray(identity) || identity[1]!==this.handoff.playerUuid ||
+        !state || (state.connection as {ready?:boolean}|undefined)?.ready!==true ||
+        !Number.isFinite(age) || Math.abs(age)>10_000) return null;
+    return state;
+  }
+  private async waitForManagedPlayer(signal:AbortSignal) {
+    for (let i=0;i<100;i++) {
+      if (this.managedPlayerFacts()) return;
+      const identity=(this.world.requestFacts?.() as WorldRequestFacts|null)?.decisionStability?.identity;
+      if (Array.isArray(identity) && typeof identity[1]==='string' && /^[\da-f-]{36}$/i.test(identity[1]) &&
+          identity[1]!==this.handoff!.playerUuid) break;
+      await delay(200,undefined,{signal});
+    }
+    throw Error('Could not verify original player UUID after connecting');
+  }
+  private assertManagedAction() {
+    if (!this.handoff) return;
+    this.handoff.assertOpen();
+    if (!this.managedPlayerFacts()) throw Error('Current Mineflayer player UUID and connection must be confirmed before acting');
+  }
+  async readyForHandoff(requestId:string, targetGeneration:number):Promise<boolean> {
+    if (!this.handoff || this.phase!=='disconnected' || this.startupPending) return false;
+    this.validateConfig();
+    return this.handoff.preflight(requestId,targetGeneration);
+  }
+
+  /** A trusted host may prepare a new generation while the original body is disconnected. */
+  async prepareTargetBodyHandoff(port: MineflayerHandoffPort, requestId: string): Promise<boolean> {
+    const previous = this.handoff;
+    if (!previous || port.characterId !== previous.characterId || port.playerUuid !== previous.playerUuid ||
+        port.generation < previous.generation || this.phase !== 'disconnected' || this.startupPending) return false;
+    if (port.generation === previous.generation) return this.readyForHandoff(requestId, port.generation);
+    this.validateConfig();
+    const target = new MineflayerHandoffSession(port);
+    if (!await target.preflight(requestId, port.generation) || this.handoff !== previous ||
+        this.phase !== 'disconnected' || this.startupPending) return false;
+    this.handoff = target;
+    return true;
+  }
+  async refreshBodyHandoff(requestId:string) {
+    if (!this.handoff) throw Error('This client has no managed player body');
+    return this.handoff.refresh(requestId);
+  }
+  /** Host-only nonce. This goes through the original Minecraft connection, outside chat, tools and journals. */
+  async witnessBodyHandoff(input: { requestId:string; generation:number; nonce:string }):Promise<void> {
+    if (!this.handoff || this.phase!=='started' || !this.world.sendHandoffWitness ||
+        !/^[A-Za-z0-9_-]{32,64}$/.test(input.nonce)) throw Error('Private Mineflayer witness unavailable');
+    const channel=await this.handoff.witnessChannelFor(input.requestId,input.generation);
+    if (!this.managedPlayerFacts()) throw Error('Could not verify the original Mineflayer connection');
+    await this.world.sendHandoffWitness(this.handoff.playerUuid,channel,input.nonce);
+  }
+
+  /** Host source hook. The server must still independently verify this UUID is offline and saved. */
+  async releaseForBodyHandoff(context: { requestId: string; generation: number }) {
+    if (!this.handoff || this.handoff.generation !== context.generation) throw Error('Unexpected Mineflayer controller generation');
+    this.handoff.freeze(context.requestId);
+    if (this.phase !== 'started') throw Error('Cannot confirm currently connected source body');
+    const facts=this.managedPlayerFacts();
+    if (!facts) throw Error('Cannot confirm original Mineflayer UUID and current connection');
+    const action=facts.action as {fighting?:boolean;task?:unknown;queued?:number} | undefined;
+    const state=this.executionState();
+    const uncertain=this.requests.unresolvedBodyAction(this.bodyScope);
+    if (!action || action.fighting!==false || action.task!==null || action.queued!==0 ||
+        uncertain || state.activeCount || state.detachedCount || state.pendingTactics)
+      return { state:'blocked' as const, reason:'source_not_drained', ...(uncertain?{requestId:uncertain}:{}) };
+    await this.disconnect();
+    this.handoff.markDetached();
+    return { state:'disconnected' as const };
+  }
+
+  /** Used only for the target phase. Gameplay stays fenced until a read confirms this exact transfer completed. */
+  async connectForBodyHandoff(requestId: string) {
+    if (!this.handoff || this.phase !== 'disconnected') throw Error('A fresh Mineflayer target session is required');
+    await this.connectInternal(requestId);
+    return {state:'connected' as const,playerUuid:this.handoff.playerUuid};
+  }
   /** Inspect argument-specific capabilities without dispatching or acquiring the body. */
   inspectCall(name: string, args: unknown) {
     return inspectToolCall(this.tools().find(tool => tool.name === name), name, args);
@@ -224,11 +319,15 @@ export class MinecraftAgentClient {
 
   tools() {
     const all = this.allTools(), gate = this.options.bodyGate;
-    return gate ? all.filter(tool => gate.expose(tool.name)) : all;
+    const exposed=gate ? all.filter(tool => gate.expose(tool.name)) : all;
+    if (!this.handoff) return exposed;
+    return exposed.map(tool=>({...tool,handler:(args:Record<string,unknown>,ctx:import('./contracts.ts').ToolCallContext)=>
+      this.call(tool.name,args,{requestId:ctx.callId,signal:ctx.signal,turnId:ctx.turnId,attribution:ctx.attribution})}));
   }
 
   private allTools() {
-    const core = this.coreTools(), extra = this.options.extraTools;
+    const base = this.coreTools(), extra = this.options.extraTools;
+    const core = this.handoff ? [this.handoff.tool(`${this.toolPrefix}_character_body`),...base.filter(tool=>tool.name!==`${this.toolPrefix}_character_body`)] : base;
     if (!extra?.length) return core;
     const names = new Set(core.map(tool => tool.name));
     return [...core, ...extra.filter(tool => !names.has(tool.name))];
@@ -265,6 +364,10 @@ export class MinecraftAgentClient {
   }
 
   async connect(): Promise<void> {
+    return this.connectInternal();
+  }
+  private async connectInternal(acquireRequest?: string): Promise<void> {
+    if (!acquireRequest) this.handoff?.assertOpen();
     if (this.phase === 'started') return;
     if (this.phase === 'starting') return this.transition;
     if (this.phase === 'stopping') throw new Error('Game runtime is stopping.');
@@ -279,6 +382,10 @@ export class MinecraftAgentClient {
     this.phase = 'starting';
     this.transition = (async () => {
       try {
+        if (this.handoff) {
+          await cancellable(this.handoff.verifyConnect(acquireRequest), this.lifetime.signal);
+          if (this.epoch !== epoch) throw Error('Startup cancelled');
+        }
         this.startupPending = true;
         const startup = this.world.start({ ...this.host,
           pushEvent: (event, opts) => this.epoch === epoch ? this.host.pushEvent(event, opts)
@@ -287,6 +394,7 @@ export class MinecraftAgentClient {
         });
         void startup.then(async () => { if (this.epoch !== epoch) await this.world.stop(); }, () => {}).finally(() => { this.startupPending = false; }).catch(() => {});
         await cancellable(startup, this.lifetime.signal);
+        if (this.handoff) await this.waitForManagedPlayer(this.lifetime.signal);
         if (this.epoch !== epoch || this.phase !== 'starting') { await this.world.stop(); throw new Error('Startup cancelled'); }
         this.phase = 'started';
       }
@@ -343,6 +451,7 @@ export class MinecraftAgentClient {
   async operatorAction(action: string, input?: unknown): Promise<void> {
     if (action === 'connect') return this.connect();
     if (action === 'disconnect') return this.disconnect();
+    if (this.handoff) this.assertManagedAction();
     if (this.phase !== 'started') throw new Error('Connect the client environment first.');
     if (action === 'play.window') {
       // Read-only: the open server window/menu slots with names and lore; clicks nothing.
@@ -529,24 +638,29 @@ export class MinecraftAgentClient {
     const offlineKnowledge = this.phase === 'disconnected' && name === `${this.toolPrefix}_knowledge`;
     const offlinePractice = this.phase === 'disconnected' && name === `${this.toolPrefix}_practice` && ['help','status'].includes(String(args.op));
     const offlineCall = offlineMemory || offlineKnowledge || offlinePractice;
-    if (this.phase !== 'started' && !offlineCall) throw new Error(`Game runtime is disconnected; call ${this.toolPrefix}_connection action:connect first.`);
+    const characterTool = this.handoff !== undefined && name === `${this.toolPrefix}_character_body`;
+    if (this.phase !== 'started' && !offlineCall && !characterTool) throw new Error(`Game runtime is disconnected; call ${this.toolPrefix}_connection action:connect first.`);
     if (typeof callId !== 'string' || !callId || callId.length > 256) throw new Error('Invalid request id');
-    const signature = createHash('sha256').update(JSON.stringify([name, args, turnId ?? this.turn?.id, ...(attribution ? [attribution] : [])])).digest('hex');
+    const signature = createHash('sha256').update(JSON.stringify([name, args, characterTool ? null : turnId ?? this.turn?.id, ...(attribution ? [attribution] : [])])).digest('hex');
     const prior = this.calls.get(callId);
     if (prior) { if (prior.signature !== signature) throw new Error('Request id reused with different arguments'); return prior.promise; }
     const replay = this.requests.read(callId, signature);
     if (replay) return replay;
+    if (characterTool && args.action==='switch') this.assertManagedAction();
     const stopping = name === `${this.toolPrefix}_stop`;
     const tactics = [...this.tacticCalls.values()].filter(c => c.pending);
-    if (tactics.length && !stopping) throw new Error('Wait for or cancel the pending host tactic before a planner tool');
-    if (stopping) for (const tactic of tactics) tactic.controller.abort(new Error('Planner stopped the body'));
+    if (tactics.length && !stopping && !characterTool) throw new Error('Wait for or cancel the pending host tactic before a planner tool');
     if (this.closingTurn && !stopping) throw new Error('Decision turn is ending');
     if (turnId && this.turn?.id !== turnId) throw new Error('Unknown decision turn');
-    if (this.barrier && !stopping) throw new Error(`Acknowledge tool barrier ${this.barrier} before the next call`);
-    if (this.turn && this.endRequested && !stopping) throw new Error('Host must end the current decision turn before submitting more calls');
+    if (this.barrier && !stopping && !(characterTool && args.action !== 'switch')) throw new Error(`Acknowledge tool barrier ${this.barrier} before the next call`);
+    if (this.turn && this.endRequested && !stopping && !(characterTool && args.action !== 'switch')) throw new Error('Host must end the current decision turn before submitting more calls');
     const tool = this.allTools().find(candidate => candidate.name === name)
       ?? (offlineKnowledge ? { ...KNOWLEDGE_TOOL, name, handler: async () => '' } : undefined);
     if (!tool) throw new Error(`Unknown game tool: ${name}`);
+    const managedAction = this.handoff && !characterTool && !offlineCall && inspectToolCall(tool,name,args).requiresBody !== false;
+    if (managedAction) this.assertManagedAction();
+    if (stopping) for (const tactic of tactics) tactic.controller.abort(new Error('Planner stopped the body'));
+    const bodyRecord = managedAction ? {bodyScope:this.bodyScope,executionScope:this.executionScope(this.epoch)} : {};
     if (signal?.aborted) throw new Error('Tool call cancelled before submission.');
     if (tool.barrierAfter && [...this.calls.values()].some(call => call.pending)) throw new Error('Drain pending calls before a barrier tool');
     if (tool.barrierAfter) this.barrier = callId;
@@ -555,14 +669,15 @@ export class MinecraftAgentClient {
       if (!this.offlineMemoryCalls && this.lifetime.signal.aborted) this.lifetime = new AbortController();
       this.offlineMemoryCalls++;
     }
-    try { this.requests.write({ requestId: callId, signature, phase: 'pending' }); }
+    try { this.requests.write({ requestId: callId, signature, phase: 'pending', ...bodyRecord }); }
     catch (error) {
       if (offlineCall && --this.offlineMemoryCalls === 0) this.lease.release();
       if (this.barrier === callId) this.barrier = null;
       throw error;
     }
     const controller = new AbortController();
-    const combined = AbortSignal.any([this.lifetime.signal, controller.signal, ...(signal ? [signal] : [])]);
+    const combined = characterTool && args.action==='switch' ? new AbortController().signal :
+      AbortSignal.any([...(characterTool?[]:[this.lifetime.signal]), controller.signal, ...(signal ? [signal] : [])]);
     const turn = this.turn, executionGeneration=this.epoch;
     const state = { signature, controller, pending: true, promise: null as unknown as Promise<ToolOutcome> };
     this.calls.set(callId, state);
@@ -624,14 +739,14 @@ export class MinecraftAgentClient {
       if (outcome.execution) this.recordExecution(outcome.execution,executionGeneration);
       if (queued.length) outcome.events = [...(outcome.events ?? []), ...queued];
       if (queued.length) outcome.text += '\n[Game events returned with this call]\n' + JSON.stringify(queued);
-      this.requests.write({ requestId: callId, signature, phase: 'returned', outcome });
+      this.requests.write({ requestId: callId, signature, phase: 'returned', outcome, ...bodyRecord });
       this.metrics.toolEnded(callId, outcome.failed === true);
       appendFileSync(join(this.options.dataDir, 'tools.jsonl'), JSON.stringify({ at: new Date().toISOString(),
         run: this.journal.run, callId, name, failed: outcome.failed === true, text: outcome.text }) + '\n');
       return outcome;
     } catch (error) {
       this.learning.finish(experience,null);
-      this.requests.write({ requestId: callId, signature, phase: 'failed', error: String(error), ...(combined.aborted ? {cancelled:true} : {}) });
+      this.requests.write({ requestId: callId, signature, phase: 'failed', error: String(error), ...bodyRecord, ...(combined.aborted ? {cancelled:true} : {}) });
       this.metrics.toolEnded(callId, true);
       appendFileSync(join(this.options.dataDir, 'tools.jsonl'), JSON.stringify({ at: new Date().toISOString(),
         run: this.journal.run, callId, name, failed: true, error: String(error) }) + '\n');
@@ -659,7 +774,7 @@ export class MinecraftAgentClient {
     const sample = Object.keys(args).length === 1 && 'battlefield' in args && args.battlefield === true;
     const choice = Object.keys(args).length === 1 && 'choice' in args && args.choice && typeof args.choice === 'object';
     if (!sample && !choice) throw new Error('Host tactics accepts only a battlefield sample or an exact choice');
-    const name = `${this.toolPrefix}_combat_tactic`, tool = this.tools().find(t => t.name === name);
+    const name = `${this.toolPrefix}_combat_tactic`, tool = this.allTools().find(t => t.name === name && (!this.options.bodyGate || this.options.bodyGate.expose(t.name)));
     if (!tool) throw new Error('Host tactics unavailable');
     const controller = new AbortController();
     const signal = AbortSignal.any([this.lifetime.signal, controller.signal, ...(options.signal ? [options.signal] : [])]);
@@ -671,6 +786,8 @@ export class MinecraftAgentClient {
       return typeof result === 'string' ? { text: result } : result;
     };
     if (sample) return invoke();
+    this.assertManagedAction();
+    const bodyRecord=this.handoff ? {bodyScope:this.bodyScope,executionScope:this.executionScope(this.epoch)} : {};
     const signature = createHash('sha256').update(JSON.stringify(['host-tactics', args,...(options.attribution?[options.attribution]:[])])).digest('hex');
     const prior = this.tacticCalls.get(callId);
     if (prior) { if (prior.signature !== signature) throw new Error('Request id reused with different arguments'); return prior.promise; }
@@ -681,7 +798,7 @@ export class MinecraftAgentClient {
         meta: { protocol: 'agent-mc-tactics/v1', receipt: { accepted: false, meaning: 'planner-tool-active', goalCompleted: false } } };
       this.learning.finish(experience,outcome);this.requests.write({requestId:callId,signature,phase:'returned',outcome});return outcome;
     }
-    this.requests.write({ requestId: callId, signature, phase: 'pending' });
+    this.requests.write({ requestId: callId, signature, phase: 'pending', ...bodyRecord });
     const state = { signature, controller, pending: true, promise: null as unknown as Promise<ToolOutcome> };
     this.tacticCalls.set(callId, state);
     const promise = Promise.resolve().then(() => { signal.throwIfAborted(); return invoke(); }).then(outcome => {
@@ -689,9 +806,9 @@ export class MinecraftAgentClient {
         outcome.meta={...outcome.meta,experience:recorded};
         if(recorded.counterexamples?.length)outcome.text+='\n[Comparable operation evidence]\n'+JSON.stringify(recorded);
       }
-      this.requests.write({ requestId: callId, signature, phase: 'returned', outcome });
+      this.requests.write({ requestId: callId, signature, phase: 'returned', outcome, ...bodyRecord });
       return outcome;
-    }, error => { this.learning.finish(experience,null);this.requests.write({ requestId: callId, signature, phase: 'failed', error: String(error) }); throw error; })
+    }, error => { this.learning.finish(experience,null);this.requests.write({ requestId: callId, signature, phase: 'failed', error: String(error), ...bodyRecord }); throw error; })
       .finally(() => { state.pending = false; });
     state.promise = promise;
     if (this.tacticCalls.size > 256) this.tacticCalls.delete(this.tacticCalls.keys().next().value!);

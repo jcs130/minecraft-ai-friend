@@ -71,8 +71,9 @@ final class NpcConversations implements Listener {
         var profile=profiles.get(id);if(profile==null)return null;
         Entity entity=Bukkit.getEntity(id);if(!(entity instanceof LivingEntity living)||living.isDead()||!living.isValid())return null;
         if(profile.kind().equals("villager"))return entity instanceof Villager villager
-                && villager.hasAI() && !villager.isInvisible()
-                && profile.residentId().equals(villager.getPersistentDataContainer().get(VILLAGER_ID,PersistentDataType.STRING))?villager:null;
+                && !villager.isInvisible()
+                && profile.residentId().equals(villager.getPersistentDataContainer().get(VILLAGER_ID,PersistentDataType.STRING))
+                && liveVillager(profile,villager)?villager:null;
         try{
             Object handle=entity.getClass().getMethod("getHandle").invoke(entity);
             String type=handle.getClass().getName();
@@ -85,6 +86,15 @@ final class NpcConversations implements Listener {
             }
             return entity;
         }catch(ReflectiveOperationException unavailable){return null;}
+    }
+    private boolean liveVillager(NpcDialoguePolicy.Profile profile,Villager villager){
+        if(profile.serviceCounter()==null)return villager.hasAI();
+        var provider=Bukkit.getPluginManager().getPlugin("AgentFriend");
+        if(provider==null||!provider.isEnabled())return false;
+        try{
+            return Boolean.TRUE.equals(provider.getClass().getMethod("isManagedVoiceServiceBody",String.class,UUID.class)
+                    .invoke(provider,profile.serviceCounter(),villager.getUniqueId()));
+        }catch(ReflectiveOperationException unavailable){return false;}
     }
     JsonArray catalogue(){
         var rows=new JsonArray();for(var p:profiles.values()){

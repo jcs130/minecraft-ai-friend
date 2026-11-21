@@ -1,6 +1,6 @@
 import {readFile} from 'node:fs/promises';
-import {fileURLToPath} from 'node:url';
-import {resolve} from 'node:path';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+import {isAbsolute,resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {hostedBootstrapClient} from './src/bootstrap-client.mjs';
 import {scopedMcpSessions} from './src/mcp-session.mjs';
@@ -8,6 +8,7 @@ import {nativeByokAdapter} from './src/native-model.mjs';
 import {hubByokAdapter} from './src/hub-model.mjs';
 import {harnessRuntime} from './src/harness-runtime.mjs';
 import {localConversationVoice} from './src/voice.mjs';
+import {configuredBodyHandoff} from './src/configured-body-handoff.mjs';
 export async function createConfig(){
   const release=fileURLToPath(new URL('../../',import.meta.url));
   const privatePath=process.env.QDJ_HOSTING_CONFIG;
@@ -37,7 +38,17 @@ export async function createConfig(){
       ...(settings.fast.api_key_env?{apiKeyEnv:settings.fast.api_key_env,token:fastEnvironment.QDJ_HOSTED_SYSTEM_ONE_TOKEN}:{})};
   }
   let hub;
+  let bodyHandoff;
+  if(c.characterBodies&&c.bodyHandoffAdapter)throw Error('Choose one private body handoff configuration');
+  if(c.characterBodies)bodyHandoff=await configuredBodyHandoff(c.characterBodies,{bootstrap,bootstrapKey:controlKey});
+  if(c.bodyHandoffAdapter){
+    if(!isAbsolute(c.bodyHandoffAdapter))throw Error('Body handoff adapter must be a private absolute path');
+    const {createBodyHandoff}=await import(pathToFileURL(c.bodyHandoffAdapter).href);
+    if(typeof createBodyHandoff!=='function')throw Error('Body handoff adapter must export createBodyHandoff');
+    bodyHandoff=await createBodyHandoff({bootstrap,coreDirectory});
+  }
   return{database:resolve(dataRoot,'hosting.sqlite'),dataRoot:resolve(dataRoot,'core'),coreDirectory,port:19084,sessionFor,admitRole:bootstrap.admit,combatAttention,
+    bodyHandoff,
     grantKey:Buffer.from(c.grantKey,'base64'),serviceKey:Buffer.from(c.serviceKey,'base64'),
     modelProfiles:{key:Buffer.from(c.vaultKey,'base64'),catalogue,adapters:(body,store)=>({native:nativeByokAdapter({body,store,catalogue,controlKey}),opencode:hub=hubByokAdapter({endpoint:'http://127.0.0.1:29152/',internalKey:c.hubInternalKey,catalogue,store,settings})})},
     runtimes:checkControl=>({opencode:harnessRuntime({python:c.python,autonomySource:resolve(release,'autonomy-src'),plannerModule,plannerSha256,dataRoot:resolve(dataRoot,'autonomy'),checkControl,configurationFor:role=>{

@@ -76,6 +76,8 @@ class ConnectionPanel:
     catalog = None
     waiting = None
     draft = None
+    body_view = None
+    body_receipt = None
 
     @staticmethod
     def local_origin():
@@ -91,6 +93,53 @@ class ConnectionPanel:
 
     def _clear_authorization(self):
         self.authorization = self.catalog = self.waiting = self.draft = None
+        self.body_view = self.body_receipt = None
+
+    def _body_readable(self):
+        until = self.authorization.get("bodyReadExpiresAt") if self._authorized() else None
+        if type(until) in (int, float) and until > time.time() * 1000:
+            return True
+        self.body_view = self.body_receipt = None
+        return False
+
+    @ui.action(id="read_character_body", label="查看身体状态和原回执")
+    @plugin_entry(id="read_character_body", name="查看身体状态和原回执", input_schema={
+        "type": "object", "properties": {"op": {"type": "string", "enum": ["list", "receipt"]},
+            "characterId": {"type": "string"}, "requestId": {"type": "string"}, "uiToken": SECRET},
+        "required": ["op", "uiToken"], "additionalProperties": False})
+    async def read_character_body(self, op, uiToken, characterId="", requestId="", **_):
+        if not self._from_panel(uiToken) or op not in ("list", "receipt"):
+            return Err("请从居民面板查看角色身体。")
+        async with self.pair_lock:
+            if not self._body_readable():
+                return Err("本次授权未开放身体查询。可以打开官网查看。")
+            url = self.portal + "/api/v1/character-bodies"
+            if op == "receipt":
+                known = {r["characterId"] for r in (self.body_view or {}).get("characters", [])}
+                if (not isinstance(characterId, str) or characterId not in known or not isinstance(requestId, str)
+                        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", requestId)):
+                    return Err("请选择列表中的角色并填写原请求编号。")
+                url += f"/{characterId}/switch/{requestId}"
+            self.body_receipt = None
+            try:
+                data = await asyncio.to_thread(request_json, url, None, self.authorization["onboardingToken"])
+                if not self._body_readable():
+                    return Err("本次授权已结束，请重新打开官网。")
+                if op == "list":
+                    rows = [{k: row[k] for k in ("characterId", "name", "activeKind", "status", "pendingRequestId")}
+                            for row in data["characters"]]
+                    if any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", row["characterId"]) for row in rows):
+                        raise ValueError("invalid_character")
+                    self.body_view = {"available": data["available"] is True, "characters": rows}
+                else:
+                    if data["characterId"] != characterId or data["requestId"] != requestId:
+                        raise ValueError("receipt_mismatch")
+                    self.body_receipt = {k: data[k] for k in ("characterId", "requestId", "status", "activeKind", "targetKind")}
+                return Ok({"updated": True})
+            except (OSError, ValueError, TypeError, KeyError):
+                if op == "list":
+                    self.body_view = None
+                return Err("未能核对身体状态或原回执。可以打开官网查看。")
 
     def _authorized(self):
         if self.authorization and self.authorization["expiresAt"] > time.time() * 1000:
@@ -107,18 +156,20 @@ class ConnectionPanel:
         names, current = await asyncio.to_thread(self.local_characters)
         return {"role": self.role or getattr(self._host_ctx, "current_lanlan", "") or current,
                 "localRoles": names, "authorized": self._authorized(), "catalog": self.catalog or {},
+                "bodyReadable": self._body_readable(), "bodyView": self.body_view, "bodyReceipt": self.body_receipt,
                 "waiting": self.waiting[0]["name"] if self.waiting else None,
                 "resident": resident.get("name", ""), "connected": self.session is not None,
                 "browserCode": self.browser_login["code"] if self.browser_login else None, "uiToken": self.panel_token}
 
     @ui.action(id="open_resident_website", label="打开角色管理或授权页")
     @plugin_entry(id="open_resident_website", name="打开角色管理或授权页", input_schema={
-        "type": "object", "properties": {"page": {"type": "string", "enum": ["authorize", "characters"]}, "uiToken": SECRET},
+        "type": "object", "properties": {"page": {"type": "string", "enum": ["authorize", "characters", "bodies"]}, "uiToken": SECRET},
         "required": ["page", "uiToken"], "additionalProperties": False})
     async def open_resident_website(self, page, uiToken, **_):
-        if not self._from_panel(uiToken) or page not in ("authorize", "characters"):
+        if not self._from_panel(uiToken) or page not in ("authorize", "characters", "bodies"):
             return Err("请从千灯纪居民面板打开。")
-        url = self.portal + "/resident-connect.html?flow=authorize" if page == "authorize" else self.local_origin() + "/character_card_manager"
+        url = (self.local_origin() + "/character_card_manager" if page == "characters"
+               else self.portal + "/resident-connect.html?flow=" + page)
         if not await asyncio.to_thread(webbrowser.open, url):
             return Err("请在浏览器打开 " + url)
         return Ok({"opened": True})
@@ -139,14 +190,14 @@ class ConnectionPanel:
                 api = self.portal + "/api/v1/resident-onboarding/"
                 if op == "start":
                     if not self.browser_login:
-                        pending = await asyncio.to_thread(request_json, api + "browser-start", {})
+                        pending = await asyncio.to_thread(request_json, api + "browser-start", {"bodyRead": True})
                         if (str(UUID(pending["id"])) != pending["id"]
                                 or not re.fullmatch(r"rba_[A-Za-z0-9_-]{43}", pending["secret"])
                                 or not re.fullmatch(r"[0-9]{6}", pending["code"])
                                 or not pending["expiresAt"] > time.time() * 1000):
                             raise ValueError("invalid_browser_login")
                         self.browser_login = pending
-                    url = self.portal + "/resident-connect.html?flow=browser#" + self.browser_login["id"]
+                    url = self.portal + "/resident-connect.html?flow=browser&bodyRead=1#" + self.browser_login["id"]
                     if not await asyncio.to_thread(webbrowser.open, url):
                         return Err("请在浏览器打开 " + url)
                     return Ok({"opened": True})

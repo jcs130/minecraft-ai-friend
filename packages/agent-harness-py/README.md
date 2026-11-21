@@ -9,6 +9,9 @@ Lightweight **Python** harness runtime for server-hosted Minecraft bodies (activ
 * Runtime (`runtime.py`): intents, single body lease, System 0 → 1 → 2 scheduling (`fastslow.py`, `typed_choice.py`,
   `scheduler.py`), message gateway (`protocol.py`).
 * Memory (`memory/`): hot ring · Graphiti (in-process sidecar service) · local SQLite fallback, `group_id` isolation.
+  The automatic archive keeps authenticated life transitions and a bounded set of confirmed game effects such as a
+  commission hand-in, ruin reward or verified workshop output. Chat remains available during the live turn.
+  Settlement receipts and explicit reflections keep their original roles. The same original ID cannot fill the hot ring twice.
 
 For the hosted NPC service, omitting `graphiti` or setting `"graphiti": {"mode": "local"}`
 uses each role's existing `memory.sqlite3` without a graph token or graph server. An existing
@@ -16,6 +19,19 @@ uses each role's existing `memory.sqlite3` without a graph token or graph server
 back reuses that role's archive and its existing remote outbox in the same state directory.
 Episodes recorded during explicit local-only operation remain in the local archive. The server-npc
 client uses HTTP; only the graph service needs the graph engine and its model dependencies.
+
+For a reviewed history migration, `memory.history.project_action_history` previews confirmed facts
+from a standalone SQLite backup of `actions.sqlite3` and a list of original request IDs. The deployment
+registry must confirm the source body, stable character, logical account, server and world for both
+bindings. Names and historical body IDs alone do not establish character ownership. A live journal or
+an unresolved request is ineligible. The preview keeps the original fact IDs and labels a snapshot
+observation time when the original receipt has no recorded time. It does not update memory or replay actions.
+
+The external Mineflayer notebook in `agent-mc-world` uses a separate realm/account/agent key and includes
+authored notes. Its optional TypeScript graph integration also handles conversation. These stores stay
+private to their existing clients. A connection's name or `memoryAgentId` cannot authorize transfer.
+For cross-client continuity, use the verified portal role binding and a server-confirmed effect with
+the original request ID. Historical records with missing ownership or provenance remain in their source archive.
 
 For a delegated companion such as 肥鱼, set `"adventure_advice": true` in the role and add
 `companionAdventure` to the NPC service settings. Install the `server-npc` extra. Point `directory`

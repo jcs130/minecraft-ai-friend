@@ -39,7 +39,10 @@ final class PagedPersonalStash implements Listener {
     }
     /** Reads existing pages/configuration without opening a menu or materializing rewards. */
     Snapshot snapshot(UUID id) {
-        ItemStack[] items=new ItemStack[CAPACITY];Inventory[] loaded=pages.get(id);
+        return snapshot(plugin, id, pages.get(id));
+    }
+    static Snapshot snapshot(AgentFriendPlugin plugin, UUID id, Inventory[] loaded) {
+        ItemStack[] items=new ItemStack[CAPACITY];
         var saved=plugin.getConfig().getConfigurationSection("dungeon-personal-stash."+id);
         for(int page=0;page<PAGES;page++)for(int slot=0;slot<PAGE_SIZE;slot++) {
             int global=page*PAGE_SIZE+slot;

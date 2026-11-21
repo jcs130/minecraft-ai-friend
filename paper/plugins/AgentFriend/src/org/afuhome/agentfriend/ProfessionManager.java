@@ -375,6 +375,18 @@ final class ProfessionManager implements Listener {
         }
         return readable;
     }
+    JsonObject originalRoleProgress(UUID player) {
+        JsonObject result = new JsonObject();
+        result.addProperty("backend", "legacy");
+        result.addProperty("available", available());
+        if (!available()) return result;
+        JsonObject profile = ledger.profile(player);
+        result.add("combat", profile.get("combat").deepCopy());
+        result.add("life", profile.get("life").deepCopy());
+        result.add("prepared", profile.get("prepared").deepCopy());
+        return result;
+    }
+
     boolean selected(UUID player, String role) {
         JsonObject p = ledger.profile(player);
         return p.get("combat").getAsString().equals(role) || ProfessionLedger.strings(p, "life").contains(role);

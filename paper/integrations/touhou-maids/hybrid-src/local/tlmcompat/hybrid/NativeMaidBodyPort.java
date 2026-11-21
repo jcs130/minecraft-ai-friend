@@ -98,6 +98,32 @@ final class NativeMaidBodyPort implements AutoCloseable {
         control.authorize(owner, maid);
         return control.read(maid, request) == null ? null : actions.receipt(owner, maid, request);
     }
+    String custodySourceGeneration(UUID owner, UUID maid, UUID controller) {
+        var lease=control.lease(maid);
+        if (lease==null || !lease.controller().equals(controller) || !lease.owner().equals(owner)) return null;
+        return control.require(owner,maid,controller,lease.generation(),System.currentTimeMillis()).generation();
+    }
+    void checkCustodySource(UUID owner, UUID maid, UUID controller, String generation) {
+        control.require(owner,maid,controller,generation,System.currentTimeMillis());
+        plugin.nativeReady(owner,maid);
+        if (actions.busy(maid)) throw new MaidBodyControl.Fault(409,"BODY_BUSY");
+        if (local.qdj.maids.brain.MaidAgentsMod.residentIdentities().containsKey(maid))
+            local.qdj.maids.brain.ResidentBodyAccess.externalReady(maid);
+    }
+    void releaseCustodySource(UUID owner, UUID maid, UUID controller, String generation) throws Exception {
+        control.require(owner,maid,controller,generation,System.currentTimeMillis());
+        if (!local.qdj.maids.brain.MaidAgentsMod.custodyHeld(maid)) throw new MaidBodyControl.Fault(409,"CUSTODY_REQUIRED");
+        actions.cancel(maid,"body_parked");
+        control.release(maid);
+    }
+    String acquireCustodyTarget(UUID owner, UUID maid, UUID controller) throws Exception {
+        if (!local.qdj.maids.brain.MaidAgentsMod.custodyClaiming(maid)) throw new MaidBodyControl.Fault(409,"CUSTODY_REQUIRED");
+        if (control.active(maid)) throw new MaidBodyControl.Fault(409,"CONTROL_BUSY");
+        var input=new JsonObject();
+        input.addProperty("operation","bind"); input.addProperty("ownerId",owner.toString());
+        input.addProperty("maidId",maid.toString()); input.addProperty("controllerId",controller.toString());
+        return handle(input).get("generation").getAsString();
+    }
     boolean busy(UUID maid) { return actions.busy(maid); }
     void caught(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid, JsonArray loot) {
         actions.caught(maid, loot);

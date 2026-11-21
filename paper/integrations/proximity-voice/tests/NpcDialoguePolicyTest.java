@@ -11,7 +11,21 @@ public final class NpcDialoguePolicyTest {
         check(NpcDialoguePolicy.profiles(config).get(a).owner().equals(b));
         JsonObject villagers=JsonParser.parseString("{\"schema\":1,\"roles\":[{\"id\":\""+a+"\",\"kind\":\"villager\",\"residentId\":\"qinghe\",\"name\":\"青禾\",\"voice\":\"qa\",\"range\":8}]}").getAsJsonObject();
         var farmer=NpcDialoguePolicy.profiles(villagers).get(a);
-        check(farmer.owner()==null&&farmer.residentId().equals("qinghe"));
+        check(farmer.owner()==null&&farmer.residentId().equals("qinghe")&&farmer.serviceCounter()==null);
+        var guild=villagers.deepCopy();
+        var counter=guild.getAsJsonArray("roles").get(0).getAsJsonObject();
+        counter.addProperty("residentId","guild_receptionist");
+        counter.addProperty("serviceCounter","guild-receptionist");
+        var receptionist=NpcDialoguePolicy.profiles(guild).get(a);
+        check(receptionist.id().equals(a)&&receptionist.residentId().equals("guild_receptionist")
+                &&receptionist.serviceCounter().equals("guild-receptionist"));
+        counter.addProperty("serviceCounter","guessed-counter");
+        rejected(()->NpcDialoguePolicy.profiles(guild));
+        counter.addProperty("serviceCounter",true);
+        rejected(()->NpcDialoguePolicy.profiles(guild));
+        var foreignCounter=config.deepCopy();
+        foreignCounter.getAsJsonArray("roles").get(0).getAsJsonObject().addProperty("serviceCounter","guild-receptionist");
+        rejected(()->NpcDialoguePolicy.profiles(foreignCounter));
         check(NpcDialoguePolicy.addressed(List.of(farmer),"青禾，你在忙什么？",true).profile().equals(farmer));
         var mixed=villagers.deepCopy();mixed.getAsJsonArray("roles").get(0).getAsJsonObject().addProperty("ownerId",b.toString());
         rejected(()->NpcDialoguePolicy.profiles(mixed));

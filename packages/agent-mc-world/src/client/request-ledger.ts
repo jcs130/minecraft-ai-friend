@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ToolOutcome } from './contracts.ts';
 import type { AgentJournal } from './journal.ts';
-type RecordEntry = { requestId: string; signature: string; phase: 'pending' | 'returned' | 'failed'; outcome?: ToolOutcome; error?: string; cancelled?: true };
+type RecordEntry = { requestId: string; signature: string; phase: 'pending' | 'returned' | 'failed'; outcome?: ToolOutcome; error?: string; cancelled?: true; bodyScope?: string; executionScope?: string };
 export class RequestOutcomeUnknownError extends Error {
   constructor(readonly requestId: string, message = 'Request outcome unknown after interruption; query the original request id without replaying it') { super(message); }
 }
@@ -14,6 +14,24 @@ export class RequestLedger {
     this.directory = join(journal.dataDir, 'requests'); mkdirSync(this.directory, { recursive: true });
   }
   private file(id: string) { return join(this.directory, createHash('sha256').update(id).digest('hex') + '.json'); }
+  private terminalFile(scope: string, execution: NonNullable<ToolOutcome['execution']>) {
+    return join(this.directory, 'settled-' + createHash('sha256').update(JSON.stringify([scope,execution.kind,execution.id])).digest('hex'));
+  }
+  recordBodyTerminal(scope: string, execution: NonNullable<ToolOutcome['execution']>) {
+    if (execution.terminal) writeFileSync(this.terminalFile(scope,execution), '');
+  }
+  /** Only during release of an explicitly managed body. Scope includes the immutable controller generation. */
+  unresolvedBodyAction(scope: string): string | null {
+    for (const name of readdirSync(this.directory)) {
+      if (!name.endsWith('.json')) continue;
+      const record: RecordEntry = JSON.parse(readFileSync(join(this.directory,name),'utf8'));
+      if (record.bodyScope !== scope) continue;
+      const execution=record.outcome?.execution;
+      if (record.phase !== 'returned' || (execution?.terminal === false &&
+          !(record.executionScope && existsSync(this.terminalFile(record.executionScope,execution))))) return record.requestId;
+    }
+    return null;
+  }
   read(requestId: string, signature: string): ToolOutcome | null {
     const file = this.file(requestId);
     if (!existsSync(file)) return null;

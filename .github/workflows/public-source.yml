@@ -116,6 +116,11 @@ jobs:
           curl --proto '=https' --tlsv1.2 -fsSL https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar -o "$RUNNER_TEMP/gson-2.10.1.jar"
           printf '%s  %s\n' '4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593' "$RUNNER_TEMP/gson-2.10.1.jar" | sha256sum --check
           python tests/verify_issue43_java.py --jdk "$JAVA_HOME" --gson "$RUNNER_TEMP/gson-2.10.1.jar" --output "$RUNNER_TEMP/review-boundaries"
+      - name: Original role assets scope and read-only projection
+        run: |
+          mkdir -p "$RUNNER_TEMP/role-assets"
+          javac --release 21 -cp "$RUNNER_TEMP/maid-life-gson.jar" -d "$RUNNER_TEMP/role-assets" paper/integrations/numen-hosting/native-bridge/src/local/hosting/CanonicalRoleAssets.java paper/integrations/numen-hosting/native-bridge/tests/CanonicalRoleAssetsTest.java
+          java -cp "$RUNNER_TEMP/role-assets:$RUNNER_TEMP/maid-life-gson.jar" local.hosting.CanonicalRoleAssetsTest
       - name: Check bidirectional voice authorization and client receipts offline
         shell: bash
         run: |

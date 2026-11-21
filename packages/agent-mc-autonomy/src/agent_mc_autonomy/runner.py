@@ -14,6 +14,7 @@ from pathlib import Path
 from .bridge import MinecraftBridge
 from .configuration import Settings
 from .controller import Controller
+from .device_pairing import ManagedPlayerDevice
 from .failure_diagnostics import FailureDiagnostics, current
 from .fast import FastPolicy, SystemOne
 from .filesystem import replace_prepared
@@ -43,7 +44,8 @@ def validate_start(settings: Settings, goal: str):
 
 async def run_session(settings: Settings, entry: Path, data_root: Path, planner: Planner | None, goal: str,
                       publish, stopped, *, bridge_factory=MinecraftBridge, viewer_opener=None, viewer_entry=None,
-                      context_counter=None, host_context_provider=None, recent_context_provider=None):
+                      context_counter=None, host_context_provider=None, recent_context_provider=None,
+                      device_handoff: ManagedPlayerDevice | None = None):
     """Own the injected planner, lease, config, controller and all cleanup."""
     runtime_session = str(uuid.uuid4())
     state = {"phase": "starting", "game_connected": False, "autonomy_running": False, "standing_goal": goal,
@@ -110,6 +112,9 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
 
     try:
         validate_start(settings, goal)
+        if device_handoff and settings.body_provider == "java-client":
+            raise ValueError("device_requires_mineflayer")
+        device_env = device_handoff.child_environment() if device_handoff else {}
         bundle_env = {}
         if settings.bundle_root:
             from .runtime_bundle import verify_settings_runtime
@@ -129,6 +134,9 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
             require_no_pending_acknowledgement(directory)
             config = directory / "client.json"
             client_config = settings.client_config(data_root)
+            if device_handoff:
+                client_config["bodyHandoffDevice"] = {**device_handoff.client_binding(),
+                                                      "packageDirectory": str(entry.parent.parent)}
             server_engine = ({"module": settings.server_engine_module, "sha256": settings.server_engine_sha256}
                              if settings.server_engine_module else None)
             if settings.viewer_renderer_directory:
@@ -148,10 +156,12 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
             elif server_engine:
                 client_config["serverEngineIntegration"] = {**server_engine, "packageDirectory": str(entry.parent.parent)}
                 entry = Path(__file__).parent / "integrations" / "server-stdio.mjs"
+            elif device_handoff:
+                entry = Path(__file__).parent / "integrations" / "device-stdio.mjs"
             config.write_text(json.dumps(client_config, ensure_ascii=False), encoding="utf-8")
             update()
-            memory_env = {**bundle_env, **settings.memory.environment()}
-            bridge = bridge_factory(settings.node, entry, config, directory / "backend.log", **({"env": memory_env} if memory_env else {}))
+            child_env = {**bundle_env, **settings.memory.environment(), **device_env}
+            bridge = bridge_factory(settings.node, entry, config, directory / "backend.log", **({"env": child_env} if child_env else {}))
             try:
                 if settings.fast.mode == "system_one" and planner:
                     system_one = SystemOne(settings.fast)
@@ -160,6 +170,8 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
                 counter = context_counter if context_counter is not None else getattr(planner, "context_counter", None)
                 counter_options = {"context_counter": counter} if counter is not None else {}
                 counter_options["runtime_session"] = runtime_session
+                if device_handoff:
+                    counter_options["managed_character"] = (device_handoff.character_id, device_handoff.expires_at)
                 schema_profile = getattr(getattr(planner, "config", None), "tool_schema_profile", "default")
                 if schema_profile != "default":
                     counter_options["tool_schema_profile"] = schema_profile

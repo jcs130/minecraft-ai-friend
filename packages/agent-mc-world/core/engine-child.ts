@@ -214,6 +214,10 @@ async function handleRequest(req: EngineRequest, signal: AbortSignal): Promise<u
     return out && typeof out === 'object' ? {...out,blobs:encodeBlobs(out.blobs)} : out;
   }
   if (!mod) throw new Error('Minecraft 引擎还没 init');
+  if (req.kind === 'handoff-witness') {
+    mod.sendHandoffWitness(req.playerUuid,req.channel,req.nonce);
+    return null;
+  }
   if (req.kind === 'turn-ended') { await mod.onTurnEnded(); return null; }
   if (req.kind === 'tool') {
     const tool = mod.tools().find((t) => t.name === req.name);

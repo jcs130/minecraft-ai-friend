@@ -1,18 +1,28 @@
+import {bodyHandoffPanel} from './character-bodies.mjs';
+
 const byId = id => document.getElementById(id);
 const api = '/api/v1/resident-turns';
 const params = new URLSearchParams(location.search);
 const legacy = ['create', 'connect'].includes(params.get('flow'));
 const browserLogin = params.get('flow') === 'browser';
+const bodyManagement = params.get('flow') === 'bodies';
 const playerDisclosure = byId('player-authorization');
 const sharedPlay = browserLogin && params.get('play') === '1' && !!playerDisclosure;
+const bodyRead = browserLogin && params.get('bodyRead') === '1' && byId('body-view-permission');
+if (bodyRead) byId('body-view-permission').hidden = false;
 const browserId = location.hash.slice(1);
 const bodies = {maid: '车万女仆', numen: 'Numen'};
 const flow = byId('flow'), kind = byId('kind'), role = byId('role');
 const status = byId('status'), result = byId('result');
 let session, catalog, loading, poll, expiry, busy = false, selected = params.get('resident');
 const drafts = new Map();
+const handoff = bodyHandoffPanel(byId, request);
 
 flow.value = params.get('flow') === 'create' ? 'create' : 'connect';
+if (bodyManagement) {
+  byId('title').textContent = '管理角色身体';
+  byId('intro').textContent = '查看你的角色、切换可用身体，或按原请求编号确认结果。';
+}
 kind.value = params.get('bodyKind') === 'numen' ? 'numen' : 'maid';
 if (legacy) {
   byId('title').textContent = '连接居民身体';
@@ -88,6 +98,7 @@ function render() {
   const creating = flow.value === 'create';
   const maidOnly = creating && catalog.creationMode === 'maid-only';
   byId('kind-label').hidden = maidOnly;
+  byId('kind-caption').textContent = creating ? '新角色身体' : '按身体类型筛选居民';
   if (maidOnly) kind.value = 'maid';
   const residents = catalog.residents.filter(r => r.bodyKind === kind.value);
   const current = residents.find(r => r.id === selected) || residents[0];
@@ -95,6 +106,7 @@ function render() {
   const capacity = catalog.availableBodies.includes(kind.value);
   const available = byId('availability');
   const ready = current?.state === 'available';
+  handoff.select(creating ? null : session.owner.id, ready ? current.characterId : null);
   byId('create').hidden = !creating || !(capacity || pending);
   byId('existing').hidden = creating || !current;
   byId('refresh').hidden = creating ? capacity && !pending : ready;
@@ -109,7 +121,7 @@ function render() {
     role.replaceChildren(...residents.map(r => new Option(r.name + (r.state === 'preparing' ? ' · 准备中' : ''), r.id)));
     if (current) { selected = current.id; role.value = selected; }
     byId('role-code').disabled = byId('download').disabled = byId('release').disabled = !ready;
-    available.textContent = !current ? '当前账号还没有这种身体的居民，可切换身体或选择新建角色。'
+    available.textContent = !current ? '当前账号还没有这种身体的居民。可查看其他类型的居民或新建角色。'
       : ready ? '把连接码填入本机插件。兑换后，原有插件连接将结束。'
       : '正在为「' + current.name + '」准备身体，页面会自动更新。';
     if (current && !ready) poll = setTimeout(() => { refresh().catch(report); }, 2500);
@@ -126,15 +138,17 @@ async function load() {
     byId('login').hidden = !!session.owner;
     const nekoSignIn = byId('neko-portal-signin');
     if (nekoSignIn) nekoSignIn.hidden = session.nekoAuth?.available !== true;
-    byId('authorize').hidden = !session.owner || legacy || browserLogin;
+    byId('authorize').hidden = !session.owner || legacy || browserLogin || bodyManagement;
     byId('browser-approve').hidden = !session.owner || !browserLogin;
     byId('legacy').hidden = !session.owner || !legacy;
     if (!session.owner) {
+      handoff.select(null, null);
       clearTimeout(poll); clearCode(); catalog = null;
       status.textContent = '请先登录千灯纪官网。';
       return;
     }
     status.textContent = '当前账号 · ' + session.owner.username;
+    if (bodyManagement) handoff.select(session.owner.id, null);
     if (legacy) {
       await refresh();
       if (!params.has('bodyKind') && flow.value === 'connect' && catalog.residents[0]) {
@@ -174,7 +188,8 @@ byId('browser-approve').onsubmit = event => {
   event.preventDefault();
   void action(async () => {
     await request('/api/v1/resident-onboarding/browser-approve', 'POST',
-      {id:browserId, code:byId('browser-code').value, ...(sharedPlay ? {player:true} : {})});
+      {id:browserId, code:byId('browser-code').value, ...(sharedPlay ? {player:true} : {}),
+        ...(bodyRead && byId('body-view-allowed').checked ? {bodyRead:true} : {})});
     byId('browser-code').value = '';
     byId('browser-approve').hidden = true;
     history.replaceState(null,'',location.pathname + location.search);

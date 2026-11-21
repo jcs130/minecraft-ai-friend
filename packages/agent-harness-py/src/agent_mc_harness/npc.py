@@ -1395,8 +1395,9 @@ class NpcHost:
                 for action in unresolved:
                     self.body.restore_request(action)
                     receipt = await self.body.result(action.request_id)
-                    if receipt.terminal:
+                    if receipt.terminal and receipt.request_id == action.request_id:
                         self.journal.settle(identity.body_id, receipt)
+                        self.runtime.remember_receipt(receipt, identity)
                 if not self.journal.unresolved(identity.body_id):
                     for intent in self.runtime.intents.values():
                         if intent.state == "paused" and intent.needs_host:

@@ -28,6 +28,33 @@ public final class MaidAgentsMod {
         }
         return java.util.Map.copyOf(visible);
     }
+    /** Stock TLM installations have no native custody provider. */
+    private static final class Custody {
+        static final java.lang.invoke.MethodHandle held = resolve("heldForDriver");
+        static final java.lang.invoke.MethodHandle claim = resolve("claimingDriver");
+        static java.lang.invoke.MethodHandle resolve(String name) {
+            try {
+                Class<?> bridge = Class.forName("local.hosting.NativeCustodyFence", false, MaidAgentsMod.class.getClassLoader());
+                return java.lang.invoke.MethodHandles.publicLookup().findStatic(bridge, name,
+                    java.lang.invoke.MethodType.methodType(boolean.class, java.util.UUID.class));
+            } catch (ClassNotFoundException standalone) {
+                return null;
+            } catch (ReflectiveOperationException badBridge) {
+                throw new IllegalStateException("Native body custody interface unavailable", badBridge);
+            }
+        }
+    }
+    public static boolean custodyHeld(java.util.UUID id) {
+        return custodyState(Custody.held, id);
+    }
+    public static boolean custodyClaiming(java.util.UUID id) {
+        return custodyState(Custody.claim, id);
+    }
+    private static boolean custodyState(java.lang.invoke.MethodHandle query, java.util.UUID id) {
+        if (query == null) return false;
+        try { return (boolean) query.invokeExact(id); }
+        catch (Throwable failure) { throw new IllegalStateException("Cannot confirm native body custody", failure); }
+    }
     static MaidResidents residents(){return running==null?null:running.residents();}
     public static boolean hasExpeditionLeader(java.util.UUID id) {
         var residents = residents();

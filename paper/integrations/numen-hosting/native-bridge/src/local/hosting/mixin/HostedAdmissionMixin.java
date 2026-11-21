@@ -21,8 +21,16 @@ public abstract class HostedAdmissionMixin {
     private void hosted$savedHealth(ServerPlayer player,CallbackInfoReturnable<Optional<CompoundTag>> ci){
         ci.getReturnValue().ifPresent(tag->local.hosting.HostedMigration.loaded(player,tag));
     }
-    @Inject(method="placeNewPlayer",at=@At("HEAD"),require=1)
+    @Inject(method="placeNewPlayer",at=@At("HEAD"),cancellable=true,require=1)
     private void hosted$pipeline(Connection connection,ServerPlayer player,CommonListenerCookie cookie,CallbackInfo ci){
+        var list=(PlayerList)(Object)this;
+        if (local.hosting.NativePlayerCustody.enrolled(player.getGameProfile())
+                && (!local.hosting.NativePlayerCustody.admitsPlayer(player)
+                    || list.getPlayer(player.getUUID())!=null || list.getPlayerByName(player.getGameProfile().getName())!=null)) {
+            connection.disconnect(net.minecraft.network.chat.Component.literal("这个角色的控制换身尚未授权当前连接。"));
+            ci.cancel();
+            return;
+        }
         if(player.getClass().getName().equals("com.dwinovo.numen.hosted.api.entity.NumenPlayer")
                 &&connection.channel.pipeline().get("encoder")==null){
             Connection.configureInMemoryPipeline(connection.channel.pipeline(),PacketFlow.SERVERBOUND);

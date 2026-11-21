@@ -30,13 +30,14 @@
     <h2>授权桌面插件</h2>
     <p>确认后，插件可以查看你的居民、使用可用名额新建角色，并连接你选中的一个身体。请核对登录账号，输入你亲自在本机插件中看到的数字。</p>
     <p id="player-authorization" hidden>也允许插件在你选中 Mineflayer 并确认准备时，为这个网站账号准备一个独立的 Minecraft 玩家角色。</p>
+    <label id="body-view-permission" hidden><input type="checkbox" id="body-view-allowed">允许插件在本次授权期间查看我名下角色的身体状态与换身回执</label>
     <label>插件显示的 6 位数字<input id="browser-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" required></label>
     <button>确认授权</button>
   </form>
   <section id="legacy" hidden>
     <h2>角色与身体</h2>
     <label>接入方式<select id="flow"><option value="create">新建角色</option><option value="connect">连接已有角色</option></select></label>
-    <label id="kind-label">身体类型<select id="kind"><option value="maid">车万女仆</option><option value="numen">Numen</option></select></label>
+    <label id="kind-label"><span id="kind-caption">身体类型</span><select id="kind"><option value="maid">车万女仆</option><option value="numen">Numen</option></select></label>
     <p id="availability" role="status"></p>
     <form id="create" hidden>
       <label>角色名<input id="name" maxlength="24" autocomplete="off" required></label>
@@ -52,6 +53,26 @@
       </details>
     </div>
     <button id="refresh" class="secondary" hidden>刷新身体状态</button>
+  </section>
+  <p id="handoff-empty" role="status" hidden></p>
+  <section id="body-handoff" hidden aria-labelledby="handoff-title">
+    <h3 id="handoff-title">切换角色身体</h3>
+    <label id="handoff-role-label" hidden>角色<select id="handoff-role"></select></label>
+    <p id="handoff-current"></p>
+    <label id="handoff-target-label">目标身体<select id="handoff-target"></select></label>
+    <button type="button" id="handoff-switch">确认切换</button>
+    <button type="button" id="handoff-check" hidden>查看原请求</button>
+    <p id="handoff-result" role="status"></p>
+    <p id="handoff-receipt-id"></p>
+    <details id="handoff-device" hidden><summary>Mineflayer 设备接力</summary>
+      <p>仅授权你正在使用的设备接力这个角色。请输入本机设备显示的配对编号。</p>
+      <form id="handoff-device-form">
+        <label>设备配对编号<input id="handoff-device-id" pattern="[A-Za-z0-9_\-]{24}" maxlength="24" autocomplete="off" spellcheck="false" required></label>
+        <button>授权这个设备</button>
+      </form>
+      <button id="handoff-device-revoke" type="button" class="secondary">撤销设备授权</button>
+      <p id="handoff-device-status" role="status"></p>
+    </details>
   </section>
   <section id="delivery" hidden aria-labelledby="code-title">
     <h2 id="code-title"></h2>

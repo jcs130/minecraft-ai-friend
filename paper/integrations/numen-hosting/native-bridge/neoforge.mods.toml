@@ -3,7 +3,7 @@ loaderVersion="[4,)"
 license="LGPL-3.0-only"
 [[mods]]
 modId="qiandengji_hosted_bridge"
-version="0.1.5"
+version="0.1.7"
 displayName="Qiandengji Numen Hosted Bridge"
 displayTest="IGNORE_SERVER_VERSION"
 description="Preserves hosted Numen bodies across Youer respawns and relays compatible Better Combat animations for ordinary melee attacks."

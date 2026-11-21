@@ -76,10 +76,10 @@ def test_service_rebinds_body_owner_and_preserves_persona_and_memory(tmp_path, m
             ident = host.body.identity()
             if ident.kind == "maid":
                 await host.memory.observe(
-                    BodyEvent(kind="dialogue", body_kind=ident.kind, body_id=ident.body_id, text="在村外找到灯塔"),
+                    BodyEvent(kind="death", body_kind=ident.kind, body_id=ident.body_id, data={"eventId": "original-death"}),
                     ident,
                 )
-            facts = await host.memory.search(ident.group_id(), "灯塔", limit=4)
+            facts = await host.memory.search(ident.group_id(), "死亡", limit=4)
             await started.put((ident, host.planner.role.persona, [fact.fact for fact in facts]))
             await asyncio.Future()
 
@@ -108,6 +108,6 @@ def test_service_rebinds_body_owner_and_preserves_persona_and_memory(tmp_path, m
         assert maid.scope == numen.scope and numen.scope.account == character["owner_id"]
         assert maid.group_id() == numen.group_id()
         assert old_persona == next_persona == character["persona"]
-        assert old_facts == next_facts == ["在村外找到灯塔"]
+        assert old_facts == next_facts == ["已确认原身体死亡。"]
 
     run(scenario())

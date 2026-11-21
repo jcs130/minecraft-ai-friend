@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sqlite3
 import threading
 import time
 
@@ -82,6 +83,36 @@ def test_villager_memory_scope_keeps_character_and_conversation_owner_after_body
     assert another_listener.group_id() != after.group_id()
     with pytest.raises(ServiceError, match="resident_identity_mismatch"):
         VillagerTurnBody(Observation.model_validate(data()), rebound)
+
+
+def test_completed_commission_memory_survives_body_and_dimension_change_without_storing_chat(tmp_path):
+    original = Profile.model_validate({"residentId": "qinghe", "bodyUuid": RESIDENT, "characterId": RESIDENT})
+    rebound = original.model_copy(update={"body_uuid": "10000000-0000-0000-0000-000000000020"})
+    path = tmp_path / "villager-memory.sqlite"
+    asked = []
+
+    def model(request):
+        payload = json.loads(request.content)
+        asked.append(json.loads(payload["messages"][1]["content"]))
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"decision":{"kind":"continue"}}'}}]})
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(model)) as transport:
+            client = ModelClient("http://127.0.0.1:4000/v1", KEY, http=transport)
+            original_observation = data() | {"completedCommissions": ["vq_fixture", "vq_fixture"], "utterance": "我的委托完成了？这句不进档。"}
+            await choose(client, original, Observation.model_validate(original_observation), 2, memory_file=str(path))
+            await choose(client, original, Observation.model_validate(original_observation), 2, memory_file=str(path))
+            new_observation = data() | {"bodyUuid": rebound.body_uuid, "scene": data()["scene"] | {"world": "minecraft:the_nether"}}
+            await choose(client, rebound, Observation.model_validate(new_observation), 2, memory_file=str(path))
+            private_other = new_observation | {"speakerUuid": "10000000-0000-0000-0000-000000000021"}
+            await choose(client, rebound, Observation.model_validate(private_other), 2, memory_file=str(path))
+
+    asyncio.run(run())
+    assert "vq_fixture" in asked[0]["memories"][0] and asked[2]["memories"] == asked[0]["memories"]
+    assert asked[3]["memories"] == []
+    with sqlite3.connect(path) as db:
+        rows = db.execute("SELECT kind, body FROM episodes").fetchall()
+    assert rows == [("quest_completed", "这名玩家已完成你发布的公会委托 vq_fixture。")]
 
 
 @pytest.mark.parametrize("reply", [

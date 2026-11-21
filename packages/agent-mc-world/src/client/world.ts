@@ -9,7 +9,8 @@ import { MessageInbox, messageInboxHost, messageInboxFacts } from './message-inb
 import { worldIdentityOf } from '../../core/server-config.ts';
 import { withToolHelp } from './tool-help.ts';
 
-type EnginePort = World & { requestFacts?(): WorldRequestFacts | null; publishAgentActivity?(value: unknown): void };
+type EnginePort = World & { requestFacts?(): WorldRequestFacts | null; publishAgentActivity?(value: unknown): void;
+  sendHandoffWitness?(playerUuid:string,channel:string,nonce:string):Promise<void> };
 /** Generic game facade. No Qiandengji command rewriting, catalog, identity or progress policy. */
 export class MinecraftClientWorld implements World {
   readonly id: string = 'minecraft';
@@ -30,6 +31,10 @@ export class MinecraftClientWorld implements World {
   }
   envPromptVars() { return this.engine.envPromptVars(); }
   publishAgentActivity(value: unknown): void { this.engine.publishAgentActivity?.(value); }
+  async sendHandoffWitness(playerUuid:string,channel:string,nonce:string) {
+    if (!this.engine.sendHandoffWitness) throw Error('This Minecraft engine does not support a connection witness');
+    await this.engine.sendHandoffWitness(playerUuid,channel,nonce);
+  }
   requestFacts() { return messageInboxFacts(this.engine.requestFacts?.() ?? null, this.messages, this.messageQueryName()); }
   tools(): ToolDef[] {
     return withToolHelp([...this.engine.tools().map((tool): ToolDef => tool.name !== 'mc_visual' ? tool : { ...tool,

@@ -4,7 +4,7 @@ import { verifyGrant, fail } from './protocol.mjs';
 
 // The public website remains the only cookie/CSRF authority. This loopback
 // endpoint accepts dedicated server-to-server credentials, never browser cookies.
-export function hostingServer({hosting,conversations,grantKey,serviceKey,now=Date.now}) {
+export function hostingServer({hosting,conversations,bodyHandoff,deviceBroker,grantKey,serviceKey,now=Date.now}) {
   if(!Buffer.isBuffer(grantKey)||grantKey.length<32||!Buffer.isBuffer(serviceKey)||serviceKey.length<32)
     throw new Error('Separate random grant and transport keys of at least 32 bytes are required');
   if(grantKey.equals(serviceKey))throw new Error('Grant and transport keys must be separate');
@@ -20,10 +20,11 @@ export function hostingServer({hosting,conversations,grantKey,serviceKey,now=Dat
       if(address!=='127.0.0.1'||req.headers.host!==expectedHost||req.headers.origin||req.headers.cookie
           ||Object.keys(req.headers).some(k=>k==='forwarded'||k.startsWith('x-forwarded-')))
         throw fail('LOCAL_GATEWAY_ONLY','此端点只供本机网页网关调用。',403);
+      if(req.url==='/v1/device-handoff'&&deviceBroker)return await deviceBroker.handle(req,res);
       const supplied=Buffer.from(req.headers.authorization??'');
       const expected=Buffer.from(`Bearer ${serviceKey.toString('base64url')}`);
       if(supplied.length!==expected.length||!timingSafeEqual(supplied,expected))throw fail('UNAUTHORIZED','网关授权无效。',401);
-      if(req.method!=='POST'||req.url!=='/v1/hosting')throw fail('NOT_FOUND','使用 POST /v1/hosting。',404);
+      if(req.method!=='POST'||!['/v1/hosting','/v1/character-bodies'].includes(req.url))throw fail('NOT_FOUND','使用托管网关的 POST 接口。',404);
       if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']??''))throw fail('CONTENT_TYPE','需要 application/json。',415);
       const chunks=[];let bytes=0;
       const maximum=4*1024*1024+16384;
@@ -31,6 +32,33 @@ export function hostingServer({hosting,conversations,grantKey,serviceKey,now=Dat
       let body;try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw fail('INVALID_JSON','请求 JSON 无效。',400);}
       if(!body||typeof body!=='object'||Array.isArray(body))throw fail('INVALID_REQUEST','请求必须是对象。',400);
       if(bytes>65536&&body.op!=='transcribe')throw fail('PAYLOAD_TOO_LARGE','该请求超出 64 KiB。',413);
+      if(req.url==='/v1/character-bodies'){
+        if(!bodyHandoff)throw fail('BODY_HANDOFF_DISABLED','服务器尚未开放角色换身。',503);
+        if(bytes>4096||typeof body.ownerId!=='string')throw fail('BODY_HANDOFF_INVALID_REQUEST','角色换身请求无效。',400);
+        // The existing loopback transport key authenticates the web gateway.
+        // Browser sessions and model tools never receive this key.
+        const authority={ownerId:body.ownerId};
+        const {characterId,requestId,targetKind,expectedGeneration}=body;
+        if(body.op==='current')return send(res,200,bodyHandoff.current(characterId,authority));
+        if(body.op==='assets')return send(res,200,await bodyHandoff.assets(characterId,authority));
+        if(body.op==='switch')return send(res,202,bodyHandoff.enqueue({characterId,requestId,targetKind,expectedGeneration},authority));
+        if(body.op==='lookup')return send(res,200,await bodyHandoff.reconcile({characterId,requestId},authority));
+        if(deviceBroker&&['deviceAvailable','deviceEnroll','deviceRevoke'].includes(body.op)){
+          if(Object.keys(body).sort().join(',')!=='characterId,op,ownerId')
+            throw fail('BODY_HANDOFF_INVALID_REQUEST','设备授权参数无效。',400);
+          try {
+            const operation={deviceAvailable:'available',deviceEnroll:'enrollOwned',deviceRevoke:'revokeOwned'}[body.op];
+            return send(res,200,deviceBroker[operation](characterId,authority));
+          } catch(error) {
+            if(error.code==='DEVICE_BODY_UNAVAILABLE')
+              throw fail(error.code,'这个角色没有可接力的 Mineflayer 身体。',404);
+            if(error.code==='DEVICE_ALREADY_ENROLLED')
+              throw fail(error.code,'这个角色已有设备授权。确认旧设备退出后，可先撤销授权。',409);
+            throw error;
+          }
+        }
+        throw fail('BODY_HANDOFF_INVALID_REQUEST','不支持该换身操作。',400);
+      }
       let result;
       for(const[id,s]of sessions)if(s.expires<=now())sessions.delete(id);
       if(body.op==='authorize'){

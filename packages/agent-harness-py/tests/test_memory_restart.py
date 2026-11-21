@@ -8,20 +8,28 @@ from agent_mc_harness.memory.base import MemoryEpisode
 import pytest
 
 
-def test_restart_never_replaces_an_earlier_observation(tmp_path):
+def test_restart_never_replaces_earlier_facts_and_body_resume_can_recall_them(tmp_path):
     async def run():
-        identity = BodyIdentity(kind="maid", body_id="original-body", scope=Scope(realm="server", account="owner", agent="kirito"))
+        scope = Scope(realm="server", account="owner", agent="kirito", character="verified-character")
+        first = BodyIdentity(kind="maid", body_id="original-body", scope=scope)
+        successor = BodyIdentity(kind="numen", body_id="new-body", scope=scope)
         path = tmp_path / "memory.sqlite"
         at = datetime.now(UTC)
-        for index, text in enumerate(("桐人救援伙伴甲", "桐人发现矿坑乙")):
-            memory = MemoryRouter(LocalMemory(path))
-            await memory.observe(BodyEvent(kind="dialogue", body_kind="maid", body_id="original-body", text=text,
-                                          at=at + timedelta(seconds=index)), identity)
-            await memory.close()
-        memory = LocalMemory(path)
-        rows = await memory.search(identity.group_id(), "桐人", limit=10)
+        death = BodyEvent(kind="death", body_kind="maid", body_id=first.body_id, at=at, data={"eventId": "death-1"})
+        memory = MemoryRouter(LocalMemory(path))
+        await memory.observe(death, first)
+        await memory.observe(death, first)
+        assert len(memory.hot(first.group_id())) == 1
         await memory.close()
-        assert {r.fact for r in rows} == {"桐人救援伙伴甲", "桐人发现矿坑乙"}
+        memory = MemoryRouter(LocalMemory(path))
+        await memory.observe(death.model_copy(update={"at": at + timedelta(hours=1)}), first)
+        assert not memory.hot(successor.group_id())
+        await memory.observe(BodyEvent(kind="respawn", body_kind="numen", body_id=successor.body_id,
+                                      at=at + timedelta(hours=2), data={"eventId": "respawn-1"}), successor)
+        rows = await memory.search(successor.group_id(), "", limit=10)
+        await memory.close()
+        assert [(r.provenance["sourceId"], r.valid_at) for r in rows] == [
+            ("respawn-1", (at + timedelta(hours=2)).isoformat()), ("death-1", at.isoformat())]
     asyncio.run(run())
 
 

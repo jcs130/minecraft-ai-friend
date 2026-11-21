@@ -124,7 +124,9 @@ final class DungeonManager implements Listener {
     int stashCapacity() { return PagedPersonalStash.CAPACITY; }
     ItemStack stashItem(UUID id,int slot) { return storage().item(id,slot); }
     ItemStack[] stashContents(UUID id) { return storage().contents(id); }
-    PagedPersonalStash.Snapshot stashSnapshot(UUID id) { return storage().snapshot(id); }
+    PagedPersonalStash.Snapshot stashSnapshot(UUID id) {
+        return storage == null ? PagedPersonalStash.snapshot(plugin, id, null) : storage.snapshot(id);
+    }
     /** Caller owns the main-thread transaction and persists once after staging all pages. */
     void stageStashContents(UUID id,ItemStack[] items) {
         if(items.length!=PagedPersonalStash.CAPACITY)throw new IllegalArgumentException("stash capacity");

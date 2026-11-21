@@ -596,6 +596,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private World world() { return Bukkit.getWorld("world"); }
     VillageStructureProtection villageProtection() { return villageStructureProtection; }
     GuildHallManager guildHall() { return guildHall; }
+
+    /** Checks a loaded service body without creating, moving or reconfiguring it. */
+    public boolean isManagedVoiceServiceBody(String service, UUID actor) {
+        return "guild-receptionist".equals(service) && guildHall != null && guildHall.isReceptionistVoiceBody(actor);
+    }
     GuildSharedStorage guildShared() { return guildShared; }
     GuildStorageOwnership guildStorage() { return guildStorage; }
     ProtectionAdvisor protectionAdvisor() { return protectionAdvisor; }
@@ -622,6 +627,25 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     LandmarkManager landmarks() { return landmarks; }
     DailyBoardManager dailyBoard() { return dailyBoard; }
     TaskMarketManager taskMarket() { return taskMarket; }
+    /**
+     * Server-internal projection for the authenticated role bridge. The bridge resolves and
+     * authorizes the original UUID before invoking this method on the game thread.
+     */
+    public String originalRoleAssets(UUID originalPlayerUuid) {
+        if (!Bukkit.isPrimaryThread() || !isEnabled() || originalPlayerUuid == null
+                || dungeon == null || guild == null || professions == null || nativeRpg == null)
+            throw new IllegalStateException("Original role assets unavailable");
+        var summary = new com.google.gson.JsonObject();
+        var stash = dungeon.stashOverview(originalPlayerUuid, dungeon.stashSnapshot(originalPlayerUuid)).json();
+        // Player CLI directions would incorrectly imply that a native entity can withdraw these items.
+        stash.remove("nextCommand");
+        summary.add("personalStash", stash);
+        summary.add("guild", guild.originalRoleProgress(originalPlayerUuid));
+        summary.add("rpg", nativeRpg.selected() ? nativeRpg.originalRoleProgress(originalPlayerUuid)
+                : professions.originalRoleProgress(originalPlayerUuid));
+        return summary.toString();
+    }
+
     GuildManager guild() { return guild; }
     ProfessionManager professions() { return professions; }
     FlightLeases flightLeases() { return flightLeases; }
