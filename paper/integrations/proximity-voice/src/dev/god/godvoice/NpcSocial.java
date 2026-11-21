@@ -191,17 +191,21 @@ final class NpcSocial {
     }
 
     private UUID enqueue(UUID body, Player speaker, String message, String scope, Set<Player> audience, boolean automatic,String medium) throws IOException {
+        if (!Bukkit.isPrimaryThread() || Bukkit.getPlayer(speaker.getUniqueId()) != speaker)
+            throw new IllegalArgumentException("居民对话暂不可用");
         var entity = residents.live(body);
         var profile = residents.profile(body);
         boolean directVillager = profile != null && profile.residentId() != null && !automatic && scope.equals("private");
-        if (!Bukkit.isPrimaryThread() || Bukkit.getPlayer(speaker.getUniqueId()) != speaker || (!directVillager && ready(body) == null)
-                || entity == null || body.equals(speaker.getUniqueId()))
+        if (entity == null || body.equals(speaker.getUniqueId()))
+            throw new IllegalArgumentException("居民对话暂不可用");
+        if (!automatic && scope.equals("private")
+                && !NpcDialoguePolicy.privateMessageAllowed(speaker, entity, Bukkit.getPluginManager().getPlugin("Essentials")))
+            throw new IllegalArgumentException("居民对话暂不可用");
+        if (!directVillager && ready(body) == null)
             throw new IllegalArgumentException("居民对话暂不可用");
         if (!scope.equals("private") && !residents.hears(speaker, entity, residents.profile(body)))
             throw new IllegalArgumentException("请靠近居民并退出旁观模式");
-        if (message.isBlank() || message.codePointCount(0, message.length()) > 400
-                || message.codePoints().anyMatch(cp -> Character.isISOControl(cp) || cp == 0xA7))
-            throw new IllegalArgumentException("请输入一行不超过 400 字的消息");
+        NpcDialoguePolicy.validateConversationText(message);
         long now = System.currentTimeMillis();
         pending.values().removeIf(item -> now - item.at() > REPLY_WINDOW_MS);
         if (pending.size() >= 256 || pending.values().stream().anyMatch(item -> item.player() == speaker))

@@ -6,6 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.regex.Pattern;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
 
 /** Explicit NPC voice identities, never inferred from names or chat text. */
 final class NpcDialoguePolicy {
@@ -182,9 +185,41 @@ final class NpcDialoguePolicy {
     }
     static boolean fresh(long at,long now){return at<=now&&now-at<=15_000;}
     static String text(String text){
-        if(text==null||text.isBlank()||text.length()>1200||text.codePoints().anyMatch(c->Character.isISOControl(c)||c==0xA7))throw new IllegalArgumentException("NPC_DIALOGUE_TEXT_INVALID");
+        if(text==null||text.length()>1200||!isPlainText(text))throw new IllegalArgumentException("NPC_DIALOGUE_TEXT_INVALID");
         return text;
     }
+    static void validateConversationText(String message) {
+        if (message == null || message.codePointCount(0, message.length()) > 400 || !isPlainText(message))
+            throw new IllegalArgumentException("请输入一行不超过 400 字的消息");
+    }
+
+    private static boolean isPlainText(String text) {
+        return !text.isBlank() && text.codePoints().noneMatch(c -> Character.isISOControl(c) || c == 0xA7);
+    }
+
+    static boolean privateMessageAllowed(Player speaker, Entity recipient, Plugin essentials) {
+        Player player = recipient instanceof Player target ? target : null;
+        if (!speaker.isOnline() || (player != null && !speaker.canSee(player))) return false;
+        if (essentials == null || !essentials.isEnabled()) return true;
+        try {
+            Class<?> userType = Class.forName("com.earth2me.essentials.IUser", false, essentials.getClass().getClassLoader());
+            return essentialsPrivateMessageAllowed(essentials, userType, speaker, player);
+        } catch (ReflectiveOperationException | LinkageError unavailable) {
+            return false;
+        }
+    }
+
+    static boolean essentialsPrivateMessageAllowed(Object essentials, Class<?> userType, Player speaker, Player recipient)
+            throws ReflectiveOperationException {
+        var lookup = essentials.getClass().getMethod("getUser", Player.class);
+        var sender = lookup.invoke(essentials, speaker);
+        if (sender == null || Boolean.TRUE.equals(sender.getClass().getMethod("isMuted").invoke(sender))) return false;
+        if (recipient == null) return true;
+        var target = lookup.invoke(essentials, recipient);
+        return target != null && !Boolean.TRUE.equals(userType.getMethod("isIgnoreMsg").invoke(target))
+                && !Boolean.TRUE.equals(target.getClass().getMethod("isIgnoredPlayer", userType).invoke(target, sender));
+    }
+
     static boolean nearby(UUID source,UUID target,UUID sourceWorld,UUID targetWorld,double squaredDistance,double range){
         return !source.equals(target)&&sourceWorld.equals(targetWorld)&&Double.isFinite(squaredDistance)&&squaredDistance>=0
             &&Double.isFinite(range)&&range>0&&squaredDistance<=range*range;

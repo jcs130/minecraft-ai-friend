@@ -7,6 +7,10 @@ public final class NpcVoiceApiTest {
         Class<?> plugin=Class.forName("dev.god.godvoice.PaperVoicePlugin");
         plugin.getMethod("npcVoiceProfiles");
         plugin.getMethod("bindHostedNpcVoice",UUID.class,UUID.class,Function.class);
+        if (plugin.getMethod("queueHostedPrivateConversation",UUID.class,UUID.class,String.class).getReturnType() != String.class)
+            throw new AssertionError("hosted private conversation receipt ABI");
+        if (plugin.getMethod("queueNpcPrivateConversation",UUID.class,UUID.class,String.class).getReturnType() != String.class)
+            throw new AssertionError("maid private conversation receipt ABI");
         plugin.getMethod("publishNpcSpeech",UUID.class,String.class,String.class,long.class);
         plugin.getMethod("speakHostedNpc",UUID.class,UUID.class,String.class,String.class,long.class);
         plugin.getMethod("npcSpeechStatus",UUID.class,String.class);
@@ -34,6 +38,6 @@ public final class NpcVoiceApiTest {
         if(!privateTurn.direct() || !privateTurn.current(original,speaker,world,binding.generation(),995))
             throw new AssertionError("private turn with original listener");
         if(privateTurn.current(original,rejoined,world,binding.generation(),995))throw new AssertionError("reconnected listener");
-        System.out.println("NPC voice runtime ABI and liveness: 18 checks passed");
+        System.out.println("NPC voice runtime ABI and liveness: 20 checks passed");
     }
 }
