@@ -237,6 +237,13 @@ reconcile state; never restore an old whole world or old inventory over progress
 
 ## Compatibility boundaries
 
+For a maid with a configured expedition leader, an activity-review interval
+and native guard, `expedition_wait_seconds` optionally lets her resume guarding
+after a seated wait. It applies when the observed leader is available and the
+body has no work, danger or pending travel. A renewed direct wait starts a new
+wait interval. Existing native expedition logic handles the route and safe
+arrival.
+
 Better Combat is optional at mod load. The hosted bridge supplies charged
 attacks and server upswing execution only for Numen fake players. Ordinary client
 connections and attack inputs are not rewritten. Optional payloads must not eject

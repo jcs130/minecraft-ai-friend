@@ -81,6 +81,7 @@ class NpcBodyProfile(BaseModel):
     autonomous_rendezvous: bool = False
     default_native_guard: bool = False
     activity_review_seconds: int | None = Field(default=None, ge=10, le=600)
+    expedition_wait_seconds: int | None = Field(default=None, ge=30, le=1800)
     adventure_advice: bool = False
 
 
@@ -105,6 +106,8 @@ class NpcRole(NpcCharacterProfile, NpcBodyProfile):
             raise ValueError("default_guard_requires_native_maid_capability")
         if self.activity_review_seconds is not None and self.body_kind != "maid":
             raise ValueError("activity_review_requires_native_maid_observations")
+        if self.expedition_wait_seconds is not None and (not self.default_native_guard or self.activity_review_seconds is None):
+            raise ValueError("expedition_wait_requires_reviewed_native_guard")
         if self.adventure_advice and (not self.default_native_guard or "body:chat" not in self.allowed_tools):
             raise ValueError("adventure_advice_requires_a_delegated_companion")
         if self.native_items and (self.body_kind != "numen" or "body:use_item" not in self.allowed_tools):
@@ -242,20 +245,31 @@ def restore_default_guard(role: NpcRole, context: PlanContext) -> Step | None:
     native = current_native_state(context)
     if not role.default_native_guard or native.get("nativeGuardDelegated") is not False:
         return None
+    review = context.activity_review or {}
+    elapsed = review.get("elapsedSeconds")
+    wake_wait = (role.expedition_wait_seconds is not None and review.get("activity") == "waiting"
+                 and type(elapsed) is int and elapsed >= role.expedition_wait_seconds
+                 and native.get("sitting") is True)
     follow = native.get("follow")
-    if (native.get("taskId") != "touhou_little_maid:idle" or native.get("canMove") is not True
-            or any(native.get(flag) is not False for flag in ("passenger", "sitting", "homeMode"))
-            or not isinstance(follow, dict) or follow.get("temporaryWait") is not False):
+    if (native.get("taskId") != "touhou_little_maid:idle"
+            or any(native.get(flag) is not False for flag in ("passenger", "homeMode"))
+            or not isinstance(follow, dict)):
+        return None
+    if not wake_wait and (native.get("canMove") is not True or native.get("sitting") is not False
+                          or follow.get("temporaryWait") is not False):
         return None
     if role.activity_review_seconds is not None:
         # Residents that review their activity can resume a configured expedition
         # when free. Do not turn an explicit wait, work, or uncertain trip into a new order.
         resident = native.get("resident") or {}
         expedition = resident.get("expedition") or {}
-        if expedition.get("state") != "not_delegated" or not expedition.get("leaderDimension"):
+        if (expedition.get("state") != "not_delegated" or not expedition.get("leaderDimension")
+                or resident.get("sleeping") or resident.get("leased") or resident.get("thinking")
+                or (resident.get("combat") or {}).get("targetId")
+                or wake_wait and danger(context.snapshot)):
             return None
         scene = activity_scene(context.snapshot)
-        if scene is None or scene[0] != "free":
+        if scene is None or scene[0] != ("waiting" if wake_wait else "free"):
             return None
     step = Step(tool="body:native:guard")
     return step if context.capabilities is not None and not step_support(step, context.capabilities) else None
@@ -1261,7 +1275,8 @@ class NpcHost:
                 if scene[0] == "waiting" and steps and steps[0].tool in wait_tools:
                     renewed_purpose = steps[0].note if direct else None
                     steps = steps[1:]
-            self.journal.reviewed_activity(body_id, *scene, time.time(), renewed_purpose)
+            self.journal.reviewed_activity(body_id, *scene, time.time(), renewed_purpose,
+                                           renew_wait=self.role.expedition_wait_seconds is not None)
         if context.proposed_agenda is not None and context.agenda is not None and not self.pausing:
             windows = context.agenda["upcoming"] or [context.agenda["current"]]
             previous_end = windows[-1]["endsAt"] if windows[-1] else None

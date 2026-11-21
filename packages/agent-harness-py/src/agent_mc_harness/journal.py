@@ -161,10 +161,13 @@ class ActionJournal:
                                 (cue, changed, body))
         return row[1], None if changed else row[3], row[4], changed
 
-    def reviewed_activity(self, body: str, mode: str, cue: str, now: float, renewed_purpose: str | None = None) -> None:
+    def reviewed_activity(self, body: str, mode: str, cue: str, now: float, renewed_purpose: str | None = None,
+                          *, renew_wait: bool = False) -> None:
         with self.db:
-            self.db.execute("UPDATE npc_activity SET reviewed=?, purpose=COALESCE(?,purpose) WHERE body=? AND mode=? AND cue=?",
-                            (now, renewed_purpose, body, mode, cue))
+            self.db.execute("UPDATE npc_activity SET reviewed=?, purpose=COALESCE(?,purpose), "
+                            "since=CASE WHEN ? THEN ? ELSE since END WHERE body=? AND mode=? AND cue=?",
+                            (now, renewed_purpose, renew_wait and mode == "waiting" and renewed_purpose is not None,
+                             now, body, mode, cue))
 
     def unresolved(self, body: str) -> list[BodyAction]:
         rows = self.db.execute("SELECT action,receipt FROM dispatch WHERE body=?", (body,)).fetchall()
