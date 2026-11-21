@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.122
+
+Large successful server query results expose an exact, bounded first page to the model. Continue using the original request ID and returned offset. SDK data and the archived receipt retain the complete server observation.
+
 ## 0.5.7-rc.160-preview.120
 
 Server extensions can claim rendered chat relays after login. The common system notice, command-feedback and mining-warning handlers skip claimed chat components. Each adapter owns relay delivery and identity evidence. Native player chat keeps its existing sender evidence.
