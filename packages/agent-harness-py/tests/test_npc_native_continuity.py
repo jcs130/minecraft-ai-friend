@@ -118,8 +118,24 @@ def test_opted_in_sitting_resident_can_rejoin_live_leader_after_review():
         planner = NpcPlanner(actor, None)
         intent = Intent(id="qa-planned-wait", agent=actor.id, goal=IDLE_GOAL)
         assert [step.tool for step in await planner(intent, context)] == ["body:native:guard"]
+        context.snapshot.raw.update(sitting=False, canMove=True)
+        context.activity_review = {"activity": "free", "elapsedSeconds": 0}
+        assert [step.tool for step in await planner(intent, context)] == ["body:native:guard"]
 
     asyncio.run(planned_wait())
+
+
+def test_idle_task_does_not_cancel_an_existing_opted_in_expedition():
+    actor = role(body_kind="maid", default_native_guard=True, activity_review_seconds=90,
+                 expedition_wait_seconds=180, native_tasks=["touhou_little_maid:idle", "touhou_little_maid:attack"],
+                 allowed_tools=["body:native:guard", "body:native:task", "body:stay"])
+    context = maid_context(nativeGuardDelegated=True, sitting=False, taskId="touhou_little_maid:idle",
+                           resident={"expedition": {"leaderId": "registered-leader"}})
+    context.capabilities.native_actions.append(NativeAction(name="task"))
+    assert reviewed_steps(actor, context, [{"tool": "body:native:task", "args": {"taskId": "touhou_little_maid:idle"}}]) == []
+    work = {"tool": "body:native:task", "args": {"taskId": "touhou_little_maid:attack"}}
+    assert reviewed_steps(actor, context, [work])[0].args == work["args"]
+    assert reviewed_steps(actor, context, [{"tool": "body:stay"}])[0].tool == "body:stay"
 
 
 def test_numen_fast_attack_requires_an_observed_hostile_and_idle_body():

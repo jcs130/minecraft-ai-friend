@@ -290,7 +290,7 @@ def surveyed_here(context: PlanContext) -> bool:
             and sample.get("origin") == [math.floor(snap.position[k]) for k in ("x", "y", "z")])
 
 
-def unnecessary_step(step: Step, context: PlanContext, native: dict[str, Any]) -> bool:
+def unnecessary_step(step: Step, context: PlanContext, native: dict[str, Any], role: NpcRole) -> bool:
     if step.tool == "body:native:survey" and not step.args:
         return surveyed_here(context)
     if not native:
@@ -304,8 +304,14 @@ def unnecessary_step(step: Step, context: PlanContext, native: dict[str, Any]) -
     if step.tool == "body:native:schedule":
         return set(step.args) == {"schedule"} and isinstance(native.get("schedule"), str) and step.args["schedule"] == native["schedule"]
     if step.tool == "body:native:task":
+        task = step.args.get("taskId")
+        same_task = set(step.args) == {"taskId"} and task == native.get("taskId")
+        expedition = (native.get("resident") or {}).get("expedition") or {}
+        if (same_task and task == "touhou_little_maid:idle" and role.expedition_wait_seconds is not None
+                and already_guarding(native) and expedition.get("leaderId")):
+            return True  # Setting the existing idle task would cancel native expedition guard.
         follow = native.get("follow")
-        return (set(step.args) == {"taskId"} and step.args["taskId"] == native.get("taskId")
+        return (same_task
                 and native.get("sitting") is False and not already_guarding(native)
                 and (follow is None or isinstance(follow, dict) and not follow.get("active")) and native.get("taskEnabled") is True)
     if step.tool == "body:follow":
@@ -358,7 +364,7 @@ def reviewed_steps(role: NpcRole, context: PlanContext, values: Any) -> list[Ste
                 step.args["text"] = text
         # The plan already received this sample. A mode write is necessary
         # again after an earlier step has actually changed the body.
-        if not body_changed and unnecessary_step(step, context, native):
+        if not body_changed and unnecessary_step(step, context, native, role):
             continue
         out.append(step)
         body_changed |= step.tool not in {"body:chat", "body:observe", "body:inventory"}
@@ -480,10 +486,9 @@ class NpcPlanner:
                 return [meal]
         if intent.goal == IDLE_GOAL and not context.dialogue and not following:
             restore = restore_default_guard(role, context)
-            # A seated in-game wait is not active work. Its reviewed expiry can
-            # replace an agenda entry that would otherwise keep renewing the wait.
-            waking = (context.activity_review or {}).get("activity") == "waiting"
-            if restore and (not current_agenda or waking):
+            # For an opted-in expedition the observed free body, or a reviewed
+            # expired wait, can resume even if a previous agenda is still current.
+            if restore and (not current_agenda or role.expedition_wait_seconds is not None):
                 self.last_route = {"layer": "native-policy", "reason": "resume_configured_guard"}
                 return [restore]
         if intent.goal == IDLE_GOAL and not context.dialogue and role.activity_review_seconds is None:
