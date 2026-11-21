@@ -345,7 +345,7 @@ final class NativeMaidOwnerTravel implements Listener {
     }
 
     private EntityMaid followingMaid(UUID id, UUID ownerId, World source) {
-        if(!plugin.nativeTravelAllowed(id))return null;
+        if(!plugin.nativeTravelAllowed(id) || local.qdj.maids.brain.ResidentBodyAccess.managesCompanionMovement(id))return null;
         EntityMaid maid = HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
         boolean personal = plugin.personalTravel(id);
         if (maid == null || !ownerId.equals(maid.getOwnerUUID()) || !source.equals(maid.getBukkitEntity().getWorld())

@@ -56,6 +56,7 @@ public final class MaidAgentsMod {
         catch (Throwable failure) { throw new IllegalStateException("Cannot confirm native body custody", failure); }
     }
     static MaidResidents residents(){return running==null?null:running.residents();}
+    static MaidCompanions companions(){return running==null?null:running.companions();}
     public static boolean hasExpeditionLeader(java.util.UUID id) {
         var residents = residents();
         return residents != null && residents.expeditionDelegated(id);

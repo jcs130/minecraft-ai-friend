@@ -240,13 +240,23 @@ def routine_catch(role: NpcRole, context: PlanContext) -> Step | None:
 
 def restore_default_guard(role: NpcRole, context: PlanContext) -> Step | None:
     native = current_native_state(context)
-    if role.activity_review_seconds is not None or not role.default_native_guard or native.get("nativeGuardDelegated") is not False:
+    if not role.default_native_guard or native.get("nativeGuardDelegated") is not False:
         return None
     follow = native.get("follow")
     if (native.get("taskId") != "touhou_little_maid:idle" or native.get("canMove") is not True
             or any(native.get(flag) is not False for flag in ("passenger", "sitting", "homeMode"))
             or not isinstance(follow, dict) or follow.get("temporaryWait") is not False):
         return None
+    if role.activity_review_seconds is not None:
+        # Residents that review their activity can resume a configured expedition
+        # when free. Do not turn an explicit wait, work, or uncertain trip into a new order.
+        resident = native.get("resident") or {}
+        expedition = resident.get("expedition") or {}
+        if expedition.get("state") != "not_delegated" or not expedition.get("leaderDimension"):
+            return None
+        scene = activity_scene(context.snapshot)
+        if scene is None or scene[0] != "free":
+            return None
     step = Step(tool="body:native:guard")
     return step if context.capabilities is not None and not step_support(step, context.capabilities) else None
 
@@ -454,11 +464,11 @@ class NpcPlanner:
                 self.next_meal = now + 90.0
                 self.last_route = {"layer": "native-policy", "reason": "ordinary_meal_needed"}
                 return [meal]
-        if intent.goal == IDLE_GOAL and not context.dialogue and role.activity_review_seconds is None:
-            restore = restore_default_guard(role, context)
-            if restore and not following and not current_agenda:
+        if intent.goal == IDLE_GOAL and not context.dialogue and not following and not current_agenda:
+            if restore := restore_default_guard(role, context):
                 self.last_route = {"layer": "native-policy", "reason": "resume_configured_guard"}
                 return [restore]
+        if intent.goal == IDLE_GOAL and not context.dialogue and role.activity_review_seconds is None:
             if not following and not current_agenda and now >= self.next_catch and (catch := routine_catch(role, context)):
                 self.next_catch = now + 300.0
                 self.last_route = {"layer": "native-policy", "reason": "prepared_native_fishing"}

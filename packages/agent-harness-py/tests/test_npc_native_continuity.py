@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 from agent_mc_harness.models import ActionSupport, BodySnapshot, NativeAction
-from agent_mc_harness.npc import ModelClient, NpcPlanner, reaction_choices, restore_default_guard, reviewed_steps
+from agent_mc_harness.npc import IDLE_GOAL, ModelClient, NpcPlanner, reaction_choices, restore_default_guard, reviewed_steps
 from agent_mc_harness.runtime import Intent, PlanContext
 from simbody import SimBody
 from test_server_npc import role
@@ -60,6 +60,30 @@ def test_default_guard_resumes_only_an_idle_unoccupied_body():
                    {"nativeGuardDelegated": True}, {"taskId": "touhou_little_maid:fishing"},
                    {"follow": {"temporaryWait": True}}):
         assert restore_default_guard(actor, maid_context(**(ready | change))) is None
+
+
+def test_idle_activity_review_resumes_configured_expedition():
+    async def run():
+        actor = role(body_kind="maid", default_native_guard=True, activity_review_seconds=90,
+                     allowed_tools=["body:native:guard"])
+        expedition = {"state": "not_delegated", "leaderDimension": "minecraft:overworld"}
+        resident = {"loaded": True, "expedition": expedition}
+        ready = dict(nativeGuardDelegated=False, taskId="touhou_little_maid:idle", canMove=True,
+                     passenger=False, sitting=False, homeMode=False, follow={"temporaryWait": False},
+                     resident=resident)
+        planner = NpcPlanner(actor, None)
+        context = maid_context(**ready)
+        intent = Intent(id="qa-expedition", agent=actor.id, goal=IDLE_GOAL)
+        assert [step.tool for step in await planner(intent, context)] == ["body:native:guard"]
+        for observation in (
+            ready | {"sitting": True},
+            ready | {"resident": resident | {"sleeping": True}},
+            ready | {"resident": resident | {"expedition": {"state": "not_delegated"}}},
+            ready | {"resident": resident | {"expedition": expedition | {"pendingTravelRequestId": "qa-travel"}}},
+        ):
+            assert restore_default_guard(actor, maid_context(**observation)) is None
+
+    asyncio.run(run())
 
 
 def test_numen_fast_attack_requires_an_observed_hostile_and_idle_body():
