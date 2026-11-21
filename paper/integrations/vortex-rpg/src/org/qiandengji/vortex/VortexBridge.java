@@ -264,6 +264,28 @@ public final class VortexBridge extends JavaPlugin {
         result.putAll(io.vortexcore.rpg.ExperienceProgress.of(state,vortex.playerProfileService().experienceCurve()).fields());
         return gson.toJson(result);
     }
+    /** Cache-only lookup of the original player profile. Never constructs or joins a player. */
+    public String originalRoleProgress(UUID id) {
+        if (!Bukkit.isPrimaryThread() || !isEnabled() || vortex == null || id == null)
+            throw new IllegalStateException("Original RPG profile unavailable");
+        var result = new JsonObject();
+        result.addProperty("backend", "vortex");
+        var profiles = vortex.playerProfileService();
+        var profile = profiles.qiandengjiLoading(id) ? Optional.<UnifiedPlayer>empty() : profiles.profile(id);
+        result.addProperty("available", profile.isPresent());
+        if (profile.isEmpty()) {
+            result.addProperty("reason", "original_profile_not_loaded");
+            return result.toString();
+        }
+        var state = profile.get();
+        result.addProperty("combat", vortex.classSkillService().selectedClassDefinition(state).map(c -> c.id()).orElse(""));
+        result.addProperty("level", state.level());
+        result.addProperty("xp", state.experience());
+        result.addProperty("skillPoints", vortex.classSkillService().unspentSkillPoints(state));
+        result.addProperty("activeSkill", vortex.spellbookService().activeSpellId(state).orElse(""));
+        return result.toString();
+    }
+
     /** Read-only native roster; no commands, invitation, teleport or enrollment. */
     public String partyState(Player p){
         var result=new LinkedHashMap<>(NativePartyView.state(vortex,p));

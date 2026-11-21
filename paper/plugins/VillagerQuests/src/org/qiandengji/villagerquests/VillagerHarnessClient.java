@@ -18,6 +18,8 @@ final class VillagerHarnessClient {
     private final String key;
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2))
             .followRedirects(HttpClient.Redirect.NEVER).build();
+    private long nextMemoryProbe;
+    private boolean commissionMemory;
 
     VillagerHarnessClient(String endpoint, String key) {
         this.endpoint = URI.create(endpoint);
@@ -31,6 +33,10 @@ final class VillagerHarnessClient {
     }
 
     String decide(JsonObject observation) throws IOException, InterruptedException {
+        if (observation.has("completedCommissions") && !supportsCommissionMemory()) {
+            observation = observation.deepCopy();
+            observation.remove("completedCommissions");
+        }
         HttpRequest request = HttpRequest.newBuilder(endpoint).timeout(TIMEOUT)
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + key)
@@ -39,6 +45,22 @@ final class VillagerHarnessClient {
         if (response.statusCode() != 200 || response.body().length() > 4096)
             throw new IOException("Villager Harness decision unavailable");
         return parse(response.body(), observation.get("eventId").getAsString());
+    }
+
+    private boolean supportsCommissionMemory() throws InterruptedException {
+        long now = System.nanoTime();
+        if (nextMemoryProbe != 0 && now - nextMemoryProbe < 0) return commissionMemory;
+        HttpRequest request = HttpRequest.newBuilder(endpoint.resolve("health")).timeout(Duration.ofSeconds(1))
+                .header("Authorization", "Bearer " + key).GET().build();
+        try {
+            HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
+            commissionMemory = response.statusCode() == 200 && response.headers().firstValue("X-QD-Villager-Memory")
+                    .filter("commissions-v1"::equals).isPresent();
+        } catch (IOException unavailable) {
+            commissionMemory = false;
+        }
+        nextMemoryProbe = now + Duration.ofSeconds(10).toNanos();
+        return commissionMemory;
     }
 
     static String parse(String reply, String eventId) throws IOException {

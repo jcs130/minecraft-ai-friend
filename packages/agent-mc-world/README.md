@@ -1,5 +1,16 @@
 # Agent MC World
 
+A host can enroll one Mineflayer character in body handoffs through
+`MinecraftClientOptions.bodyHandoff`. Bind the character ID, actual player UUID,
+controller generation and authenticated request transport when constructing the client.
+The Agent gets `mc_character_body` to inspect available bodies, select a target and
+read the original request. The current turn ends on submission. Build a new SDK
+session for each acquired generation. The coordinator uses `readyForHandoff`,
+`releaseForBodyHandoff`, `connectForBodyHandoff` and `refreshBodyHandoff`.
+For native connection and save confirmation, configure the private plugin channel
+and call `witnessBodyHandoff` through the existing authenticated host. Receipt and
+player checks remain scoped to the original request, UUID and generation.
+
 Voice diagnostics candidate: `mc_voice` and the proximity SDK retain bounded server `nextStep` guidance and optional `delivery` counters. `packetOffers` counts server send events, not client playback. `sent` still leaves `recipientHeard: unknown` and `goal_completed: false`; never replay an unknown request with a new ID. This source change requires a rebuilt client package and a compatible server; it is not automatically installed in existing hosts.
 The Numen hosting source candidate adds `NumenClientWorld` and `NumenBodyPort`
 to the public client/extension API. An explicitly supplied authenticated native

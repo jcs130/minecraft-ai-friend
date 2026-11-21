@@ -1,18 +1,28 @@
-"""Memory access point. One partition (``group_id``) per body kind + server + world + body + agent scope."""
+"""Selective character memory. Durable facts require a stable scope and original evidence."""
 from __future__ import annotations
 
-import re
 import hashlib
 import json
-from datetime import datetime
+import re
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
-from ..models import BodyEvent, BodyIdentity, utcnow
+from ..models import ActionReceipt, BodyEvent, BodyIdentity, utcnow
 
 GROUP_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")  # same rule as the graphiti sidecar
-REMEMBER = {"chat", "whisper", "dialogue", "death", "respawn", "dimension", "player_join", "player_leave", "action_result", "combat"}
+_SOURCE_ID = re.compile(r"[A-Za-z0-9_.:~/-]{1,200}\Z")
+_SUBJECT = re.compile(r"[a-z0-9][a-z0-9_./:-]{0,159}\Z")
+_LIFE = {
+    "death": ("death", "diedAt", "已确认原身体死亡。"),
+    "respawn": ("recovery", "observedAt", "再次观察到原身体存活。"),
+}
+_ADVENTURE = {
+    "accept_quest": ("quest_accepted", "已确认接取公会委托"),
+    "turn_in_quest": ("quest_completed", "已确认交付公会委托"),
+    "claim_ruin": ("ruin_claimed", "已确认领取遗迹奖励"),
+}
 
 
 class MemoryEpisode(BaseModel):
@@ -59,19 +69,69 @@ def check_group(group_id: str) -> str:
     return group_id
 
 
-def episode_from_event(event: BodyEvent, identity: BodyIdentity, seq: int) -> MemoryEpisode | None:
-    """Only meaningful perception becomes memory; text is the body's own wording, attributed, never instructions."""
-    if event.kind not in REMEMBER or not event.text.strip():
+def reference(value: Any, pattern: re.Pattern[str] = _SOURCE_ID) -> str | None:
+    return value if isinstance(value, str) and pattern.fullmatch(value) else None
+
+
+def significant_episode(kind: str, text: str, source: str, original_id: str, observed: datetime) -> MemoryEpisode:
+    """Use the original idempotence key, independent of transport and polling time."""
+    digest = hashlib.sha256(json.dumps([source, kind, original_id], separators=(",", ":")).encode()).hexdigest()
+    return MemoryEpisode(id=f"fact-{digest}", kind=kind, name=kind, body=text, source_description=source,
+                         reference_time=observed, provenance={"sourceId": original_id})
+
+
+def episode_from_event(event: BodyEvent, identity: BodyIdentity, seq: int | None = None) -> MemoryEpisode | None:
+    """Capture life transitions only; chat and telemetry belong to the live turn and receipt journal."""
+    if (event.kind not in _LIFE or event.body_kind != identity.kind or event.body_id not in (None, identity.body_id)
+            or event.data.get("channel") in ("private", "party", "team")):
         return None
-    speaker = event.data.get("speaker") or event.data.get("speakerId")
-    who = f"{speaker}: " if speaker else ""
-    where = f" [{identity.world.dimension}]" if identity.world.dimension else ""
-    # A process-local counter repeats after restart and used to overwrite older SQLite rows.
-    # Prefer the original event ID; otherwise the observation time and payload identify the event.
-    source_id = event.data.get("eventId") or event.data.get("event_id")
-    material = [identity.body_id, event.kind, source_id] if source_id else [
-        identity.body_id, event.kind, event.at.isoformat(), event.request_id, speaker, event.text]
-    event_id = hashlib.sha256(json.dumps(material, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
-    return MemoryEpisode(id=f"event-{event_id}", kind=event.kind, name=f"{event.kind}{where}",
-                         body=f"{who}{event.text}"[:20_000], source_description=f"{identity.kind} body {identity.name or identity.body_id}",
-                         reference_time=event.at, actors=[a for a in (identity.name, speaker) if a])
+    key, at_key, summary = _LIFE[event.kind]
+    raw = event.data.get(key)
+    evidence = raw if isinstance(raw, dict) else {}
+    # A death snapshot and a following notification can carry the same server event.
+    if evidence.get("maidId", identity.body_id) != identity.body_id or (
+            identity.owner_id and evidence.get("ownerId", identity.owner_id) != identity.owner_id):
+        return None
+    source_id = reference(evidence.get("eventId") or event.data.get("eventId") or event.data.get("event_id"))
+    if not source_id:
+        return None
+    observed = event.at
+    if isinstance(at := evidence.get(at_key), str):
+        try:
+            value = datetime.fromisoformat(at)
+            if value.tzinfo is not None:
+                observed = value.astimezone(UTC)
+        except ValueError:
+            pass
+    return significant_episode(event.kind, summary, f"{identity.kind}:{identity.body_id}:life", source_id, observed)
+
+
+def episode_from_receipt(receipt: ActionReceipt, observed: datetime | None = None) -> MemoryEpisode | None:
+    """Retain a small set of server-confirmed effects, never prose or queued/rejected actions."""
+    if receipt.status != "completed" or not receipt.terminal or not isinstance(receipt.data, dict):
+        return None
+    observed = observed or utcnow()
+    data = receipt.data
+    if isinstance(effect := data.get("adventure"), dict) and effect.get("effect") == "confirmed":
+        if (milestone := _ADVENTURE.get(reference(effect.get("kind")) or "")) and (subject := reference(effect.get("id"), _SUBJECT)):
+            return significant_episode(milestone[0], f"{milestone[1]} {subject}。", "adventure_receipt",
+                                       receipt.request_id, observed)
+    if data.get("maidAction") != "make" or not isinstance(reply := data.get("reply"), dict):
+        return None
+    row = reply.get("data")
+    if (not isinstance(row, dict) or row.get("operationId") != receipt.request_id or row.get("status") != "completed"
+            or row.get("action") != "make" or row.get("goalCompleted") is not True):
+        return None
+    detail = row.get("observation")
+    if not isinstance(detail, dict) or detail.get("verified") is not True or detail.get("effectsApplied") is not True:
+        return None
+    item, count = reference(detail.get("itemId"), _SUBJECT), detail.get("count")
+    if not item or type(count) is not int or count < 1 or detail.get("inventory") not in ("chest", "backpack"):
+        return None
+    return significant_episode("craft_completed", f"工坊已确认制作 {item} × {count}。", "workshop_receipt", receipt.request_id, observed)
+
+
+def village_commission_memory(commission_id: str, observed: datetime) -> MemoryEpisode:
+    if not reference(commission_id, _SUBJECT):
+        raise ValueError("invalid_commission_memory_id")
+    return significant_episode("quest_completed", f"这名玩家已完成你发布的公会委托 {commission_id}。", "village_board", commission_id, observed)

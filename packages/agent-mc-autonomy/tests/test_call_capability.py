@@ -8,6 +8,14 @@ from agent_mc_autonomy.call_capability import PROTOCOL, SCHEMA
 from agent_mc_autonomy.controller import READ_PROTOCOL, model_tools
 
 
+def test_body_choice_is_direct_only_for_a_core_that_advertises_it():
+    tool = {"name": "mc_character_body", "description": "Choose an authorized body",
+            "inputSchema": {"type": "object", "properties": {"action": {"enum": ["current", "switch", "lookup"]}}}}
+    assert not any(row["function"]["name"] == tool["name"] for row in model_tools([]))
+    exposed = next(row["function"] for row in model_tools([tool]) if row["function"]["name"] == tool["name"])
+    assert exposed["parameters"]["properties"]["action"]["enum"] == ["current", "switch", "lookup"]
+
+
 def bridge(tmp_path, answer, *, legacy=False):
     client = MinecraftBridge("unused-node", tmp_path / "unused", tmp_path / "config", tmp_path / "log")
     client.tools = [{"name": "mc_method", "_meta": {} if legacy else {PROTOCOL: {

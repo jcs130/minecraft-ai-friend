@@ -11,6 +11,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.Tameable;
+import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -71,6 +72,11 @@ final class Listeners implements Listener {
         Board.Evidence e = new Board.Evidence("vqk-" + dead.getUniqueId(), Board.EvidenceKind.KILL, actor, dead.getType().getKey().toString(),
                 l.getWorld() == null ? null : l.getWorld().getName(), l.getX(), l.getY(), l.getZ(), 1, System.currentTimeMillis(), null);
         apply(e);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onResidentDeath(EntityDeathEvent event) {
+        if (event.getEntity() instanceof Villager villager) plugin.lives.recordDeath(villager);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

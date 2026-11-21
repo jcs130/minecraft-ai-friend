@@ -72,6 +72,9 @@ function ipcToolOutcome(out: string | IpcToolOutcome): string | ToolOutcome {
 
 export class MinecraftWorldProxy implements World {
   readonly id = 'minecraft';
+  async sendHandoffWitness(playerUuid:string,channel:string,nonce:string):Promise<void> {
+    await this.rpc({kind:'handoff-witness',playerUuid,channel,nonce},RPC_TIMEOUT_MS);
+  }
   /** Optional host activity port; no model calls, history reads or game actions. */
   publishAgentActivity(value: unknown): void { const record = normalizeAgentActivity(value); if (record) this.cast({ kind: 'viewer-activity', value: record }); }
 

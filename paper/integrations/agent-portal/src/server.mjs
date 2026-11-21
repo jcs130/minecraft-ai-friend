@@ -49,6 +49,8 @@ import {NekoAuth,NEKO_CALLBACK} from './neko-auth.mjs';
 import {NekoPluginLinks} from './neko-plugin-links.mjs';
 import { MaidConnections, maidConnectionRoute } from './maid-connections.mjs';
 import {hostingRoutes} from './hosting-routes.mjs';
+import {characterBodyRoutes} from './character-body-routes.mjs';
+import {characterDeviceRoutes} from './character-device-routes.mjs';
 import {ResidentTurns} from './resident-turns.mjs';
 import { WorldMap } from './world-map.mjs';
 
@@ -98,6 +100,7 @@ export function createPortal(config, options = {}) {
   const cloud = config.sourceMode === 'cloud' ? new CloudSource(config, store) : null;
   const game = options.game || (cloud ? new CloudGame(config, store, cloud) : new GameData(config, store.salt));
   const hostedAgents=options.hostedAgents??options.hostedAgentsFactory?.({config,store,game})??null;
+  const characterDevices=characterDeviceRoutes({provider:hostedAgents?.characterDevices,publicOrigin:config.publicOrigin});
   const world = options.world || (cloud ? new CloudWorld(config, game, store, cloud) : new WorldCatalog(config, game, store));
   const challenges = cloud ? new CloudChallenges(store,game) : new SavedChallenges(config,game,store);
   const live = new Live(config, store);
@@ -285,6 +288,8 @@ export function createPortal(config, options = {}) {
       if (req.portalOrigin.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
       const url = new URL(req.url, req.portalOrigin.origin);
       const pathname = url.pathname;
+      if (await characterDevices.machine({req,res,pathname,jsonBody,respond,rate,
+        peer:digest(rateAddress(req,config))})) return;
       if (pathname.startsWith('/watch/') && await (await nativeReady)?.http(req, res)) return;
       if (['/join','/join.html','/downloads.html'].includes(pathname)) {
         if (!['GET', 'HEAD'].includes(req.method)) throw fail(405, 'METHOD_NOT_ALLOWED', '请打开接入网页');
@@ -540,6 +545,21 @@ export function createPortal(config, options = {}) {
         rate('write:' + digest(rateAddress(req, config)), 80, 60000);
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
+      if (await characterBodyRoutes({req,res,pathname,browserAuth,respond,jsonBody,residents:residentTurns,
+        provider:options.characterBodies ?? hostedAgents?.characterBodies,
+        characterDevices,
+        characterHistory:options.characterHistory,
+        async ownedPlayers(owner) {
+          const owned = new Set(store.ownedUuids(owner.id));
+          if (!owned.size) return [];
+          return (await game.roster()).filter(row => owned.has(row.playerUuid)
+            && !row.historical && !row.reserved && !row.isReserved && !row.identityConflict)
+            .map(row => ({
+              // The original verified player UUID is the own-role principal.
+              characterId:row.playerUuid, ownerGameId:row.playerUuid, name:row.name,
+              owns:() => store.ownedUuids(owner.id).includes(row.playerUuid),
+            }));
+        }})) return;
       if (pathname === '/api/v1/resident-onboarding/browser-approve' && req.method === 'POST') {
         rate('resident-browser-approve:'+digest(rateAddress(req,config)),24,60000);
       }

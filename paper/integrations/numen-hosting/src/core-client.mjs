@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 
 // Consume the shared core's public build and its existing MCP implementation.
 // There is no second tool schema, model loop or Minecraft socket here.
-export async function coreClientFactory({coreDirectory,dataRoot,combatAttention,checkControl}){
+export async function coreClientFactory({coreDirectory,dataRoot,combatAttention,checkControl,bodyTools}){
   const root=resolve(coreDirectory),require=createRequire(join(root,'package.json'));
   const core=await import(pathToFileURL(join(root,'dist/runtime/src/client/index.js')));
   const {createMinecraftMcpServer}=await import(pathToFileURL(join(root,'dist/runtime/src/mcp/server.js')));
@@ -24,7 +24,7 @@ export async function coreClientFactory({coreDirectory,dataRoot,combatAttention,
     const world=new core.NumenClientWorld(port);
     const runtime=new core.MinecraftAgentClient({cfg:{...structuredClone(core.MINECRAFT_CLIENT_DEFAULTS),
       host:role.serverId,port:25565,username:role.name,auth:'offline',memoryAgentId:role.roleUuid},
-      dataDir:directory,log:core.nullLogger()},world);
+      dataDir:directory,log:core.nullLogger(),extraTools:bodyTools?.(role,epoch)},world);
     const server=createMinecraftMcpServer(runtime,manifest.version);
     const client=new Client({name:'numen-hosted-harness',version:'0.1.0'});
     const [front,back]=InMemoryTransport.createLinkedPair();

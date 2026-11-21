@@ -3,6 +3,14 @@ import net.neoforged.fml.common.Mod;
 @Mod("qiandengji_hosted_bridge")
 public final class HostedNativeBridge {
     public HostedNativeBridge(){
+        var events=net.neoforged.neoforge.common.NeoForge.EVENT_BUS;
+        events.addListener(NativeCustodyFence::beforeWorlds);
+        events.addListener(NativeCustodyFence::stopped);
+        events.addListener(NativeResidentHandoffPort::start);
+        events.addListener(NativeResidentHandoffPort::stop);
+        events.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, NativeCustodyFence::onJoin);
+        events.addListener(net.neoforged.bus.api.EventPriority.HIGHEST,NativePlayerCustody::protectPendingPlayer);
+        events.addListener(net.neoforged.bus.api.EventPriority.HIGHEST,NativePlayerCustody::preventPendingPickup);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(this::tick);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(HostedMigration::damage);
     }

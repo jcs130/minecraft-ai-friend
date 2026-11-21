@@ -60,6 +60,25 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private NativeMaidOwnerTravel ownerTravel;
     private CompanionRespawn respawns;
     private NativeMaidBodyPort bodyPort;
+    /** Trusted game-thread participant. The role coordinator supplies the existing controller generation. */
+    public String custodySourceGeneration(UUID owner, UUID maid, UUID controller) {
+        if (!Bukkit.isPrimaryThread() || bodyPort == null || !unifiedBody(maid)) return null;
+        return bodyPort.custodySourceGeneration(owner, maid, controller);
+    }
+    public boolean checkCustodySource(UUID owner, UUID maid, UUID controller, String generation) {
+        if (!Bukkit.isPrimaryThread() || bodyPort == null || !unifiedBody(maid)) return false;
+        bodyPort.checkCustodySource(owner,maid,controller,generation);
+        return true;
+    }
+    public void releaseCustodySource(UUID owner, UUID maid, UUID controller, String generation) throws Exception {
+        if (!Bukkit.isPrimaryThread() || bodyPort == null || !unifiedBody(maid)) throw new IllegalStateException("No native custody source");
+        bodyPort.releaseCustodySource(owner,maid,controller,generation);
+    }
+    public String acquireCustodyTarget(UUID owner, UUID maid, UUID controller) throws Exception {
+        if (!Bukkit.isPrimaryThread() || bodyPort == null || !unifiedBody(maid)) throw new IllegalStateException("No native custody target");
+        return bodyPort.acquireCustodyTarget(owner,maid,controller);
+    }
+
     boolean nativeControlled(UUID id){return bodyPort!=null&&bodyPort.active(id);}
     private final Set<UUID> unifiedBodies=new HashSet<>();
     void registerUnifiedBody(UUID id){unifiedBodies.add(id);}
@@ -351,7 +370,8 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     }
     public static EntityMaid nativeMaid(org.bukkit.entity.Entity entity){
         if(entity==null)return null;
-        Object handle=((CraftEntity)entity).getHandle();return handle instanceof EntityMaid maid?maid:null;
+        Object handle=((CraftEntity)entity).getHandle();
+        return handle instanceof EntityMaid maid && !local.qdj.maids.brain.MaidAgentsMod.custodyHeld(maid.getUUID()) ? maid : null;
     }
     private JsonObject records(){return registry.getAsJsonObject("maids");}
     private void saveRegistry()throws Exception{ReceiptJournal.write(registryFile,registry,Files.exists(registryFile));}
@@ -402,7 +422,10 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         catch (CompatibilityException denied) { return denied.code(); }
     }
     EntityMaid ownedLoaded(UUID actor,UUID id){
-        owned(actor,id);EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
+        owned(actor,id);
+        if(local.qdj.maids.brain.MaidAgentsMod.custodyHeld(id))
+            throw new CompatibilityException("body_parked","This original body is parked. Query the current body before acting.");
+        EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
         if(maid==null||!maid.isAlive()||!maid.getBukkitEntity().isValid())throw new CompatibilityException(maid!=null&&!maid.isAlive()?"maid_dead":"unloaded","Query context before acting on the original body");
         return maid;
     }

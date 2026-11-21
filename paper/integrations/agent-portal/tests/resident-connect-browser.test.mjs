@@ -11,8 +11,8 @@ const slot = {id:'new-maid', bodyKind:'maid', bodyId:randomUUID(), ownerGameId:r
 const kirito = {id:'kirito', name:'桐人', bodyKind:'numen', bodyId:randomUUID(),
   characterId:randomUUID(), ownerGameId:randomUUID(), workerHash:'b'.repeat(64)};
 
-async function fixture(t, options = {}) {
-  const f = await siteFixture(t, {residentTurns:[kirito], residentCreationSlots:[slot], ...options});
+async function fixture(t, options = {}, dependencies = {}) {
+  const f = await siteFixture(t, {residentTurns:[kirito], residentCreationSlots:[slot], ...options}, dependencies);
   const store = f.portal.store, owner = store.db.prepare('SELECT id FROM owners LIMIT 1').get();
   store.db.prepare('INSERT INTO ownerships(owner_id,agent_uuid,proof,created_at) VALUES(?,?,?,?)').run(owner.id,kirito.ownerGameId,'fixture',Date.now());
   const browser = await puppeteer.launch({executablePath:process.env.PORTAL_BROWSER_EXECUTABLE, headless:true,
@@ -32,6 +32,73 @@ async function login(page) {
 const noOverflow = page => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
 const visible = (page,id) => page.waitForSelector('#' + id, {visible:true});
 const enabled = (page,id) => page.waitForSelector('#' + id + ':enabled', {visible:true});
+
+test('N.E.K.O. browser body management reuses the signed-in owner and keeps pairing separate', browserTest, async t => {
+  const {origin,page,store,owner,uuid}=await fixture(t,{}, {characterBodies:{
+    current:characterId=>({characterId,activeKind:'mineflayer',targetKinds:['numen'],generation:3,status:'ready'})
+  }});
+  store.db.prepare('DELETE FROM ownerships WHERE owner_id=?').run(owner.id);
+  store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id,uuid,'fixture',Date.now());
+  const writes=[];
+  page.on('request',request=>{if(request.method()!=='GET') writes.push(new URL(request.url()).pathname);});
+  await page.goto(origin+'/resident-connect.html?flow=bodies');
+  await login(page);
+  await enabled(page,'handoff-switch');
+  assert.equal(await page.$eval('#legacy',el=>el.hidden),true);
+  assert.equal(await page.$eval('#authorize',el=>el.hidden),true);
+  assert.equal(await page.$eval('#handoff-role',el=>el.value),uuid);
+  assert.deepEqual(writes,['/api/v1/sessions']);
+  const post=(op,body,token)=>fetch(origin+'/api/v1/resident-onboarding/'+op,{method:'POST',
+    headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body)}).then(r=>r.json());
+  const pending=await post('browser-start',{bodyRead:true});
+  await page.goto(origin+'/resident-connect.html?flow=browser&bodyRead=1#'+pending.id);
+  await visible(page,'body-view-permission');
+  assert.equal(await page.$eval('#body-view-allowed',el=>el.checked),false);
+  await page.click('#body-view-allowed');
+  await page.type('#browser-code',pending.code);
+  await page.click('#browser-approve button');
+  await page.waitForSelector('#browser-approve[hidden]');
+  const status=await post('browser-status',{},pending.secret);
+  assert.ok(status.bodyReadExpiresAt>Date.now()); assert.equal(status.playerAuthorizationExpiresAt,undefined);
+  assert.deepEqual(writes,['/api/v1/sessions','/api/v1/resident-onboarding/browser-approve']);
+});
+
+test('the resident can choose a body and reload an interrupted switch without a second POST', browserTest, async t => {
+  let original, done = false;
+  const posts = [], reads = [];
+  const {page,origin} = await fixture(t, {}, {characterBodies:{
+    current:async characterId => ({characterId, activeKind:done ? 'maid' : 'numen', generation:done ? 4 : 3,
+      targetKinds:original ? [] : ['maid'], status:original && !done ? 'switching' : 'ready',
+      pendingRequestId:original && !done ? original.requestId : null, autonomous:true}),
+    switchBody:async value => { posts.push(value); original = value; throw Error('synthetic response interrupted'); },
+    lookup:async value => {
+      reads.push(value);
+      return {...original, activeKind:done ? 'maid' : 'numen', status:done ? 'completed' : 'switching',
+        phase:done ? 'completed' : 'releasing', generation:done ? 4 : 3};
+    }
+  }});
+  await page.goto(origin+'/resident-connect.html?flow=connect&bodyKind=numen');
+  await login(page);
+  await enabled(page,'handoff-switch');
+  assert.equal(posts.length, 0);
+  assert.match(await page.$eval('#handoff-current', el => el.textContent), /Numen.*自主/);
+  assert.equal(await page.$eval('#handoff-target', el => el.value), 'maid');
+  await page.click('#handoff-switch');
+  await page.waitForFunction(() => document.querySelector('#handoff-result').textContent.includes('查看原请求'));
+  assert.equal(posts.length, 1);
+  assert.equal(original.characterId, kirito.characterId);
+  assert.equal(original.expectedGeneration, 3);
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector('#handoff-result').textContent.includes('正在交接身体'));
+  assert.deepEqual(reads, [{characterId:kirito.characterId, requestId:original.requestId}]);
+  done = true;
+  await page.click('#handoff-check');
+  await page.waitForFunction(() => document.querySelector('#handoff-result').textContent === '已切换到车万女仆。');
+  assert.match(await page.$eval('#handoff-current', el => el.textContent), /当前身体 · 车万女仆/);
+  assert.equal(posts.length, 1);
+  assert.ok(reads.every(row => row.requestId === original.requestId));
+  assert.equal(await noOverflow(page), true);
+});
 
 test('the shared desktop authorization screen discloses both modes and confirms only once', browserTest, async t => {
   const {page,origin} = await fixture(t);

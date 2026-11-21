@@ -175,6 +175,23 @@ final class GuildManager implements Listener {
         out.addProperty("activeId", plugin.getConfig().getString(base(p.getUniqueId()) + ".active.id", ""));
         return out;
     }
+    /** Progress already written by the existing player ledger, without live eligibility checks. */
+    com.google.gson.JsonObject originalRoleProgress(UUID id) {
+        var result = new com.google.gson.JsonObject();
+        var config = plugin.getConfig();
+        String path = base(id);
+        String active = config.getString(path + ".active.id", "");
+        result.addProperty("joined", config.contains(path + ".joined"));
+        result.addProperty("completed", config.getInt(path + ".completed"));
+        result.addProperty("reputation", config.getInt(path + ".fame"));
+        result.addProperty("activeId", active);
+        result.addProperty("status", active.isEmpty() ? "none" : expiredDaily(active) ? "expired" : "recorded");
+        if (!active.isEmpty()) {
+            result.addProperty("recordedProgress", config.getInt(path + ".active.progress"));
+        }
+        return result;
+    }
+
     com.google.gson.JsonObject progressState(Player p) {
         // Never call active()/status() here: old expired daily contracts may be
         // released by those legacy paths. A progress query must retain the slot.

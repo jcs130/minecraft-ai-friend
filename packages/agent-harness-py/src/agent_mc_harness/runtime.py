@@ -21,9 +21,9 @@ from .body.base import BodyAdapter, new_request_id
 from .fastslow import Candidate, Decision, FastSlow
 from .learning.reflection import ReflectionLoop
 from .learning.strategies import StrategyStore
-from .memory.base import Fact, MemoryEpisode
+from .memory.base import Fact, MemoryEpisode, episode_from_event, episode_from_receipt
 from .memory.router import MemoryRouter
-from .models import ACTION_VERBS, ActionReceipt, BodyAction, BodyEvent, BodySnapshot, Capabilities, utcnow
+from .models import ACTION_VERBS, ActionReceipt, BodyAction, BodyEvent, BodyIdentity, BodySnapshot, Capabilities, utcnow
 from .journal import ActionJournal
 from .scheduler import BodyLease, BrainMetrics, WorkerPool
 
@@ -186,10 +186,24 @@ class HarnessRuntime:
         elif event.kind in ("player_join", "player_leave"):
             self.emit("player_presence", event.text, 1, event.data)
         if self.memory is not None and self.body is not None and (identity := self.body.identity()) is not None:
+            self._remember(episode_from_event(event, identity), identity)
+
+    def _remember(self, episode: MemoryEpisode | None, identity: BodyIdentity) -> None:
+        if self.memory is not None and episode is not None:
             with contextlib.suppress(RuntimeError):
-                task = asyncio.get_running_loop().create_task(self.memory.observe(event, identity))
+                task = asyncio.get_running_loop().create_task(self._archive(episode, identity.group_id()))
                 self._memory_tasks.add(task)
                 task.add_done_callback(self._memory_tasks.discard)
+
+    async def _archive(self, episode: MemoryEpisode, group: str) -> None:
+        if self.memory is not None:
+            try:
+                await self.memory.add(group, episode)
+            except Exception as error:
+                self.emit("body", "memory archive unavailable", 1, {"error": type(error).__name__})
+
+    def remember_receipt(self, receipt: ActionReceipt, identity: BodyIdentity) -> None:
+        self._remember(episode_from_receipt(receipt), identity)
 
     # ---- events -----------------------------------------------------------------------------------
     def emit(self, kind: EventKind, text: str, severity: int = 1, data: dict[str, Any] | None = None) -> HarnessEvent:
@@ -497,6 +511,8 @@ class HarnessRuntime:
         def record(receipt: ActionReceipt) -> ActionReceipt:
             if self.journal is not None:
                 self.journal.settle(body_key, receipt)
+            if identity is not None and receipt.request_id == rid:
+                self.remember_receipt(receipt, identity)
             return receipt
         try:
             receipt = await self.body.act(action)

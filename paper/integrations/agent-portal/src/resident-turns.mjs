@@ -50,7 +50,9 @@ export class ResidentTurns {
         id TEXT PRIMARY KEY, secret_hash TEXT UNIQUE NOT NULL, code_hash TEXT NOT NULL,
         until INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, owner TEXT, token_until INTEGER);
       CREATE TABLE IF NOT EXISTS resident_play_grants (
-        secret_hash TEXT PRIMARY KEY, owner TEXT NOT NULL, until INTEGER NOT NULL, client_id TEXT)`);
+        secret_hash TEXT PRIMARY KEY, owner TEXT NOT NULL, until INTEGER NOT NULL, client_id TEXT);
+      CREATE TABLE IF NOT EXISTS resident_body_views (
+        login_id TEXT PRIMARY KEY, owner TEXT, token_hash TEXT UNIQUE, until INTEGER NOT NULL)`);
     const bodies = new Set(), keys = new Set(), characters = new Set();
     for (const raw of [...(config.residentTurns ?? []), ...(config.residentCreationSlots ?? []).map(s => ({...s, fresh: true}))]) {
       const r = {...raw};
@@ -177,7 +179,7 @@ export class ResidentTurns {
       .run(owner,hash(code),expiresAt);
     return {code,expiresAt};
   }
-  startBrowserLogin() {
+  startBrowserLogin({bodyRead = false} = {}) {
     const id = randomUUID();
     const secret = 'rba_' + randomBytes(32).toString('base64url');
     const code = String(randomInt(1_000_000)).padStart(6, '0');
@@ -186,9 +188,11 @@ export class ResidentTurns {
     db.prepare('DELETE FROM resident_browser_logins WHERE until<=?').run(this.now());
     db.prepare('INSERT INTO resident_browser_logins(id,secret_hash,code_hash,until) VALUES(?,?,?,?)')
       .run(id,hash(secret),hash(id + code),expiresAt);
+    db.prepare('DELETE FROM resident_body_views WHERE until<=?').run(this.now());
+    if (bodyRead === true) db.prepare('INSERT INTO resident_body_views(login_id,until) VALUES(?,?)').run(id,expiresAt);
     return {id,secret,code,expiresAt};
   }
-  approveBrowserLogin(owner, {id, code, player = false}) {
+  approveBrowserLogin(owner, {id, code, player = false, bodyRead = false}) {
     if (typeof id !== 'string' || !uuid.test(id) || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
       throw denied(400,'INVALID_BROWSER_LOGIN');
     }
@@ -209,6 +213,9 @@ export class ResidentTurns {
           db.prepare('INSERT INTO resident_play_grants(secret_hash,owner,until) VALUES(?,?,?)')
             .run(pending.secret_hash,owner,now + accountExpiry);
         }
+        if (changed.changes && bodyRead === true) {
+          db.prepare('UPDATE resident_body_views SET owner=?,until=? WHERE login_id=? AND until>?').run(owner,now + accountExpiry,id,now);
+        }
         db.exec('COMMIT');
       } catch (error) { db.exec('ROLLBACK'); throw error; }
     }
@@ -228,8 +235,21 @@ export class ResidentTurns {
       .run(pending.owner,hash(token),pending.token_until);
     const playerAuthorization = db.prepare('SELECT until FROM resident_play_grants WHERE secret_hash=? AND owner=? AND until>?')
       .get(pending.secret_hash,pending.owner,now)?.until;
+    const view = db.prepare('UPDATE resident_body_views SET token_hash=? WHERE login_id=? AND owner=? AND until>? RETURNING until')
+      .get(hash(token),pending.id,pending.owner,now);
     return {state:'authorized',onboardingToken:token,expiresAt:pending.token_until,
+      ...(view ? {bodyReadExpiresAt:view.until} : {}),
       ...(playerAuthorization ? {playerAuthorizationExpiresAt:playerAuthorization} : {})};
+  }
+  bodyViewOwner(req) {
+    if (req.method !== 'GET' || req.headers.origin || req.headers.cookie) throw denied(403,'PLUGIN_READ_ONLY');
+    const token = (req.headers.authorization || '').match(/^Bearer (rot_[A-Za-z0-9_-]{43})$/)?.[1];
+    const now = this.now();
+    const view = token && this.store.db.prepare(`SELECT v.owner FROM resident_body_views v
+      JOIN resident_onboarding o ON o.token_hash=v.token_hash AND o.owner=v.owner
+      WHERE v.token_hash=? AND v.until>? AND o.token_until>? AND o.connected IS NULL`).get(hash(token),now,now);
+    if (!view || !this.store.ownerById(view.owner)) throw denied(401,'BODY_VIEW_AUTHORIZATION_REQUIRED');
+    return {id:view.owner};
   }
   preparePlayer(req, input, prepare) {
     if (req.method !== 'POST' || req.headers.origin || req.headers.cookie) throw denied(403,'PLUGIN_REQUIRED');
@@ -257,7 +277,7 @@ export class ResidentTurns {
     const input = await jsonBody(req, op === 'create' ? 8192 : 512), db = this.store.db;
     if (op === 'browser-start') {
       if (req.headers.authorization) throw denied(403,'PLUGIN_REQUIRED');
-      return respond(res,201,this.startBrowserLogin());
+      return respond(res,201,this.startBrowserLogin(input));
     }
     if (op === 'browser-status') return respond(res,200,this.browserLoginStatus(req));
     if (op === 'pair') {

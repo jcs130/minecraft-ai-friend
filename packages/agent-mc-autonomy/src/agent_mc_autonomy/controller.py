@@ -205,6 +205,8 @@ def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="defau
     # Keep its real schema visible instead of hiding it behind Mineflayer tools.
     if any(tool["name"] == "mc_numen" for tool in catalogue):
         direct.add("mc_numen")
+    if any(tool["name"] == "mc_character_body" for tool in catalogue):
+        direct.add("mc_character_body")
     available = sorted(tool["name"] for tool in catalogue if tool["name"] not in HIDDEN_TOOLS)
     advanced = [name for name in available if name not in direct]
     if context_mode == "full":

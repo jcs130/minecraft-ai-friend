@@ -1,0 +1,15 @@
+# Mineflayer device handoff
+
+The device transport connects an existing Mineflayer client to the body handoff coordinator. It does not create a Minecraft account or handle its authentication. The client still uses its private game configuration and the server still verifies its original player UUID, save receipt and private connection witness.
+
+The hosting composition creates `createDeviceHandoffBroker()`, passes its `clientFor` into `originalPlayerHandoffs`, and supplies the same `deviceBroker` in the `bodyHandoff` service configuration. The broker runs behind the existing protected loopback gateway. The portal assembly must explicitly enable both `characterBodies` and `characterDevices` and accept the configured public HTTPS origin. The game still authenticates the original player separately.
+
+1. The desktop POSTs `{"op":"start"}` to `/api/v1/character-device/pair`. Display only the returned `pairId` on the device. Keep its `pollSecret` private.
+2. The player opens `/resident-connect.html?flow=bodies`, selects the existing role and approves the device code in the Mineflayer device panel. The browser sends no existing game password or device credential.
+3. The desktop POSTs `{"op":"redeem","pairId":"…"}` to the same endpoint with `Authorization: Bearer <pollSecret>`. Poll sparingly while awaiting approval. A completed redemption returns the private `token`, character ID and HTTPS endpoint exactly once. The desktop uses this device grant for its single process. Existing resident onboarding and conversation credentials cannot be used for device接力.
+
+Use the website to revoke a grant before approving a replacement device. Pairing state is in memory. A portal restart loses current pairings; if the broker kept running, revoke the existing grant before pairing again.
+
+Run `node minecraft-agent-device-stdio.mjs <private-config.json>` using the updated `agent-mc-world` package. Add a top-level `bodyHandoffDevice` object to the existing config with `endpoint` set to the enrolled URL, `characterId` set to the same registered character, and `token` set to the device credential. Keep the private config out of model inputs, logs and repositories. The stdio host must stay running while another body is active if it is expected to take control again. A transport reconnect retains the original process identity. After a process restart, enroll a replacement only after confirming that the previous process stopped and that the original handoff receipt has a known outcome.
+
+A lost delivery of a device command leaves the original switch available for lookup without replaying the effect. Losing a receipt acknowledgement may cause the client to send the same receipt again. No second game operation runs. The server alone decides which body has control and whether the witness or save is conclusive. The standard MCP executable and resident pairing keep their existing scopes. A remote desktop release must independently add the pairing to its own startup and test it before making it a download.

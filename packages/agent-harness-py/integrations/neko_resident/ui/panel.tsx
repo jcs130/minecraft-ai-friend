@@ -2,7 +2,13 @@ import { Button, Card, Field, Inline, Input, Page, PasswordInput, Select, Stack,
 import type { PluginSurfaceProps } from "@neko/plugin-ui"
 
 type Resident = { id: string, characterId: string, name: string, bodyKind: string, state: string }
+type Body = {characterId: string, name: string, activeKind: string | null, status: string, pendingRequestId: string | null}
+const bodyNames: Record<string, string> = {maid: "车万女仆", numen: "Numen", mineflayer: "Mineflayer 玩家", villager: "村民"}
+const statuses: Record<string, string> = {ready:"可用", switching:"交接中", recovery_required:"待核实",
+  completed:"已完成", blocked:"本次未执行"}
 type State = { role?: string, localRoles?: string[], resident?: string, connected?: boolean, authorized?: boolean,
+  bodyReadable?: boolean, bodyView?: {available: boolean, characters: Body[]},
+  bodyReceipt?: {characterId: string, requestId: string, status: string},
   uiToken?: string, browserCode?: string, waiting?: string, catalog?: { residents?: Resident[], availableBodies?: string[] } }
 
 export default function ResidentPanel(props: PluginSurfaceProps<State>) {
@@ -19,6 +25,11 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   const [code, setCode] = useState("")
   const [manual, setManual] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [characterId, setCharacterId] = useState("")
+  const [receiptId, setReceiptId] = useState("")
+  const bodyRows = state.bodyView?.characters || []
+  const character = bodyRows.find(row => row.characterId === characterId) || bodyRows[0]
+  const original = receiptId.trim() || character?.pendingRequestId || ""
   const checking = useRef(false)
   const localRole = (role ?? state.role) || roles[0] || ""
   const selected = residents.find(row => row.id === id) || residents[0]
@@ -60,6 +71,24 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
 
   return <Page title="千灯纪居民"><Stack>
     {state.connected ? <Text>已绑定 {state.role} → {state.resident}</Text> : null}
+    <Card title="角色身体与换身"><Stack>
+      <Button disabled={busy || !state.uiToken} onClick={() => call("open_resident_website", {page:"bodies"})}>在官网管理身体</Button>
+      {state.bodyReadable && <Stack>
+        <Button disabled={busy} onClick={() => call("read_character_body", {op:"list"})}>查看身体状态</Button>
+        {character ? <Stack>
+          <Field label="我的角色"><Select value={character.characterId}
+            options={bodyRows.map(row => ({value:row.characterId,label:row.name}))}
+            onChange={value => { setCharacterId(value); setReceiptId("") }} /></Field>
+          <Text>{bodyNames[character.activeKind || ""] || "身体待核实"} · {statuses[character.status] || "待核实"}</Text>
+          <Field label="换身请求编号"><Input value={receiptId} placeholder={character.pendingRequestId || "填写原请求编号"} onChange={setReceiptId} /></Field>
+          <Button disabled={busy || !original} onClick={() => call("read_character_body", {
+            op:"receipt",characterId:character.characterId,requestId:original
+          })}>查看原回执</Button>
+          {state.bodyReceipt?.characterId === character.characterId && state.bodyReceipt.requestId === original &&
+            <Text>{statuses[state.bodyReceipt.status] || "待核实"}</Text>}
+        </Stack> : state.bodyView && <Text>{state.bodyView.available ? "当前账号还没有可管理身体的角色。" : "服务器尚未开放角色换身。"}</Text>}
+      </Stack>}
+    </Stack></Card>
     <Card title="本机 N.E.K.O. 角色"><Stack>
       <Field required label="由哪个角色在游戏里行动">{roles.length ?
         <Select value={localRole} options={roles.map(value => ({ value, label: value }))} onChange={setRole} /> :

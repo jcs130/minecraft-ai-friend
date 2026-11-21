@@ -15,8 +15,8 @@ function logger(area: string): Logger {
     info: (msg, data) => emit('info', msg, { data }), warn: (msg, data) => emit('warn', msg, { data }),
     error: (msg, data) => emit('error', msg, { data }) };
 }
-export interface McStdioRuntime { runtime: MinecraftAgentClient; metricsPort: number; consolePort?: number; operatorBinding?: { directory: string; identity: string } }
-export type McStdioFactory = (configPath: string, log: Logger) => McStdioRuntime;
+export interface McStdioRuntime { runtime: MinecraftAgentClient; metricsPort: number; consolePort?: number; operatorBinding?: { directory: string; identity: string }; close?: () => void | Promise<void> }
+export type McStdioFactory = (configPath: string, log: Logger) => McStdioRuntime | Promise<McStdioRuntime>;
 const nativeClient: McStdioFactory = (path, log) => {
   const options = loadMinecraftClientConfig(path);
   return { metricsPort: options.metricsPort, consolePort: options.consolePort, operatorBinding: options.operatorBinding, runtime: new MinecraftAgentClient({ ...options, agentName: options.cfg.username, log,
@@ -26,14 +26,14 @@ const nativeClient: McStdioFactory = (path, log) => {
 export async function startMcpStdio(factory: McStdioFactory = nativeClient, command = 'minecraft-agent-mcp'): Promise<void> {
 const configPath = process.argv[2];
 if (!configPath || process.argv.length !== 3) throw new Error(`Usage: ${command} <private-config.json>`);
-const { runtime, metricsPort, consolePort, operatorBinding } = factory(configPath, logger(command));
+const { runtime, metricsPort, consolePort, operatorBinding, close: closeIntegration } = await factory(configPath, logger(command));
 const manifest = JSON.parse(readFileSync(createRequire(import.meta.url).resolve('agent-mc-world/package.json'), 'utf8'));
 const server = createMinecraftMcpServer(runtime, manifest.version);
 let operator: Awaited<ReturnType<typeof serveClientConsole>> | null = null;
 let monitor: Awaited<ReturnType<typeof serveAgentMetrics>> | null = null;
 let closing: Promise<void> | undefined;
 const onSignal = () => { void close(); };
-const close = () => closing ??= runtime.disconnect().finally(async () => {
+const close = () => closing ??= Promise.resolve().then(() => closeIntegration?.()).finally(() => runtime.disconnect()).finally(async () => {
   for (const signal of ['SIGINT', 'SIGTERM'] as const) process.removeListener(signal, onSignal);
   await Promise.allSettled([monitor?.close(), operator?.close()]);
   await server.close();

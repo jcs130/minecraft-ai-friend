@@ -87,3 +87,16 @@ python tests/run_bridge_roundtrip.py --jdk /path/to/jdk21 --gson gson-2.10.1.jar
 - Numen 身体击杀时 `getKiller()` 是否是英雄（若 Numen 身体不是 Player，靠最后伤害者兜底，也未实测）；英雄奖励只能发给在线的 Player 实体。
 - Citizens 2.0.35 的反射调用（`getNPCRegistry/getById/isNPC/getNPC`），以及右键 NPC 事件在 Youer 上的分发。
 - Vortex 经验 / 声望发放命令。
+## 角色记忆
+
+The authenticated Villager Harness remembers completed commissions under the registered character and the original
+assignee. Only matching completions from the game board are offered for recall. Recent delivered dialogue remains bounded
+in memory, and previously saved transcripts retain their original expiry. The worker uses `villager-memory.sqlite3`
+beside its private configuration unless `memoryFile` specifies an absolute path. Binding a replacement body to history
+requires the same operator-verified `characterId`.
+
+## 登记居民的住宅与复活
+
+经核验的原版居民可通过 `households.<residentId>` 登记住宅。门牌和角色编号独立保存，身体沿用 `villagers.<residentId>.entityUuid`。只有已经加载且满足门、床、工位、净空和通行检查的住宅可用。住房配置不生成普通村民，也不把未知或卸载的身体当成死亡。[艾因格朗特住房候选](../../content/aincrad/NATIVE_HOUSEHOLDS.md)
+
+服务器记录正式死亡事件后，居民可在一分钟后回到安全住所。原生 UUID、职业、职业经验与交易使用次数继续使用。死亡掉落按游戏规则处理，复活流程不复制原背包或装备。等待复活或结果不明时暂停这个角色的换身资格。维护时保留 `resident-life/` 和最新世界数据。

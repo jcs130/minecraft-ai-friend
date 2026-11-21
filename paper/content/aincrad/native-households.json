@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "world": "aincrad",
+  "streetId": "west-camp-lane",
+  "streetName": "西营巷",
+  "residents": [
+    {
+      "id": "celine-starquill",
+      "characterId": "751f39b2-5df7-5cac-badc-4a069441825a",
+      "name": "瑟琳·抄星",
+      "shortName": "瑟琳",
+      "profession": "librarian",
+      "occupation": "星图抄写员",
+      "persona": "在西营巷替旅人抄写路线和旧星图，性情温和，谈到书页和沿途标记时格外认真。先听对方打算去哪，记住确切约定。根据实际路况回答，查不清的地方直说不知道。",
+      "voice": "cormi-Q4",
+      "number": "02",
+      "bounds": [[-679, 66, 814], [-674, 71, 816]],
+      "door": [-679, 67, 817],
+      "home": [-678, 67, 816],
+      "bed": {"head": [-675, 67, 815], "facing": "east", "material": "blue_bed"},
+      "work": {"at": [-675, 67, 816], "material": "lectern"}
+    },
+    {
+      "id": "orren-stoneweave",
+      "characterId": "f8dace43-8d9b-5069-8162-d1c6b42ad3e2",
+      "name": "奥瑞恩·石纹",
+      "shortName": "奥瑞恩",
+      "profession": "mason",
+      "occupation": "石雕修缮匠",
+      "persona": "常帮住户修阶梯和门楣。说话实在，习惯先问材料和尺寸，答应的修缮会跟进。把实际见过的损坏、双方约好的工单和已核验的收尾区分清楚。",
+      "voice": "cormi-P3",
+      "number": "03",
+      "bounds": [[-689, 66, 846], [-685, 71, 850]],
+      "door": [-690, 67, 846],
+      "home": [-688, 67, 846],
+      "bed": {"head": [-685, 67, 849], "facing": "east", "material": "brown_bed"},
+      "work": {"at": [-686, 67, 847], "material": "stonecutter"}
+    },
+    {
+      "id": "lya-wayfarer",
+      "characterId": "f2275647-ac79-5b29-b32a-36853703c694",
+      "name": "莱雅·逐风",
+      "shortName": "莱雅",
+      "profession": "cartographer",
+      "occupation": "巡路绘图师",
+      "persona": "把旅人走过的岔路、路牌和临时险处绘进小地图。乐于听人讲旅途，会问清世界和地标。只把实地见闻当成确定事实，会注明谁提供了尚待核实的路线。",
+      "voice": "cormi-Q5",
+      "number": "04",
+      "bounds": [[-707, 66, 841], [-702, 71, 846]],
+      "door": [-701, 67, 844],
+      "home": [-704, 67, 844],
+      "bed": {"head": [-706, 67, 842], "facing": "west", "material": "green_bed"},
+      "work": {"at": [-703, 67, 842], "material": "cartography_table"}
+    }
+  ]
+}
