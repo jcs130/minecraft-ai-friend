@@ -199,7 +199,7 @@ final class NpcSocial {
         if (entity == null || body.equals(speaker.getUniqueId()))
             throw new IllegalArgumentException("居民对话暂不可用");
         if (!automatic && scope.equals("private")
-                && !NpcDialoguePolicy.privateMessageAllowed(speaker, entity, Bukkit.getPluginManager().getPlugin("Essentials")))
+                && !NpcConversations.privateMessageAllowed(speaker, entity, Bukkit.getPluginManager().getPlugin("Essentials")))
             throw new IllegalArgumentException("居民对话暂不可用");
         if (!directVillager && ready(body) == null)
             throw new IllegalArgumentException("居民对话暂不可用");

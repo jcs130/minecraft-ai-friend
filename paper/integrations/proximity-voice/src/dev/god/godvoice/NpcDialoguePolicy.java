@@ -6,9 +6,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.regex.Pattern;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
-import org.bukkit.plugin.Plugin;
 
 /** Explicit NPC voice identities, never inferred from names or chat text. */
 final class NpcDialoguePolicy {
@@ -195,29 +192,6 @@ final class NpcDialoguePolicy {
 
     private static boolean isPlainText(String text) {
         return !text.isBlank() && text.codePoints().noneMatch(c -> Character.isISOControl(c) || c == 0xA7);
-    }
-
-    static boolean privateMessageAllowed(Player speaker, Entity recipient, Plugin essentials) {
-        Player player = recipient instanceof Player target ? target : null;
-        if (!speaker.isOnline() || (player != null && !speaker.canSee(player))) return false;
-        if (essentials == null || !essentials.isEnabled()) return true;
-        try {
-            Class<?> userType = Class.forName("com.earth2me.essentials.IUser", false, essentials.getClass().getClassLoader());
-            return essentialsPrivateMessageAllowed(essentials, userType, speaker, player);
-        } catch (ReflectiveOperationException | LinkageError unavailable) {
-            return false;
-        }
-    }
-
-    static boolean essentialsPrivateMessageAllowed(Object essentials, Class<?> userType, Player speaker, Player recipient)
-            throws ReflectiveOperationException {
-        var lookup = essentials.getClass().getMethod("getUser", Player.class);
-        var sender = lookup.invoke(essentials, speaker);
-        if (sender == null || Boolean.TRUE.equals(sender.getClass().getMethod("isMuted").invoke(sender))) return false;
-        if (recipient == null) return true;
-        var target = lookup.invoke(essentials, recipient);
-        return target != null && !Boolean.TRUE.equals(userType.getMethod("isIgnoreMsg").invoke(target))
-                && !Boolean.TRUE.equals(target.getClass().getMethod("isIgnoredPlayer", userType).invoke(target, sender));
     }
 
     static boolean nearby(UUID source,UUID target,UUID sourceWorld,UUID targetWorld,double squaredDistance,double range){

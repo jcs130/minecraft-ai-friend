@@ -1,82 +1,17 @@
 package dev.god.godvoice;
 import com.google.gson.*;
-import java.lang.reflect.Proxy;
 import java.util.*;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
 public final class NpcDialoguePolicyTest {
     static int checks;
     static void check(boolean value){if(!value)throw new AssertionError("NPC dialogue check "+checks);checks++;}
     static void rejected(Runnable work){try{work.run();throw new AssertionError("expected rejection");}catch(IllegalArgumentException expected){checks++;}}
 
-    public interface MessagingUser {
-        boolean isIgnoreMsg();
-    }
-
-    public record TestUser(boolean isMuted, boolean isIgnoreMsg, MessagingUser ignored) implements MessagingUser {
-        public boolean isIgnoredPlayer(MessagingUser sender) { return sender == ignored; }
-    }
-
-    public record TestEssentials(Player speaker, TestUser sender, Player recipient, TestUser receiver) {
-        public MessagingUser getUser(Player player) {
-            if (player == speaker) return sender;
-            return player == recipient ? receiver : null;
-        }
-    }
-
-    private static Player player(boolean online, boolean canSee) {
-        return (Player) Proxy.newProxyInstance(NpcDialoguePolicyTest.class.getClassLoader(), new Class<?>[]{Player.class},
-            (source, method, args) -> switch (method.getName()) {
-                case "isOnline" -> online;
-                case "canSee" -> {
-                    check(method.getParameterTypes()[0] == Player.class);
-                    yield canSee;
-                }
-                default -> throw new AssertionError(method.getName());
-            });
-    }
-
-    private static void privateDialogueChecks() throws ReflectiveOperationException {
+    public static void main(String[] args)throws Exception{
         NpcDialoguePolicy.validateConversationText("🐋".repeat(400));
         rejected(() -> NpcDialoguePolicy.validateConversationText("🐋".repeat(401)));
         rejected(() -> NpcDialoguePolicy.validateConversationText(""));
         rejected(() -> NpcDialoguePolicy.validateConversationText("抬头\n看"));
         rejected(() -> NpcDialoguePolicy.validateConversationText("§0input"));
-        var speaker = player(true, true);
-        var recipient = player(true, true);
-        var inaccessible = player(true, false);
-        var offline = player(false, true);
-        var maid = (Entity) Proxy.newProxyInstance(NpcDialoguePolicyTest.class.getClassLoader(), new Class<?>[]{Entity.class},
-            (source, method, args) -> { throw new AssertionError(method.getName()); });
-        check(NpcDialoguePolicy.privateMessageAllowed(speaker, recipient, null));
-        check(!NpcDialoguePolicy.privateMessageAllowed(inaccessible, recipient, null));
-        check(!NpcDialoguePolicy.privateMessageAllowed(offline, recipient, null));
-        check(NpcDialoguePolicy.privateMessageAllowed(inaccessible, maid, null));
-
-        var talking = new TestUser(false, false, null);
-        var muted = new TestUser(true, false, null);
-        var ignoringDms = new TestUser(false, true, null);
-        var ignoringSpeaker = new TestUser(false, false, talking);
-        check(NpcDialoguePolicy.essentialsPrivateMessageAllowed(new TestEssentials(speaker, talking, recipient, talking),
-            MessagingUser.class, speaker, recipient));
-        check(!NpcDialoguePolicy.essentialsPrivateMessageAllowed(new TestEssentials(speaker, muted, recipient, talking),
-            MessagingUser.class, speaker, recipient));
-        check(!NpcDialoguePolicy.essentialsPrivateMessageAllowed(new TestEssentials(speaker, talking, recipient, ignoringDms),
-            MessagingUser.class, speaker, recipient));
-        check(!NpcDialoguePolicy.essentialsPrivateMessageAllowed(new TestEssentials(speaker, talking, recipient, ignoringSpeaker),
-            MessagingUser.class, speaker, recipient));
-        check(!NpcDialoguePolicy.essentialsPrivateMessageAllowed(new TestEssentials(speaker, talking, recipient, null),
-            MessagingUser.class, speaker, recipient));
-        check(!NpcDialoguePolicy.essentialsPrivateMessageAllowed(new TestEssentials(speaker, null, recipient, talking),
-            MessagingUser.class, speaker, recipient));
-        check(NpcDialoguePolicy.essentialsPrivateMessageAllowed(new TestEssentials(speaker, talking, recipient, null),
-            MessagingUser.class, speaker, null));
-        check(!NpcDialoguePolicy.essentialsPrivateMessageAllowed(new TestEssentials(speaker, muted, recipient, null),
-            MessagingUser.class, speaker, null));
-    }
-
-    public static void main(String[] args)throws Exception{
-        privateDialogueChecks();
         UUID a=UUID.randomUUID(),b=UUID.randomUUID(),world=UUID.randomUUID();
         JsonObject config=JsonParser.parseString("{\"schema\":1,\"roles\":[{\"id\":\""+a+"\",\"ownerId\":\""+b+"\",\"kind\":\"maid\",\"name\":\"结衣\",\"voice\":\"neko-yui-cn\",\"range\":24}]}").getAsJsonObject();
         check(NpcDialoguePolicy.profiles(config).get(a).owner().equals(b));

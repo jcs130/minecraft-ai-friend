@@ -343,14 +343,14 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
 
     /**
      * Native server bridge for a signed or unsigned message already resolved to a specific recipient.
-     * Returns null when this service does not handle the body, an empty string for a handled
-     * rejection, or the canonical NPC conversation request ID when accepted. A storage error
-     * is a handled failure and must never fall back to a second recipient delivery.
+     * Returns null if the service is unavailable or the body has no registered Numen profile,
+     * an empty string for a handled rejection, or the canonical request ID when accepted.
+     * A storage error is a handled failure and must never fall back to a second recipient delivery.
      */
     public String queueHostedPrivateConversation(UUID body, UUID speakerId, String message) throws java.io.IOException {
         if (!Bukkit.isPrimaryThread() || !isEnabled() || npcs == null || social == null || body == null) return null;
         var profile = npcs.profile(body);
-        if (profile == null || !profile.kind().equals("numen") || !(npcs.live(body) instanceof Player)) return null;
+        if (profile == null || !profile.kind().equals("numen")) return null;
         try {
             return queueNpcPrivateConversation(body, speakerId, message);
         } catch (IllegalArgumentException denied) {
