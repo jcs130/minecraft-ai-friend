@@ -33,7 +33,7 @@ export const COMBAT_TACTIC_TOOL: Omit<ToolDef,'handler'> = {
       + 'Program ordering only changes the host-choice menu; it does not throttle the separate automatic spell rules. To conserve mana on automatic casts, edit the relevant rule when.manaAtLeast or when.reserveMana and verify casts[].source/ruleId/manaBefore in a combat report. '
       + 'routines:[{id,intent,procedure,params?,durationMs?}] registers exact saved mc_script library references in the fast menu; routines:[] removes them. '
       + 'meleeWeapons:["trident","iron_axe"] sets your native melee preference for reactive/fast combat; unavailable entries are skipped, then the normal fallback applies. [] restores defaults and does NOT disable melee. It does not equip or start a fight. '
-      + 'Read frame.loadout.choices for observed weapon modes. Tridents and maces support melee; native automatic ranged combat currently uses bows. Explicit throws or crossbows can be authored with mc_script api:"weapons" and registered as versioned routines. '
+      + 'Read frame.loadout.ranged for the currently usable automatic ranged weapon and choices for explicit options. The native controller supports bows, crossbows and Loyalty tridents. Use attack mode:ranged with weapon:crossbow or weapon:trident to request one explicitly. '
       + 'Read and validate/save a method first. Registration checks its immutable version and does not execute it or claim it effective. '
       + 'A method option starts that existing script only when the body is free; its original run ID, SDK trace and terminal remain readable with mc_script. '
       + 'An installed program may filter/reorder method options from actionPool; its returned priority order is preserved. '

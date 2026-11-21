@@ -22,6 +22,7 @@ import { parseSpatialObservation, SPATIAL_OBSERVATION_LIMITS, SPATIAL_QUERY_SCHE
 import { VOXEL_QUERY_DOC } from './voxel-query-contract.ts';
 import {parseWalkRoute,WALK_ROUTE_FIELDS,type WalkRoute} from './route-contract.ts';
 import type {FireCrossing} from './fire-route.ts';
+import { isRangedWeaponName } from './weapon-capabilities.ts';
 import type { InventoryOrganization, InventoryDisposition } from './inventory-organization.ts';
 
 const STEP_DEPENDENCY_DOC = '依赖本次 steps 内更早步骤的1起序号；第一步只能省略或写[]。'
@@ -870,9 +871,9 @@ const PICK_DOC = '同 id 的几件里挑哪一件:写清单括号里的字(「�
 /** 精确攻击沿用 use/ride 的类型或玩家名 + 本连接 ID；省略 ID 不默认选 0。 */
 function parseAttack(c: Record<string, unknown>, at: string): ParseResult {
   if (c.weapon !== undefined && (typeof c.weapon !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(c.weapon)))
-    return { error: `${at} attack.weapon 要精确的近战物品英文 ID` };
-  if (c.weapon !== undefined && (c.mode === 'ranged' || c.mode === 'kite'))
-    return { error: `${at} attack.weapon 指定近战武器，只与 auto/melee 配合；投掷或弩使用独立 use/原生脚本` };
+    return { error: `${at} attack.weapon 要精确的武器英文 ID` };
+  if (typeof c.weapon === 'string' && (c.mode === 'ranged' || c.mode === 'kite') && !isRangedWeaponName(c.weapon))
+    return { error: `${at} attack.weapon 在 ranged/kite 下可选 bow、crossbow 或 trident` };
   if (c.entityId !== undefined && (typeof c.entityId !== 'number' || !Number.isSafeInteger(c.entityId)
       || c.entityId < 0 || c.entityId > 2_147_483_647)) {
     return { error: `${at} attack 的 entityId 要是本连接里观察到的非负整数实体 ID；target 仍填实体英文类型或玩家名` };
@@ -1827,19 +1828,20 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   },
   {
     name: 'attack',
-    doc: `{"skill":"attack","target":"zombie"}             攻击最近的该目标。mode 不写/auto = 距离判断可用近战武器或弓箭(8 格切弓、5.5 格切回近战)，两者都不可用时明确受阻，不降级为空手;
+    doc: `{"skill":"attack","target":"zombie"}             攻击最近的该目标。mode 不写/auto = 8 格切可用远程、5.5 格切回近战，两者都不可用时明确受阻，不降级为空手。
 {"skill":"attack","target":"zombie","entityId":42} 精确指定现场观察到的这一只；target 是英文类型或玩家名，编号另填 entityId，不把 "42" 写成 target。
                                                  ID 只在当前连接有效；失效、类型不符或被遮挡时不改打附近同类，重新观察。
-                                                 melee = 只近战;ranged = 只用弓;kite = 用弓并尽量保持 8–14 格。
-                                                 weapon:"trident" 可精确指定本步近战武器（auto/melee）；缺失或损坏时明确受阻，不暗换剑或空手。三叉戟近战不会扔出，重锤支持普通近战，不自动安排高处下落。
-                                                 ranged/kite 没有可用弓箭或看不见目标时会受阻,不会暗换近战;
-                                                 auto 在 8 格外这一箭射不出(被挡、没弹道等)也受阻收手,换站位再下单。
+{"skill":"attack","target":"skeleton","entityId":42,"mode":"ranged","weapon":"crossbow"}  指定弩，可用已装填箭的弩，或用普通箭、光灵箭、药箭装填。
+                                                 melee = 只近战；ranged = 只远程；kite = 远程并尽量保持 8–14 格。武器或视线不足时，ranged/kite 不改用近战。
+                                                 ranged/kite 的 weapon 可选 bow、crossbow、trident。自动投掷仅选忠诚三叉戟；没有忠诚的三叉戟明确投出后要看落点并主动拾回，可能丢失。激流三叉戟不能投掷。
+                                                 auto/melee 填 weapon 精确指定近战物品，缺失或损坏时不换用其他武器。近战三叉戟不会投掷，重锤不会自动安排高处下落。
+                                                 auto 在 8 格外远程出手受阻时，需重新找站位。
                                                  end_crystal / ender_dragon 在 128 格内找,其余 32 格`,
     parse: parseAttack,
     fields: [
       { key: 'target', kind: 'string', required: true, hint: '实体英文类型或玩家名；数字实体编号另填 entityId' },
       { key: 'entityId', kind: 'int', lo: 0, hi: 2_147_483_647, def: 0, doc: '可选；与 target 一起精确指定本连接观察到的实体 ID；省略时选最近同类，指定后不改选其他实体' },
-      { key: 'weapon', kind: 'string', doc: '可选；本步近战武器英文 ID；仅 auto/melee，失去后不替换。省略则按默认选择。' },
+      { key: 'weapon', kind: 'string', doc: '可选；auto/melee 指定近战物品英文 ID；ranged/kite 指定 bow、crossbow 或 trident。失去后不替换。' },
       {
         key: 'mode', kind: 'enum', values: ['auto', 'melee', 'ranged', 'kite'],
         error: 'attack 的 mode 只认 auto/melee/ranged/kite',

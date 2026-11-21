@@ -1241,7 +1241,7 @@ async function shootBowAt(bot: Bot, cell: Cell, ctx: SkillContext): Promise<stri
   const lease = ctx.attack.acquire(-1);
   let shot: BowShotResult;
   try {
-    shot = await ranged.shoot(cellTarget(cell), lease.token);
+    shot = await ranged.shoot(cellTarget(cell), lease.token, 'bow');
   } finally {
     ctx.attack.release(lease);
   }

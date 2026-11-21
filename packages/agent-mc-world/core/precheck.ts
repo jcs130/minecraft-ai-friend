@@ -23,7 +23,7 @@ import { itemMatchesPick, pickMissText, pickTargetOf } from './item-pick.ts';
 import { zhDimension, zhEntity, zhName } from './names.ts';
 import { invItemNamed, missingTossItem, noSuchItem } from './inventory.ts';
 import { itemCustomName } from './item-display.ts';
-import { bestRangedWeapon, hasRangedLos, hasUsableArrows, type RangedTarget } from './ranged.ts';
+import { hasRangedLos, hasReadyRangedWeapon, selectRangedWeapon, type RangedTarget } from './ranged.ts';
 import { attackTargetRadius, bestWeapon } from './melee.ts';
 import { taggedCraftChoice } from './tagged-crafting.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
@@ -644,29 +644,26 @@ function precheckAttackTarget(bot: Bot, call: Extract<SkillCall, { skill: 'attac
 /** Report the requested mode's current equipment without selecting a different mode. */
 function precheckAttack(bot: Bot, call: Extract<SkillCall, { skill: 'attack' }>): PrecheckNote | null {
   if ((!call.mode || call.mode === 'auto') && inventoryReadConfirmed(bot) && !bestWeapon(bot)
-    && (!bestRangedWeapon(bot) || !hasUsableArrows(bot))) {
+    && !hasReadyRangedWeapon(bot)) {
     const target = precheckAttackTarget(bot, call);
     if (target) return target;
-    return { level: 'soft', rule: 'attack.autoLoadout', text: `当前没有可用近战武器或弓箭组合，主手为 ${bot.heldItem?.name ?? '空手'}；`
+    return { level: 'soft', rule: 'attack.autoLoadout', text: `当前没有可用近战或远程武器，主手为 ${bot.heldItem?.name ?? '空手'}；`
       + 'auto 不会降级为空手挥击。若前序步骤取到武器，执行时重查；否则本步会明确受阻，法术与避险不受此检查限制。' };
   }
   if (call.mode === 'melee' && inventoryReadConfirmed(bot) && !bestWeapon(bot)) {
     const target = precheckAttackTarget(bot, call);
     if (target) return target;
-    const bow = bestRangedWeapon(bot);
-    const arrows = hasUsableArrows(bot);
+    const ranged = selectRangedWeapon(bot);
     return { level: 'soft', rule: 'attack.meleeLoadout',
       text: `当前随身没有执行器可自动选用的近战武器，主手为 ${bot.heldItem?.name ?? '空'}；`
-        + '本步明确指定 melee，只会近战挥击，不会射箭。'
-        + (bow ? `当前有 ${bow.name}${arrows ? '和普通箭' : '，但没有普通箭'}；远程命中与安全位置尚未验证。` : '')
+        + '本步明确指定 melee，只会近战挥击，不会射箭或投掷。'
+        + (ranged ? `当前有可用的 ${ranged.item.name}${ranged.kind === 'bow' ? ' 和普通箭' : ''}；远程命中与安全位置尚未验证。` : '')
         + '这是受理时库存，执行前会重查；未改写模式或代为补给。' };
   }
   if (call.mode !== 'ranged' && call.mode !== 'kite') return precheckAttackTarget(bot, call);
-  if (!bestRangedWeapon(bot)) {
-    return { level: 'hard', text: '包里没有可用的弓;强制远程不会改用近战', rule: 'attack.noBow' };
-  }
-  if (!hasUsableArrows(bot)) {
-    return { level: 'hard', text: '包里没有普通箭;强制远程不会改用近战', rule: 'attack.noArrow' };
+  if (inventoryReadConfirmed(bot) && !hasReadyRangedWeapon(bot, call.weapon)) {
+    const weapon = call.weapon ? `指定远程武器 ${call.weapon}` : '自动远程武器';
+    return { level: 'hard', text: `当前${weapon}不可用；强制远程不会改用其他模式`, rule: 'attack.noRangedWeapon' };
   }
   const target = attackEntity(bot, call.target, call.entityId);
   if (!target) return precheckAttackTarget(bot, call);

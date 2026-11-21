@@ -246,9 +246,9 @@ interface CombatSessionOptions {
 }
 
 export interface CombatRangedActions {
-  ready(bot: Bot): boolean;
+  ready(bot: Bot, preference?: string): boolean;
   active(): boolean;
-  shoot(target: RangedTarget, ownerToken: unknown): Promise<BowShotResult>;
+  shoot(target: RangedTarget, ownerToken: unknown, preference?: string): Promise<BowShotResult>;
   abort(): void;
 }
 
@@ -418,6 +418,7 @@ export class CombatSession {
   private rangedPendingOwner: object | null = null;
   private nextRangedAt = 0;
   private arrows = 0;
+  private tridents = 0;
   private rangedLanded = 0;
   private lastRangedHitTargetId = -1;
   private lastRangedHitAt = 0;
@@ -482,7 +483,7 @@ export class CombatSession {
       || Date.now() < this.capCooldownUntil
       || (!t.arena && Date.now() < this.cooldownUntil)
       || (!t.arena && this.busyRatioNow() > t.busyRatio / 100)) return [];
-    // Match the actual controller's usable ranged pool. Previously a loaded bow
+    // Match the actual controller's usable ranged pool. Previously a ready ranged weapon
     // could shoot these targets after injury, but the chooser could only wait
     // or retreat when the same visible targets were outside melee pursuit.
     const range = Math.max(t.chaseMax + 4, Math.min(32, Math.max(0, t.decisionRange ?? 0)),
@@ -580,24 +581,26 @@ export class CombatSession {
     return this.state !== 'idle' && this.struck.has(id);
   }
 
-  /** 弓控制器的租约只在创建它的这一场战斗内有效。 */
+  /** 远程控制器的租约只在创建它的这一场战斗内有效。 */
   ownsRanged(ownerToken: unknown): boolean {
     return this.state === 'fighting' && ownerToken === this.rangedOwner;
   }
 
   /** 近战发包窗口优先，防止在途旧箭把刚落下的一刀归成远程命中。 */
-  acceptsRangedHit(targetId: number, at = Date.now()): boolean {
-    return this.rangedOwner !== null && !(
-      this.lastSwingTargetId === targetId && at - this.lastSwingAt <= LANDED_WINDOW_MS
-    );
+  acceptsRangedHit(targetId: number, at = Date.now(), nativeProjectile = false): boolean {
+    if (this.rangedOwner === null) return false;
+    // The controller still requires the active lease, target and exact launched projectile ID.
+    if (nativeProjectile) return this.state === 'fighting';
+    return !(this.lastSwingTargetId === targetId && at - this.lastSwingAt <= LANDED_WINDOW_MS);
   }
 
   onBowEvent(event: BowEvent): void {
     if (event.kind === 'blocked' || !this.ownsRanged(event.ownerToken)) return;
     if (event.kind === 'released') {
-      this.arrows += 1;
+      if (event.weapon === 'trident') this.tridents += 1;
+      else this.arrows += 1;
       this.rangedBlocked = null;
-      // A released arrow proves the ranged body can act. Only a hit extends
+      // An observed launch proves the ranged body can act. Only a hit extends
       // the hard no-damage window; repeated misses must still terminate.
       this.lastProgressAt = event.at;
       this.nextRangedAt = Math.max(this.nextRangedAt, event.at + 200);
@@ -853,6 +856,7 @@ export class CombatSession {
     this.rangedPendingOwner = null;
     this.nextRangedAt = now;
     this.arrows = 0;
+    this.tridents = 0;
     this.rangedLanded = 0;
     this.lastRangedHitTargetId = -1;
     this.lastRangedHitAt = 0;
@@ -867,8 +871,7 @@ export class CombatSession {
     this.releaseWalkOnly ??= walkOnlyPath(bot);
     this.hook(bot);
     const held = initial === 'fighting' ? this.hybridWeapon === 'ranged'
-      ? (bot.heldItem?.name === 'bow' || bot.heldItem?.name === 'crossbow'
-        ? ',保留手里的远程武器，拉开距离还击' : ',准备换上背包里的远程武器，拿稳后还击')
+      ? ',准备远程武器，拉开距离还击'
       : this.armMelee(bot) : '';
     this.opts.emit(
       initial === 'tracking' ? `先和${zhEntity(firstName)}保持距离，跟进观察，不主动出手。`
@@ -1260,7 +1263,7 @@ export class CombatSession {
       return;
     }
 
-    if (this.swings === 0 && this.arrows === 0 && now - this.startedAt > NO_SWING_MS) {
+    if (this.swings === 0 && this.arrows === 0 && this.tridents === 0 && now - this.startedAt > NO_SWING_MS) {
       this.opts.emit(
         `进场 ${Math.round(NO_SWING_MS / 1000)} 秒一下手都没出上(${zhEntity(target.name)}),不耗了。(生命 ${this.hp()}/20)`,
         true, false,
@@ -1269,7 +1272,7 @@ export class CombatSession {
       return;
     }
 
-    // Having a bow does not make the empty melee hand armed. With no melee
+    // Having a ranged weapon does not make the empty melee hand armed. With no melee
     // weapon, keep the ranged controller's spacing instead of choosing fists
     // merely because the hostile crossed the hybrid distance threshold.
     const weapon = this.selectDefensiveWeapon({phase:'tick',current:this.hybridWeapon,heldItem:bot.heldItem?.name??null,
@@ -1340,7 +1343,7 @@ export class CombatSession {
     const nearest = [...foes].sort((a, b) => a.reach - b.reach)[0];
     this.opts.emit(
       `还在打:${foes.length} 只在附近(最近的是${zhEntity(nearest.name)}),` +
-        `刀 ${this.swings} 次命中 ${this.meleeLanded()} 次,箭 ${this.arrows} 支命中 ${this.rangedLanded} 次,` +
+        `刀 ${this.swings} 次命中 ${this.meleeLanded()} 次,远程发射 ${this.arrows + this.tridents} 次命中 ${this.rangedLanded} 次,` +
         `手里是${heldText(bot)},生命 ${this.hp()}/20。`,
       false, false,
     );
@@ -1449,7 +1452,7 @@ export class CombatSession {
     this.statusTick(bot, foes, now);
   }
 
-  /** 弓态不靠寻路器接管视线；只在实际移动方向有干燥落脚格时写水平键。 */
+  /** 远程状态不靠寻路器接管视线；只在实际移动方向有干燥落脚格时写水平键。 */
   private driveRangedDirection(
     bot: Bot,
     candidates: Array<{ x: number; z: number }>,
@@ -1507,16 +1510,16 @@ export class CombatSession {
     const now = Date.now(), previous = this.rangedBlocked;
     this.rangedBlocked = { firstAt: previous?.firstAt ?? now, reason: result.reason, cause: result.cause };
     if (!previous || previous.reason !== result.reason || previous.cause !== result.cause) {
-      this.opts.diag?.write({ lane: 'combat', event: 'ranged-blocked', msg: '弓箭执行未完成',
+      this.opts.diag?.write({ lane: 'combat', event: 'ranged-blocked', msg: '远程出手未完成',
         data: { targetId, reason: result.reason, cause: result.cause ?? null, held: this.bot.heldItem?.name ?? null } });
     }
     const equipmentFailure = result.reason === 'no_arrow'
-      || ['equip', 'equip_timeout', 'bow_lost', 'cancel_slot', 'activate', 'release'].includes(result.cause ?? '');
+      || ['equip', 'equip_timeout', 'bow_lost', 'cancel_slot', 'activate', 'release', 'charge_unconfirmed', 'launch_unconfirmed'].includes(result.cause ?? '');
     // LOS and a busy hand may recover while spacing. They cannot keep an idle
     // controller labelled as attacking for the whole six-second stuck window.
     if (!equipmentFailure && now - this.rangedBlocked.firstAt < 1_500) return;
     this.rangedUnavailable = true;
-    this.opts.emit(`弓箭未能出手(${result.cause ?? result.reason})，主手是${heldText(this.bot)}。` +
+    this.opts.emit(`远程出手未确认(${result.cause ?? result.reason})，主手是${heldText(this.bot)}。` +
       (this.bestMeleeWeapon(this.bot) ? '核对近战武器后再打。' : '先撤离，不用手里物品继续攻击。'), true, false);
     if (this.bestMeleeWeapon(this.bot)) this.switchWeapon(this.bot, 'melee');
     else this.beginRetreat('flee');
@@ -2063,7 +2066,7 @@ export class CombatSession {
       this.targetDeaths.clear();
       this.engagedDeaths.clear();
       this.targetDeathsPending.clear();
-      this.swings = this.landed = this.arrows = this.rangedLanded = 0;
+      this.swings = this.landed = this.arrows = this.tridents = this.rangedLanded = 0;
     }
     this.state = 'retreating';
     this.retreatWhy = why;
@@ -2258,7 +2261,7 @@ export class CombatSession {
    * 时返回 false 并继续撤退。
    */
   private turnAndFight(bot: Bot, glued: Foe, now: number, cause: 'close' | 'stalled'): boolean {
-    // A failed bow/equip is not evidence that punching with the previous food
+    // A failed ranged attack or equip is not evidence that punching with the previous food
     // item is a usable fallback. Keep the escape owner until it can disengage.
     if (!this.bestMeleeWeapon(bot) && this.rangedUnavailable) return false;
     if (this.meleeEquip?.failed && !this.rangedReady(bot)) return false;
@@ -2369,7 +2372,7 @@ export class CombatSession {
       : '当前已无可见交战目标，未确认目标死亡。';
     this.opts.emit(
       `${what}刀 ${this.swings} 次命中 ${this.meleeLanded()} 次,` +
-        `箭 ${this.arrows} 支命中 ${this.rangedLanded} 次;生命 ${this.hp()}/20。`,
+        `远程发射 ${this.arrows + this.tridents} 次命中 ${this.rangedLanded} 次;生命 ${this.hp()}/20。`,
       true,
       false,
     );
@@ -2433,10 +2436,10 @@ export class CombatSession {
       msg: `收工(${reason}),${Math.round((Date.now() - this.startedAt) / 1000)}s,` +
         `观察到交战目标死亡 ${[...this.targetDeaths.values()].reduce((a, b) => a + b, 0)}，${this.attributionText()},` +
         `挥刀 ${this.swings} 次命中 ${this.meleeLanded()} 次,` +
-        `放箭 ${this.arrows} 支命中 ${this.rangedLanded} 次,生命 ${reason === 'death' ? 0 : this.hp()}/20`,
+        `远程发射 ${this.arrows + this.tridents} 次命中 ${this.rangedLanded} 次,生命 ${reason === 'death' ? 0 : this.hp()}/20`,
       data: {
         reason, ms: Date.now() - this.startedAt, ...this.killTotals(), targetDeaths: Object.fromEntries(this.targetDeaths),
-        swings: this.swings, arrows: this.arrows, meleeLanded: this.meleeLanded(),
+        swings: this.swings, arrows: this.arrows, tridents: this.tridents, meleeLanded: this.meleeLanded(),
         rangedLanded: this.rangedLanded, landed: this.landed,
       },
     });
@@ -2445,7 +2448,8 @@ export class CombatSession {
       healthBefore: this.healthBefore, healthAfter: reason === 'death' ? 0 : bot?.health ?? null,
       sceneBefore: this.sceneBefore, controlSummary, ...(deathEpisodeId ? { deathEpisodeId } : {}),
       ...this.killTotals(), targetDeaths: Object.fromEntries(this.targetDeaths), swings: this.swings,
-      meleeLanded: this.meleeLanded(), arrows: this.arrows, rangedLanded: this.rangedLanded });
+      meleeLanded: this.meleeLanded(), arrows: this.arrows, ...(this.tridents ? { tridentsThrown: this.tridents } : {}),
+      rangedLanded: this.rangedLanded });
     // 只有正常战斗收尾解冻断点。断线、环境夺权、外部抢占与死亡各自由其终态边界
     // 处理冻结队列；在这里泵回会让任务进入已断线或正在交权的执行器。
     const resumable = reason === 'clear' || reason === 'lost-sight' || reason === 'flee' || reason === 'timeout' ||

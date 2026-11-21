@@ -22,6 +22,7 @@ function fixture(names=['iron_sword','trident','mace']) {
     entity:{id:1,position:new Vec3(.5,64,.5),velocity:new Vec3(0,0,0),onGround:false},
     entities:{7:enemy},players:{},health:20,heldItem:items[0]??null,
     inventory:{items:()=>items,slots:[]},registry:{entitiesByName:{zombie:{name:'zombie'}}},
+    supportFeature: (name: string) => name === 'itemsWithComponents',
     pathfinder:{setGoal:vi.fn()},world:{raycast:()=>null},
     blockAt:(p:Vec3)=>({name:p.y<64?'stone':'air',boundingBox:p.y<64?'block':'empty',getProperties:()=>({})}),
     lookAt:vi.fn(async()=>{}),setControlState:(k:string,v:boolean)=>{controls[k]=v;},controlState:controls,
@@ -59,13 +60,26 @@ it('keeps authored preference and ranged capability separate, skipping unavailab
   expect(bestWeapon(f.bot as never,['mace','trident'])?.name).toBe('trident');
   expect(bestWeapon(f.bot as never,['mace','iron_sword'])?.name).toBe('iron_sword');
   expect(combatLoadout(f.bot as never,['trident'])).toMatchObject({melee:'trident',ranged:null,
-    choices:expect.arrayContaining([{item:'crossbow',count:1,melee:false,ranged:'native-script-only'}])});
+    choices:expect.arrayContaining([{item:'crossbow',count:1,melee:false,ranged:'automatic-crossbow',rangedReady:false}])});
+});
+it('projects actual ranged availability separately from the ordinary arrow count', () => {
+  const f = fixture(['crossbow', 'arrow']);
+  expect(combatLoadout(f.bot as never)).toMatchObject({ melee: null, ranged: 'crossbow', arrows: 1, canEngage: true,
+    choices: [{ item: 'crossbow', ranged: 'automatic-crossbow', rangedReady: true }] });
+  f.replace([item('trident')]);
+  expect(combatLoadout(f.bot as never)).toMatchObject({ melee: 'trident', ranged: null, arrows: 0, canEngage: true,
+    choices: [{ item: 'trident', ranged: 'trident-throw', rangedReady: true }] });
 });
 it('shares exact weapon selection in the public schema and parser',()=>{
   const call={skill:'attack',target:'zombie',entityId:7,mode:'melee',weapon:'trident'};
   expect(new Ajv({strict:false}).compile(SKILL_STEP_SCHEMA)(call)).toBe(true);
   expect(parseSteps([call])).toMatchObject({steps:[call]});
-  expect(parseSteps([{...call,mode:'ranged'}])).toHaveProperty('error');
+  for (const weapon of ['bow', 'crossbow', 'trident']) {
+    const ranged = { ...call, mode: 'ranged', weapon };
+    expect(new Ajv({strict:false}).compile(SKILL_STEP_SCHEMA)(ranged)).toBe(true);
+    expect(parseSteps([ranged])).toMatchObject({ steps: [ranged] });
+  }
+  expect(parseSteps([{ ...call, mode: 'ranged', weapon: 'iron_sword' }])).toHaveProperty('error');
 });
 it('uses the named trident rather than silently switching to a better-ranked sword',async()=>{
   vi.useFakeTimers();const f=fixture(['netherite_sword','trident']);

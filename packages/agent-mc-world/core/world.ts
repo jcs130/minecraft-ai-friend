@@ -192,8 +192,7 @@ import {
   PositionVelocityTracker,
   RANGED_ENTER_RANGE,
   RANGED_EXIT_RANGE,
-  bestRangedWeapon,
-  hasUsableArrows,
+  hasReadyRangedWeapon,
   type BowEvent,
   type BowShotResult,
 } from './ranged.ts';
@@ -4417,8 +4416,8 @@ export class MinecraftWorld implements World {
       // 清空冻结两槽后通知反射丢弃旧令牌；危机仍在时重新申请。
       onHoldsReleased: () => this.reflexes?.invalidateEnvironmentHold(),
       ranged: {
-        ready: (bot) => this.rangedBot === bot && Boolean(bestRangedWeapon(bot)) && hasUsableArrows(bot),
-        shoot: (target, ownerToken): Promise<BowShotResult> => this.ranged?.shoot(target, ownerToken)
+        ready: (bot, preference) => this.rangedBot === bot && hasReadyRangedWeapon(bot, preference),
+        shoot: (target, ownerToken, preference): Promise<BowShotResult> => this.ranged?.shoot(target, ownerToken, preference)
           ?? Promise.resolve({ kind: 'blocked', reason: 'aborted', cause: 'bot_lost' }),
         abort: () => this.ranged?.abort(),
       },
@@ -4525,9 +4524,9 @@ export class MinecraftWorld implements World {
       onLowHealth: (bot) => this.onLowHealth(bot),
       report: result => this.extensionCombatReport(result),
       ranged: {
-        ready: (bot) => this.rangedBot === bot && Boolean(bestRangedWeapon(bot)) && hasUsableArrows(bot),
+        ready: (bot, preference) => this.rangedBot === bot && hasReadyRangedWeapon(bot, preference),
         active: () => this.ranged?.active ?? false,
-        shoot: (target, ownerToken): Promise<BowShotResult> => this.ranged?.shoot(target, ownerToken)
+        shoot: (target, ownerToken, preference): Promise<BowShotResult> => this.ranged?.shoot(target, ownerToken, preference)
           ?? Promise.resolve({ kind: 'blocked', reason: 'aborted', cause: 'bot_lost' }),
         abort: () => this.ranged?.abort(),
       },
@@ -7403,6 +7402,12 @@ export class MinecraftWorld implements World {
       ),
       emit: (event) => {
         if (generation === this.rangedGeneration && this.rangedBot === bot) {
+          if (event.kind !== 'blocked' && event.projectileId !== undefined) {
+            this.diag.write({ lane: 'combat', event: `native-ranged-${event.kind}`,
+              msg: event.kind === 'released' ? '观察到自己的远程投射物' : '投射物的命中已确认',
+              data: { weapon: event.weapon, shotId: event.shotId, targetId: event.targetId,
+                projectileId: event.projectileId, at: event.at } });
+          }
           if (event.kind !== 'blocked' && this.executor?.ownsRanged(event.ownerToken)) {
             this.executor.onBowEvent(event as BowEvent);
           }
@@ -8149,18 +8154,50 @@ export class MinecraftWorld implements World {
     bot.on('entitySpawn', (entity: { type?: string }) => {
       if (entity.type === 'player') this.playerProximityTick(bot);
     });
+    // Mineflayer emits entityHurt synchronously from this packet but only forwards the causing entity.
+    // Consume the native direct projectile ID first and suppress the lossy duplicate for that target.
+    let nativeOwnDamage: { targetId: number } | null = null;
+    const onNativeDamage = (packet: { entityId?: number; sourceCauseId?: number; sourceDirectId?: number }): void => {
+      const ownId = bot.entity?.id;
+      const targetId = packet.entityId;
+      if (this.rangedBot !== bot || typeof ownId !== 'number' || typeof targetId !== 'number'
+        || packet.sourceCauseId !== ownId + 1 || typeof packet.sourceDirectId !== 'number') return;
+      const current = { targetId };
+      nativeOwnDamage = current;
+      queueMicrotask(() => { if (nativeOwnDamage === current) nativeOwnDamage = null; });
+      const taskOwns = this.executor?.claimsCombat(targetId) ?? false;
+      const directId = packet.sourceDirectId - 1;
+      if (directId === ownId) {
+        if (taskOwns) this.executor?.noteCombatTargetHurt(targetId);
+      } else if (Number.isSafeInteger(directId) && directId >= 0) {
+        const at = Date.now();
+        if (taskOwns || this.combat?.acceptsRangedHit(targetId, at, true)) {
+          if (this.ranged?.noteHit(targetId, at, directId)) return;
+        }
+        // Existing bow shots have no bound projectile ID. Only use the older
+        // window when the native direct entity is an actual arrow.
+        const directName = bot.entities[directId]?.name;
+        if ((directName === 'arrow' || directName === 'spectral_arrow')
+          && (this.executor?.acceptsRangedHit(targetId, at) || this.combat?.acceptsRangedHit(targetId, at))) {
+          this.ranged?.noteHit(targetId, at);
+        }
+      }
+    };
+    bot._client.prependListener('damage_event', onNativeDamage);
+    bot.once('end', () => bot._client.off('damage_event', onNativeDamage));
     bot.on('entityHurt', (entity: { id?: number }, source?: { id?: number }) => {
-      if (entity.id === bot.entity?.id) this.interruptIdle('damage');
+      if (typeof entity.id === 'number' && entity.id === bot.entity?.id) this.interruptIdle('damage');
       if (
         this.rangedBot !== bot ||
         typeof entity.id !== 'number' ||
-        source?.id !== bot.entity?.id
+        nativeOwnDamage?.targetId === entity.id ||
+        typeof source?.id !== 'number' || source.id !== bot.entity?.id
       ) return;
       const taskOwns = this.executor?.claimsCombat(entity.id) ?? false;
-      const taskAcceptsArrow = this.executor?.acceptsRangedHit(entity.id) ?? false;
+      const taskAcceptsRanged = this.executor?.acceptsRangedHit(entity.id) ?? false;
       const combatOwns = this.combat?.acceptsRangedHit(entity.id) ?? false;
-      const arrow = taskAcceptsArrow || combatOwns ? this.ranged?.noteHit(entity.id) : null;
-      if (taskOwns && !arrow) this.executor?.noteCombatTargetHurt(entity.id);
+      const rangedHit = taskAcceptsRanged || combatOwns ? this.ranged?.noteHit(entity.id) : null;
+      if (taskOwns && !rangedHit) this.executor?.noteCombatTargetHurt(entity.id);
     });
     bot.on('death', () => {
       if (this.rangedBot === bot) this.ranged?.onDeath();
@@ -8851,7 +8888,7 @@ export class MinecraftWorld implements World {
   protected snapshotArmedAt: number | null = null;
   /** 上一份快照实际进上下文(被渲染)的时刻;snapshotSec 节流的基准 */
   protected lastSnapshotRenderAt = 0;
-  /** 实体接近状态；持弓时已看见的敌对使用 32 进/40 出，其他仍为 16/24。 */
+  /** 实体接近状态；远程就绪时已看见的敌对使用 32 进/40 出，其他仍为 16/24。 */
   protected readonly proximity = new Map<number, {
     kind: 'hostile' | 'notable';
     seen: boolean;
@@ -8980,8 +9017,7 @@ export class MinecraftWorld implements World {
     const flockSeen = new Map<string, number>();
     const flockNear = new Set<string>();
     const journeyCues:JourneyCue[]=[];
-    const rangedReady = typeof bot.inventory?.items === 'function' &&
-      Boolean(bestRangedWeapon(bot)) && hasUsableArrows(bot);
+    const rangedReady = typeof bot.inventory?.items === 'function' && hasReadyRangedWeapon(bot);
     for (const key of Object.keys(bot.entities)) {
       const e = bot.entities[key];
       if (!e || e === bot.entity || !e.position) continue;
