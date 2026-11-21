@@ -272,7 +272,8 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
         try {
             JsonObject root = JsonParser.parseString(Files.readString(statePath, StandardCharsets.UTF_8)).getAsJsonObject();
             board.load(root.getAsJsonObject("board"));
-            if (root.get("dialogue") instanceof JsonArray turns) dialogue.load(turns);
+            if (root.get("dialogue") instanceof JsonArray turns) dialogue.load(turns, false);
+            if (root.get("privateDialogue") instanceof JsonArray turns) dialogue.load(turns, true);
             outboxOffset = root.has("outboxOffset") ? root.get("outboxOffset").getAsLong() : 0;
         } catch (IOException | RuntimeException e) {
             getLogger().log(Level.SEVERE, "state.json unreadable; keeping it aside and starting empty", e);
@@ -283,7 +284,8 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
     private String snapshot() {
         JsonObject root = new JsonObject();
         root.add("board", board.toJson());
-        root.add("dialogue", dialogue.snapshot());
+        root.add("dialogue", dialogue.snapshot(false));
+        root.add("privateDialogue", dialogue.snapshot(true));
         root.addProperty("outboxOffset", outboxOffset);
         return GSON.toJson(root);
     }

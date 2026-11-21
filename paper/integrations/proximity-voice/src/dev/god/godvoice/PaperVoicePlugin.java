@@ -352,23 +352,30 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     /** Speak only to the player who addressed this body in the original, still current turn. */
     public String speakVillagerReply(Plugin caller,UUID actor,UUID listener,String heardEventId,String text){
         if(!villagerBridge(caller))throw new IllegalArgumentException("VILLAGER_VOICE_BRIDGE_REQUIRED");
+        return submitVillagerSpeech(actor,listener,heardEventId,text,false);
+    }
+    public boolean finishVillagerPrivateReply(Plugin caller,UUID actor,UUID listener,String event,String text) throws java.io.IOException {
+        if(!villagerBridge(caller)||social==null)return false;
+        return social.finishVillager(actor,listener,UUID.fromString(event),text);
+    }
+    private String submitVillagerSpeech(UUID actor,UUID listener,String heardEventId,String text,boolean direct){
         var profile=npcs.profile(actor);
         if(profile==null||profile.residentId()==null)throw new IllegalArgumentException("VILLAGER_VOICE_IDENTITY_MISMATCH");
         NpcDialoguePolicy.text(text);
         if(text.length()>200)throw new IllegalArgumentException("TEXT_REQUIRED_MAX_200");
         UUID request=NpcDialoguePolicy.speechId(actor,heardEventId);
-        String fingerprint=hash("villager-tts\0"+listener+"\0"+profile.voice()+"\0"+text);
+        String fingerprint=hash((direct?"villager-private-tts\0":"villager-tts\0")+listener+"\0"+profile.voice()+"\0"+text);
         var old=ledger.get(actor,request);
         if(old!=null){
             if(!old.fingerprint().equals(fingerprint))throw new IllegalArgumentException("REQUEST_ID_REUSED");
             return npcSpeechStatus(actor,heardEventId);
         }
         var player=npcs.villagerListener(actor,listener,heardEventId);
-        if(player==null)throw new IllegalArgumentException("VILLAGER_VOICE_TURN_EXPIRED");
+        if(player==null||npcs.privateVillagerTurn(actor,listener,heardEventId)!=direct)throw new IllegalArgumentException("VILLAGER_VOICE_TURN_EXPIRED");
         var session=sessions.get(listener);
         if(session==null||privateConnection(new PrivateRecipient(player,session))==null)
             throw new IllegalArgumentException("VOICE_LISTENER_UNAVAILABLE");
-        submit(new Job(actor,null,request,fingerprint,text,profile.voice(),null,null,
+        submit(new Job(actor,null,request,fingerprint,text,profile.voice(),null,direct?new PrivateRecipient(player,session):null,
                 Map.of(listener,player),profile.range(),new VillagerReply(listener,heardEventId)));
         return "{\"state\":\"submitted\",\"requestId\":\""+request+"\",\"actualHearingVerified\":false}";
     }
@@ -416,6 +423,8 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     boolean socialVoiceReady(NpcDialoguePolicy.Profile profile,Player requester){
         var session=sessions.get(requester.getUniqueId());
         if(session==null||privateConnection(new PrivateRecipient(requester,session))==null)return false;
+        if(profile.residentId()!=null)
+            return npcs.hostedReady(npcs.live(profile.id())) && validVoice(profile.voice());
         if(profile.kind().equals("numen"))
             return npcs.live(profile.id()) instanceof Player speaker && npcs.hostedReady(speaker) && validVoice(profile.voice());
         var bridge=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");
@@ -427,6 +436,11 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     }
     String speakSocialReply(NpcDialoguePolicy.Profile profile,UUID conversation,String reply,Player requester,
                             boolean privateDialogue,Map<UUID,Player> textAudience){
+        if(profile.residentId()!=null){
+            if(!privateDialogue || textAudience.size()!=1 || textAudience.get(requester.getUniqueId())!=requester)return null;
+            submitVillagerSpeech(profile.id(),requester.getUniqueId(),conversation.toString(),reply,true);
+            return NpcDialoguePolicy.speechId(profile.id(),conversation.toString()).toString();
+        }
         if(profile.kind().equals("maid")){
             var bridge=Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");
             if(bridge==null||!bridge.isEnabled())return null;
