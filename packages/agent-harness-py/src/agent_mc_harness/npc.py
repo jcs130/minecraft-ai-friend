@@ -478,8 +478,12 @@ class NpcPlanner:
                 self.next_meal = now + 90.0
                 self.last_route = {"layer": "native-policy", "reason": "ordinary_meal_needed"}
                 return [meal]
-        if intent.goal == IDLE_GOAL and not context.dialogue and not following and not current_agenda:
-            if restore := restore_default_guard(role, context):
+        if intent.goal == IDLE_GOAL and not context.dialogue and not following:
+            restore = restore_default_guard(role, context)
+            # A seated in-game wait is not active work. Its reviewed expiry can
+            # replace an agenda entry that would otherwise keep renewing the wait.
+            waking = (context.activity_review or {}).get("activity") == "waiting"
+            if restore and (not current_agenda or waking):
                 self.last_route = {"layer": "native-policy", "reason": "resume_configured_guard"}
                 return [restore]
         if intent.goal == IDLE_GOAL and not context.dialogue and role.activity_review_seconds is None:

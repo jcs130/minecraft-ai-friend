@@ -110,6 +110,17 @@ def test_opted_in_sitting_resident_can_rejoin_live_leader_after_review():
                    {"resident": resident | {"expedition": {"state": "not_delegated"}}}):
         assert review(change) is None
 
+    async def planned_wait():
+        context = maid_context(**ready)
+        context.snapshot.health = 30
+        context.activity_review = {"activity": "waiting", "elapsedSeconds": 180}
+        context.agenda = {"current": {"goal": "Wait for the expedition leader at home"}}
+        planner = NpcPlanner(actor, None)
+        intent = Intent(id="qa-planned-wait", agent=actor.id, goal=IDLE_GOAL)
+        assert [step.tool for step in await planner(intent, context)] == ["body:native:guard"]
+
+    asyncio.run(planned_wait())
+
 
 def test_numen_fast_attack_requires_an_observed_hostile_and_idle_body():
     actor = role()
