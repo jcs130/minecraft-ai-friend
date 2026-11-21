@@ -1,3 +1,6 @@
+import { installHealthSources, healthSources } from './health-sources.ts';
+import { installEntityNativeState } from './entity-native-state.ts';
+import { configureNpcThreatPolicy } from './entity-threat.ts';
 import { installMovementPace, MOVEMENT_PACE_DEFAULTS, resolveMovementPace } from './movement-pace.ts';
 import { installMiningLimiter, MINING_LIMIT_DEFAULTS, resolveMiningLimits } from './mining-limiter.ts';
 import { onServerScreen, renderScreen, serverScreen } from './server-screens.ts';
@@ -4016,7 +4019,7 @@ export class MinecraftWorld implements World {
               cells.push({dx,dz,floor:read(-1),feet:read(0),head:read(1)});
             }
             return cells;
-          })(),position:this.bridge.bot.entity?.position, health:this.bridge.bot.health,
+          })(),position:this.bridge.bot.entity?.position, health:this.bridge.bot.health, healthSources:healthSources(this.bridge.bot),
             food:this.bridge.bot.food, yaw:this.bridge.bot.entity?.yaw, pitch:this.bridge.bot.entity?.pitch,
             window: this.bridge.bot.currentWindow ? {id:this.bridge.bot.currentWindow.id,title:this.bridge.bot.currentWindow.title}:null,
             display: readServerDisplay(this.bridge.bot)} : null,
@@ -4620,7 +4623,9 @@ export class MinecraftWorld implements World {
       // 成果登记的垫脚过滤:维度在这里合上,寻路器只问「这一格算不算」
       workCell: (x, y, z) => this.works.has(this.bridge?.bot?.game?.dimension ?? 'overworld', x, y, z),
       showTempo: () => this.showTempo(),
-      onBotCreated: (bot) => { configureObservationPolicy(bot,()=>this.cfg.perception);this.hookMessageEvents(bot); },
+      onBotCreated: (bot) => { installHealthSources(bot); installEntityNativeState(bot); configureObservationPolicy(bot,()=>this.cfg.perception);
+        configureNpcThreatPolicy(bot, `${this.cfg.fakeHost || this.cfg.host}:${this.cfg.port}`, () => this.cfg.perception?.npcThreatAnchors);
+        this.hookMessageEvents(bot); },
       onSpawn: () => this.onSpawn(),
       onRespawn: () => this.onRespawn(),
       onSpawnPosition: (landing) => this.onSpawnPosition(landing),

@@ -5,6 +5,8 @@ import { bindEntityIdentityResolver, observedEntityIdentity } from './entity-ide
 type Point={x:number;y:number;z:number};
 const observationSources=new WeakMap<object,Bot>();
 export interface ObservationPolicy {
+  /** Operator-only exact NPC exceptions, default none; damage/aggression always wins. */
+  npcThreatAnchors?: readonly import('./entity-threat.ts').NpcThreatAnchor[];
   mineralVision?: boolean;
   /** Surroundings uses loaded line of sight in every direction; camera also applies the yaw/pitch cone. */
   entityView?: 'surroundings' | 'camera';

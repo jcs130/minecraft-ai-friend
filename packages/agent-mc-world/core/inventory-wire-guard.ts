@@ -1,7 +1,7 @@
 import type { Bot } from 'mineflayer';
 
 export interface InventoryDecodeFailure {
-  packet: 'window_items' | 'set_slot';
+  packet: 'window_items' | 'set_slot' | 'set_cursor_item' | 'set_player_inventory';
   bytes: number;
   at: number;
   error: string;
@@ -24,24 +24,29 @@ export function installInventoryWireGuard(bot: Bot, failed: (failure: InventoryD
     } } } } };
     const mappings = registry.protocol?.play?.toClient?.types?.packet?.[1]?.find(f => f.name === 'name')?.type?.[1]?.mappings;
     if (!mappings) return;
-    const ids = new Map(Object.entries(mappings).filter(([,name]) => name === 'window_items' || name === 'set_slot')
+    const inventoryPackets = new Set(['window_items', 'set_slot', 'set_cursor_item', 'set_player_inventory']);
+    const ids = new Map(Object.entries(mappings).filter(([,name]) => inventoryPackets.has(name))
       .map(([id,name]) => [Number(id), name as InventoryDecodeFailure['packet']]));
+    const varintContainer = (bot.registry as unknown as {protocol?: {types?: {ContainerID?: unknown}}}).protocol?.types?.ContainerID === 'varint';
     const original = parser.parsePacketBuffer;
     parsers.add(parser);
     parser.parsePacketBuffer = function(bytes) {
       const id = readVarint(bytes), packet = id ? ids.get(id.value) : undefined;
-      // Player window 0 is one zero byte in both u8 and VarInt versions. Other
-      // windows, cursor/standalone slot packets and equipment are not covered.
-      const playerInventory = packet && id && bytes[id.offset] === 0;
+      // Closed-window late packets must not poison the current inventory.
+      // Modern ContainerID is VarInt, not one byte (menu IDs can exceed 127).
+      const windowId = id && (varintContainer ? readVarint(bytes.subarray(id.offset))?.value : bytes[id.offset]);
+      const relevant = packet === 'set_cursor_item' || packet === 'set_player_inventory'
+        || !!packet && (windowId === 0 || windowId === bot.currentWindow?.id
+          || packet === 'set_slot' && (windowId === -1 || windowId === 255));
       try {
         const result = original.call(this, bytes);
-        if (playerInventory && result.metadata.size !== bytes.length) {
+        if (relevant && result.metadata.size !== bytes.length) {
           // FullPacketParser otherwise prints the short read and emits wrong slots.
           throw Object.assign(new Error('Inventory packet was not consumed completely'), {partialReadError:true});
         }
         return result;
       } catch(error) {
-        if (playerInventory) failed({packet, bytes:bytes.length, at:Date.now(),
+        if (relevant) failed({packet, bytes:bytes.length, at:Date.now(),
           error:error instanceof Error ? error.name : 'DecodeError'});
         throw error; // Preserve upstream handling, including silent PartialReadError drops.
       }

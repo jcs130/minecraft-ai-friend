@@ -146,3 +146,33 @@ it.each(['1.20.6','1.21.1','1.21.3'])('keeps compatibility corrections within th
   if(version==='1.21.1') expect(names('food')).toContain('usingConvertsTo');
   expect(names('potion_contents').includes('customName')).toBe(version==='1.21.3');
 });
+
+// Synthetic protocol-774 bytes assembled independently of the encoder. This
+// exercises component boundaries, not the unretained mcmoyu failing payload.
+it('reads 1.21.11 custom-name/lore menu items and reports a truncated active-menu component',()=>{
+  const {registry,bot,client}=patchedInventory('1.21.11');
+  const component=(name:string)=>varint(Number(Object.entries(registry.protocol.types.SlotComponentType[1].mappings).find(([,v])=>v===name)![0]));
+  const menuItem=Buffer.concat([varint(1),varint(registry.itemsByName.clock.id),varint(2),varint(0),
+    component('custom_name'),textNbt('玩法菜单'),component('lore'),varint(1),textNbt('只读说明')]);
+  const sword=Buffer.concat([varint(1),varint(registry.itemsByName.iron_sword.id),varint(0),varint(0)]);
+  const id=Number(Object.entries(registry.protocol.play.toClient.types.packet[1][0].type[1].mappings).find(([,v])=>v==='window_items')![0]);
+  const packet=(windowId:number,length:number)=>Buffer.concat([varint(id),varint(windowId),varint(1),varint(length),
+    ...Array.from({length},(_,i)=>i===0?menuItem:i===54?sword:varint(0)),varint(0)]);
+  const parser=mf('minecraft-protocol').createDeserializer({state:'play',isServer:false,version:'1.21.11',noErrorLogging:true});
+  Object.assign(client,{state:'play',deserializer:parser});client.emit('state','play');
+  let delivered=0;parser.on('data',(decoded:any)=>{delivered++;client.emit(decoded.data.name,decoded.data.params);});
+  parser.write(packet(0,46));
+  client.emit('open_window',{windowId:256,inventoryType:5,windowTitle:{type:'string',value:'帮助'}});
+  parser.write(packet(256,90));
+  expect(bot.currentWindow?.slots[0]?.name).toBe('clock');
+  expect(bot.inventory.slots[9]?.name).toBe('iron_sword');
+  expect(inventoryReadConfirmed(bot)).toBe(true);
+  const complete=packet(256,90);
+  parser.write(complete.subarray(0,20)); // active ID uses a multi-byte ContainerID
+  expect(delivered).toBe(2);
+  expect(inventoryReadState(bot).phase).toBe('decode_failed');
+  parser.write(complete);
+  expect(inventoryReadState(bot).phase).toBe('ready');
+  expect(delivered).toBe(3);
+  client.emit('end');
+});

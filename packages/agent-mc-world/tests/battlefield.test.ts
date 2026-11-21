@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { observeDamage } from '../core/damage-evidence.ts';
 import { EventEmitter } from 'node:events';
 import type { Bot } from 'mineflayer';
 import minecraftData from 'minecraft-data';
@@ -164,4 +166,55 @@ describe('programmatic battlefield observations', () => {
     expect(r.sample().server?.sequence).toBe(1);
     expect(r.observer.noteServerPayload(Buffer.alloc(40_000))).toBe(false);
   });
+});
+
+// Synthetic registry-indexed NPC metadata; live metadata was not retained.
+it.each(['1.20.6','1.21.1','1.21.11'])('does not promote a named no-AI display mob to an automatic threat (%s)', version=>{
+  const r=rig(version), e=r.bot.entities[3];
+  const keys=r.bot.registry.entitiesByName.zombie.metadataKeys!;
+  e.metadata[keys.indexOf('custom_name')]={type:'string',value:'任意公告'};
+  r.sample(); // metadata can arrive after the entity spawn
+  e.metadata[keys.indexOf('mob_flags')]=1;
+  expect(r.sample().clues?.some(c=>c.source==='last-seen')).toBe(false);
+  expect(r.sample().actors.some(a=>a.entityId===3&&a.relation==='hostile')).toBe(false);
+  e.metadata[keys.indexOf('mob_flags')]=0; // named real enemies remain threats
+  expect(r.sample().actors.some(a=>a.entityId===3&&a.relation==='hostile')).toBe(true);
+  r.observer.close();
+});
+
+it('damage provenance overrides display metadata without blessing a reused entity ID',async()=>{
+  vi.useFakeTimers();const r=rig('1.21.11'),e=r.bot.entities[3],keys=r.bot.registry.entitiesByName.zombie.metadataKeys!;
+  e.metadata[keys.indexOf('custom_name')]={type:'string',value:'守卫'};
+  e.metadata[keys.indexOf('mob_flags')]=1;
+  Object.assign(e,{isValid:true});
+  const off=observeDamage(r.bot as unknown as Bot,()=>{});
+  expect(r.sample().actors.some(a=>a.entityId===3)).toBe(false);
+  r.bot._client.emit('damage_event',{entityId:1,sourceTypeId:0,sourceCauseId:4,sourceDirectId:4});
+  await vi.advanceTimersByTimeAsync(60);
+  expect(r.sample().actors.find(a=>a.entityId===3)?.relation).toBe('hostile');
+  r.bot.entities[3]={...e,uuid:'replacement'};
+  expect(r.sample().actors.some(a=>a.entityId===3)).toBe(false);
+  off();r.bot._client.emit('end');r.observer.close();
+});
+
+it('keeps explicit server hostility and aggression even for a named no-AI mob',()=>{
+  const r=rig('1.21.11'),e=r.bot.entities[3],keys=r.bot.registry.entitiesByName.zombie.metadataKeys!;
+  e.metadata[keys.indexOf('custom_name')]={type:'string',value:'危险守卫'};e.metadata[keys.indexOf('mob_flags')]=1;
+  r.observer.noteServerPayload(Buffer.from(JSON.stringify(payload())),1000);
+  expect(r.sample(1100).actors.find(a=>a.entityId===3)?.relation).toBe('hostile');
+  e.metadata[keys.indexOf('mob_flags')]=5;
+  expect(r.sample(2200).actors.find(a=>a.entityId===3)?.relation).toBe('hostile');
+  r.observer.close();
+});
+
+// Actual decoded mob observation, but a deliberately synthetic UUID team update.
+// A collision team is information, not proof that a mob is a harmless NPC.
+it('retains a non-player UUID scoreboard team without treating collision rules as NPC safety',()=>{
+  const live=JSON.parse(readFileSync(new URL('./fixtures/mcmoyu-followup-observations.json',import.meta.url),'utf8'));
+  const raw=live.entities.find((e:any)=>e.type==='creeper'),r=rig('1.21.11');
+  r.bot.entity.position=new Vec3(raw.position.x+3,raw.position.y,raw.position.z); // synthetic close body; team never implies safety
+  (r.bot as any).entities={[raw.id]:{...structuredClone(raw),name:'creeper',type:'hostile',position:new Vec3(raw.position.x,raw.position.y,raw.position.z)}};
+  Object.assign(r.bot.teamMap,{[raw.uuid]:{team:'synthetic-display-team',collisionRule:'never'}});
+  try{expect(r.sample().actors.find(e=>e.uuid===raw.uuid)).toMatchObject({scoreboardTeam:'synthetic-display-team',relation:'hostile',relationSource:'hostile-type'});}
+  finally{r.observer.close();}
 });

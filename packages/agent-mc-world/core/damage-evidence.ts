@@ -1,3 +1,4 @@
+import { noteNativeAggressor } from './entity-threat.ts';
 import { onConnectionEnd } from './connection-end.ts';
 /** Preserve server damage provenance before Mineflayer reduces it to entityHurt. */
 import type { Bot } from 'mineflayer';
@@ -63,6 +64,7 @@ export function installDamageEvidence(bot: Bot): void {
   };
   states.set(bot, state);
   const dispatch = (evidence: DamageEvidence): void => {
+    if (evidence.actor?.entity) noteNativeAggressor(bot, evidence.actor.entity);
     for (const listener of state.listeners) listener(evidence);
   };
   const flush = (): void => {

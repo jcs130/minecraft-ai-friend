@@ -1,0 +1,642 @@
+{
+  "provenance": {
+    "source": "authenticated fixed agent-mc-world core; decoded target packets in source ledger",
+    "capturedAt": "2026-11-21T02:47:39.790Z",
+    "rawWire": false,
+    "notes": "Spawn/metadata/attributes are actual decoded values, not serialized wire. No auth/chat/player profiles. Replay envelopes reconstructed from these observations.",
+    "decoderMinecraftDataVersion": "3.117.0 transitive (diagnosed after capture)",
+    "attributeLabelsMayBeStale": true,
+    "attributeWarning": "Do not infer actual scale from generic.scale=0.25 here: old protocol maps id22 to scale, while774 id22 is movement_speed. Typed metadata, UUIDs and teams unaffected by this attribute mapping defect."
+  },
+  "health": {
+    "schema": "native-health-sources/v1",
+    "epoch": 1,
+    "disconnected": false,
+    "synchronisation": "stable",
+    "native": {
+      "current": 28,
+      "maximum": 28,
+      "food": 20,
+      "saturation": 20
+    },
+    "metadataHealth": 28,
+    "displayScores": {},
+    "baseline": {
+      "current": 28,
+      "maximum": 28,
+      "at": 1795229257040
+    },
+    "lastLoss": {
+      "at": 1795229256729,
+      "from": 40,
+      "to": 28,
+      "rawDelta": 12,
+      "baselineEstablished": false,
+      "attribution": "unattributed",
+      "recoveredAt": null,
+      "capacityChangedNearby": true
+    },
+    "events": [
+      {
+        "at": 1795229256706,
+        "sequence": 1,
+        "source": "life-reset"
+      },
+      {
+        "at": 1795229256710,
+        "sequence": 2,
+        "source": "entity_status",
+        "status": 24
+      },
+      {
+        "at": 1795229256720,
+        "sequence": 3,
+        "source": "max_health_attribute",
+        "key": "generic.max_health",
+        "base": 40,
+        "modifiers": [],
+        "maximum": 40,
+        "previous": null
+      },
+      {
+        "at": 1795229256720,
+        "sequence": 4,
+        "source": "update_health",
+        "current": 40,
+        "maximum": 40,
+        "food": 20,
+        "saturation": 20,
+        "rawDelta": null
+      },
+      {
+        "at": 1795229256729,
+        "sequence": 5,
+        "source": "max_health_attribute",
+        "key": "generic.max_health",
+        "base": 28,
+        "modifiers": [],
+        "maximum": 28,
+        "previous": 40
+      },
+      {
+        "at": 1795229256729,
+        "sequence": 6,
+        "source": "update_health",
+        "current": 28,
+        "maximum": 28,
+        "food": 20,
+        "saturation": 20,
+        "rawDelta": -12
+      },
+      {
+        "at": 1795229256911,
+        "sequence": 7,
+        "source": "max_health_attribute",
+        "key": "generic.max_health",
+        "base": 28,
+        "modifiers": [],
+        "maximum": 28,
+        "previous": 28
+      },
+      {
+        "at": 1795229256912,
+        "sequence": 8,
+        "source": "update_health",
+        "current": 28,
+        "maximum": 28,
+        "food": 20,
+        "saturation": 20,
+        "rawDelta": 0
+      },
+      {
+        "at": 1795229256915,
+        "sequence": 9,
+        "source": "self_metadata_health",
+        "value": 28,
+        "index": 9,
+        "type": "float"
+      },
+      {
+        "at": 1795229256915,
+        "sequence": 10,
+        "source": "max_health_attribute",
+        "key": "generic.max_health",
+        "base": 28,
+        "modifiers": [],
+        "maximum": 28,
+        "previous": 28
+      },
+      {
+        "at": 1795229256915,
+        "sequence": 11,
+        "source": "update_health",
+        "current": 28,
+        "maximum": 28,
+        "food": 20,
+        "saturation": 20,
+        "rawDelta": 0
+      }
+    ],
+    "meaning": "Raw HP loss remains observable even if recovered; no proof of harmlessness from absent damage or timing."
+  },
+  "world": {
+    "schema": "agent-mc-world-identity/v1",
+    "key": "minecraft:zc",
+    "uuid": null,
+    "instanceId": null,
+    "dimensionType": "overworld",
+    "source": "vanilla-login",
+    "revision": 1,
+    "observedAt": "2026-11-21T02:47:36.705Z"
+  },
+  "targets": [
+    {
+      "schema": "native-entity-state/v1",
+      "disconnected": false,
+      "entityId": 3999195,
+      "uuid": "8f10aa69-2288-4f2b-8e4f-10f00f82e528",
+      "spawn": {
+        "at": 1795229257623,
+        "sequence": 66,
+        "entityId": 3999195,
+        "uuid": "8f10aa69-2288-4f2b-8e4f-10f00f82e528",
+        "typeId": 41,
+        "type": "enderman",
+        "position": {
+          "x": -22.4971,
+          "y": 36,
+          "z": 58.4788
+        },
+        "yaw": -56,
+        "pitch": 0,
+        "headPitch": -56,
+        "objectData": 0,
+        "velocity": {
+          "x": 0,
+          "y": -0.0783739241897089,
+          "z": 0
+        }
+      },
+      "metadata": [
+        {
+          "key": 2,
+          "type": "optional_component",
+          "value": {
+            "type": "compound",
+            "value": {
+              "text": {
+                "type": "string",
+                "value": "材质包加载"
+              },
+              "color": {
+                "type": "string",
+                "value": "red"
+              }
+            }
+          },
+          "at": 1795229257623,
+          "sequence": 67
+        },
+        {
+          "key": 9,
+          "type": "float",
+          "value": 40,
+          "at": 1795229257623,
+          "sequence": 67
+        },
+        {
+          "key": 6,
+          "type": "pose",
+          "value": 0,
+          "at": 1795229257624,
+          "sequence": 85
+        }
+      ],
+      "updates": [
+        {
+          "at": 1795229257623,
+          "sequence": 67,
+          "entries": [
+            {
+              "key": 2,
+              "type": "optional_component",
+              "value": {
+                "type": "compound",
+                "value": {
+                  "text": {
+                    "type": "string",
+                    "value": "材质包加载"
+                  },
+                  "color": {
+                    "type": "string",
+                    "value": "red"
+                  }
+                }
+              },
+              "at": 1795229257623,
+              "sequence": 67
+            },
+            {
+              "key": 9,
+              "type": "float",
+              "value": 40,
+              "at": 1795229257623,
+              "sequence": 67
+            }
+          ]
+        },
+        {
+          "at": 1795229257624,
+          "sequence": 85,
+          "entries": [
+            {
+              "key": 6,
+              "type": "pose",
+              "value": 0,
+              "at": 1795229257624,
+              "sequence": 85
+            }
+          ]
+        }
+      ],
+      "truncatedUpdates": 0,
+      "attributes": [
+        {
+          "at": 1795229257623,
+          "sequence": 68,
+          "key": "generic.armor",
+          "value": 0,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 69,
+          "key": "generic.armor_toughness",
+          "value": 0,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 70,
+          "key": "burning_time",
+          "value": 1,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 71,
+          "key": "camera_distance",
+          "value": 4,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 72,
+          "key": "explosion_knockback_resistance",
+          "value": 0,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 73,
+          "key": "generic.fall_damage_multiplier",
+          "value": 1,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 74,
+          "key": "generic.gravity",
+          "value": 0.08,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 75,
+          "key": "generic.jump_strength",
+          "value": 0.41999998688697815,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 76,
+          "key": "generic.max_absorption",
+          "value": 0,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 77,
+          "key": "generic.max_health",
+          "value": 40,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 78,
+          "key": "generic.safe_fall_distance",
+          "value": 0,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 79,
+          "key": "generic.scale",
+          "value": 0.30000001192092896,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 80,
+          "key": "zombie.spawn_reinforcements",
+          "value": 0,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 81,
+          "key": "generic.step_height",
+          "value": 3,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 82,
+          "key": "submerged_mining_speed",
+          "value": 1,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 83,
+          "key": "water_movement_efficiency",
+          "value": 1,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257623,
+          "sequence": 84,
+          "key": 32,
+          "value": 0,
+          "modifiers": []
+        }
+      ],
+      "statuses": [],
+      "team": {
+        "name": "CIT-8f10aa692288",
+        "collisionRule": "never",
+        "nameTagVisibility": "never"
+      },
+      "dimensions": {
+        "width": 0.6,
+        "height": 2.9
+      },
+      "vehicle": null,
+      "passengers": []
+    },
+    {
+      "schema": "native-entity-state/v1",
+      "disconnected": false,
+      "entityId": 3999212,
+      "uuid": "5a91ad56-82e4-44d3-8fd2-d27a4843e2f7",
+      "spawn": {
+        "at": 1795229257307,
+        "sequence": 46,
+        "entityId": 3999212,
+        "uuid": "5a91ad56-82e4-44d3-8fd2-d27a4843e2f7",
+        "typeId": 32,
+        "type": "creeper",
+        "position": {
+          "x": -21.6231,
+          "y": 36,
+          "z": 69.5733
+        },
+        "yaw": -36,
+        "pitch": 0,
+        "headPitch": -36,
+        "objectData": 0,
+        "velocity": {
+          "x": 0,
+          "y": -0.0783739241897089,
+          "z": 0
+        }
+      },
+      "metadata": [
+        {
+          "key": 2,
+          "type": "optional_component",
+          "value": {
+            "type": "compound",
+            "value": {
+              "text": {
+                "type": "string",
+                "value": "近期更新内容"
+              },
+              "color": {
+                "type": "string",
+                "value": "red"
+              }
+            }
+          },
+          "at": 1795229257307,
+          "sequence": 47
+        },
+        {
+          "key": 9,
+          "type": "float",
+          "value": 20,
+          "at": 1795229257307,
+          "sequence": 47
+        },
+        {
+          "key": 6,
+          "type": "pose",
+          "value": 0,
+          "at": 1795229257307,
+          "sequence": 65
+        }
+      ],
+      "updates": [
+        {
+          "at": 1795229257307,
+          "sequence": 47,
+          "entries": [
+            {
+              "key": 2,
+              "type": "optional_component",
+              "value": {
+                "type": "compound",
+                "value": {
+                  "text": {
+                    "type": "string",
+                    "value": "近期更新内容"
+                  },
+                  "color": {
+                    "type": "string",
+                    "value": "red"
+                  }
+                }
+              },
+              "at": 1795229257307,
+              "sequence": 47
+            },
+            {
+              "key": 9,
+              "type": "float",
+              "value": 20,
+              "at": 1795229257307,
+              "sequence": 47
+            }
+          ]
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 65,
+          "entries": [
+            {
+              "key": 6,
+              "type": "pose",
+              "value": 0,
+              "at": 1795229257307,
+              "sequence": 65
+            }
+          ]
+        }
+      ],
+      "truncatedUpdates": 0,
+      "attributes": [
+        {
+          "at": 1795229257307,
+          "sequence": 48,
+          "key": "generic.armor",
+          "value": 0,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 49,
+          "key": "generic.armor_toughness",
+          "value": 0,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 50,
+          "key": "burning_time",
+          "value": 1,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 51,
+          "key": "camera_distance",
+          "value": 4,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 52,
+          "key": "explosion_knockback_resistance",
+          "value": 0,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 53,
+          "key": "generic.fall_damage_multiplier",
+          "value": 1,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 54,
+          "key": "generic.gravity",
+          "value": 0.08,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 55,
+          "key": "generic.jump_strength",
+          "value": 0.41999998688697815,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 56,
+          "key": "generic.max_absorption",
+          "value": 0,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 57,
+          "key": "generic.max_health",
+          "value": 20,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 58,
+          "key": "generic.safe_fall_distance",
+          "value": 0,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 59,
+          "key": "generic.scale",
+          "value": 0.25,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 60,
+          "key": "zombie.spawn_reinforcements",
+          "value": 0,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 61,
+          "key": "generic.step_height",
+          "value": 3,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 62,
+          "key": "submerged_mining_speed",
+          "value": 1,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 63,
+          "key": "water_movement_efficiency",
+          "value": 0.6,
+          "modifiers": []
+        },
+        {
+          "at": 1795229257307,
+          "sequence": 64,
+          "key": 32,
+          "value": 0,
+          "modifiers": []
+        }
+      ],
+      "statuses": [],
+      "team": {
+        "name": "CIT-5a91ad5682e4",
+        "collisionRule": "never",
+        "nameTagVisibility": "never"
+      },
+      "dimensions": {
+        "width": 0.6,
+        "height": 1.7
+      },
+      "vehicle": null,
+      "passengers": []
+    }
+  ]
+}

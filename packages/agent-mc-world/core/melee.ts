@@ -1,3 +1,4 @@
+import { suppressSpeciesThreat } from './entity-threat.ts';
 /**
  * 动手那几下:挑兵器、够不够得着、挥击与冷却、远程接管的判据,以及附近敌对生物的读数。
  *
@@ -64,7 +65,7 @@ export function nearestHostileWithin(bot: Bot, radius: number): HurtSource | nul
     const e = bot.entities[id as unknown as number];
     if (!e?.position || e.type === 'player' || e === bot.entity) continue;
     const name = e.name ?? '';
-    if (!HOSTILE.has(name) && !(name === 'piglin' && piglinIsHostile(bot, e))) continue;
+    if (suppressSpeciesThreat(bot, e) || (!HOSTILE.has(name) && !(name === 'piglin' && piglinIsHostile(bot, e)))) continue;
     const d = e.position.distanceTo(bot.entity.position);
     if (d < bestD) { bestD = d; best = e as unknown as HurtSource; }
   }
@@ -244,7 +245,7 @@ export function hostilesAround(bot: Bot, from: { x: number; y: number; z: number
   for (const id of Object.keys(bot.entities)) {
     const e = bot.entities[id];
     if (!e?.position || !e.name) continue;
-    if (!HOSTILE.has(e.name) && !(e.name === 'piglin' && piglinIsHostile(bot, e))) continue;
+    if (suppressSpeciesThreat(bot, e) || (!HOSTILE.has(e.name) && !(e.name === 'piglin' && piglinIsHostile(bot, e)))) continue;
     const d = e.position.distanceTo(from as never);
     if (d <= 32) out.push({ e, d });
   }

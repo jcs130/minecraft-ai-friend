@@ -1,3 +1,4 @@
+import { suppressSpeciesThreat, potentialCreeperOnly } from './entity-threat.ts';
 /** Connection-scoped battle facts from native entities and optional server party telemetry. */
 import type { Bot } from 'mineflayer';
 import { declareDecodedChannels } from './decoded-channels.ts';
@@ -181,9 +182,11 @@ export class BattlefieldObserver {
       const distance = Math.hypot(e.position.x - p.x, e.position.y - p.y, e.position.z - p.z);
       const rawRow = e.uuid ? rows.get(e.uuid.toLowerCase()) : undefined;
       const row = rawRow && (rawRow.entityId === null || rawRow.entityId === e.id) ? rawRow : undefined;
-      const hostile = e.type !== 'player' && (HOSTILE.has(e.name ?? '')
+      const potential = !suppressSpeciesThreat(bot,e) && potentialCreeperOnly(bot,e);
+      const hostile = !potential && e.type !== 'player' && !suppressSpeciesThreat(bot, e) && (HOSTILE.has(e.name ?? '')
         || (e.name === 'piglin' && piglinIsHostile(bot, e)));
-      if (!row && !hostile && e.type !== 'player') continue;
+      if (!hostile && (!row || row.relation !== 'hostile')) this.lastSeen.delete(JSON.stringify([e.id, e.uuid ?? null]));
+      if (!row && !hostile && !potential && e.type !== 'player') continue;
       if (row) rows.delete(row.uuid.toLowerCase());
       const native = metaOf(bot, e, 'health');
       let visible: boolean | null = observation.lineOfSight;
@@ -199,7 +202,8 @@ export class BattlefieldObserver {
         ...(observedEntityIdentity(bot,e)?{identity:observedEntityIdentity(bot,e)!}:{}),
         name: e.username ?? row?.name ?? null, relation: row?.relation ?? (hostile ? 'hostile' : 'unknown'),
         relationSource: row ? 'server' : hostile ? 'hostile-type' : 'unknown',
-        scoreboardTeam: team(e.username),
+        // Vanilla non-player score holders use UUID, not a player username.
+        scoreboardTeam: team(e.type === 'player' ? e.username : e.uuid),
         health: row ? { ...row.health, source: 'server', updatedAtMs: server!.receivedAtMs }
           : { current: number(native) ? native : null, max: maxHealth(e), source: number(native) ? 'native' : 'unknown',
             updatedAtMs: this.healthTimes.get(e.id) ?? null },

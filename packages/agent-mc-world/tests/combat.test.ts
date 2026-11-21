@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { configureNpcThreatPolicy } from '../core/entity-threat.ts';
+import { installWorldIdentity } from '../core/world-scope.ts';
 import { installDeathLifecycle } from '../core/death-lifecycle.ts';
 import { installNativeBodyReadiness } from '../core/body-readiness.ts';
 import { EventEmitter } from 'node:events';
@@ -2950,4 +2953,51 @@ describe('异步战术动作共用战斗控制器', () => {
     expect(attacks.length).toBeGreaterThan(0);
     r.session.stop();
   });
+});
+
+// Synthetic display-mob metadata: do not assume these flags were captured live.
+it.each(['creeper','enderman'])('does not hold walking or equip for a no-AI %s display, but defends on a real hurt source', async name=>{
+  const e=foe(7,name,2.5),{bot,attacks}=combatRigBot([e]);
+  const registry=createRequire(import.meta.url)('minecraft-data')('1.21.11');
+  Object.assign(bot,{registry,health:28,heldItem:{name:'clock'}});
+  e.metadata=[];
+  const keys=registry.entitiesByName[name].metadataKeys;
+  e.metadata[keys.indexOf('custom_name')]={type:'string',value:'任意展示名称'};
+  e.metadata[keys.indexOf('mob_flags')]=1;
+  const equip=vi.fn(async()=>{});Object.assign(bot,{equip});
+  const r=rig(bot);
+  try {
+    r.session.start();
+    expect(r.session.trackingTargets()).toEqual([]);expect(r.session.canRetreat()).toBe(false);
+    expect(r.session.react({kind:'retreat'})).toBe(false);
+    await drive(bot,500);
+    expect(r.calls.suspended).toBe(0);expect(equip).not.toHaveBeenCalled();expect(attacks).toEqual([]);
+    expect(r.session.onHurtBy(7,name)).toBe(true);
+    expect(r.session.active).toBe(true);expect(r.calls.suspended).toBeGreaterThan(0);
+  } finally {r.session.stop();}
+});
+
+// Actual decoded NPC, player and world observations; fake body/terrain, timing and hurt.
+it('does not retreat, equip or suspend for the exact received display anchor, while a synthetic hurt still defends',async()=>{
+  const live=JSON.parse(readFileSync(new URL('./fixtures/mcmoyu-followup-observations.json',import.meta.url),'utf8'));
+  function setup(anchored:boolean){
+    const raw=live.entities.find((e:any)=>e.uuid===live.explicitAnchor.uuid);
+    const e=Object.assign(foe(raw.id,raw.type,0),{uuid:raw.uuid,metadata:structuredClone(raw.metadata),position:new Vec3(raw.position.x,raw.position.y,raw.position.z)});
+    const {bot,attacks}=combatRigBot([e]);const b=bot as unknown as Bot;
+    Object.assign(b,{_client:new EventEmitter(),registry:createRequire(import.meta.url)('minecraft-data')('1.21.11'),health:live.player.health,heldItem:{name:'clock'}});
+    b.entity.position=new Vec3(live.player.position.x,live.player.position.y,live.player.position.z);
+    b.blockAt=((p:Vec3)=>({name:p.y<36?'stone':'air',boundingBox:p.y<36?'block':'empty',getProperties:()=>({}),shapes:p.y<36?[[0,0,0,1,1,1]]:[]})) as Bot['blockAt'];
+    const dispose=installWorldIdentity(b);b._client.emit('login',{worldState:{name:live.world.key}});
+    if(anchored)configureNpcThreatPolicy(b,live.explicitAnchor.server,()=>[live.explicitAnchor]);
+    const equip=vi.fn(async()=>{});b.equip=equip;return {bot,b,e,attacks,equip,dispose,r:rig(bot,{engageRadius:16})};
+  }
+  const baseline=setup(false);
+  try{expect(baseline.r.session.canRetreat()).toBe(false); /* actual8.3-block static Creeper is potential, not identified as NPC */}finally{baseline.r.session.stop();baseline.dispose();}
+  const a=setup(true);
+  try{
+    a.r.session.start();await drive(a.bot,500);
+    expect(a.r.session.canRetreat()).toBe(false);expect(a.r.session.reactionState().retreating).toBe(false);
+    expect(a.r.session.active).toBe(false);expect(a.r.calls.suspended).toBe(0);expect(a.equip).not.toHaveBeenCalled();expect(a.attacks).toEqual([]);
+    expect(a.r.session.onHurtBy(a.e.id,a.e.name)).toBe(true);expect(a.r.session.active).toBe(true);expect(a.r.calls.suspended).toBeGreaterThan(0);
+  }finally{a.r.session.stop();a.dispose();}
 });

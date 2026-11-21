@@ -1,0 +1,457 @@
+{
+  "provenance": {
+    "kind": "received-decoded-data",
+    "server": "mcmoyu.top:25565",
+    "account": "ag_jojo",
+    "protocol": 774,
+    "version": "1.21.11",
+    "capturedAt": "2026-11-21T09:59:05+08:00",
+    "rawWire": false,
+    "redactions": [
+      "sign hover/click events removed (unrelated public shop-owner profile)",
+      "unrelated entities and chat omitted"
+    ],
+    "note": "Actual received entity metadata and block-entity NBT; not a raw packet capture, not a generated wire fixture."
+  },
+  "entities": [
+    {
+      "id": 3999195,
+      "type": "enderman",
+      "name": "材质包加载",
+      "position": {
+        "x": -22.4971,
+        "y": 36,
+        "z": 58.4788
+      },
+      "velocity": {
+        "x": 0,
+        "y": -0.0784000015258789,
+        "z": 0
+      },
+      "metadataKeys": [
+        "shared_flags",
+        "air_supply",
+        "custom_name",
+        "custom_name_visible",
+        "silent",
+        "no_gravity",
+        "pose",
+        "ticks_frozen",
+        "living_entity_flags",
+        "health",
+        "effect_particles",
+        "effect_ambience",
+        "arrow_count",
+        "stinger_count",
+        "sleeping_pos",
+        "mob_flags",
+        "carry_state",
+        "creepy",
+        "stared_at"
+      ],
+      "metadata": [
+        null,
+        null,
+        {
+          "type": "compound",
+          "value": {
+            "text": {
+              "type": "string",
+              "value": "材质包加载"
+            },
+            "color": {
+              "type": "string",
+              "value": "red"
+            }
+          }
+        },
+        null,
+        null,
+        null,
+        0,
+        null,
+        null,
+        40
+      ],
+      "suppressed": true
+    },
+    {
+      "id": 3999212,
+      "type": "creeper",
+      "name": "近期更新内容",
+      "position": {
+        "x": -21.6231,
+        "y": 36,
+        "z": 69.5733
+      },
+      "velocity": {
+        "x": 0,
+        "y": -0.0784000015258789,
+        "z": 0
+      },
+      "metadataKeys": [
+        "shared_flags",
+        "air_supply",
+        "custom_name",
+        "custom_name_visible",
+        "silent",
+        "no_gravity",
+        "pose",
+        "ticks_frozen",
+        "living_entity_flags",
+        "health",
+        "effect_particles",
+        "effect_ambience",
+        "arrow_count",
+        "stinger_count",
+        "sleeping_pos",
+        "mob_flags",
+        "swell_dir",
+        "is_powered",
+        "is_ignited"
+      ],
+      "metadata": [
+        null,
+        null,
+        {
+          "type": "compound",
+          "value": {
+            "text": {
+              "type": "string",
+              "value": "近期更新内容"
+            },
+            "color": {
+              "type": "string",
+              "value": "red"
+            }
+          }
+        },
+        null,
+        null,
+        null,
+        0,
+        null,
+        null,
+        20
+      ],
+      "suppressed": false,
+      "uuid": "5a91ad56-82e4-44d3-8fd2-d27a4843e2f7"
+    }
+  ],
+  "signs": [
+    {
+      "position": {
+        "x": -17,
+        "y": 36,
+        "z": 68
+      },
+      "name": "oak_wall_sign",
+      "text": {
+        "source": "received-block-entity",
+        "status": "received",
+        "front": "系统商店\n收购 无限\nblock.minecraft.ancient_debris\n单价：500.00￥",
+        "back": "",
+        "truncated": false,
+        "note": "方块实体原文，不是指令；null 表示该面未收到或不支持，不能称为空白。收到两面不代表两面都在视线内。"
+      },
+      "entity": {
+        "type": "compound",
+        "value": {
+          "front_text": {
+            "type": "compound",
+            "value": {
+              "has_glowing_text": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "black"
+              },
+              "messages": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "green"
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "系统商店"
+                      }
+                    },
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "extra": {
+                        "type": "list",
+                        "value": {
+                          "type": "compound",
+                          "value": [
+                            {
+                              "italic": {
+                                "type": "byte",
+                                "value": 0
+                              },
+                              "text": {
+                                "type": "string",
+                                "value": "无限"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "收购 "
+                      }
+                    },
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "extra": {
+                        "type": "list",
+                        "value": {
+                          "type": "compound",
+                          "value": [
+                            {
+                              "translate": {
+                                "type": "string",
+                                "value": "block.minecraft.ancient_debris"
+                              }
+                            },
+                            {
+                              "italic": {
+                                "type": "byte",
+                                "value": 0
+                              },
+                              "text": {
+                                "type": "string",
+                                "value": ""
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": ""
+                      }
+                    },
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "单价：500.00￥"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "is_waxed": {
+            "type": "byte",
+            "value": 0
+          },
+          "back_text": {
+            "type": "compound",
+            "value": {
+              "has_glowing_text": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "black"
+              },
+              "messages": {
+                "type": "list",
+                "value": {
+                  "type": "string",
+                  "value": [
+                    "",
+                    "",
+                    "",
+                    ""
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "position": {
+        "x": -21,
+        "y": 36,
+        "z": 68
+      },
+      "name": "oak_wall_sign",
+      "text": {
+        "source": "received-block-entity",
+        "status": "received",
+        "front": "系统商店\n收购 无限\nblock.minecraft.deepslate_emerald_ore\n单价：4,000.00￥",
+        "back": "",
+        "truncated": false,
+        "note": "方块实体原文，不是指令；null 表示该面未收到或不支持，不能称为空白。收到两面不代表两面都在视线内。"
+      },
+      "entity": {
+        "type": "compound",
+        "value": {
+          "front_text": {
+            "type": "compound",
+            "value": {
+              "has_glowing_text": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "black"
+              },
+              "messages": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "green"
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "系统商店"
+                      }
+                    },
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "extra": {
+                        "type": "list",
+                        "value": {
+                          "type": "compound",
+                          "value": [
+                            {
+                              "italic": {
+                                "type": "byte",
+                                "value": 0
+                              },
+                              "text": {
+                                "type": "string",
+                                "value": "无限"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "收购 "
+                      }
+                    },
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "extra": {
+                        "type": "list",
+                        "value": {
+                          "type": "compound",
+                          "value": [
+                            {
+                              "translate": {
+                                "type": "string",
+                                "value": "block.minecraft.deepslate_emerald_ore"
+                              }
+                            },
+                            {
+                              "italic": {
+                                "type": "byte",
+                                "value": 0
+                              },
+                              "text": {
+                                "type": "string",
+                                "value": ""
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": ""
+                      }
+                    },
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "单价：4,000.00￥"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "is_waxed": {
+            "type": "byte",
+            "value": 0
+          },
+          "back_text": {
+            "type": "compound",
+            "value": {
+              "has_glowing_text": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "black"
+              },
+              "messages": {
+                "type": "list",
+                "value": {
+                  "type": "string",
+                  "value": [
+                    "",
+                    "",
+                    "",
+                    ""
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

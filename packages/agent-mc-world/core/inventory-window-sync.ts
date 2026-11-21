@@ -110,6 +110,11 @@ export function installInventoryWindowSyncGuard(bot: Bot, diag?: MinecraftLog): 
         const seen = seenFor(window);
         for (let slot = window.inventoryStart; slot < Math.min(packet.items.length, window.inventoryEnd); slot++) seen.add(slot);
         state.confirmed = complete(window);
+        // Recover a failed active-container decode only from a complete new
+        // container frame with its cursor, not incremental coverage of old slots.
+        if (state.confirmed && packet.items.length >= window.slots.length && packet.carriedItem !== undefined) {
+          state.decodeFailure = undefined;
+        }
       }
     } else if (name === 'set_slot' && window && window.id === packet.windowId
       && packet.slot >= window.inventoryStart && packet.slot < window.inventoryEnd) {
