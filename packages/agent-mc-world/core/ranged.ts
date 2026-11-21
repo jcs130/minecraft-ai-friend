@@ -2,6 +2,11 @@ import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { readDurability, type ItemLike } from './item-facts.ts';
 import { equipHandConfirmed } from './equipment.ts';
+import {
+  crossbowCharge, hasUsableArrows, readyToThrowTrident, selectRangedWeapon, type RangedWeaponKind,
+} from './ranged-weapons.ts';
+
+export { hasReadyRangedWeapon, hasUsableArrows, selectRangedWeapon } from './ranged-weapons.ts';
 
 /** 未交战时允许进入远程候选池的最大距离。感知命中本身不触发开火。 */
 export const RANGED_ENTER_RANGE = 32;
@@ -11,11 +16,12 @@ export const HYBRID_RANGED_AT = 8;
 export const HYBRID_MELEE_AT = 5.5;
 export const KITE_MIN_RANGE = 8;
 export const KITE_MAX_RANGE = 14;
-const BOW_FULL_DRAW_MS = 1_000;
 export const BOW_HIT_WINDOW_MS = 1_500;
 
 const AIM_STEP_MS = 50;
 const ARROW_SPEED_PER_TICK = 3;
+const PROJECTILE_ACK_MS = 1_000;
+const projectileSpeeds = { bow: ARROW_SPEED_PER_TICK, crossbow: 3.15, trident: 2.5 };
 const ARROW_GRAVITY_PER_TICK = 0.05;
 /** 原版箭每刻先位移,再把速度乘这个系数,再减重力 */
 const ARROW_DRAG_PER_TICK = 0.99;
@@ -141,7 +147,7 @@ export class PositionVelocityTracker {
 
 export type HybridWeapon = 'melee' | 'ranged';
 
-/** 仅支持首期的弓和普通箭；弩、药箭和光灵箭不隐式混入。 */
+/** Compatibility helper for callers that explicitly request an ordinary bow. */
 export function bestRangedWeapon(bot: Bot): InventoryItem | null {
   let best: InventoryItem | null = null;
   let bestLeft = 0;
@@ -154,10 +160,6 @@ export function bestRangedWeapon(bot: Bot): InventoryItem | null {
     }
   }
   return best;
-}
-
-export function hasUsableArrows(bot: Bot): boolean {
-  return bot.inventory.items().some((item) => item.name === 'arrow' && item.count > 0);
 }
 
 /** 近远武器切换带 2.5 格滞回；中间区间保持当前武器。 */
@@ -193,10 +195,12 @@ export function lowArcAimPoint(
   target: RangedTarget,
   targetVelocity: Point3 = zeroPoint(),
   shooterVelocity: Point3 = zeroPoint(),
+  speed: number = ARROW_SPEED_PER_TICK,
 ): Vec3 | null {
+  if (!Number.isFinite(speed) || speed <= 0) return null;
   const velocity = subtractPoint(targetVelocity, shooterVelocity);
   const center = targetCenter(target);
-  let flightTicks = pointDistance(center, eye) / ARROW_SPEED_PER_TICK;
+  let flightTicks = pointDistance(center, eye) / speed;
   let aim = new Vec3(center.x, center.y, center.z);
 
   for (let i = 0; i < 3; i += 1) {
@@ -208,13 +212,13 @@ export function lowArcAimPoint(
     const horizontal = Math.hypot(predicted.x - eye.x, predicted.z - eye.z);
     const dy = predicted.y - eye.y;
     if (horizontal < 1e-6) {
-      const vertical = verticalFlight(dy);
+      const vertical = verticalFlight(dy, speed);
       if (vertical === null) return null;
       flightTicks = vertical.ticks;
       aim = new Vec3(predicted.x, eye.y + vertical.direction, predicted.z);
       continue;
     }
-    const arc = lowArcPitch(horizontal, dy);
+    const arc = lowArcPitch(horizontal, dy, speed);
     if (arc === null) return null;
     flightTicks = arc.ticks;
     aim = new Vec3(predicted.x, eye.y + horizontal * Math.tan(arc.pitch), predicted.z);
@@ -230,9 +234,10 @@ function arrowHeightAt(
   pitch: number,
   horizontal: number,
   floor: number,
+  speed: number,
 ): { y: number; ticks: number } | null {
-  let vx = ARROW_SPEED_PER_TICK * Math.cos(pitch);
-  let vy = ARROW_SPEED_PER_TICK * Math.sin(pitch);
+  let vx = speed * Math.cos(pitch);
+  let vy = speed * Math.sin(pitch);
   let x = 0;
   let y = -ARROW_SPAWN_BELOW_EYE;
   let ticks = 0;
@@ -250,8 +255,8 @@ function arrowHeightAt(
   }
 }
 
-function lowArcPitch(horizontal: number, dy: number): { pitch: number; ticks: number } | null {
-  const reaches = (pitch: number): boolean => (arrowHeightAt(pitch, horizontal, dy)?.y ?? -Infinity) >= dy;
+function lowArcPitch(horizontal: number, dy: number, speed: number): { pitch: number; ticks: number } | null {
+  const reaches = (pitch: number): boolean => (arrowHeightAt(pitch, horizontal, dy, speed)?.y ?? -Infinity) >= dy;
   let below: number | null = null;
   for (let pitch = -Math.PI / 2 + PITCH_SCAN_STEP; pitch < Math.PI / 2; pitch += PITCH_SCAN_STEP) {
     if (!reaches(pitch)) {
@@ -264,14 +269,14 @@ function lowArcPitch(horizontal: number, dy: number): { pitch: number; ticks: nu
       if (reaches(mid)) above = mid;
       else below = mid;
     }
-    return { pitch: above, ticks: arrowHeightAt(above, horizontal, dy)!.ticks };
+    return { pitch: above, ticks: arrowHeightAt(above, horizontal, dy, speed)!.ticks };
   }
   return null;
 }
 
-function verticalFlight(dy: number): { ticks: number; direction: 1 | -1 } | null {
+function verticalFlight(dy: number, speed: number): { ticks: number; direction: 1 | -1 } | null {
   const direction = dy >= -ARROW_SPAWN_BELOW_EYE ? 1 : -1;
-  let vy = ARROW_SPEED_PER_TICK * direction;
+  let vy = speed * direction;
   let y = -ARROW_SPAWN_BELOW_EYE;
   let ticks = 0;
   while (direction > 0 ? y < dy : y > dy) {
@@ -332,6 +337,8 @@ export type BowAbortCause =
   | 'equip_timeout'
   | 'activate'
   | 'release'
+  | 'charge_unconfirmed'
+  | 'launch_unconfirmed'
   | 'cancel_slot'
   | 'busy';
 
@@ -343,6 +350,8 @@ interface BowBlocked {
 
 interface BowReleased {
   kind: 'released';
+  weapon?: RangedWeaponKind;
+  projectileId?: number;
   shotId: number;
   targetId: number;
   ownerToken: unknown;
@@ -353,6 +362,7 @@ interface BowReleased {
 
 interface BowHit {
   kind: 'hit';
+  weapon?: RangedWeaponKind;
   shotId: number;
   targetId: number;
   ownerToken: unknown;
@@ -378,7 +388,9 @@ interface Drawing {
   targetId: number;
   targetUuid?: string;
   leaseToken: unknown;
-  bowType: number;
+  weapon: RangedWeaponKind;
+  weaponType: number;
+  explicitTrident: boolean;
   cancelSlot: number;
   activated: boolean;
   abortCause: BowAbortCause | null;
@@ -390,7 +402,7 @@ interface TrackedTarget {
   velocityPerTick: Point3;
 }
 
-/** 单次满弓控制器；身体租约、死亡和显式取消都在 release 事件之前复核。 */
+/** A single projectile sequence, bound to the body lease and target identity. */
 export class BowController {
   private readonly now: () => number;
   private readonly sleep: (ms: number) => Promise<void>;
@@ -415,14 +427,19 @@ export class BowController {
 
   onBotLost(): void { this.cancel('bot_lost'); }
 
-  async shoot(target: RangedTarget, leaseToken?: unknown): Promise<BowShotResult> {
+  async shoot(target: RangedTarget, leaseToken?: unknown, preference?: string): Promise<BowShotResult> {
     if (this.drawing) return this.blocked('aborted', 'busy');
     const bot = this.opts.getBot();
     if (!bot) return this.blocked('aborted', 'bot_lost');
     if (bot.usingHeldItem) return this.blocked('aborted', 'busy');
-    const bow = bestRangedWeapon(bot);
-    if (!bow) return this.blocked('aborted', 'bow_lost');
-    if (!hasUsableArrows(bot)) return this.blocked('no_arrow');
+    const weapon = selectRangedWeapon(bot, preference, rangedTargetDistance(bot, target));
+    if (!weapon) {
+      const bowRequested = preference === undefined || preference.replace(/^minecraft:/, '') === 'bow';
+      return bowRequested && bestRangedWeapon(bot) && !hasUsableArrows(bot)
+        ? this.blocked('no_arrow')
+        : this.blocked('aborted', 'bow_lost');
+    }
+    const { kind } = weapon;
     // HYBRID_MELEE_AT chooses a preferred weapon; it is not a bow or protocol
     // minimum range. A bow-only body must still be able to defend itself when
     // a hostile closes in. Actual shot validity remains LOS, aim and lease.
@@ -434,7 +451,9 @@ export class BowController {
       targetId: target.id,
       ...(target.uuid === undefined ? {} : { targetUuid: target.uuid }),
       leaseToken,
-      bowType: bow.type,
+      weapon: kind,
+      weaponType: weapon.item.type,
+      explicitTrident: preference?.replace(/^minecraft:/, '') === 'trident',
       cancelSlot: -1,
       activated: false,
       abortCause: null,
@@ -450,11 +469,11 @@ export class BowController {
         const deadline = this.now() + 3_000;
         const checkEquipment = (): void => {
           const stopped = this.validateOwner(drawing);
-          if (stopped) throw new Error(`Bow equipment cancelled: ${stopped.cause}`);
-          if (this.drawing !== drawing) throw new Error('Bow equipment owner ended');
+          if (stopped) throw new Error(`Ranged equipment cancelled: ${stopped.cause}`);
+          if (this.drawing !== drawing) throw new Error('Ranged equipment owner ended');
           if (this.now() >= deadline) {
             drawing.abortCause = 'equip_timeout';
-            throw new Error('Bow equipment confirmation timed out');
+            throw new Error('Ranged equipment confirmation timed out');
           }
         };
         const interrupted = new Promise<never>((_resolve, reject) => {
@@ -462,15 +481,17 @@ export class BowController {
             try { checkEquipment(); } catch (error) { reject(error); }
           }, AIM_STEP_MS);
         });
-        await Promise.race([equipHandConfirmed(bot, bow, checkEquipment), interrupted]);
+        await Promise.race([equipHandConfirmed(bot, weapon.item, checkEquipment), interrupted]);
       } catch {
         const stopped = this.validateOwner(drawing);
         return await this.finishBlocked(drawing, 'aborted', stopped?.cause ?? 'equip');
       } finally {
         if (equipmentGuard !== undefined) clearInterval(equipmentGuard);
       }
-      drawing.cancelSlot = findSafeCancelSlot(bot, drawing.bowType);
-      if (drawing.cancelSlot < 0) return await this.finishBlocked(drawing, 'aborted', 'cancel_slot');
+      if (weapon.chargeMs > 0) {
+        drawing.cancelSlot = findSafeCancelSlot(bot, drawing.weaponType);
+        if (drawing.cancelSlot < 0) return await this.finishBlocked(drawing, 'aborted', 'cancel_slot');
+      }
       let stopped = this.validateOwner(drawing);
       if (stopped) return await this.finishBlocked(drawing, stopped.reason, stopped.cause);
       let current = this.trackTarget(drawing, target);
@@ -478,7 +499,7 @@ export class BowController {
       stopped = this.validate(drawing, current.target);
       if (stopped) return await this.finishBlocked(drawing, stopped.reason, stopped.cause);
 
-      let aim = this.aim(bot, current);
+      let aim = this.aim(bot, current, kind);
       if (!aim) return await this.finishBlocked(drawing, 'no_solution');
       await bot.lookAt(aim, true);
       stopped = this.validateOwner(drawing);
@@ -487,23 +508,30 @@ export class BowController {
       if (!current) return await this.finishBlocked(drawing, 'aborted', 'target_lost');
       stopped = this.validate(drawing, current.target);
       if (stopped) return await this.finishBlocked(drawing, stopped.reason, stopped.cause);
-      try {
-        bot.activateItem();
-      } catch {
-        return await this.finishBlocked(drawing, 'aborted', 'activate');
+      const heldCharge = (): ReturnType<typeof crossbowCharge> => bot.heldItem?.type === drawing.weaponType
+        ? crossbowCharge(bot, bot.heldItem)
+        : 'unknown';
+      if (kind === 'crossbow' && heldCharge() !== (weapon.chargeMs === 0 ? 'arrow' : 'empty'))
+        return await this.finishBlocked(drawing, 'aborted', 'charge_unconfirmed');
+      if (weapon.chargeMs > 0) {
+        try {
+          bot.activateItem();
+          drawing.activated = true;
+        } catch {
+          return await this.finishBlocked(drawing, 'aborted', 'activate');
+        }
       }
-      drawing.activated = true;
 
       const startedAt = this.now();
-      while (this.now() - startedAt < BOW_FULL_DRAW_MS) {
-        await this.sleep(Math.min(AIM_STEP_MS, BOW_FULL_DRAW_MS - (this.now() - startedAt)));
+      while (this.now() - startedAt < weapon.chargeMs) {
+        await this.sleep(Math.min(AIM_STEP_MS, weapon.chargeMs - (this.now() - startedAt)));
         stopped = this.validateOwner(drawing);
         if (stopped) return await this.finishBlocked(drawing, stopped.reason, stopped.cause);
         current = this.trackTarget(drawing, target);
         if (!current) return await this.finishBlocked(drawing, 'aborted', 'target_lost');
         stopped = this.validate(drawing, current.target);
         if (stopped) return await this.finishBlocked(drawing, stopped.reason, stopped.cause);
-        aim = this.aim(bot, current);
+        aim = this.aim(bot, current, kind);
         if (!aim) return await this.finishBlocked(drawing, 'no_solution');
         await bot.lookAt(aim, true);
         stopped = this.validateOwner(drawing);
@@ -514,22 +542,35 @@ export class BowController {
         if (stopped) return await this.finishBlocked(drawing, stopped.reason, stopped.cause);
       }
 
-      if (!this.commitRelease(drawing)) return await this.finishBlocked(drawing, 'aborted', 'release');
+      if (kind === 'crossbow' && drawing.activated) {
+        if (heldCharge() !== 'empty') return await this.finishBlocked(drawing, 'aborted', 'charge_unconfirmed');
+        if (!this.commitRelease(drawing)) return await this.finishBlocked(drawing, 'aborted', 'release');
+        const deadline = this.now() + PROJECTILE_ACK_MS;
+        while (heldCharge() === 'empty' && this.now() < deadline && !this.validateOwner(drawing))
+          await this.sleep(AIM_STEP_MS);
+        stopped = this.validateOwner(drawing);
+        if (stopped) return await this.finishBlocked(drawing, stopped.reason, stopped.cause);
+        if (heldCharge() !== 'arrow') return await this.finishBlocked(drawing, 'aborted', 'charge_unconfirmed');
+        current = this.trackTarget(drawing, target);
+        if (!current) return await this.finishBlocked(drawing, 'aborted', 'target_lost');
+        stopped = this.validate(drawing, current.target);
+        if (stopped) return await this.finishBlocked(drawing, stopped.reason, stopped.cause);
+        aim = this.aim(bot, current, kind);
+        if (!aim) return await this.finishBlocked(drawing, 'no_solution');
+        await bot.lookAt(aim, true);
+        current = this.trackTarget(drawing, target);
+        if (!current) return await this.finishBlocked(drawing, 'aborted', 'target_lost');
+        stopped = this.validate(drawing, current.target);
+        if (stopped) return await this.finishBlocked(drawing, stopped.reason, stopped.cause);
+        if (heldCharge() !== 'arrow') return await this.finishBlocked(drawing, 'aborted', 'charge_unconfirmed');
+      }
       const at = this.now();
-      const released: BowReleased = {
-        kind: 'released',
-        shotId: this.nextShotId,
-        targetId: target.id,
-        ownerToken: leaseToken,
-        at,
-        aim,
-        hitWindow: { from: at, until: at + BOW_HIT_WINDOW_MS },
-      };
-      this.nextShotId += 1;
-      this.pending.push(released);
-      this.pruneHits(at);
-      this.opts.emit?.(released);
-      return released;
+      if (kind === 'bow') {
+        if (!this.commitRelease(drawing)) return await this.finishBlocked(drawing, 'aborted', 'release');
+        return this.recordRelease(drawing, at, aim);
+      }
+      const launched = await this.confirmProjectileLaunch(drawing, kind, at, aim);
+      return typeof launched === 'string' ? await this.finishBlocked(drawing, 'aborted', launched) : launched;
     } finally {
       if (drawing.activated) {
         const cause = drawing.abortCause
@@ -542,37 +583,62 @@ export class BowController {
     }
   }
 
-  /** 实体受伤事件落在放箭窗口内时归到最早一支未结算的箭。 */
-  noteHit(targetId: number, at = this.now()): BowHit | null {
+  /** Native projectiles require the damage packet's direct entity, even when the owner matches. */
+  noteHit(targetId: number, at = this.now(), projectileId?: number): BowHit | null {
     this.pruneHits(at);
     const index = this.pending.findIndex((shot) => (
-      shot.targetId === targetId && at >= shot.hitWindow.from && at <= shot.hitWindow.until
+      shot.targetId === targetId && shot.projectileId === projectileId &&
+      at >= shot.hitWindow.from && at <= shot.hitWindow.until
     ));
     if (index < 0) return null;
     const [shot] = this.pending.splice(index, 1);
     const hit: BowHit = {
       kind: 'hit', shotId: shot.shotId, targetId, ownerToken: shot.ownerToken, at,
+      ...(shot.weapon === undefined ? {} : { weapon: shot.weapon }),
     };
     this.opts.emit?.(hit);
     return hit;
   }
 
-  private aim(bot: Bot, tracked: TrackedTarget): Vec3 | null {
+  private recordRelease(drawing: Drawing, at: number, aim: Vec3, projectileId?: number): BowReleased {
+    const released: BowReleased = {
+      kind: 'released',
+      weapon: drawing.weapon,
+      ...(projectileId === undefined ? {} : { projectileId }),
+      shotId: this.nextShotId++,
+      targetId: drawing.targetId,
+      ownerToken: drawing.leaseToken,
+      at,
+      aim,
+      hitWindow: { from: at, until: at + BOW_HIT_WINDOW_MS },
+    };
+    this.pending.push(released);
+    this.pruneHits(at);
+    this.opts.emit?.(released);
+    return released;
+  }
+
+  private aim(bot: Bot, tracked: TrackedTarget, kind: RangedWeaponKind): Vec3 | null {
     const entity = bot.entity as Bot['entity'] & { eyeHeight?: number };
+    const motion = kind === 'crossbow' ? zeroPoint() : { ...(entity.velocity ?? zeroPoint()) };
+    if (entity.onGround) motion.y = 0;
     return lowArcAimPoint({
       x: entity.position.x,
       y: entity.position.y + (entity.eyeHeight ?? 1.62),
       z: entity.position.z,
-    }, tracked.target, tracked.velocityPerTick, entity.velocity ?? zeroPoint());
+    }, tracked.target, tracked.velocityPerTick, motion, projectileSpeeds[kind]);
   }
 
   private validate(drawing: Drawing, target: RangedTarget): BowBlocked | null {
     const owner = this.validateOwner(drawing);
     if (owner) return owner;
-    if (!usableBow(drawing.bot.heldItem as InventoryItem | null)) {
+    const held = drawing.bot.heldItem;
+    if (!held || held.type !== drawing.weaponType || held.name !== drawing.weapon ||
+        (readDurability(held)?.left ?? 0) <= 0 ||
+        (drawing.weapon === 'trident' && !readyToThrowTrident(drawing.bot, held, drawing.explicitTrident))) {
       return { kind: 'blocked', reason: 'aborted', cause: 'bow_lost' };
     }
-    if (!hasUsableArrows(drawing.bot)) return { kind: 'blocked', reason: 'no_arrow' };
+    if (drawing.weapon === 'bow' && !hasUsableArrows(drawing.bot)) return { kind: 'blocked', reason: 'no_arrow' };
     if (!this.hasLos(drawing.bot, target)) return { kind: 'blocked', reason: 'no_los' };
     return null;
   }
@@ -627,16 +693,62 @@ export class BowController {
     return true;
   }
 
+  private async confirmProjectileLaunch(
+    drawing: Drawing, kind: 'crossbow' | 'trident', at: number, aim: Vec3,
+  ): Promise<BowReleased | BowAbortCause> {
+    const { bot } = drawing;
+    const entities = bot.registry.entitiesByName;
+    const names = kind === 'crossbow' ? ['arrow', 'spectral_arrow'] : ['trident'];
+    const types = names.map(name => entities?.[name]?.id).filter(id => Number.isSafeInteger(id));
+    if (!bot._client || types.length === 0) return 'launch_unconfirmed';
+    let released: BowReleased | undefined;
+    let onProjectile!: () => void;
+    const spawned = new Promise<void>(resolve => { onProjectile = resolve; });
+    const onSpawn = (packet: { entityId: number; type: number; objectData: number }): void => {
+      if (!released && types.includes(packet.type) && packet.objectData === bot.entity.id &&
+          Number.isSafeInteger(packet.entityId)) {
+        released = this.recordRelease(drawing, at, aim, packet.entityId);
+        onProjectile();
+      }
+    };
+    bot._client.on('spawn_entity', onSpawn);
+    try {
+      if (kind === 'trident') {
+        if (!this.commitRelease(drawing)) return 'release';
+      } else {
+        try {
+          bot.activateItem();
+        } catch {
+          return 'activate';
+        } finally {
+          // A charged crossbow fires on use. No sustained use or release packet follows.
+          bot.usingHeldItem = false;
+        }
+      }
+      const deadline = this.now() + PROJECTILE_ACK_MS;
+      while (!released && this.now() < deadline) {
+        const stopped = this.validateOwner(drawing);
+        if (stopped) return stopped.cause ?? 'abort';
+        await Promise.race([spawned, this.sleep(AIM_STEP_MS)]);
+      }
+      return released ?? 'launch_unconfirmed';
+    } finally {
+      bot._client.removeListener('spawn_entity', onSpawn);
+    }
+  }
+
   private cancelDrawing(drawing: Drawing, cause: BowAbortCause): Promise<boolean> {
     if (drawing.cancelWait) return drawing.cancelWait;
     if (!drawing.activated) return Promise.resolve(true);
     drawing.activated = false;
     if (cause === 'death' || cause === 'bot_lost') return Promise.resolve(true);
-    const slot = findSafeCancelSlot(drawing.bot, drawing.bowType, drawing.cancelSlot);
+    const slot = findSafeCancelSlot(drawing.bot, drawing.weaponType, drawing.cancelSlot);
     if (slot < 0) return Promise.resolve(false);
     drawing.cancelSlot = slot;
     try {
       drawing.bot.setQuickBarSlot(slot);
+      // Mineflayer changes the selected stack but leaves its local use flag set.
+      drawing.bot.usingHeldItem = false;
     } catch {
       return Promise.resolve(false);
     }
