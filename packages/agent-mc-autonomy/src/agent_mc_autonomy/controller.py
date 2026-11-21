@@ -40,6 +40,7 @@ from .decision_profiles import profile_view
 from .effects import EffectRecovery, body_changed
 from .fast import FastPolicy, focus_state, rule_focus
 from .filesystem import replace_prepared
+from .game_voice import hearing_identity, status_update
 from .model_protocols import assistant_history
 from .observations import (
     body_event_view,
@@ -77,7 +78,7 @@ PROTOCOL_PLANNER_DESCRIPTION = (
     "Read native tasks, facts and original archives. When advertised by the core, inspect_call classifies exact arguments and resolve_work matches scoped work versions without adoption. "
     "The host owns turn boundaries, barrier acknowledgement and cancellation; do not manage that lifecycle.")
 HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_control"}
-DIRECT_TOOLS = {"mc_help", "mc_knowledge", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape", "mc_tool_help", "mc_messages", "mc_query"}
+DIRECT_TOOLS = {"mc_help", "mc_knowledge", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape", "mc_tool_help", "mc_messages", "mc_query", "mc_voice"}
 IMMEDIATE_READ_TOOLS = READ_ACTIVITY_TOOLS - {"mc_scout"}
 # Query deduplication and reply freshness belong to the native server-query lane.
 # Never cache its sent/timeout receipts as reusable local observation answers.
@@ -162,11 +163,13 @@ def admission_fingerprint(facts):
     return encode(parts) if parts else None
 
 
-def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="default"):
+def model_tools(catalogue, *, context_mode="compact", tool_schema_profile="default", proximity_voice=False):
     # Native catalogues can repeat a tool. Dispatch/help use the first schema;
     # advertise that same contract exactly once to providers that reject names.
     unique = {}
     for tool in catalogue:
+        if tool["name"] == "mc_voice" and not proximity_voice:
+            continue
         unique.setdefault(tool["name"], tool)
     catalogue = list(unique.values())
     def numeric_field(value):
@@ -468,6 +471,7 @@ class Controller:
         self.pending = {}
         self.action_owners = {}
         self.recent = []
+        self.game_voice = {}
         self.social = SocialInbox(data, settings.social, settings.username)
         self.groups = []
         self.outcome_history_ids = set()
@@ -547,6 +551,7 @@ class Controller:
             self.recent.clear()
             self.native_outcomes.clear()
             self.body_events.clear()
+            self.clear_game_voice()
             self.publish(native_outcomes=[], body_events=[], read_recovery=None)
             self.groups.clear()  # Tool replies/provider replay belong to the previous game identity too.
             self.outcome_history_ids.clear()
@@ -664,6 +669,16 @@ class Controller:
         # The planner's full diagnostic stays local. Other hosts receive the
         # same actual error plus a reference, without private arguments/schema.
         self.publish(tool_failure=tool_failure_view(self.tool_failure))
+
+    def clear_game_voice(self):
+        if self.game_voice:
+            self.game_voice = {}
+            self.publish(game_voice={})
+
+    def accepts_event(self, event):
+        return (event.get("contextDelivery") != "archive-only" and not (event.get("meta") or {}).get("staleEpoch")
+                and (self.settings.proximity_voice_enabled
+                     or (event.get("type") != "minecraft.voice" and not hearing_identity(event))))
 
     def receipt(self, value):
         if uncertain(value):
@@ -786,8 +801,14 @@ class Controller:
             # completion or issuing a new native queue read.
             self.publish(pending=list(self.pending.values()))
         for event in value.get("events", []):
-            if event.get("contextDelivery") == "archive-only" or event.get("meta", {}).get("staleEpoch"):
+            if not self.accepts_event(event):
                 continue
+            if self.settings.proximity_voice_enabled and self.event_run and event.get("run") == self.event_run:
+                if voice := status_update(event):
+                    if "send_state" in voice:
+                        self.game_voice.pop("listener_count", None)
+                    self.game_voice.update(voice)
+                    self.publish(game_voice=dict(self.game_voice))
             body = body_event_view(event)
             if body and not any(row["id"] == body["id"] for row in self.body_events):
                 self.body_events = [*self.body_events, body][-6:]
@@ -811,7 +832,7 @@ class Controller:
                     self.publish(death_episode=current)
         for event in value.get("events", []):
             self.social.note_transport(event)
-        self.recent.extend(e for e in value.get("events", []) if e.get("contextDelivery") != "archive-only" and not e.get("meta", {}).get("staleEpoch")
+        self.recent.extend(e for e in value.get("events", []) if self.accepts_event(e)
                            and (foreign_execution_key is None or ((e.get("execution") or {}).get("kind"), (e.get("execution") or {}).get("id")) != foreign_execution_key)
                            and not self.social.offer(e))
         self.recent = retain_events(self.recent, byte_limit=self.settings.context_tokens if self.settings.context_mode == "full" else None)
@@ -1066,11 +1087,13 @@ class Controller:
             # ignore an evicted terminal/damage event and guess the task state.
             archived = await self.protocol("archive", run=page["run"], after=self.cursor, limit=64)
             page = {**archived, "run": page["run"]}
+        if self.event_run != page["run"]:
+            self.clear_game_voice()
         self.event_run, self.cursor = page["run"], page["nextCursor"]
         self.publish(native_run=self.event_run)
         wake, urgent = False, False
         for event in page["events"]:
-            if event.get("contextDelivery") == "archive-only" or event.get("meta", {}).get("staleEpoch"):
+            if not self.accepts_event(event):
                 continue
             terminal = (event.get("execution") or {}).get("terminal") is True
             self.receipt({"events": [event], "execution": event.get("execution")})
@@ -1364,6 +1387,12 @@ class Controller:
         return None
 
     async def dispatch(self, name, arguments, request_id, *, attribution=None):
+        if not self.settings.proximity_voice_enabled and (
+                name == "mc_voice" or (name == "mc_tool_help" and arguments.get("name") == "mc_voice")):
+            result = {"protocol": PROTOCOL, "failed": True, "execution": None, "dispatched": False,
+                      "origin": "controller_validation", "code": "game_voice_disabled",
+                      "text": "Nearby game voice is disabled for this controller."}
+            return result, await self.archive_receipt(request_id, name, result)
         if error := argument_error(self.bridge.tools, name, arguments):
             result = {"protocol": PROTOCOL, "failed": True, "execution": None,
                       "dispatched": False, "origin": "controller_validation", "text": error}
@@ -2534,7 +2563,7 @@ class Controller:
             self.publish(phase="running", game_connected=True, autonomy_running=self.decide is not None, current_goal=None)
             prefix = text_content(await self.bridge.resource("mc://environment"))
             tools = model_tools(self.bridge.tools, context_mode=self.settings.context_mode,
-                                tool_schema_profile=self.tool_schema_profile)
+                                tool_schema_profile=self.tool_schema_profile, proximity_voice=self.settings.proximity_voice_enabled)
             wake, urgent = True, False
             last_status_check = time.monotonic()
             if self.commands:

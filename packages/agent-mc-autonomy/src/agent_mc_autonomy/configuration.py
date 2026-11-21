@@ -336,15 +336,20 @@ class Settings:
     def data_root(self, default: Path) -> Path:
         return Path(self.data_directory).expanduser().resolve() if self.data_directory else default
 
+    @property
+    def proximity_voice_enabled(self) -> bool:
+        return self.body_provider == "mineflayer" and self.native.proximity_voice_enabled
+
     def client_config(self, data: Path) -> dict:
         self.require_server()
         private = data / "sessions" / self.identity
+        native = self.native.client_config(mineflayer=self.body_provider == "mineflayer")
         return {
             "dataDir": str(Path(self.java_client["ledgerDir"]).expanduser().resolve()) if self.body_provider == "java-client" else str(private / "client"), "timezone": "Asia/Shanghai", "acceptsImages": self.vision_enabled,
             "metricsPort": 0, "consolePort": self.console_port,
             **({"operatorIdentity": self.identity} if self.console_port else {}),
             "world": {
-                **self.native.client_config(),
+                **native,
                 **({"provider": "java-client", "javaClient": self.java_client} if self.body_provider == "java-client" else {}),
                 "host": self.host, "port": self.port, "username": self.username, "auth": self.auth,
                 "version": self.version, "profilesFolder": str(private / "auth"),
@@ -353,8 +358,7 @@ class Settings:
                 "memory": self.memory.client_config(),
                 **({"knowledge": self.knowledge.client_config()} if self.knowledge.minedojo_index_file else {}),
                 **({"memoryAgentId": self.memory.agent_id} if self.memory.agent_id else {}),
-                "perception": {"mineralVision": self.mineral_vision,
-                               **self.native.client_config().get("perception", {})},
+                "perception": {"mineralVision": self.mineral_vision, **native.get("perception", {})},
                 "performanceBridge": {"module": "", "endpoint": ""},
                 "local": {"startWithWorld": False, "serverDir": "", "cheats": False},
                 "client": {"enabled": False}, "player": {"enabled": False},

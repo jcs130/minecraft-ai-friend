@@ -19,6 +19,7 @@ GROUPS = {
     'visual': {'background': bool},
     'perception': {'entityView': frozenset({'surroundings', 'camera'}), 'entityRange': (1, 64),
                    'nearbyOccludedRange': (0, 16)},
+    'proximity_voice': {'enabled': bool},
 }
 
 
@@ -62,6 +63,13 @@ class NativeSettings:
     def public_config(self):
         return copy.deepcopy(self.options)
 
-    def client_config(self):
-        return {({'scaffold_blocks': 'scaffoldBlocks', 'remote_textures': 'remoteTextures'}.get(key, key)): value
-                for key, value in self.public_config().items()}
+    @property
+    def proximity_voice_enabled(self):
+        return self.options.get('proximity_voice', {}).get('enabled', False)
+
+    def client_config(self, *, mineflayer=True):
+        config = {({'scaffold_blocks': 'scaffoldBlocks', 'remote_textures': 'remoteTextures'}.get(key, key)): value
+                  for key, value in self.public_config().items() if key != 'proximity_voice'}
+        if mineflayer and self.proximity_voice_enabled:
+            config['proximityVoice'] = {'enabled': True, 'speechSource': 'server', 'outputMode': 'game-only'}
+        return config
