@@ -8,6 +8,7 @@ import {nativeByokAdapter} from './src/native-model.mjs';
 import {hubByokAdapter} from './src/hub-model.mjs';
 import {harnessRuntime} from './src/harness-runtime.mjs';
 import {localConversationVoice} from './src/voice.mjs';
+import {configuredBodyHandoff} from './src/configured-body-handoff.mjs';
 export async function createConfig(){
   const release=fileURLToPath(new URL('../../',import.meta.url));
   const privatePath=process.env.QDJ_HOSTING_CONFIG;
@@ -38,6 +39,8 @@ export async function createConfig(){
   }
   let hub;
   let bodyHandoff;
+  if(c.characterBodies&&c.bodyHandoffAdapter)throw Error('Choose one private body handoff configuration');
+  if(c.characterBodies)bodyHandoff=await configuredBodyHandoff(c.characterBodies,{bootstrap,bootstrapKey:controlKey});
   if(c.bodyHandoffAdapter){
     if(!isAbsolute(c.bodyHandoffAdapter))throw Error('Body handoff adapter must be a private absolute path');
     const {createBodyHandoff}=await import(pathToFileURL(c.bodyHandoffAdapter).href);

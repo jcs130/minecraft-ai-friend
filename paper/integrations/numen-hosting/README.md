@@ -24,6 +24,8 @@
 
 向私有托管配置提供 `bodyHandoffAdapter` 时，模块须导出 `createBodyHandoff({bootstrap,coreDirectory})`，返回 `{ registrations, adapters, numen }`。同玩家双向交接可用 `originalPlayerHandoffs` 绑定已授权的桌面 SDK、同一原玩家的 Numen 配置，以及签名的原生准入入口。普通角色的角色编号和主体均使用官网核实的原玩家 UUID。桌面端按当前代次获取 `controllerPort`，用原连接证明退出和接续，游戏侧独立回读退出落盘和新连接。原客户端、游戏侧驱动或目标身体缺席时，交接会拒绝或等待原请求核对。本站后端只通过现有受保护回源访问 `/v1/character-bodies`，浏览器无权调用该私有端点。
 
+也可以在同一份私有托管配置启用内置 `characterBodies`，填写本机 `custodyPort`、库外 `custodyKeyFile` 绝对路径及 `characters`。每项使用 `{characterId, ownerId, active, targets, generation, autonomous, combinedCustody}`。玩家身体绑定为 `{kind, bodyId, playerUuid}`，女仆和村民绑定为 `{kind, bodyId, entityUuid}`。玩家项还需原托管身份 `numenRole`，其中 `roleUuid` 与玩家身体相同。Numen 使用原角色选定的 OpenCode 托管档案。选择 Mineflayer 时需启用 `devices: true` 和官网本人配对。组合登记必须与 [游戏侧离线登记](native-bridge/NATIVE_HANDOFF.md) 的原身体、归属和代次一一核对。开服时已有 `pending` 或 `transfer` 的角色应继续查询原运维账本。
+
 进程中止或动作结果不明时，两端保持停权，原请求进入恢复待确认。只查询原生端对原请求的结果，允许提交已证实的回执，避免重复登录或执行动作。正式注册前应完成真实双向接续和失败恢复验收。停用已启用角色时，先核对在途换身并停住已接管端，保留角色存档和换身账本。
 
 ## 模型和状态

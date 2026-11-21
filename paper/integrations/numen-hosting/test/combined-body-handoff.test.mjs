@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { BodyHandoffCoordinator, BodyHandoffStore } from '../src/body-handoff.mjs';
 import { combinedBodyHandoffAdapters } from '../src/native-entity-handoff.mjs';
+import { configuredBodyHandoff } from '../src/configured-body-handoff.mjs';
 
 const characterId = 'combined-test';
 const authority = { ownerId: randomUUID() };
@@ -145,4 +149,31 @@ test('the original game records resolve lost acquire response and unpause only t
   assert.equal(settled[0].activeKind, 'mineflayer');
   assert.equal(calls.filter(([phase]) => phase === 'unpause').length, 1);
   assert.equal(calls.filter(([phase]) => phase === 'join-and-witness').length, 1);
+});
+
+test('operator configuration installs exact original bootstrap and refuses mismatched UUIDs and shared private keys', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'qjd-body-config-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const custodyKeyFile = join(root, 'private.key');
+  const key = Buffer.alloc(32, 9);
+  await writeFile(custodyKeyFile, key, { mode: 0o600 });
+  const numenRole = { roleUuid: playerUuid, numenOwnerUuid: randomUUID(), name: 'FixtureHero',
+    serverId: 'fixture', ownerId: 'owner-id' };
+  const existing = {
+    characterId, ownerId: authority.ownerId, active: bodies.maid, targets: [bodies.numen, bodies.mineflayer, bodies.villager],
+    combinedCustody: true, numenRole,
+  };
+  const config = { custodyPort: 19088, custodyKeyFile, devices: true, characters: [existing] };
+  const args = { bootstrapKey: Buffer.alloc(32, 2), bootstrap: {} };
+  const assembled = await configuredBodyHandoff(config, args);
+  assert.deepEqual(assembled.numen.roleFor(characterId), numenRole);
+  assert.equal(assembled.numen.runtimeFor(characterId), 'opencode');
+  assert.ok(assembled.deviceBroker);
+  assert.ok(assembled.custodyProvider.assets);
+  assert.deepEqual(Object.keys(assembled.adapters({ handoff: {} })).sort(), ['maid', 'mineflayer', 'villager']);
+  await assert.rejects(configuredBodyHandoff({ ...config, devices: false }, args), /device transport/);
+  await assert.rejects(configuredBodyHandoff(config, { ...args, bootstrapKey: key }), /different keys/);
+  await assert.rejects(configuredBodyHandoff({
+    ...config, characters: [{ ...existing, numenRole: { ...numenRole, roleUuid: randomUUID() } }],
+  }, args), /original player bootstrap identity/);
 });
