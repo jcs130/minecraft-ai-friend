@@ -17,31 +17,28 @@ test('public Agent skill download matches the pinned release and never embeds a 
   assert.equal((await fetch(f.origin + '/downloads/.env')).status, 404);
 });
 
-test('earlier reviewed Skill links keep their bytes when the current bundle changes', async t => {
+test('only the current Skill and its build metadata are public, even when archived files exist on disk', async t => {
   const f = await siteFixture(t);
-  for (const [version, digest] of [
-    ['1.0.0', '3d1676e86f31396071866c64ce87d9e6820e1530b755c4221f04c22a15f94669'],
-    ['1.1.0', '6a1be95fa174e37c330a756ffdbc32f0924254099390d1fc99a236c451d8fe7d'],
-    ['1.2.0', 'a0618f8c2d75a71d42ca532973a43f7d837e91ee47707a7ce9de2d9167cf858b'],
-    ['1.2.1', '1c3c57962babb47fd2ca2100b12e1d941949e85e6774b63b5cbd1a874e435c66'],
-    ['1.3.7', '0672a96ab8cdc7933ffe25a7a268b6b4bf4f182f9a409c63071bccdfb5b96442'],
-    ['1.3.10', '858acb272355cc38db95915c405c75e51e6e4164771404b7aa7dbf030c1f580c'],
-    ['1.3.11', 'aada7ed6adf15c60501ad71e6c9c2d2e59ebb0f635e466a2be7a597db7102ff7'],
-    ['1.3.9', '160a23dc17e55c209199bb0946287aed28780c8bea5ebf794e2d04663433e3f4'],
-  ]) {
-    const url = `/downloads/qiandengji-agent-${version}.zip`;
-    assert.equal(skillAt(url)?.version, version);
-    const response = await fetch(f.origin + url), bytes = Buffer.from(await response.arrayBuffer());
-    assert.equal(response.status, 200);
-    assert.equal(createHash('sha256').update(bytes).digest('hex'), digest);
+  const current = await fetch(f.origin + agentSkill.url.replace(/\.zip$/, '.json'));
+  assert.equal(current.status, 200);
+  assert.equal((await current.json()).sha256, agentSkill.sha256);
+  const retired = ['1.0.0','1.1.0','1.2.0','1.2.1', ...Array.from({length:12}, (_, i) => '1.3.' + i)];
+  for (const version of retired) {
+    for (const extension of ['zip', 'json']) {
+      const url = '/downloads/qiandengji-agent-' + version + '.' + extension;
+      assert.equal(skillAt(url), undefined);
+      const response = await fetch(f.origin + url, {method:'HEAD', redirect:'manual'});
+      assert.equal(response.status, 404, url);
+      assert.equal(response.headers.get('location'), null);
+    }
   }
 });
 
 test('reviewed Skill links redirect directly to the configured OSS prefix without forwarding cookies or query strings', async t => {
   const baseUrl = 'https://downloads.example.test/qiandengji/skills/';
   const f = await siteFixture(t, { downloads: { baseUrl } });
-  for (const version of ['1.0.0', '1.1.0', '1.2.0', '1.2.1', agentSkill.version]) {
-    const route = `/downloads/qiandengji-agent-${version}.zip`, release = skillAt(route);
+  for (const route of ['/downloads/agent-skill', agentSkill.url]) {
+    const release = skillAt(route);
     for (const method of ['GET', 'HEAD']) {
       const response = await fetch(f.origin + route + '?token=must-not-forward&url=https://evil.example', {
         method, redirect: 'manual', headers: { Cookie: 'unrelated=must-not-forward' },

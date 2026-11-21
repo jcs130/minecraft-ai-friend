@@ -35,7 +35,9 @@ test('public join page and Skill remain useful to a fetch-only Agent and never c
   const html = await page.text(); assert.equal(page.status, 200); assert.equal(page.headers.get('referrer-policy'), 'no-referrer'); assert.ok(!html.includes(value.token)); assert.match(html, /不执行 JavaScript/); assert.match(html, /references\/invite.md/);
   assert.equal((await fetch(f.origin + '/join', { method: 'HEAD' })).status, 200);
   const discovery = (await f.admin.request('/agent-access')).data; assert.equal(discovery.joinPage, '/join'); assert.equal(discovery.skill.version, agentSkill.version);
-  const old = await fetch(f.origin + '/downloads/qiandengji-agent-1.0.0.zip'); assert.equal(old.status, 200); assert.equal(old.headers.get('content-length'), '2705570');
+  const current = await fetch(f.origin + discovery.skill.url, {method: 'HEAD'});
+  assert.equal(current.status, 200);
+  assert.equal(current.headers.get('content-length'), String(agentSkill.bytes));
 });
 
 test('fetch-only join routes expose the current reviewed release and direct OSS link without an invitation or JavaScript',async t=>{

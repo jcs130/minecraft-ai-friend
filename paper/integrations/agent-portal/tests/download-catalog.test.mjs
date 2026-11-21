@@ -45,8 +45,7 @@ test('approved mirrors serve GET and HEAD redirects for exact plugin paths witho
   const site = (await f.client().request('/site')).data, api = await (await fetch(f.origin + '/api/v1/agent-access')).json();
   assert.deepEqual(site.agentClients, api.clients);
   assert.deepEqual(site.agentClients.map(row => row.id), ['core', 'neko', 'cortico', 'dsh']);
-  assert.equal(site.agentClients.find(row => row.id === 'neko').downloads.length, 1);
-  assert.equal(site.agentClients.find(row => row.id === 'neko').downloads[0].id, 'neko-base');
+  assert.deepEqual(site.agentClients.find(row => row.id === 'neko').downloads.map(row => row.id), ['neko-base', 'neko-plugin']);
 });
 
 test('adding client packs preserves the twenty-per-minute download burst limit',async t=>{
@@ -81,7 +80,7 @@ test('the configured standalone SAO pack bootstraps and serves its original rele
 
 test('permanent host and component links redirect to the reviewed OSS object without forwarding request secrets',async t=>{
  const f=await siteFixture(t,{downloads:{baseUrl,enabledPackages}});
- for(const[alias,id]of[['cortico','cortico-bundle'],['dsh','dsh-bundle'],['neko','neko-base'],['audio','shared-audio'],['browser','shared-browser']]){
+ for(const[alias,id]of[['cortico','cortico-world'],['dsh','dsh-adapter'],['neko','neko-base'],['audio','shared-audio'],['browser','shared-browser']]){
   const row=packageReleases.find(row=>row.id===id);
   for(const method of ['GET','HEAD']){
    const reply=await fetch(f.origin+'/downloads/'+alias+'?token=private',{method,redirect:'manual',headers:{Cookie:'irrelevant=private'}});
@@ -91,78 +90,70 @@ test('permanent host and component links redirect to the reviewed OSS object wit
  }
 });
 
-test('download page separates complete hosts, Lite, shared components and legacy files without a website login', async t => {
+test('download page separates current host, Lite and shared component downloads without a website login', async t => {
   const f = await siteFixture(t, { downloads: { baseUrl, enabledPackages } });
   const html = await (await fetch(f.origin + '/downloads.html')).text();
   const dom = new JSDOM(html, { url: f.origin + '/downloads.html', runScripts: 'outside-only' });
   t.after(() => dom.window.close());
   dom.window.fetch = url => fetch(new URL(url, f.origin));
   dom.window.eval(await fs.readFile(new URL('../public/downloads.js', import.meta.url), 'utf8'));
-  // Native client releases have their own static cards. Verify these three
-  // dynamic host/component/legacy groups without counting unrelated releases.
-  const cards=()=>dom.window.document.querySelectorAll('#package-downloads .download-card,#component-downloads .download-card,#advanced-downloads .download-card');
+  const cards=()=>dom.window.document.querySelectorAll('#package-downloads .download-card,#component-downloads .download-card');
   const deadline = Date.now() + 4000;
-  while (cards().length !== 10 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
-  assert.equal(cards().length, 10);
+  while (cards().length !== 7 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(cards().length, 7);
   assert.ok([...cards()].every(card=>card.querySelectorAll('a[download]').length===1));
-  assert.equal(dom.window.document.querySelectorAll('#package-downloads .download-card').length, 4);
+  assert.equal(dom.window.document.querySelectorAll('#package-downloads .download-card').length, 5);
   assert.equal(dom.window.document.querySelectorAll('#component-downloads .download-card').length, 2);
-  assert.equal(dom.window.document.querySelectorAll('#advanced-downloads .download-card').length, 4);
-  assert.equal(dom.window.document.querySelector('.legacy-downloads').open, false);
+  assert.equal(dom.window.document.querySelector('#advanced-downloads'), null);
   const recommended = dom.window.document.querySelector('#package-downloads');
-  const archived = dom.window.document.querySelector('#advanced-downloads');
   assert.match(recommended.textContent, /Cortico World 联网版.*0\.4\.1-rc\.70/s);
   assert.match(recommended.textContent, /DSH Minecraft 插件联网版.*0\.3\.0-rc\.26/s);
-  assert.match(archived.textContent, /Cortico 旧版离线兼容包.*0\.4\.1-rc\.14/s);
-  assert.match(archived.textContent, /DSH 旧版离线兼容包.*0\.3\.0-rc\.12/s);
-  assert.match(dom.window.document.body.textContent, /1\.11 GB/);
+  assert.match(recommended.textContent, /NEKO 插件文件.*Linux/s);
+  assert.doesNotMatch(dom.window.document.body.textContent, /旧版离线|历史离线/);
   assert.ok([...dom.window.document.querySelectorAll('a[download]')].every(link => link.href.startsWith(f.origin + '/downloads/')));
   assert.equal((await f.client().request('/session')).data.owner, null);
 });
 
-test('the Neko package and historical offline bundles identify their actual dependencies', () => {
+test('current Windows and Linux Neko releases identify their actual dependencies', () => {
   const lite=packageReleases.find(row=>row.id==='cortico-lite');assert.equal(lite.version,'0.1.2');assert.equal(lite.gameDependenciesBundled,false);assert.match(lite.install,/联网安装依赖/);
   for (const id of ['cortico-world', 'dsh-adapter']) {
     const row = packageReleases.find(release => release.id === id);
     assert.equal(row.category, 'host');
     assert.match(row.includes + row.install, /联网/);
   }
-  for (const id of ['cortico-bundle', 'dsh-bundle', 'neko-base']) {
-    const row = packageReleases.find(release => release.id === id);
-    assert.equal(row.category, id === 'neko-base' ? 'host' : 'advanced');
-    assert.equal(row.viewerIncluded, true); assert.equal(row.gameDependenciesBundled, true);
-    assert.ok(row.bytes > 100_000_000);
-    assert.deepEqual(row.requires, row.framework === 'neko' ? [] : ['shared-audio', 'shared-browser']);
-    for (const id of row.requires) assert.equal(packageReleases.find(part => part.id === id)?.category, 'component');
-  }
+  const windows = packageReleases.find(row => row.id === 'neko-base');
+  assert.equal(windows.version, '0.6.114');
+  assert.equal(windows.viewerIncluded, true);
+  assert.equal(windows.gameDependenciesBundled, true);
+  assert.deepEqual(windows.requires, []);
+  assert.match(windows.install, /保留原人物与记忆/);
   assert.match(packageReleases.find(row => row.id === 'neko-plugin').platform, /Linux/);
-  assert.equal(packageReleases.find(row => row.id === 'neko-offline').bytes, 1111598162);
 });
 
-test('the previous Cortico and DSH registry mirrors keep their immutable paths', async t => {
+test('retired host selections are ignored without enabling their successors', async t => {
+  const retired = ['cortico-bundle', 'dsh-bundle', 'neko-offline'];
+  const f = await siteFixture(t, { downloads: { baseUrl, enabledPackages: [...retired, 'neko-base'] } });
+  const data = (await f.client().request('/downloads')).data;
+  assert.ok(data.packages.every(row => !retired.includes(row.id)));
+  assert.deepEqual(data.packages.filter(row => row.available).map(row => row.id), ['neko-base']);
+  assert.equal((await fetch(f.origin + '/downloads/cortico', {redirect:'manual'})).status, 503);
+});
+
+test('retired edition filenames are unavailable even with every current release enabled', async t => {
   const f = await siteFixture(t, { downloads: { baseUrl, enabledPackages } });
-  for (const [filename, sha256] of [
-    ['cortico-world-qiandengji-0.4.1-rc.14.tgz', 'c242e6c879c809ee15b010c3bba4783fbad4d2c5404c8f1ce0bc3cf5b55b275e'],
-    ['jcs130-dsh-minecraft-agent-0.3.0-rc.24.tgz', '209618e2693d9707dbfb0ca6f23f370d7e2250a9eca1a4c786c7ed8880219c03'],
+  for (const filename of [
+    'cortico-world-qiandengji-0.4.1-rc.14.tgz',
+    'qiandengji-cortico-0.4.1-rc.14-with-viewer-data.tgz',
+    'jcs130-dsh-minecraft-agent-0.3.0-rc.24.tgz',
+    'jcs130-dsh-minecraft-agent-0.3.0-rc.12.tgz',
+    'qiandengji-dsh-0.3.0-rc.12-with-viewer-data.tgz',
+    'NEKO-MC-0.6.109-Windows.zip',
+    'qiandengji-neko-0.6.70-base-with-viewer-data.zip',
+    'Minecraft-Autonomous-0.6.70-Windows-x64-offline.zip',
+    'minecraft-autonomous-0.6.70.neko-plugin',
   ]) {
-    const reply = await fetch(f.origin + '/downloads/' + filename, { method: 'HEAD', redirect: 'manual' });
-    assert.equal(reply.status, 307);
-    assert.equal(reply.headers.get('location'), baseUrl + sha256 + '/' + filename);
-    assert.equal(reply.headers.get('x-checksum-sha256'), sha256);
+    const reply = await fetch(f.origin + '/downloads/' + filename, {method:'HEAD', redirect:'manual'});
+    assert.equal(reply.status, 404, filename);
+    assert.equal(reply.headers.get('location'), null);
   }
-});
-
-test('new complete Neko selection preserves the previous immutable base download', async t => {
-  const f = await siteFixture(t, { downloads: { baseUrl, enabledPackages } });
-  const current = packageReleases.find(row => row.id === 'neko-base');
-  assert.equal(current.version, '0.6.114');
-  assert.deepEqual(current.requires, []);
-  assert.match(current.install, /保留原人物与记忆/);
-  const previous=await fetch(f.origin+'/downloads/NEKO-MC-0.6.109-Windows.zip',{method:'HEAD',redirect:'manual'});assert.equal(previous.status,307);assert.equal(previous.headers.get('x-checksum-sha256'),'624ef18e011ef6681cfa1c2e963745e815582130a77b812e0fc525e2fcd4e5d4');
-  const oldName = 'qiandengji-neko-0.6.70-base-with-viewer-data.zip';
-  const oldHash = '701716c351f8cd3dd43b0837b34131b793648eab740e60d4145748fea59e2dc2';
-  const old = await fetch(f.origin + '/downloads/' + oldName + '?token=private', { redirect: 'manual' });
-  assert.equal(old.status, 307);
-  assert.equal(old.headers.get('location'), baseUrl + oldHash + '/' + oldName);
-  assert.equal(old.headers.get('x-checksum-sha256'), oldHash);
 });

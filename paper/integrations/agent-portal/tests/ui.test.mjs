@@ -857,7 +857,7 @@ test('separate SAO world and original download links remain reachable outside th
  const link=ui.document.querySelector('.join-secondary a[href="/sao.html"]');assert.ok(link);
  assert.match(link.textContent,/SAO 1.20.1.*公开测试/);
  const downloads=await(await fetch(ui.origin+'/downloads.html')).text();
- for(const id of ['game-clients','game-client-downloads','package-downloads','component-downloads','advanced-downloads','maid-client','ysm-client','shared'])assert.ok(downloads.includes('id="'+id+'"'),id);
+ for(const id of ['game-clients','game-client-downloads','package-downloads','component-downloads','maid-client','ysm-client','shared'])assert.ok(downloads.includes('id="'+id+'"'),id);
  assert.match(downloads,/<details id="appearance-clients"/);assert.match(downloads,/<details id="sao-clients"/);
 });
 

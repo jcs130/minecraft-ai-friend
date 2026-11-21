@@ -14,9 +14,5 @@
 .season-update time{font-weight:600}.season-update svg{width:14px;height:14px}
 .season-figure{margin:28px 0 38px}.aincrad-document .season-figure .season-art{margin:0;border:1px solid #b29a6533}
 .season-figure figcaption{font-size:12px;line-height:1.8;color:#9cb2a7;padding-top:12px}
-.season-latest{scroll-margin-top:24px;padding:24px 28px;margin:0 0 28px;background:linear-gradient(135deg,#243d34,#182e29);border:1px solid #c5aa7955;border-radius:18px}
-.aincrad-document .season-latest h2{margin-top:12px;font-size:clamp(23px,4vw,32px)}
-.season-latest .eyebrow{font-size:11px;letter-spacing:.1em;color:#dec99e}
-.season-guide-version{padding-top:24px;margin-top:38px;border-top:1px solid #ffffff20;color:#9cb2a7;font-size:12px}
 .aincrad-document h2[id]{scroll-margin-top:24px}.home-rescue-note a{color:#e1c78d}
-@media(max-width:700px){.season-latest{padding:20px}.season-figure{margin:24px 0 30px}.home-layout .world-hero-scene .world-art-label{padding:12px 14px}.season-update{margin-top:12px}}
+@media(max-width:700px){.season-figure{margin:24px 0 30px}.home-layout .world-hero-scene .world-art-label{padding:12px 14px}.season-update{margin-top:12px}}
