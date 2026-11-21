@@ -112,6 +112,7 @@ final class DungeonManager implements Listener {
     private static final String EQUIPMENT_INDEX = "dungeon-diamond-set-index.";
     private static final String BOSS_CLEARS = "dungeon-boss-clears.";
     private static final String FINAL_CLEARS = "dungeon-final-clears.";
+    private static final String SUMMIT_AWARDS = "dungeon-summit-awards.";
     private static final String DAILY_CLAIMS = "dungeon-daily-claims.";
     private static final String FLOOR_PAYOUTS = "dungeon-floor-payouts.";
     private static final String DIFFICULTY_CHOICE = "dungeon-difficulty.";
@@ -541,6 +542,14 @@ final class DungeonManager implements Listener {
                 // A living participant standing in either trench still belongs to this floor.
                 && at.getY() >= y && at.getY() <= y + 7;
     }
+    private CompanionTravelAccess.HeadCount presentBodies() {
+        if (!active || floor < 1 || floor > maxFloor()) return new CompanionTravelAccess.HeadCount(0,0);
+        var center=new Location(world(),floorX(floor)+.5,Y[floor-1]+3.5,floorZ(floor)+.5);
+        var present=participants.stream().map(ResidentCli::find).filter(p->p!=null && p.isOnline()
+            && !p.isDead() && inFloor(p.getLocation(),floor)).map(Player::getUniqueId)
+            .collect(java.util.stream.Collectors.toSet());
+        return CompanionTravelAccess.countPresent(center,radius(floor),4,participants,present,at->inFloor(at,floor));
+    }
     private int floorAt(Location at) {
         for (int n = 1; n <= maxFloor(); n++) if (inFloor(at, n)) return n;
         return 0;
@@ -856,6 +865,10 @@ final class DungeonManager implements Listener {
             out.addProperty("revision", runRevision);
             out.addProperty("runDifficulty", difficulty.id);
             out.addProperty("challengeTier", challengeTier);
+            var count=presentBodies();
+            out.addProperty("presentCount",count.total());
+            out.addProperty("presentPlayers",count.players());
+            out.addProperty("presentMaidAgents",count.maids());
             TrialChallenge.Tactic tactic = currentTactic();
             if (tactic != TrialChallenge.Tactic.NONE) {
                 out.add("tacticalObjective", JSON.toJsonTree(Map.of("type", tactic.name().toLowerCase(Locale.ROOT),
@@ -951,7 +964,10 @@ final class DungeonManager implements Listener {
             if(java.util.Arrays.stream(args).skip(2).anyMatch(a->!Set.of("--json","--verbose").contains(a))){player.sendMessage("§e[invalid_argument] 此查询只接受 --json 或 --verbose；未执行。命令：/mycli arena "+sub);return;}
         }
         if(sub.equals("status")&&!java.util.Arrays.asList(args).contains("--json")&&!java.util.Arrays.asList(args).contains("--verbose")){
-            var guide=guidance(player);player.sendMessage("§6[试炼塔] "+(isParticipant(player)?"本人参赛中，第"+floor+"/"+maxFloor()+"层":active?"本人未参赛；已有队伍挑战":guide.get("startDescription").getAsString())+"。清层自动下楼，全部通关自动返回入口，奖励到个人箱。详情可用 --json 或 --verbose。");showGuidance(player);showOuting(player,outing(player,false));return;
+            var guide=guidance(player);player.sendMessage("§6[试炼塔] "+(isParticipant(player)?"本人参赛中，第"+floor+"/"+maxFloor()+"层":active?"本人未参赛；已有队伍挑战":guide.get("startDescription").getAsString())+"。清层自动下楼，全部通关自动返回入口，奖励到个人箱。详情可用 --json 或 --verbose。");
+            if(guide.has("presentCount"))player.sendMessage("§7本层在场 "+guide.get("presentCount").getAsInt()
+                +" 位，其中女仆 Agent "+guide.get("presentMaidAgents").getAsInt()+" 位。");
+            showGuidance(player);showOuting(player,outing(player,false));return;
         }
         switch (sub) {
             case "status" -> {
@@ -1095,6 +1111,11 @@ final class DungeonManager implements Listener {
         Difficulty manual = Difficulty.parse(plugin.getConfig().getString(DIFFICULTY_CHOICE + starter.getUniqueId(), "auto"));
         return manual != null ? manual : entrants.stream().map(this::recommendedDifficulty)
                 .min(Difficulty::compareTo).orElse(Difficulty.NORMAL);
+    }
+
+    String summitAchievement(Player player) {
+        return TrialRewardPolicy.summitAchievement(
+                plugin.getConfig().getInt(SUMMIT_AWARDS + player.getUniqueId(), -1), clearedMilestone(player));
     }
 
     private Difficulty entryDifficulty(Player starter, List<Admission> assembly) {
@@ -1363,7 +1384,7 @@ final class DungeonManager implements Listener {
         floorStartedAt = System.currentTimeMillis();
         spawnAt = cleared ? 0 : floorStartedAt + 3000L;
         advanceAt = cleared ? floorStartedAt + REST_DURATION_MS : 0;
-        announce(ChatColor.AQUA + "附近 " + arrived.size() + " 人进入第 " + number + "/" + maxFloor() + " 层："
+        announce(ChatColor.AQUA + "已传送 " + arrived.size() + " 位登记参赛者进入第 " + number + "/" + maxFloor() + " 层："
                 + THEMES.get(number - 1).name() + "。");
         if (cleared) announce(ChatColor.GOLD + "这里可使用工作台与商人，领取个人箱奖励。"
                 + "三分钟后自动下楼，或按绿色按钮／输入 /mycli arena next 提前出发。");
@@ -2060,6 +2081,14 @@ final class DungeonManager implements Listener {
                 + lootChanceSummary(4, preview) + lootChanceSummary(8, preview) + lootChanceSummary(15, preview)
                 + "几率为难度折扣及保底前。逐层查询：/mycli arena loot --json。");
         player.sendMessage(ChatColor.GRAY + "已领取 " + claimedFloors.size() + " 层；装备位置用 /mycli arena stash list <1–10>，待入箱用 /mycli arena rewards list。");
+        int summitGrade = plugin.getConfig().getInt(SUMMIT_AWARDS + id, -1);
+        boolean summitReady = maxFloor() == FINAL_FLOOR && TrialRewardPolicy.summitUpgrade(
+                FINAL_FLOOR, preview.ordinal(), summitGrade,
+                previewScale.gap() == 0 || !plugin.getConfig().contains(DAILY_CLAIMS + id + "." + FINAL_FLOOR));
+        if (maxFloor() == FINAL_FLOOR)
+            player.sendMessage(ChatColor.GOLD + "第15层登顶保底 · " + preview.label + "：「"
+                    + DungeonLoot.summitCache(preview.ordinal()).label() + "」"
+                    + (summitReady ? "，符合条件登顶后发放。" : "，本档暂无可领的登顶保底，详情看推荐难度。"));
         if (json) {
             var detail = new com.google.gson.JsonObject();
             detail.addProperty("schemaVersion", 2);
@@ -2075,6 +2104,15 @@ final class DungeonManager implements Listener {
             detail.addProperty("rotationPiecesFound", owned);
             detail.addProperty("rotationPiecesTotal", DungeonLoot.EQUIPMENT_CYCLE);
             detail.add("rotation", collection);
+            if (maxFloor() == FINAL_FLOOR) {
+                var summit = new com.google.gson.JsonObject();
+                summit.addProperty("eligible", summitReady);
+                summit.addProperty("rewardName", DungeonLoot.summitCache(preview.ordinal()).label());
+                summit.addProperty("achievement", summitAchievement(player));
+                summit.addProperty("highestRewardedDifficulty", summitGrade < 0 || summitGrade >= Difficulty.values().length
+                        ? "" : Difficulty.values()[summitGrade].id);
+                detail.add("summit", summit);
+            }
             var rates = new java.util.LinkedHashMap<Integer, TrialRewardPolicy.Rates>();
             var nextPayouts = new com.google.gson.JsonObject();
             int previewTier = isParticipant(player) ? challengeTier : TrialChallenge.tier(preview.ordinal(), clearedMilestone(player));
@@ -2195,6 +2233,12 @@ final class DungeonManager implements Listener {
                     + " repeatedGear=" + (payout.items() && scale.gap() == 0
                             && TrialRewardPolicy.milestone(floor, difficulty.ordinal(), false))));
             if (payout.items()) grantFloorItems(p, firstClear, scale, receipts);
+            boolean summit = TrialRewardPolicy.summitUpgrade(floor, difficulty.ordinal(),
+                    plugin.getConfig().getInt(SUMMIT_AWARDS + id, -1), scale.gap() == 0 || firstClear);
+            if (summit) {
+                storeBossCache(p, DungeonLoot.summitCache(difficulty.ordinal()), "summit", receipts);
+                plugin.getConfig().set(SUMMIT_AWARDS + id, difficulty.ordinal());
+            }
             if (floor == 3) plugin.teachArenaSkills(p);
             if (floor == BASE_FLOORS && expanded && !p.getPersistentDataContainer().has(checkpointKey, PersistentDataType.BYTE)) {
                 p.getPersistentDataContainer().set(checkpointKey, PersistentDataType.BYTE, (byte) 1);
@@ -2212,19 +2256,21 @@ final class DungeonManager implements Listener {
             String coinRequest = economy.recordTrialCoins(id, runId, floor, payout.coins());
             plugin.saveConfig(); // Commit items, entitlement and the stable coin request together.
             boolean coinsPaid = economy.deliverTrialCoins(p).contains(coinRequest);
-            boolean rewarded = coinsPaid || payout.items();
+            boolean rewarded = coinsPaid || payout.items() || summit;
             receipts.add(new LootReceipt(p, "MC_DUNGEON_LOOT floor=" + floor + " category=" + payout.reason()
                     + " rewardDate=" + date + " runId=" + runId + " challengeTier=" + challengeTier
                     + " coinsDue=" + payout.coins() + " introductoryCoins=" + payout.introductoryCoins()
-                    + " itemsEligible=" + payout.items() + " credited=" + rewarded
+                    + " itemsEligible=" + payout.items() + " summitAward=" + summit + " credited=" + rewarded
                     + " coinsConfirmed=" + coinsPaid));
             String coinSummary = coinsPaid ? "金币 +" + payout.coins() : payout.coins() > 0 ? "金币待结算" : "";
-            String summary = payout.items() ? "奖励已存入个人箱子" + (coinSummary.isEmpty() ? "" : "，" + coinSummary)
+            String summary = summit ? difficulty.label + "登顶宝藏已放入个人箱首位" + (coinSummary.isEmpty() ? "" : "，" + coinSummary)
+                    : payout.items() ? "奖励已存入个人箱子" + (coinSummary.isEmpty() ? "" : "，" + coinSummary)
                     : coinsPaid ? "本层" + coinSummary
                     : payout.coins() > 0 ? "本层金币待结算，原凭据已保存"
                     : payout.reason().equals("practice") ? "本层练习，推荐挑战" + recommended.label + "或其他遗迹" : "本层今日奖励已领，可挑战其他遗迹";
-            p.sendTitle(ChatColor.GOLD + "第 " + floor + " 层过关", ChatColor.YELLOW + summary, 5, 55, 10);
-            p.sendMessage(ChatColor.GOLD + summary + (payout.items() ? "。免费查余量、武器及补给：" + PersonalStashOverview.COMMAND : "。"));
+            p.sendTitle(ChatColor.GOLD + (summit ? "解锁称号 · " + summitAchievement(p) : "第 " + floor + " 层过关"),
+                    ChatColor.YELLOW + summary, 5, summit ? 95 : 55, 10);
+            p.sendMessage(ChatColor.GOLD + summary + (payout.items() || summit ? "。免费查余量、武器及补给：" + PersonalStashOverview.COMMAND : "。"));
             if (rewarded) credited++;
         }
         persistRun();
@@ -2301,7 +2347,6 @@ final class DungeonManager implements Listener {
         if (floor == FINAL_FLOOR && (scale.gap() == 0 || firstClear)) {
             int clears = plugin.getConfig().getInt(FINAL_CLEARS + id, 0);
             plugin.getConfig().set(FINAL_CLEARS + id, clears + 1);
-            if (clears == 0) storeBossCache(p, DungeonLoot.finalCache(0, difficulty.ordinal()), "final_boss", receipts);
         }
     }
 

@@ -104,8 +104,8 @@ final class DungeonLoot {
             case 1 -> new Bonus(imprint(named(Material.IRON_SWORD, "寒霜剑",
                     "sharpness", 2, "unbreaking", 2), "frostnova",
                     "潜行使用：施放刻印法术 · 7 魔力；遵守冷却"), true, "寒霜剑 · 霜环刻印");
-            case 2 -> new Bonus(named(Material.SHIELD, "赤铜纹战盾", "unbreaking", 2,
-                    "mending", 1), true, "赤铜纹战盾");
+            case 2 -> new Bonus(ShieldRunes.engrave(named(Material.SHIELD, "赤铜纹战盾", "unbreaking", 2,
+                    "mending", 1), ShieldRunes.Rune.TIDE), true, "赤铜纹战盾 · 回潮");
             case 3 -> new Bonus(extra(named(Material.IRON_BOOTS, "踏影铁靴",
                     "protection", 2, "unbreaking", 2), "feather_falling", 2), true, "踏影铁靴");
             case 4 -> new Bonus(imprint(named(Material.IRON_AXE, "炎纹双刃斧",
@@ -331,16 +331,25 @@ final class DungeonLoot {
         return randomize(base,10,difficulty,"rare");
     }
 
-    static Bonus finalCache(int clears) {
-        return finalCache(clears,0);
+    static Bonus summitCache(int difficulty) {
+        return switch (difficulty) {
+            case 0 -> new Bonus(ShieldRunes.engrave(named(Material.SHIELD, "星灯守望", "unbreaking", 3, "mending", 1),
+                    ShieldRunes.Rune.STONE), true, "星灯守望 · 坚壁护盾", "rare");
+            case 1 -> new Bonus(named(Material.DIAMOND_BOOTS, "星灯踏云", "protection", 3, "feather_falling", 4),
+                    true, "星灯踏云 · 钻石靴", "excellent");
+            case 2 -> new Bonus(summitSword(), true, "星灯誓约 · 霜环魔剑", "legendary");
+            default -> throw new IllegalArgumentException("unknown_difficulty");
+        };
     }
-    static Bonus finalCache(int clears,int difficulty) {
-        Bonus base = clears == 0
-                ? new Bonus(named(difficulty == 2 ? Material.DIAMOND_SWORD : Material.IRON_SWORD,
-                        "星灯誓约", "sharpness", 3, "unbreaking", 2), true,
-                        (difficulty == 2 ? "首通钻石剑" : "首通铁剑") + " · 星灯誓约")
-                : earlyRare(Math.floorMod(clears, 4));
-        return randomize(base,15,difficulty,"rare");
+
+    private static ItemStack summitSword() {
+        var item = named(Material.DIAMOND_SWORD, "星灯誓约", "sharpness", 5, "unbreaking", 3);
+        var meta = item.getItemMeta();
+        var lore = new java.util.ArrayList<>(meta.getLore());
+        WeaponEngravings.inscribeRelic(meta,lore,new WeaponSkillRolls.Binding("selfheal","frostnova","blink"));
+        meta.setLore(lore);
+        item.setItemMeta(meta);
+        return item;
     }
 
     static ItemStack bossRelic() {

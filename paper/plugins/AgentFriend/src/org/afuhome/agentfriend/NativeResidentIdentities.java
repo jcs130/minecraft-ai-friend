@@ -12,7 +12,7 @@ final class NativeResidentIdentities {
         var result=new LinkedHashMap<UUID,String>();
         try{
             Object raw=Class.forName("local.qdj.maids.brain.MaidAgentsMod").getMethod(method).invoke(null);
-            if(raw instanceof Map<?,?> rows&&rows.size()<=24)for(var e:rows.entrySet())
+            if(raw instanceof Map<?,?> rows)for(var e:rows.entrySet())
                 if(e.getKey() instanceof UUID id&&e.getValue() instanceof String name&&!name.isBlank()&&name.length()<=48&&!name.codePoints().anyMatch(Character::isISOControl))result.put(id,name);
         }catch(ReflectiveOperationException|LinkageError ignored){}
         return Map.copyOf(result);

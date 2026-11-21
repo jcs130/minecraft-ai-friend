@@ -35,6 +35,8 @@ final class WeaponEngravings implements Listener {
     static final String COST = LEVELS + " 经验等级 + " + LAPIS + " 青金石";
     private static final String LORE_PREFIX = "§5✦ 武器刻印 · ";
     private static final String BINDING_LORE = "§8┆ ";
+    private static final NamespacedKey COMBO = NamespacedKey.fromString("agentfriend:weapon_spell_combo_v1");
+    private static final NamespacedKey PRESET = NamespacedKey.fromString("agentfriend:weapon_spell_preset");
     private static final List<NamespacedKey> VORTEX_IDS = List.of(
             NamespacedKey.fromString("vortexrpg:vortex_item_id"),
             NamespacedKey.fromString("vortexrpg:profession_item_id"),
@@ -88,16 +90,12 @@ final class WeaponEngravings implements Listener {
     private record Attack(UUID target, int tick, int slot, Material weapon, Binding binding) { }
 
     private final AgentFriendPlugin plugin;
-    private final NamespacedKey presetKey;
-    private final NamespacedKey bindingKey;
     private final NamespacedKey legacyImprintKey;
     private final Map<UUID, Attack> attacks = new HashMap<>();
 
     WeaponEngravings(AgentFriendPlugin plugin, NamespacedKey legacyImprintKey) {
         this.plugin = plugin;
         this.legacyImprintKey = legacyImprintKey;
-        presetKey = new NamespacedKey(plugin, "weapon_spell_preset");
-        bindingKey = new NamespacedKey(plugin, "weapon_spell_combo_v1");
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -112,15 +110,15 @@ final class WeaponEngravings implements Listener {
 
     Preset preset(ItemStack stack) {
         if (!canEngrave(stack) || !stack.hasItemMeta()) return null;
-        return Preset.find(stack.getItemMeta().getPersistentDataContainer().get(presetKey, PersistentDataType.STRING));
+        return Preset.find(stack.getItemMeta().getPersistentDataContainer().get(PRESET, PersistentDataType.STRING));
     }
 
     Binding binding(ItemStack stack) {
         if (!canEngrave(stack) || !stack.hasItemMeta()) return null;
         var data = stack.getItemMeta().getPersistentDataContainer();
-        String raw = data.get(bindingKey, PersistentDataType.STRING);
+        String raw = data.get(COMBO, PersistentDataType.STRING);
         if (raw != null) return WeaponSkillRolls.decode(raw);
-        Preset old = Preset.find(data.get(presetKey, PersistentDataType.STRING));
+        Preset old = Preset.find(data.get(PRESET, PersistentDataType.STRING));
         return old == null ? null : old.binding;
     }
 
@@ -172,16 +170,26 @@ final class WeaponEngravings implements Listener {
                 lore.remove("§7潜行右键 · " + name(previous.binding.sneakUse(), Map.of()));
                 lore.remove("§7主手持剑；右键施法时腾空副手");
             }
-            lore.removeIf(line -> line.startsWith(BINDING_LORE));
         }
+        lore.removeIf(line -> line.startsWith(LORE_PREFIX) || line.startsWith(BINDING_LORE));
         lore.add(LORE_PREFIX + preset.title);
         for (String label : lines(binding, known)) lore.add(BINDING_LORE + label);
         meta.setLore(lore);
-        meta.getPersistentDataContainer().set(presetKey, PersistentDataType.STRING, preset.id);
-        meta.getPersistentDataContainer().set(bindingKey, PersistentDataType.STRING, binding.encode());
+        writeBinding(meta, binding, preset);
         meta.setEnchantmentGlintOverride(true);
         stack.setItemMeta(meta);
         return stack;
+    }
+
+    static void inscribeRelic(org.bukkit.inventory.meta.ItemMeta meta, List<String> lore, Binding binding) {
+        lore.add(LORE_PREFIX + "遗迹");
+        lines(binding, Map.of()).forEach(line -> lore.add(BINDING_LORE + line));
+        writeBinding(meta, binding, Preset.RANDOM);
+    }
+
+    private static void writeBinding(org.bukkit.inventory.meta.ItemMeta meta, Binding binding, Preset preset) {
+        meta.getPersistentDataContainer().set(PRESET, PersistentDataType.STRING, preset.id);
+        meta.getPersistentDataContainer().set(COMBO, PersistentDataType.STRING, binding.encode());
     }
 
     private static List<String> lines(Binding binding, Map<String, String> known) {

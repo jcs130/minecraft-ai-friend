@@ -32,6 +32,10 @@ function Content-MaidBridgeTarget([string]$relative) {
     return $relative -ceq 'qiandengji-maid-native-0.1.12-conversation.jar'
 }
 
+function Content-MaidBridgeConfig([string]$relative) {
+    return $relative -ceq 'plugins/QiandengjiMaidBridge/native-body-port.json'
+}
+
 function Content-ResidentTarget([string]$relative) {
     return $relative -cin @('mods/qiandengji-maid-brain-0.1.0.jar','config/tlm-residents.json')
 }
@@ -84,7 +88,7 @@ function Content-SmartBlinkTarget([string]$relative) {
 }
 
 function Content-NativeRpgJar([string]$relative) {
-    return $relative -cin @('VortexRPG-1.2.2-alpha-qd27-zh.jar','VortexRPG-1.2.2-alpha-qd29.jar','VortexRPG-1.2.2-alpha-qd30.jar','QiandengjiRpg-0.2.0.jar','QiandengjiRpg-0.2.4.jar','QiandengjiRpg-0.2.6.jar','QiandengjiRpg-0.2.9.jar','QiandengjiRpg-0.2.10.jar','QiandengjiRpg-0.2.12.jar','Vault-1.7.3.jar')
+    return $relative -cin @('VortexRPG-1.2.2-alpha-qd27-zh.jar','VortexRPG-1.2.2-alpha-qd29.jar','VortexRPG-1.2.2-alpha-qd30.jar','QiandengjiRpg-0.2.0.jar','QiandengjiRpg-0.2.4.jar','QiandengjiRpg-0.2.6.jar','QiandengjiRpg-0.2.9.jar','QiandengjiRpg-0.2.10.jar','QiandengjiRpg-0.2.12.jar','QiandengjiRpg-0.2.20.jar','Vault-1.7.3.jar')
 }
 
 function Content-NativeRpgTarget([string]$relative) {
@@ -193,7 +197,7 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     if ($plan.schema -ne 1 -or $plan.id -notmatch '^[a-z0-9-]{8,80}$') { throw 'Invalid content deployment plan' }
     $voiceChange = @($plan.files | Where-Object { Content-ProximityVoiceTarget ([string]$_.target) }).Count -gt 0 -or
         @($plan.removeJars | Where-Object { Content-ProximityVoiceJar ([string]$_.name) }).Count -gt 0
-    $maidBridgeChange = @($plan.files | Where-Object { Content-MaidBridgeTarget ([string]$_.target) }).Count -gt 0
+    $maidBridgeChange = @($plan.files | Where-Object { (Content-MaidBridgeTarget ([string]$_.target)) -or (Content-MaidBridgeConfig ([string]$_.target)) }).Count -gt 0
     $personalConfig = 'plugins/QiandengjiMaidBridge/personal-dialogue.json'
     if (@($plan.files | Where-Object { $_.target -ceq $personalConfig }).Count) { $maidBridgeChange = $true }
     $residentChange = @($plan.files | Where-Object { Content-ResidentTarget ([string]$_.target) }).Count -gt 0
@@ -224,6 +228,9 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     foreach ($file in @($plan.files)) {
         $relative = [string]$file.target
         if ($relative -ceq $personalConfig) {
+            $target = Join-Path $serverDir $relative
+        } elseif (Content-MaidBridgeConfig $relative) {
+            if ($file.beforeSha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Maid body port replacement requires its current digest' }
             $target = Join-Path $serverDir $relative
         } elseif (Content-ResidentTarget $relative) {
             if ($file.beforeSha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Resident replacement requires its current digest' }

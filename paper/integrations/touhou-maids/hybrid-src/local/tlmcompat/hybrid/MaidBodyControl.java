@@ -35,13 +35,17 @@ final class MaidBodyControl {
     }
     record Lease(UUID owner,UUID maid,UUID controller,String generation,long expiresAt){}
     private final Map<UUID,UUID> bindings;
+    private final java.util.function.Function<UUID,UUID> guideOwner;
     private final Map<UUID,Lease> leases=new HashMap<>();
     private final Map<UUID,Long> epochs=new HashMap<>();
     private final Path directory;
     MaidBodyControl(Path directory,Map<UUID,UUID> bindings)throws IOException {
-        this.directory=directory;this.bindings=Map.copyOf(bindings);Files.createDirectories(directory);
+        this(directory,bindings,id->null);
     }
-    void authorize(UUID owner,UUID maid){if(!owner.equals(bindings.get(maid)))throw new Fault(403,"NOT_AUTHORIZED");}
+    MaidBodyControl(Path directory,Map<UUID,UUID> bindings,java.util.function.Function<UUID,UUID> guideOwner)throws IOException {
+        this.directory=directory;this.bindings=Map.copyOf(bindings);this.guideOwner=guideOwner;Files.createDirectories(directory);
+    }
+    void authorize(UUID owner,UUID maid){if(!owner.equals(bindings.getOrDefault(maid,guideOwner.apply(maid))))throw new Fault(403,"NOT_AUTHORIZED");}
     Lease bind(UUID owner,UUID maid,UUID controller,long now){
         authorize(owner,maid);var old=leases.get(maid);
         // The host must stop the old body before releasing an expired controller.
@@ -61,7 +65,7 @@ final class MaidBodyControl {
     void invalidateCallbacks(UUID maid){epochs.merge(maid,1L,Long::sum);}
     Lease lease(UUID maid){return leases.get(maid);}
     List<UUID> expired(long now){return leases.values().stream().filter(x->x.expiresAt<=now).map(Lease::maid).toList();}
-    Set<UUID> ids(){return bindings.keySet();}
+    Set<UUID> ids(){var ids=new HashSet<>(bindings.keySet());ids.addAll(leases.keySet());return ids;}
     void release(UUID maid){if(leases.remove(maid)!=null)epochs.merge(maid,1L,Long::sum);}
     static String string(JsonObject value,String key){
         if(!value.has(key)||!value.get(key).isJsonPrimitive()||!value.getAsJsonPrimitive(key).isString())throw new Fault(400,"INVALID_"+key);

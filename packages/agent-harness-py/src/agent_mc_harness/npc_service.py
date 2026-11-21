@@ -11,7 +11,9 @@ import os
 from pathlib import Path
 import sqlite3
 import time
-from uuid import UUID
+from urllib.parse import urlsplit
+from uuid import UUID, uuid5
+import httpx
 
 from .body.maid import MaidBody
 from .body.numen import NumenBody
@@ -19,6 +21,7 @@ from .body.hosted_mcp import HostedMcpPort
 from .bridges import NativeMaidBridge
 from .companion_adventure import CompanionAdventure
 from .journal import ActionJournal
+from .guide_roles import GUIDE_PERSONA, parse_guide_roster
 from .memory.companion import CompanionRecall
 from .memory.local import LocalMemory
 from .memory.remote import RemoteGraphMemory
@@ -43,10 +46,17 @@ class ResidentRun:
     unknown_requests: int = 0
     restart_after: float = 0
     restart_error: str | None = None
+    external_release: bool = False
 
-    def close_in_background(self):
+    def close_in_background(self, external=False):
         if self.closing is None:
-            self.closing = asyncio.create_task(self.host.close(), name="npc-close-" + self.host.role.id)
+            self.external_release = external
+            self.closing = asyncio.create_task(self.close(external), name="npc-close-" + self.host.role.id)
+
+    async def close(self, external):
+        await self.host.close()
+        if external and self.host.role.body_kind == "numen":
+            await self.host.body.port.wait_voluntary_release()
 
 
 def read(path):
@@ -69,9 +79,9 @@ def open_role_memory(directory: Path, connection: tuple[str, str] | None) -> Mem
 
 
 def external_handoff(role, transport, *, now=None):
-    """A trusted operator lease pauses one original maid, even if the LAN relay exits unexpectedly."""
+    """A trusted operator lease pauses one original native body for an external controller."""
     filename = transport.get("externalHandoffFile")
-    if role.body_kind != "maid" or not filename:
+    if role.body_kind not in {"maid", "numen"} or not filename:
         return False
     marker = Path(filename)
     if not marker.is_absolute():
@@ -160,14 +170,44 @@ async def serve(path: Path):
     semaphore = asyncio.Semaphore(2)
     # An old planner may still be finishing a request when its host is rebuilt.
     role_locks = defaultdict(asyncio.Lock)
+    guide_config = settings.get("guideCompanions")
+    guide_online = {}
+    guide_ids = set()
+    guide_client = None
+    guide_portal = None
+    if guide_config:
+        guide_endpoint = guide_config["endpoint"]
+        endpoint = urlsplit(guide_endpoint)
+        if ((endpoint.scheme, endpoint.hostname, endpoint.path) != ("http", "127.0.0.1", "/maid-body")
+                or endpoint.query or endpoint.fragment or endpoint.username is not None):
+            raise ValueError("guide_roster_requires_loopback_maid_port")
+        if guide_config.get("provider","tokenplan") not in provider:
+            raise ValueError("guide_provider_unavailable")
+        guide_secret = Path(guide_config["tokenFile"]).read_text().strip()
+        guide_client = httpx.AsyncClient(timeout=5, trust_env=False,
+                                         headers={"Authorization": "Bearer " + guide_secret})
+        if portal := guide_config.get("portal"):
+            portal_endpoint = portal["endpoint"]
+            url = urlsplit(portal_endpoint)
+            if ((url.scheme != "https" and not (url.scheme == "http" and url.hostname == "127.0.0.1"))
+                    or url.path != "/api/v1/internal/player-companions" or url.query or url.fragment or url.username is not None):
+                raise ValueError("companion_portal_endpoint_invalid")
+            guide_portal = httpx.AsyncClient(timeout=5, trust_env=False,
+                headers={"Authorization": "Bearer " + Path(portal["tokenFile"]).read_text().strip()})
+
     def handoff(role):
+        if role.id in guide_ids:
+            return role.id not in guide_online
         return external_handoff(role, settings["bodies"][role.id])
 
-    async def start_local(host, delay=0):
+    async def start_local(host, delay=0, returning=False):
         if delay:
             await asyncio.sleep(delay)
         if not maintenance() and not handoff(host.role):
             if host.role.body_kind == "numen":
+                if returning and not await host.body.port.wait_for_return(
+                        lambda: maintenance() or handoff(host.role)):
+                    return
                 if settings.get("residentCreationSlots", {}).get(host.role.id, {}).get("numenAdmission"):
                     await prepare_numen(host.role)
                     if maintenance() or handoff(host.role):
@@ -270,22 +310,23 @@ async def serve(path: Path):
         return NpcHost(role, body, planner,
                        memory, journal, social=social, social_graph=social_graph,
                        companion_adventure=CompanionAdventure(*source, role.owner_id) if role.adventure_advice and source else None)
-    def launch(host, delay=0):
+    def launch(host, delay=0, returning=False):
         residents[host.role.id] = ResidentRun(
-            host, asyncio.create_task(start_local(host, delay), name="npc-" + host.role.id))
+            host, asyncio.create_task(start_local(host, delay, returning), name="npc-" + host.role.id))
 
-    def attach(role):
+    def attach(role, *, player_guide=False):
         nonlocal social
         if any(r.id == role.id for r in roles):
             raise ValueError("resident_slot_duplicate_host")
         host = build(role)
         roles.append(role)
-        turns[role.id].role = role
-        if directory := settings.get("residentNamesDirectory"):
+        if role.id in turns:
+            turns[role.id].role = role
+        if not player_guide and (directory := settings.get("residentNamesDirectory")):
             publish_json(Path(directory) / (str(role.body_id) + ".json"),
                          {"bodyId": str(role.body_id), "bodyKind": role.body_kind, "ownerGameId": str(role.owner_id),
                           "characterId": str(role.character_id), "name": role.name})
-        if social is not None:
+        if social is not None and not player_guide:
             social = SocialWorld(world_data, settings["serverId"], roles)
             host.social = social
             for resident in residents.values():
@@ -320,9 +361,70 @@ async def serve(path: Path):
         for slot_id, template in slots.items():
             slot_tasks[slot_id] = asyncio.create_task(activate(template, registry, turns[slot_id], attach, current_body),
                                                       name="resident-birth-" + slot_id)
+        next_guides = 0.0
+        profiles = {}
         while True:
             pausing = maintenance()
             status = {"schema": 1, "pid": os.getpid(), "pausing": pausing, "roles": []}
+            if guide_client and not pausing and time.monotonic() >= next_guides:
+                next_guides = time.monotonic() + 6
+                try:
+                    response = await guide_client.post(guide_endpoint, json={"operation": "guide_list"})
+                    response.raise_for_status()
+                    roster = response.json()
+                    online = parse_guide_roster(roster, settings["serverId"], guide_config)
+                    if guide_portal:
+                        try:
+                            posted = await guide_portal.post(portal_endpoint, json={"guides":roster["guides"]})
+                            posted.raise_for_status()
+                            wanted = {row["maidId"]:row for row in posted.json()["profiles"]}
+                            for row in roster["guides"]:
+                                profile = wanted.get(row["maidId"])
+                                if not profile or profile["ownerId"] != row["ownerId"]:
+                                    continue
+                                revision = profile["revision"]
+                                if revision > row.get("profileRevision", 0):
+                                    applied = await guide_client.post(guide_endpoint, json={
+                                        "operation":"guide_profile","ownerId":row["ownerId"],"maidId":row["maidId"],
+                                        "profileRevision":revision,"name":profile["name"],
+                                    })
+                                    applied.raise_for_status()
+                                    if not applied.json().get("applied"):
+                                        continue
+                                    row["name"] = profile["name"]
+                                elif revision < row.get("profileRevision", 0):
+                                    continue
+                                profiles[row["maidId"]] = profile["persona"]
+                            online = parse_guide_roster(roster, settings["serverId"], guide_config)
+                        except (httpx.HTTPError, ValueError, KeyError, TypeError) as failure:
+                            status["guidePortal"] = {"state":"unavailable","reason":type(failure).__name__}
+                    for role_id, role in online.items():
+                        if persona := profiles.get(str(role.body_id)):
+                            role.persona = "玩家自设人设：" + persona + "\n" + GUIDE_PERSONA
+                        if role_id in guide_ids:
+                            host = residents[role_id].host
+                            if host.role.body_id != role.body_id:
+                                raise ValueError("guide_body_changed")
+                            host.role.name = role.name
+                            host.role.persona = role.persona
+                            continue
+                        if role_id in settings["bodies"] or any(active.body_id == role.body_id for active in roles):
+                            raise ValueError("guide_identity_already_bound")
+                        settings["bodies"][role_id] = {
+                            "endpoint": guide_endpoint, "tokenFile": guide_config["tokenFile"],
+                            "controllerId": str(uuid5(role.character_id, "guide-controller")),
+                        }
+                        try:
+                            attach(role, player_guide=True)
+                        except Exception:
+                            settings["bodies"].pop(role_id, None)
+                            raise
+                        guide_ids.add(role_id)
+                    guide_online = online
+                    status["guideDiscovery"] = {"state": "ready", "online": len(online)}
+                except (ValueError, TypeError, KeyError, OSError, sqlite3.Error, httpx.HTTPError) as failure:
+                    guide_online = {}
+                    status["guideDiscovery"] = {"state": "unavailable", "reason": type(failure).__name__}
             if slot_tasks:
                 status["creationSlots"] = {key: ("waiting" if not task.done() else
                     "failed:" + type(task.exception()).__name__ if task.exception() else "bound")
@@ -365,7 +467,7 @@ async def serve(path: Path):
                     continue
                 if holding:
                     if row["unknownRequests"] == 0:
-                        resident.close_in_background()
+                        resident.close_in_background(external=True)
                 elif not pausing and can_reopen(host):
                     if resident.released:
                         if time.monotonic() >= resident.restart_after:
@@ -375,7 +477,7 @@ async def serve(path: Path):
                                 resident.restart_error = "reopen_" + type(failure).__name__
                                 resident.restart_after = time.monotonic() + 15
                             else:
-                                launch(replacement, 15)
+                                launch(replacement, 15, returning=resident.external_release)
                     else:
                         # A slow or failed close belongs to this body. Do not
                         # launch another controller before the old one releases it.
@@ -399,6 +501,10 @@ async def serve(path: Path):
             await social_graph.graph.close()
         for client in clients:
             await client.close()
+        if guide_client:
+            await guide_client.aclose()
+        if guide_portal:
+            await guide_portal.aclose()
         if registry:
             registry.db.close()
         lock.close()

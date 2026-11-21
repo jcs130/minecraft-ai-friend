@@ -20,6 +20,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.TamableAnimal;
 import org.bukkit.*;
+import local.qdj.maids.brain.ResidentBodyAccess;
 import org.bukkit.command.*;
 import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.craftbukkit.entity.CraftEntity;
@@ -49,6 +50,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private NativeMaidTransport nativeTransport;
     private NativeMaidAgentSupport agentSupport;
     private NativeMaidBrainSupport brains;
+    private GuideCompanions guides;
     private NativeMaidSocialSupport social;
     PersonalMaidDialogue personal;
     private final Map<UUID, String> loadingRecalls = new HashMap<>();
@@ -81,7 +83,9 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
 
     boolean nativeControlled(UUID id){return bodyPort!=null&&bodyPort.active(id);}
     private final Set<UUID> unifiedBodies=new HashSet<>();
+    private final Set<UUID> starterKitBodies=new HashSet<>();
     void registerUnifiedBody(UUID id){unifiedBodies.add(id);}
+    void registerStarterKit(UUID id){starterKitBodies.add(id);}
     boolean unifiedBody(UUID id){return unifiedBodies.contains(id);}
     boolean nativeExclusive(UUID id){return unifiedBodies.contains(id)||bodyPort!=null&&bodyPort.exclusive(id);}
     boolean nativeGuard(UUID id){return bodyPort!=null&&bodyPort.guarding(id);}
@@ -250,19 +254,77 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     boolean ownerDialogue(Player actor,EntityMaid maid){
         return actor!=null && personalDialogue(maid) && actor.getUniqueId().equals(maid.getOwnerUUID());
     }
-    boolean nearbyDialogue(Player actor,EntityMaid maid){return sharedDialogueEnabled(maid)||ownerDialogue(actor,maid);}
+    boolean nearbyDialogue(Player actor,EntityMaid maid){return sharedDialogueEnabled(maid)||ownerDialogue(actor,maid)||guideDialogue(actor,maid);}
+    boolean guideDialogue(Player actor,EntityMaid maid){
+        return actor!=null&&guides!=null&&guides.matches(maid)&&actor.getUniqueId().equals(maid.getOwnerUUID());
+    }
+    boolean guideVoice(EntityMaid maid){return personal!=null&&personal.allOwned()&&guides!=null&&guides.matches(maid);}
+    UUID guideOwner(UUID id){return guides==null?null:guides.owner(id);}
+    JsonArray onlineGuides(){return guides==null?new JsonArray():guides.online();}
+    boolean applyGuideProfile(UUID owner,UUID id,long revision,String name)throws Exception{
+        return guides.applyWebsiteProfile(owner,id,revision,name);
+    }
+    void bindGuide(EntityMaid maid)throws Exception{bind(maid);}
+    private boolean guidesEnabled(){return bodyPort!=null&&bodyPort.guidesEnabled();}
+    public String playerGuideStatus(Player actor){return guides.status(actor,guidesEnabled()).toString();}
+    public String playerGuideAction(Player actor,String action,String value)throws Exception{
+        if(!Bukkit.isPrimaryThread()||!guidesEnabled())
+            throw new CompatibilityException("guide_disabled","伙伴暂未开放。");
+        if(action.equals("claim"))return guides.claim(actor).toString();
+        if(action.equals("recall")){
+            UUID id=guides.requireId(actor);
+            if(bodyPort.busy(id))throw new CompatibilityException("guide_busy","伙伴正在完成当前动作，请稍候。");
+            String request=fresh();
+            var result=recall(actor,id,request);
+            String status=result.get("status").getAsString();
+            actor.sendMessage(status.equals("applied")?"§a原伙伴已到达。":"§e召回结果 "+status+"，原请求 "+request);
+            return guides.status(actor,true).toString();
+        }
+        var maid=guides.requireBody(actor);
+        switch(action){
+            case "voice" -> {requireNearby(actor,maid,8);openCosmetics(actor,maid,true,0);}
+            case "bag" -> {requireNearby(actor,maid,8);menus.open(actor,maid);}
+            case "rename" -> guides.rename(actor,value);
+            case "choose","learn" -> {
+                if(!value.matches("[a-z0-9_]{1,48}"))throw new CompatibilityException("bad_skill","请从当前职业或技能清单选择。");
+                var rpg=JsonParser.parseString(ResidentBodyAccess.rpg(maid.getUUID())).getAsJsonObject();
+                if(!rpg.get("available").getAsBoolean())
+                    throw new CompatibilityException("guide_profile_loading","伙伴的职业档案还在加载。");
+                var friend=Bukkit.getPluginManager().getPlugin("AgentFriend");
+                if(friend==null||!friend.isEnabled())throw new IllegalStateException("guide_services_unavailable");
+                var service=friend.getClass().getClassLoader().loadClass("org.afuhome.agentfriend.ResidentCli");
+                UUID request=UUID.randomUUID();
+                String command=action.equals("choose")?"profession choose "+value:"skills learn "+value;
+                return (String)service.getMethod("run",UUID.class,UUID.class,String.class).invoke(null,maid.getUUID(),request,command);
+            }
+            case "receipt" -> {
+                var friend=Bukkit.getPluginManager().getPlugin("AgentFriend");
+                if(friend==null||!friend.isEnabled())throw new IllegalStateException("guide_services_unavailable");
+                return (String)friend.getClass().getClassLoader().loadClass("org.afuhome.agentfriend.ResidentCli")
+                    .getMethod("query",UUID.class,UUID.class).invoke(null,maid.getUUID(),UUID.fromString(value));
+            }
+            default -> throw new CompatibilityException("unknown_guide_action","未知的伙伴操作。");
+        }
+        return guides.status(actor,true).toString();
+    }
     boolean personalModelReady(){return brains!=null&&brains.personalSite()!=null;}
     void personalChat(Player actor,com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.LLMCallback callback){
         if(!ownerDialogue(actor,callback.getMaid())||!social.handles(callback))throw new IllegalStateException("Personal dialogue binding changed");
         brains.chatPersonal(callback);
     }
     boolean sharedDialogueEnabled(EntityMaid maid){return brains!=null&&brains.allowed(maid);}
-    boolean configuredCompanionIdentity(EntityMaid maid){return brains!=null&&brains.identityMatches(maid);}
+    boolean configuredCompanionIdentity(EntityMaid maid){return brains!=null&&brains.identityMatches(maid)||guides!=null&&guides.matches(maid);}
     void nearbyConversation(Player actor,EntityMaid maid,NativeMaidNearbyChat.Address address,Set<UUID> recipients){
         nearbyConversation(actor,maid,address,recipients,"near_"+UUID.randomUUID());
     }
     void nearbyConversation(Player actor,EntityMaid maid,NativeMaidNearbyChat.Address address,Set<UUID> recipients,String operation){
         try{
+            if(guideDialogue(actor,maid)){
+                String event=actor.getUniqueId()+":"+operation;
+                if(!inbox.contains(maid.getUUID(),event))
+                    queueResidentConversation(maid.getUUID(),actor.getUniqueId(),actor.getName(),address.text(),event);
+                return;
+            }
             if(receipts.read(maid.getUUID(),operation)!=null)return;
             var admission=nearbyChat.admit(actor,maid,address);
             if(!admission.allowed()){
@@ -320,6 +382,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             registry=Files.exists(registryFile)?JsonParser.parseString(Files.readString(registryFile)).getAsJsonObject():new JsonObject();
             if(!registry.has("schema")){registry.addProperty("schema",1);registry.add("maids",new JsonObject());}
             if(registry.get("schema").getAsInt()!=1)throw new IllegalStateException("Future native registry preserved without rewriting");
+            guides=new GuideCompanions(this);
             receipts=new ReceiptJournal(getDataFolder().toPath().resolve("native-receipts"));
             workshops=new NativeMaidWorkshop(this,receipts);
             inbox=new DialogueInbox(getDataFolder().toPath().resolve("native-dialogue"));
@@ -357,11 +420,16 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             if (!maid.isAlive() || maid.isRemoved() || owner(maid) == null) return;
             try {
                 bind(maid);
+                if(guides.known(maid.getUUID()))guides.seen(maid);
                 if (personalDialogue(maid) && personal.allOwned()) {
                     brains.applyPersonalDefaults(maid);
                     if (speech != null) speech.applyNativeDefault(maid);
                 }
-                if (bodyPort != null && unifiedBody(maid.getUUID())) NativeMaidKit.initialize(maid);
+                if (bodyPort != null && unifiedBody(maid.getUUID())) {
+                    NativeMaidKit.initialize(maid);
+                    if (guideOwner(maid.getUUID()) != null || starterKitBodies.contains(maid.getUUID()))
+                        NativeMaidKit.provision(maid, companion);
+                }
                 if (agentSupport != null) agentSupport.observeLoaded(maid);
             } catch (Exception error) {
                 getLogger().warning("Native NPC binding preserved: " + error.getMessage());
@@ -372,6 +440,14 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(entity==null)return null;
         Object handle=((CraftEntity)entity).getHandle();
         return handle instanceof EntityMaid maid && !local.qdj.maids.brain.MaidAgentsMod.custodyHeld(maid.getUUID()) ? maid : null;
+    }
+    public boolean dungeonParticipant(org.bukkit.entity.Entity entity, Set<UUID> party) {
+        if (!Bukkit.isPrimaryThread() || !entity.isValid() || entity.isDead()
+                || !unifiedBody(entity.getUniqueId())) return false;
+        var maid = nativeMaid(entity);
+        if (maid == null || !maid.isAlive() || maid.isNoAi()) return false;
+        UUID owner = guideOwner(maid.getUUID());
+        return owner == null ? !guides.known(maid.getUUID()) : party.contains(owner) || party.contains(maid.getUUID());
     }
     private JsonObject records(){return registry.getAsJsonObject("maids");}
     private void saveRegistry()throws Exception{ReceiptJournal.write(registryFile,registry,Files.exists(registryFile));}
@@ -448,6 +524,14 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     }
     JsonObject context(UUID owner,Player actor,UUID id){
         JsonObject data=owned(owner,id).deepCopy();EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
+        if(owner.equals(guideOwner(id))){
+            var origin=Bukkit.getPlayer(owner);
+            var friend=Bukkit.getPluginManager().getPlugin("AgentFriend");
+            if(origin!=null&&friend!=null&&friend.isEnabled())try{
+                var hints=(String)friend.getClass().getMethod("playerGuideHints",Player.class).invoke(friend,origin);
+                data.add("ownerOnboarding",JsonParser.parseString(hints));
+            }catch(ReflectiveOperationException unavailable){/* Actual nearby perception is still available. */}
+        }
         data.addProperty("loaded",maid!=null&&maid.isAlive()&&maid.getBukkitEntity().isValid());
         data.addProperty("fullOriginalEntityMaid",true);data.addProperty("hostKind","original_touhou_little_maid");
         data.addProperty("nativeClient",actor!=null&&VanillaMaidProjection.nativeClient(actor));
@@ -630,6 +714,9 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         }
         boolean inventoryAction = Set.of("transfer", "equip").contains(action);
         boolean sharedInventory = inventoryAction && unifiedBody(id);
+        UUID guideOwner=guideOwner(id);
+        if(guideOwner!=null&&Set.of("chat","talk").contains(action)&&!guideOwner.equals(actor.getUniqueId()))
+            throw new CompatibilityException("not_owned","请和自己的伙伴对话。");
         if(nativeExclusive(id)&&!sharedInventory&&!Set.of("chat","talk").contains(action))throw new CompatibilityException("control_changed","Body is owned by the native controller; use the original owner UI to take control");
         // A replay must read the original result even if the entity has since died/unloaded.
         if(receipts.read(id,operation)!=null){receipt(actor.getUniqueId(),id,operation);JsonObject old=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));old=reconcile(old);old.addProperty("replayed",true);return old;}
@@ -679,7 +766,13 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(action.equals("native-menu")&&!VanillaMaidProjection.nativeClient(actor))throw new CompatibilityException("native_client_required","Use the common menu on this client");
         if(!Set.of("follow","stay","sit","speak","talk","chat","brain","task","schedule","pickup","ack","transfer","equip","menu","native-menu").contains(action)&&!NativeMaidCosmetics.WRITES.contains(action))throw new CompatibilityException("unsupported_action",action);
         if(NativeMaidCosmetics.WRITES.contains(action)&&receipts.read(id,operation)==null)cosmetics.validate(actor,maid,action,value);
-        if(action.equals("chat")){requireNearby(actor,maid,MaidConversationRange.speaker(maid,actor));if(visitor||ownerDialogue(actor,maid))social.validate(actor,maid);agentSupport.validateChat(actor,maid);}
+        if(action.equals("chat")){
+            requireNearby(actor,maid,MaidConversationRange.speaker(maid,actor));
+            if(!guideDialogue(actor,maid)){
+                if(visitor||ownerDialogue(actor,maid))social.validate(actor,maid);
+                agentSupport.validateChat(actor,maid);
+            }
+        }
         if(action.equals("brain")){agentSupport.validateIdle(maid);brains.validate(maid,value);}
         JsonObject previous=receipts.reserve(id,actor.getUniqueId(),operation,action,Objects.requireNonNullElse(value,""));
         if(previous!=null){JsonObject replay=previous.deepCopy();replay.addProperty("replayed",true);return replay;}
@@ -918,6 +1011,17 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
                 reply(actor,action,correlation,create(target,name),null);return true;
             }
             if(action.equals("help")){help(actor);return true;}
+            if(action.equals("guide")){
+                String verb=args.length>1?args[1].toLowerCase(Locale.ROOT):"status";
+                if(verb.equals("status")&&args.length<=2)
+                    actor.sendMessage("QD_GUIDE "+playerGuideStatus(actor));
+                else if(Set.of("claim","recall","voice","bag").contains(verb)&&args.length==2)
+                    actor.sendMessage("QD_GUIDE "+playerGuideAction(actor,verb,""));
+                else if(verb.equals("rename")&&args.length>2)
+                    actor.sendMessage("QD_GUIDE "+playerGuideAction(actor,verb,String.join(" ",Arrays.copyOfRange(args,2,args.length))));
+                else throw new CompatibilityException("bad_arguments","罗盘 → 伙伴；改名也可用 /qdmaid guide rename <新名字>。");
+                return true;
+            }
             if(action.equals("nearby")){
                 correlation=request(args,1);JsonArray rows=new JsonArray();
                 for(var entity:actor.getNearbyEntities(8,8,8)){

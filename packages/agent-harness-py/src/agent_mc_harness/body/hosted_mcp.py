@@ -243,25 +243,52 @@ class HostedMcpPort:
         port.previous_states = {(self.owned_epoch, self.lease_mode), (self.epoch, self.requested_mode)}
         return port
 
-    async def wait_previous_release(self):
+    async def wait_previous_release(self, *, never_attached=False):
         """Observe the prior seat becoming vacant without extending its lease."""
-        if not self.previous_states:
+        if not self.previous_states and not never_attached:
             return
         async with asyncio.timeout(25):
             if self._provided_session is None:
                 async with self._mcp_session() as session:
-                    await self._wait_for_vacancy(session)
+                    await self._wait_for_vacancy(session, never_attached=never_attached)
             else:
-                await self._wait_for_vacancy(self._provided_session)
+                await self._wait_for_vacancy(self._provided_session, never_attached=never_attached)
 
-    async def _wait_for_vacancy(self, session):
+    async def wait_voluntary_release(self):
+        """Verify the closed controller's native seat before announcing a handoff."""
+        if not self.closing or self.attached:
+            raise RuntimeError("hosted_control_still_open")
+        self.previous_states = {(self.owned_epoch, self.lease_mode), (self.epoch, self.requested_mode)}
+        for attempt in range(2):
+            try:
+                await self.wait_previous_release(never_attached=self.owned_epoch == 0)
+                return
+            except Exception as error:
+                if attempt or not self._transient_facts_error(error):
+                    raise
+                await asyncio.sleep(.5)
+
+    async def wait_for_return(self, paused):
+        """Wait without renewing another controller's lease or attaching early."""
+        while not paused():
+            try:
+                await self.wait_previous_release(never_attached=True)
+            except Exception as error:
+                if not self._transient_facts_error(error):
+                    raise
+                await asyncio.sleep(2)
+            else:
+                return not paused()
+        return False
+
+    async def _wait_for_vacancy(self, session, *, never_attached=False):
         epochs = {epoch for epoch, _ in self.previous_states}
         while True:
             facts = await self._request(session, "facts")
             epoch, mode = facts.get("epoch"), facts.get("mode")
-            if self._vacant(facts, epochs):
+            if self._vacant(facts, {epoch} if never_attached else epochs):
                 return  # attach still has to win the native fence atomically
-            if facts.get("roleUuid") != self.body or (epoch, mode) not in self.previous_states:
+            if facts.get("roleUuid") != self.body or not never_attached and (epoch, mode) not in self.previous_states:
                 self.lost = True
                 raise RuntimeError("CONTROL_CHANGED")
             await asyncio.sleep(.5)

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
+import { PNG } from 'pngjs';
 import { createPortal } from '../src/server.mjs';
 import { loadConfig, projectRoot } from '../src/config.mjs';
 import { buildSnapshot } from '../src/cloud-source.mjs';
@@ -58,6 +59,50 @@ test('cloud ingress is separate from browsers and client credentials, with no im
   assert.equal((await fetch(f.origin() + '/api/v1/agents', { headers: { Authorization: 'Bearer ' + token } })).status, 401);
   assert.equal((await f.get('game-capabilities')).ready, false);
   assert.equal((await f.get('server')).online, null);
+});
+
+test('a player companion can be configured and its works are visible only through the bound role', async t => {
+  const f = await fixture(t), owner = f.portal.store.ownerByName('cloud-admin');
+  f.portal.store.db.prepare('INSERT INTO ownerships VALUES(?,?,?,?)').run(owner.id, uuid, 'isolated ownership', Date.now());
+  const maid = randomUUID(), sameNameMaid = randomUUID();
+  const guide = {ownerId:uuid,maidId:maid,name:'小灯',profileRevision:0,loaded:true,active:true,level:6};
+  const internal = (path, body, method = 'POST', extra = {}) => fetch(f.origin() + '/api/v1/internal/' + path, {
+    method, headers:{Authorization:'Bearer ' + token,'Content-Type':'application/json',...extra},body:JSON.stringify(body),
+  });
+  assert.equal((await internal('player-companions',{guides:[guide]},'POST',{Origin:f.origin()})).status,403);
+  assert.equal((await internal('player-companions',{guides:[guide]})).status,200);
+  const stranger = f.client();
+  await stranger('session');
+  assert.equal((await stranger('accounts','POST',{username:'companion-visitor',password:'test-visitor-only'})).status,201);
+  const base = 'player-companions/' + uuid;
+  const profile = {name:'一起冒险',persona:'爱逛村庄',expectedRevision:0};
+  assert.deepEqual((await stranger('player-companions')).data.companions,[]);
+  assert.equal((await stranger(base,'PUT',profile)).status,404);
+  assert.equal((await stranger(base + '/diaries')).status,404);
+  assert.equal((await f.admin(base,'PUT',profile)).data.revision,1);
+  assert.equal((await f.admin(base,'PUT',profile)).status,409);
+  const poll = await (await internal('player-companions',{guides:[guide]})).json();
+  assert.deepEqual(poll.profiles,[{ownerId:uuid,maidId:maid,name:profile.name,persona:profile.persona,revision:1}]);
+  const bytes = PNG.sync.write(new PNG({width:2,height:2}));
+  const photo = (id, authorUuid) => ({id,author:'小灯',authorUuid,title:'旅行照片',story:'',capturedAt:new Date().toISOString(),
+    sha256:createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length,width:2,height:2,published:false});
+  const originalPhoto = photo(randomUUID(),maid), sameNamePhoto = photo(randomUUID(),sameNameMaid);
+  assert.equal((await f.put({...snapshot(),photos:[originalPhoto,sameNamePhoto]})).status,200);
+  assert.equal((await fetch(f.origin() + '/api/v1/internal/photos/' + originalPhoto.id, {
+    method:'PUT',headers:{Authorization:'Bearer ' + token,'Content-Type':'image/png'},body:bytes,
+  })).status,200);
+  const result = await f.admin(base + '/photos');
+  assert.deepEqual(result.data.photos.map(row=>row.id),[originalPhoto.id]);
+  assert.match(result.data.photos[0].thumbnailUrl,/\?size=thumb$/);
+  const book = (id, authorUuid, title, published = true) => ({id,version:1,kind:'book',author:'小灯',title,body:'旅途中记下来的公开片段。',
+    createdAt:new Date().toISOString(),published,authorRef:createHash('sha256').update('qd-archive-author:' + authorUuid).digest('hex')});
+  const originalBook = book(randomUUID(),maid,'村庄旅行'), unrelatedBook = book(randomUUID(),sameNameMaid,'同名日记');
+  const withdrawnBook = book(randomUUID(),maid,'未公开作品',false);
+  assert.equal((await internal('archives',{available:true,entries:[originalBook,unrelatedBook,withdrawnBook]},'PUT')).status,200);
+  assert.deepEqual((await f.admin(base + '/diaries')).data.entries.map(row=>row.id),[originalBook.id]);
+  assert.equal((await f.admin('archives/' + withdrawnBook.id)).status,404);
+  assert.equal((await fetch(f.origin() + '/companion.html')).status,200);
+  assert.match((await fetch(f.origin() + '/companion.mjs')).headers.get('content-type'),/javascript/);
 });
 
 test('real outbound HTTP ingestion exposes public growth/events while keeping original UUID, inventory and position private', async t => {

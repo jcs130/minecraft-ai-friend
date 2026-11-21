@@ -31,12 +31,27 @@ public final class TrialRewardPolicyTest {
     public static void main(String[] args) {
         dailyRewards();
         introductoryRewards();
+        require(!TrialRewardPolicy.summitUpgrade(14, 2, -1, true), "only the summit awards the guaranteed cache");
+        require(!TrialRewardPolicy.summitUpgrade(15, 1, -1, false), "practice does not award the cache");
+        require(TrialRewardPolicy.summitUpgrade(15, 0, -1, true), "first qualified summit awards a cache");
+        require(!TrialRewardPolicy.summitUpgrade(15, 0, 0, true), "same grade never duplicates a cache");
+        require(TrialRewardPolicy.summitUpgrade(15, 2, 1, true), "qualified higher difficulty awards an upgrade");
+        require(!TrialRewardPolicy.summitUpgrade(15, 1, 2, true), "clearing below a rewarded grade grants no cache");
+        require(TrialRewardPolicy.summitAchievement(-1, 10).isEmpty(), "a pre-summit clear does not unlock the title");
+        require(TrialRewardPolicy.summitAchievement(-1, 15).equals("试炼登顶者"), "historical summit retains recognition");
+        require(TrialRewardPolicy.summitAchievement(1, 15).equals("踏云征服者"), "adventure award title");
+        require(TrialRewardPolicy.summitAchievement(2, 15).equals("星灯誓约者"), "apocalypse award title");
         String today="2026-11-20", yesterday="2026-11-19";
         require(SiteRewardPolicy.status("run2",today,null,"run1",yesterday).equals("eligible"), "new day fresh site");
         require(SiteRewardPolicy.status("run2",today,null,"run1",today).equals("daily_limit"), "one expedition award per site/day");
         require(SiteRewardPolicy.status("run1",today,"run1",null,null).equals("ready"), "restart retains original receipt");
         require(SiteRewardPolicy.status("run1",today,null,"run1",yesterday).equals("claimed"), "claimed run replay next day");
         require(SiteRewardPolicy.status("run2",today,"run1",null,null).equals("previous_reward_pending"), "preserve earlier pending reward");
+        require(SiteRewardPolicy.relicEligible(true,false,false,false), "verified final room once grants relic");
+        require(!SiteRewardPolicy.relicEligible(false,false,false,false), "earlier room alone is not final credit");
+        require(!SiteRewardPolicy.relicEligible(true,true,false,false), "collected relic cannot be granted again");
+        require(!SiteRewardPolicy.relicEligible(true,false,true,false), "older pending receipt is always preserved");
+        require(!SiteRewardPolicy.relicEligible(true,false,false,true), "original run cannot be replayed");
         for (int difficulty = 0; difficulty <= 2; difficulty++) {
             var previous = TrialRewardPolicy.rates(1, difficulty);
             for (int floor = 1; floor <= 15; floor++) {
