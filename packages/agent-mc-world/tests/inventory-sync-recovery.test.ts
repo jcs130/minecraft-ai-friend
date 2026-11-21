@@ -321,3 +321,35 @@ describe('inventory synchronization readouts', () => {
     } finally { r.close(); }
   });
 });
+
+// Real pinned inventory plugin with synthetic received packets, not a live trace.
+it('processes the modern cursor packet when completing an authoritative 1.21.11 frame', async()=>{
+  vi.useFakeTimers();const r=rig('1.21.11');
+  const operation=clickInventoryConfirmed(r.bot,9,0,0);
+  const settled=operation.catch(e=>e);
+  await Promise.resolve();
+  r.full(0,46); // complete slots, cursor arrives in its dedicated modern packet
+  expect(inventoryClickState(r.bot).phase).toBe('pending');
+  r.client.emit('set_cursor_item',{contents:r.raw('oak_log',8)});
+  const phase=inventoryClickState(r.bot).phase;
+  await vi.advanceTimersByTimeAsync(INVENTORY_CLICK_CONFIRM_MS);
+  const result=await settled;
+  expect(phase).toBe('ready');expect(result).toBeUndefined();
+  expect(r.bot.inventory.selectedItem?.count).toBe(8);
+  expect(r.write.mock.calls.filter(([name])=>name==='window_click')).toHaveLength(1);
+});
+
+it('keeps a silent 1.21.11 click unknown, never retries, then recovers only from a fresh full view',async()=>{
+  vi.useFakeTimers();const r=rig('1.21.11');
+  const operation=clickInventoryConfirmed(r.bot,9,0,0);
+  const failed=expect(operation).rejects.toMatchObject({code:'inventory-click-sync'});
+  await vi.advanceTimersByTimeAsync(INVENTORY_CLICK_CONFIRM_MS);await failed;
+  expect(inventoryClickState(r.bot).phase).toBe('quarantined');
+  await expect(clickInventoryConfirmed(r.bot,9,0,0)).rejects.toMatchObject({reason:'quarantined'});
+  r.client.emit('set_cursor_item',{contents:r.raw('oak_log',8)});
+  expect(inventoryClickState(r.bot).phase).toBe('quarantined');
+  r.full(0,46,{9:r.raw('oak_log',8)});
+  expect(inventoryClickState(r.bot).phase).toBe('ready');
+  expect(r.bot.inventory.selectedItem).toBeNull();
+  expect(r.write.mock.calls.filter(([name])=>name==='window_click')).toHaveLength(1);
+});

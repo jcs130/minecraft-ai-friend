@@ -72,6 +72,19 @@ final class Villagers {
 
     Map<String, Spot> all() { return spots; }
 
+    static boolean trialMerchant(String service) {
+        return "trial-platform-manager".equals(service);
+    }
+
+    Location trialServicePost(Spot spot) {
+        Object result = serviceCall("trialResidentServicePost", spot, UUID.class, spot.entityUuid());
+        return result instanceof Location post ? post : null;
+    }
+
+    boolean restoreTrialService(Spot spot, Villager body) {
+        return Boolean.TRUE.equals(serviceCall("restoreTrialResidentServiceBody", spot, Villager.class, body));
+    }
+
     /** Native villagers have a current location only while their bound entity is loaded and active. */
     Location location(String id) {
         Spot s = spots.get(id);
@@ -121,13 +134,17 @@ final class Villagers {
     }
 
     private static boolean managedService(Spot spot, Villager villager) {
+        String method = trialMerchant(spot.serviceCounter()) ? "isTrialPlatformVoiceServiceBody" : "isManagedVoiceServiceBody";
+        return Boolean.TRUE.equals(serviceCall(method, spot, UUID.class, villager.getUniqueId()));
+    }
+
+    private static Object serviceCall(String method, Spot spot, Class<?> type, Object argument) {
         Plugin service = Bukkit.getPluginManager().getPlugin("AgentFriend");
-        if (service == null || !service.isEnabled()) return false;
+        if (service == null || !service.isEnabled()) return null;
         try {
-            return Boolean.TRUE.equals(service.getClass().getMethod("isManagedVoiceServiceBody", String.class, UUID.class)
-                    .invoke(service, spot.serviceCounter(), villager.getUniqueId()));
+            return service.getClass().getMethod(method, String.class, type).invoke(service, spot.serviceCounter(), argument);
         } catch (ReflectiveOperationException | LinkageError unavailable) {
-            return false;
+            return null;
         }
     }
 

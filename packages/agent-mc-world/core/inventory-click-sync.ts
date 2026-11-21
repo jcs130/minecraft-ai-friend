@@ -244,6 +244,16 @@ export function installInventoryClickSync(bot: Bot, diag?: MinecraftLog): void {
       }
     }
   });
+  // Modern protocols moved the cursor to a dedicated packet. Native 4.39.0
+  // handles player slots but not this cursor, so keep the exact same barrier.
+  client.on('set_cursor_item', (packet) => {
+    if (packet.contents === undefined) return;
+    const seq = ++state.packetSeq, window = activeWindow(bot);
+    window.selectedItem = decode(packet.contents);
+    const frame = state.authority.get(window);
+    if (frame) { frame.cursor = structuredClone(packet.contents); frame.seq = seq; }
+    confirmPendingClick(bot, state, 'set_slot', undefined);
+  });
   client.on('window_items', (packet) => {
     const seq = ++state.packetSeq;
     const window = activeWindow(bot);

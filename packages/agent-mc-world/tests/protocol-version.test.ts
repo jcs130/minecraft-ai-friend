@@ -1,3 +1,4 @@
+import '../core/dependency-patches.ts';
 import { createRequire } from 'node:module';
 import { once } from 'node:events';
 import mineflayer from 'mineflayer';
@@ -7,7 +8,7 @@ import { expect, it } from 'vitest';
 const require = createRequire(import.meta.url);
 const protocol = createRequire(require.resolve('mineflayer'))('minecraft-protocol');
 
-it.each(['1.20.6', '1.21.1'])('negotiates Java %s against a real loopback protocol server', async version => {
+it.each(['1.20.6', '1.21.1', '1.21.11'])('negotiates Java %s against a real loopback protocol server', async version => {
   const server = protocol.createServer({ host: '127.0.0.1', port: 0, version, 'online-mode': false, maxPlayers: 4,
     motd: 'Agent MC World isolated protocol fixture', hideErrors: true });
   const errors: string[] = [];

@@ -10,7 +10,10 @@
  *
  * 三个包都是 MIT 许可;mineflayer-pathfinder 的许可全文见同目录 LICENSE-mineflayer-pathfinder.txt。
  */
-import Module from 'node:module';
+import Module, { createRequire } from 'node:module';
+
+// Resolve from this package at runtime, not the nested dependency's pnpm location.
+const protocol774Data = JSON.stringify(createRequire(import.meta.url).resolve('minecraft-data'));
 
 interface SourceEdit {
   find: string;
@@ -26,9 +29,49 @@ interface SourcePatch {
 
 const PATCHES: readonly SourcePatch[] = [
   {
+    pkg: 'mineflayer', file: 'lib/plugins/team.js', edits: [{
+      find: `  function teamHandler (packet) {`,
+      replace: `  function receivedTeamFlags (packet) {
+    // Modern schemas decode flags by name; Team's public API still uses the legacy bitmask.
+    return packet.flags && typeof packet.flags === 'object'
+      ? (packet.flags.friendly_fire ? 1 : 0) | (packet.flags.see_friendly_invisible ? 2 : 0)
+      : packet.friendlyFire
+  }
+  function teamHandler (packet) {`,
+    }, {
+      find: `team = new Team(
+          teamName,
+          packet.name,
+          packet.friendlyFire,`,
+      replace: `team = new Team(
+          teamName,
+          packet.name,
+          receivedTeamFlags(packet),`,
+    }, {
+      find: `team.update(
+          packet.name,
+          packet.friendlyFire,`,
+      replace: `team.update(
+          packet.name,
+          receivedTeamFlags(packet),`,
+    }],
+  },
+  {
+    pkg: 'prismarine-registry', file: 'lib/index.js', edits: [{
+      find: `  const staticData = require('minecraft-data')(version)`,
+      replace: `  const transitiveData = require('minecraft-data')(version)
+  // 774: keep registry, item components and packet decoder on the same pinned schema.
+  const staticData = transitiveData?.version.version === 774 ? require(${protocol774Data})(version) : transitiveData`,
+    }],
+  },
+  {
     pkg: 'minecraft-protocol',
     file: 'src/transforms/serializer.js',
     edits: [{
+      find: `  const mcData = minecraftData(version)`,
+      replace: `  const transitiveData = minecraftData(version)
+  const mcData = transitiveData?.version.version === 774 ? require(${protocol774Data})(version) : transitiveData`,
+    }, {
       find: `  const mergedProtocol = merge(mcData.protocol, customPackets?.[mcData.version.majorVersion] ?? {})`,
       replace: `  const mergedProtocol = merge(mcData.protocol, customPackets?.[mcData.version.majorVersion] ?? {})
   // minecraft-data 3.119.0 inserted the removed banner-pattern serializer into

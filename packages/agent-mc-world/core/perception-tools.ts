@@ -41,7 +41,8 @@ function kindOf(bot:any,e:any):string {
   if(['villager','wandering_trader'].includes(e.name))return 'npc';
   const keys=bot.registry?.entitiesByName?.[e.name]?.metadataKeys??[];
   const read=(name:string)=>e.metadata?.[keys.indexOf(name)];
-  if(e.name==='creeper'&&(read('swell')===1||read('is_ignited')===true))return 'warning';
+  const swell=read('swell_dir')??read('swell');
+  if(e.name==='creeper'&&((typeof swell==='number'&&swell>0)||read('is_ignited')===true))return 'warning';
   if(conditional.has(e.name))return read('remaining_anger_time')>0||(e.name==='enderman'&&read('creepy')===true)
     ||(e.name==='bee'&&typeof read('flags')==='number'&&(read('flags')&2))?'warning':'neutral';
   const kind=classifyEntity(e.type,e.name);return kind==='hostile'?'hostile':kind==='animal'?'neutral':'unknown';

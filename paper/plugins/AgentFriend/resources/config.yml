@@ -1,5 +1,7 @@
 arena-built: false
 last-run: 0
+# Set both entrance role IDs to their surveyed original Villager UUIDs to opt in. Restart to bind.
+trial-platform-residents: {}
 legacy-task-npcs:
   # At startup, retire only AgentFriend's own tagged RPG storyline and life-guild task bodies.
   # Story notes remain available at their original locations. Life contracts stay on the board.
