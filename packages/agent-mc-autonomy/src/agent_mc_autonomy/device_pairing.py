@@ -1,11 +1,10 @@
 """Explicit, owner-approved enrollment for the hosted Minecraft device protocol."""
-from dataclasses import dataclass, field
 import re
 import time
+from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
 import httpx
-
 
 _PAIR = "/api/v1/character-device/pair"
 _DEVICE = "/api/v1/character-device"

@@ -14,6 +14,7 @@ from pathlib import Path
 from .bridge import MinecraftBridge
 from .configuration import Settings
 from .controller import Controller
+from .device_pairing import ManagedPlayerDevice
 from .failure_diagnostics import FailureDiagnostics, current
 from .fast import FastPolicy, SystemOne
 from .filesystem import replace_prepared
@@ -24,7 +25,6 @@ from .planner import Planner
 from .review import ReviewPort
 from .viewer import ViewerWindow
 from .viewer_public import record_playback, viewer_projection
-from .device_pairing import ManagedPlayerDevice
 
 
 def _replace_status(temporary: Path, destination: Path):
