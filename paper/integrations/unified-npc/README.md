@@ -158,6 +158,9 @@ A quiet review can continue the same wait without a body write. Fresh danger,
 addressed dialogue or a change in the leader's availability can prompt an
 earlier decision. The controller can select a local task, rest or delegate
 guard even when the original owner and the expedition leader are different.
+Idle and guarding maids use the same routine and nearby adventure adviser with
+or without an activity-review interval. A configured expedition leader who is
+not the owner receives suggestions drawn from public world facts.
 Confirmed wait reasons stay in the body's local action journal across restarts.
 Mode selections appear in the private NPC health route; the body's receipt
 and a fresh observation establish the actual outcome.
@@ -241,8 +244,9 @@ For a maid with a configured expedition leader, an activity-review interval
 and native guard, `expedition_wait_seconds` optionally lets her resume guarding
 after a seated wait. It applies when the observed leader is available and the
 body has no work, danger or pending travel. A renewed direct wait starts a new
-wait interval. Existing native expedition logic handles the route and safe
-arrival.
+wait interval. A finished native walk to the configured leader can also hand
+control back to guard after its temporary destination anchor. Existing native
+expedition logic handles the route and safe arrival.
 
 Better Combat is optional at mod load. The hosted bridge supplies charged
 attacks and server upswing execution only for Numen fake players. Ordinary client

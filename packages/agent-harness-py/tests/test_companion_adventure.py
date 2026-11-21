@@ -226,3 +226,34 @@ def test_explicit_advice_uses_verified_owner_and_body_binding(tmp_path):
             host.unsubscribe()
             journal.close()
     asyncio.run(run())
+
+
+def test_resident_check_in_uses_same_adviser_with_public_facts_for_non_owner_leader(tmp_path):
+    async def run():
+        actor, context = guarded()
+        actor.activity_review_seconds = 90
+        context.snapshot.raw.pop("ownerDistance")
+        expedition = {"leaderId": OTHER, "leaderDimension": context.snapshot.dimension,
+                      "state": "nearby", "distanceBlocks": 3}
+        context.snapshot.raw["resident"] = {"loaded": True, "expedition": expedition}
+        seen = []
+
+        async def planner(_intent, view_context):
+            seen.append(view_context.companion_adventure)
+            return []
+
+        journal = ActionJournal(tmp_path / "actions.sqlite3")
+        host = NpcHost(actor, SimBody(), planner, None, journal, companion_adventure=source(tmp_path))
+        intent = Intent(id="idle", agent=actor.id, goal=IDLE_GOAL)
+        try:
+            await host._plan(intent, context.model_copy(deep=True))
+            assert seen[-1]["choices"]
+            assert "partnerProgress" not in seen[-1]
+            assert seen[-1]["activeWithPartner"] == []
+            expedition.update(state="waiting_to_regroup", leaderDimension="minecraft:aincrad")
+            await host._plan(intent, context.model_copy(deep=True))
+            assert seen[-1] is None
+        finally:
+            journal.close()
+
+    asyncio.run(run())

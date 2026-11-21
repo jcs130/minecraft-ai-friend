@@ -138,6 +138,46 @@ def test_idle_task_does_not_cancel_an_existing_opted_in_expedition():
     assert reviewed_steps(actor, context, [{"tool": "body:stay"}])[0].tool == "body:stay"
 
 
+def test_completed_walk_to_expedition_leader_returns_to_native_guard():
+    actor = role(body_kind="maid", default_native_guard=True, activity_review_seconds=90,
+                 expedition_wait_seconds=180, allowed_tools=["body:native:guard"])
+    expedition = {"state": "not_delegated", "leaderId": "registered-leader", "leaderDimension": "minecraft:overworld"}
+    resident = {"loaded": True, "expedition": expedition}
+    ready = dict(nativeGuardDelegated=False, taskId="touhou_little_maid:idle", canMove=True,
+                 passenger=False, sitting=False, homeMode=True, follow={"temporaryWait": False},
+                 resident=resident, socialNavigationTargetUuid="registered-leader", socialWalkAvailable=True)
+
+    def sample(**change):
+        context = maid_context(**(ready | change))
+        context.activity_review = {"activity": "free"}
+        context.snapshot.health = 30
+        return context
+
+    assert restore_default_guard(actor, sample()).tool == "body:native:guard"
+    assert restore_default_guard(actor, sample(socialNavigationTargetUuid="")) is None
+    assert restore_default_guard(actor, sample(socialNavigationTargetUuid="different-companion")) is None
+    assert restore_default_guard(actor, sample(socialWalkAvailable=False)) is None
+    assert restore_default_guard(actor, sample(resident=resident | {"activeRequest": "still-moving"})) is None
+    danger = sample()
+    danger.snapshot.health = 10
+    assert restore_default_guard(actor, danger) is None
+
+
+def test_reviewed_maid_uses_shared_native_routine_while_guarding():
+    async def run():
+        actor = role(body_kind="maid", default_native_guard=True, activity_review_seconds=90,
+                     allowed_tools=["body:native:guard", "body:native:fish"])
+        context = maid_context(nativeGuardDelegated=True, sitting=False, fishing={"canStartNativeCatch": True})
+        context.snapshot.health = 30
+        context.capabilities.native_actions.append(NativeAction(name="fish"))
+        context.activity_review = {"activity": "guarding"}
+        planner = NpcPlanner(actor, None)
+        intent = Intent(id="qa-shared-routine", agent=actor.id, goal=IDLE_GOAL)
+        assert [step.tool for step in await planner(intent, context)] == ["body:native:fish"]
+
+    asyncio.run(run())
+
+
 def test_numen_fast_attack_requires_an_observed_hostile_and_idle_body():
     actor = role()
     context = PlanContext(capabilities=SimBody().capabilities(), snapshot=BodySnapshot(
