@@ -1,3 +1,9 @@
+## 0.2.159
+
+- Opt in to authenticated Simple Voice Chat transcripts and server-selected game speech.
+- Publish current-connection speech status without projecting transcripts, speaker identities, or hearing claims into the host dashboard.
+- Pin the verified engine-only SDK at rc.160-preview.119.
+
 ## 0.2.158
 
 - Keep the existing Mineflayer, server-engine and viewer assemblies available to an explicitly authorized managed device. An inactive local driver waits without submitting a second connection or replaying a body transfer.

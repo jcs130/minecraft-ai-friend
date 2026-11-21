@@ -72,6 +72,15 @@ def test_voice_events_publish_receipt_state_without_private_contents_or_task_suc
                                sent("accepted", 77)])
     assert run_async(controller.events())[0] is False
     assert controller.game_voice == {"received_at": STAMP, "send_state": "accepted", "send_at": STAMP}
+    failed = sent("failed", 78)
+    failed["meta"]["proximityVoice"]["game"]["reason"] = "VOICE_NOT_SELECTED"
+    bridge.event_pages.append([failed])
+    assert run_async(controller.events())[0] is False
+    assert controller.game_voice == {"received_at": STAMP, "send_state": "failed", "send_at": STAMP,
+                                     "voice_selection_required": True}
+    bridge.event_pages.append([sent("submitting", 79)])
+    assert run_async(controller.events())[0] is False
+    assert controller.game_voice == {"received_at": STAMP, "send_state": "submitting", "send_at": STAMP}
     voice = project_event(next(row for row in controller.recent if row["cursor"] == 1))
     assert voice["meta"]["utteranceId"] == UTTERANCE
     assert voice["meta"]["senderUuid"] == MEMBERS[1]["uuid"]

@@ -807,6 +807,7 @@ class Controller:
                 if voice := status_update(event):
                     if "send_state" in voice:
                         self.game_voice.pop("listener_count", None)
+                        self.game_voice.pop("voice_selection_required", None)
                     self.game_voice.update(voice)
                     self.publish(game_voice=dict(self.game_voice))
             body = body_event_view(event)

@@ -5,7 +5,8 @@ from datetime import datetime
 
 UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
 SEND_STATES = frozenset({
-    "accepted", "synthesizing", "uploading", "queued", "playing", "sent", "failed", "cancelled", "unknown", "not_found",
+    "accepted", "submitting", "synthesizing", "uploading", "queued", "playing", "sent", "failed", "cancelled",
+    "unknown", "not_found",
 })
 
 
@@ -42,6 +43,8 @@ def status_update(event):
     if not isinstance(state, str) or state not in SEND_STATES:
         return {}
     update = {"send_state": state, "send_at": stamp}
+    if state == "failed" and game.get("reason") == "VOICE_NOT_SELECTED":
+        update["voice_selection_required"] = True
     delivery = game.get("delivery")
     count = delivery.get("listenerCount") if isinstance(delivery, dict) else None
     if state == "sent" and type(count) is int and 0 <= count <= 128:

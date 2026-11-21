@@ -1,22 +1,22 @@
 {
   "repository": "https://github.com/jcs130/minecraft-ai-friend",
-  "source_revision": "db92c22527a74976439fd5ec0e2569c6cae3b407",
+  "source_revision": "e0b91b1d5fa800b4bea99958876336b398882dc4",
   "source_path": "packages/agent-mc-world",
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.160-preview.117",
-  "archive": "agent-mc-world-0.5.7-rc.160-preview.117.tgz",
-  "sha256": "1d42513ca112c62fab99b554c185ad10b7d3f506f635fcf82effb9378a1ad2be",
+  "version": "0.5.7-rc.160-preview.119",
+  "archive": "agent-mc-world-0.5.7-rc.160-preview.119.tgz",
+  "sha256": "c0eeba7bd5f988a91eb9ae89f5af4233272a45a2b5eba1b9c4d97cbbb2a810c7",
   "build_profile": "canonical-engine-only",
   "upstream_release": false,
   "minecraft_version": "1.21.1",
   "viewer_assets": null,
   "verification": {
-    "package.json": "64c14ac5d7c047d549fd5221ceef1457c2d77c5a8aef74c77cd8c507d4c710fe",
-    "dist/build.json": "d692e54a3c16691f415a3dff51e294f7a82b57f95f0ad91b3efa77b5bea44650",
-    "dist/types/manifest.json": "9fdc7bf36e8c0c1874a658a450aa694acebc8c3d1323d35f85dc6ee16abeccc1",
-    "bin/minecraft-agent-mcp.mjs": "161d2ebcc11726d655e2c204f412553bcc8ed6df6b7d20c2c6fcb82bf30760a8",
-    "bin/minecraft-agent-client.mjs": "7cf81abccdcef5ad0aaf59340b233c3b5d398160e1c3d829a36fc25bfcbfb1bc",
-    "bin/minecraft-agent-knowledge.mjs": "a67d8c4fa1221e9035e463e959cca36648c956e578b9a264e4618a00a4daa86b"
+    "package.json": "8eed4c17e515c7c7492ebfdc19fbcc18609ed46f9f9c1dfd5dce0bd9e4065405",
+    "dist/build.json": "41b90cf37eb6cea30da4d2431620bdb2c2471b76780c943ea3245c9b5e0b2598",
+    "dist/types/manifest.json": "0feb94601b01cf7710d0743b88442687fe38a0a57223014006fd91531c8e17c3",
+    "bin/minecraft-agent-mcp.mjs": "1508f8ccd65f176b5d14999d57d4e61103beda106070e152e693380c75a701f7",
+    "bin/minecraft-agent-client.mjs": "49384a0a96b3509a6a9afc42d00953752deb41a946efd5e2db46e1de43d5c8d8",
+    "bin/minecraft-agent-knowledge.mjs": "ad4ff2e683d4a8f91ff823cb17e88060e61a0326e306421327d8f0653a289270"
   },
   "external_viewer": {
     "repository": "https://github.com/jcs130/mc-visual-console",
