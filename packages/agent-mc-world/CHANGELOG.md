@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.123
+
+- Use native arrow crossbows and throwable tridents in ranged combat, with ammunition and enchantment checks, confirmed loading and launch, and projectile-specific hit evidence on Java 1.21.1.
+- Support explicit crossbow and trident selection for ranged combat while preserving melee selection and existing ordinary bow behavior.
+
 ## 0.5.7-rc.160-preview.122
 
 Large successful server query results expose an exact, bounded first page to the model. Continue using the original request ID and returned offset. SDK data and the archived receipt retain the complete server observation.
