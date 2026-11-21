@@ -377,7 +377,15 @@ and [server-hosted Numen and maid integration](https://github.com/jcs130/minecra
 
 ### Optional nearby voice
 
-[Game voice, audience voice, routing and evidence](docs/PROXIMITY_VOICE.md): one authenticated player connection, one audio artifact, independent game/broadcast receipts and explicit output mode.
+An authenticated player connection can request nearby speech through a compatible server with Simple Voice Chat. Set the Minecraft world configuration to:
+
+```json
+{"proximityVoice":{"enabled":true,"speechSource":"server","outputMode":"game-only","audioProducerUrl":""}}
+```
+
+The server selects its configured voice and accepts a line of up to 200 UTF-16 units. Use `mc_voice` with one request ID and query that same ID after a timeout. Nearby text and game audio have separate receipts. A server `sent` receipt confirms packet offers only.
+
+[Artifact speech, audience voice, routing and evidence](docs/PROXIMITY_VOICE.md) describes the default `speechSource: "artifact"` mode and its independent game and broadcast receipts.
 # Portable report and native wait evidence
 
 `agent-mc-world/contracts` exports `workReportReceipt`, `inspectReportReview`,
