@@ -92,7 +92,8 @@ import { bossBarChange, classifyBossBarTitle, readBossBar, readBossBarHud, rende
 import { readServerDisplay, renderServerDisplayHud, scoreRowText } from './server-display.ts';
 import { minecraftTextComponent } from './text-component.ts';
 import { installOpenBookObserver } from './window-protocol.ts';
-import { MinecraftChatProvenance, incomingPrivateParts, isServerNotice } from '../src/chat-provenance.ts';
+import { MinecraftChatProvenance, incomingPrivateParts, isServerNotice, type ChatIdentityEvidence } from '../src/chat-provenance.ts';
+import { nearbySpeakerContext, type NearbySpeakerOrigin } from './nearby-speaker.mjs';
 import { configureChatDedup, noteChatInput } from './chat-dedup.ts';
 import { RAILWAY_TOOL_DECL, railwayReadout } from '../src/railway.ts';
 import {
@@ -3098,9 +3099,11 @@ export class MinecraftWorld implements World {
           sendNearbyText:(text,requestId)=>this.sendNearbyVoiceText(text,requestId)};
       },
       blob:handle=>this.host?.blob(handle)??null,
-      hearing:(row,world)=>this.emit('minecraft.chat',`[MC 附近语音] ${row.speaker}: ${row.text}`,true,{meta:{uname:row.speaker,senderUuid:row.speakerUuid,
+      hearing:(row,world)=>this.emit('minecraft.chat',`[MC 附近语音] ${row.speaker}: ${row.text}`
+        +(row.speakerOrigin ? nearbySpeakerContext(row.speakerOrigin) : ''),true,{meta:{uname:row.speaker,senderUuid:row.speakerUuid,
         utteranceId:row.utteranceId,channel:'nearby-voice',socialScope:'minecraft-server',
-        source:'mcagent:voice/nearby_voice',sourceWorld:null,deliveryWorld:world,deliveryWorldKey:world.key,transcript:true}},row.speaker),
+        source:'mcagent:voice/nearby_voice',sourceWorld:row.speakerOrigin?.world??null,deliveryWorld:world,deliveryWorldKey:world.key,transcript:true,
+        ...(row.speakerOrigin ? {speakerOrigin:row.speakerOrigin,chatBody:row.text} : {})}},row.speaker),
       changed:receipt=>this.emit('minecraft.voice',`[Minecraft 附近语音] ${receipt.requestId} 游戏=${receipt.game.state}，直播=${receipt.broadcast.state}。`
         +(receipt.game.state==='sent'&&receipt.requestedText?` 本次台词输入：${receipt.requestedText}。`:'')
         +'音频帧发送不证明对方听见或全文生成完整；按原请求ID查状态。',false,{trigger:'piggyback',meta:{proximityVoice:receipt}}),
@@ -7870,25 +7873,27 @@ export class MinecraftWorld implements World {
       matchedChatMessages.add(jsonMsg);
       return false;
     };
+    const emitPublicChat = (username: string, message: string, identity: ChatIdentityEvidence,
+      rendered?: string, speakerOrigin?: NearbySpeakerOrigin): void => {
+      const audience = this.extensionChatAudience(message, rendered, 'incoming');
+      const fromSelf = username.toLowerCase() === this.chatName().toLowerCase();
+      if (!fromSelf) { noteChatInput(bot, username, false); this.interruptIdle('chat'); }
+      const deliveryWorld = speakerOrigin ? readWorldIdentity(bot) : undefined;
+      this.emit('minecraft.chat', `[MC] ${username}: ${message}`+(speakerOrigin ? nearbySpeakerContext(speakerOrigin) : ''),
+        !fromSelf && mentionedInChat(message), { ...(fromSelf ? { deliver: false } : {}), meta: {
+          uname: username, channel: 'public', socialScope: 'minecraft-server', ...identity,
+          ...(rendered ? { serverRenderedText: rendered } : {}), ...this.chatAudienceMeta(audience),
+          ...(speakerOrigin ? {channel:'nearby',chatChannel:'nearby',speakerOrigin,sourceWorld:speakerOrigin.world,chatBody:message,
+            deliveryWorld,deliveryWorldKey:deliveryWorld?.key} : {}),
+          ...(fromSelf ? { outgoing: true, direction: 'outgoing' } : {}) } }, username);
+    };
     bot.on('chat', (username: string, message: string, _translate: string, jsonMsg: unknown) => {
       const identity = chatProvenance.identify(username, jsonMsg, bot.players);
       if (!identity) return;
       if (markMatched(jsonMsg)) return;
       if (jsonMsg && typeof jsonMsg === 'object') this.chatClaimed.add(jsonMsg);
-      const decorated = chatProvenance.publicChat(jsonMsg as Parameters<typeof chatProvenance.publicChat>[0], bot.players, bot.registry)?.serverRenderedText;
-      const audience = this.extensionChatAudience(message, decorated, 'incoming');
-      if (username === this.chatName()) {
-        // 自己说的话:落库存档,但不投递——拿自己的话叫醒自己没有意义
-        this.emit('minecraft.chat', `[MC] ${username}: ${message}`, false, { deliver: false,
-          meta: { uname: username, channel: 'public', outgoing: true, direction: 'outgoing', ...identity,
-            ...(decorated ? { serverRenderedText: decorated } : {}), ...this.chatAudienceMeta(audience) } }, username);
-        return;
-      }
-      noteChatInput(bot, username, false);
-      this.interruptIdle('chat');
-      this.emit('minecraft.chat', `[MC] ${username}: ${message}`, mentionedInChat(message),
-        { meta: { uname: username, channel: 'public', socialScope: 'minecraft-server', ...identity,
-          ...(decorated ? { serverRenderedText: decorated } : {}), ...this.chatAudienceMeta(audience) } }, username);
+      const packet = chatProvenance.publicChat(jsonMsg as Parameters<typeof chatProvenance.publicChat>[0], bot.players, bot.registry);
+      emitPublicChat(username, message, identity, packet?.serverRenderedText, packet?.speakerOrigin);
     });
     // Private identity is parsed from the raw component below. Mineflayer's
     // default whisper regex can mistake a rank/tag (or a public quote) for a
@@ -7936,14 +7941,8 @@ export class MinecraftWorld implements World {
       const publicChat = chatProvenance.publicChat(jsonMsg, bot.players, bot.registry);
       if (publicChat) {
         markMatched(jsonMsg); this.chatClaimed.add(jsonMsg);
-        const { username, message, identity, serverRenderedText } = publicChat;
-        const audience = this.extensionChatAudience(message, serverRenderedText, 'incoming');
-        const fromSelf = username.toLowerCase() === this.chatName().toLowerCase();
-        if (!fromSelf) { noteChatInput(bot, username, false); this.interruptIdle('chat'); }
-        this.emit('minecraft.chat', `[MC] ${username}: ${message}`, !fromSelf && mentionedInChat(message),
-          { ...(fromSelf ? { deliver: false } : {}), meta: { uname: username, channel: 'public',
-            socialScope: 'minecraft-server', ...identity, ...(serverRenderedText ? { serverRenderedText } : {}), ...this.chatAudienceMeta(audience),
-            ...(fromSelf ? { outgoing: true, direction: 'outgoing' } : {}) } }, username);
+        const { username, message, identity, serverRenderedText, speakerOrigin } = publicChat;
+        emitPublicChat(username, message, identity, serverRenderedText, speakerOrigin);
         return;
       }
       let unchangedQueryFeedback = false;

@@ -1,9 +1,12 @@
 import {attachProximityVoice as attach,inspectVoiceWav as inspect} from '../core/proximity-voice.mjs';
+import type { NearbySpeakerOrigin } from '../core/nearby-speaker.mjs';
+export { readNearbySpeaker } from '../core/nearby-speaker.mjs';
+export type { NearbySpeakerOrigin } from '../core/nearby-speaker.mjs';
 export interface ProximityVoiceBot {
  _client:{state:string;write(name:string,value:unknown):void;on(name:string,fn:(value:any)=>void):unknown;off(name:string,fn:(value:any)=>void):unknown};
  on(name:string,fn:()=>void):unknown;once(name:string,fn:()=>void):unknown;off(name:string,fn:()=>void):unknown;
 }
-export interface NearbyVoiceHearing {type:'nearby_voice';speaker:string;speakerUuid:string;utteranceId:string;text:string}
+export interface NearbyVoiceHearing {type:'nearby_voice';speaker:string;speakerUuid:string;utteranceId:string;text:string;speakerOrigin?:NearbySpeakerOrigin}
 export interface ProximityVoiceResult {type?:'voice_result';requestId:string;state:'uploading'|'queued'|'playing'|'sent'|'failed'|'cancelled'|'unknown'|'not_found'|'subscribed';reason?:string;lastState?:string|null;nextStep?:string;actualHearingVerified?:false;delivery?:{packetOffers:number;listenerCount:number;listenersTruncated:boolean}}
 export interface ProximityVoiceClient {
  say(text:string,options?:{requestId?:string;voice?:string}):Promise<ProximityVoiceResult>;

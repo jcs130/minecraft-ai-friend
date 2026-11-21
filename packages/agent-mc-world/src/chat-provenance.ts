@@ -1,3 +1,5 @@
+import { nearbySpeakerFromDecoration } from '../core/nearby-speaker.mjs';
+
 /** Identity evidence for Mineflayer's text-pattern chat events. */
 interface ChatMessage {
   translate?: string;
@@ -88,8 +90,10 @@ export class MinecraftChatProvenance {
     const body = contentIndex === undefined ? message.toString?.() : parts?.[contentIndex]?.toString();
     if (!body?.trim()) return null;
     const serverRenderedText = message.unsigned?.toString().slice(0, 32_768);
+    const speakerOrigin = nearbySpeakerFromDecoration(message.unsigned, source.sender);
     return { username, message: body,
       identity: { chatTransport: source.position, identityEvidence: 'packet-sender' as const, senderUuid: source.sender },
+      ...(speakerOrigin ? { speakerOrigin } : {}),
       ...(serverRenderedText ? { serverRenderedText } : {}) };
   }
 

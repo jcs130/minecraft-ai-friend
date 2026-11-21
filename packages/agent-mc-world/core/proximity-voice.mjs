@@ -1,6 +1,7 @@
 // Canonical dependency-free mcagent:voice client; never creates a connection or model.
 import {randomUUID,createHash} from 'node:crypto';
 import {setTimeout as sleep} from 'node:timers/promises';
+import {readNearbySpeaker} from './nearby-speaker.mjs';
 const CHANNEL='mcagent:voice',UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const terminal=new Set(['sent','failed','cancelled','unknown','not_found']);
 const states=new Set([...terminal,'uploading','queued','playing','subscribed']),attached=new WeakMap();
@@ -33,7 +34,9 @@ export function attachProximityVoice(bot,{onHearing,onResult,isAuthenticated,see
       if(typeof row.text!=='string'||!row.text.trim()||row.text.length>4000||!UUID.test(row.utteranceId??'')||!UUID.test(row.speakerUuid??'')||typeof row.speaker!=='string'||row.speaker.length>64)return;
       const key=row.speakerUuid.toLowerCase()+':'+row.utteranceId.toLowerCase();if(seenUtterances.has(key))return;
       seenUtterances.add(key);while(seenUtterances.size>512)seenUtterances.delete(seenUtterances.values().next().value);
-      onHearing?.({type:'nearby_voice',speaker:row.speaker,speakerUuid:row.speakerUuid,utteranceId:row.utteranceId,text:row.text});return;
+      const speakerOrigin=readNearbySpeaker(row.speakerOrigin,row.speakerUuid);
+      onHearing?.({type:'nearby_voice',speaker:row.speaker,speakerUuid:row.speakerUuid,utteranceId:row.utteranceId,text:row.text,
+        ...(speakerOrigin?{speakerOrigin}:{})});return;
     }
     if(row.type!=='voice_result'||!UUID.test(row.requestId??'')||!states.has(row.state))return;
     const details=row;

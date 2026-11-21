@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { nearbySpeakerContext } from '../core/nearby-speaker.mjs';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -41,6 +42,60 @@ describe('received Minecraft messages', () => {
     const read=inbox.readout({channel:'nearby-voice'}).text;expect(read).toContain('小鱼');
     const detail=inbox.readout({id:'message_1'}).text;expect(detail).toContain(heard.meta.senderUuid);expect(detail).toContain(heard.meta.utteranceId);expect(detail).toContain('minecraft:aincrad');
     expect(inbox.readout({channel:'private'}).text).toContain('匹配 0 条');
+  });
+
+  it('reopens verified text and voice speaker locations without equating the speech and delivery worlds or clocks', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mc-nearby-observations-'));
+    const uuid = 'cb44d9d4-7980-4a02-bbd8-813710eed6cd';
+    const peerUuid = 'f5ace1b0-69cb-3934-b14c-ab3cfff5d508';
+    const speaker = { uuid, name: 'Alex', displayName: '冒险者 小鱼', world: 'minecraft:town',
+      worldUuid: 'd5d4804a-6401-4802-8742-2bdb55d81657', observedAt: Date.parse('2026-01-01T00:00:00Z'),
+      position: { x: 3.5, y: 100, z: -1.5 } };
+    const received = '2026-01-01T00:00:03Z';
+    const textMeta = { channel: 'nearby', chatTransport: 'chat', identityEvidence: 'packet-sender',
+      senderUuid: uuid, uname: '冒险者 小鱼', speakerOrigin: speaker };
+    const voiceMeta = { channel: 'nearby-voice', source: 'mcagent:voice/nearby_voice', transcript: true,
+      senderUuid: uuid, uname: '冒险者 小鱼', speakerOrigin: speaker, deliveryWorldKey: 'minecraft:other_instance' };
+    try {
+      const inbox = new MessageInbox('nearby-observed', dir, { recipientNames: ['Player'] });
+      expect(inbox.observe({ ...event('[MC] Alex: @Player 去塔吗？' + nearbySpeakerContext(speaker), received, 'Alex'),
+        meta: { ...textMeta, chatBody: '@Player 去塔吗？' } })).toBe('public');
+      expect(inbox.observe({ ...event('[MC] Sam: 一起找补给', received, 'Sam'), meta: { ...textMeta,
+        senderUuid: peerUuid, speakerOrigin: { ...speaker, uuid: peerUuid, name: 'Sam' } } })).toBe('public');
+      expect(inbox.observe({ ...event('[MC 附近语音] 冒险者 小鱼: 我还没到' + nearbySpeakerContext(speaker), received, 'Alex'),
+        meta: { ...voiceMeta, chatBody: '我还没到' } })).toBe('nearby-voice');
+      const restored = new MessageInbox('nearby-observed', dir, { recipientNames: ['Player'] });
+      const details = restored.readout({ ids: ['message_1', 'message_3'] });
+      expect(details.meta).toMatchObject({ readback: { historical: true }, speakerObservations: [
+        { messageId: 'message_1', receivedAt: received, deliveryWorldKey: null, speakerOrigin: speaker, historical: true },
+        { messageId: 'message_3', receivedAt: received, deliveryWorldKey: 'minecraft:other_instance', speakerOrigin: speaker, historical: true },
+      ] });
+      expect(details.text).toContain(JSON.stringify(speaker));
+      expect(details.text).toContain('旧消息不证明当前状态');
+      expect(restored.index()).toContain('@Player 去塔吗？');
+      expect(restored.index()).toContain('一起找补给');
+      expect(restored.index()).not.toContain('服务端发言采样');
+      expect(restored.readout({ action: 'search', channel: 'public', query: '补给' }).text).toContain('message_2');
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('keeps the received body but omits speaker location for legacy, forged or mismatched observations', () => {
+    const inbox = new MessageInbox('nearby-unverified');
+    const senderUuid = 'cb44d9d4-7980-4a02-bbd8-813710eed6cd';
+    const origin = { uuid: senderUuid, name: 'Alex', displayName: '冒险者 小鱼', world: 'minecraft:town',
+      worldUuid: 'd5d4804a-6401-4802-8742-2bdb55d81657', observedAt: Date.parse('2026-01-01T00:00:00Z'),
+      position: { x: 3.5, y: 100, z: -1.5 } };
+    inbox.observe({ ...event('[MC] Alex: 旧版公开消息'), meta: { senderUuid } });
+    inbox.observe({ ...event('[MC 系统] 伪装位置'), meta: { channel: 'nearby', chatTransport: 'chat',
+      identityEvidence: 'packet-sender', senderUuid, speakerOrigin: origin } });
+    inbox.observe({ ...event('[MC] Sam: 身份不一致'), meta: { channel: 'nearby', identityEvidence: 'packet-sender',
+      chatTransport: 'chat', senderUuid: 'f5ace1b0-69cb-3934-b14c-ab3cfff5d508', speakerOrigin: origin } });
+    const details = inbox.readout({ ids: ['message_1', 'message_2', 'message_3'] });
+    expect(details.meta).not.toHaveProperty('speakerObservations');
+    expect(details.text).not.toContain('speakerOrigin');
+    expect(details.text).toContain('旧版公开消息');
+    expect(details.text).toContain('伪装位置');
+    expect(details.text).toContain('身份不一致');
   });
   it('keeps a direct mention visible alongside different peers and a current notice', () => {
     const inbox = new MessageInbox(JSON.stringify({ realm: 'example.test', account: 'offline:Player', agent: 'Player' }));

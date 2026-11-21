@@ -5,7 +5,7 @@ import {mkdtemp,readFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createServer} from 'node:http';
-import {attachProximityVoice,inspectVoiceWav} from '../src/proximity-voice.ts';
+import {attachProximityVoice,inspectVoiceWav,readNearbySpeaker,type NearbyVoiceHearing} from '../src/proximity-voice.ts';
 import {ProximityVoiceLane,type ProximityVoiceContext,type GameVoiceReceipt} from '../core/proximity-voice-lane.ts';
 export function wav(seconds=.2,rate=48000){const bytes=Buffer.alloc(44+Math.round(seconds*rate)*2);bytes.write('RIFF');bytes.writeUInt32LE(bytes.length-8,4);bytes.write('WAVEfmt ',8);bytes.writeUInt32LE(16,16);bytes.writeUInt16LE(1,20);bytes.writeUInt16LE(1,22);bytes.writeUInt32LE(rate,24);bytes.writeUInt32LE(rate*2,28);bytes.writeUInt16LE(2,32);bytes.writeUInt16LE(16,34);bytes.write('data',36);bytes.writeUInt32LE(bytes.length-44,40);return bytes;}
 function bot(){const value=new EventEmitter() as any;value._client=new EventEmitter();value._client.state='play';value._client.write=(name:string,data:unknown)=>value.emit('write',name,data);return value;}
@@ -13,6 +13,24 @@ function wire(bot:any,row:unknown){bot._client.emit('custom_payload',{channel:'m
 function receipt(bot:any,requestId:string,state:string){wire(bot,{type:'voice_result',requestId,state});}
 const eventually=async(check:()=>boolean)=>{for(let i=0;i<200;i++){if(check())return;await new Promise(ok=>setTimeout(ok,5));}throw Error('evidence did not arrive');};
 describe('canonical proximity protocol',()=>{
+ it('retains the opening sample attached to SVC text, with legacy and invalid samples remaining optional',()=>{
+   const b=bot(), heard:NearbyVoiceHearing[]=[];
+   const client=attachProximityVoice(b,{onHearing:row=>heard.push(row)});
+   const speakerUuid=randomUUID();
+   const speakerOrigin={uuid:speakerUuid,name:'Alice',displayName:'爱丽丝',world:'minecraft:town',worldUuid:randomUUID(),
+     observedAt:1795257827406,position:{x:3.5,y:100,z:-1.5}};
+   const row={type:'nearby_voice',speaker:'Alice',speakerUuid,utteranceId:randomUUID(),text:'你好',speakerOrigin};
+   wire(b,row);
+   wire(b,{...row,speakerOrigin:{...speakerOrigin,position:{x:30,y:100,z:1.5}}});
+   wire(b,{...row,utteranceId:randomUUID(),speakerOrigin:{...speakerOrigin,uuid:randomUUID()}});
+   wire(b,{...row,utteranceId:randomUUID(),speakerOrigin:undefined});
+   expect(heard).toHaveLength(3);
+   expect(heard[0]?.speakerOrigin).toEqual(speakerOrigin);
+   expect(heard.slice(1).every(value=>value.speakerOrigin===undefined)).toBe(true);
+   expect(readNearbySpeaker({...speakerOrigin,position:{x:'3.5',y:100,z:0}},speakerUuid)).toBeUndefined();
+   expect(readNearbySpeaker({...speakerOrigin,observedAt:0},speakerUuid)).toBeUndefined();
+   client.close();
+ });
  it('requires authenticated play and rejects invalid WAV before effects',async()=>{const b=bot();expect(()=>attachProximityVoice(b,{isAuthenticated:()=>false})).toThrow(/AUTHENTICATED/);
    const voice=attachProximityVoice(b);await expect(voice.upload(Buffer.from('no'))).rejects.toThrow(/PCM16/);expect(()=>inspectVoiceWav(wav(30.1))).toThrow(/30_SECONDS/);voice.close();});
  it('deduplicates real utterance UUIDs across reconnect and removes old listeners',()=>{const b=bot(),seen=new Set<string>(),rows:any[]=[];

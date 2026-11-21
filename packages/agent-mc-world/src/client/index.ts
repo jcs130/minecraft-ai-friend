@@ -94,5 +94,5 @@ export { planInventoryOrganization, inventoryOrganizationPlanView, planInventory
 
 export { PHOTOGRAPHY_DEFAULTS } from '../../core/photo-image.ts';
 
-export {attachProximityVoice, inspectVoiceWav} from '../proximity-voice.ts';
-export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing} from '../proximity-voice.ts';
+export {attachProximityVoice, inspectVoiceWav, readNearbySpeaker} from '../proximity-voice.ts';
+export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing, NearbySpeakerOrigin} from '../proximity-voice.ts';
