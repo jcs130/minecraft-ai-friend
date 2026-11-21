@@ -1038,6 +1038,10 @@ export function createPortal(config, options = {}) {
       try {
         const real = await fs.realpath(filePath);
         if (!real.startsWith(path.resolve(config.publicDir) + path.sep)) throw new Error();
+        // Only the current Skill metadata uses the static download directory.
+        // Reviewed package and Skill binary routes have already been handled.
+        const directory = path.relative(config.publicDir, real).split(path.sep)[0];
+        if (directory.toLowerCase() === 'downloads' && pathname !== agentSkill.url.replace(/\.zip$/, '.json')) throw new Error();
         file = await fs.readFile(real);
       } catch { throw fail(404, 'NOT_FOUND', '未找到此页面'); }
       res.setHeader('Cache-Control', /\.(png|jpg|webp|svg|ico)$/.test(filePath) ? 'public, max-age=3600' : 'no-cache');

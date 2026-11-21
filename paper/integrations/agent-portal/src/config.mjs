@@ -55,6 +55,11 @@ export function loadConfig(overrides = {}) {
   config.downloads.baseUrl = downloadBaseUrl(config.downloads.baseUrl);
   config.publicMedia = { ...defaults.publicMedia, ...local.publicMedia, ...overrides.publicMedia };
   if (typeof config.publicMedia.objectStorage !== 'boolean' || config.publicMedia.objectStorage && !config.downloads.baseUrl) throw new Error('Public media object storage requires an explicit HTTPS download base');
+  // Allow an existing configuration to retain retired IDs without publishing them.
+  const retiredPackages = ['cortico-bundle', 'dsh-bundle', 'neko-offline'];
+  if (Array.isArray(config.downloads.enabledPackages)) {
+    config.downloads.enabledPackages = config.downloads.enabledPackages.filter(id => !retiredPackages.includes(id));
+  }
   if (!Array.isArray(config.downloads.enabledPackages) || config.downloads.enabledPackages.some(id => !packageReleases.some(row => row.id === id))) throw new Error('Unknown reviewed download package');
   config.appearance = { enabled: true, bridgeEnabled: false, tokenHash: '', ...defaults.appearance, ...local.appearance, ...overrides.appearance };
   if (!['email', 'username', 'optional-email'].includes(config.emailAuth.registrationMode)) throw new Error('Invalid registration mode');

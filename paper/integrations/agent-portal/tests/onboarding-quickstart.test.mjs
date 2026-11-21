@@ -71,6 +71,6 @@ test('resuming join cannot silently select an old role or another portal, and re
 });
 test('stable download entrances resolve reviewed packages and discard arbitrary paths',()=>{
  assert.equal(skillAt('/downloads/agent-skill'),agentSkill);
- for(const[id,alias]of[['cortico-bundle','cortico'],['dsh-bundle','dsh'],['neko-base','neko'],['shared-audio','audio'],['shared-browser','browser']])assert.equal(packageAt('/downloads/'+alias).id,id);
+ for(const[id,alias]of[['cortico-world','cortico'],['dsh-adapter','dsh'],['neko-base','neko'],['shared-audio','audio'],['shared-browser','browser']])assert.equal(packageAt('/downloads/'+alias).id,id);
  for(const bad of ['/downloads/../private','/downloads/cortico/else','/downloads/latest-secret'])assert.equal(packageAt(bad),undefined);
 });

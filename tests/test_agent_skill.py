@@ -11,12 +11,14 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from urllib.request import urlopen
 import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PORTAL = ROOT / "paper/integrations/agent-portal"
 PREFIX = "qiandengji-agent/"
+RELEASE_MIRROR = "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/"
 
 
 class AgentSkillReleaseTest(unittest.TestCase):
@@ -30,7 +32,7 @@ class AgentSkillReleaseTest(unittest.TestCase):
         if not cls.file.exists():
             subprocess.run([
                 shutil.which("node") or "node", "scripts/prepare-downloads.mjs", "--base-url",
-                "https://qiandengji-downloads-hk-20261023.oss-cn-hongkong.aliyuncs.com/releases/",
+                RELEASE_MIRROR,
             ], cwd=PORTAL, check=True, capture_output=True)
         cls.release = json.loads(cls.file.with_suffix(".json").read_text(encoding="utf-8"))
         with zipfile.ZipFile(cls.file) as archive:
@@ -88,7 +90,7 @@ class AgentSkillReleaseTest(unittest.TestCase):
         # its reviewed entry small while verifying the exact current source.
         self.assertLess(len(entry), 1500)
 
-    def test_old_downloads_remain_immutable(self):
+    def test_retired_release_archives_remain_immutable(self):
         for version, digest in (
             ("1.0.0", "3d1676e86f31396071866c64ce87d9e6820e1530b755c4221f04c22a15f94669"),
             ("1.1.0", "6a1be95fa174e37c330a756ffdbc32f0924254099390d1fc99a236c451d8fe7d"),
@@ -97,7 +99,15 @@ class AgentSkillReleaseTest(unittest.TestCase):
             ("1.3.7", "0672a96ab8cdc7933ffe25a7a268b6b4bf4f182f9a409c63071bccdfb5b96442"),
         ):
             file = PORTAL / "public/downloads" / ("qiandengji-agent-" + version + ".zip")
-            self.assertEqual(hashlib.sha256(file.read_bytes()).hexdigest(), digest)
+            with self.subTest(version=version):
+                if file.is_file():
+                    actual = hashlib.sha256(file.read_bytes()).hexdigest()
+                else:
+                    # Archived releases can be verified at their content-addressed
+                    # storage path without adding them to the website catalogue.
+                    with urlopen(RELEASE_MIRROR + digest + "/" + file.name, timeout=30) as archive:
+                        actual = hashlib.file_digest(archive, "sha256").hexdigest()
+                self.assertEqual(actual, digest)
 
     def test_fetch_only_pages_match_the_actual_download(self):
         for name in ("join.html", "agent-api.html"):
