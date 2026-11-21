@@ -780,10 +780,20 @@ final class SiteDungeonManager implements Listener {
         Map<String,Object> detail=new LinkedHashMap<>(Map.of("id",s.id,"name",s.name,"world",s.world,"start",List.of(first.x,first.y,first.z),"rooms",s.rooms.stream().map(r->Map.of("name",r.name,"center",List.of(r.x,r.y,r.z),"radius",r.radius,"enemies",r.enemies.size())).toList(),"hint",s.hint,"dailyRewardPerSite",1,"approachMana",8,"lifecycleRules",Map.of("timeLimitSeconds",TIMEOUT_MS/1000,"rescueScope","current_run_and_site","exitPolicy","standing_stay_downed_recover","instruction","有效场次且身处范围内才有存档点救援；超时、结束或退出后失效，存活者留在原地须及时撤离。")));
         var expedition=DungeonExpeditions.site(s.expedition);
         detail.put("hint",routeHint(s));
+        detail.put("roomHints",s.rooms.stream().map(Room::hint).toList());
         var arrival=DungeonArrival.describe(s.world,entry(s),expedition==null?null:expedition.approachX(),expedition==null?null:expedition.approachZ());
         if(approaches.containsKey(s.id)){arrival.put("entranceScope","navigation_only");arrival.put("buildingProtected",true);arrival.put("startRequiresFirstRoom",true);}
-        detail.put("arrival",arrival);send(p,"MC_SITE_DUNGEON_INFO",detail);
+        detail.put("arrival",arrival);
+        var relic=DungeonRelics.at(s.id);
+        if(relic!=null){
+            detail.put("relic",relic.preview(s.world,relicClaimed(p.getUniqueId(),s.id),pendingRelic(p.getUniqueId(),s.id)!=null));
+            detail.put("collection",relicCollection(p.getUniqueId()));
+        }
+        send(p,"MC_SITE_DUNGEON_INFO",detail);
         if(!jsonOutput.get())p.sendMessage("[抵达] "+arrival.get("instruction"));
+        if(!jsonOutput.get()&&relic!=null)
+            p.sendMessage("§6【入口】"+relic.x()+", "+relic.y()+", "+relic.z()+" 石钮 · "+relic.tactic()
+                    +" §d秘宝："+relic.name()+"，首次登记终室参战并通关后可领。");
         if(verboseOutput.get()&&!jsonOutput.get())p.sendMessage("[路线] "+routeHint(s)+"；逐室清怪，通关后直接领取个人奖励。普通/冒险/末日的生命倍率为1/1.5/2.1，伤害倍率为1/1.25/1.6；进入遗迹自动同队，可中途加入和离开。");
     }
     private void travel(Player p,Site s){
@@ -819,14 +829,29 @@ final class SiteDungeonManager implements Listener {
             if(landing==null){result(p,"travel",s.id,"entry_blocked");return;}
             if(plugin.travelMagic().teleport(p,landing,"dungeon:"+s.id,"遗迹入口传送术",TravelMagic.DISTANT_MANA)){
                 result(p,"travel",s.id,"success");
+                highlightEntrance(p,s);
                 if (s.id.equals(BlackBannerCamp.SITE) && surveyedCamp() != null) {
                     p.sendMessage("§6已到黑旗林营外哨。用「使用」打开入口路牌，选择开始清剿，守卫在集结倒计时后出现。");
                 } else {
-                    p.sendMessage("§6已到"+label(s)+"入口；空闲场地由一人 start，遗迹内达标者自动同队，通关后生成个人奖励。");
+                    var relic=DungeonRelics.at(s.id);
+                    p.sendMessage(relic==null ? "§6已到"+label(s)+"入口，站到首室后选择难度。"
+                            : "§6已到"+s.name+"。找发光路牌和石钮，按使用键打开挑战菜单。");
                 }
             }
             else result(p,"travel",s.id,"travel_denied");
         })));
+    }
+
+    private void highlightEntrance(Player player,Site site){
+        var relic=DungeonRelics.at(site.id);
+        if(relic==null)return;
+        World world=player.getWorld();
+        Location button=new Location(world,relic.x()+.5,relic.y()+.5,relic.z()+.5);
+        if(!site.world.equals(world.getName())||!site.rooms.getFirst().contains(button)
+                ||player.getLocation().distanceSquared(button)>144
+                ||!world.isChunkLoaded(relic.x()>>4,relic.z()>>4)
+                ||button.getBlock().getType()!=Material.STONE_BUTTON)return;
+        player.spawnParticle(Particle.HAPPY_VILLAGER,button,12,.25,.4,.25,.002);
     }
     private void start(Player p,Site s,Mode mode){
         conquestAdmission(p,s);
@@ -881,6 +906,14 @@ final class SiteDungeonManager implements Listener {
         }
         Room target=r.stage>=r.site.rooms.size()?r.site.rooms.getFirst():r.room();
         Map<String,Object> fields=new LinkedHashMap<>();fields.put("id",r.site.id);fields.put("run",r.id);fields.put("active",true);fields.put("participant",r.party.contains(p.getUniqueId()));fields.put("phase",r.phase);fields.put("stage",Math.min(r.stage+1,r.site.rooms.size()));fields.put("stages",r.site.rooms.size());fields.put("remainingMobs",r.mobs.size());fields.put("target",List.of(target.x,target.y,target.z));fields.put("difficulty",r.mode.id);fields.put("paused",r.pausedAt>0||!r.fault.isEmpty());fields.put("fault",r.fault);
+        if(r.party.contains(p.getUniqueId())){
+            var present=present(r).stream().filter(member->target.contains(member.getLocation()))
+                .map(Player::getUniqueId).collect(java.util.stream.Collectors.toSet());
+            var count=CompanionTravelAccess.countPresent(target.center(Bukkit.getWorld(r.site.world)),
+                target.radius+2,3,r.party,present,target::contains);
+            fields.put("presentCount",count.total());fields.put("presentPlayers",count.players());
+            fields.put("presentMaidAgents",count.maids());
+        }
         fields.putAll(attendanceState(r,p.getUniqueId()));fields.put("attempt",r.attempt);fields.put("resets",r.resets);fields.put("pauseReason",r.pauseReason);fields.put("lastResetReason",r.lastResetReason);fields.put("lastResetAt",r.lastResetAt);
         fields.putAll(checkpointState(r));fields.put("bossRoomLocked",bossLocked(r));
         fields.put("faultPausedMillis",r.faultPausedMillis);fields.put("resumable",r.party.contains(p.getUniqueId())&&!r.fault.isEmpty());
@@ -903,6 +936,7 @@ final class SiteDungeonManager implements Listener {
         explainPending(p,pending);
         if(r.party.contains(p.getUniqueId())){
             p.sendMessage("§b【"+label(r.site)+"】"+r.site.name+" · "+target.name+"；参战登记 "+r.attendance.getOrDefault(p.getUniqueId(),0)+"/"+r.site.rooms.size()+"，"+(r.phase.equals("returning")?"正在登记通关奖励，无须返回首室":"本段"+(r.roomParticipants.contains(p.getUniqueId())?"已记录":"尚未记录"))+"。"+(!r.fault.isEmpty()?(r.storageFault?"存储故障暂停，等待不计挑战时限；原队伍回到遗迹后自动核对恢复，也可本人用 /mycli dungeon resume。":"故障暂停，等待不计挑战时限；准备好后本人用 /mycli dungeon resume，恢复后5分钟内回场。"):r.pausedAt>0?"暂停："+pauseLabel(r.pauseReason)+"；5分钟内回场，未清段落重刷。":""));
+            p.sendMessage("§7本室在场 "+fields.get("presentCount")+" 位，其中女仆 Agent "+fields.get("presentMaidAgents")+" 位。");
             if(!missingRooms(r,p.getUniqueId()).isEmpty())p.sendMessage("§e缺席房间："+String.join("、",missingRooms(r,p.getUniqueId()))+"；已有参战记录保留，实际参战者在全场通关后均可领奖。");
             if(!unverifiedRooms(r).isEmpty())p.sendMessage("§7旧版房间明细未保存，保留原登记数量，不推断缺席房间。本人当前总数以回执 attendance 为准。");
         }else if(!previousOutcome.isEmpty()){p.sendMessage("§7该地点有其他队伍正在挑战；以下是你本人最近一次结果。");explainOutcome(p,previousOutcome);}
@@ -916,12 +950,25 @@ final class SiteDungeonManager implements Listener {
     }
     private int receiptCount(){var c=plugin.getConfig().getConfigurationSection(ROOT+".receipts");if(c==null)return 0;int total=0;for(String owner:c.getKeys(false)){var section=c.getConfigurationSection(owner);if(section!=null)total+=section.getKeys(false).size();}return total;}
     private ConfigurationSection receipt(UUID id,String site){return plugin.getConfig().getConfigurationSection(ROOT+".receipts."+id+"."+site);}
+    private String relicPath(UUID id,String site){return ROOT+".relics."+id+"."+site;}
+    private boolean relicClaimed(UUID id,String site){return plugin.getConfig().isString(relicPath(id,site));}
+    private ItemStack pendingRelic(UUID id,String site){
+        var saved=receipt(id,site);
+        return saved==null?null:saved.getItemStack("relic");
+    }
+    private Map<String,Object> relicCollection(UUID id){
+        long completed=sites.keySet().stream().filter(site->relicClaimed(id,site)).count();
+        String title=completed>=15?"群境开拓者":completed>=10?"十境寻迹者":completed>=5?"遗迹巡行者":completed>=1?"遗迹先行者":"";
+        return Map.of("found",completed,"total",sites.keySet().stream().filter(site->DungeonRelics.at(site)!=null).count(),"title",title);
+    }
     private List<String> pendingSites(UUID id){var c=plugin.getConfig().getConfigurationSection(ROOT+".receipts."+id);return c==null?List.of():new ArrayList<>(c.getKeys(false));}
     private Map<String,Object> pendingReward(UUID owner,String id){
         var saved=receipt(owner,id);if(saved==null)return Map.of();Site s=sites.get(id);
         Map<String,Object> data=new LinkedHashMap<>();data.put("id",id);data.put("name",s==null?id:s.name);if(s!=null){data.put("activityLabel",label(s));data.put("setting",s.outdoor?"outdoor":"interior");}
         data.put("status","ready");data.put("run",saved.getString("run",""));data.put("day",saved.getString("day",""));
         data.put("emeralds",saved.getInt("emeralds"));data.put("item",saved.getString("item",""));data.put("count",saved.getInt("count"));
+        var relic=DungeonRelics.at(id);
+        if(relic!=null&&relic.recognizes(saved.getItemStack("relic")))data.put("relic",relic.name());
         data.put("claimCommand","/mycli dungeon claim "+id);return data;
     }
     private void explainPending(Player p,List<String> pending){
@@ -937,9 +984,18 @@ final class SiteDungeonManager implements Listener {
         String chosen=id;var receipt=receipt(p.getUniqueId(),chosen);
         if(receipt==null){Map<String,Object> outcome=lastOutcome(p.getUniqueId(),chosen);if(!outcome.isEmpty())explainOutcome(p,outcome);require(false,"no_pending_reward");}
         String claimedRun=receipt.getString("run");
+        ItemStack gear=receipt.getItemStack("relic");
+        var relic=DungeonRelics.at(chosen);
+        if(receipt.contains("relic"))
+            require(relic!=null&&relic.recognizes(gear)&&!relicClaimed(p.getUniqueId(),chosen),"data_unavailable");
         applyCompletion(p,chosen,receipt);
         atomic(()->{
-            require(plugin.dungeon().queueGuildRewards(p.getUniqueId(),receipt.getInt("emeralds"),Material.valueOf(receipt.getString("item")),receipt.getInt("count")),"personal_reward_queue_full");
+            if(!receipt.getBoolean("relic-only"))
+                require(plugin.dungeon().queueGuildRewards(p.getUniqueId(),receipt.getInt("emeralds"),Material.valueOf(receipt.getString("item")),receipt.getInt("count")),"personal_reward_queue_full");
+            if(gear!=null){
+                require(plugin.dungeon().queuePurchased(p.getUniqueId(),gear),"personal_reward_queue_full");
+                plugin.getConfig().set(relicPath(p.getUniqueId(),chosen),claimedRun);
+            }
             // Proof and consumed receipt commit together; a crash cannot lose or duplicate the hand-in.
             plugin.taskMarket().worldAction(p,GuildManager.Goal.SITE_CLEAR,chosen,"site:"+receipt.getString("run"),receipt.getLong("started-at",0),false);
             plugin.getConfig().set(ROOT+".claimed."+p.getUniqueId()+"."+chosen,receipt.getString("day"));plugin.getConfig().set(ROOT+".receipts."+p.getUniqueId()+"."+chosen,null);
@@ -951,6 +1007,7 @@ final class SiteDungeonManager implements Listener {
             }
         });
         runResult(p,"claim",chosen,claimedRun);p.sendMessage("§a"+(sites.containsKey(chosen)?label(sites.get(chosen)):"遗迹远征")+"奖励已保存到待入箱队列；打开个人箱时装入，箱满会保留。开箱 /mycli arena stash；免费查库存和待入箱数量 "+PersonalStashOverview.COMMAND+"。重复领取不会再次发奖。");
+        if(gear!=null)p.sendMessage("§d已收录秘宝「"+relic.name()+"」。查看装备说明了解触发方式；遗迹菜单可查收藏与称号。");
         plugin.agentCoach().rememberAdventure(p, "遗迹攻略奖励已经领取");
     }
     private void tick(){
@@ -1031,6 +1088,13 @@ final class SiteDungeonManager implements Listener {
                 if(plugin.lifeChallenges()!=null)plugin.lifeChallenges().roomCleared(challengeContext,challengePresent);
                 for(UUID id:r.party){Player p=ResidentCli.find(id);if(p!=null)p.sendMessage((credited.contains(id)?"§a":"§e")+"【"+label(r.site)+"·参战登记】"+roomName+"："+(credited.contains(id)?"已记录本段参战":"本段尚无参战记录")+"；累计 "+r.attendance.getOrDefault(id,0)+"/"+r.site.rooms.size()+"。中途离开仍保留已经完成的登记。");}
                 notice(r,"§a战斗室已清理；"+(r.phase.equals("returning")?"全场通关，正在为所有真实参战者登记奖励，无须返回首室。":"步行前往下一室："+r.room().name+" "+r.room().x+","+r.room().y+","+r.room().z));
+                if(!r.phase.equals("returning")){
+                    Room next=r.room();
+                    for(Player player:present)if(player.isOnline()){
+                        player.sendTitle("§a"+roomName+" · 已攻克","§e下一步：前往"+next.name,5,38,10);
+                        if(!next.hint.isBlank())player.sendMessage("§e【行进指引】"+next.hint);
+                    }
+                }
                 if(r.phase.equals("returning"))complete(r);
             }
         }catch(RuntimeException e){
@@ -1157,20 +1221,30 @@ final class SiteDungeonManager implements Listener {
             String rewardDay=day();
             boolean bossParticipant=r.roomAttendance.getOrDefault(r.site.rooms.size()-1,Set.of()).contains(id);
             boolean grantLoot=siteRewardSlot(r,id,rewardDay).equals("eligible");
+            var relic=DungeonRelics.at(r.site.id);
+            boolean grantRelic=SiteRewardPolicy.relicEligible(relic!=null&&bossParticipant,relicClaimed(id,r.site.id),
+                    receipt(id,r.site.id)!=null,r.id.equals(plugin.getConfig().getString(ROOT+".claimed-runs."+id+"."+r.site.id)));
             boolean grantCircle=r.altarTactics&&bossParticipant&&!circleReward(id)&&plugin.nativeRpg().healingCircleEnabled();
-            if(!grantLoot&&!grantCircle)continue;
+            if(!grantLoot&&!grantRelic&&!grantCircle)continue;
             atomic(()->{
-                if(grantLoot){
+                if(grantLoot||grantRelic){
                     String path=ROOT+".receipts."+id+"."+r.site.id;
-                    plugin.getConfig().createSection(path,Map.of("day",rewardDay,"run",r.id,"started-at",r.started,"emeralds",r.site.emeralds*r.mode.reward,"item",r.site.bonus.name(),"count",r.site.bonusCount*r.mode.reward,"bossParticipant",bossParticipant));
+                    var saved=plugin.getConfig().createSection(path,Map.of("day",rewardDay,"run",r.id,"started-at",r.started,
+                            "emeralds",grantLoot?r.site.emeralds*r.mode.reward:0,"item",r.site.bonus.name(),
+                            "count",grantLoot?r.site.bonusCount*r.mode.reward:0,"bossParticipant",bossParticipant));
+                    if(grantRelic){
+                        saved.set("relic",DungeonRelics.create(relic,r.mode.ordinal(),java.util.concurrent.ThreadLocalRandom.current()));
+                        saved.set("relic-only",!grantLoot);
+                    }
                     if(r.site.conquestFloor>0&&bossParticipant)plugin.getConfig().set(ROOT+".conquest-proofs."+id+"."+r.site.conquestFloor,r.id);
                 }
                 if(grantCircle)plugin.getConfig().set(circleProof(id),r.id);
             });
             if(participant!=null&&grantCircle)newlyEligible.add(participant);
-            Player p=participant;if(p!=null&&grantLoot){
+            Player p=participant;if(p!=null&&(grantLoot||grantRelic)){
                 applyCompletion(p,r.site.id,receipt(id,r.site.id));
-                p.sendMessage("§6"+r.site.name+"已通关；你的真实参战记录已生成奖励，/mycli dungeon claim "+r.site.id+"领取到个人箱。无需返回首室，今日该处仅奖励一次。");
+                p.sendMessage("§6"+r.site.name+"已通关。罗盘 → 遗迹地下城 → "+r.site.name+" → 领取奖励。"
+                        +(grantRelic?" §d本次发现秘宝「"+relic.name()+"」。":""));
             }
         }
         end(r,"completed");
@@ -1378,13 +1452,40 @@ final class SiteDungeonManager implements Listener {
         else{Site s=site(id);inv.setItem(10,icon(Material.ENDER_PEARL,entry(s).isEmpty()?"§b前往遗迹外围":"§b前往挑战入口","8魔力；抵达后仍须主动开始、逐室清怪"));inv.setItem(12,icon(Material.IRON_SWORD,"§a开始普通挑战","须亲自站在首室；10秒组队集结"));inv.setItem(13,icon(Material.DIAMOND_SWORD,"§6开始冒险挑战","更强怪物；每日奖励二倍"));inv.setItem(14,icon(Material.NETHERITE_SWORD,"§5开始末日挑战","更强怪物；每日奖励三倍"));inv.setItem(16,icon(Material.SUNFLOWER,"§a确认当前参战","遗迹内达标者自动同队，可随时加入"));inv.setItem(22,icon(Material.BARRIER,"§c退出自己的挑战","留在原地；自行步行或使用传送技能"));inv.setItem(30,icon(Material.CHEST,"§6领取已完成奖励","存入个人箱；满队列时保留凭据"));inv.setItem(31,icon(Material.WRITTEN_BOOK,"§e路线与当前进度","逐室攻略，通关后就地登记奖励"));inv.setItem(49,icon(Material.ARROW,"§7返回地下城列表"));}
         if(id.isEmpty()){
             int slot=10;for(Site s:sites.values()){
+                var relic=DungeonRelics.at(s.id);
                 if(receipt(p.getUniqueId(),s.id)!=null)inv.setItem(slot,icon(s.icon,"§e"+s.name+" · 有奖励待领取",routeHint(s),"点击打开，再点奖励箱领取上次奖励","领取后才可开始或加入这处的新挑战"));
+                else if(relic!=null)inv.setItem(slot,icon(s.icon,"§6"+s.name,
+                        "秘宝："+relic.name()+(relicClaimed(p.getUniqueId(),s.id)?"（已收录）":"（待发现）"),
+                        "点击查看装备效果、传送和难度"));
                 slot++;
             }
+            var collection=relicCollection(p.getUniqueId());
+            String title=collection.get("title").toString();
+            inv.setItem(45,icon(Material.NAME_TAG,"§d遗迹秘宝收藏 "+collection.get("found")+"/"+collection.get("total"),
+                    title.isEmpty()?"首件秘宝解锁「遗迹先行者」":"当前称号："+title,
+                    "不同遗迹累计收录 1、5、10、15 件时提升称号"));
         }else if(receipt(p.getUniqueId(),id)!=null){
             var saved=receipt(p.getUniqueId(),id);
             for(int slot:new int[]{12,13,14,16})inv.setItem(slot,icon(Material.GRAY_DYE,"§e先领取上次奖励","上次已完成，奖励保留中","请点下方「领取上次奖励」箱子","不会自动领取或替你开启新挑战"));
             inv.setItem(30,icon(Material.ENDER_CHEST,"§a领取上次奖励",saved.getString("day","日期未记录")+"完成的挑战","点击领取到个人奖励箱，随后重新开场","满队列时保留凭据；无需重打旧场次"));
+        }
+        if(!id.isEmpty()){
+            var relic=DungeonRelics.at(id);
+            if(relic!=null){
+                var lore=new ArrayList<String>();
+                lore.add(relicClaimed(p.getUniqueId(),id)?"已收录 · 秘宝每个角色限领一次"
+                        :pendingRelic(p.getUniqueId(),id)!=null?"本次秘宝待领 · 点击右侧奖励箱"
+                        :"首次在终室登记参战并通关，保证取得");
+                lore.addAll(relic.instructions());
+                inv.setItem(27,icon(relic.material(),"§d秘宝 · "+relic.name(),lore.toArray(String[]::new)));
+                inv.setItem(28,icon(Material.COMPASS,"§6从哪里进",
+                        "传送后沿实体路标到石钮，按使用键",
+                        "入口："+relic.x()+", "+relic.y()+", "+relic.z(),relic.tactic()));
+            }
+            Site selected=site(id);
+            var rooms=selected.rooms.stream().map(room->room.name+" · "+room.x+", "+room.y+", "+room.z).toList();
+            inv.setItem(29,icon(Material.MAP,"§e行进路线",rooms.toArray(String[]::new)));
+            inv.setItem(32,icon(Material.ENDER_CHEST,"§b打开个人箱","领取后的装备会在个人箱中装入"));
         }
         if (!id.isEmpty() && id.equals(BlackBannerCamp.SITE) && surveyedCamp() != null) {
             inv.setItem(24, icon(Material.DARK_OAK_FENCE, "§e救援牢笼",
@@ -1429,6 +1530,7 @@ final class SiteDungeonManager implements Listener {
         Bukkit.getScheduler().runTask(plugin,()->{
             if(!p.isOnline() || p.getOpenInventory().getTopInventory() != e.getView().getTopInventory())return;
             if(menu.site.isEmpty()){List<Site> list=new ArrayList<>(sites.values());if(slot>=10&&slot<10+list.size())open(p,list.get(slot-10).id);return;}
+            if(slot==32){p.closeInventory();plugin.dungeon().openStash(p);return;}
             if(slot==33&&menu.site.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled()){learnCircle(p);return;}
             String action=switch(slot){case 10->"travel";case 12,13,14->"start";case 16->"join";case 22->"leave";case 30->"claim";case 31->"info";default->"";};
             if(slot==49){open(p,"");return;}if(action.isEmpty())return;

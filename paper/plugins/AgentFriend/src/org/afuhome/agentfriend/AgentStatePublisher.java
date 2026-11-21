@@ -115,7 +115,12 @@ final class AgentStatePublisher implements Listener {
         }
         if(plugin.nativeRpg().selected())root.add("mana",plugin.nativeRpg().mana(player));
         root.add("abilities", abilities.build(player));
-        root.add("equipmentEffects", DungeonGearAura.effects(player));
+        var equipmentEffects = DungeonGearAura.effects(player);
+        var shieldEffect = ShieldRunes.effect(player);
+        if (shieldEffect != null) equipmentEffects.add(shieldEffect);
+        var weaponEffect = plugin.heldWeaponEffect(player);
+        if (weaponEffect != null) equipmentEffects.add(weaponEffect);
+        root.add("equipmentEffects", equipmentEffects);
         var moves = plugin.dungeonEnemyMoves().hazards(player);
         if (!moves.isEmpty()) root.add("enemyMoves", JSON.toJsonTree(moves));
         if (plugin.trialRescue() != null) root.add("trialRescue", plugin.trialRescue().state(player));

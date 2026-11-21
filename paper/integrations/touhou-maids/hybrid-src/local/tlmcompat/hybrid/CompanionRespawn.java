@@ -62,7 +62,7 @@ final class CompanionRespawn implements AutoCloseable {
             CompoundTag phase=maid.getPersistentData().getCompound(TAG);
             recovery.addProperty("eventId",phase.getString("eventId"));
             recovery.addProperty("readyAt",java.time.Instant.ofEpochMilli(phase.getLong("readyAt")).toString());
-            context.addProperty("nextStep","伙伴倒下后自动在可米附近安全重生；保留原身份和装备。无需墓碑、遗物、魂符或重复恢复请求。可米离线或落点不安全时等待安全落点。");
+            context.addProperty("nextStep","伙伴倒下后会在绑定玩家附近安全重生，保留原身份和装备。玩家离线或落点不安全时会等待。");
         }
         context.add("respawn",recovery);
     }

@@ -64,7 +64,11 @@ public final class ResidentCli {
     static Entity actual(Player p){if(!isResident(p.getUniqueId()))return p;try{return (Entity)nativeCall("entity",new Class[]{UUID.class},p.getUniqueId());}catch(Exception e){throw new IllegalStateException("resident_unavailable",e);}}
     static boolean mana(Player p,double amount,boolean spend){try{return Boolean.TRUE.equals(nativeCall("mana",new Class[]{UUID.class,double.class,boolean.class},p.getUniqueId(),amount,spend));}catch(Exception e){return false;}}
     static Player find(UUID id){var player=Bukkit.getPlayer(id);if(player!=null)return player;if(!isResident(id))return null;
-        try{nativeCall("entity",new Class[]{UUID.class},id);return actors.computeIfAbsent(id,ResidentCli::actor);}catch(Exception missing){return null;}}
+        try{
+            Object loaded=nativeCall("entity",new Class[]{UUID.class},id);
+            if(!(loaded instanceof LivingEntity body)||!body.isValid()||body.isDead()||!body.hasAI())return null;
+            return actors.computeIfAbsent(id,ResidentCli::actor);
+        }catch(Exception missing){return null;}}
     static int storageSize(Player player){return isResident(player.getUniqueId())?player.getInventory().getSize():36;}
     static Player fromEntity(Entity entity){return entity==null?null:isResident(entity.getUniqueId())?find(entity.getUniqueId()):entity instanceof Player p?p:null;}
     static LivingEntity living(Player p){return (LivingEntity)actual(p);}
@@ -88,7 +92,7 @@ public final class ResidentCli {
             if(m.getName().equals("getGameMode"))return GameMode.SURVIVAL;
             if(m.getName().equals("getServer"))return Bukkit.getServer();
             var body=(LivingEntity)nativeCall("entity",new Class[]{UUID.class},id);
-            if(m.getName().equals("isOnline"))return body.isValid()&&!body.isDead();
+            if(m.getName().equals("isOnline"))return body.isValid()&&!body.isDead()&&body.hasAI();
             if(m.getName().equals("getName")||m.getName().equals("getDisplayName"))return NativeResidentIdentities.all().get(id);
             if(m.getName().equals("getEyeLocation"))return body.getEyeLocation();
             if(m.getName().equals("hasLineOfSight")&&args[0]instanceof Entity target){var real=target instanceof Player p&&isResident(p.getUniqueId())?actual(p):target;return body.hasLineOfSight(real);}

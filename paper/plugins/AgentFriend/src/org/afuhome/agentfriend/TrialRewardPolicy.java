@@ -82,6 +82,16 @@ final class TrialRewardPolicy {
 
     static int pityAfter(int difficulty) { return difficulty == 2 ? 8 : 10; }
 
+    static boolean summitUpgrade(int floor, int difficulty, int rewardedDifficulty, boolean qualified) {
+        return floor == FINAL_FLOOR && qualified && difficulty > rewardedDifficulty;
+    }
+
+    static String summitAchievement(int rewardedDifficulty, int highestFloor) {
+        if (rewardedDifficulty == 2) return "星灯誓约者";
+        if (rewardedDifficulty == 1) return "踏云征服者";
+        return rewardedDifficulty == 0 || highestFloor >= FINAL_FLOOR ? "试炼登顶者" : "";
+    }
+
     static boolean milestone(int floor, int difficulty, boolean firstClear) {
         return switch (floor) {
             case 6, BOSS_FLOOR -> firstClear || difficulty > 0;

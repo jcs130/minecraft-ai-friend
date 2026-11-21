@@ -9,13 +9,81 @@ import com.github.tartaricacid.touhoulittlemaid.item.bauble.ExtraLifeBauble;
 import com.github.tartaricacid.touhoulittlemaid.item.bauble.UndyingTotemBauble;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import java.util.Map;
+import local.tlmcompat.core.CompatibilityException;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
+import org.bukkit.craftbukkit.inventory.CraftItemStack;
+import org.bukkit.persistence.PersistentDataType;
 
 /** Starting equipment on the original, explicitly registered unified body. */
 final class NativeMaidKit {
     private static final String INITIALIZED = "qiandengji_native_starter_kit";
+
+    static void provision(EntityMaid maid, NativeMaidCompanionSupport companion) {
+        var backpack = BackpackManager.findBackpack(BigBackpack.ID).orElseThrow();
+        var worn = maid.getMaidBackpackType();
+        if (worn.getAvailableMaxContainerIndex() < backpack.getAvailableMaxContainerIndex()
+                && (worn == BackpackManager.getEmptyBackpack()
+                    || worn instanceof com.github.tartaricacid.touhoulittlemaid.entity.backpack.SmallBackpack
+                    || worn instanceof com.github.tartaricacid.touhoulittlemaid.entity.backpack.MiddleBackpack)) {
+            maid.setMaidBackpackType(backpack);
+        }
+        maid.getConfigManager().setShowBackpack(false);
+        for (var entry:keepsakes(maid).entrySet()) issueKeepsake(maid,entry.getKey(),entry.getValue());
+        if (companion != null) {
+            try {
+                companion.provisionStaff(maid);
+            } catch (CompatibilityException refused) {
+                if (!java.util.Set.of("starter_already_issued","maid_inventory_full","rpg_unavailable",
+                        "rpg_item_unavailable").contains(refused.code())) throw refused;
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String,org.bukkit.inventory.ItemStack> keepsakes(EntityMaid maid) {
+        var game = Bukkit.getPluginManager().getPlugin("AgentFriend");
+        if (game == null || !game.isEnabled()) return Map.of();
+        try {
+            return (Map<String,org.bukkit.inventory.ItemStack>) Class.forName(
+                "org.afuhome.agentfriend.CompanionTravelAccess",false,game.getClass().getClassLoader())
+                .getMethod("companionKeepsakes",String.class).invoke(null,maid.getName().getString());
+        } catch (ReflectiveOperationException | LinkageError unavailable) {
+            return Map.of();
+        }
+    }
+
+    private static void issueKeepsake(EntityMaid maid, String id, org.bukkit.inventory.ItemStack original) {
+        var saved = maid.getPersistentData();
+        String marker = "qiandengji_starter_" + id;
+        if (saved.getBoolean(marker)) return;
+        var key = new NamespacedKey("agentfriend",id);
+        var inventory = maid.getMaidInv();
+        boolean exists = keepsake(maid.getMainHandItem(),key) || keepsake(maid.getOffhandItem(),key);
+        int free = -1;
+        for (int slot=0;slot<inventory.getSlots();slot++) {
+            ItemStack stack = inventory.getStackInSlot(slot);
+            if (keepsake(stack,key)) { exists = true; break; }
+            if (free<0 && stack.isEmpty() && slot<NativeMaidInventory.capacity(maid)) free=slot;
+        }
+        if (exists) {
+            saved.putBoolean(marker,true);
+        } else if (free>=0) {
+            var stack=CraftItemStack.asNMSCopy(original);
+            if (!inventory.isItemValid(free,stack)) return;
+            inventory.setStackInSlot(free,stack);
+            saved.putBoolean(marker,true);
+        }
+    }
+
+    private static boolean keepsake(ItemStack stack, NamespacedKey key) {
+        return !stack.isEmpty() && CraftItemStack.asCraftMirror(stack).getItemMeta()
+            .getPersistentDataContainer().has(key,PersistentDataType.BYTE);
+    }
 
     static void initialize(EntityMaid maid) {
         var saved = maid.getPersistentData();

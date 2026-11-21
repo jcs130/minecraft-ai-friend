@@ -86,7 +86,7 @@ final class NativeMaidSpeech implements AutoCloseable {
     }
     boolean idle(){return active==null&&waiting.peek()==null;}
     private void main(Runnable action){if(!closed&&plugin.isEnabled())Bukkit.getScheduler().runTask(plugin,()->{if(!closed)action.run();});}
-    private boolean valid(EntityMaid maid){return !closed&&maid.isAlive()&&!maid.isRemoved()&&maidId.equals(maid.getUUID())&&ownerId.equals(maid.getOwnerUUID())&&(requiredSoundPack!=null?plugin.personalDialogue(maid)&&forSelection(maid):plugin.sharedDialogueEnabled(maid)||plugin.unifiedBody(maidId))&&!maid.isSilent();}
+    private boolean valid(EntityMaid maid){return !closed&&maid.isAlive()&&!maid.isRemoved()&&maidId.equals(maid.getUUID())&&ownerId.equals(maid.getOwnerUUID())&&(requiredSoundPack!=null?(plugin.personalDialogue(maid)||plugin.guideVoice(maid))&&forSelection(maid):plugin.sharedDialogueEnabled(maid)||plugin.unifiedBody(maidId))&&!maid.isSilent();}
     JsonObject describe(EntityMaid maid){
         JsonObject out=new JsonObject();out.addProperty("enabled",valid(maid));
         if(!maidId.equals(maid.getUUID())||!ownerId.equals(maid.getOwnerUUID())){out.addProperty("reason","shared_voice_not_enabled_for_this_maid");return out;}
