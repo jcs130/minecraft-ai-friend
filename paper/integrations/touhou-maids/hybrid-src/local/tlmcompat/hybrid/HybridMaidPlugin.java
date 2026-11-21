@@ -981,21 +981,33 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
         String action=args.length==0?"help":args[0].toLowerCase(Locale.ROOT),correlation=fresh();
         try{
-            if (action.equals("guard-starter")) {
+            if (action.equals("guard-starter") || action.equals("starter-kit")) {
+                boolean kit = action.equals("starter-kit");
                 if (!(sender instanceof org.bukkit.command.ConsoleCommandSender
-                        || sender instanceof org.bukkit.command.RemoteConsoleCommandSender) || args.length != 3) {
-                    throw new CompatibilityException("permission_denied", "仅服务器控制台可以为配置中的原伙伴发放初始法杖。");
+                        || sender instanceof org.bukkit.command.RemoteConsoleCommandSender)
+                        || (!kit && args.length != 3) || (kit && args.length != 3 && args.length != 6)) {
+                    throw new CompatibilityException("permission_denied", "仅服务器控制台可维护已登记原伙伴的起始装备。");
                 }
                 UUID id = UUID.fromString(args[1]), expectedOwner = UUID.fromString(args[2]);
                 owned(expectedOwner, id);
                 EntityMaid maid = nativeMaid(Bukkit.getEntity(id));
-                if (maid == null || !expectedOwner.equals(owner(maid)) || !sharedDialogueEnabled(maid)) {
+                if (maid == null || !expectedOwner.equals(owner(maid)) || !kit && !sharedDialogueEnabled(maid)) {
                     throw new CompatibilityException("maid_unavailable", "先核对配置中的原伙伴身份，并等待原实体加载。");
                 }
                 if (editingMaidInventory(maid) || workshops.busy(id)) {
                     throw new CompatibilityException("maid_busy", "请等女仆背包关闭或原生工作结束，再发放初始法杖。");
                 }
-                sender.sendMessage("QD_MAID_GUARD_STARTER " + companion.provisionStaff(maid));
+                if (kit) {
+                    if (!starterKitBodies.contains(id)) {
+                        throw new CompatibilityException("permission_denied", "该原实体未在起始装备名单中。");
+                    }
+                    if (args.length==6) {
+                        NativeMaidKit.packStarterSpace(maid,List.of(Integer.parseInt(args[3]),
+                            Integer.parseInt(args[4]),Integer.parseInt(args[5])));
+                    }
+                    NativeMaidKit.provision(maid,companion);
+                    sender.sendMessage("QD_MAID_STARTER_KIT checked=true");
+                } else sender.sendMessage("QD_MAID_GUARD_STARTER " + companion.provisionStaff(maid));
                 return true;
             }
             if(action.equals("bind")){

@@ -10,11 +10,15 @@ import com.github.tartaricacid.touhoulittlemaid.item.bauble.UndyingTotemBauble;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import local.tlmcompat.core.CompatibilityException;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.ItemContainerContents;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.craftbukkit.inventory.CraftItemStack;
@@ -108,6 +112,40 @@ final class NativeMaidKit {
             return from;
         }
         return -1;
+    }
+
+    static void packStarterSpace(EntityMaid maid, List<Integer> slots) {
+        var saved=maid.getPersistentData();
+        if (saved.getBoolean("qiandengji_starter_packed")
+                || saved.getBoolean("qiandengji_starter_skill_compass")
+                || saved.getBoolean("qiandengji_starter_status_book")) {
+            throw new CompatibilityException("starter_already_issued", "这只伙伴已领过起始道具或完成过一次整理。");
+        }
+        var bag=maid.getMaidInv();
+        int capacity=NativeMaidInventory.capacity(maid);
+        if (slots.size()!=3 || slots.stream().distinct().count()!=3
+                || slots.stream().anyMatch(slot -> slot<0 || slot>=capacity)) {
+            throw new CompatibilityException("invalid_slot", "填写三个不同的已解锁背包槽位。");
+        }
+        for (int slot=0;slot<capacity;slot++) {
+            if (bag.getStackInSlot(slot).isEmpty()) {
+                throw new CompatibilityException("starter_space_available", "背包已有空位，直接补发起始道具。");
+            }
+        }
+        var packed=slots.stream().map(bag::getStackInSlot).map(ItemStack::copy).toList();
+        if (packed.stream().anyMatch(item -> item.getMaxStackSize()<=1 || !item.getComponentsPatch().isEmpty())) {
+            throw new CompatibilityException("starter_pack_not_plain", "只整理无自定义属性的普通可堆叠物品。");
+        }
+        var box=new ItemStack(Items.SHULKER_BOX);
+        box.set(DataComponents.CONTAINER,ItemContainerContents.fromItems(packed));
+        box.set(DataComponents.CUSTOM_NAME,Component.literal("起始装备收纳 · 原有物品"));
+        int first=slots.getFirst();
+        if (!bag.isItemValid(first,box)) {
+            throw new CompatibilityException("starter_pack_unavailable", "原生背包不接受这个收纳盒。");
+        }
+        bag.setStackInSlot(first,box);
+        for (int slot:slots.subList(1,3)) bag.setStackInSlot(slot,ItemStack.EMPTY);
+        saved.putBoolean("qiandengji_starter_packed",true);
     }
 
     private static boolean keepsake(ItemStack stack, NamespacedKey key) {
