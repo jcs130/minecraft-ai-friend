@@ -46,10 +46,17 @@ class ResidentRun:
     unknown_requests: int = 0
     restart_after: float = 0
     restart_error: str | None = None
+    external_release: bool = False
 
-    def close_in_background(self):
+    def close_in_background(self, external=False):
         if self.closing is None:
-            self.closing = asyncio.create_task(self.host.close(), name="npc-close-" + self.host.role.id)
+            self.external_release = external
+            self.closing = asyncio.create_task(self.close(external), name="npc-close-" + self.host.role.id)
+
+    async def close(self, external):
+        await self.host.close()
+        if external and self.host.role.body_kind == "numen":
+            await self.host.body.port.wait_voluntary_release()
 
 
 def read(path):
@@ -72,9 +79,9 @@ def open_role_memory(directory: Path, connection: tuple[str, str] | None) -> Mem
 
 
 def external_handoff(role, transport, *, now=None):
-    """A trusted operator lease pauses one original maid, even if the LAN relay exits unexpectedly."""
+    """A trusted operator lease pauses one original native body for an external controller."""
     filename = transport.get("externalHandoffFile")
-    if role.body_kind != "maid" or not filename:
+    if role.body_kind not in {"maid", "numen"} or not filename:
         return False
     marker = Path(filename)
     if not marker.is_absolute():
@@ -193,11 +200,14 @@ async def serve(path: Path):
             return role.id not in guide_online
         return external_handoff(role, settings["bodies"][role.id])
 
-    async def start_local(host, delay=0):
+    async def start_local(host, delay=0, returning=False):
         if delay:
             await asyncio.sleep(delay)
         if not maintenance() and not handoff(host.role):
             if host.role.body_kind == "numen":
+                if returning and not await host.body.port.wait_for_return(
+                        lambda: maintenance() or handoff(host.role)):
+                    return
                 if settings.get("residentCreationSlots", {}).get(host.role.id, {}).get("numenAdmission"):
                     await prepare_numen(host.role)
                     if maintenance() or handoff(host.role):
@@ -300,9 +310,9 @@ async def serve(path: Path):
         return NpcHost(role, body, planner,
                        memory, journal, social=social, social_graph=social_graph,
                        companion_adventure=CompanionAdventure(*source, role.owner_id) if role.adventure_advice and source else None)
-    def launch(host, delay=0):
+    def launch(host, delay=0, returning=False):
         residents[host.role.id] = ResidentRun(
-            host, asyncio.create_task(start_local(host, delay), name="npc-" + host.role.id))
+            host, asyncio.create_task(start_local(host, delay, returning), name="npc-" + host.role.id))
 
     def attach(role, *, player_guide=False):
         nonlocal social
@@ -457,7 +467,7 @@ async def serve(path: Path):
                     continue
                 if holding:
                     if row["unknownRequests"] == 0:
-                        resident.close_in_background()
+                        resident.close_in_background(external=True)
                 elif not pausing and can_reopen(host):
                     if resident.released:
                         if time.monotonic() >= resident.restart_after:
@@ -467,7 +477,7 @@ async def serve(path: Path):
                                 resident.restart_error = "reopen_" + type(failure).__name__
                                 resident.restart_after = time.monotonic() + 15
                             else:
-                                launch(replacement, 15)
+                                launch(replacement, 15, returning=resident.external_release)
                     else:
                         # A slow or failed close belongs to this body. Do not
                         # launch another controller before the old one releases it.
