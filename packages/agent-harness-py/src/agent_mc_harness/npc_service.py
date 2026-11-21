@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections import defaultdict
+from dataclasses import dataclass
 import importlib.util
 import json
 import os
@@ -30,6 +32,21 @@ from .resident_numen import admit_numen
 from .resident_protocol import social_receipt
 from .social import SocialWorld, publish_json, read_json
 from .status_file import StatusFile
+
+
+@dataclass
+class ResidentRun:
+    host: NpcHost
+    task: asyncio.Task[None]
+    closing: asyncio.Task[None] | None = None
+    released: bool = False
+    unknown_requests: int = 0
+    restart_after: float = 0
+    restart_error: str | None = None
+
+    def close_in_background(self):
+        if self.closing is None:
+            self.closing = asyncio.create_task(self.host.close(), name="npc-close-" + self.host.role.id)
 
 
 def read(path):
@@ -116,7 +133,8 @@ async def serve(path: Path):
     else:
         import fcntl
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    clients, hosts, tasks = [], [], []
+    clients = []
+    residents: dict[str, ResidentRun] = {}
     social_tasks = []
     slot_tasks = {}
     social = None
@@ -140,6 +158,8 @@ async def serve(path: Path):
         clients.append(provider[name])
     system1 = FastSelector(provider["tokenplan"], settings.get("systemOneModel", "decision-model-preview"))
     semaphore = asyncio.Semaphore(2)
+    # An old planner may still be finishing a request when its host is rebuilt.
+    role_locks = defaultdict(asyncio.Lock)
     def handoff(role):
         return external_handoff(role, settings["bodies"][role.id])
 
@@ -173,11 +193,13 @@ async def serve(path: Path):
     async def power_recall(body, request):
         return await recall.search(body, request) if recall else ((), "local")
 
-    async def answer_social(role, planner):
+    async def answer_social(role):
         body = str(role.body_id)
         awaiting = {}
         while True:
-            if not maintenance() and not handoff(role):
+            resident = residents[role.id]
+            if resident.closing is None and not maintenance() and not handoff(role):
+                planner = resident.host.planner
                 for request, (target, source, expiry) in list(awaiting.items()):
                     receipt = social_receipt(source, await asyncio.to_thread(read_json, target))
                     if receipt:
@@ -205,7 +227,7 @@ async def serve(path: Path):
                         response = {"status": "prepared", **reply}
                     except Exception:
                         response = {"status": "failed", "reason": "dialogue_reply_unavailable"}
-                    if maintenance() or handoff(role):
+                    if maintenance() or handoff(role) or residents[role.id] is not resident or resident.closing is not None:
                         break
                     try:
                         await asyncio.to_thread(publish_json, answer, response | {
@@ -243,14 +265,20 @@ async def serve(path: Path):
             body = NumenBody(port, scope=scope, server_id=settings["serverId"], name=transport["name"], owner_id=native_owner,
                              item_use_ids=tuple(role.native_items), adventure_partner=role.adventure_partner)
         memory = open_role_memory(state / role.id, connection)
-        return NpcHost(role, body, NpcPlanner(role, provider[role.provider], semaphore=semaphore, fast=system1, resident_turns=turns.get(role.id)),
+        planner = NpcPlanner(role, provider[role.provider], semaphore=semaphore, role_lock=role_locks[role.id],
+                             fast=system1, resident_turns=turns.get(role.id))
+        return NpcHost(role, body, planner,
                        memory, journal, social=social, social_graph=social_graph,
                        companion_adventure=CompanionAdventure(*source, role.owner_id) if role.adventure_advice and source else None)
-    yielded = {}
+    def launch(host, delay=0):
+        residents[host.role.id] = ResidentRun(
+            host, asyncio.create_task(start_local(host, delay), name="npc-" + host.role.id))
+
     def attach(role):
         nonlocal social
         if any(r.id == role.id for r in roles):
             raise ValueError("resident_slot_duplicate_host")
+        host = build(role)
         roles.append(role)
         turns[role.id].role = role
         if directory := settings.get("residentNamesDirectory"):
@@ -259,18 +287,17 @@ async def serve(path: Path):
                           "characterId": str(role.character_id), "name": role.name})
         if social is not None:
             social = SocialWorld(world_data, settings["serverId"], roles)
-            for existing in hosts:
-                existing.social = social
+            host.social = social
+            for resident in residents.values():
+                resident.host.social = social
             if social_graph:
                 social_graph.world = social
-        host = build(role)
-        hosts.append(host)
-        tasks.append(asyncio.create_task(start_local(host), name="npc-" + role.id))
+        launch(host)
         if social and role.social_memory:
-            social_tasks.append(asyncio.create_task(answer_social(role, host.planner), name="npc-dialogue-" + role.id))
+            social_tasks.append(asyncio.create_task(answer_social(role), name="npc-dialogue-" + role.id))
 
     def current_body(role_id):
-        return next(host.body for host in hosts if host.role.id == role_id)
+        return residents[role_id].host.body
 
     async def prepare_numen(role):
         if maintenance():
@@ -283,70 +310,91 @@ async def serve(path: Path):
         if slots or (state / "resident-births.sqlite3").exists():
             registry = BirthRegistry(state, slots, roles)
         for role in roles:
-            host = build(role)
-            hosts.append(host)
-            tasks.append(asyncio.create_task(start_local(host), name="npc-" + role.id))
+            launch(build(role))
         if social:
             if social_graph:
                 social_graph.graph.start()
             social_tasks.append(asyncio.create_task(project_social(), name="npc-relationships"))
-            social_tasks.extend(asyncio.create_task(answer_social(host.role, host.planner), name="npc-dialogue-" + host.role.id)
-                                for host in hosts if host.role.social_memory)
+            social_tasks.extend(asyncio.create_task(answer_social(role), name="npc-dialogue-" + role.id)
+                                for role in roles if role.social_memory)
         for slot_id, template in slots.items():
             slot_tasks[slot_id] = asyncio.create_task(activate(template, registry, turns[slot_id], attach, current_body),
                                                       name="resident-birth-" + slot_id)
         while True:
             pausing = maintenance()
-            holding = [handoff(host.role) for host in hosts]
             status = {"schema": 1, "pid": os.getpid(), "pausing": pausing, "roles": []}
             if slot_tasks:
                 status["creationSlots"] = {key: ("waiting" if not task.done() else
                     "failed:" + type(task.exception()).__name__ if task.exception() else "bound")
                     for key, task in slot_tasks.items()}
-            for index, (host, task) in enumerate(list(zip(hosts, tasks, strict=True))):
-                paused = pausing or holding[index]
+            for resident in residents.values():
+                host, task = resident.host, resident.task
+                holding = handoff(host.role)
+                paused = pausing or holding
                 if paused != host.pausing:
                     host.pausing = paused
                     host.wake.set()
-                if index in yielded:
-                    status["roles"].append(yielded[index])
-                    continue
                 error = type(task.exception()).__name__ if task.done() and not task.cancelled() and task.exception() else None
-                status["roles"].append({"id": host.role.id, "characterId": str(host.role.character_id),
+                if resident.closing is not None and resident.closing.done():
+                    if resident.closing.cancelled():
+                        error = "close_cancelled"
+                    elif failure := resident.closing.exception():
+                        error = "close_" + type(failure).__name__
+                    else:
+                        resident.released = True
+                        error = resident.restart_error or error
+                if resident.closing is None:
+                    resident.unknown_requests = len(host.journal.unresolved(str(host.role.body_id)))
+                row = {"id": host.role.id, "characterId": str(host.role.character_id),
                                         "bodyKind": host.role.body_kind, "bodyId": str(host.role.body_id),
                                         "model": host.role.model, "provider": host.role.provider, "running": not task.done(), "error": error,
                                         "health": host.body.health().model_dump(mode="json"), "route": host.planner.last_route,
                                         "memory": host.memory.status,
                                         "dialogueMemory": recall_modes.get(host.role.id),
                                         "socialGraphiti": social_graph.last.get(str(host.role.body_id)) if social_graph else None,
-                                        "unknownRequests": len(host.journal.unresolved(str(host.role.body_id))),
-                                        "intents": [{"id": i.id, "state": i.state, "reason": i.reason} for i in list(host.runtime.intents.values())[-8:]]})
-                if holding[index] and task.done() and not status["roles"][-1]["unknownRequests"]:
-                    await host.close()
-                    row = status["roles"][-1]
-                    row.update(running=False, controlMode="available_for_external_controller")
-                    row["health"] = host.body.health().model_dump(mode="json")
-                    yielded[index] = row
+                                        "unknownRequests": resident.unknown_requests,
+                                        "intents": [{"id": i.id, "state": i.state, "reason": i.reason} for i in list(host.runtime.intents.values())[-8:]]}
+                status["roles"].append(row)
+                if resident.closing is not None and not resident.closing.done():
+                    row["controlMode"] = "closing"
+                elif resident.closing is not None and not resident.released:
+                    row["controlMode"] = "close_failed"
+                if resident.released and holding:
+                    row.update(controlMode="available_for_external_controller", unknownRequests=0)
+                if not task.done():
+                    continue
+                if holding:
+                    if row["unknownRequests"] == 0:
+                        resident.close_in_background()
+                elif not pausing and can_reopen(host):
+                    if resident.released:
+                        if time.monotonic() >= resident.restart_after:
+                            try:
+                                replacement = build(host.role)
+                            except (ValueError, OSError, sqlite3.Error) as failure:
+                                resident.restart_error = "reopen_" + type(failure).__name__
+                                resident.restart_after = time.monotonic() + 15
+                            else:
+                                launch(replacement, 15)
+                    else:
+                        # A slow or failed close belongs to this body. Do not
+                        # launch another controller before the old one releases it.
+                        resident.close_in_background()
             await asyncio.to_thread(health_file.publish, status)
-            if all(task.done() for task in tasks) and pausing:
+            if pausing and all(resident.task.done() for resident in residents.values()):
                 return
-            if not pausing:
-                # One unloaded body must not interrupt other characters' active
-                # actions. Re-open only that actor with its original journals.
-                for index,task in enumerate(tasks[:len(holding)]):
-                    if task.done() and not holding[index] and can_reopen(hosts[index]):
-                        if yielded.pop(index, None) is None:
-                            await hosts[index].close()
-                        hosts[index]=build(roles[index])
-                        tasks[index]=asyncio.create_task(start_local(hosts[index], 15), name="npc-"+roles[index].id)
             await asyncio.sleep(2)
     finally:
+        tasks = [resident.task for resident in residents.values()]
         for task in [*slot_tasks.values(), *tasks, *social_tasks]:
             task.cancel()
         await asyncio.gather(*slot_tasks.values(), *tasks, *social_tasks, return_exceptions=True)
-        for index, host in enumerate(hosts):
-            if index not in yielded:
-                await host.close()
+        for resident in residents.values():
+            resident.close_in_background()
+        results = await asyncio.gather(*(resident.closing for resident in residents.values()), return_exceptions=True)
+        for resident, result in zip(residents.values(), results, strict=True):
+            if isinstance(result, BaseException):
+                print(f"NPC {resident.host.role.id} close failed: {type(result).__name__}", flush=True)
         if social_graph:
             await social_graph.graph.close()
         for client in clients:

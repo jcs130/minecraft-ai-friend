@@ -368,9 +368,10 @@ class ModelClient:
 
 
 class NpcPlanner:
-    def __init__(self, role: NpcRole, model: ModelClient, *, semaphore=None, fast=None, resident_turns=None):
+    def __init__(self, role: NpcRole, model: ModelClient, *, semaphore=None, role_lock=None, fast=None, resident_turns=None):
         self.role, self.model = role, model
         self.semaphore = semaphore or asyncio.Semaphore(2)
+        self.role_lock = role_lock or asyncio.Lock()
         self.last_route: dict[str, Any] = {}
         self.fast = fast
         self.resident_turns = resident_turns
@@ -391,8 +392,13 @@ class NpcPlanner:
                 return response, "desktop"
         if desktop_only:
             return None, "desktop"
-        async with self.semaphore:
-            return await self.model.request("/chat/completions", payload, timeout), self.role.provider
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        async with asyncio.timeout_at(deadline), self.role_lock, self.semaphore:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise TimeoutError("NPC model fallback timed out")
+            return await self.model.request("/chat/completions", payload, remaining), self.role.provider
 
     async def answer_dialogue(self, text: str, relationship: dict | None, *, public: bool) -> str:
         return (await self.prepare_dialogue(text, relationship, public=public))["reply"]
