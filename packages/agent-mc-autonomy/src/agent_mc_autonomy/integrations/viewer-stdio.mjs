@@ -4,9 +4,11 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { serverEnginePort } from './server-engine-port.mjs';
+import { managedRuntime } from './managed-runtime.mjs';
 
 const file = process.argv[2];
-const viewer = JSON.parse(readFileSync(file, 'utf8')).viewerIntegration;
+const config = JSON.parse(readFileSync(file, 'utf8'));
+const viewer = config.viewerIntegration;
 const require = createRequire(resolve(viewer.packageDirectory, 'package.json'));
 const load = name => import(pathToFileURL(require.resolve(name)).href);
 const { startMcpStdio } = await load('agent-mc-world/mcp/stdio');
@@ -20,7 +22,7 @@ await startMcpStdio((path, log) => {
   const options = loadMinecraftClientConfig(path);
   const world = new MinecraftClientWorld({ cfg: options.cfg, dataDir: options.dataDir, timezone: options.timezone,
     botName: options.cfg.username, extension: { module: moduleUrl.href, tools: serverEngine?.SERVER_TOOLS ?? [], config: viewer } });
-  return { metricsPort: options.metricsPort, consolePort: options.consolePort, operatorBinding: options.operatorBinding,
-    runtime: new MinecraftAgentClient({ ...options, log, agentName: options.cfg.username,
-      modelFacts: { model: () => '', accepts: mime => options.acceptsImages && mime.startsWith('image/'), contextWindow: () => undefined } }, world) };
+  return managedRuntime(config.bodyHandoffDevice, options, bodyHandoff =>
+    new MinecraftAgentClient({ ...options, bodyHandoff, log, agentName: options.cfg.username,
+      modelFacts: { model: () => '', accepts: mime => options.acceptsImages && mime.startsWith('image/'), contextWindow: () => undefined } }, world), log);
 }, 'minecraft-viewer-mcp');

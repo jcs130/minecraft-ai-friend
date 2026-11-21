@@ -440,10 +440,13 @@ def failure_context(catalogue, name, arguments, result):
 
 
 class Controller:
-    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None, *, context_counter=None, host_context_provider=None, recent_context_provider=None, runtime_session=None, profile_decide=None, tool_schema_profile="default"):
+    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None, *, context_counter=None, host_context_provider=None, recent_context_provider=None, runtime_session=None, profile_decide=None, tool_schema_profile="default", managed_character=None):
         self.bridge, self.decide, self.settings = bridge, decide, settings
         self.profile_decide=profile_decide
         self.tool_schema_profile = tool_schema_profile
+        self.managed_character = managed_character
+        self.managed_generation = None
+        self.managed_request = None
         self.profile_death_id=None
         from .host_context import HostContextPort
         self.host_context_port = HostContextPort(data)
@@ -1490,7 +1493,16 @@ class Controller:
             self.active_goal["queue_policy_consumed"] = True
             self.publish(current_goal=self.active_goal)
         self.inflight_request = None
-        self.persist(inflight_request=None, uncertain=False)
+        handoff = result.get("data")
+        if (self.managed_character and name == "mc_character_body" and arguments.get("action") == "switch"
+                and isinstance(handoff, dict) and handoff.get("characterId") == self.managed_character[0]
+                and handoff.get("status") in {"switching", "recovery_required", "unknown"}
+                and isinstance(handoff.get("requestId"), str)
+                and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", handoff["requestId"])):
+            self.managed_request = {"characterId": self.managed_character[0], "requestId": handoff["requestId"]}
+            self.persist(inflight_request=None, uncertain=False, managed_handoff=self.managed_request)
+        else:
+            self.persist(inflight_request=None, uncertain=False)
         control = result.get("control") or {}
         if control.get("barrierAfter"):
             await self.protocol("ack_barrier", id=control["requestId"])
@@ -1602,6 +1614,90 @@ class Controller:
         self.publish(phase="running", game_connected=True, autonomy_running=self.decide is not None,
                      connection_wait=None)
         return True
+
+    async def managed_owner(self):
+        character_id, expires_at = self.managed_character
+        if int(time.time() * 1000) >= expires_at:
+            raise RuntimeError("managed_device_expired")
+        result = outcome(await self.bridge.call("mc_character_body", {"action":"current"}))
+        if result.get("failed"):
+            return {"status":"unavailable", "activeKind":None, "generation":None, "pendingRequestId":None}
+        record = result.get("data")
+        if (not isinstance(record, dict) or record.get("characterId") != character_id
+                or type(record.get("generation")) is not int or record["generation"] < 1
+                or record.get("status") not in {"ready", "switching", "recovery_required"}
+                or record.get("activeKind") not in {None, "mineflayer", "numen", "maid", "villager"}):
+            raise RuntimeError("managed_device_identity_unconfirmed")
+        return {key:record.get(key) for key in ("status", "activeKind", "generation", "pendingRequestId")}
+
+    @staticmethod
+    def managed_owner_ready(record):
+        return record["status"] == "ready" and record["activeKind"] == "mineflayer"
+
+    async def check_managed_receipt(self):
+        if not self.managed_request:
+            return
+        original = self.managed_request
+        result = outcome(await self.bridge.call("mc_character_body", {"action":"lookup", "requestId":original["requestId"]}))
+        data = result.get("data")
+        if (not result.get("failed") and isinstance(data, dict) and data.get("characterId") == original["characterId"]
+                and data.get("requestId") == original["requestId"] and data.get("status") in {"completed", "blocked"}):
+            self.persist(managed_handoff=None)
+            self.managed_request = None
+
+    async def await_managed_body(self, *, initial=False):
+        """Poll the current owner without restarting MCP or admitting game actions."""
+        self.frame = None
+        while not self.stop_requested():
+            await self.external_command(stop_only=True)
+            if self.stop_requested():
+                return False
+            record = await self.managed_owner()
+            await self.check_managed_receipt()
+            if record["status"] not in {"ready", "unavailable"} or record["activeKind"] in {"numen", "maid", "villager"}:
+                # Handback is driven by the existing device transport. Only an
+                # already-owned Mineflayer body may use an initial login.
+                initial = False
+            if self.managed_owner_ready(record) and not self.managed_request:
+                status = json_content(await self.bridge.call("mc_connection", {"action":"status"}))
+                if initial and status.get("phase") == "disconnected":
+                    initial = False
+                    try:
+                        status = json_content(await self.bridge.call("mc_connection", {"action":"connect"}, timeout=120))
+                    except RuntimeError:
+                        # An explicit initial login may have crossed a server handoff.
+                        latest = await self.managed_owner()
+                        if self.managed_owner_ready(latest) and latest["generation"] == record["generation"]:
+                            raise
+                if online(status):
+                    try:
+                        # In started phase this checks the SDK fence without reopening the game socket.
+                        checked = json_content(await self.bridge.call("mc_connection", {"action":"connect"}))
+                    except RuntimeError:
+                        checked = {}
+                    if online(checked):
+                        self.managed_generation = record["generation"]
+                        self.read_answers.clear()
+                        self.last_facts = None
+                        self.publish(phase="running", game_connected=True, autonomy_running=self.decide is not None,
+                                     body_control=record, connection_wait=None)
+                        return True
+            if self.managed_request:
+                record = {**record, "pendingRequestId":self.managed_request["requestId"]}
+            self.publish(phase="waiting_for_body", game_connected=False, autonomy_running=False, body_control=record)
+            # Settle only already-admitted native work, by its original receipt.
+            more = False
+            if self.pending or self.inflight_request or self._event_poll or self._deferred_event_drain:
+                _, _, more = await self.events()
+            await asyncio.sleep(0 if more else 1)
+        return False
+
+    async def transferred_managed_body(self):
+        if not self.managed_character or self.inflight_request:
+            return False
+        record = await self.managed_owner()
+        return record["status"] != "unavailable" and (
+            not self.managed_owner_ready(record) or record["generation"] != self.managed_generation)
 
     async def observe_queue(self):
         # Native readout is authoritative. Do not infer execution from inbox order.
@@ -2397,6 +2493,14 @@ class Controller:
             previous = json.loads(self.state_path.read_text(encoding="utf-8"))
             if previous.get("uncertain") or previous.get("pending") or previous.get("inflight_request"):
                 raise RuntimeError("outcome_unknown: previous dispatch requires receipt reconciliation; the ledger was preserved")
+            managed_request = previous.get("managed_handoff")
+            if managed_request:
+                if (not self.managed_character or not isinstance(managed_request, dict)
+                        or managed_request.get("characterId") != self.managed_character[0]
+                        or not isinstance(managed_request.get("requestId"), str)
+                        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", managed_request["requestId"])):
+                    raise RuntimeError("outcome_unknown: the original managed-body request must be reconciled")
+                self.managed_request = managed_request
         self.persist(stopped=False)
         try:
             await self.bridge.open()
@@ -2405,13 +2509,18 @@ class Controller:
                 if not {"mc_control", "mc_operations", "mc_capabilities"}.issubset(advertised):
                     raise RuntimeError("java_client_backend_required: use an explicit core build advertising native client control; refusing Mineflayer fallback")
             self.publish(phase="connecting")
-            json_content(await self.bridge.call("mc_connection", {"action": "connect"}, timeout=120))
-            status = json_content(await self.bridge.call("mc_connection", {"action": "status"}))
-            # Native startup retries have the same ownership and stop semantics
-            # as a later connection loss. Do not discard a healthy retry loop
-            # just because maintenance lasts longer than two minutes.
-            if not online(status) and not await self.wait_for_native_reconnect(status):
-                return
+            if self.managed_character:
+                if not any(tool["name"] == "mc_character_body" for tool in self.bridge.tools):
+                    raise RuntimeError("managed_device_sdk_required")
+                if not await self.await_managed_body(initial=True):
+                    return
+            else:
+                json_content(await self.bridge.call("mc_connection", {"action": "connect"}, timeout=120))
+                status = json_content(await self.bridge.call("mc_connection", {"action": "status"}))
+                # Native startup retries have the same ownership and stop semantics
+                # as a later connection loss.
+                if not online(status) and not await self.wait_for_native_reconnect(status):
+                    return
             if self.stop_requested():
                 return
             if self.settings.body_provider == "java-client":
@@ -2436,6 +2545,14 @@ class Controller:
                 await self.external_command(stop_only=True)
                 if self.stop_requested():
                     break
+                if self.managed_character:
+                    record = await self.managed_owner()
+                    if (self.managed_request or not self.managed_owner_ready(record)
+                            or record["generation"] != self.managed_generation):
+                        if not await self.await_managed_body():
+                            break
+                        await self.observe_queue()
+                        wake, urgent = True, False
                 if self._event_poll is not None or self._deferred_event_drain:
                     drained = await self.join_deferred_events()
                     if drained is None or self.stop_requested():
@@ -2468,7 +2585,8 @@ class Controller:
                          and time.monotonic() - self.last_decision >= self.settings.min_decision_seconds)):
                     status = json_content(await self.bridge.call("mc_connection", {"action": "status"}))
                     if not online(status):
-                        if not await self.wait_for_native_reconnect(status):
+                        reconnect = self.await_managed_body() if self.managed_character else self.wait_for_native_reconnect(status)
+                        if not await reconnect:
                             break
                         wake = True
                     last_status_check = time.monotonic()
@@ -2499,6 +2617,12 @@ class Controller:
                     try:
                         self._review_inference_bypass=urgent
                         turn_outcome=await self.turn_once(goal, prefix, tools)
+                    except RuntimeError:
+                        if not await self.transferred_managed_body():
+                            raise
+                        self.turn = None
+                        wake, urgent = True, False
+                        continue
                     finally:
                         self._review_inference_bypass=False
                         self.lookahead_anchor = None
@@ -2529,7 +2653,7 @@ class Controller:
                         raise RuntimeError("Disconnect not confirmed")
                     # Generic core disconnect explicitly stops its own action queue.
                     # This must not be reused for Numen, whose remote body stays alive.
-                    if (status.get("connection") or {}).get("disconnectStopsBody") is False:
+                    if self.managed_character or (status.get("connection") or {}).get("disconnectStopsBody") is False:
                         # Remote hosting must fence and confirm the server-side
                         # body separately. Closing this SDK is not that receipt.
                         self.persist(uncertain=bool(self.pending or self.inflight_request))
