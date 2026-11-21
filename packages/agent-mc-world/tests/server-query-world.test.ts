@@ -108,19 +108,27 @@ describe('independent server query through the public World tool',()=>{
     r.bot.emit('message',{toString:()=> 'Unrelated server notice'},'system');await Promise.resolve();
     expect(r.host.events.some(e=>e.type==='minecraft.chat'&&e.text.includes('Unrelated server notice'))).toBe(true);
   });
-  it('delivers a multipart result once, with a bounded broadcast and full original lookup',async()=>{
+  it('pages oversized model results and broadcasts a compact view while archiving all rows',async()=>{
     const r=rig(),read=call(r,{query:'page'});
-    for(let i=0;i<54;i++)r.bot.emit('message',{toString:()=>`ROW item-${i}`},'system');
+    for(let i=0;i<54;i++)r.bot.emit('message',{toString:()=>`ROW item-${i} ${'x'.repeat(190)}`},'system');
     r.bot.emit('message',{toString:()=> 'END 54'},'system');
     const result=await read;
     expect((result.data!.reply as any).data).toMatchObject({pendingRewards:null,scope:'requested_page_only',items:expect.any(Array)});
     expect((result.data!.reply as any).data.items).toHaveLength(54);
     expect(r.host.events.filter(e=>e.type==='minecraft.chat')).toEqual([]);
     const terminal=r.host.events.find(e=>e.meta?.serverQuery)!;
+    expect(terminal.text.length).toBeGreaterThan(7000);
+    expect(result.text.length).toBeLessThanOrEqual(7000);
     const view=readWorkerEventView(terminal.text,terminal.meta?.requestContext)!;
     expect(view).toBe(readSupervisorEventView(terminal.text,terminal.meta?.requestContext));
     expect(view.length).toBeLessThan(800);expect(view).not.toContain('item-53');
     expect(JSON.parse(view)).toMatchObject({requestId:result.data!.requestId,query:'page',phase:'replied',goal_completed:false,requestNonce:false});
+    const page=JSON.parse(result.text.slice(result.text.indexOf('\n')+1));
+    const next=r.world.tools().find(t=>t.name==='mc_query_receipt')!;
+    const continuation=await next.handler(page.next_safe_read.arguments,{} as ToolCallContext) as ToolOutcome;
+    expect(continuation.data).toEqual(result.data);
+    expect(continuation.text.length).toBeLessThanOrEqual(7000);
+    expect(continuation.text).not.toEqual(result.text);
     expect((await call(r,{requestId:result.data!.requestId})).data).toEqual(result.data);
     expect((terminal.meta!.serverQuery as any).reply.data.items).toHaveLength(54);
   });

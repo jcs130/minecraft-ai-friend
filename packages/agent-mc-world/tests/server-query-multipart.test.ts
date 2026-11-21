@@ -48,6 +48,73 @@ it('collects rows without settling, rejects duplicate/old delivery, then emits a
   lane.reset('end');
 });
 
+it('reads an oversized merchant-shaped receipt in whole rows without losing the archived data', () => {
+  const { lane, terminal, context } = setup();
+  const rows = Array.from({ length: 34 }, (_, index) => ({ offerId: `item-${index}`,
+    price: index + 2, item: { name: `物品 ${index}`, detail: ('fresh values \\ "' + '甲').repeat(34), unknown: null } }));
+  context.send.mockImplementation(() => {
+    rows.forEach((row, index) => lane.receive('ROW ' + JSON.stringify(row), 'one', 'alice', 11 + index));
+    lane.receive('END 34', 'one', 'alice', 11 + rows.length);
+  });
+  const parsedDefinition = { ...definition, matchReply: (text: string, _args: readonly string[], _user: string, parts: readonly unknown[] = []) =>
+    text.startsWith('ROW ') ? { partial: true, data: JSON.parse(text.slice(4)) } :
+      text === `END ${parts.length}` ? { ok: true, data: { balance: 2488, complete: true, items: parts } } : null };
+  const first = lane.call({ query: 'pages' }, [parsedDefinition], context);
+  const stored = terminal.mock.calls[0][0];
+  const receiptId = first.data?.requestId;
+  expect(stored.text.length).toBeGreaterThan(23_000);
+  expect(first.data).toEqual(stored.data);
+  expect(first.data?.reply).toMatchObject({ data: { complete: true, items: rows } });
+  const received = [];
+  let toolOutput = first;
+  let previousOffset = 0;
+  for (;;) {
+    expect(toolOutput.text.length).toBeLessThanOrEqual(7_000);
+    const view = JSON.parse(toolOutput.text.split('\n')[1]);
+    expect(view).toMatchObject({ requestId: receiptId, phase: 'replied', goal_completed: false,
+      receiptView: { unit: 'items', offset: previousOffset, total: rows.length },
+      reply: { data: { balance: 2488, complete: true } } });
+    expect(view.receiptView.returned).toBeGreaterThan(0);
+    received.push(...view.reply.data.items);
+    if (!view.receiptView.hasMore) {
+      expect(view).not.toHaveProperty('next_safe_read');
+      break;
+    }
+    expect(view.next_safe_read).toEqual({tool: 'mc_query_receipt', arguments: { requestId: receiptId,
+      offset: previousOffset + view.receiptView.returned }});
+    previousOffset = view.next_safe_read.arguments.offset;
+    toolOutput = lane.readReceipt(view.next_safe_read.arguments);
+    expect(toolOutput.data).toEqual(stored.data);
+  }
+  expect(received).toEqual(rows);
+  expect(lane.readReceipt({requestId: receiptId, offset: rows.length})).toMatchObject({ failed: true });
+  expect(lane.readReceipt({requestId: receiptId, offset: '2'})).toMatchObject({ failed: true });
+  expect(lane.call({requestId: receiptId, offset: 2, query: 'pages'}, [parsedDefinition], context)).toMatchObject({ failed: true });
+  expect(context.send).toHaveBeenCalledTimes(1);
+});
+
+it('keeps exact JSON available for oversized non-list outcomes and leaves failures honest', () => {
+  const { lane, terminal, context } = setup();
+  const payload = { details: ('雪🌱' + '\\"').repeat(5_000), stable: null };
+  const sent = lane.call({ query: 'pages' }, [{ ...definition, matchReply: () => ({ ok: true, data: payload }) }], context);
+  expect(lane.readReceipt({ requestId: sent.data?.requestId, offset: 1 })).toMatchObject({ failed: true });
+  expect(lane.receive('END', 'one', 'alice', 11)).toBe(true);
+  const stored = terminal.mock.calls[0][0];
+  let args: Record<string, unknown> | undefined = { requestId: sent.data?.requestId };
+  let received = '';
+  while (args) {
+    const result = lane.call(args, [definition], context);
+    expect(result.text.length).toBeLessThanOrEqual(7_000);
+    const view = JSON.parse(result.text.split('\n')[1]);
+    expect(view.receiptView).toMatchObject({ unit: 'utf16', offset: received.length });
+    expect(view.jsonChunk.length).toBeGreaterThan(0);
+    received += view.jsonChunk;
+    args = view.next_safe_read?.arguments;
+  }
+  expect(received).toBe(JSON.stringify(stored.data));
+  expect(context.send).toHaveBeenCalledTimes(1);
+});
+
 it.each(['timeout', 'cancelled'] as const)('keeps partial evidence explicitly incomplete on %s without retry', phase => {
   vi.useFakeTimers();
   const { lane, terminal, context } = setup();
