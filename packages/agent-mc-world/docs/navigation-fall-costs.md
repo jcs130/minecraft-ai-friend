@@ -20,6 +20,11 @@ lose to a small drop. A planned descent still needs loaded support and clearance
 Live navigation and read-only route profiles share these rules and disclose the
 budget. The public SDK exports the budget/estimate and movement policy installer.
 
+The search excludes damaging dry edges without verified landing support and
+clearance when those edges require no block changes. This lets A* pick a
+different route within the same goal. Execution rechecks the chosen edge
+against current geometry and health, including geometry after digging or placing.
+
 Execution rechecks collision geometry and current health. Unexpected cliff exits
 still stop. The deep-fall reflex exempts only an owned, measured landing with a
 matching height and position; a lower destination Y alone is never sufficient.
@@ -39,6 +44,7 @@ prismarine-physics and real 1.21.1 collision shapes, without a game connection:
 - native physics executes four/seven-block descent with the geometry and deep-fall
   guards present, without digging, placement or server position writes;
 - nearby staircase vs long detour, cumulative damage and resource-aware A* keys;
+- a five-block direct edge onto a narrow stair face is excluded in favour of a verified route;
 - low/unknown health, adverse attributes, missing landing, lava/magma and blockage;
 - health loss between planning and execution withdraws the descent;
 - exact landing as the final destination, bounded arrival grace and cancellation;

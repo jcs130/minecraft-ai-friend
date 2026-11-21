@@ -16,6 +16,10 @@ export interface NavigationFallBudget {
 type FallBody = Partial<Pick<Bot, 'health' | 'entity'>>;
 const modes = new WeakMap<object, () => FallMode>();
 const installed = new WeakSet<object>();
+const climbableNavigationBlocks = new Set(['ladder', 'vine', 'scaffolding', 'water', 'bubble_column']);
+
+export const isClimbableNavigationBlock = (name: string): boolean => climbableNavigationBlocks.has(name);
+
 function fallParameters(bot: FallBody): { safeFallDistance: number; damageMultiplier: number } {
   const read = (name: string, fallback: number) => {
     const attributes = (bot.entity as unknown as { attributes?: Record<string, { value: number; modifiers?: Array<{operation:number;amount:number}> }> })?.attributes ?? {};
@@ -58,6 +62,21 @@ type RiskMovements = {
   getNeighbors(p: Move): Move[];
 };
 
+function verifiedSearchLanding(bot: Bot, from: Cell, to: Cell): boolean {
+  const destination = new Vec3(to.x, to.y, to.z);
+  const landing = bot.blockAt(destination, false);
+  if (!landing) return false;
+  const start = bot.blockAt(new Vec3(from.x, from.y, from.z), false);
+  if (start && (isClimbableNavigationBlock(start.name) || isClimbableNavigationBlock(landing.name))) return true;
+
+  // Search nodes use block coordinates. Pathfinder places the executable waypoint
+  // on the highest collision face here, or on the supporting block below.
+  const surface = landing.shapes.length ? landing : bot.blockAt(destination.offset(0, -1, 0), false);
+  if (!surface?.shapes.length) return false;
+  const y = surface.position.y + Math.max(...surface.shapes.map(shape => shape[4]));
+  return verifiedDryLanding(bot, from, { ...to, y });
+}
+
 /** Install on this profile only; live navigation and read-only probes use the same policy.
  * The upstream solid-floor test measures to the *block bottom* (one too far),
  * whereas liquid drops measure to feet. Here maxDropDown always means feet height.
@@ -96,6 +115,10 @@ export function installNavigationFallCosts(bot: Bot, movements: Movements): void
       const damage = estimateFallDamage(node.y - next.y + (next.parkour ? 1.25 : 0), bot);
       const total = spent + damage;
       if (total > budget.damageBudget) return false;
+      // Exclude this edge during search so A* can choose another route. Edges
+      // requiring terrain edits remain subject to the execution-time recheck.
+      if (damage > 0 && next.y < node.y && !next.toBreak?.length && !next.toPlace?.length
+        && !verifiedSearchLanding(bot, node, next)) return false;
       next.fallDamage = total;
       // A cheaper route that spent more health must not hide a survivable route
       // to the same cell. The remaining damage budget is part of A* state.
