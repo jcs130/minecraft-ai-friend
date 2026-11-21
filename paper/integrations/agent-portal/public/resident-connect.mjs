@@ -16,7 +16,7 @@ flow.value = params.get('flow') === 'create' ? 'create' : 'connect';
 kind.value = params.get('bodyKind') === 'numen' ? 'numen' : 'maid';
 if (legacy) {
   byId('title').textContent = '连接居民身体';
-  byId('intro').textContent = '选择车万女仆或 Numen，获取仅供这个居民使用的连接码。';
+  byId('intro').textContent = '新建居民，或为你已有的居民获取专属连接码。';
 }
 if (sharedPlay) {
   byId('title').textContent = '授权千灯纪游戏插件';
@@ -86,6 +86,7 @@ function render() {
   clearTimeout(poll);
   if (!catalog || !session?.owner || !legacy) return;
   const creating = flow.value === 'create';
+  byId('kind-caption').textContent = creating ? '新角色的身体类型' : '按身体类型筛选居民';
   const maidOnly = creating && catalog.creationMode === 'maid-only';
   byId('kind-label').hidden = maidOnly;
   if (maidOnly) kind.value = 'maid';
@@ -109,7 +110,7 @@ function render() {
     role.replaceChildren(...residents.map(r => new Option(r.name + (r.state === 'preparing' ? ' · 准备中' : ''), r.id)));
     if (current) { selected = current.id; role.value = selected; }
     byId('role-code').disabled = byId('download').disabled = byId('release').disabled = !ready;
-    available.textContent = !current ? '当前账号还没有这种身体的居民，可切换身体或选择新建角色。'
+    available.textContent = !current ? '当前账号还没有这种类型的居民。可查看其他类型，或选择新建角色。'
       : ready ? '把连接码填入本机插件。兑换后，原有插件连接将结束。'
       : '正在为「' + current.name + '」准备身体，页面会自动更新。';
     if (current && !ready) poll = setTimeout(() => { refresh().catch(report); }, 2500);

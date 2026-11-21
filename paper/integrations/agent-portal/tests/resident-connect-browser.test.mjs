@@ -95,9 +95,25 @@ test('authorization links only to the enabled resident installers and their revi
   }
 });
 
+test('public body guidance works without JavaScript and lists no residents before login', browserTest, async t => {
+  const {page,origin} = await fixture(t);
+  await page.setJavaScriptEnabled(false);
+  await page.goto(origin+'/join');
+  const panel = await page.$eval('#plugin-start',e=>e.innerText);
+  assert.match(panel,/自主换身暂未开放/);
+  const link = await page.$eval('#plugin-start a[href*="flow=connect"]',e=>e.href);
+  await page.goto(link);
+  assert.match(await page.$eval('#body-status',e=>e.innerText),/登录后.*当前账号的已有居民/);
+  assert.equal(await page.$$eval('#role option',rows=>rows.length),0);
+  assert.equal((await fetch(origin+'/api/v1/resident-turns')).status,401);
+  assert.equal(await noOverflow(page),true);
+});
+
 test('production website creation selects a maid even when the link asks for Numen', browserTest, async t => {
   const {page,origin} = await fixture(t,{residentCreationMode:'maid-only'});
   await page.goto(origin+'/resident-connect.html?flow=create&bodyKind=numen');
+  await visible(page,'body-status');
+  assert.match(await page.$eval('#body-status',el=>el.textContent),/自主换身暂未开放/);
   await login(page);
   await visible(page,'create');
   assert.equal(await page.$eval('#kind-label',el=>el.hidden),true);
@@ -121,10 +137,17 @@ test('existing Numen is connected by code, downloaded separately and revoked', b
   assert.equal(await page.$eval('#role option', e => e.textContent), '桐人');
   await page.click('#role-code');
   await visible(page,'delivery');
+  assert.equal(await page.$eval('#kind-caption',e=>e.textContent),'按身体类型筛选居民');
+  const filterWrites=[];
+  const trackFilterWrites=request=>{if(request.method()==='POST')filterWrites.push(request.url());};
+  page.on('request',trackFilterWrites);
   await page.select('#kind','maid');
   assert.equal(await page.$eval('#delivery',e => e.hidden),true);
-  assert.match(await page.$eval('#availability',e=>e.textContent),/还没有/);
+  assert.match(await page.$eval('#availability',e=>e.textContent),/查看其他类型/);
   await page.select('#kind','numen');
+  assert.equal(await page.$eval('#role option',e=>e.textContent),'桐人');
+  assert.deepEqual(filterWrites,[]);
+  page.off('request',trackFilterWrites);
   await page.select('#flow','create');
   assert.match(await page.$eval('#availability',e=>e.textContent),/暂无可分配.*身体名额/);
   await page.select('#flow','connect');
