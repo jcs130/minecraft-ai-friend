@@ -38,6 +38,7 @@ final class MaidResidents {
     private final java.util.Set<UUID> combatReady=new java.util.HashSet<>();
     final ResidentSettings settings;
     private final Map<UUID,ResidentConfig.Resident> roles=new LinkedHashMap<>();
+    private final Map<UUID,UUID> guides=new LinkedHashMap<>();
     private final Map<UUID,Job> jobs=new java.util.HashMap<>();
     private final Map<UUID,Thinking> thinking=new java.util.HashMap<>();
     private final Map<UUID,Long> nextPlan=new java.util.HashMap<>();
@@ -65,6 +66,20 @@ final class MaidResidents {
         settings=new ResidentSettings(server.getWorldPath(LevelResource.ROOT).resolve("data/tlm-resident-settings"),dir,this,agents);
     }
     ResidentConfig.Resident role(UUID id) { return roles.get(id); }
+    void registerGuide(UUID id,UUID owner,String name) {
+        if(roles.containsKey(id)&&!guide(id))throw new IllegalStateException("existing_resident_identity");
+        if(guides.containsKey(id)&&!guides.get(id).equals(owner))throw new IllegalStateException("guide_owner_mismatch");
+        agents.registerGuide(id,owner);
+        guides.put(id,owner);
+        roles.put(id,new ResidentConfig.Resident(id,name,"","touhou_little_maid:idle",null,null,
+            List.of(),List.of(),false,null,false,true,"unified",List.of(owner),null));
+    }
+    boolean guide(UUID id){return guides.containsKey(id);}
+    String name(UUID id){
+        if(!guide(id))return settings.name(id);
+        var maid=body(id);
+        return maid==null?require(id).name():maid.getName().getString();
+    }
     Map<String,Object> travelReceipt(UUID id,UUID request)throws Exception{require(id);return agents.companions().travelReceipt(id,request);}
     Map<String,Object> inspectTravel(UUID id,UUID request,UUID review,JsonObject inspection)throws Exception{require(id);return agents.companions().inspectTravel(id,request,review,inspection);}
     Map<String,Object> resumeTravel(UUID id,UUID review)throws Exception{require(id);return agents.companions().resumeAfterInspection(id,review);}
@@ -88,7 +103,7 @@ final class MaidResidents {
     boolean ownsMovement(UUID id){var job=jobs.get(id);return job!=null&&(ResidentContract.holdsPosition(job.input())||List.of("walk","home").contains(job.input().get("action").getAsString()));}
     void combatStarted(UUID id){agents.agent(id).invalidateActions();}
     void combatTick(){for(var id:ids()){
-        var maid=body(id);if(maid==null||!combatReady.contains(id))continue;
+        var maid=body(id);if(maid==null||!combatReady.contains(id)||guide(id)&&server.getPlayerList().getPlayer(guides.get(id))==null)continue;
         boolean allowed=(!external(id)||externalGuards.contains(id))&&!jobs.containsKey(id)&&maid.getPersistentData().getString(ACTIVE).isBlank()
             &&(agents.companions()==null||agents.companions().combatAllowed(id));
         combat.tick(maid,allowed);
@@ -97,7 +112,7 @@ final class MaidResidents {
     private boolean leased(UUID id) { return agents.companions()!=null&&agents.companions().reserved(id); }
     Map<String,Object> observe(UUID id) {
         var r=require(id);var maid=body(id);var row=new LinkedHashMap<String,Object>();
-        row.put("maidId",id.toString());row.put("name",settings.name(id));row.put("profession",r.profession());row.put("home",r.home());
+        row.put("maidId",id.toString());row.put("name",name(id));row.put("profession",r.profession());if(r.home()!=null)row.put("home",r.home());
         row.put("loaded",maid!=null);row.put("observedAt",java.time.Instant.now().toString());row.put("usesPlayerSlot",false);
         var expedition = expeditions.get(id);
         if (expedition != null) row.put("expedition", expedition.describe(maid, agents.companions()));
@@ -122,13 +137,13 @@ final class MaidResidents {
     }
     Map<String,Object> publicView(UUID id) {
         var r=require(id);var maid=body(id);var row=new LinkedHashMap<String,Object>();
-        row.put("maidId",id.toString());row.put("name",settings.name(id));row.put("profession",r.profession());
+        row.put("maidId",id.toString());row.put("name",name(id));row.put("profession",r.profession());
         row.put("available",maid!=null&&!leased(id));row.put("usesPlayerSlot",false);
-        row.put("homeDoor",r.home().door());row.put("homeDimension",r.home().dimension());
+        if(r.home()!=null){row.put("homeDoor",r.home().door());row.put("homeDimension",r.home().dimension());}
         return row;
     }
     boolean mapVisible(UUID id, EntityMaid maid) {
-        return maid!=null && maid.isAlive() && !maid.isInvisible() && settings.flag(id,"mapVisible");
+        return !guide(id) && maid!=null && maid.isAlive() && !maid.isInvisible() && settings.flag(id,"mapVisible");
     }
     Map<String,Object> mapPositions() {
         var out=new ArrayList<Map<String,Object>>();
@@ -143,6 +158,7 @@ final class MaidResidents {
         return ResidentAppearance.apply(maid,r);
     }
     Map<String,Object> home(UUID id,boolean apply,UUID requestId) throws Exception {
+        if(guide(id))throw new IllegalArgumentException("guide_follows_owner");
         var r=require(id);var maid=body(id);
         if(maid==null)throw new IllegalArgumentException("resident_body_not_loaded");
         if(!maid.level().dimension().location().toString().equals(r.home().dimension()))throw new IllegalArgumentException("resident_not_in_home_dimension");
@@ -244,6 +260,15 @@ final class MaidResidents {
         long now=System.currentTimeMillis();
         for(var r:roles.values()) {
             var id=r.maidId();
+            if(guide(id)){
+                if(server.getPlayerList().getPlayer(guides.get(id))==null)continue;
+                var maid=body(id);
+                if(maid!=null){
+                    combatReady.add(id);
+                    ResidentRpg.tick(maid);
+                }
+                continue;
+            }
             var homeLevel=server.getLevel(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,ResourceLocation.parse(r.home().dimension())));
             if(homeLevel!=null)homeLevel.getChunkSource().addRegionTicket(TICKET,new net.minecraft.world.level.ChunkPos(r.home().door().pos()),2,id);
             try{
@@ -376,7 +401,10 @@ final class MaidResidents {
         latest.put(r.maidId(),row);jobs.remove(r.maidId());nextPlan.put(r.maidId(),now+config.planningSeconds()*1000L);
     }
     List<LivingEntity> allies(EntityMaid maid){var out=new ArrayList<LivingEntity>();out.add(maid);
-        for(var id:roles.keySet()){var other=body(id);if(other!=null&&other!=maid)out.add(other);}
+        for(var id:roles.keySet()){
+            if((guide(id)||guide(maid.getUUID()))&&!sameParty(maid.getUUID(),id))continue;
+            var other=body(id);if(other!=null&&other!=maid)out.add(other);
+        }
         for(var p:server.getPlayerList().getPlayers())if(sameParty(maid.getUUID(),p.getUUID()))out.add(p);
         return out;}
     Map<String,Object> plan(UUID id) {

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>我的伙伴 · 千灯纪</title>
+  <link rel="stylesheet" href="/maid-connect-trial.css">
+  <link rel="stylesheet" href="/companion.css">
+  <script type="module" src="/companion.mjs"></script>
+</head>
+<body>
+<main>
+  <nav aria-label="主导航"><a href="/">千灯纪</a><a href="/#account">我的账号</a><a href="/join#players">进服说明</a></nav>
+  <header><h1>我的伙伴</h1><p>在游戏里与你同行。回到这里，可以设置她的名字和人设，查看旅途留下的作品。</p></header>
+  <p id="notice" role="status">正在读取角色…</p>
+  <section id="entry" hidden>
+    <h2>领取第一位伙伴</h2>
+    <ol>
+      <li><a href="/#account">注册或登录千灯纪官网</a>，在账号页绑定自己的游戏角色。</li>
+      <li>用同一个角色进服。已有游戏账号使用原密码，微软正版自动认证可用时直接进入。</li>
+      <li>右键罗盘，选择「我的伙伴」，点「领取我的伙伴」。</li>
+    </ol>
+    <a href="/join#players">查看各客户端的进服方式</a>
+  </section>
+  <div id="manage" hidden>
+    <label for="roles">选择角色</label>
+    <select id="roles"></select>
+    <section class="companion-card">
+      <div class="companion-facts">
+        <div><h2 id="name"></h2><span id="body"></span></div>
+        <span id="presence"></span>
+      </div>
+      <dl class="companion-details"><div><dt>等级</dt><dd id="level"></dd></div><div><dt>职业</dt><dd id="profession"></dd></div><div><dt>声音包</dt><dd id="voice"></dd></div></dl>
+      <form id="profile">
+        <label>名字<input name="name" required maxlength="48"></label>
+        <label>人设<textarea name="persona" maxlength="1200" rows="4" placeholder="她说话是什么样子？喜欢做什么？"></textarea></label>
+        <button type="submit">保存伙伴设置</button>
+      </form>
+      <p class="help">普通伙伴随玩家上线启用。下线后暂停行动和模型调用。音色在游戏的伙伴菜单随声音包切换。</p>
+    </section>
+    <section class="companion-card"><h2>照片</h2><div id="photos" class="companion-photos"></div></section>
+    <section class="companion-card"><h2>公开日记</h2><div id="diaries"></div></section>
+  </div>
+</main>
+</body></html>

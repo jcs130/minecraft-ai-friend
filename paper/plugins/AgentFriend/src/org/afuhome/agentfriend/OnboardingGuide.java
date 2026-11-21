@@ -216,7 +216,10 @@ final class OnboardingGuide implements Listener {
         else if (!catalog) step = new Step("catalog", "", List.of("/mycli skills list common", "/mycli skills info fireworks"));
         else if (!cast) {
             boolean known = plugin.professions().level(p, "fireworks") > 0;
-            step = new Step("cast", known ? "已学烟花术，可用 /mycli cast fireworks；1魔力，10秒冷却。也可成功施放任一已学技能。"
+            step = plugin.nativeRpg().selected()
+                    ? new Step("cast", "用罗盘打开技能图鉴，选择烟花术，点「使用一次」；不要求选职。实际施法成功才记入进度。",
+                            List.of("/mycli cast fireworks", "/mycli skills list common"))
+                    : new Step("cast", known ? "已学烟花术，可用 /mycli cast fireworks；1魔力，10秒冷却。也可成功施放任一已学技能。"
                     : "例如先 /mycli skills info fireworks；愿意花1技能点时 /mycli skills learn fireworks，再 cast fireworks（1魔力）。也可选别的已学技能。",
                     known ? List.of("/mycli cast fireworks", "/mycli status")
                             : List.of("/mycli skills info fireworks", "/mycli skills points", "/mycli skills learn fireworks", "/mycli cast fireworks"));
@@ -232,19 +235,24 @@ final class OnboardingGuide implements Listener {
             } else if (flag(life, "ready")) step = new Step("life_claim", value(life, "title") + " " + life.get("progress") + "/" + life.get("target"), List.of("/mycli life claim"));
             else step = new Step("life_progress", value(life, "title") + " " + life.get("progress") + "/" + life.get("target") + "；" + value(life, "instruction"), List.of("/mycli life status", "/mycli life locations"));
         } else step = new Step("complete", "入门已毕业；先 tasks list exploration 看近郊分段调查，arena status 看按层试炼，dungeon list 看逐室遗迹。已有委托用 tasks status 收尾，试炼/地下城可独立参加。出发前 guild shared 查公共装备。", List.of("/mycli tasks list exploration", "/mycli arena status", "/mycli dungeon list", "/mycli guild shared", "/mycli tasks list"));
-        if(registered&&plugin.combatRpg()!=null){
+        boolean graduated=registered&&TaskRouteCatalog.graduated(enrolled,catalog,cast,lived);
+        if(graduated&&plugin.combatRpg()!=null){
             boolean retired=RetiredActivities.retired(value(guild,"activeId"));
             String next=plugin.combatRpg().next(p,retired);
             if(retired||plugin.dungeonParticipant(p)||!plugin.combatRpg().profession(p).isEmpty()&&lived)
                 step=new Step("complete","攻略路线：整备装备 → 学习技能 → 战斗练级 → 探索迷宫 → 讨伐楼层首领。旧试炼塔只作练习，正式层数单独统计。"
                     +(retired?"当前是已撤下的农耕委托；可主动暂存，保留历史进度。":""),List.of(next,"/mycli world story list ranking"));
-            else if(plugin.combatRpg().profession(p).isEmpty())step=new Step("route_choose","先选战斗职业：战士、坦克、法师或牧师；均可单人练级或组队。",List.of(next));
+            else if(plugin.combatRpg().profession(p).isEmpty())step=new Step("complete","已结束入门；可选战士、坦克、法师或牧师，单人练级或组队。",List.of(next));
         }
-        if(plugin.nativeRpg().selected()){boolean chosen=!plugin.nativeRpg().profession(p).isEmpty();step=new Step(chosen?"complete":"route_choose",chosen?"Vortex职业已选；查看技能学习点，接讨伐和探索，再组队攻略。":"先选原生职业：骑士、法师、游侠、牧师、驯兽师、工程师。少量通用技无需选职。",List.of(chosen?"/mycli skills list":"/mycli profession list","/mycli tasks list","/mycli guild shared"));}
+        if(graduated&&plugin.nativeRpg().selected()){
+            boolean chosen=!plugin.nativeRpg().profession(p).isEmpty();
+            step=new Step("complete",chosen?"查看技能学习点，任选讨伐、探索或遗迹。":"可以在职业页查看六种职业；通用技能无需选职。",
+                    List.of(chosen?"/mycli tasks list":"/mycli profession list","/mycli dungeon list","/mycli guild shared"));
+        }
         out.addProperty("step", step.id()); out.addProperty("title", settings.getString("steps." + step.id() + ".title"));
         out.addProperty("message", settings.getString("steps." + step.id() + ".message") + (step.detail().isEmpty() ? "" : " " + step.detail()));
         out.addProperty("nextCommand", step.commands().getFirst()); JsonArray commands = new JsonArray(); step.commands().forEach(commands::add); out.add("commands", commands);
-        out.addProperty("completed", registered && TaskRouteCatalog.graduated(enrolled, catalog, cast, lived));
+        out.addProperty("completed", graduated);
         out.addProperty("routesCommand", "/mycli tasks list");
         JsonArray checklist = new JsonArray();
         milestone(checklist, "register", "冒险者登记", registered); milestone(checklist, "guide_start", "报名新手实习", enrolled);

@@ -39,6 +39,15 @@ public final class AdventureMenuModelTest {
         check(parent(Page.WHEEL_PICK)==Page.WHEEL_EDIT&&destination(Action.WHEEL_ASSIGN)==null,"skill selection is a guarded preference write, not a page or cast");
         check(destination(Action.COMMON_EQUIP)==null,"a skill-first shortcut carries the selected skill to its slot list");
         check(category(Page.TRAVEL).stream().anyMatch(b->b.action()==Action.COMMON_DETAIL&&b.payload().equals("home")),"home shows spell details first");
+        check(destination(Action.ONBOARDING)==Page.ONBOARDING,"the compass opens the shared welcome screen");
+        check(onboardingNext("register").payload().equals("register")&&onboardingNext("guide_start").payload().equals("guide_start"),
+                "registration and enrollment require separate clicks");
+        check(onboardingNext("catalog").action()==Action.COMMON&&onboardingNext("cast").action()==Action.COMMON_DETAIL,
+                "open the actual catalogue, show a spell before casting");
+        check(onboardingNext("guild_progress").action()==Action.CONTRACT_MENU&&onboardingNext("life_claim").payload().equals("life_claim"),
+                "resume existing commissions");
+        check(onboardingNext("complete").action()==Action.ADVENTURE&&onboardingNext("unknown")==null,
+                "completed and unknown states have no onboarding writes");
         UUID owner=UUID.randomUUID(),other=UUID.randomUUID();Ticket ticket=new Ticket(owner,1000);
         check(partyAction("create",true,false,null).equals("create"),"explicit own party creation");
         check(partyAction("create",false,false,null)==null,"unknown party state never creates");

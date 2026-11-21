@@ -48,9 +48,10 @@ final class NativeMaidNearbyChat implements Listener {
             ?MaidAddressing.partnerAddressed(maid.getName().getString(),text)
             :MaidAddressing.addressed(maid.getName().getString(),text);
         if(direct!=null)return new Address(direct,partner);
-        if(plugin.ownerDialogue(actor,maid)){
+        if(plugin.ownerDialogue(actor,maid)||plugin.guideDialogue(actor,maid)){
             if (addressesSomeoneElse(actor, maid, text)) return null;
             String vocative=MaidAddressing.partnerAddressed("女仆",text);
+            if(vocative==null&&plugin.guideDialogue(actor,maid))vocative=MaidAddressing.partnerAddressed("伙伴",text);
             if(vocative!=null){
                 if(facing||onlyNearbyPersonalMaid(actor,maid))return new Address(vocative,true);
                 return null;
@@ -67,7 +68,7 @@ final class NativeMaidNearbyChat implements Listener {
         for(var other:owner.getNearbyEntities(range,range,range)){
             if(other.getUniqueId().equals(maid.getUUID())||!owner.canSee(other))continue;
             var body=HybridMaidPlugin.nativeMaid(other);
-            if(plugin.ownerDialogue(owner,body)&&MaidConversationRange.within(body,owner,range))return false;
+            if((plugin.ownerDialogue(owner,body)||plugin.guideDialogue(owner,body))&&MaidConversationRange.within(body,owner,range))return false;
         }
         return true;
     }
@@ -92,9 +93,11 @@ final class NativeMaidNearbyChat implements Listener {
         positions.values().removeIf(history->history.isEmpty()||history.peekLast().time<now-180_000);
         for(String key:plugin.registeredMaids().keySet()){
             UUID id=UUID.fromString(key);EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
-            if(maid==null||!plugin.sharedDialogueEnabled(maid)&&!plugin.personalDialogue(maid))continue;
-            Player owner=plugin.personalDialogue(maid)?Bukkit.getPlayer(maid.getOwnerUUID()):null;
-            if(plugin.personalDialogue(maid)&&(owner==null||!MaidConversationRange.within(maid,owner,MaidConversationRange.PARTNER)))continue;
+            if(maid==null)continue;
+            boolean personal=plugin.personalDialogue(maid)||plugin.guideOwner(id)!=null;
+            if(!personal&&!plugin.sharedDialogueEnabled(maid))continue;
+            Player owner=personal?Bukkit.getPlayer(maid.getOwnerUUID()):null;
+            if(personal&&(owner==null||!MaidConversationRange.within(maid,owner,MaidConversationRange.PARTNER)))continue;
             var history=positions.computeIfAbsent(id,k->new ArrayDeque<>());
             boolean facing=owner!=null&&MaidConversationRange.within(maid,owner,5)&&owner.getTargetEntity(5)==maid.getBukkitEntity();
             history.addLast(new Pose(now,maid.getBukkitEntity().getWorld().getUID(),maid.getX(),maid.getY(),maid.getZ(),facing));
@@ -108,7 +111,7 @@ final class NativeMaidNearbyChat implements Listener {
         Player actor=Bukkit.getPlayer(actorId);if(actor==null||!actor.getWorld().getUID().equals(world)||actor.isDead()||actor.isInvisible()||actor.getGameMode()==GameMode.SPECTATOR)return;
         for(var row:positions.entrySet()){
             EntityMaid maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(row.getKey()));
-            if(maid==null|| (onlyPersonal ? !plugin.ownerDialogue(actor,maid) : !plugin.nearbyDialogue(actor,maid)) ||!world.equals(maid.getBukkitEntity().getWorld().getUID())||!actor.canSee(maid.getBukkitEntity())||!MaidConversationRange.within(maid,actor,MaidConversationRange.speaker(maid,actor)))continue;
+            if(maid==null|| (onlyPersonal ? !plugin.ownerDialogue(actor,maid)&&!plugin.guideDialogue(actor,maid) : !plugin.nearbyDialogue(actor,maid)) ||!world.equals(maid.getBukkitEntity().getWorld().getUID())||!actor.canSee(maid.getBukkitEntity())||!MaidConversationRange.within(maid,actor,MaidConversationRange.speaker(maid,actor)))continue;
             List<Pose> samples=row.getValue().stream().filter(p->p.time>=start-300&&p.time<=end+300).toList();
             if(samples.isEmpty()||samples.getFirst().time>start||samples.getLast().time<end-300)continue;
             boolean heard=true;long previous=start;
@@ -162,7 +165,7 @@ final class NativeMaidNearbyChat implements Listener {
             if(maid==null||!plugin.nearbyDialogue(actor,maid)||!maid.isAlive()||maid.isRemoved()
                 ||!actor.getWorld().equals(maid.getBukkitEntity().getWorld())||!actor.canSee(maid.getBukkitEntity())
                 ||!MaidConversationRange.within(maid,actor,MaidConversationRange.speaker(maid,actor)))continue;
-            Address addressed=addressed(actor,maid,text,plugin.ownerDialogue(actor,maid)&&actor.getTargetEntity(5)==maid.getBukkitEntity());if(addressed==null)continue;
+            Address addressed=addressed(actor,maid,text,(plugin.ownerDialogue(actor,maid)||plugin.guideDialogue(actor,maid))&&actor.getTargetEntity(5)==maid.getBukkitEntity());if(addressed==null)continue;
             plugin.nearbyConversation(actor,maid,addressed,recipients);return;
         }
     }

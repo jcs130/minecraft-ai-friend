@@ -91,6 +91,7 @@ final class ResidentSettings {
     Map<String,Object> catalogue() {
         var rows=new ArrayList<Map<String,Object>>();
         for(var id:residents.ids()) {
+            if(residents.guide(id))continue;
             var a=agents.agent(id);var maid=residents.body(id);
             rows.add(Map.of("id",id.toString(),"revision",revision(id),"profile",profile(id),"loaded",maid!=null,
                 "profession",residents.role(id).profession(),"brains",a.binding().choices().entrySet().stream().sorted(Map.Entry.comparingByKey()).map(e->Map.of("id",e.getKey(),"model",e.getValue().model())).toList(),
@@ -114,6 +115,7 @@ final class ResidentSettings {
     }
     Map<String,Object> apply(UUID id,UUID request,long expected,JsonObject profile)throws Exception {
         if(residents.role(id)==null)throw new IllegalArgumentException("unknown_resident");
+        if(residents.guide(id))throw new IllegalArgumentException("player_guide_uses_owner_settings");
         validate(id,profile);
         var old=profiles.get(id);
         if(old!=null&&request.toString().equals(old.get("requestId").getAsString())) {

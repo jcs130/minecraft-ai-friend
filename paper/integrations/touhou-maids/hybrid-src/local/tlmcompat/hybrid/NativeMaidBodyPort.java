@@ -22,6 +22,7 @@ final class NativeMaidBodyPort implements AutoCloseable {
     private final HttpServer server;
     private final ExecutorService executor;
     private final byte[] token;
+    private final boolean guidesEnabled;
     private volatile boolean closed;
     static NativeMaidBodyPort open(HybridMaidPlugin plugin){
         var path=plugin.getDataFolder().toPath().resolve("native-body-port.json");if(!Files.exists(path))return null;
@@ -35,7 +36,8 @@ final class NativeMaidBodyPort implements AutoCloseable {
         var tokenFile=Path.of(config.get("tokenFile").getAsString());if(Files.size(tokenFile)>256)throw new IllegalArgumentException("token_size");
         var secret=Files.readString(tokenFile).strip();if(!secret.matches("[A-Za-z0-9_-]{32,128}"))throw new IllegalArgumentException("token_format");
         token=("Bearer "+secret).getBytes(StandardCharsets.UTF_8);
-        var bindings=new LinkedHashMap<UUID,UUID>();var rows=config.getAsJsonArray("bindings");if(rows.size()<1||rows.size()>24)throw new IllegalArgumentException("bindings");
+        guidesEnabled=config.has("guideCompanions")&&config.get("guideCompanions").getAsBoolean();
+        var bindings=new LinkedHashMap<UUID,UUID>();var rows=config.getAsJsonArray("bindings");if(rows.size()>24||rows.isEmpty()&&!guidesEnabled)throw new IllegalArgumentException("bindings");
         for(var value:rows){var row=value.getAsJsonObject();var maid=MaidBodyControl.uuid(row,"maidId");var owner=MaidBodyControl.uuid(row,"ownerId");
             if(bindings.put(maid,owner)!=null)throw new IllegalArgumentException("duplicate_body");
             var registered=plugin.registeredMaids().get(maid.toString());
@@ -45,6 +47,7 @@ final class NativeMaidBodyPort implements AutoCloseable {
                 // A disconnected unified host must not wake the retired dialogue
                 // planner. This designation survives lease expiry and bind errors.
                 plugin.registerUnifiedBody(maid);
+                if (row.has("starterKit") && row.get("starterKit").getAsBoolean()) plugin.registerStarterKit(maid);
             }
         }
         MaidPlayerProfiles profiles;
@@ -55,7 +58,8 @@ final class NativeMaidBodyPort implements AutoCloseable {
             profiles = MaidPlayerProfiles.from(new JsonArray());
         }
         playerProfiles = profiles;
-        control=new MaidBodyControl(plugin.getDataFolder().toPath().resolve("native-body-receipts"),bindings);
+        control=new MaidBodyControl(plugin.getDataFolder().toPath().resolve("native-body-receipts"),bindings,
+            id->guidesEnabled?plugin.guideOwner(id):null);
         actions=new NativeMaidBodyActions(plugin,control);
         server=HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),port),16);
         executor=new ThreadPoolExecutor(2,2,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(16),r->{var t=new Thread(r,"maid-body-http");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy());
@@ -64,6 +68,7 @@ final class NativeMaidBodyPort implements AutoCloseable {
         plugin.getLogger().info("Native maid body port listening on loopback; "+bindings.size()+" explicit bindings");
     }
     boolean active(UUID maid){return control.active(maid);}
+    boolean guidesEnabled(){return guidesEnabled;}
     JsonObject playerRoleProfile(UUID player, UUID maid) {
         return playerProfiles.read(player, maid, () -> plugin.ownedLoaded(player, maid).getOwnerUUID(),
             NativeMaidMagicSupport::cachedPlayerProfile);
@@ -163,9 +168,28 @@ final class NativeMaidBodyPort implements AutoCloseable {
     private JsonObject handle(JsonObject input)throws Exception {
         if(closed)throw new MaidBodyControl.Fault(503,"PORT_STOPPED");
         var operation=MaidBodyControl.string(input,"operation");
+        if(operation.equals("guide_list")){
+            MaidBodyControl.keys(input,Set.of("operation"));
+            if(!guidesEnabled)throw new MaidBodyControl.Fault(404,"GUIDES_DISABLED");
+            var result=new JsonObject();result.addProperty("protocol",MaidBodyControl.PROTOCOL);result.add("guides",plugin.onlineGuides());return result;
+        }
+        if(operation.equals("guide_profile")){
+            MaidBodyControl.keys(input,Set.of("operation","ownerId","maidId","profileRevision","name"));
+            if(!guidesEnabled)throw new MaidBodyControl.Fault(404,"GUIDES_DISABLED");
+            var owner=MaidBodyControl.uuid(input,"ownerId");
+            var body=MaidBodyControl.uuid(input,"maidId");
+            if(!owner.equals(plugin.guideOwner(body)))throw new MaidBodyControl.Fault(403,"NOT_AUTHORIZED");
+            var applied=plugin.applyGuideProfile(owner,body,input.get("profileRevision").getAsLong(),MaidBodyControl.string(input,"name"));
+            var result=new JsonObject();result.addProperty("protocol",MaidBodyControl.PROTOCOL);result.addProperty("applied",applied);return result;
+        }
         MaidBodyControl.keys(input,Set.of("operation","ownerId","maidId","controllerId","generation","name","arguments","requestId"));
         var owner=MaidBodyControl.uuid(input,"ownerId");var maid=MaidBodyControl.uuid(input,"maidId");var controller=MaidBodyControl.uuid(input,"controllerId");
         control.authorize(owner,maid);MaidBodyControl.Lease lease;
+        if(plugin.guideOwner(maid)!=null&&!operation.equals("release")){
+            var player=Bukkit.getPlayer(owner);
+            if(player==null||!player.isOnline()||player.isDead()||player.getGameMode()==org.bukkit.GameMode.SPECTATOR)
+                throw new MaidBodyControl.Fault(409,"GUIDE_OWNER_UNAVAILABLE");
+        }
         if(operation.equals("bind")){
             MaidBodyControl.keys(input,Set.of("operation","ownerId","maidId","controllerId"));
             if(!control.active(maid)){
@@ -179,7 +203,14 @@ final class NativeMaidBodyPort implements AutoCloseable {
             lease=control.bind(owner,maid,controller,System.currentTimeMillis());
             var out=envelope(lease);var tools=new JsonArray();tools.add(MaidBodyControl.tool());out.add("tools",tools);out.addProperty("leaseTimeoutMs",MaidBodyControl.LEASE_MILLIS);return out;
         }
-        lease=control.require(owner,maid,controller,MaidBodyControl.string(input,"generation"),System.currentTimeMillis());
+        String generation=MaidBodyControl.string(input,"generation");
+        if(operation.equals("release")&&plugin.guideOwner(maid)!=null&&!control.active(maid)){
+            MaidBodyControl.keys(input,Set.of("operation","ownerId","maidId","controllerId","generation"));
+            var released=envelope(new MaidBodyControl.Lease(owner,maid,controller,generation,0));
+            released.addProperty("released",true);
+            return released;
+        }
+        lease=control.require(owner,maid,controller,generation,System.currentTimeMillis());
         var out=envelope(lease);
         if(operation.equals("release")){MaidBodyControl.keys(input,Set.of("operation","ownerId","maidId","controllerId","generation"));release(maid,"controller_released");out.addProperty("released",true);return out;}
         if(!operation.equals("call"))throw new MaidBodyControl.Fault(400,"INVALID_operation");

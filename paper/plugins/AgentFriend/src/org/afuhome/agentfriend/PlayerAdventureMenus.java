@@ -19,11 +19,12 @@ final class PlayerAdventureMenus implements Listener {
     private record WheelSkill(Action action, String id, String icon, String name, List<String> lore) { }
     private final AgentFriendPlugin owner;
     private final BedrockMenuForms forms;
+    private final GuideCompanionMenu guides;
     private final Map<UUID,Session> sessions=new HashMap<>();
     private final Map<Inventory,Session> inventories=new IdentityHashMap<>();
     private volatile boolean stopped;
     PlayerAdventureMenus(AgentFriendPlugin owner){
-        this.owner=owner;forms=BedrockMenuForms.available();
+        this.owner=owner;forms=BedrockMenuForms.available();guides=new GuideCompanionMenu(owner,this);
         Bukkit.getPluginManager().registerEvents(this,owner);
     }
     void open(Player p){open(p,Page.HOME,"");}
@@ -40,14 +41,17 @@ final class PlayerAdventureMenus implements Listener {
             p.closeInventory();
             Session s=new Session(new Ticket(p.getUniqueId(),System.currentTimeMillis()),view,null,aim);
             sessions.put(p.getUniqueId(),s);
-            if(forms.show(p.getUniqueId(),view,index->onForm(p.getUniqueId(),s,index),()->onFormClosed(p.getUniqueId(),s)))return;
+            if(forms.show(p.getUniqueId(),view,index->onForm(p.getUniqueId(),s,index),()->onFormClosed(p.getUniqueId(),s))){
+                if(page==Page.COMMON)owner.recordWorldLesson(p,"catalog");
+                return;
+            }
             forget(p.getUniqueId()); // a late response cannot activate the chest fallback
         }
         var title=page==Page.WHEEL
                 ? net.kyori.adventure.text.Component.translatable().key("screen.qiandeng_controls.spell_wheel").fallback(view.title()).build()
                 : net.kyori.adventure.text.Component.text(view.title(),net.kyori.adventure.text.format.NamedTextColor.DARK_AQUA);
         Inventory inv=Bukkit.createInventory(null,SIZE,title);
-        ItemStack frame=item(button(0,Action.NONE,"GRAY_STAINED_GLASS_PANE"," "));
+        ItemStack frame=item(button(0,Action.NONE,page==Page.ONBOARDING?"CYAN_STAINED_GLASS_PANE":"GRAY_STAINED_GLASS_PANE"," "));
         for(int slot=0;slot<SIZE;slot++)inv.setItem(slot,frame);
         for(Button b:view.buttons())inv.setItem(b.slot(),item(b));
         // openInventory closes the previous screen synchronously; install this session afterwards.
@@ -55,6 +59,7 @@ final class PlayerAdventureMenus implements Listener {
         if(p.getOpenInventory().getTopInventory()==inv){
             Session s=new Session(new Ticket(p.getUniqueId(),System.currentTimeMillis()),view,inv,aim);
             sessions.put(p.getUniqueId(),s);inventories.put(inv,s);
+            if(page==Page.COMMON)owner.recordWorldLesson(p,"catalog");
         }
     }
     View view(Player p,Page page,String detail){
@@ -63,7 +68,7 @@ final class PlayerAdventureMenus implements Listener {
             case STORAGE->"背包与仓库";case TRADE->"商城与交易";case SOCIAL->"队伍与伙伴";
             case MEMORIES->"留影与生活";case COMMON->"通用生存技能";case COMMON_DETAIL->"技能说明";
             case WHEEL->"施法轮盘";case WHEEL_EDIT->"配置快捷施法";case WHEEL_PICK->"选择槽位技能";
-            case CHARACTER->"我的角色";case TIDY_BAG,TIDY_STASH->"确认无损合并";case PARTY->"组队大厅";case PARTY_CONFIRM->"确认组队操作";case HELP->"聊天与入门";case ERROR->"入口暂不可用";
+            case CHARACTER->"我的角色";case TIDY_BAG,TIDY_STASH->"确认无损合并";case PARTY->"组队大厅";case PARTY_CONFIRM->"确认组队操作";case HELP->"聊天与入门";case ONBOARDING->"初来千灯纪";case GUIDE_COMPANION->"我的伙伴";case GUIDE_CLASS->"伙伴 · 职业";case GUIDE_SKILLS->"伙伴 · 技能";case ERROR->"入口暂不可用";
         };
         buttons.addAll(category(page));
         if(page==Page.HOME){
@@ -71,10 +76,11 @@ final class PlayerAdventureMenus implements Listener {
             buttons.add(button(4,Action.NONE,"COMPASS","欢迎，"+p.getName(),"点击图标浏览；物品只是按钮","按 Esc 关闭；CLI仍可使用"));
             buttons.add(button(28,Action.TRAVEL,"ENDER_PEARL","传送与集合","公共地标、个人传送点、归乡、战斗增援"));
             buttons.add(button(30,Action.STASH,"ENDER_CHEST","个人仓库 · 10页540格","直接选择页码；与大背包、公共箱分开"));
-            buttons.add(button(29,Action.ONBOARDING,"OAK_SIGN","我的下一步","查看职业、通用技能、公会委托和任务交付建议"));
+            buttons.add(button(29,Action.ONBOARDING,"BOOK","我的下一步","查看入门进度，继续当前目标"));
+            buttons.add(button(34,Action.GUIDE_COMPANION,"LANTERN","我的伙伴","领取或管理自己的冒险伙伴"));
             buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","八槽混排通用技与职业技；可按习惯配置"));
             buttons.add(button(33,Action.WHEEL_EDIT,"REPEATER","选择快捷技能","选槽位，再选技能，立即保存"));
-        }else if(page!=Page.WHEEL&&page!=Page.WHEEL_EDIT&&page!=Page.WHEEL_PICK)buttons.add(button(4,Action.NONE,"PAPER",title,"先查看内容与条件，再自行决定","下方箭头返回；罗盘回到大厅"));
+        }else if(page!=Page.ONBOARDING&&page!=Page.GUIDE_COMPANION&&page!=Page.GUIDE_CLASS&&page!=Page.GUIDE_SKILLS&&page!=Page.WHEEL&&page!=Page.WHEEL_EDIT&&page!=Page.WHEEL_PICK)buttons.add(button(4,Action.NONE,"PAPER",title,"先查看内容与条件，再自行决定","下方箭头返回；罗盘回到大厅"));
         if(page==Page.GROWTH){
             buttons.add(staffSpellButton());
             buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","八槽混排通用技与职业技；可按习惯配置"));
@@ -155,16 +161,45 @@ final class PlayerAdventureMenus implements Listener {
             buttons.add(new Button(22,Action.PARTY_APPLY,detail,"LIME_DYE","确认一次",List.of("操作后查看实际队伍状态，不自动重试")));
         }else if(page==Page.HELP){
             content="普通聊天与全服喊话以服务器当前设置为准。点击下方按钮获取当前范围与准确用法。\n大多数功能无需打指令：右键罗盘 → 选择分区。\n原生子菜单关闭后，再右键罗盘即可回到大厅。";
-            buttons.add(button(10,Action.ONBOARDING,"OAK_SIGN","查询聊天与入门","返回当前聊天规则和本人下一步"));
+            buttons.add(button(10,Action.ONBOARDING,"BOOK","查看入门进度"));
+            buttons.add(button(12,Action.CHAT_RULES,"OAK_SIGN","查看聊天规则"));
             buttons.add(button(14,Action.COMMON,"BLAZE_ROD","生存技能","全部通用技能的实际效果和使用条件"));
+        }else if(page==Page.ONBOARDING){
+            content=onboarding(p,buttons);
+        }else if(page==Page.GUIDE_COMPANION||page==Page.GUIDE_CLASS||page==Page.GUIDE_SKILLS){
+            content=guides.view(p,page,detail,buttons);
         }else if(page==Page.ERROR){
             content="这次入口未能确认完成，已停止。若是交易、学习或领取，不要连续重试；先查原记录或联系服主并说明时间。";
             buttons.add(button(13,Action.NONE,"BARRIER","服务暂不可用",content));
         }
         if(page!=Page.HOME)buttons.add(button(27,Action.BACK,"ARROW","返回上一页"));
-        if(page!=Page.WHEEL)buttons.add(button(31,Action.HOME,"COMPASS","冒险大厅"));
+        if(page!=Page.WHEEL&&page!=Page.ONBOARDING)buttons.add(button(31,Action.HOME,"COMPASS","冒险大厅"));
         buttons.add(button(35,Action.CLOSE,"BARRIER","关闭"));
         return new View(page,detail,title,content,buttons);
+    }
+    private String onboarding(Player player,List<Button> buttons){
+        JsonObject state=owner.agentCoach().entryState(player);
+        if(!state.get("eligible").getAsBoolean()){
+            String reason="观战账号不参加新手实习。";
+            buttons.add(button(13,Action.NONE,"SPYGLASS",reason));
+            return reason;
+        }
+        var checklist=state.getAsJsonArray("checklist");
+        int done=0;
+        for(int i=0;i<checklist.size();i++){
+            JsonObject milestone=checklist.get(i).getAsJsonObject();
+            boolean completed=milestone.get("done").getAsBoolean();
+            if(completed)done++;
+            buttons.add(button(11+i,Action.NONE,completed?"LIME_DYE":"GRAY_DYE",
+                    (completed?"已完成 · ":"待完成 · ")+milestone.get("title").getAsString()));
+        }
+        String summary="入门进度 "+done+"/"+checklist.size();
+        Button next=onboardingNext(state.get("step").getAsString());
+        buttons.add(button(4,Action.NONE,"LANTERN",summary));
+        if(next!=null)buttons.add(next);
+        buttons.add(button(30,Action.ONBOARDING_DETAILS,"WRITABLE_BOOK","查看详细清单与专项实练"));
+        buttons.add(button(34,Action.GUIDE_COMPANION,"LANTERN","我的伙伴","可以和她一起完成入门"));
+        return summary+(next==null?"":"\n当前目标 · "+next.title());
     }
     private List<WheelSkill> wheelSkills(Player player, boolean profession) {
         List<WheelSkill> skills = new ArrayList<>();
@@ -363,6 +398,9 @@ final class PlayerAdventureMenus implements Listener {
         Page target=destination(b.action());
         if(target!=null){open(p,target,"");return;}
         if(b.action()==Action.BACK){open(p,parent(view.page()),"");return;}
+        if(b.action()==Action.GUIDE_CLASS_DETAIL){open(p,Page.GUIDE_CLASS,b.payload());return;}
+        if(b.action()==Action.GUIDE_SKILL_DETAIL){open(p,Page.GUIDE_SKILLS,b.payload());return;}
+        if(b.action()==Action.GUIDE_ACTION){guides.perform(p,b.payload());return;}
         if(b.action()==Action.COMMON_PAGE){open(p,Page.COMMON,b.payload());return;}
         if(b.action()==Action.COMMON_EQUIP){open(p,Page.WHEEL_EDIT,b.payload());return;}
         if(b.action()==Action.WHEEL_PAGE){open(p,Page.WHEEL,b.payload());return;}

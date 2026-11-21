@@ -21,7 +21,9 @@ export function validatePhotos(rows = []) {
   if (!Array.isArray(rows) || rows.length > 50) throw fail(400, 'PHOTO_CATALOG', '照片目录超出范围');
   const ids = new Set();
   return rows.map(row => {
-    if (!row || !UUID.test(row.id || '') || ids.has(row.id) || !playerNameValid(row.author) || typeof row.title !== 'string' || !row.title.trim() || row.title.length > 160 || typeof row.story !== 'string' || row.story.length > 2000 || !Number.isFinite(Date.parse(row.capturedAt)) || !/^[a-f0-9]{64}$/.test(row.sha256 || '') || !Number.isInteger(row.bytes) || row.bytes < 33 || row.bytes > MAX_PHOTO_BYTES || !Number.isInteger(row.width) || !Number.isInteger(row.height) || row.width < 1 || row.height < 1 || row.width > 4096 || row.height > 4096) throw fail(400, 'PHOTO_CATALOG', '照片目录格式无效');
+    const namedBody = UUID.test(row?.authorUuid ?? '') && typeof row.author === 'string'
+      && row.author.trim() && [...row.author].length <= 48 && !/[\p{Cc}\p{Cf}§]/u.test(row.author);
+    if (!row || !UUID.test(row.id || '') || ids.has(row.id) || !(playerNameValid(row.author) || namedBody) || typeof row.title !== 'string' || !row.title.trim() || row.title.length > 160 || typeof row.story !== 'string' || row.story.length > 2000 || !Number.isFinite(Date.parse(row.capturedAt)) || !/^[a-f0-9]{64}$/.test(row.sha256 || '') || !Number.isInteger(row.bytes) || row.bytes < 33 || row.bytes > MAX_PHOTO_BYTES || !Number.isInteger(row.width) || !Number.isInteger(row.height) || row.width < 1 || row.height < 1 || row.width > 4096 || row.height > 4096) throw fail(400, 'PHOTO_CATALOG', '照片目录格式无效');
     ids.add(row.id);
     const scene=sceneDescriptor(row.scene);
     if(scene&&!UUID.test(row.authorUuid??''))throw fail(400,'PHOTO_SCENE_METADATA','场景必须绑定已核实的照片作者');
