@@ -48,6 +48,11 @@ def test_wait_purpose_belongs_to_body_and_confirmed_request(tmp_path):
     assert purpose == step.note and reviewed >= started
     assert journal.observe_activity("kirito", "waiting", "a", time.time())[2] is None
     assert journal.observe_activity("yui", "waiting", "leader-back", time.time())[1:] == (None, step.note, True)
+    now = time.time()
+    journal.reviewed_activity("yui", "waiting", "leader-back", now, renew_wait=True)
+    assert journal.observe_activity("yui", "waiting", "leader-back", now)[0] == started
+    journal.reviewed_activity("yui", "waiting", "leader-back", now, "再等一会儿", renew_wait=True)
+    assert journal.observe_activity("yui", "waiting", "leader-back", now)[:3] == (now, now, "再等一会儿")
     journal.observe_activity("yui", "working", "a", time.time())
     journal.settle("yui", receipt.model_copy(update={"status": "completed", "terminal": True}))
     assert journal.observe_activity("yui", "waiting", "a", time.time())[2] is None

@@ -81,6 +81,7 @@ class NpcBodyProfile(BaseModel):
     autonomous_rendezvous: bool = False
     default_native_guard: bool = False
     activity_review_seconds: int | None = Field(default=None, ge=10, le=600)
+    expedition_wait_seconds: int | None = Field(default=None, ge=30, le=1800)
     adventure_advice: bool = False
 
 
@@ -105,6 +106,8 @@ class NpcRole(NpcCharacterProfile, NpcBodyProfile):
             raise ValueError("default_guard_requires_native_maid_capability")
         if self.activity_review_seconds is not None and self.body_kind != "maid":
             raise ValueError("activity_review_requires_native_maid_observations")
+        if self.expedition_wait_seconds is not None and (not self.default_native_guard or self.activity_review_seconds is None):
+            raise ValueError("expedition_wait_requires_reviewed_native_guard")
         if self.adventure_advice and (not self.default_native_guard or "body:chat" not in self.allowed_tools):
             raise ValueError("adventure_advice_requires_a_delegated_companion")
         if self.native_items and (self.body_kind != "numen" or "body:use_item" not in self.allowed_tools):
@@ -197,15 +200,21 @@ def addressed_dialogue(event: BodyEvent, body_id: str, aliases: tuple[str, ...] 
 def companion_check_in(role: NpcRole, context: PlanContext) -> tuple[str, tuple[float, float, float]] | None:
     native = current_native_state(context)
     follow, companion = native.get("follow"), native.get("companion")
-    distance = native.get("ownerDistance")
     snapshot = context.snapshot
+    expedition = (native.get("resident") or {}).get("expedition") or {}
+    if expedition.get("leaderId"):
+        ready = expedition.get("state") == "nearby" and expedition.get("leaderDimension") == getattr(snapshot, "dimension", None)
+        distance = expedition.get("distanceBlocks")
+    else:
+        ready = (isinstance(native.get("conversation"), dict) and isinstance(follow, dict)
+                 and follow.get("active") is True and follow.get("temporaryWait") is False
+                 and isinstance(companion, dict) and companion.get("state") == "following_ready")
+        distance = native.get("ownerDistance")
     if (not role.default_native_guard or "body:chat" not in role.allowed_tools or context.dialogue
             or context.capabilities is None or step_support(Step(tool="body:chat"), context.capabilities)
-            or not native or not isinstance(native.get("conversation"), dict) or not already_guarding(native)
+            or not ready or not already_guarding(native)
             or native.get("taskId") != "touhou_little_maid:idle" or native.get("canMove") is not True
             or any(native.get(flag) is not False for flag in ("passenger", "sitting", "homeMode"))
-            or not isinstance(follow, dict) or follow.get("active") is not True or follow.get("temporaryWait") is not False
-            or not isinstance(companion, dict) or companion.get("state") != "following_ready"
             or not isinstance(distance, (int, float)) or isinstance(distance, bool) or not 0 <= distance <= 8 or danger(snapshot)
             or snapshot is None or not snapshot.dimension or snapshot.position is None
             or not all(axis in snapshot.position and math.isfinite(snapshot.position[axis]) for axis in "xyz")):
@@ -242,20 +251,36 @@ def restore_default_guard(role: NpcRole, context: PlanContext) -> Step | None:
     native = current_native_state(context)
     if not role.default_native_guard or native.get("nativeGuardDelegated") is not False:
         return None
+    review = context.activity_review or {}
+    resident = native.get("resident") or {}
+    expedition = resident.get("expedition") or {}
+    leader_id = expedition.get("leaderId")
+    elapsed = review.get("elapsedSeconds")
+    wake_wait = (role.expedition_wait_seconds is not None and review.get("activity") == "waiting"
+                 and type(elapsed) is int and elapsed >= role.expedition_wait_seconds
+                 and native.get("sitting") is True)
+    finished_leader_walk = (role.expedition_wait_seconds is not None and review.get("activity") == "free"
+                            and leader_id and native.get("socialNavigationTargetUuid") == leader_id
+                            and native.get("socialWalkAvailable") is True)
     follow = native.get("follow")
-    if (native.get("taskId") != "touhou_little_maid:idle" or native.get("canMove") is not True
-            or any(native.get(flag) is not False for flag in ("passenger", "sitting", "homeMode"))
-            or not isinstance(follow, dict) or follow.get("temporaryWait") is not False):
+    if (native.get("taskId") != "touhou_little_maid:idle"
+            or native.get("passenger") is not False
+            or (native.get("homeMode") is not False and not finished_leader_walk)
+            or not isinstance(follow, dict)):
+        return None
+    if not wake_wait and (native.get("canMove") is not True or native.get("sitting") is not False
+                          or follow.get("temporaryWait") is not False):
         return None
     if role.activity_review_seconds is not None:
         # Residents that review their activity can resume a configured expedition
         # when free. Do not turn an explicit wait, work, or uncertain trip into a new order.
-        resident = native.get("resident") or {}
-        expedition = resident.get("expedition") or {}
-        if expedition.get("state") != "not_delegated" or not expedition.get("leaderDimension"):
+        if (expedition.get("state") != "not_delegated" or not expedition.get("leaderDimension")
+                or resident.get("sleeping") or resident.get("leased") or resident.get("thinking")
+                or (resident.get("combat") or {}).get("targetId")
+                or (wake_wait or finished_leader_walk) and danger(context.snapshot)):
             return None
         scene = activity_scene(context.snapshot)
-        if scene is None or scene[0] != "free":
+        if scene is None or scene[0] != ("waiting" if wake_wait else "free"):
             return None
     step = Step(tool="body:native:guard")
     return step if context.capabilities is not None and not step_support(step, context.capabilities) else None
@@ -276,7 +301,7 @@ def surveyed_here(context: PlanContext) -> bool:
             and sample.get("origin") == [math.floor(snap.position[k]) for k in ("x", "y", "z")])
 
 
-def unnecessary_step(step: Step, context: PlanContext, native: dict[str, Any]) -> bool:
+def unnecessary_step(step: Step, context: PlanContext, native: dict[str, Any], role: NpcRole) -> bool:
     if step.tool == "body:native:survey" and not step.args:
         return surveyed_here(context)
     if not native:
@@ -290,8 +315,14 @@ def unnecessary_step(step: Step, context: PlanContext, native: dict[str, Any]) -
     if step.tool == "body:native:schedule":
         return set(step.args) == {"schedule"} and isinstance(native.get("schedule"), str) and step.args["schedule"] == native["schedule"]
     if step.tool == "body:native:task":
+        task = step.args.get("taskId")
+        same_task = set(step.args) == {"taskId"} and task == native.get("taskId")
+        expedition = (native.get("resident") or {}).get("expedition") or {}
+        if (same_task and task == "touhou_little_maid:idle" and role.expedition_wait_seconds is not None
+                and already_guarding(native) and expedition.get("leaderId")):
+            return True  # Setting the existing idle task would cancel native expedition guard.
         follow = native.get("follow")
-        return (set(step.args) == {"taskId"} and step.args["taskId"] == native.get("taskId")
+        return (same_task
                 and native.get("sitting") is False and not already_guarding(native)
                 and (follow is None or isinstance(follow, dict) and not follow.get("active")) and native.get("taskEnabled") is True)
     if step.tool == "body:follow":
@@ -344,7 +375,7 @@ def reviewed_steps(role: NpcRole, context: PlanContext, values: Any) -> list[Ste
                 step.args["text"] = text
         # The plan already received this sample. A mode write is necessary
         # again after an earlier step has actually changed the body.
-        if not body_changed and unnecessary_step(step, context, native):
+        if not body_changed and unnecessary_step(step, context, native, role):
             continue
         out.append(step)
         body_changed |= step.tool not in {"body:chat", "body:observe", "body:inventory"}
@@ -457,6 +488,9 @@ class NpcPlanner:
         following = social_walk and bool(context.maid_companions.get("selection"))
         roster = tuple(sorted(p["uuid"] for p in context.maid_companions["characters"])) if social_walk else ()
         review_company = social_walk and (roster != self.social_roster or now >= self.next_social_review)
+        activity = (context.activity_review or {}).get("activity")
+        available_for_routine = role.activity_review_seconds is None or activity in {"free", "guarding"}
+        keep_quiet_guard = role.activity_review_seconds is None and already_guarding(current_native_state(context))
         current_agenda = (context.agenda or {}).get("current")
         if intent.goal in (IDLE_GOAL, DANGER_GOAL) and now >= self.next_meal:
             meal = routine_meal(role, context)
@@ -464,11 +498,14 @@ class NpcPlanner:
                 self.next_meal = now + 90.0
                 self.last_route = {"layer": "native-policy", "reason": "ordinary_meal_needed"}
                 return [meal]
-        if intent.goal == IDLE_GOAL and not context.dialogue and not following and not current_agenda:
-            if restore := restore_default_guard(role, context):
+        if intent.goal == IDLE_GOAL and not context.dialogue and not following:
+            restore = restore_default_guard(role, context)
+            # For an opted-in expedition the observed free body, or a reviewed
+            # expired wait, can resume even if a previous agenda is still current.
+            if restore and (not current_agenda or role.expedition_wait_seconds is not None):
                 self.last_route = {"layer": "native-policy", "reason": "resume_configured_guard"}
                 return [restore]
-        if intent.goal == IDLE_GOAL and not context.dialogue and role.activity_review_seconds is None:
+        if intent.goal == IDLE_GOAL and not context.dialogue and available_for_routine:
             if not following and not current_agenda and now >= self.next_catch and (catch := routine_catch(role, context)):
                 self.next_catch = now + 300.0
                 self.last_route = {"layer": "native-policy", "reason": "prepared_native_fishing"}
@@ -506,7 +543,7 @@ class NpcPlanner:
         elif self.resident_turns and quiet_turn:
             if not (near_partner or near_maid_listener) and "body:chat" in tools:
                 tools.remove("body:chat")
-            if role.activity_review_seconds is None and already_guarding(current_native_state(context)):
+            if keep_quiet_guard:
                 tools = [name for name in tools if name not in {"body:stay", "body:stop", "body:native:sit"}]
         schemas, native_catalogue = {}, []
         for action in caps.native_actions if caps else []:
@@ -518,7 +555,7 @@ class NpcPlanner:
                 key = "arguments_" + str(len(schemas))
                 schemas[key] = json.loads(encoded)
             native_catalogue.append({"name": action.name, "description": action.description, "schema": key})
-        if intent.goal == DANGER_GOAL and self.fast is not None and role.activity_review_seconds is None:
+        if intent.goal == DANGER_GOAL and self.fast is not None and available_for_routine:
             choices = reaction_choices(role, context)
             if len(choices) >= 2:
                 try:
@@ -801,7 +838,7 @@ class NpcPlanner:
         elif quiet_turn:
             desktop_greeting = provider == "desktop" and near_maid_listener and not near_partner
             inactive = set() if near_partner or desktop_greeting else {"body:chat"}
-            if role.activity_review_seconds is None and already_guarding(current_native_state(context)):
+            if keep_quiet_guard:
                 inactive.update({"body:stay", "body:stop", "body:native:sit"})
             steps = [step for step in steps if step.tool not in inactive]
             context.recheck_nearby_speech = desktop_greeting
@@ -1123,9 +1160,11 @@ class NpcHost:
         if self.companion_adventure and context.snapshot and context.snapshot.life_state == "alive":
             direct = next((event for event in dialogue if addressed_dialogue(event, body_id, (self.role.name, self.role.id))), None)
             if direct or (intent.goal == IDLE_GOAL and companion_check_in(self.role, context)):
-                audience = "nearby_partner" if direct is None else (
-                    "addressed_partner" if direct.data.get("speakerId") == str(self.role.owner_id) else "public"
-                )
+                expedition = (current_native_state(context).get("resident") or {}).get("expedition") or {}
+                if direct is None:
+                    audience = "nearby_partner" if expedition.get("leaderId") in (None, str(self.role.owner_id)) else "public"
+                else:
+                    audience = "addressed_partner" if direct.data.get("speakerId") == str(self.role.owner_id) else "public"
                 context.companion_adventure = await self.companion_adventure.view(
                     audience=audience, dimension=context.snapshot.dimension, position=context.snapshot.position,
                     recent_speech=context.recent_companion_speech)
@@ -1261,7 +1300,8 @@ class NpcHost:
                 if scene[0] == "waiting" and steps and steps[0].tool in wait_tools:
                     renewed_purpose = steps[0].note if direct else None
                     steps = steps[1:]
-            self.journal.reviewed_activity(body_id, *scene, time.time(), renewed_purpose)
+            self.journal.reviewed_activity(body_id, *scene, time.time(), renewed_purpose,
+                                           renew_wait=self.role.expedition_wait_seconds is not None)
         if context.proposed_agenda is not None and context.agenda is not None and not self.pausing:
             windows = context.agenda["upcoming"] or [context.agenda["current"]]
             previous_end = windows[-1]["endsAt"] if windows[-1] else None
