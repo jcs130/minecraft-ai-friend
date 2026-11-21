@@ -11,6 +11,7 @@
   <a class="brand" href="/">千灯纪</a>
   <h1 id="title">授权居民插件</h1>
   <p id="intro">可以在官网新建车万女仆，也可以授权本机的 N.E.K.O. 或 Cortico 创建或连接居民。</p>
+  <p id="body-status"><strong>角色自主换身暂未开放。</strong>每个居民使用自己已绑定的身体。登录后，可以按身体类型查找当前账号的已有居民。</p>
   <p id="install" hidden><a href="/downloads.html#resident">下载居民插件</a></p>
   <p id="status" role="status">正在读取网站身份…</p>
   <form id="login" hidden>
@@ -36,7 +37,7 @@
   <section id="legacy" hidden>
     <h2>角色与身体</h2>
     <label>接入方式<select id="flow"><option value="create">新建角色</option><option value="connect">连接已有角色</option></select></label>
-    <label id="kind-label">身体类型<select id="kind"><option value="maid">车万女仆</option><option value="numen">Numen</option></select></label>
+    <label id="kind-label"><span id="kind-caption">身体类型</span><select id="kind"><option value="maid">车万女仆</option><option value="numen">Numen</option></select></label>
     <p id="availability" role="status"></p>
     <form id="create" hidden>
       <label>角色名<input id="name" maxlength="24" autocomplete="off" required></label>
