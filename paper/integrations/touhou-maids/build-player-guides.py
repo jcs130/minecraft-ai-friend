@@ -61,7 +61,7 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
     package = "local/tlmcompat/hybrid"
     build(args, args.bridge_baseline, MAID_BASELINE, package, ROOT / "hybrid-src" / package, MAID_CLASSES,
-          args.output_dir / "qiandengji-maid-0.1.62-player-guides.jar", "0.1.62-player-guides")
+          args.output_dir / "qiandengji-maid-0.1.63-player-guides.jar", "0.1.63-player-guides")
     package = "org/qiandengji/vortex"
     build(args, args.rpg_baseline, RPG_BASELINE, package, ROOT.parent / "vortex-rpg/src" / package, ("ResidentRpgApi",),
           args.output_dir / "QiandengjiRpg-0.2.33-player-guides.jar", "0.2.33-player-guides")

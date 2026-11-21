@@ -9,6 +9,7 @@ import com.github.tartaricacid.touhoulittlemaid.item.bauble.ExtraLifeBauble;
 import com.github.tartaricacid.touhoulittlemaid.item.bauble.UndyingTotemBauble;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import local.tlmcompat.core.CompatibilityException;
 import net.minecraft.world.item.Item;
@@ -72,12 +73,41 @@ final class NativeMaidKit {
         }
         if (exists) {
             saved.putBoolean(marker,true);
-        } else if (free>=0) {
+        } else {
             var stack=CraftItemStack.asNMSCopy(original);
-            if (!inventory.isItemValid(free,stack)) return;
+            if (free<0) free=compactOneSlot(maid,stack);
+            if (free<0 || !inventory.isItemValid(free,stack)) return;
             inventory.setStackInSlot(free,stack);
             saved.putBoolean(marker,true);
         }
+    }
+
+    // Only make room when an entire stack fits. Keep all existing items in
+    // the original backpack and preserve components and native stack limits.
+    private static int compactOneSlot(EntityMaid maid, ItemStack keepsake) {
+        var inventory=maid.getMaidInv();
+        int capacity=NativeMaidInventory.capacity(maid);
+        for (int from=capacity-1;from>=0;from--) {
+            var source=inventory.getStackInSlot(from);
+            if (source.isEmpty() || !inventory.isItemValid(from,keepsake)) continue;
+            int excess=source.getCount();
+            var transfers=new LinkedHashMap<Integer,ItemStack>();
+            for (int to=0;to<capacity && excess>0;to++) {
+                if (to==from) continue;
+                var target=inventory.getStackInSlot(to);
+                if (!ItemStack.isSameItemSameComponents(source,target) || !inventory.isItemValid(to,source)) continue;
+                int limit=Math.min(inventory.getSlotLimit(to),target.getMaxStackSize());
+                int move=Math.min(excess,limit-target.getCount());
+                if (move<=0) continue;
+                transfers.put(to,target.copyWithCount(target.getCount()+move));
+                excess-=move;
+            }
+            if (excess>0) continue;
+            transfers.forEach(inventory::setStackInSlot);
+            inventory.setStackInSlot(from,ItemStack.EMPTY);
+            return from;
+        }
+        return -1;
     }
 
     private static boolean keepsake(ItemStack stack, NamespacedKey key) {
