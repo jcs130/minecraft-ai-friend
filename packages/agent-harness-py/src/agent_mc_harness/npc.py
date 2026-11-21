@@ -601,11 +601,16 @@ class NpcPlanner:
             if adventure_query in tools:
                 guidance.append(
                     "Read current quests, combat jobs, ruins or the guild board. Locate characters by exact name/UUID. "
-                    "Read quest_status after accepting or turning in a quest.")
+                    "Read quest_status after accepting or turning in a quest. "
+                    "Villagers post optional local work on village_list. Read village_info with an exact card ID for its "
+                    "objective and issuer location. Check village_status for work you already took.")
             if survey in tools:
                 guidance.append("Survey the terrain and walk to a sampled walkTo position. Reuse a fresh survey.")
             if adventure_action in tools:
                 guidance.append(
+                    "Choose village_accept with a posted card ID if the job suits you. For a gather card, bring the materials "
+                    "to its issuer and use village_deliver with the same ID. Slay and reach count through normal play. "
+                    "Only a completed card proves the objective is finished. "
                     "Use prepare_armor for a missing slot and prepare_ammo for a bow or crossbow without arrows. "
                     "Use carried supplies first. With allowPurchase you can buy one ordinary iron piece for up to "
                     "20 RPG coins or 16 arrows for up to 3. Confirm collection and wear the armor. For meet_character use the UUID "

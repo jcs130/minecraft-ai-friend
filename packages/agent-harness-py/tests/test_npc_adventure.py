@@ -133,6 +133,9 @@ def test_idle_host_samples_self_and_offers_capable_activities_to_the_planner(tmp
             assert [s.args for s in await host._plan(intent, context)] == [{"kind": "quest_status"}]
             await host._plan(intent, context)
             assert "currentCraftStage" not in captured[-1]["adventuring"]
+            guidance = captured[-1]["adventuring"]["purpose"]
+            assert "village_list" in guidance and "village_info" in guidance and "village_status" in guidance
+            assert "village_accept" not in guidance  # This test role can only read.
             market = {"id": "tm_sample", "goal": "CRAFT", "available": True, "stage": 1,
                       "progress": 0, "target": 1, "ready": False, "guidance": {"nextAction": "亲手合成 TORCH"}}
             message = "MC_ADVENTURE " + json.dumps({"guild": {"activeId": "tm_sample", "status": "active", "market": market}})

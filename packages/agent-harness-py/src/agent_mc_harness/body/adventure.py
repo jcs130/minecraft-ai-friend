@@ -12,10 +12,12 @@ from xml.sax.saxutils import unescape
 
 from ..models import NativeAction
 from .base import ArgumentError, rendezvous_arrival
+from . import village_commissions as village
 
 # The body supplies both player names. Only a catalogue ID is model input.
 INVENTORY = {f"inventory_{action}": f"inventory {action}" for action in ("clean", "store", "donate")}
 QUERIES = {
+    **village.QUERIES,
     **{key: command + " --dry-run" for key, command in INVENTORY.items()},
     "characters": "locate list", "locate_character": "locate info {target}",
     "events": "world events", "exploration": "tasks list exploration", "combat_jobs": "tasks list combat",
@@ -26,6 +28,7 @@ QUERIES = {
     "detail_page": "page {id} {page}",
 }
 ACTIONS = {
+    **village.ACTIONS,
     **INVENTORY,
     "meet_character": "locate tp {targetUuid}",
     "accept_quest": "guild accept {id}", "turn_in_quest": "guild claim",
@@ -74,11 +77,11 @@ def catalogue(peer: str | None) -> list[NativeAction]:
         result.append(NativeAction(name=name, description=description, read_only=name == QUERY, input_schema={
             "type": "object", "properties": {"kind": {"type": "string", "enum": [
                 operation for operation in options if peer or operation not in PARTNER_OPERATIONS]},
-            "id": {"type": "string", "description": "Exact returned quest or ruin ID, only for operations that require one."}},
+            "id": {"type": "string", "description": "Exact returned quest, village commission or ruin ID, only for operations that require one."}},
             "required": ["kind"], "additionalProperties": False}))
     query_properties = result[1].input_schema["properties"]
     query_properties["page"] = {"type": "integer", "minimum": 1,
-                                "description": "Use the directory's returned page count for characters. Pages 1 to 100 for exploration, combat_jobs, ruins and detail_page."}
+                                "description": "Use the returned page count for characters or village_list. Pages 1 to 100 for exploration, combat_jobs, ruins and detail_page."}
     query_properties["target"] = {"type": "string", "description": "locate_character only: exact name or UUID from the skill compass."}
     actions = result[2].input_schema["properties"]
     actions["targetUuid"] = {"type": "string", "format": "uuid", "description": "meet_character only: use the exact UUID from locate_character. Uses the ordinary RPG travel spell."}
@@ -102,6 +105,8 @@ def player_command(name: str, args: dict, account: str, peer: str | None) -> str
         raise ArgumentError("The configured partner must be another valid player.")
     if kind in PARTNER_OPERATIONS and not peer:
         raise ArgumentError("This party operation requires a configured partner.")
+    if kind in village.KINDS:
+        return village.command(kind, args)
     if kind == "characters":
         page = args.get("page", 1)
         if set(args) - {"kind", "page"} or type(page) is not int or not 1 <= page <= 2 ** 31 - 1:
@@ -203,6 +208,9 @@ def permission_lua(account: str) -> str:
 
 
 def game_lua(line: str, account: str) -> str:
+    if line.startswith("/mycli guild village "):
+        return (permission_lua(account) + "local r=numen_hosted.mc.run(" + json.dumps(line) + "); "
+                + village.PRINT_BOARD)
     fallback = ""
     if line == "/mycli tasks status --json":
         # Large task records may be paged outside mc.run's capture. This ordinary
@@ -302,6 +310,9 @@ def game_result(result, name: str, args: dict, *, account=None, body_id=None, pe
         elif line:
             messages.append(line[:350])
     kind = args["kind"]
+    if kind in village.KINDS or (name == ACT and kind == "accept_quest"
+                                 and isinstance(args.get("id"), str) and village.CARD_ID.fullmatch(args["id"])):
+        return village.receipt(result, kind, args, records, body_id, recovered)
     if kind in {"characters", "locate_character", "meet_character"}:
         expected = {"characters": "list", "locate_character": "info", "meet_character": "tp"}[kind]
         rows = [row for tag, row in records if tag == "MC_LOCATE" and isinstance(row, dict) and row.get("action") == expected]
