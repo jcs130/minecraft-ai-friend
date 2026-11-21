@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.120
+
+Server extensions can claim rendered chat relays after login. The common system notice, command-feedback and mining-warning handlers skip claimed chat components. Each adapter owns relay delivery and identity evidence. Native player chat keeps its existing sender evidence.
+
 ## 0.5.7-rc.160-preview.115
 
 Equipment and inventory lookups accept the qualified vanilla IDs returned by transfers. Qualified IDs match an exact inventory identity, including when checking armor already worn. Display names and category selectors remain available for ordinary queries.

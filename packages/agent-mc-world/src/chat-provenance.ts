@@ -50,7 +50,7 @@ export const outgoingPrivateParts = (message: ChatMessage, registry?: unknown) =
 
 /** A warning may pause the body only on a native system notice. Player chat,
  * whispers, overlays and events without provenance are observations, not control. */
-export function isServerNotice(message: unknown, position: unknown, sender?: unknown): boolean {
+export function isServerNotice(message: unknown, position: unknown, sender?: unknown): message is object {
   if (position !== 'system' || !message || typeof message !== 'object'
     || (sender != null && sender !== '00000000-0000-0000-0000-000000000000')) return false;
   const component = message as ChatMessage;

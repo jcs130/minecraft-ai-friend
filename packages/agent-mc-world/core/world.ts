@@ -4900,6 +4900,8 @@ export class MinecraftWorld implements World {
   protected extensionInventoryArrival(_command: string): InventoryArrivalMatcher | undefined { return undefined; }
   /** Optional routing evidence; the common core does not assume a server's chat radius or prefixes. */
   protected extensionChatAudience(_text: string, _serverRenderedText?: string, _direction: 'incoming'|'outgoing'='outgoing'): import('../src/contracts/chat-delivery.ts').ChatAudienceEvidence | undefined { return undefined; }
+  /** Consume a server-rendered chat relay after login; display text does not establish player identity. */
+  protected extensionServerRelayedChat(_text: string): boolean { return false; }
   private chatAudienceMeta(audience: import('../src/contracts/chat-delivery.ts').ChatAudienceEvidence | undefined): Record<string, unknown> {
     return audience ? { chatChannel: audience.channel, chatScope: audience.scope, chatRoutingSource: audience.source,
       ...(audience.radius === undefined ? {} : { chatRadius: audience.radius }), ...(audience.observedAt ? { chatPolicyObservedAt: audience.observedAt } : {}) } : {};
@@ -7805,7 +7807,8 @@ export class MinecraftWorld implements World {
       try { miningLimits = resolveMiningLimits(this.cfg.miningLimits); } catch { /* keep last valid hot config */ }
       return miningLimits;
     },
-      (event, data) => this.diag?.write({ lane: 'event', event, msg: '服务器警告挖矿：暂停挖掘并降低挖矿额度', data }));
+      (event, data) => this.diag?.write({ lane: 'event', event, msg: '服务器警告挖矿：暂停挖掘并降低挖矿额度', data }),
+      component => this.chatClaimed.has(component));
     installMovementPace(bot, () => {
       try { movementPace = resolveMovementPace(this.cfg.movementPace); } catch { /* keep last valid hot config */ }
       return movementPace;
@@ -7910,6 +7913,7 @@ export class MinecraftWorld implements World {
         return;
       }
       if (position !== 'chat' && position !== 'system') return;
+      if (matchedChatMessages.has(jsonMsg)) return;
       const outgoing = chatProvenance.outgoingWhisper(jsonMsg, bot.players, this.chatName(), bot.player?.uuid, bot.registry);
       if (outgoing) {
         markMatched(jsonMsg); this.chatClaimed.add(jsonMsg);
@@ -7946,6 +7950,13 @@ export class MinecraftWorld implements World {
       let independentQueryReply = false;
       if (position === 'system') {
         const reply = jsonMsg.toString().trim();
+        if (reply && !loginMessage && !this.shuttingDown && this.bridge?.bot === bot
+          && this.bridge?.connectionState?.ready === true && bot._client.state === 'play'
+          && isServerNotice(jsonMsg, position, sender) && this.extensionServerRelayedChat(reply)) {
+          markMatched(jsonMsg);
+          this.chatClaimed.add(jsonMsg);
+          return;
+        }
         const taskId = this.executor?.currentTask?.id ?? null;
         const queryGeneration = this.queryGeneration();
         const querySequence = ++this.serverQueryMessageSequence;
@@ -8191,6 +8202,7 @@ export class MinecraftWorld implements World {
       let lastKnownNotice = -Infinity;
       const onRefusal = (message: string, position: string, component: unknown, sender?: string) => {
         if (this.bridge?.bot !== bot) return;
+        if (component && typeof component === 'object' && this.chatClaimed.has(component)) return;
         if (!isServerNotice(component, position, sender) || /^\s*</.test(String(message))) return;
         if (!/打开界面时无法执行指令/.test(String(message))) return;
         const now = Date.now();
@@ -8877,7 +8889,7 @@ export class MinecraftWorld implements World {
   protected lastLevel: number | null = null;
   /** 顶部状态条已报过的 25% 档位(按标题) */
   protected lastBoomAt = 0;
-  /** mineflayer 聊天模式已派发成 chat/whisper 的消息对象 */
+  /** Components already routed as native or server-relayed chat. */
   protected readonly chatClaimed = new WeakSet<object>();
   /** 最近一条动作栏文字及收到时刻 */
   protected lastActionBar: { text: string; at: number } | null = null;
