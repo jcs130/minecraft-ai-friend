@@ -45,7 +45,7 @@ events:
     display-name: 冒险者集结·试炼塔
     announcement: '<gold>[公会集结·试炼塔]</gold> <gray>邀请持续10分钟，可单人或结伴。试炼塔空闲时达标玩家随时可主动开场。/mycli goto arena 到主世界入口（6魔力），走进围墙内的集合平台（桥上不计入）。穿齐四甲，带近战及可用远程武器。/mycli arena status 查战备，一人 /mycli arena start 免费开场，每次从第1层开始。</gray>'
     symbol: ⚔
-    weight: 45
+    weight: 25
     bossbar-color: BLUE
     conditions: {min-players: 2}
     start-commands: []
@@ -55,11 +55,47 @@ events:
     type: CONSOLE_COMMAND
     duration: 600
     display-name: 冒险者集结·遗迹远征
-    announcement: '<gold>[公会集结·遗迹远征]</gold> <gray>邀请持续10分钟。开放遗迹随时可按准入条件主动开场。/mycli dungeon list 选地点，/mycli dungeon info 地点ID 查路线及准入，再用 /mycli dungeon travel 地点ID（成功耗8魔力）到入口。沿通道进首室，一人 /mycli dungeon start 地点ID normal 开场。占用或故障时可选其他遗迹。</gray>'
+    announcement: '<gold>[公会集结·遗迹远征]</gold> <gray>邀请10分钟。用 /mycli dungeon list 选遗迹，/mycli dungeon info 地点ID 查看当前准入与首室路线。可以传送到入口（成功耗8魔力）；到首室，由一人按状态指引开场。通关收到待领回执后再领取本人奖励。入口暂不可用时换一处。</gray>'
     symbol: ◈
-    weight: 35
+    weight: 8
     bossbar-color: PURPLE
     conditions: {min-players: 2}
+    start-commands: []
+    end-commands: []
+  qd-undead-crypt-gather:
+    enabled: true
+    type: CONSOLE_COMMAND
+    duration: 600
+    display-name: 冒险者集结·亡灵墓穴
+    announcement: '<gold>[公会集结·亡灵墓穴]</gold> <gray>邀请10分钟。主世界三室墓穴，带齐护甲、近战和远程武器。/mycli dungeon info undead_crypt 查准入；可达时 /mycli dungeon travel undead_crypt（成功耗8魔力），按指引到守墓前厅，一人 /mycli dungeon start undead_crypt normal。待领回执出现后 /mycli dungeon claim undead_crypt；入口暂不可用时 /mycli dungeon list 换一处。</gray>'
+    symbol: ◈
+    weight: 16
+    bossbar-color: PURPLE
+    conditions: {min-players: 1}
+    start-commands: []
+    end-commands: []
+  qd-illager-camp-gather:
+    enabled: true
+    type: CONSOLE_COMMAND
+    duration: 600
+    display-name: 冒险者集结·黑旗林营
+    announcement: '<gold>[公会集结·黑旗林营]</gold> <gray>邀请10分钟。主世界野外营地，建议带盾和弓箭。/mycli dungeon info illager_camp 查准入；可达时 /mycli dungeon travel illager_camp（成功耗8魔力），按指引到外哨，一人 /mycli dungeon start illager_camp normal。待领回执出现后 /mycli dungeon claim illager_camp；入口暂不可用时 /mycli dungeon list 换一处。</gray>'
+    symbol: ⚔
+    weight: 16
+    bossbar-color: YELLOW
+    conditions: {min-players: 1}
+    start-commands: []
+    end-commands: []
+  qd-corsair-cove-gather:
+    enabled: true
+    type: CONSOLE_COMMAND
+    duration: 600
+    display-name: 冒险者集结·黑帆海盗湾
+    announcement: '<gold>[公会集结·黑帆海盗湾]</gold> <gray>邀请10分钟。艾恩葛朗特三室海盗船，建议带盾和远程武器。/mycli dungeon info corsair_cove 查准入；可达时 /mycli dungeon travel corsair_cove（成功耗8魔力，可跨世界），按指引到首室，一人 /mycli dungeon start corsair_cove normal。待领回执出现后 /mycli dungeon claim corsair_cove；入口暂不可用时 /mycli dungeon list 换一处。</gray>'
+    symbol: ◈
+    weight: 15
+    bossbar-color: BLUE
+    conditions: {min-players: 1}
     start-commands: []
     end-commands: []
   qd-explorers-gather:

@@ -134,3 +134,11 @@ describe('perception evidence boundaries',()=>{
     expect(perceptionArgs({mode:'combat',limit:3},'mc_attention')).toEqual({mode:'combat',limit:3});
   });
 });
+
+it('uses the modern swell_dir observation for Creeper warnings, retaining legacy swell',()=>{
+ for(const key of ['swell_dir','swell']){
+  const b:any=rig();b.entities[9]={...b.entities[9],name:'creeper',metadata:[1]};
+  b.registry={entitiesByName:{creeper:{metadataKeys:[key]}}};
+  expect(new AttentionReader().read(b,3,1000,true,9).highlights[0]?.kind).toBe('warning');
+ }
+});

@@ -246,6 +246,21 @@ final class SiteDungeonManager implements Listener {
                 .anyMatch(site -> site.pieces.stream().anyMatch(piece -> WildRuinResets.overlaps(piece, area)));
     }
     List<String> ids(){return new ArrayList<>(sites.keySet());}
+    JsonObject gatheringRoute(Player player, String id) {
+        Site target = sites.get(id);
+        if (target == null) return null;
+        Room first = target.rooms.getFirst();
+        String hint = routeHint(target);
+        JsonObject route = WorldActivityGuide.siteRoute(id, first.name + "（" + target.world + " "
+                + first.x + "," + first.y + "," + first.z + "）",
+                hint.length() > 180 ? hint.substring(0, 180) + "…" : hint, advice(player, id));
+        route.add("firstRoomPosition", JSON.toJsonTree(Map.of(
+                "world", target.world, "x", first.x, "y", first.y, "z", first.z)));
+        List<Integer> approach = entry(target);
+        if (!approach.isEmpty()) route.add("configuredApproach", JSON.toJsonTree(Map.of(
+                "world", target.world, "x", approach.get(0), "y", approach.get(1), "z", approach.get(2))));
+        return route;
+    }
     boolean activityArea(Location at){return protectionArea(at)!=null;}
     String editDomain(Location at) {
         for (var item : protectionAreas.entrySet()) {

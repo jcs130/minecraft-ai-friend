@@ -59,7 +59,7 @@ final class PlayerAdventureMenus implements Listener {
     }
     View view(Player p,Page page,String detail){
         var buttons=new ArrayList<Button>();String content="浏览不会选职、接任务或购买。";String title=switch(page){
-            case HOME->"千灯纪 · 冒险大厅";case TRAVEL->"传送与集合";case GROWTH->"角色与技能";case ADVENTURE->"冒险与任务";
+            case HOME->"千灯纪 · 冒险大厅";case TRAVEL->"传送与集合";case GROWTH->"角色与技能";case BOOK->"命格书 · 角色与技能";case ADVENTURE->"冒险与任务";
             case STORAGE->"背包与仓库";case TRADE->"商城与交易";case SOCIAL->"队伍与伙伴";
             case MEMORIES->"留影与生活";case COMMON->"通用生存技能";case COMMON_DETAIL->"技能说明";
             case WHEEL->"施法轮盘";case WHEEL_EDIT->"配置快捷施法";case WHEEL_PICK->"选择槽位技能";
@@ -73,8 +73,14 @@ final class PlayerAdventureMenus implements Listener {
             buttons.add(button(30,Action.STASH,"ENDER_CHEST","个人仓库 · 10页540格","直接选择页码；与大背包、公共箱分开"));
             buttons.add(button(29,Action.ONBOARDING,"OAK_SIGN","我的下一步","查看职业、通用技能、公会委托和任务交付建议"));
             buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","八槽混排通用技与职业技；可按习惯配置"));
+            buttons.add(button(33,Action.WHEEL_EDIT,"REPEATER","选择快捷技能","选槽位，再选技能，立即保存"));
         }else if(page!=Page.WHEEL&&page!=Page.WHEEL_EDIT&&page!=Page.WHEEL_PICK)buttons.add(button(4,Action.NONE,"PAPER",title,"先查看内容与条件，再自行决定","下方箭头返回；罗盘回到大厅"));
-        if(page==Page.GROWTH)buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","八槽混排通用技与职业技；可按习惯配置"));
+        if(page==Page.GROWTH){
+            buttons.add(staffSpellButton());
+            buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","八槽混排通用技与职业技；可按习惯配置"));
+            buttons.add(button(33,Action.WHEEL_EDIT,"REPEATER","选择快捷技能","选一个槽位，再选要放进去的技能"));
+        }
+        if(page==Page.BOOK)content="学习职业技能后，可单独选择法杖的右键法术或配置八个快捷槽位。通用技能可直接加入轮盘。";
         if(page==Page.COMMON){
             content=NativeRpg.COMMON_IDS.size()+"项通用技能无需选职；公用同一个魔力池。选择页码，再点技能看条件和消耗。";
             int pageNumber=detail.equals("2")?1:0,start=pageNumber*CONTENT.length;
@@ -93,6 +99,7 @@ final class PlayerAdventureMenus implements Listener {
             buttons.add(button(14,Action.NONE,"OAK_SIGN","使用提示",e.tip(),"失败："+e.failure()));
             String use=Set.of("travel","team","give","prospect").contains(detail)?"选择目标或配方":"使用一次";
             buttons.add(new Button(22,Action.COMMON_USE,detail,"LIME_DYE",use,List.of(e.costLine(),e.command(),"关闭本页后按当前状态检查；失败不自动重试")));
+            buttons.add(new Button(24,Action.COMMON_EQUIP,detail,"REPEATER","加入轮盘",List.of("选择一个快捷槽位，只配置，不施法")));
         }else if(page==Page.WHEEL){
             content=wheel(p,detail,buttons);
         }else if(page==Page.WHEEL_EDIT){content=wheelEdit(p,detail,buttons);
@@ -232,19 +239,27 @@ final class PlayerAdventureMenus implements Listener {
     }
     private String wheelEdit(Player p,String detail,List<Button> buttons) {
         var learned=wheelSkills(p,true);var catalogue=wheelCatalogue(p,learned);List<String> slots;
-        boolean equipCircle=detail.equals(NativeRpg.HEALING_CIRCLE)&&catalogue.containsKey(detail);
+        WheelSkill selected=catalogue.get(detail);
+        if(!detail.isEmpty()&&selected==null) {
+            buttons.add(button(4,Action.NONE,"BARRIER","技能暂不可用","重新查看职业技能或通用技能目录"));
+            buttons.add(button(33,Action.WHEEL_EDIT,"REPEATER","回到轮盘配置","保留当前快捷技能"));
+            return "该技能暂不可用。请从技能目录重新选择。";
+        }
         String message="选一个槽位，更换或清空。可混排通用技和已学职业技，保存后跨设备、重登及重启保留。";
-        try{slots=wheelSlots(p,learned);}catch(IllegalArgumentException invalid){slots=Collections.nCopies(8,"");message="配置资料暂不可读；可点恢复推荐，或保留资料并联系服主。";}
-        if(equipCircle)message="治愈之环已学会。选择一个替换位置，或关闭以保留现有搭配。";
+        try{slots=wheelSlots(p,learned);}catch(IllegalArgumentException invalid){
+            slots=Collections.nCopies(8,"");message="配置资料暂不可读；可点恢复推荐，或保留资料并联系服主。";
+            selected=null;
+        }
+        if(selected!=null)message="将「"+selected.name()+"」放入选定槽位。已有技能会被替换。";
         buttons.add(button(4,Action.NONE,"REPEATER","选择要调整的槽位",message));
         for(int index=0;index<8;index++) {
             String id=slots.get(index);WheelSkill spell=catalogue.get(id);
-            buttons.add(new Button(WHEEL_CELLS[index],equipCircle?Action.WHEEL_ASSIGN:Action.WHEEL_SLOT,
-                    equipCircle?index+"|"+detail:Integer.toString(index),spell==null?"LIGHT_GRAY_DYE":spell.icon(),
+            buttons.add(new Button(WHEEL_CELLS[index],selected==null?Action.WHEEL_SLOT:Action.WHEEL_ASSIGN,
+                    selected==null?Integer.toString(index):index+"|"+detail,spell==null?"LIGHT_GRAY_DYE":spell.icon(),
                     "槽位 "+(index+1)+" · "+(id.isEmpty()?"空":spell==null?id:spell.name()),
-                    List.of(equipCircle?"点击将治愈之环装入这里":"点击更换或清空","只调整快捷位置，不施法、不学习")));
+                    List.of(selected==null?"点击更换或清空":"将「"+selected.name()+"」装入此处","只调整快捷位置，不施法、不学习")));
         }
-        if(!equipCircle)buttons.add(button(22,Action.WHEEL_DEFAULTS,"CLOCK","恢复推荐布局","优先本人已学职业技，再加入治疗、控制与位移","这是恢复快捷位置，不会遗忘技能"));
+        if(selected==null)buttons.add(button(22,Action.WHEEL_DEFAULTS,"CLOCK","恢复推荐布局","优先本人已学职业技，再加入治疗、控制与位移","这是恢复快捷位置，不会遗忘技能"));
         buttons.add(button(33,Action.WHEEL,"END_CRYSTAL","完成 · 打开轮盘","配置即时保存，无需再点保存"));
         return message;
     }
@@ -349,11 +364,13 @@ final class PlayerAdventureMenus implements Listener {
         if(target!=null){open(p,target,"");return;}
         if(b.action()==Action.BACK){open(p,parent(view.page()),"");return;}
         if(b.action()==Action.COMMON_PAGE){open(p,Page.COMMON,b.payload());return;}
+        if(b.action()==Action.COMMON_EQUIP){open(p,Page.WHEEL_EDIT,b.payload());return;}
         if(b.action()==Action.WHEEL_PAGE){open(p,Page.WHEEL,b.payload());return;}
         if(b.action()==Action.WHEEL_SLOT){open(p,Page.WHEEL_PICK,b.payload()+"|common:0");return;}
         if(b.action()==Action.WHEEL_PICK_PAGE){open(p,Page.WHEEL_PICK,b.payload());return;}
         if(b.action()==Action.WHEEL_ASSIGN||b.action()==Action.WHEEL_CLEAR||b.action()==Action.WHEEL_DEFAULTS){
-            changeWheel(p,b,view.detail().equals(NativeRpg.HEALING_CIRCLE)?Page.WHEEL:Page.WHEEL_EDIT);return;
+            boolean singleSkill=view.page()==Page.WHEEL_EDIT&&!view.detail().isEmpty()&&b.action()==Action.WHEEL_ASSIGN;
+            changeWheel(p,b,singleSkill?Page.WHEEL:Page.WHEEL_EDIT);return;
         }
         if(b.action()==Action.WHEEL_CAST&&b.payload().equals(NativeRpg.HEALING_CIRCLE)){
             owner.nativeRpg().castHealingCircle(p,session.aim);

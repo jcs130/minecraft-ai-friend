@@ -76,12 +76,10 @@ final class WorldLifeManager implements Listener {
     }
     private boolean enabled(String name) { return Bukkit.getPluginManager().isPluginEnabled(name); }
     RpgCampaign story() { return story; }
-    private static final Set<String> GATHERINGS =
-            Set.of("qd-trial-gather", "qd-ruins-gather", "qd-explorers-gather");
     record WorldEvent(String id, String name, long endsAt) {
         String receiptId() { return id + ":" + endsAt; }
         long remainingSeconds(long now) { return Math.max(0, (endsAt - now + 999) / 1000); }
-        boolean gathering() { return GATHERINGS.contains(id); }
+        boolean gathering() { return WorldActivityGuide.gathering(id); }
         String command() {
             return switch (id) {
                 case "qd-trial-gather" -> "/mycli arena status";
@@ -104,6 +102,41 @@ final class WorldLifeManager implements Listener {
             row.addProperty("nextCommand", command());
             return row;
         }
+    }
+    JsonObject eventState(Player player, WorldEvent event, long now) {
+        JsonObject row = event.state(now);
+        String instruction = WorldActivityGuide.instruction(event.id());
+        if (!instruction.isEmpty()) row.addProperty("instruction", instruction);
+        String destination = WorldActivityGuide.site(event.id());
+        if (destination.isEmpty() && Set.of("qd-ruins-gather", "qd-clear-sight").contains(event.id()))
+            destination = recommendedSite(player);
+        if (!destination.isEmpty()) {
+            JsonObject route = plugin.siteDungeons().gatheringRoute(player, destination);
+            if (route != null) {
+                row.add("route", route);
+                row.addProperty("nextCommand", route.get("readCommand").getAsString());
+            } else {
+                row.addProperty("nextCommand", "/mycli dungeon list");
+                row.addProperty("instruction", "公告地点当前不在本服目录。用 /mycli dungeon list 重新选择一处可用遗迹。");
+            }
+        }
+        return row;
+    }
+
+    private String recommendedSite(Player player) {
+        if (plugin.dungeonParticipant(player) || plugin.pvpParticipant(player)) return "";
+        Object id = plugin.siteDungeons().lobbyOuting(player).get("id");
+        return id instanceof String site ? site : "";
+    }
+
+    static String eventDetail(JsonObject event) {
+        if (event.has("route")) {
+            var route = event.getAsJsonObject("route");
+            return route.get("siteName").getAsString() + " · " + route.get("nextAction").getAsString()
+                    + " 下一步 " + route.get("nextCommand").getAsString();
+        }
+        if (event.has("instruction")) return event.get("instruction").getAsString();
+        return "查看 " + event.get("nextCommand").getAsString();
     }
     private long nextGatheringRead;
     private List<WorldEvent> gatheringSnapshot = List.of();
@@ -233,8 +266,9 @@ final class WorldLifeManager implements Listener {
         out.addProperty("dungeonStartPolicy", "player_initiated");
         JsonArray rows = new JsonArray();
         for (WorldEvent event : active) {
-            rows.add(event.state(now));
-            if (!json) p.sendMessage("§e[活动] " + event.name() + " · 剩" + event.remainingSeconds(now) + "秒。查看 " + event.command());
+            JsonObject entry = eventState(p, event, now);
+            rows.add(entry);
+            if (!json) p.sendMessage("§e[活动] " + event.name() + " · 剩" + event.remainingSeconds(now) + "秒。 " + eventDetail(entry));
         }
         if (plugin.agentCoach() != null) {
             JsonObject release = plugin.agentCoach().releaseNotice();
@@ -243,8 +277,16 @@ final class WorldLifeManager implements Listener {
                 p.sendMessage("§7" + line.getAsString());
         }
         out.add("events",rows);out.addProperty("instruction","集结自愿参加；公告不会报名、传送或推进任务。集结结束不终止已开始的副本。");
+        if (active.isEmpty()) {
+            String destination = recommendedSite(p);
+            JsonObject route = destination.isEmpty() ? null : plugin.siteDungeons().gatheringRoute(p, destination);
+            if (route != null) {
+                out.add("suggestedExpedition", route);
+                if (!json) p.sendMessage("§7[活动] 当前没有集结。可查 " + route.get("readCommand").getAsString()
+                        + "，先看 " + route.get("firstRoom").getAsString() + " 的路线及准入。");
+            } else if (!json) p.sendMessage("§7[活动] 当前没有集结。用 /mycli dungeon list 查看各遗迹的实况，或 /mycli arena status 查询试炼塔。");
+        }
         if(json)emit(p,"events",out);
-        else if(active.isEmpty())p.sendMessage("§7[活动] 当前没有集结。可直接 /mycli arena status 查试炼，或 /mycli dungeon list 选遗迹，不必等公告。");
     }
     private void board(Player p, boolean open, boolean json) {
         JsonObject out = new JsonObject(); JsonArray cards = new JsonArray(); java.util.ArrayList<String> ids = new java.util.ArrayList<>();

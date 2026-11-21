@@ -86,10 +86,11 @@ function renderText(input, depth = 0) {
 }
 
 /** Plain text from chat components, anonymous NBT titles, or already-unwrapped objects. */
-export function minecraftTextComponent(value) {
+export function minecraftTextComponent(value, { trim = true, limit = 500 } = {}) {
   const input = value && typeof value === 'object' && 'type' in value && 'value' in value
     ? unwrapNbt(value) : value;
-  return renderText(input, 0).trim().slice(0, 500);
+  const text = renderText(input, 0);
+  return (trim ? text.trim() : text).slice(0, limit);
 }
 
 /** Readable window title; never returns `[object Object]`. */

@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Villager;
@@ -73,8 +74,10 @@ final class VillagerLives {
     private final Path directory;
     private final NamespacedKey stamp;
     private final NamespacedKey life;
+    private final NativeVillagerWalk walk;
     private final Map<UUID, Record> records = new HashMap<>();
     private final Set<UUID> held = new HashSet<>();
+    private final Map<String, Long> nextShopWalk = new HashMap<>();
     private Map<String, NativeVillageHomes.Home> homes = Map.of();
 
     VillagerLives(VillagerQuestsPlugin plugin) {
@@ -82,10 +85,12 @@ final class VillagerLives {
         this.directory = plugin.getDataFolder().toPath().resolve("resident-life");
         this.stamp = new NamespacedKey(plugin, "resident_life_return");
         this.life = new NamespacedKey(plugin, "resident_life_id");
+        this.walk = new NativeVillagerWalk(plugin.getLogger());
     }
 
     void configure(Map<String, NativeVillageHomes.Home> homes) {
         this.homes = Map.copyOf(homes);
+        nextShopWalk.keySet().retainAll(homes.keySet());
         for (NativeVillageHomes.Home home : homes.values()) {
             UUID character = home.characterId();
             if (records.containsKey(character) || held.contains(character)) continue;
@@ -135,7 +140,7 @@ final class VillagerLives {
             if (spot == null || row != null && !row.matches(home, spot)) continue;
             Entity original = Bukkit.getEntity(spot.entityUuid());
             if (original instanceof Villager v && v.isValid() && !v.isDead()) {
-                bindLive(home, row, v);
+                bindLive(home, spot, row, v, now);
                 continue;
             }
             if (original != null || row == null || row.admitted() || row.returnAt() > now || !NativeVillageHomes.ready(home)) continue;
@@ -143,18 +148,25 @@ final class VillagerLives {
         }
     }
 
-    private void bindLive(NativeVillageHomes.Home home, Record row, Villager villager) {
+    private void bindLive(NativeVillageHomes.Home home, Villagers.Spot spot, Record row, Villager villager, long now) {
         if (villager.hasMetadata("NPC")) return;
+        boolean service = Villagers.trialMerchant(spot.serviceCounter());
+        Location post = service ? plugin.villagers.trialServicePost(spot) : null;
+        if (service && post == null) return;
         if (row != null && row.deathId().toString().equals(villager.getPersistentDataContainer().get(stamp, PersistentDataType.STRING))) {
             try {
                 if (!row.admitted()) persist(row.admit());
                 villager.getPersistentDataContainer().remove(stamp);
-                villager.setInvulnerable(false);
+                villager.setInvulnerable(service);
                 villager.setAI(true);
             } catch (IOException | RuntimeException failure) {
                 hold(home.characterId(), "returned body could not be admitted");
                 return;
             }
+        }
+        if (service) {
+            attendShop(home, villager, post, now);
+            return;
         }
         boolean missingHome = villager.getMemory(MemoryKey.HOME) == null;
         boolean missingWork = villager.getMemory(MemoryKey.JOB_SITE) == null && villager.getProfession() == home.profession();
@@ -162,6 +174,20 @@ final class VillagerLives {
                 || !villager.getWorld().equals(home.bed().getWorld())) return;
         if (missingHome) villager.setMemory(MemoryKey.HOME, home.bed());
         if (missingWork) villager.setMemory(MemoryKey.JOB_SITE, home.work());
+    }
+
+    private void attendShop(NativeVillageHomes.Home home, Villager villager, Location post, long now) {
+        if (villager.getTrader() != null || now < nextShopWalk.getOrDefault(home.id(), 0L)) return;
+        nextShopWalk.put(home.id(), now + 6_000L);
+        if (!villager.getWorld().equals(post.getWorld()) || !villager.getWorld().equals(home.bed().getWorld())
+                || !NativeVillageHomes.ready(home)) return;
+        if (!villager.hasAI()) villager.setAI(true);
+        if (!home.bed().equals(villager.getMemory(MemoryKey.HOME))) villager.setMemory(MemoryKey.HOME, home.bed());
+        boolean daytime = villager.getWorld().getTime() < 12_000;
+        Location destination = daytime ? post : home.spawn();
+        if (villager.isSleeping() || !destination.isChunkLoaded()
+                || villager.getLocation().distanceSquared(destination) <= 2.25) return;
+        walk.move(villager, destination);
     }
 
     private void returnHome(NativeVillageHomes.Home home, Villagers.Spot spot, Record row) {
@@ -190,13 +216,17 @@ final class VillagerLives {
             body.getPersistentDataContainer().set(life, PersistentDataType.STRING, row.deathId().toString());
             body.setAI(false);
             body.setInvulnerable(true);
+            if (Villagers.trialMerchant(spot.serviceCounter()) && !plugin.villagers.restoreTrialService(spot, body)) {
+                hold(home.characterId(), "original service role could not be restored");
+                return;
+            }
             // No copy of the former body's inventory or equipment. Vanilla death still owns drops.
             home.spawn().getWorld().addEntity(body);
             if (!body.isValid() || Bukkit.getEntity(row.entityId()) != body) {
                 hold(home.characterId(), "game did not confirm the original UUID at home");
                 return;
             }
-            bindLive(home, row, body);
+            bindLive(home, spot, row, body, System.currentTimeMillis());
         } catch (ReflectiveOperationException | RuntimeException failure) {
             hold(home.characterId(), "game did not confirm a safe return");
         }

@@ -1,0 +1,22 @@
+{
+  "world": "world",
+  "existingMerchants": {
+    "trial-supply-merchant": "be6a0cb5-a670-4491-908c-8d279fe3e150",
+    "trial-recycle-merchant": "cfe48b99-b284-424e-b8f2-92bbb0b7fcd8"
+  },
+  "residents": [
+    {
+      "id": "trial-platform-manager",
+      "entityUuid": "be6a0cb5-a670-4491-908c-8d279fe3e150",
+      "name": "试炼管理员",
+      "alias": "试炼官",
+      "voice": "coo-yunxi-male-20261028",
+      "persona": "你是试炼塔唯一值班的管理员，白天在集合平台，晚间回东廊小屋。你可以和明确向你问候的冒险者简短聊天，并说明集结、补给、装备回收、个人奖励和如何查本人的真实试炼进度。不要猜测他人的通关次数、楼层或背包。遇到不确定的问题请引导对方右键打开管理员菜单查看。",
+      "address": "试炼塔东廊 1 号",
+      "frontZ": -309,
+      "bed": "brown_bed",
+      "profession": "weaponsmith",
+      "workstation": "grindstone[facing=west]"
+    }
+  ]
+}

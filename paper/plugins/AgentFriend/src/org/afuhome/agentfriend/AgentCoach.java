@@ -369,12 +369,12 @@ final class AgentCoach implements Listener {
             if (event.remainingSeconds(now) < 30) continue;
             var key = new NamespacedKey(plugin, "coach_gathering_" + event.id().replace('-', '_'));
             if (event.endsAt() <= data.getOrDefault(key, PersistentDataType.LONG, 0L)) continue;
-            JsonObject notice = event.state(now);
+            JsonObject notice = plugin.worldLife().eventState(player, event, now);
             notice.addProperty("type", "adventure_gathering");
             notice.addProperty("recipient", player.getUniqueId().toString());
             notice.addProperty("requiresDecision", true);
             player.sendMessage("§a[当前集结] " + event.name() + " · 剩" + event.remainingSeconds(now)
-                    + "秒。自愿前往，可先查 " + event.command());
+                    + "秒。自愿参加。 " + WorldLifeManager.eventDetail(notice));
             player.sendMessage("MC_COACH " + notice);
             data.set(key, PersistentDataType.LONG, event.endsAt());
             onboarding.delivered(player, now);

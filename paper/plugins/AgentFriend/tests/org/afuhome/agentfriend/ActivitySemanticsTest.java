@@ -13,6 +13,16 @@ public final class ActivitySemanticsTest {
             check(ActivityBarSemantics.sameActivity(title,ActivityBarSemantics.title(a.label(),480)),"small scheduling skew");
             check(!ActivityBarSemantics.sameActivity(raw,"☆ "+name+" | 1:00"),"separate generations");
         }
+        var expeditionIds=java.util.Map.of("亡灵墓穴","qd-undead-crypt-gather","黑旗林营","qd-illager-camp-gather",
+            "黑帆海盗湾","qd-corsair-cove-gather");
+        expeditionIds.forEach((name,id)->{
+            String raw="◈ 冒险者集结·"+name+" | 8:07";
+            var activity=ActivityBarSemantics.identify(raw);
+            check(activity!=null&&activity.invitation()&&activity.id().equals(id),"exact reserved expedition "+name);
+            check(ActivityBarSemantics.sameActivity(raw,ActivityBarSemantics.title(activity.label(),487)),"canonical expedition timer "+name);
+            check(!ActivityBarSemantics.sameActivity(raw,"◈ 冒险者集结·遗迹远征 | 8:07"),"site and generic invitations remain separate");
+            check(ActivityBarSemantics.identify("任务 · 冒险者集结·"+name)==null,"quest text never becomes an invitation");
+        });
         for(String title:new String[]{"双生首领","试炼救援 6/10秒","任务 · 冒险者集结·探索留影","王·星灯夜巡 | 8:07","突袭 - 剩余2名袭击者"}){
             check(ActivityBarSemantics.identify(title)==null,"non activity "+title);
             check(!ActivityBarSemantics.sameActivity(title,title),"equal names do not imply shared identity");

@@ -47,6 +47,20 @@ describe('read-only received sign text', () => {
     expect(signTextReceipt(signTextSnapshot(missing)!)).toContain('不是空白');
     expect(signTextSnapshot(sign(version,['','']))).toMatchObject({status:'received',front:'',back:''});
   });
+  // Synthetic received NBT, not a packet capture from mcmoyu.
+  it('decodes modern compound-list text components instead of object coercion',()=>{
+    const block=sign('1.21.11');
+    block.entity={type:'compound',value:{front_text:{type:'compound',value:{messages:{type:'list',value:{type:'compound',value:[
+      {text:{type:'string',value:' 公告 '},extra:{type:'list',value:{type:'compound',value:[{text:{type:'string',value:'入口'}}]}}},
+      {text:{type:'string',value:'第二行'}},{text:{type:'string',value:''}},{text:{type:'string',value:''}}
+    ]}}}}}};
+    expect(block.getSignText()[0]).toContain('[object Object]'); // pinned upstream limitation
+    expect(signTextSnapshot(block)).toMatchObject({status:'received',front:' 公告 入口\n第二行',back:null});
+  });
+  it('preserves a pre-multisided JSON sign',()=>{
+    const block=sign('1.19.4',['旧告示\n下楼']);
+    expect(signTextSnapshot(block)).toMatchObject({status:'received',front:'旧告示\n下楼',back:null});
+  });
   it('look and sites expose original text without clicking or editing; occlusion remains unknown',async()=>{
     const block=sign('1.21.1',['向下是公共通道','原路返回']),r=scene(block);
     const looked=await skillLook(r.bot,{skill:'look',at:[1,64,0]},{aborted:()=>false} as never);
@@ -71,8 +85,8 @@ describe('read-only received sign text', () => {
     } finally {r.close();}
   });
   it('keeps malformed or unsupported payload unknown and bounds custom text',()=>{
-    const block=sign('1.21.1',['safe','']);block.getSignText=()=>{throw Error('malformed');};
-    expect(signTextSnapshot(block)).toMatchObject({status:'unavailable',front:null});
+    const block=sign('1.21.1',['safe','']);block.entity.value.front_text.value.messages={type:'list',value:{type:'compound',value:[{unsupported:true}]}};
+    expect(signTextSnapshot(block)).toMatchObject({status:'received',front:null,back:''});
     const long=sign('1.21.1',['x'.repeat(3000),'']);expect(signTextSnapshot(long)?.front?.length).toBe(2048);
     expect(signTextSnapshot(long)?.truncated).toBe(true);
   });

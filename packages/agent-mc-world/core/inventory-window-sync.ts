@@ -62,6 +62,12 @@ export function installInventoryWindowSyncGuard(bot: Bot, diag?: MinecraftLog): 
   };
   const complete = (window: Window): boolean =>
     seenFor(window).size >= window.inventoryEnd - window.inventoryStart;
+  const recoverDecode = (): void => {
+    if (!state.decodeFailure) return;
+    state.decodeFailure = undefined;
+    diag?.write({ lane: 'inventory', event: 'decode-recovered', level: 'info',
+      msg: '已收到并解码当前窗口的完整物品栏，恢复当前清单' });
+  };
   // updateSlot changes item.slot. Keep the two windows' Item instances separate.
   const copyItem = (item: Window['selectedItem']): Window['selectedItem'] =>
     item ? Object.assign(Object.create(Object.getPrototypeOf(item)), item) : null;
@@ -99,17 +105,18 @@ export function installInventoryWindowSyncGuard(bot: Bot, diag?: MinecraftLog): 
       return true;
     }
     if (name === 'window_items') {
+      const completeCursor = packet.carriedItem !== undefined || !bot.supportFeature?.('stateIdUsed');
       if (packet.windowId === 0) {
         state.confirmed = packet.items.length >= bot.inventory.slots.length;
-        if (state.confirmed && state.decodeFailure) {
-          state.decodeFailure = undefined;
-          diag?.write({lane:'inventory',event:'decode-recovered',level:'info',msg:'已收到并解码完整玩家背包，恢复当前清单'});
-        }
+        if (!window && state.confirmed && completeCursor) recoverDecode();
       }
       else if (window) {
         const seen = seenFor(window);
         for (let slot = window.inventoryStart; slot < Math.min(packet.items.length, window.inventoryEnd); slot++) seen.add(slot);
         state.confirmed = complete(window);
+        // Recover a failed active-container decode only from a complete new
+        // container frame with its cursor, not incremental coverage of old slots.
+        if (state.confirmed && packet.items.length >= window.slots.length && completeCursor) recoverDecode();
       }
     } else if (name === 'set_slot' && window && window.id === packet.windowId
       && packet.slot >= window.inventoryStart && packet.slot < window.inventoryEnd) {

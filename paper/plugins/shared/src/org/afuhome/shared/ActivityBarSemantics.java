@@ -12,6 +12,9 @@ public final class ActivityBarSemantics {
         new Activity("qd-traveler","旅人顺风","活动·旅人顺风",false),
         new Activity("qd-trial-gather","冒险者集结·试炼塔","集结邀请·试炼塔",true),
         new Activity("qd-ruins-gather","冒险者集结·遗迹远征","集结邀请·遗迹远征",true),
+        new Activity("qd-undead-crypt-gather","冒险者集结·亡灵墓穴","集结邀请·亡灵墓穴",true),
+        new Activity("qd-illager-camp-gather","冒险者集结·黑旗林营","集结邀请·黑旗林营",true),
+        new Activity("qd-corsair-cove-gather","冒险者集结·黑帆海盗湾","集结邀请·黑帆海盗湾",true),
         new Activity("qd-explorers-gather","冒险者集结·探索留影","集结邀请·探索留影",true));
     private static final Pattern COLORS=Pattern.compile("(?i)§[0-9a-fk-orx]");
     private static final Pattern ICONS=Pattern.compile("[\\s☾✿☆★⚔◈☀]*");

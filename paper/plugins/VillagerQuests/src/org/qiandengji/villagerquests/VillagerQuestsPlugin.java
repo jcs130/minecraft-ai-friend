@@ -210,7 +210,7 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
                         throw new IllegalArgumentException("villagers." + id + ".entityUuid must be a unique canonical UUID and replace npcId");
                 }
                 String counter = v.getString("serviceCounter");
-                if (v.contains("serviceCounter") && (!"guild-receptionist".equals(counter) || entityUuid == null
+                if (v.contains("serviceCounter") && (!("guild-receptionist".equals(counter) || Villagers.trialMerchant(counter)) || entityUuid == null
                         || !policy.villagers.get(id).types().isEmpty() || v.contains("triggers"))) {
                     throw new IllegalArgumentException("villagers." + id + ".serviceCounter requires a native UUID and no commissions");
                 }
@@ -219,7 +219,8 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
             }
             Map<String, NativeVillageHomes.Home> homes = NativeVillageHomes.load(cfg.getConfigurationSection("households"));
             for (String id : homes.keySet()) {
-                if (!spots.containsKey(id) || spots.get(id).entityUuid() == null || spots.get(id).serviceCounter() != null) {
+                Villagers.Spot spot = spots.get(id);
+                if (spot == null || spot.entityUuid() == null || spot.serviceCounter() != null && !Villagers.trialMerchant(spot.serviceCounter())) {
                     throw new IllegalArgumentException("households." + id + " requires a registered native villager");
                 }
             }

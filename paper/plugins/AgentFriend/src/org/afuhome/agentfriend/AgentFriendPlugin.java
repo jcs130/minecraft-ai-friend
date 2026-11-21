@@ -281,8 +281,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     /** Only typed, server-owned buttons reach here; existing commands keep their own authority. */
     void executePlayerMenuAction(Player p,AdventureMenuModel.Action action,String payload){
         switch(action){
+            case BOOK_READ -> p.openBook(statusBook(p));
             case CLASS_MENU -> nativeRpg.delegate(p,"profession","menu");
             case SKILL_MENU -> nativeRpg.delegate(p,"skills","menu");
+            case SPELLBOOK_MENU -> playerMenuCommand(p,"vortexrpg:spell menu");
             case TALENT_MENU -> {
                 var state=nativeRpg.state(p);
                 String profession=state.has("combat")?state.get("combat").getAsString():"";
@@ -601,6 +603,20 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     public boolean isManagedVoiceServiceBody(String service, UUID actor) {
         return "guild-receptionist".equals(service) && guildHall != null && guildHall.isReceptionistVoiceBody(actor);
     }
+
+    public boolean isTrialPlatformVoiceServiceBody(String service, UUID actor) {
+        return trialResidentServicePost(service, actor) != null;
+    }
+
+    /** Fixed service counter anchor for the authoritative resident body. */
+    public Location trialResidentServicePost(String service, UUID actor) {
+        return Bukkit.isPrimaryThread() && isEnabled() && dungeon != null ? dungeon.platformMerchantPost(service, actor) : null;
+    }
+
+    /** Reapply the original service role before the resident lifecycle admits a confirmed return. */
+    public boolean restoreTrialResidentServiceBody(String service, org.bukkit.entity.Villager actor) {
+        return Bukkit.isPrimaryThread() && isEnabled() && dungeon != null && dungeon.restorePlatformMerchant(service, actor);
+    }
     GuildSharedStorage guildShared() { return guildShared; }
     GuildStorageOwnership guildStorage() { return guildStorage; }
     ProtectionAdvisor protectionAdvisor() { return protectionAdvisor; }
@@ -702,14 +718,23 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return namedTravelActivityArea(at, "");
     }
     boolean namedTravelActivityArea(Location at, String destination) {
-        // Only the official entrance may cross its construction-protection corridor.
+        // Only the official destination may cross the trial platform's protection boundary.
         // Personal bookmarks, combat rooms, PvP and other encounters retain admission checks.
-        boolean publicEntrance = "arena".equals(destination) && sameWorld(at)
-                && Math.pow(at.getX() - (X + .5), 2) + Math.pow(at.getZ() - (Z - 16.5), 2)
-                    <= HomeLanding.RADIUS * HomeLanding.RADIUS
-                && Math.abs(at.getY() - (FLOOR + 1)) <= HomeLanding.VERTICAL;
+        boolean publicEntrance = "arena".equals(destination) && arenaPublicLanding(at);
         return arenaBuilt && inBuild(at) && !publicEntrance || pvpArena != null && pvpArena.namedTravelArea(at)
                 || siteDungeons != null && siteDungeons.activityArea(at);
+    }
+    Location arenaEntrance() {
+        return dungeon != null && dungeon.isBuilt() ? dungeon.gatheringLanding()
+                : new Location(world(), X + .5, FLOOR + 1, Z - 16.5);
+    }
+    private boolean arenaPublicLanding(Location at) {
+        if (!sameWorld(at)) return false;
+        Location anchor = arenaEntrance();
+        return Math.pow(at.getX() - anchor.getX(), 2) + Math.pow(at.getZ() - anchor.getZ(), 2)
+                    <= HomeLanding.RADIUS * HomeLanding.RADIUS
+                && Math.abs(at.getY() - anchor.getY()) <= HomeLanding.VERTICAL
+                && (dungeon == null || !dungeon.isBuilt() || dungeon.isGatheringPlatform(at));
     }
     void refreshAgentState(Player player) { if (agentStatePublisher != null) agentStatePublisher.afterCast(player); }
     void openPvpMenu(Player player) { openMenu(player, "pvp"); }
@@ -1947,8 +1972,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         if (id.equals("arena") || id.equals("试炼场")) {
             if (!arenaBuilt) { p.sendMessage(ChatColor.RED + "试炼场尚未建成；请联系服主检查场地，或 /mycli guild board 选择其他委托。"); return; }
-            Location landing = new Location(world(), X + 0.5, FLOOR + 1.0, Z - 17 + 0.5, 0, 0);
-            travelPublic(p, "arena", "村庄试炼塔入口", landing);
+            travelPublic(p, "arena", "村庄试炼塔集合平台", arenaEntrance());
             return;
         }
         if (PUBLIC_PLACES.stream().anyMatch(place -> place.id().equals(id))) {
@@ -1972,9 +1996,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
     void travelPublic(Player p, String id, String title, Location destination) {
         if (destination == null) { p.sendMessage("§e[world_unavailable] 地点暂未开放；/mycli waypoint 查看当前目录。"); return; }
+        boolean trial = id.equals("arena");
         waypoints.travel(p, id, title, destination,
-            () -> id.equals("arena") ? arenaBuilt : destination.equals(publicWarp(id)),
-            TravelMagic.LOCAL_MANA, () -> new HomeLanding(p, destination).select().destination(), outcome -> {
+            () -> trial ? arenaBuilt && destination.equals(arenaEntrance()) : destination.equals(publicWarp(id)),
+            TravelMagic.LOCAL_MANA, () -> new HomeLanding(p, destination)
+                    .select(at -> !trial || arenaPublicLanding(at)).destination(), outcome -> {
                 String status = outcome.reason().equals("loading") ? "pending" : outcome.success() ? "arrived" : "denied";
                 p.sendMessage("MC_TRAVEL target=" + id + " status=" + status + " reason=" + outcome.reason());
                 if (outcome.reason().equals("loading")) p.sendMessage("§b正在检查「" + id + "」落点，请留在原地；到达才消耗6魔力。");
@@ -1991,8 +2017,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             // Listing waypoints must stay read-only; enumerate personal homes below.
             p.sendMessage("传送：/mycli goto <ID>，6魔力。个人点名称由玩家自定，不代表官方任务入口；任务目标请查 /mycli guild guide。");
             p.sendMessage("公共地点：" + String.join("、", PUBLIC_PLACES.stream().map(PublicPlace::id).toList()) + "、arena");
-            p.sendMessage("MC_WAYPOINT id=arena " + LocationOutput.fields(
-                    new Location(world(), X + 0.5, FLOOR + 1, Z - 17 + 0.5)));
+            p.sendMessage("MC_WAYPOINT id=arena " + LocationOutput.fields(arenaEntrance()));
             for (PublicPlace place : PUBLIC_PLACES) {
                 Location at = publicWarp(place.id());
                 if (at != null) p.sendMessage("MC_WAYPOINT id=" + place.id() + " " + LocationOutput.fields(at));
@@ -2722,13 +2747,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         meta.setTitle("命格书");
         meta.setAuthor("千灯纪");
         meta.setDisplayName(ChatColor.GOLD + "❖ 命格书 ❖");
-        meta.setLore(List.of("使用键：查看状态与旅途指引", "手柄可用翻页键；未找到时可用 /mycli book 补领"));
+        meta.setLore(List.of("使用键：查看角色、学习职业技和选择快捷技能", "潜行时使用：直接翻阅原书"));
         if(nativeRpg.selected()){
             var state=nativeRpg.state(p);
             meta.setPages("§6千灯纪 · 重返艾恩葛朗特§r\n\n"+p.getName()+"\n生命 "+Math.round(p.getHealth())+"/"+Math.round(p.getMaxHealth())
                     +"\nVortex职业 "+(state.has("combat")&&!state.get("combat").getAsString().isEmpty()?state.get("combat").getAsString():"未选择")
                     +"\n战斗等级 "+nativeRpg.level(p)+"\n\n/mycli status 查看实时状态。",
-                "§6冒险四步§r\n\n/mycli profession list\n主动choose <ID>选职。\n\n/mycli skills list\n查看等级/学习点要求，主动learn <节点ID>。\n\n/mycli cast <技能ID>\n手持职业装备，核对实际效果。\n\n/mycli tasks list\n接讨伐或探索，达标后主动claim。",
+                "§6角色与技能§r\n\n用命格书打开菜单，可选职业、查看技能条件并学习。\n\n在「选择快捷技能」中点一个槽位，再选技能。\n\n需要瞄准时，先瞄准再潜行使用罗盘，然后点技能。",
                 "§b通用生存技能§r\n\nhome 归乡\nselfheal 圣愈\nfood 饱食\nblink 闪现\nstarbolt 星芒箭\nfrostnova 寒霜（控场、灭火）\ngive 造物\n\n另有travel传送点、prospect探矿、night夜视、feather羽落。\n\n无需选职或学习，统一使用Vortex魔力。详情：/mycli skills info <ID>",
                 "§e补给与个人箱§r\n\n/mycli guild shared\n查看公会共享装备与补给，亲自前往领取。\n\n/mycli arena stash\n远程个人奖励箱；成功开页2魔力。照片成片也在这里。\n\n54格大背包独立，不是个人奖励箱。",
                 "§d组队与攻略§r\n\n/mycli guild party\n原生组队入口。\n\n/mycli dungeon list\n正式遗迹和攻略；先看难度、装备和下一步，再报名。\n\n/mycli arena status\n练习试炼塔；不等于正式爬塔通关。\n\n倒地可等待队友救援。",
@@ -2788,7 +2813,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             p.sendMessage(ChatColor.YELLOW + "命格书已经在背包里；也可输入 /mycli status 查看当前状态。"); return;
         }
         Map<Integer, ItemStack> extra = p.getInventory().addItem(statusBook(p));
-        if (extra.isEmpty()) p.sendMessage(ChatColor.GOLD + "命格书已来到你的行囊，拿在手上右键翻阅。");
+        if (extra.isEmpty()) p.sendMessage(ChatColor.GOLD + "已领取命格书。拿在手上使用可学习职业技能与配置快捷技能；潜行时使用可翻阅。");
         else p.sendMessage(ChatColor.RED + "背包已满；腾出一格后输入 /mycli book 补领。");
     }
     private ItemStack item(Material material, String name, String... lore) {
@@ -2854,7 +2879,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         else switch (action) {
             case "stash" -> dungeon.openStashPages(p);
             case "photo" -> photoCamera.menu(p);
-            case "book" -> p.openBook(statusBook(p));
+            case "book" -> playerAdventureMenus.open(p,AdventureMenuModel.Page.BOOK,"");
             case "lands" -> lands.open(p, 1);
             case "market" -> taskMarket.openMenu(p);
             case "arena" -> gotoPlace(p, "arena");
@@ -3187,9 +3212,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             else playerAdventureMenus.open(player);
         } else if (isStatusBook(event.getItem())) {
             event.setCancelled(true);
-            ItemStack updated = statusBook(player);
-            player.getInventory().setItemInMainHand(updated);
-            player.openBook(updated);
+            if (player.isSneaking()) player.openBook(statusBook(player));
+            else playerAdventureMenus.open(player,AdventureMenuModel.Page.BOOK,"");
         }
     }
     @EventHandler public void onMenuClick(InventoryClickEvent event) {
