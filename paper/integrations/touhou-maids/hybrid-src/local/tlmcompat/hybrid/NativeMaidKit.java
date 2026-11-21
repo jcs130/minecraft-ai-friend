@@ -18,7 +18,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.component.ItemContainerContents;
+import net.minecraft.world.item.component.BundleContents;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.craftbukkit.inventory.CraftItemStack;
@@ -136,14 +136,21 @@ final class NativeMaidKit {
         if (packed.stream().anyMatch(item -> item.getMaxStackSize()<=1 || !item.getComponentsPatch().isEmpty())) {
             throw new CompatibilityException("starter_pack_not_plain", "只整理无自定义属性的普通可堆叠物品。");
         }
-        var box=new ItemStack(Items.SHULKER_BOX);
-        box.set(DataComponents.CONTAINER,ItemContainerContents.fromItems(packed));
-        box.set(DataComponents.CUSTOM_NAME,Component.literal("起始装备收纳 · 原有物品"));
-        int first=slots.getFirst();
-        if (!bag.isItemValid(first,box)) {
-            throw new CompatibilityException("starter_pack_unavailable", "原生背包不接受这个收纳盒。");
+        var contents=new BundleContents.Mutable(BundleContents.EMPTY);
+        for (ItemStack item:packed) {
+            int count=item.getCount();
+            if (contents.tryInsert(item)!=count) {
+                throw new CompatibilityException("starter_pack_too_large", "三个槽位的物品超过一个收纳袋容量。");
+            }
         }
-        bag.setStackInSlot(first,box);
+        var bagItem=new ItemStack(Items.BUNDLE);
+        bagItem.set(DataComponents.BUNDLE_CONTENTS,contents.toImmutable());
+        bagItem.set(DataComponents.CUSTOM_NAME,Component.literal("起始装备收纳 · 原有物品"));
+        int first=slots.getFirst();
+        if (!bag.isItemValid(first,bagItem)) {
+            throw new CompatibilityException("starter_pack_unavailable", "原生背包不接受这个收纳袋。");
+        }
+        bag.setStackInSlot(first,bagItem);
         for (int slot:slots.subList(1,3)) bag.setStackInSlot(slot,ItemStack.EMPTY);
         saved.putBoolean("qiandengji_starter_packed",true);
     }
