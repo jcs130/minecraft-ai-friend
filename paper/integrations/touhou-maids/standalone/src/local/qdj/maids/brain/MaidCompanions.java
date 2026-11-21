@@ -25,6 +25,7 @@ import net.minecraft.world.level.storage.LevelResource;
 
 /** Public temporary parties. The TLM owner UUID, inventory, model and private history never change. */
 final class MaidCompanions {
+    private static final CompanionFollow.Distances DEFAULT_FOLLOW = new CompanionFollow.Distances(6, 3, 64);
     private final MinecraftServer server;
     private final MaidAgentsServer agents;
     private final CompanionConfig config;
@@ -38,11 +39,11 @@ final class MaidCompanions {
     private final Map<UUID, CompanionConfig.Offer> offers = new LinkedHashMap<>();
     private final Map<UUID, String> errors = new HashMap<>();
     private final Map<UUID, Long> applied = new HashMap<>();
-    private final Map<UUID, Motion> motion = new HashMap<>();
+    private final Map<UUID, CompanionFollow> followers = new HashMap<>();
+    private final Set<UUID> blockedPaths = new java.util.HashSet<>();
     private final Map<UUID, Conversation> pending = new HashMap<>();
     private final Map<UUID, Map<String, Object>> latest = new HashMap<>();
     private long nextSocial;
-    private record Motion(double x, double y, double z, long movedAt) {}
     private record Conversation(UUID id, UUID speaker, UUID expected, long revision, long brainRevision, long deadline,
                                 String message, int depth, String channel, CompanionConversation callback) {}
 
@@ -234,7 +235,7 @@ final class MaidCompanions {
             agents.agent(id).invalidateActions();
             errors.remove(id);
             applied.remove(id);
-            motion.remove(id);
+            releaseFollow(id);
             if (maid != null) {
                 try { update(ledger.get(id), maid, now); }
                 catch (Exception failure) { errors.put(id, "execution_needs_attention"); }
@@ -325,8 +326,7 @@ final class MaidCompanions {
         if (leader == null) return "waiting_for_reconnect";
         if (!leader.isAlive() || leader.isSpectator()) return "waiting_for_leader";
         if (leader.level() != maid.level()) return "waiting_in_other_dimension";
-        var m = motion.get(e.maid());
-        if (m != null && now - m.movedAt > 15_000 && maid.distanceToSqr(leader) > 36 && e.mode().equals("follow"))
+        if (e.mode().equals("follow") && blockedPaths.contains(e.maid()))
             return "path_needs_attention";
         return e.mode();
     }
@@ -337,8 +337,9 @@ final class MaidCompanions {
             finish(row.getKey(), row.getValue().id(), null, "model_timeout_no_replay");
         for (var e : ledger.entries()) {
             var agent = agents.agent(e.maid());
+            var residentBody=agent==null?null:agents.loaded(agent);
+            if (residentBody == null || !e.mode().equals("follow")) releaseFollow(e.maid());
             if (agent == null) continue; // Retired bodies can have historical contracts.
-            var residentBody=agents.loaded(agent);
             if(residentBody!=null&&residentBody.getPersistentData().getBoolean(ResidentBodyAccess.DOWNED)){halt(residentBody);continue;}
             if(e.mode().equals("paused")){if(residentBody!=null)halt(residentBody);continue;}
             if (!reserved(e.maid()) || !offered(e.maid()) || errors.containsKey(e.maid()) && !errors.get(e.maid()).startsWith("travel_wait:")) continue;
@@ -385,13 +386,25 @@ final class MaidCompanions {
 
     private void release(CompanionLedger.Entry e, long now, String cause) throws IOException {
         ledger.put(e.change(null, "returning", e.work(), 0, now, cause));
+        releaseFollow(e.maid());
         agents.agent(e.maid()).invalidateActions();
     }
 
+    private void pauseFollow(UUID id) {
+        var follow = followers.get(id);
+        if (follow != null) follow.pause();
+        blockedPaths.remove(id);
+    }
+
+    private void releaseFollow(UUID id) {
+        pauseFollow(id);
+        followers.remove(id);
+    }
+
     private void update(CompanionLedger.Entry e, EntityMaid maid, long now) throws IOException {
-        if(pendingTravel(e.maid())){halt(maid);errors.put(e.maid(),"travel_unknown_query_original_request");return;}
+        if(pendingTravel(e.maid())){pauseFollow(e.maid());halt(maid);errors.put(e.maid(),"travel_unknown_query_original_request");return;}
         // A finite photo action owns movement; the unchanged contract resumes afterwards.
-        if(agents.residents()!=null&&agents.residents().ownsMovement(e.maid()))return;
+        if(agents.residents()!=null&&agents.residents().ownsMovement(e.maid())){pauseFollow(e.maid());return;}
         if (e.mode().equals("returning")) {
             if (applied.getOrDefault(e.maid(), -1L) != e.revision()) {
                 halt(maid);
@@ -423,12 +436,8 @@ final class MaidCompanions {
             return;
         }
         var leader = actor(e.leader());
-        if (leader != null && leader.isAlive() && !leader.isSpectator() && leader.level()!=maid.level() && e.mode().equals("follow")) {
-            // Existing follow consent covers the same leader changing dimensions; do not change the contract.
-            autoTravel(e,maid,()->ResidentTravel.prepareVisit(maid,leader),now);
-            return;
-        }
-        if (leader == null || !leader.isAlive() || leader.isSpectator() || leader.level() != maid.level()) {
+        if (!CompanionFollow.available(leader) || !e.mode().equals("follow") && leader.level() != maid.level()) {
+            pauseFollow(e.maid());
             halt(maid);
             anchor(maid, point(maid));
             maid.setInSittingPose(true);
@@ -446,13 +455,22 @@ final class MaidCompanions {
             applied.put(e.maid(), e.revision());
         }
         if (e.mode().equals("follow")) {
-            anchor(maid, point(leader));
-            if (maid.distanceToSqr(leader) > 36 && maid.canBrainMoving() &&
-                    !maid.getBrain().hasMemoryValue(MemoryModuleType.ATTACK_TARGET))
-                BehaviorUtils.setWalkAndLookTargetMemories(maid, leader, .7f, 3);
-            var last = motion.get(e.maid());
-            if (last == null || maid.position().distanceToSqr(last.x, last.y, last.z) > .25)
-                motion.put(e.maid(), new Motion(maid.getX(), maid.getY(), maid.getZ(), now));
+            if (!CompanionFollow.canFollow(maid)) { pauseFollow(e.maid()); return; }
+            if (maid.level() == leader.level()) anchor(maid, point(leader));
+            CompanionFollow.Distances distances;
+            try { distances = CompanionFollow.distances(maid, DEFAULT_FOLLOW); }
+            catch (IllegalArgumentException invalid) {
+                pauseFollow(e.maid());
+                errors.put(e.maid(), "travel_wait:follow_profile_invalid");
+                return;
+            }
+            if ("travel_wait:follow_profile_invalid".equals(errors.get(e.maid()))) errors.remove(e.maid());
+            var profile = CompanionFollowPolicy.Profile.teammate(distances.walk(), distances.stop(), distances.recovery());
+            var result = followers.computeIfAbsent(e.maid(), ignored -> new CompanionFollow())
+                    .tick(maid, leader, profile, true, now);
+            if (result == CompanionFollow.Result.PATH_BLOCKED) blockedPaths.add(e.maid());
+            else blockedPaths.remove(e.maid());
+            if (result == CompanionFollow.Result.REJOIN) autoTravel(e, maid, () -> ResidentTravel.prepareVisit(maid, leader), now);
         } else anchor(maid, e.work());
     }
 

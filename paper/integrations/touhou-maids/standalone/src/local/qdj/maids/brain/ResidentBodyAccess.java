@@ -9,6 +9,11 @@ public final class ResidentBodyAccess {
     public static boolean external(UUID id){var r=MaidAgentsMod.residents();return r!=null&&r.external(id);}
     public static void externalReady(UUID id){MaidAgentsMod.residents().externalReady(id);}
     public static void externalGuard(UUID id,boolean enabled){MaidAgentsMod.residents().externalGuard(id,enabled);}
+    public static boolean managesCompanionMovement(UUID id) {
+        var residents = MaidAgentsMod.residents();
+        var companions = MaidAgentsMod.companions();
+        return residents != null && residents.expeditionDelegated(id) || companions != null && companions.reserved(id);
+    }
     public static String cast(UUID id,String request,String spell){
         externalReady(id);var r=MaidAgentsMod.residents();var maid=body(id);
         // Preserve the public body request through the native RPG ledger; no new random retry ID.

@@ -81,7 +81,7 @@ final class MaidResidents {
         if(enabled){externalGuards.add(id);return;}
         externalGuards.remove(id);
         var maid=body(id);
-        if(expeditions.containsKey(id))expeditions.get(id).pause(maid,"not_delegated");
+        if(expeditions.containsKey(id))expeditions.get(id).pause("not_delegated");
         combat.tick(maid,false);
     }
     boolean holdsPosition(UUID id) { var job=jobs.get(id);return job!=null&&ResidentContract.holdsPosition(job.input()); }

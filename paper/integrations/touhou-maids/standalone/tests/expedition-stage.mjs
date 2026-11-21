@@ -86,12 +86,12 @@ try {
     await act('guard');
     const snapshot = await waitFor(v => v.expedition.state === 'nearby', 'nearby');
     if (process.argv[4] === '--trial-only') await runTrial(snapshot);
-    else await runTrial(await runJourney(snapshot));
+    else await runTrial(await runJourney(snapshot, originalOwner));
 } finally {
     if (envelope.generation) await post('release').catch(()=>{});
     if (bot) bot.quit();
 }
-async function runJourney(snapshot) {
+async function runJourney(snapshot, originalOwner) {
     const originalTravel = snapshot.expedition.lastTravelRequestId;
     await passed('separate owner and live leader binding', { distance: snapshot.expedition.distanceBlocks });
     await rc(point('overworld',316.5,89,296.5));
