@@ -13,6 +13,7 @@ import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.Plugin;
 
 /** Scoped text/ASR input for registered NPCs. No model, controller or new player connection. */
 final class NpcConversations implements Listener {
@@ -326,6 +327,29 @@ final class NpcConversations implements Listener {
             for(var p:profiles.values())if(p.kind().equals("numen")&&recipients.contains(p.id()))deliver(actor,p.id(),"chat_"+input,text,"chat",at);
         });
     }
+    static boolean privateMessageAllowed(Player speaker, Entity recipient, Plugin essentials) {
+        Player player = recipient instanceof Player target ? target : null;
+        if (!speaker.isOnline() || (player != null && !speaker.canSee(player))) return false;
+        if (essentials == null || !essentials.isEnabled()) return true;
+        try {
+            Class<?> userType = Class.forName("com.earth2me.essentials.IUser", false, essentials.getClass().getClassLoader());
+            return essentialsPrivateMessageAllowed(essentials, userType, speaker, player);
+        } catch (ReflectiveOperationException | LinkageError unavailable) {
+            return false;
+        }
+    }
+
+    static boolean essentialsPrivateMessageAllowed(Object essentials, Class<?> userType, Player speaker, Player recipient)
+            throws ReflectiveOperationException {
+        var lookup = essentials.getClass().getMethod("getUser", Player.class);
+        var sender = lookup.invoke(essentials, speaker);
+        if (sender == null || Boolean.TRUE.equals(sender.getClass().getMethod("isMuted").invoke(sender))) return false;
+        if (recipient == null) return true;
+        var target = lookup.invoke(essentials, recipient);
+        return target != null && !Boolean.TRUE.equals(userType.getMethod("isIgnoreMsg").invoke(target))
+                && !Boolean.TRUE.equals(target.getClass().getMethod("isIgnoredPlayer", userType).invoke(target, sender));
+    }
+
     private boolean local(Player actor,String text){
         var essentials=Bukkit.getPluginManager().getPlugin("Essentials");var chat=Bukkit.getPluginManager().getPlugin("EssentialsChat");
         if(essentials==null||chat==null||!essentials.isEnabled()||!chat.isEnabled())return false;

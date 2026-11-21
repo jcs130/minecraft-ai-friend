@@ -182,9 +182,18 @@ final class NpcDialoguePolicy {
     }
     static boolean fresh(long at,long now){return at<=now&&now-at<=15_000;}
     static String text(String text){
-        if(text==null||text.isBlank()||text.length()>1200||text.codePoints().anyMatch(c->Character.isISOControl(c)||c==0xA7))throw new IllegalArgumentException("NPC_DIALOGUE_TEXT_INVALID");
+        if(text==null||text.length()>1200||!isPlainText(text))throw new IllegalArgumentException("NPC_DIALOGUE_TEXT_INVALID");
         return text;
     }
+    static void validateConversationText(String message) {
+        if (message == null || message.codePointCount(0, message.length()) > 400 || !isPlainText(message))
+            throw new IllegalArgumentException("请输入一行不超过 400 字的消息");
+    }
+
+    private static boolean isPlainText(String text) {
+        return !text.isBlank() && text.codePoints().noneMatch(c -> Character.isISOControl(c) || c == 0xA7);
+    }
+
     static boolean nearby(UUID source,UUID target,UUID sourceWorld,UUID targetWorld,double squaredDistance,double range){
         return !source.equals(target)&&sourceWorld.equals(targetWorld)&&Double.isFinite(squaredDistance)&&squaredDistance>=0
             &&Double.isFinite(range)&&range>0&&squaredDistance<=range*range;

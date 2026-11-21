@@ -334,10 +334,30 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         return row == null ? null : row.toString();
     }
     public String queueNpcPrivateConversation(UUID body, UUID speakerId, String message) throws java.io.IOException {
+        if (!Bukkit.isPrimaryThread() || social == null || body == null || speakerId == null)
+            throw new IllegalArgumentException("npc_private_dialogue_unavailable");
         var speaker = Bukkit.getPlayer(speakerId);
-        if (social == null || speaker == null) throw new IllegalArgumentException("npc_private_dialogue_unavailable");
+        if (speaker == null) throw new IllegalArgumentException("npc_private_dialogue_unavailable");
         return social.queue(body, speaker, message, true).toString();
     }
+
+    /**
+     * Native server bridge for a signed or unsigned message already resolved to a specific recipient.
+     * Returns null if the service is unavailable or the body has no registered Numen profile,
+     * an empty string for a handled rejection, or the canonical request ID when accepted.
+     * A storage error is a handled failure and must never fall back to a second recipient delivery.
+     */
+    public String queueHostedPrivateConversation(UUID body, UUID speakerId, String message) throws java.io.IOException {
+        if (!Bukkit.isPrimaryThread() || !isEnabled() || npcs == null || social == null || body == null) return null;
+        var profile = npcs.profile(body);
+        if (profile == null || !profile.kind().equals("numen")) return null;
+        try {
+            return queueNpcPrivateConversation(body, speakerId, message);
+        } catch (IllegalArgumentException denied) {
+            return "";
+        }
+    }
+
     public boolean bindHostedNpcVoice(UUID actor,UUID owner,java.util.function.Function<String,Boolean> input){
         return Bukkit.isPrimaryThread()&&npcs!=null&&npcs.bind(actor,owner,input);
     }

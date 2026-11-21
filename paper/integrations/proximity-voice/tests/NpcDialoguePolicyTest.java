@@ -5,7 +5,13 @@ public final class NpcDialoguePolicyTest {
     static int checks;
     static void check(boolean value){if(!value)throw new AssertionError("NPC dialogue check "+checks);checks++;}
     static void rejected(Runnable work){try{work.run();throw new AssertionError("expected rejection");}catch(IllegalArgumentException expected){checks++;}}
+
     public static void main(String[] args)throws Exception{
+        NpcDialoguePolicy.validateConversationText("🐋".repeat(400));
+        rejected(() -> NpcDialoguePolicy.validateConversationText("🐋".repeat(401)));
+        rejected(() -> NpcDialoguePolicy.validateConversationText(""));
+        rejected(() -> NpcDialoguePolicy.validateConversationText("抬头\n看"));
+        rejected(() -> NpcDialoguePolicy.validateConversationText("§0input"));
         UUID a=UUID.randomUUID(),b=UUID.randomUUID(),world=UUID.randomUUID();
         JsonObject config=JsonParser.parseString("{\"schema\":1,\"roles\":[{\"id\":\""+a+"\",\"ownerId\":\""+b+"\",\"kind\":\"maid\",\"name\":\"结衣\",\"voice\":\"neko-yui-cn\",\"range\":24}]}").getAsJsonObject();
         check(NpcDialoguePolicy.profiles(config).get(a).owner().equals(b));

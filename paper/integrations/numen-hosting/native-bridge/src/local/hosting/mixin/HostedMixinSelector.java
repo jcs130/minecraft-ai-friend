@@ -9,7 +9,8 @@ public final class HostedMixinSelector implements IMixinConfigPlugin {
     public String getRefMapperConfig(){return null;}
     public boolean shouldApplyMixin(String target,String mixin){
         if(mixin.endsWith("HostedRespawnMixin")||mixin.endsWith("HostedAdmissionMixin")||mixin.endsWith("PlayerSaveAccess")
-                ||mixin.endsWith("HostedPlayerLoginMixin")||mixin.endsWith("HostedPlayerPacketFenceMixin"))return true;
+                ||mixin.endsWith("HostedPlayerLoginMixin")||mixin.endsWith("HostedPlayerPacketFenceMixin")
+                ||mixin.endsWith("HostedPrivateMessageMixin"))return true;
         var mods=net.neoforged.fml.loading.FMLLoader.getLoadingModList();
         return mods!=null&&mods.getMods().stream().anyMatch(m->m.getModId().equals("bettercombat"));
     }
