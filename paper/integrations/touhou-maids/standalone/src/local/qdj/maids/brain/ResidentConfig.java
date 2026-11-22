@@ -44,7 +44,7 @@ record ResidentConfig(int schema, int planningSeconds, List<Resident> residents)
             if (r != null && r.expeditionLeader != null && (!r.allied(r.expeditionLeader) || r.expeditionLeader.equals(r.maidId)))
                 throw new IllegalArgumentException("expedition_leader_must_be_a_distinct_configured_ally");
             if(r==null||r.maidId==null||agents.agent(r.maidId)==null||!ids.add(r.maidId)||!text(r.name,24)||
-                !names.add(r.name)||!List.of("guardian","ranger","mage","healer","artisan","farmer","knight","cleric","engineer","beastmaster").contains(r.profession))
+                !names.add(r.name)||!List.of("guardian","ranger","mage","healer","artisan","farmer","knight","cleric","engineer","beastmaster","swordsman").contains(r.profession))
                 throw new IllegalArgumentException("invalid_resident_identity_or_profession");
             ResourceLocation.parse(r.nativeTask);
             if(r.appearance!=null&&(r.appearance.modelId==null||!r.appearance.modelId.matches("[A-Za-z0-9_-][A-Za-z0-9_.-]{0,110}\\.ysm")||
