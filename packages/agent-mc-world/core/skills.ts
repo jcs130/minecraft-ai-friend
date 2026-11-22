@@ -1565,6 +1565,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  告示牌目标另附 sign：已收到的正反面原文；null 未收到/不支持，不是空白。只读，不开编辑框、不写字。
                                                  faces 是邻格碰撞面：ref+face方向=目标格；area 为格边界上的面积比，0 省略，null 未知。几何面积不代替物品放置规则或权限。
                                                  body 是以目标格水平中心为脚点的 0.6×1.8 净空；计入邻格延伸形状，clear:null 表示未知。blockers/fluids 为总数，hits/fluidHits 各最多3项；液体按格另报，实体不在此检查。
+                                                 半砖或楼梯看 landing.topY 实测踏面脚高。直接用 landing.next 的脚格 goto；非整数踏面或未知净空仅试算，已挡住时 next=null。
                                                  不试走、不试放、不验证支撑稳定性；每格检查当前实况，不投影先前施工。需要原始形状再查 voxels，长距离遮挡用 rays，地形剖面用 probe.slice，外观用 mc_visual。
 {"skill":"observe","mode":"voxels","bounds":[-2,-1,-2,2,3,2]}
                                                  按 MineDojo 的局部体素观测方式，直接读当前连接已加载方块，不需图像估深。

@@ -39,6 +39,40 @@ function faceArea(shapes: Box[] | null, axis: number, positive: boolean): Covera
 
 const overlaps = (a: Box, b: Box) => [0, 1, 2].every(i => a[i] < b[i + 3] - EPS && a[i + 3] > b[i] + EPS);
 
+/** A requested cell can be the step itself or the air just below/above it. */
+function stepLanding(read: Read, at: Point) {
+  let blocked: { supportAt: Point; topY: number; clearance: 'blocked'; next: null } | null = null;
+  for (const offset of [0, -1, 1]) {
+    const supportAt: Point = [at[0], at[1] + offset, at[2]];
+    const support = read(supportAt);
+    if (!('material' in support) || !/_(slab|stairs)$/.test(support.material.name)
+        || support.material.properties?.waterlogged === true || support.material.properties?.waterlogged === 'true') continue;
+    const shapes = shapesOf(support);
+    if (!shapes?.length) continue;
+    const topY = round(supportAt[1] + Math.max(...shapes.map(shape => shape[4])));
+    if (topY < at[1]) continue;
+    const position: Point = [at[0] + .5, topY, at[2] + .5];
+    const body = spatialBody(read, position);
+    // On ordinary stairs, half of a centered 0.6×0.6 footprint reaches the upper tread.
+    if (body.supportArea < .18 - EPS) continue;
+    if (body.collision || body.water || body.hazard) {
+      blocked ??= { supportAt, topY, clearance: 'blocked', next: null };
+      continue;
+    }
+    const feet: Point = [at[0], Math.floor(topY), at[2]];
+    return {
+      supportAt, topY,
+      clearance: body.unknown ? 'unknown' as const : 'clear' as const,
+      next: {
+        skill: 'goto' as const, at: feet, exact: true as const,
+        // An exact goto accepts integer cells; it cannot verify fractional height.
+        ...((body.unknown || !Number.isInteger(topY)) ? { dryRun: true as const, walkOnly: true as const } : {}),
+      },
+    };
+  }
+  return blocked;
+}
+
 export function spatialSites(read: Read, sites: Point[]) {
   return sites.map(at => {
     const target = read(at), belowAt: Point = [at[0], at[1] - 1, at[2]], below = read(belowAt);
@@ -63,6 +97,7 @@ export function spatialSites(read: Read, sites: Point[]) {
       if ((block.liquid || block.properties?.waterlogged === true || block.properties?.waterlogged === 'true')
         && overlaps(bodyBox, [x, y, z, x + 1, y + 1, z + 1])) fluids.push({ at: cell, block: block.name });
     }
+    const landing = stepLanding(read, at);
     return {
       at,
       observation: { target: 'unknown' in target ? target.unknown : 'observed', below: 'unknown' in below ? below.unknown : 'observed' },
@@ -75,6 +110,7 @@ export function spatialSites(read: Read, sites: Point[]) {
       body: { clear: blockers.length ? false : unknown ? null : true,
         blockers: blockers.length, hits: blockers.slice(0, 3), unknown,
         fluids: fluids.length, fluidHits: fluids.slice(0, 3) },
+      ...(landing ? { landing } : {}),
     };
   });
 }
@@ -114,5 +150,6 @@ export function spatialBody(read: Read, at: Point, end: Point = at) {
           supportArea += faceArea(clipped, 1, true) ?? 0;
         }
       }
-  return { unknown, collision, water, hazard, supported: supportArea >= .36 - 1e-6, wetSupport: supportArea + waterSupportArea >= .36 - 1e-6 };
+  return { unknown, collision, water, hazard, supportArea,
+    supported: supportArea >= .36 - 1e-6, wetSupport: supportArea + waterSupportArea >= .36 - 1e-6 };
 }

@@ -4,7 +4,7 @@ import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { describe, expect, it, vi } from 'vitest';
 import { observeSpatial, parseSpatialObservation, spatialObservationText } from '../core/spatial-observation.ts';
-import { parseScoutSteps } from '../core/skills.ts';
+import { parseScoutSteps, parseSteps } from '../core/skills.ts';
 import { describeSkill } from '../core/receipt.ts';
 
 type Box = [number, number, number, number, number, number];
@@ -70,6 +70,32 @@ describe('compact site observations', () => {
     const stair = inspect({ '0,63,0': block('oak_stairs', [[0, 0, 0, 1, .5, 1], [0, .5, .5, 1, 1, 1]]) });
     expect(stair.below.topArea).toBe(.5);
     expect(stair.faces[0].area).toBe(.5);
+  });
+
+  it('supplies the actual feet cell above an observed step in either the requested or head cell', () => {
+    const support = [12, 75, -8] as [number, number, number];
+    const steps = { [support.join(',')]: block('spruce_slab', [[0, .5, 0, 1, 1, 1]], { type: 'top' }) };
+    for (const y of [74, 75, 76]) {
+      const result = inspect(steps, [12, y, -8]);
+      const next = { skill: 'goto', at: [12, 76, -8], exact: true };
+      expect(result.landing).toEqual({ supportAt: support, topY: 76, clearance: 'clear', next });
+      expect(parseSteps([result.landing?.next])).toEqual({ steps: [next] });
+    }
+    const stair = inspect({ '0,64,0': block('oak_stairs', [[0, 0, 0, 1, .5, 1], [0, .5, .5, 1, 1, 1]]) });
+    expect(stair.landing?.next).toEqual({ skill: 'goto', at: [0, 65, 0], exact: true });
+    const lower = inspect({ '0,64,0': block('stone_slab', [[0, 0, 0, 1, .5, 1]]) });
+    expect(lower.landing).toMatchObject({ topY: 64.5, next: { at: [0, 64, 0], dryRun: true, walkOnly: true } });
+  });
+
+  it('only probes an uncertain tread and excludes clearance collisions and flooded treads', () => {
+    const slab = block('stone_slab', [[0, .5, 0, 1, 1, 1]]);
+    const unknown = inspect({ '0,64,0': slab, '0,66,0': null });
+    expect(unknown.landing).toMatchObject({
+      clearance: 'unknown', next: { skill: 'goto', at: [0, 65, 0], exact: true, dryRun: true, walkOnly: true },
+    });
+    expect(inspect({ '0,64,0': slab, '0,66,0': block('stone') }).landing).toMatchObject({ clearance: 'blocked', next: null });
+    expect(inspect({ '0,64,0': block('stone_slab', [[0, .5, 0, 1, 1, 1]], { waterlogged: true }) }).landing).toBeUndefined();
+    expect(inspect({ '0,64,0': null }).landing).toBeUndefined();
   });
 
   it('keeps all six reference face directions unambiguous', () => {
