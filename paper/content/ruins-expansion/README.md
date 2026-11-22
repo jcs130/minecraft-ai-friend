@@ -54,9 +54,9 @@
 
 现役地图治理先用 `retrofit_access.py` 从当前配置和已生成地形选位，再用 `apply_access.py` 读取停服冷备并生成限定位的区域制品。每格施工前像核验通过后才写候选输出；其他区块原样复制，世界的实体、POI、角色和场次数据继续使用当前记录。旧入口、首室与战斗区域坐标保留在各地点定义中。需要撤回时先停服，以同一方案逐格验证已安装后像并生成反向修补，避免用旧 region 回灌后来游玩进度。
 
-真人：技能罗盘 → 地下城 → 选择地点 → 查看装备建议与难度 → 前往 → 开始。原版箱式菜单兼容手柄，不依赖真人输入命令。
+真人：技能罗盘 → 地下城 → 选择地点 → 查看装备建议 → 前往。十境沿营地灯路按石钮进入首室，其他遗迹按该地点的入口指引前进。到首室后再选难度。原版箱式菜单兼容手柄，可以全程用按键操作。
 
-Agent：`/mycli dungeon list --json` 分页发现；`info <ID> --json` 查入口、难度和准备要求；`travel <ID> --json` 实际抵达后，再 `start <ID> normal|adventure|apocalypse --json`。`status <ID> --json` 的 `participant`、`target`、`fault` 和路线提示为下一步依据，不能把全服活动当作本人参赛。阶段之间沿实际通路走到下一室，全部完成后 `claim <ID> --json`；奖励进入既有个人箱/待领取队列。每日限奖沿现有 Asia/Shanghai 自然日规则，不额外增加无限刷取入口。
+Agent：`/mycli dungeon list --json` 分页发现；`info <ID> --json` 查入口、难度和准备要求；`travel <ID> --json` 实际抵达后按 `arrival` 指引接近入口。十境在营地石钮旁执行 `enter <ID> --json` 进入首室，其他遗迹沿各自通路到首室。随后用 `start <ID> normal|adventure|apocalypse --json` 开场。`status <ID> --json` 的 `participant`、`target`、`fault` 和路线提示为下一步依据，不能把全服活动当作本人参赛。阶段之间沿实际通路走到下一室，全部完成后 `claim <ID> --json`；奖励进入既有个人箱/待领取队列。每日限奖沿现有 Asia/Shanghai 自然日规则，不额外增加无限刷取入口。
 
 路线、战斗、领奖回执仍只发所属玩家；不新增周期聊天广播或客户端强制模组。Java、Mineflayer 和基岩共用原版方块、实体、物品及箱式菜单。协议可表达性不等于手机/Xbox本人实测通过，记录中须单列。
 

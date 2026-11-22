@@ -794,7 +794,7 @@ final class SiteDungeonManager implements Listener {
     }
     private void execute(Player p,String[] args,int page){
         String action=args.length>1?args[1].toLowerCase(Locale.ROOT):"list",id=args.length>2?args[2]:"";
-        if(verboseOutput.get()&&!jsonOutput.get()&&Set.of("list","info","status").contains(action))p.sendMessage("[提示] dungeon为真实遗迹；arena为练习塔。逐室清怪后回首室结算，奖励进入个人箱。");
+        if(verboseOutput.get()&&!jsonOutput.get()&&Set.of("list","info","status").contains(action))p.sendMessage("[提示] dungeon为真实遗迹；arena为练习塔。逐室清怪后就地登记奖励，可领取到个人箱。");
         try{
             require(ready,"configuration_unavailable");
             switch(action){
@@ -810,7 +810,7 @@ final class SiteDungeonManager implements Listener {
                 case "resume"->{Run r=own(p);require(r!=null&&!r.fault.isEmpty(),"not_fault_paused");resume(r);runResult(p,"resume",r.site.id,r.id);p.sendMessage("§a原地下城场次已恢复，已清进度保留；5分钟内返回目标房间。查询：/mycli dungeon status "+r.site.id);}
                 case "leave"->leave(p);
                 case "claim"->claim(p,id);
-                default->throw new IllegalArgumentException("use_list_info_travel_start_join_status_resume_leave_claim_menu");
+                default->throw new IllegalArgumentException("use_list_info_travel_enter_exit_start_join_status_resume_leave_claim_menu");
             }
         }catch(IllegalArgumentException e){result(p,action,id,e.getMessage());}
     }
@@ -1598,7 +1598,7 @@ final class SiteDungeonManager implements Listener {
                 if(receipt(p.getUniqueId(),s.id)!=null)inv.setItem(slot,icon(s.icon,"§e"+s.name+" · 有奖励待领取",routeHint(s),"点击打开，再点奖励箱领取上次奖励","领取后才可开始或加入这处的新挑战"));
                 else if(relic!=null)inv.setItem(slot,icon(s.icon,"§6"+s.name,
                         "秘宝："+relic.name()+(relicClaimed(p.getUniqueId(),s.id)?"（已收录）":"（待发现）"),
-                        "点击查看装备效果、传送和难度"));
+                        "点击查看秘宝、入口路线和难度"));
                 slot++;
             }
             var collection=relicCollection(p.getUniqueId());
