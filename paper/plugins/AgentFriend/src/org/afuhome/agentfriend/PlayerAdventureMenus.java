@@ -64,7 +64,7 @@ final class PlayerAdventureMenus implements Listener {
     }
     View view(Player p,Page page,String detail){
         var buttons=new ArrayList<Button>();String content="浏览不会选职、接任务或购买。";String title=switch(page){
-            case HOME->"千灯纪 · 冒险大厅";case TRAVEL->"传送与集合";case GROWTH->"角色与技能";case BOOK->"命格书 · 角色与技能";case ADVENTURE->"冒险与任务";
+            case HOME->"千灯纪 · 冒险大厅";case TRAVEL->"传送与集合";case TRAVEL_CONFIRM->"确认传送";case GROWTH->"角色与技能";case BOOK->"命格书 · 角色与技能";case ADVENTURE->"冒险与任务";
             case STORAGE->"背包与仓库";case TRADE->"商城与交易";case SOCIAL->"队伍与伙伴";
             case MEMORIES->"留影与生活";case COMMON->"通用生存技能";case COMMON_DETAIL->"技能说明";
             case WHEEL->"施法轮盘";case WHEEL_EDIT->"配置快捷施法";case WHEEL_PICK->"选择槽位技能";
@@ -87,7 +87,17 @@ final class PlayerAdventureMenus implements Listener {
             buttons.add(button(33,Action.WHEEL_EDIT,"REPEATER","选择快捷技能","选一个槽位，再选要放进去的技能"));
         }
         if(page==Page.BOOK)content="学习职业技能后，可单独选择法杖的右键法术或配置八个快捷槽位。通用技能可直接加入轮盘。";
-        if(page==Page.COMMON){
+        if(page==Page.TRAVEL_CONFIRM){
+            var target=owner.compassDestination(p,detail);
+            if(target==null){
+                content="目的地或队友当前不可用，请返回并重新选择。";
+                buttons.add(button(13,Action.NONE,"BARRIER","目的地不可用",content));
+            }else{
+                content=target.title()+"\n"+target.location()+"\n"+target.terms();
+                buttons.add(button(13,Action.NONE,"MAP",target.title(),target.location(),target.terms()));
+                buttons.add(new Button(22,Action.TRAVEL_APPLY,detail,"ENDER_PEARL","确认传送",List.of(target.terms())));
+            }
+        }else if(page==Page.COMMON){
             content=NativeRpg.COMMON_IDS.size()+"项通用技能无需选职；公用同一个魔力池。选择页码，再点技能看条件和消耗。";
             int pageNumber=detail.equals("2")?1:0,start=pageNumber*CONTENT.length;
             for(int i=start;i<Math.min(start+CONTENT.length,NativeRpg.COMMON_IDS.size());i++){
@@ -172,7 +182,8 @@ final class PlayerAdventureMenus implements Listener {
             content="这次入口未能确认完成，已停止。若是交易、学习或领取，不要连续重试；先查原记录或联系服主并说明时间。";
             buttons.add(button(13,Action.NONE,"BARRIER","服务暂不可用",content));
         }
-        if(page!=Page.HOME)buttons.add(button(27,Action.BACK,"ARROW","返回上一页"));
+        if(page==Page.TRAVEL_CONFIRM)buttons.add(button(27,detail.startsWith("team:")?Action.PLAYERS_MENU:Action.PLACES_MENU,"ARROW","返回，取消传送"));
+        else if(page!=Page.HOME)buttons.add(button(27,Action.BACK,"ARROW","返回上一页"));
         if(page!=Page.WHEEL&&page!=Page.ONBOARDING)buttons.add(button(31,Action.HOME,"COMPASS","冒险大厅"));
         buttons.add(button(35,Action.CLOSE,"BARRIER","关闭"));
         return new View(page,detail,title,content,buttons);
