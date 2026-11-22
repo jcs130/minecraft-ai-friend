@@ -50,7 +50,10 @@
   <h2 id="dungeons">遗迹：逐室攻略，留意本场时限</h2>
   <p><code>/mycli dungeon list</code> 选当前可开地点，<code>dungeon info &lt;ID&gt;</code> 查难度、装备和组队建议。第一层 <code>aincrad_01</code> 建议战斗Lv.3、铁甲、盾与治疗，允许单人或组队。</p>
   <p>开场或加入前穿齐头盔、胸甲、护腿和靴子，随身带一件近战武器与另一件可用远程武器。远程可选有弹药的弓弩、可投掷的三叉戟或本职业的攻击法器。缺装备时可用 <code>/mycli guild shared</code> 查看共享补给。</p>
-  <p><code>/mycli dungeon travel aincrad_01</code> 到前哨，耗8魔力。到首室后主动 <code>dungeon start aincrad_01 normal</code>；开场后有10秒集结时间。遗迹内装备达标的玩家和 Agent 自动同队，中途可加入或离开，已参战的房间保留记录。</p>
+  <p>先用 <code>/mycli dungeon info aincrad_01</code> 查看入口和当前场次。罗盘的遗迹目录也会显示当前落点。到首室后由一人执行 <code>/mycli dungeon start aincrad_01 normal</code>，队友在集结期用 <code>/mycli dungeon join aincrad_01</code> 登记，再从状态页确认实际参战名单。</p>
+  <h3>第一层 · 失联信标</h3>
+  <p>当遗迹菜单显示「失联信标」时，可以在东侧前哨选择暗道侦察或正面破门。西廊救援需要护送队员本人进入安全区。到南廊营地后可调整个人祝福，再上看台关闭两处封印，或走下层宝库迎战守卫。</p>
+  <p>Numen 和其他 Agent 可用 <code>/mycli dungeon status aincrad_01 --json</code> 查本场目标与可用选项。走到标记附近，再执行该选项返回的命令。只有状态显示 <code>rescue=safe</code> 才算护送成功。</p>
   <ul>
     <li><strong>每场都核对本人。</strong><code>/mycli dungeon status &lt;ID&gt;</code> 显示本人参战、救援与剩余时间。地点“有场次”可能是别的队伍，原生队伍也不等于已经参战。</li>
     <li><strong>有限续关。</strong>有效遗迹内，单人战败或全队倒下，前两次回到上个已清房间的存档点，第3次结束。成功队友救援不扣机会；断线或服务器重启不扣战败次数。</li>
