@@ -24,7 +24,7 @@ from .conversation import COMPANION_SPEECH_POLICY, CONVERSATION_POLICY, WHALE_SP
 from .body import adventure, commission_craft
 from .journal import ActionJournal, work_key
 from .maid_companions import WALK_TIMEOUT, MaidCompanions, nearby_maid_listener, parse_choice, walk_available
-from .models import BodyEvent, Scope
+from .models import BodyEvent, Scope, utcnow
 from .resident_protocol import social_communication, speech_receipt
 from .resident_trace import ResidentDecisionError, correlation_hash, validate_resident_decision
 from .runtime import HarnessRuntime, Intent, PlanContext, Step, intent_health, step_support
@@ -1013,6 +1013,8 @@ class FastSelector:
 
 class NpcHost:
     """Event-driven actor. Unknown writes pause this character across process restarts."""
+    READ_TIMEOUT_SECONDS = 10
+
     def __init__(self, role: NpcRole, body, planner, memory, journal: ActionJournal, *, social=None, social_graph=None,
                  companion_adventure=None):
         self.role, self.body, self.planner, self.memory, self.journal = role, body, planner, memory, journal
@@ -1036,6 +1038,61 @@ class NpcHost:
         self.next_outing_check = 0.0
         self.next_rendezvous_attempt: dict[str, float] = {}
         self.checked_party_event = None
+        self.last_loop_at = None
+        self.last_loop_monotonic = None
+        self.last_observation_at = None
+        self.last_plan_started_at = None
+        self.last_plan_finished_at = None
+        self.last_plan_outcome = None
+        self.last_receipt_query_at = None
+        self.last_receipt_settled_at = None
+        self.loop_error = None
+        self.pending_requests = []
+
+    def autonomy_status(self) -> dict:
+        """Progress, not just a live PID. Uses cached observations and never opens a closed journal."""
+        age = None if self.last_loop_monotonic is None else max(0.0, time.monotonic() - self.last_loop_monotonic)
+        active = self.runtime._active
+        paused = [intent for intent in self.runtime.intents.values() if intent.state == "paused"]
+        unknown = any(row["status"] == "unknown" for row in self.pending_requests)
+        if self.pausing:
+            state = "maintenance"
+        elif age is None:
+            state = "starting"
+        elif age > 30:
+            state = "loop_stalled"
+        elif unknown:
+            state = "waiting_for_original_receipt"
+        elif active is not None and active.state == "active":
+            state = "planning" if active.planning_status == "pending" else "executing"
+        elif self.pending_requests:
+            state = "reconciling_original_requests"
+        elif self.body.health().lifecycle != "ready":
+            state = "body_unavailable"
+        elif paused:
+            state = "waiting_for_safety_recovery" if all(intent.recoverable_pause for intent in paused) else "waiting_for_host"
+        else:
+            state = "idle"
+        return {"state": state, "loopAgeSeconds": None if age is None else round(age, 3),
+                "lastLoopAt": self.last_loop_at, "lastObservationAt": self.last_observation_at,
+                "lastPlanStartedAt": self.last_plan_started_at, "lastPlanFinishedAt": self.last_plan_finished_at,
+                "lastPlanOutcome": self.last_plan_outcome, "lastReceiptQueryAt": self.last_receipt_query_at,
+                "lastReceiptSettledAt": self.last_receipt_settled_at, "lastError": self.loop_error,
+                "pendingRequests": list(self.pending_requests),
+                "needsAttention": self.last_plan_outcome == "failed" or state in {
+                    "loop_stalled", "waiting_for_original_receipt", "body_unavailable", "waiting_for_host"}}
+
+    async def _observe(self):
+        try:
+            snapshot = await asyncio.wait_for(self.body.snapshot(), self.READ_TIMEOUT_SECONDS)
+        except Exception as error:
+            self.loop_error = "observation_unavailable:" + type(error).__name__
+            return None
+        if snapshot is not None and snapshot.life_state != "unknown":
+            self.last_observation_at = snapshot.sampled_at.isoformat()
+        if self.loop_error and self.loop_error.startswith("observation_unavailable:"):
+            self.loop_error = None
+        return snapshot
 
     def _can_rendezvous(self, caps):
         return bool(caps and caps.supports("native", "rendezvous") and "body:native:rendezvous" in self.role.allowed_tools)
@@ -1137,6 +1194,21 @@ class NpcHost:
         return notice, team, opening
 
     async def _plan(self, intent: Intent, context: PlanContext):
+        self.last_plan_started_at = utcnow().isoformat()
+        try:
+            steps = await self._prepare_plan(intent, context)
+            self.last_plan_outcome = "deferred" if steps is None else "completed"
+            return steps
+        except asyncio.CancelledError:
+            self.last_plan_outcome = "cancelled"
+            raise
+        except Exception:
+            self.last_plan_outcome = "failed"
+            raise
+        finally:
+            self.last_plan_finished_at = utcnow().isoformat()
+
+    async def _prepare_plan(self, intent: Intent, context: PlanContext):
         body_id = str(self.role.body_id)
         dialogue = [self.pending_dialogue[key] for key in intent.source_events if key in self.pending_dialogue]
         context.dialogue = dialogue
@@ -1510,6 +1582,8 @@ class NpcHost:
 
     async def _actor_loop(self, identity):
         while not self.closed:
+            self.last_loop_at = utcnow().isoformat()
+            self.last_loop_monotonic = time.monotonic()
             self.wake.clear()
             if self.pausing:
                 # Do not start another plan during maintenance. Wait for the
@@ -1519,29 +1593,41 @@ class NpcHost:
                 await asyncio.sleep(.5)
                 continue
             unresolved = self.journal.unresolved(identity.body_id)
+            self.pending_requests = [{"requestHash": correlation_hash(action.request_id), "verb": action.name or action.verb,
+                                      "status": receipt.status if (receipt := self.journal.receipt(identity.body_id, action.request_id)) else "dispatched"}
+                                     for action in unresolved]
+            recovery_snapshot = None
             if not unresolved:
                 self._settle_rendezvous(identity.body_id)
+                if any(intent.state == "paused" and intent.recoverable_pause for intent in self.runtime.intents.values()):
+                    recovery_snapshot = await self._observe()
+                    if self.runtime.retire_recovered_pauses(recovery_snapshot):
+                        self.next_plan = 0.0  # A new plan, never the old interrupted steps.
             if unresolved:
                 for action in unresolved:
                     self.body.restore_request(action)
-                    receipt = await self.body.result(action.request_id)
+                    try:
+                        receipt = await asyncio.wait_for(self.body.result(action.request_id), self.READ_TIMEOUT_SECONDS)
+                    except Exception as error:
+                        self.loop_error = "original_receipt_unavailable:" + type(error).__name__
+                        continue  # Preserve the durable request; a lost read is not proof of its outcome.
+                    self.last_receipt_query_at = utcnow().isoformat()
+                    if self.loop_error and self.loop_error.startswith("original_receipt_unavailable:"):
+                        self.loop_error = None
                     if receipt.terminal and receipt.request_id == action.request_id:
                         self.journal.settle(identity.body_id, receipt)
                         self.runtime.remember_receipt(receipt, identity)
+                        self.last_receipt_settled_at = utcnow().isoformat()
                 if not self.journal.unresolved(identity.body_id):
+                    self.pending_requests = []
                     for intent in self.runtime.intents.values():
                         if intent.state == "paused" and intent.needs_host:
-                            intent.state = "cancelled"
-                            intent.reason = "original_receipt_reconciled_replan_from_current_observation"
+                            self.runtime._transition(intent, "cancelled", "original_receipt_reconciled_replan_from_current_observation")
             elif self.body.health().lifecycle != "error" and not any(i.state in ("active", "queued", "paused") for i in self.runtime.intents.values()):
                 # This read never preempts a running world action. Native guard runs
                 # every tick; the fast model chooses modes only when danger changes.
-                try:
-                    snapshot = await self.body.snapshot()
-                    threatened = danger(snapshot)
-                except Exception:
-                    snapshot = None
-                    threatened = False
+                snapshot = recovery_snapshot if recovery_snapshot is not None else await self._observe()
+                threatened = danger(snapshot)
                 activity_changed = False
                 if self.role.activity_review_seconds is not None:
                     scene = activity_scene(snapshot)

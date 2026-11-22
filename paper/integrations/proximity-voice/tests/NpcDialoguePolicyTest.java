@@ -113,6 +113,16 @@ public final class NpcDialoguePolicyTest {
         check(!NpcDialoguePolicy.nearby(a,b,world,world,Double.NaN,24));
         var seen=new NpcDialoguePolicy.Seen();check(seen.add(b,a,"original",1000));check(!seen.add(b,a,"original",2000));
         check(seen.add(UUID.randomUUID(),a,"original",2000));check(seen.add(b,a,"new",2000));
+        var delivery=new NpcDialoguePolicy.Seen();int[] calls={0};
+        check(delivery.deliver(b,a,"recoverable",1000,()->{calls[0]++;return false;})==NpcDialoguePolicy.Delivery.NOT_READY);
+        check(delivery.deliver(b,a,"recoverable",1500,()->{calls[0]++;return null;})==NpcDialoguePolicy.Delivery.NOT_READY);
+        check(delivery.deliver(b,a,"recoverable",2000,()->{calls[0]++;return true;})==NpcDialoguePolicy.Delivery.ACCEPTED);
+        check(delivery.deliver(b,a,"recoverable",2500,()->{calls[0]++;return true;})==NpcDialoguePolicy.Delivery.ALREADY_SEEN);
+        check(calls[0]==3); // readiness recovery uses the original input once, not a new event or another model request
+        check(delivery.deliver(b,a,"uncertain",3000,()->{calls[0]++;throw new IllegalStateException("acceptance unknown");})==NpcDialoguePolicy.Delivery.UNKNOWN);
+        check(delivery.deliver(b,a,"uncertain",3500,()->{calls[0]++;return true;})==NpcDialoguePolicy.Delivery.ALREADY_SEEN);
+        check(calls[0]==4); // a callback exception is not replay permission
+        check(delivery.deliver(UUID.randomUUID(),a,"recoverable",4000,()->true)==NpcDialoguePolicy.Delivery.ACCEPTED);
         UUID session=UUID.randomUUID();
         var source=new VoiceAudience.Actor(a,session,world,0,80,0,"human",true);
         var distant=new VoiceAudience.Actor(b,session,world,30,80,0,"npc",true,24);

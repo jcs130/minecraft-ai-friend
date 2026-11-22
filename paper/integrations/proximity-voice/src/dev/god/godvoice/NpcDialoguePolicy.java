@@ -198,6 +198,7 @@ final class NpcDialoguePolicy {
         return !source.equals(target)&&sourceWorld.equals(targetWorld)&&Double.isFinite(squaredDistance)&&squaredDistance>=0
             &&Double.isFinite(range)&&range>0&&squaredDistance<=range*range;
     }
+    enum Delivery { ACCEPTED, ALREADY_SEEN, NOT_READY, UNKNOWN }
     static final class Seen {
         private final LinkedHashMap<String,Long> rows=new LinkedHashMap<>();
         boolean add(UUID listener,UUID source,String event,long now){
@@ -205,6 +206,18 @@ final class NpcDialoguePolicy {
             String key=listener+"/"+source+"/"+event;
             if(rows.putIfAbsent(key,now)!=null)return false;
             while(rows.size()>4096)rows.remove(rows.keySet().iterator().next());return true;
+        }
+        Delivery deliver(UUID listener,UUID source,String event,long now,java.util.function.Supplier<Boolean> input){
+            if(!add(listener,source,event,now))return Delivery.ALREADY_SEEN;
+            try {
+                if(Boolean.TRUE.equals(input.get()))return Delivery.ACCEPTED;
+            } catch(RuntimeException|LinkageError uncertain) {
+                // A callback may already have enqueued the input. Quarantine the original ID, never replay it.
+                return Delivery.UNKNOWN;
+            }
+            // A missing binding or an explicit no-acceptance must not consume the event's deduplication key.
+            rows.remove(listener+"/"+source+"/"+event);
+            return Delivery.NOT_READY;
         }
     }
 }

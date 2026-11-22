@@ -474,6 +474,7 @@ async def serve(path: Path):
                                         "socialGraphiti": social_graph.last.get(str(host.role.body_id)) if social_graph else None,
                                         "lastTransfer": host.companions.last_transfer if host.companions else None,
                                         "unknownRequests": resident.unknown_requests,
+                                        "autonomy": host.autonomy_status(),
                                         "intents": [intent_health(intent, host.journal if resident.closing is None else None,
                                                                   str(host.role.body_id))
                                                     for intent in list(host.runtime.intents.values())[-8:]]}

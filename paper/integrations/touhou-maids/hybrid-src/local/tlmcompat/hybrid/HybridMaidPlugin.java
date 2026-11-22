@@ -40,6 +40,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     private Path registryFile;
     private ReceiptJournal receipts;
     private DialogueInbox inbox;
+    private NpcVoiceEnvelopeStore dialogueEnvelopes;
     private VanillaMaidProjection projection;
     private NativeMaidInventory menus;
     private NativeMaidCosmetics cosmetics;
@@ -100,19 +101,61 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(!Bukkit.isPrimaryThread()||!local.qdj.maids.brain.ResidentBodyAccess.external(id))throw new IllegalStateException("unified_resident_required");
         inbox.add(id,event,speaker,name,text);
     }
-    /** Authored by the server voice relay; nearby speech is observation, never action authority. */
+    /** Legacy ABI: no envelope is invented for old dialogue. */
     public boolean acceptUnifiedNpcDialogue(UUID id,UUID expectedOwner,UUID speaker,String name,String text,String event)throws Exception{
-        if(!Bukkit.isPrimaryThread()||!nativeExclusive(id)||!event.startsWith("qdvoice:"+speaker+":"))return false;
+        return acceptNpcDialogue(id,expectedOwner,speaker,name,text,event,null,false);
+    }
+    /** Authored by the server voice relay; nearby speech is observation, never action authority. */
+    public boolean acceptUnifiedNpcDialogue(UUID id,UUID expectedOwner,UUID speaker,String name,String text,String event,String encodedEnvelope)throws Exception{
+        return acceptNpcDialogue(id,expectedOwner,speaker,name,text,event,encodedEnvelope,true);
+    }
+    private boolean acceptNpcDialogue(UUID id,UUID expectedOwner,UUID speaker,String name,String text,String event,String encodedEnvelope,boolean v2)throws Exception{
+        if(!Bukkit.isPrimaryThread()||id==null||expectedOwner==null||speaker==null||event==null||!nativeExclusive(id)||!event.startsWith("qdvoice:"+speaker+":"))return false;
         EntityMaid maid=ownedLoaded(expectedOwner,id);var source=Bukkit.getEntity(speaker);
         if(source==null||source.getUniqueId().equals(id)||!source.isValid()||source.isDead()||!maid.isAlive()||maid.isRemoved())return false;
         var target=maid.getBukkitEntity();
         if(!source.getWorld().equals(target.getWorld())||source.getLocation().distanceSquared(target.getLocation())>24*24)return false;
         if(text==null||text.isBlank()||text.length()>1200||text.codePoints().anyMatch(Character::isISOControl))return false;
-        if(!inbox.contains(id,event))inbox.add(id,event,speaker,name,text);return true;
+        boolean pending=inbox.contains(id,event);
+        if(v2){
+            if(dialogueEnvelopes==null)return false;
+            var envelope=NpcVoiceEnvelopeStore.validate(id,speaker,event,encodedEnvelope,
+                source.getWorld().getKey().toString(),source.getWorld().getUID(),
+                target.getWorld().getKey().toString(),target.getWorld().getUID(),System.currentTimeMillis());
+            if(envelope==null||!Objects.equals(name,envelope.get("speaker").getAsString()))return false;
+            // Never upgrade a legacy pending row, or give another sender's row a fresh envelope.
+            if(pending&&(dialogueEnvelopes.get(id,event,speaker)==null
+                    ||!NpcVoiceEnvelopeStore.matchesPending(inbox.snapshot(id),id,event,speaker)))return false;
+            dialogueEnvelopes.put(id,envelope); // atomic metadata commit precedes original inbox.add
+        }
+        if(!pending)inbox.add(id,event,speaker,name,text);return true;
     }
     JsonObject nativeLegacyReceipt(UUID owner,UUID id,String request)throws Exception{owned(owner,id);return receipts.read(id,request);}
-    JsonObject nativeInbox(UUID owner,UUID id)throws Exception{var original=owned(owner,id);var result=inbox.snapshot(id);for(String key:List.of("sessionKey","memoryNamespace"))if(original.has(key))result.add(key,original.get(key).deepCopy());return result;}
-    void nativeAck(UUID id,String event)throws Exception{if(!inbox.contains(id,event))throw new CompatibilityException("dialogue_missing","Query inbox first");inbox.acknowledge(id,event);}
+    JsonObject nativeInbox(UUID owner,UUID id)throws Exception{
+        var original=owned(owner,id);var result=inbox.snapshot(id).deepCopy();
+        if(dialogueEnvelopes!=null)try{dialogueEnvelopes.enrich(id,result);}catch(java.io.IOException unavailable){getLogger().fine("Native dialogue metadata unavailable; original inbox preserved");}
+        for(String key:List.of("sessionKey","memoryNamespace"))if(original.has(key))result.add(key,original.get(key).deepCopy());return result;
+    }
+    void nativeAck(UUID id,String event)throws Exception{
+        if(!inbox.contains(id,event))throw new CompatibilityException("dialogue_missing","Query inbox first");
+        inbox.acknowledge(id,event);
+        if(dialogueEnvelopes!=null)try{dialogueEnvelopes.remove(id,event);}
+        catch(java.io.IOException unavailable){getLogger().fine("Acknowledged dialogue metadata retained; original inbox acknowledgement succeeded");}
+    }
+    /** Read-only operator diagnostics. No transcript, model call, native mode change or fabricated hearing acknowledgement. */
+    public String unifiedNpcVoiceStatus(UUID id,UUID owner)throws Exception{
+        if(!Bukkit.isPrimaryThread())return null;
+        var maid=ownedLoaded(owner,id);var out=new JsonObject();
+        out.addProperty("bodyLoaded",maid.isAlive()&&!maid.isRemoved());
+        out.addProperty("inboxAvailable",nativeExclusive(id));
+        out.addProperty("pendingInboxMessages",inbox.snapshot(id).getAsJsonArray("messages").size());
+        out.addProperty("voiceTransportReady",speech!=null&&speech.serviceReady());
+        if(speech!=null){var state=speech.describe(maid);var safe=new JsonObject();
+            for(String key:List.of("enabled","voice","state","reason","waitingReply","transport"))if(state.has(key))safe.add(key,state.get(key).deepCopy());
+            out.add("speech",safe);
+        }
+        out.addProperty("actualHearingVerified",false);return out.toString();
+    }
     void nativeEquipmentValidate(EntityMaid maid,String value){menus.validateEquip(null,maid,value);}
     JsonObject nativeEquip(EntityMaid maid,String value){var result=menus.equip(null,maid,value);if(companion!=null)companion.equipmentChanged(maid);return result;}
     JsonObject nativeConversation(Player actor,EntityMaid maid,String operation,String text)throws Exception{
@@ -189,7 +232,9 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     JsonObject nativeCast(EntityMaid maid,String spell,String request){
         if(!local.qdj.maids.brain.ResidentBodyAccess.external(maid.getUUID())){
             var result=nativeCast(maid,spell);
-            result.addProperty("status",result.get("effectsApplied").getAsBoolean()?"completed":"rejected");
+            // An exception after mana deduction is genuinely unproven: keep it unknown (auditable),
+            // never settle it as a no-effect rejection. A provable pre-mana failure settles rejected.
+            result.addProperty("status",LegacyCastFailure.status(result));
             return result;
         }
         var result=JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.cast(maid.getUUID(),request,spell)).getAsJsonObject();
@@ -386,6 +431,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             receipts=new ReceiptJournal(getDataFolder().toPath().resolve("native-receipts"));
             workshops=new NativeMaidWorkshop(this,receipts);
             inbox=new DialogueInbox(getDataFolder().toPath().resolve("native-dialogue"));
+            dialogueEnvelopes=new NpcVoiceEnvelopeStore(getDataFolder().toPath().resolve("native-dialogue-envelope"));
             agentSupport=new NativeMaidAgentSupport(this,receipts);
             brains=NativeMaidBrainSupport.create(this);
             personal=PersonalMaidDialogue.load(this);

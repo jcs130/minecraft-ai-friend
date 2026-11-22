@@ -121,6 +121,7 @@ final class NativeMaidVoices implements AutoCloseable {
         if(missingNotices.size()>256)missingNotices.remove(missingNotices.keySet().iterator().next());
         owner.sendMessage("[女仆语音] 当前声音包尚未导入服务器，暂用文字回复。可在女仆的声音包菜单更换。");
     }
+    boolean serviceReady(){return api!=null;}
     void combat(EntityMaid maid,Mob target,String mode,float damage){var voice=voices.get(maid.getUUID());if(voice!=null)voice.combat(maid,target,mode,damage);}
     JsonObject describe(EntityMaid maid){
         var voice=voices.get(maid.getUUID());

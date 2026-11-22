@@ -91,6 +91,19 @@ final class MaidResidents {
     private final java.util.Set<UUID> externalGuards=new java.util.HashSet<>();
     void externalReady(UUID id){try{var b=body(id);var previous=state.load(id);if(!external(id)||b==null||busy(id)||leased(id)||previous!=null&&previous.pending()!=null||!b.getPersistentData().getString(ACTIVE).isBlank())throw new IllegalStateException("resident_external_control_not_ready");}catch(IOException error){throw new IllegalStateException("resident_checkpoint_unavailable",error);}}
     boolean expeditionDelegated(UUID id) { return expeditions.containsKey(id) && externalGuards.contains(id); }
+    // Only suppress the native follow-owner task while the expedition can actually drive
+    // movement. If the leader body is destroyed (e.g. Kirito before relay-1 restore) or sits
+    // in another dimension, resume native follow-owner so the maid is never stranded.
+    boolean expeditionSuppressesNativeFollow(UUID id) {
+        var expedition = expeditions.get(id);
+        if (expedition == null) return false;
+        var companions = agents.companions();
+        var leader = companions == null ? null : companions.actor(expedition.leaderId());
+        var maid = body(id);
+        boolean available = CompanionFollow.available(leader);
+        boolean sameDimension = maid != null && leader != null && maid.level() == leader.level();
+        return ExpeditionFollowGate.suppressNativeFollow(expeditionDelegated(id), available, sameDimension);
+    }
     void externalGuard(UUID id,boolean enabled){
         externalReady(id);
         if(enabled){externalGuards.add(id);return;}

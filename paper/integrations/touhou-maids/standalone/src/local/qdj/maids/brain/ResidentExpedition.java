@@ -18,6 +18,8 @@ final class ResidentExpedition {
 
     ResidentExpedition(UUID leaderId) { this.leaderId = leaderId; }
 
+    UUID leaderId() { return leaderId; }
+
     Map<String, Object> describe(EntityMaid maid, MaidCompanions companions) {
         var row = new LinkedHashMap<String, Object>();
         row.put("leaderId", leaderId.toString());

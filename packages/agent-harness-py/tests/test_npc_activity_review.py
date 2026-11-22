@@ -126,3 +126,185 @@ def test_model_can_remain_waiting_leave_early_or_choose_its_own_break(tmp_path):
             await model.close()
             journal.close()
     asyncio.run(run())
+
+
+def autonomous_host(tmp_path, planner):
+    from agent_mc_harness.models import BodyIdentity, WorldRef
+
+    configured = role()
+    body = SimBody(body_id=str(configured.body_id))
+    body.identity = lambda: BodyIdentity(kind="numen", body_id=str(configured.body_id),
+                                        owner_id=str(configured.native_owner_id), scope=configured.scope("qa"),
+                                        world=WorldRef(server_id="qa", world_key="world"))
+    return NpcHost(configured, body, planner, None, ActionJournal(tmp_path / "progress.sqlite")), body
+
+
+def test_receipt_read_failure_does_not_kill_actor_or_replay(tmp_path):
+    from agent_mc_harness.models import BodyAction
+
+    async def run():
+        async def forbidden_plan(intent, context):
+            raise AssertionError("an unknown write must still fence new planning")
+
+        host, body = autonomous_host(tmp_path, forbidden_plan)
+        original = BodyAction(verb="chat", request_id="original_unknown_01", args={"text": "synthetic-private-message"})
+        unknown = ActionReceipt(request_id=original.request_id, verb="chat", status="unknown", terminal=False)
+        host.journal.begin(body.body_id, original)
+        host.journal.settle(body.body_id, unknown)
+        queries, second_read, release = [], asyncio.Event(), asyncio.Event()
+
+        async def read(request_id):
+            queries.append(request_id)
+            if len(queries) == 1:
+                host.wake.set()
+                raise OSError("synthetic transport interruption")
+            second_read.set()
+            await release.wait()
+            return unknown
+
+        body.result = read
+        task = asyncio.create_task(host.run())
+        try:
+            await asyncio.wait_for(second_read.wait(), 1)
+            assert not task.done() and queries == [original.request_id, original.request_id]
+            assert host.journal.unresolved(body.body_id)[0].request_id == original.request_id
+            progress = host.autonomy_status()
+            assert progress["state"] == "waiting_for_original_receipt" and progress["needsAttention"]
+            assert progress["lastError"] == "original_receipt_unavailable:OSError"
+            assert progress["lastPlanStartedAt"] is None and progress["lastObservationAt"] is None
+            assert "synthetic-private-message" not in json.dumps(progress)
+            assert original.request_id not in json.dumps(progress)
+            assert not body.acts
+        finally:
+            release.set()
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            await host.close()
+
+    asyncio.run(run())
+
+
+def test_receipt_query_timeout_is_bounded_and_keeps_original_request(tmp_path):
+    from agent_mc_harness.models import BodyAction
+
+    async def run():
+        host, body = autonomous_host(tmp_path, None)
+        host.READ_TIMEOUT_SECONDS = .02
+        original = BodyAction(verb="move", request_id="original_timeout_01", args={"x": 1, "y": 64, "z": 0})
+        host.journal.begin(body.body_id, original)
+        read_cancelled, second_read = asyncio.Event(), asyncio.Event()
+        reads = []
+
+        async def unavailable(request_id):
+            reads.append(request_id)
+            if len(reads) == 2:
+                second_read.set()
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                read_cancelled.set()
+                host.wake.set()
+                raise
+
+        body.result = unavailable
+        task = asyncio.create_task(host.run())
+        try:
+            await asyncio.wait_for(second_read.wait(), 1)
+            assert read_cancelled.is_set() and not task.done()
+            assert reads == [original.request_id, original.request_id] and not body.acts
+            assert host.journal.unresolved(body.body_id)[0].request_id == original.request_id
+            assert host.autonomy_status()["lastError"] == "original_receipt_unavailable:TimeoutError"
+            assert host.last_receipt_query_at is None
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            await host.close()
+
+    asyncio.run(run())
+
+
+def test_original_terminal_receipt_unfences_a_fresh_plan_without_replay(tmp_path):
+    from agent_mc_harness.models import BodyAction
+
+    async def run():
+        planned = asyncio.Event()
+
+        async def plan(intent, context):
+            planned.set()
+            return []
+
+        host, body = autonomous_host(tmp_path, plan)
+        original = BodyAction(verb="move", request_id="original_settled_01", args={"x": 1, "y": 64, "z": 0})
+        host.journal.begin(body.body_id, original)
+        host.journal.settle(body.body_id, ActionReceipt(request_id=original.request_id, verb="move", status="unknown", terminal=False))
+        queries = []
+
+        async def reconcile(request_id):
+            queries.append(request_id)
+            host.wake.set()
+            return ActionReceipt(request_id=request_id, verb="move", status="failed", terminal=True)
+
+        body.result = reconcile
+        task = asyncio.create_task(host.run())
+        try:
+            await asyncio.wait_for(planned.wait(), 1)
+            assert queries == [original.request_id] and not body.acts
+            assert not host.journal.unresolved(body.body_id)
+            assert host.last_receipt_query_at and host.last_receipt_settled_at and host.last_observation_at
+            assert host.last_plan_started_at and host.last_plan_finished_at and host.last_plan_outcome == "completed"
+            assert host.autonomy_status()["pendingRequests"] == []
+            assert host.journal.receipt(body.body_id, original.request_id).status == "failed"
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            await host.close()
+
+    asyncio.run(run())
+
+
+def test_progress_detects_stalled_loop_but_not_maintenance_and_survives_close(tmp_path):
+    async def run():
+        host, body = autonomous_host(tmp_path, None)
+        await body.spawn()
+        try:
+            assert host.autonomy_status()["state"] == "starting"
+            host.last_loop_monotonic = time.monotonic() - 31
+            host.last_loop_at = "synthetic-checkpoint"
+            assert host.autonomy_status()["state"] == "loop_stalled"
+            assert host.autonomy_status()["needsAttention"]
+            host.pausing = True
+            assert host.autonomy_status()["state"] == "maintenance"
+            assert not host.autonomy_status()["needsAttention"]
+        finally:
+            await host.close()
+        # Service publishes one final row after the journal is closed.
+        assert host.autonomy_status()["state"] == "maintenance"
+
+    asyncio.run(run())
+
+
+def test_failed_or_unknown_observation_is_not_a_successful_sense_timestamp(tmp_path):
+    from agent_mc_harness.models import BodySnapshot
+
+    async def run():
+        host, body = autonomous_host(tmp_path, None)
+
+        async def broken():
+            raise OSError("synthetic observation interruption")
+
+        body.snapshot = broken
+        try:
+            assert await host._observe() is None
+            assert host.last_observation_at is None
+            assert host.loop_error == "observation_unavailable:OSError"
+
+            async def unknown():
+                return BodySnapshot(life_state="unknown")
+
+            body.snapshot = unknown
+            assert (await host._observe()).life_state == "unknown"
+            assert host.last_observation_at is None
+        finally:
+            await host.close()
+
+    asyncio.run(run())

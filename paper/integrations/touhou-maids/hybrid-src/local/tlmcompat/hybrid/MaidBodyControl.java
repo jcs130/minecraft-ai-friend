@@ -67,6 +67,7 @@ final class MaidBodyControl {
     List<UUID> expired(long now){return leases.values().stream().filter(x->x.expiresAt<=now).map(Lease::maid).toList();}
     Set<UUID> ids(){var ids=new HashSet<>(bindings.keySet());ids.addAll(leases.keySet());return ids;}
     void release(UUID maid){if(leases.remove(maid)!=null)epochs.merge(maid,1L,Long::sum);}
+    static boolean dialogueEventId(String value){return value!=null&&value.matches("[A-Za-z0-9_:-]{1,192}");}
     static String string(JsonObject value,String key){
         if(!value.has(key)||!value.get(key).isJsonPrimitive()||!value.getAsJsonPrimitive(key).isString())throw new Fault(400,"INVALID_"+key);
         return value.get(key).getAsString();
@@ -82,6 +83,25 @@ final class MaidBodyControl {
             catch(NumberFormatException|ArithmeticException invalid){throw new Fault(400,"INVALID_NUMBER");}
         }
         return value.toString();
+    }
+    /**
+     * Evidence that an external cast failed before the RPG service persisted its ledger row.
+     * ResidentCli.run persists on the same game thread before dispatch, so a not_found query
+     * proves no spell or mana side effect happened. Only an accepted/unknown body receipt may
+     * settle this way: a running receipt observed a service row earlier, and a vanished row is
+     * not provable here — it stays unresolved for manual audit. The derived service request ID
+     * mirrors ResidentBodyAccess.cast ("unified-cast:"+maid+":"+request); no new retry ID.
+     */
+    static JsonObject castPreDispatchEvidence(UUID maid,String request,String bodyStatus,JsonObject serviceReceipt){
+        if(serviceReceipt==null||!serviceReceipt.has("status")||!serviceReceipt.get("status").isJsonPrimitive()
+                ||!serviceReceipt.getAsJsonPrimitive("status").isString()||!serviceReceipt.get("status").getAsString().equals("not_found"))return null;
+        if(!Set.of("accepted","unknown").contains(bodyStatus))return null;
+        var evidence=new JsonObject();
+        evidence.addProperty("reason","native_failure_before_service_dispatch");
+        evidence.addProperty("effectsApplied",false);
+        evidence.addProperty("serviceRequestId",UUID.nameUUIDFromBytes(("unified-cast:"+maid+":"+request).getBytes(StandardCharsets.UTF_8)).toString());
+        evidence.add("serviceReceipt",serviceReceipt.deepCopy());
+        return evidence;
     }
     private Path file(UUID maid,String request){if(!request.matches("[A-Za-z0-9_-]{1,48}"))throw new Fault(400,"INVALID_requestId");return directory.resolve(maid.toString()).resolve(request+".json");}
     JsonObject read(UUID maid,String request)throws IOException {
