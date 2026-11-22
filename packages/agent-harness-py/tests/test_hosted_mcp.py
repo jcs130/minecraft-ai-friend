@@ -85,6 +85,43 @@ def test_slow_hosted_walk_yields_to_speech_and_reconciles_original_id(tmp_path, 
     monkeypatch.setattr("agent_mc_harness.body.hosted_mcp.WALK_INLINE_SECONDS", 0.01)
     asyncio.run(run())
 
+def test_stop_releases_the_inline_walk_waiter_without_replaying(tmp_path):
+    async def run():
+        dispatched = asyncio.Event()
+        stopped = asyncio.Event()
+
+        class WalkingSession(Session):
+            async def call_tool(self, tool, args):
+                if args["op"] == "call":
+                    self.calls.append(args)
+                    dispatched.set()
+                    await asyncio.Future()
+                if args["op"] == "transition" and args["mode"] == "paused":
+                    stopped.set()
+                if args["op"] == "result":
+                    assert stopped.is_set()
+                    self.calls.append(args)
+                    return SimpleNamespace(isError=False, structuredContent={
+                        "id": args["id"], "state": "cancelled", "message": "stopped at the original position",
+                    })
+                return await super().call_tool(tool, args)
+
+        session = WalkingSession()
+        adapter = port(tmp_path, session)
+        await adapter.open()
+        try:
+            async with asyncio.timeout(3):
+                move = asyncio.create_task(adapter.start_walk("walk()", "first-walk"))
+                await dispatched.wait()
+                assert (await adapter.halt("stop-walk")).status == "completed"
+                assert (await move).status == "unknown"
+                assert (await adapter.result("first-walk")).status == "rejected"
+                assert [row["id"] for row in session.calls if row["op"] == "call"] == ["first-walk"]
+        finally:
+            await adapter.close()
+
+    asyncio.run(run())
+
 def test_hosted_leases_and_original_receipts(tmp_path):
     async def run():
         session=Session();p=port(tmp_path,session)

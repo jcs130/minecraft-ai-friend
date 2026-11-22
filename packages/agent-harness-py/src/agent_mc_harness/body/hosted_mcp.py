@@ -395,6 +395,9 @@ class HostedMcpPort:
         if not walk:
             return await self._dispatch(tool, args, request_id, epoch, generation)
         done, _ = await asyncio.wait({task}, timeout=WALK_INLINE_SECONDS)
+        if task.cancelled():
+            return PortResult("unknown", "The local walk wait ended after a control change. Query the original request without resending.",
+                              {"reason": "walk_wait_ended", "originalRequestId": request_id})
         return task.result() if done else self._walk_pending(request_id)
 
     @staticmethod
