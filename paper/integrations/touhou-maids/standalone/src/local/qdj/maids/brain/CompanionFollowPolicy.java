@@ -6,22 +6,32 @@ public final class CompanionFollowPolicy {
 
     public record Profile(double walkBeyond, double stopWithin, double recoverBeyond,
                           double farBeyond, long settleMillis, long stalledMillis,
-                          long retryMillis, boolean resetWhenLeaderMoves) {
+                          long retryMillis, boolean resetWhenLeaderMoves, double maxCloseHeight) {
         public Profile {
             if (!Double.isFinite(walkBeyond) || !Double.isFinite(stopWithin) || !Double.isFinite(recoverBeyond)
                     || Double.isNaN(farBeyond) || walkBeyond < 3 || stopWithin < 2 || stopWithin > walkBeyond
                     || recoverBeyond < walkBeyond || recoverBeyond > 256 || farBeyond < recoverBeyond
-                    || settleMillis < 0 || stalledMillis <= 0 || retryMillis <= 0) {
+                    || settleMillis < 0 || stalledMillis <= 0 || retryMillis <= 0
+                    || Double.isNaN(maxCloseHeight) || maxCloseHeight < 0) {
                 throw new IllegalArgumentException("Invalid companion follow profile");
             }
         }
 
         public static Profile owner(double walk, double stop, double recovery) {
-            return new Profile(walk, stop, recovery, Double.POSITIVE_INFINITY, 0, 8_000, 15_000, true);
+            return new Profile(walk, stop, recovery, Double.POSITIVE_INFINITY, 0, 8_000, 15_000, true,
+                               Double.POSITIVE_INFINITY);
         }
 
         public static Profile teammate(double walk, double stop, double far) {
-            return new Profile(walk, stop, walk, far, 5_000, 12_000, 30_000, false);
+            return new Profile(walk, stop, walk, far, 5_000, 12_000, 30_000, false, 1.5);
+        }
+
+        boolean onSameFloor(double heightGap) {
+            return heightGap <= maxCloseHeight;
+        }
+
+        int pathTolerance(double heightGap) {
+            return onSameFloor(heightGap) ? (int) stopWithin : 0;
         }
     }
 
@@ -36,14 +46,15 @@ public final class CompanionFollowPolicy {
         separatedSince = null;
     }
 
-    public Step sample(Profile settings, String dimensionPair, boolean sameWorld, double gap,
+    public Step sample(Profile settings, String dimensionPair, boolean sameWorld, double gap, double heightGap,
                        boolean advancing, boolean leaderMoved, long now) {
         if (!settings.equals(profile)) {
             pause();
             profile = settings;
         }
         double boundary = leg == null || !dimensionPair.equals(leg) ? settings.walkBeyond() : settings.stopWithin();
-        if (sameWorld && gap <= boundary) {
+        boolean differentFloor = sameWorld && !settings.onSameFloor(heightGap);
+        if (sameWorld && gap <= boundary && !differentFloor) {
             pause();
             return Step.NEAR;
         }
@@ -61,7 +72,7 @@ public final class CompanionFollowPolicy {
         if (!separated) separatedSince = null;
         else if (separatedSince == null) separatedSince = now;
         boolean ready = separated ? now - separatedSince >= settings.settleMillis()
-                : gap > settings.recoverBeyond() && now - lastProgress >= settings.stalledMillis();
+                : (differentFloor || gap > settings.recoverBeyond()) && now - lastProgress >= settings.stalledMillis();
         if (ready && now >= nextAttempt) {
             nextAttempt = now + settings.retryMillis();
             lastProgress = now;

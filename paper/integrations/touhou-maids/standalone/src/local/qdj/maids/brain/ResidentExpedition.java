@@ -25,7 +25,10 @@ final class ResidentExpedition {
         var leader = companions == null ? null : companions.actor(leaderId);
         if (maid != null && CompanionFollow.available(leader)) {
             row.put("leaderDimension", leader.level().dimension().location().toString());
-            if (maid.level() == leader.level()) row.put("distanceBlocks", maid.distanceTo(leader));
+            if (maid.level() == leader.level()) {
+                row.put("distanceBlocks", maid.distanceTo(leader));
+                row.put("heightGapBlocks", Math.abs(maid.getY() - leader.getY()));
+            }
         }
         if (lastRequest != null) row.put("lastTravelRequestId", lastRequest.toString());
         if (lastTravel != null) row.put("lastTravelResult", lastTravel);
