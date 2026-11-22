@@ -55,11 +55,15 @@ final class ResidentSettings {
             }
         }
     }
+    static String defaultBrain(String current, Set<String> configured) {
+        // Unified residents may intentionally have no Java-side model. Report that state without inventing one.
+        return configured.contains(current) ? current : configured.stream().sorted().findFirst().orElse("unmanaged");
+    }
     JsonObject profile(UUID id) {
         var saved=profiles.get(id);if(saved!=null)return saved.getAsJsonObject("profile").deepCopy();
         var r=residents.role(id);var a=agents.agent(id);var maid=residents.body(id);
         var p=new JsonObject();p.addProperty("name",r.name());p.addProperty("persona",a.persona(agents.companions()==null?"Minecraft居民":agents.companions().persona(id)));
-        String brain=maid==null?"":a.brain(maid);p.addProperty("brain",a.binding().choices().containsKey(brain)?brain:a.binding().choices().keySet().stream().sorted().findFirst().orElseThrow());
+        String brain=maid==null?"":a.brain(maid);p.addProperty("brain",defaultBrain(brain,a.binding().choices().keySet()));
         p.addProperty("appearance","original");p.addProperty("voice",a.binding().voice()==null?"none":"default");p.addProperty("autonomous",r.autonomous());p.addProperty("mapVisible",true);return p;
     }
     long revision(UUID id){return profiles.containsKey(id)?profiles.get(id).get("revision").getAsLong():0;}

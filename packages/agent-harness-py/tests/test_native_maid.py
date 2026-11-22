@@ -209,6 +209,156 @@ def test_direct_cast_legacy_observation_has_a_terminal_outcome(run, observation,
     run(scenario())
 
 
+def test_pre_dispatch_cast_failure_settles_the_original_request_without_replay(run, tmp_path):
+    """The bridge proves the service ledger row never existed; the host settles, never resends."""
+    async def scenario():
+        server = NativeServer()
+        server.actions += ["cast"]
+        server.cast_observation = {}  # uncertain cast reply, no legacy effect observation
+        action = BodyAction(verb="cast", args={"spellId": "radiant_pulse"}, request_id="hs_predispatch")
+        journal = ActionJournal(tmp_path / "actions.db")
+        body = make(server)
+        await body.spawn()
+        try:
+            journal.begin(MAID, action)
+            unknown = await body.act(action)
+            assert unknown.status == "unknown" and not unknown.terminal
+            journal.settle(MAID, unknown)
+            assert len(journal.unresolved(MAID)) == 1
+            # While the server keeps the request unknown, querying never invents an outcome.
+            still = await body.result("hs_predispatch")
+            assert still.status == "unknown" and len(journal.unresolved(MAID)) == 1
+            # Audited terminal rejection: the derived service request was never persisted.
+            server.receipts["hs_predispatch"] = {
+                "schema": 1, "namespace": "native-body", "maidId": MAID, "ownerId": OWNER,
+                "operationId": "hs_predispatch", "requestId": "hs_predispatch", "action": "cast",
+                "arguments": json.dumps({"action": "cast", "maidId": MAID, "requestId": "hs_predispatch",
+                                         "spellId": "radiant_pulse"}),
+                "status": "rejected", "terminal": True, "retryAllowed": False, "goalCompleted": False,
+                "observation": {"reason": "native_failure_before_service_dispatch", "effectsApplied": False,
+                                "serviceRequestId": "87bc1552-42f3-3ba2-b408-140a111e8063",
+                                "serviceReceipt": {"status": "not_found", "completed": False}},
+            }
+            settled = await body.result("hs_predispatch")
+            assert settled.status == "failed" and settled.terminal and not settled.retry_allowed
+            journal.settle(MAID, settled)
+            assert journal.unresolved(MAID) == []
+            evidence = settled.data["data"]["observation"]
+            assert evidence["reason"] == "native_failure_before_service_dispatch"
+            assert evidence["effectsApplied"] is False
+            assert len(server.writes) == 1  # the spell was never dispatched a second time
+            again = await body.result("hs_predispatch")
+            assert again.status == "failed" and len(server.writes) == 1
+        finally:
+            await body.destroy()
+
+    run(scenario())
+
+
+def test_provable_pre_mana_legacy_cast_failure_settles_without_replay(run, tmp_path):
+    """A legacy cast that threw before committing mana is provably no-effect; the host settles and resumes."""
+    async def scenario():
+        server = NativeServer()
+        server.actions += ["cast"]
+        server.cast_observation = {}
+        action = BodyAction(verb="cast", args={"spellId": "astral_convergence"}, request_id="hs_legacy_before")
+        journal = ActionJournal(tmp_path / "actions.db")
+        body = make(server)
+        await body.spawn()
+        try:
+            journal.begin(MAID, action)
+            unknown = await body.act(action)
+            assert unknown.status == "unknown" and not unknown.terminal
+            journal.settle(MAID, unknown)
+            assert len(journal.unresolved(MAID)) == 1
+            # The bridge settles the provable pre-mana failure as a terminal rejection carrying evidence.
+            server.receipts["hs_legacy_before"] = {
+                "schema": 1, "namespace": "native-body", "maidId": MAID, "ownerId": OWNER,
+                "operationId": "hs_legacy_before", "requestId": "hs_legacy_before", "action": "cast",
+                "arguments": json.dumps({"action": "cast", "maidId": MAID, "requestId": "hs_legacy_before",
+                                         "spellId": "astral_convergence"}),
+                "status": "rejected", "terminal": True, "retryAllowed": False, "goalCompleted": False,
+                "observation": {"status": "rejected", "state": "rpg_cast_failed_before_mana",
+                                "error": "rpg_cast_failed_before_mana", "spellId": "astral_convergence",
+                                "effectsApplied": False, "manaDeducted": False,
+                                "manaBefore": 40.0, "manaRemaining": 40.0,
+                                "exception": "java.lang.IllegalStateException: vortex nexus bus unavailable"},
+            }
+            settled = await body.result("hs_legacy_before")
+            assert settled.status == "failed" and settled.terminal and not settled.retry_allowed
+            journal.settle(MAID, settled)
+            assert journal.unresolved(MAID) == []  # freeze cleared, the maid can decide and speak again
+            evidence = settled.data["data"]["observation"]
+            assert evidence["state"] == "rpg_cast_failed_before_mana"
+            assert evidence["effectsApplied"] is False and evidence["manaDeducted"] is False
+            assert len(server.writes) == 1  # the spell was never dispatched a second time
+            again = await body.result("hs_legacy_before")
+            assert again.status == "failed" and len(server.writes) == 1
+        finally:
+            await body.destroy()
+
+    run(scenario())
+
+
+def test_unproven_post_mana_legacy_cast_failure_stays_unknown_and_auditable(run, tmp_path):
+    """A legacy cast that threw after committing mana cannot be proven; it stays unknown, never settles or replays."""
+    async def scenario():
+        server = NativeServer()
+        server.actions += ["cast"]
+        server.cast_observation = {}
+        action = BodyAction(verb="cast", args={"spellId": "astral_convergence"}, request_id="hs_legacy_after")
+        journal = ActionJournal(tmp_path / "actions.db")
+        body = make(server)
+        await body.spawn()
+        try:
+            journal.begin(MAID, action)
+            unknown = await body.act(action)
+            journal.settle(MAID, unknown)
+            assert len(journal.unresolved(MAID)) == 1
+            server.receipts["hs_legacy_after"] = {
+                "schema": 1, "namespace": "native-body", "maidId": MAID, "ownerId": OWNER,
+                "operationId": "hs_legacy_after", "requestId": "hs_legacy_after", "action": "cast",
+                "arguments": json.dumps({"action": "cast", "maidId": MAID, "requestId": "hs_legacy_after",
+                                         "spellId": "astral_convergence"}),
+                "status": "unknown", "terminal": False, "retryAllowed": False, "goalCompleted": False,
+                "observation": {"status": "unknown", "state": "rpg_cast_exception_after_mana",
+                                "error": "rpg_cast_exception_after_mana", "spellId": "astral_convergence",
+                                "effectsApplied": False, "effectsUnproven": True, "manaDeducted": True,
+                                "manaBefore": 40.0, "manaRemaining": 25.0,
+                                "exception": "java.lang.IllegalStateException: vortex nexus bus unavailable"},
+            }
+            still = await body.result("hs_legacy_after")
+            assert still.status == "unknown" and not still.terminal
+            journal.settle(MAID, still)
+            assert len(journal.unresolved(MAID)) == 1  # frozen pending audit, by design — never faked
+            # The unproven receipt maps to unknown and the legacy reconciler refuses to invent an outcome.
+            unproven = server.receipts["hs_legacy_after"]
+            assert reply_status(unproven, False) == "unknown"
+            assert unproven["observation"]["effectsUnproven"] is True
+            assert unproven["observation"]["effectsApplied"] is False  # never claims a successful effect
+            assert legacy_cast_outcome(unproven, owner=OWNER, maid=MAID,
+                                       request="hs_legacy_after", spell="astral_convergence") is None
+            assert len(server.writes) == 1  # no replay
+        finally:
+            await body.destroy()
+
+    run(scenario())
+
+
+@pytest.mark.parametrize("observation", [
+    {"state": "rpg_cast_exception_after_mana", "error": "rpg_cast_exception_after_mana", "effectsApplied": False,
+     "effectsUnproven": True, "manaDeducted": True, "manaRemaining": 25.0},
+    {"state": "rpg_cast_failed_before_mana", "error": "rpg_cast_failed_before_mana", "effectsApplied": False,
+     "manaDeducted": False, "manaRemaining": 40.0},
+])
+def test_new_legacy_failure_states_are_not_invented_from_an_unknown_receipt(observation):
+    # The provable pre-mana case settles at the bridge as terminal rejected (not via this reconciler);
+    # the unproven post-mana case must never be invented into an outcome here. Neither clears an unknown write.
+    args = {"action": "cast", "maidId": MAID, "requestId": "original-cast", "spellId": "astral_convergence"}
+    receipt = old_cast_receipt(args, observation)
+    assert legacy_cast_outcome(receipt, owner=OWNER, maid=MAID, request="original-cast", spell="astral_convergence") is None
+
+
 def test_drop_cast_response_keeps_one_dispatch_and_read_recovers_reply_lane(run, tmp_path, monkeypatch):
     async def scenario():
         server = NativeServer()

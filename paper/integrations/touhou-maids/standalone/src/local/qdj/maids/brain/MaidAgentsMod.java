@@ -67,7 +67,7 @@ public final class MaidAgentsMod {
     static MaidCompanions companions(){return running==null?null:running.companions();}
     public static boolean hasExpeditionLeader(java.util.UUID id) {
         var residents = residents();
-        return residents != null && residents.expeditionDelegated(id);
+        return residents != null && residents.expeditionSuppressesNativeFollow(id);
     }
     static MaidAgent runningAgent(java.util.UUID id){return running==null?null:running.agent(id);}
     /** Transient action ownership, never a persisted NoAI/sitting change. */

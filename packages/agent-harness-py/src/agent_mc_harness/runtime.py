@@ -55,6 +55,8 @@ class Intent(BaseModel):
     state: IntentState = "queued"
     reason: str | None = None
     needs_host: bool = False
+    # Only native death/safety transitions set this; a host-supplied reason is not a recovery permit.
+    recoverable_pause: Literal["death", "safety"] | None = Field(default=None, exclude=True)
     step_index: int = 0
     candidates: list[Candidate] = Field(default_factory=list, max_length=8)  # System 1 options (2-8)
     decision: Decision | None = None  # who decided (host/reflex/system1/system2), route, thinking tier, profile
@@ -196,11 +198,12 @@ class HarnessRuntime:
             self.lease.preempt("safety")  # reflex bypasses the queue; the holder's late results are discarded
             self.emit("safety", event.text, 3, event.data)
             if self._active and self._active.state == "active":
-                self._transition(self._active, "paused", f"safety halt: {event.text}", needs_host=True)
+                self._transition(self._active, "paused", f"safety halt: {event.text}", needs_host=True,
+                                 recoverable_pause="safety")
         elif event.kind == "death":
             self.emit("death", event.text or "body died", 3, event.data)
             if self._active and self._active.state == "active":
-                self._transition(self._active, "paused", "body died", needs_host=True)
+                self._transition(self._active, "paused", "body died", needs_host=True, recoverable_pause="death")
         elif event.kind in ("lifecycle", "connection") and event.severity >= 2:
             self.emit("body", event.text, 2, event.data)
         elif event.kind in ("chat", "whisper", "dialogue"):
@@ -241,9 +244,11 @@ class HarnessRuntime:
                 "dropped": after + 1 < oldest, "hasMore": len(rows) > limit}
 
     # ---- intents ----------------------------------------------------------------------------------
-    def _transition(self, intent: Intent, state: IntentState, reason: str | None = None, needs_host: bool = False) -> None:
+    def _transition(self, intent: Intent, state: IntentState, reason: str | None = None, needs_host: bool = False,
+                    *, recoverable_pause: Literal["death", "safety"] | None = None) -> None:
         previous = intent.state
         intent.state, intent.reason, intent.needs_host, intent.updated_at = state, reason, needs_host, utcnow()
+        intent.recoverable_pause = recoverable_pause if state == "paused" else None
         severity = 3 if needs_host else (2 if state in ("completed", "failed") else 1)
         self.emit("intent_state", f"{intent.goal}: {previous} -> {state}" + (f" ({reason})" if reason else ""), severity,
                   {"intentId": intent.id, "from": previous, "state": state, "needsHost": needs_host, "reason": reason})
@@ -297,9 +302,10 @@ class HarnessRuntime:
         intent = self.intents[str(intent_id)]
         if action == "get":
             return intent
-        if action == "pause" and intent.state in ("queued", "active"):
-            if intent is self._active and self.body:
+        if action == "pause" and intent.state in ("queued", "active", "paused"):
+            if intent is self._active and intent.state == "active" and self.body:
                 await self.body.stop("paused by host")
+            # An explicit host pause also overrides an earlier recoverable native pause.
             self._transition(intent, "paused", reason or "paused by host")
         elif action == "resume" and intent.state == "paused":
             self._transition(intent, "queued", reason or "resumed")
@@ -309,6 +315,29 @@ class HarnessRuntime:
             self._transition(intent, "cancelled", reason or "cancelled by host")
         self._wake.set()
         return intent
+
+    def retire_recovered_pauses(self, snapshot: BodySnapshot | None) -> bool:
+        """Retire stale native safety plans; never resume their steps or reconcile an unknown by inference."""
+        if self.body is None or snapshot is None or snapshot.life_state != "alive" or self._active is not None:
+            return False
+        if not -1 <= (utcnow() - snapshot.sampled_at).total_seconds() <= 5:
+            return False
+        if any(intent.state in ("active", "queued") for intent in self.intents.values()):
+            return False
+        identity, health = self.body.identity(), self.body.health()
+        if identity is None or not health.connected or health.lifecycle != "ready" or health.safety and health.safety.halted:
+            return False
+        if self.journal is not None and self.journal.unresolved(identity.body_id):
+            return False
+        recovered = False
+        for intent in self.intents.values():
+            if intent.state != "paused" or intent.recoverable_pause not in ("death", "safety"):
+                continue
+            if intent.recoverable_pause == "safety" and health.safety is None:
+                continue  # An alive snapshot alone cannot prove the native safety guard was cleared.
+            self._transition(intent, "cancelled", "body_recovered_replan_from_current_observation")
+            recovered = True
+        return recovered
 
     # ---- memory access point ---------------------------------------------------------------------
     async def recall(self, query: str, limit: int = 8) -> list[Fact]:
@@ -527,7 +556,8 @@ class HarnessRuntime:
                 intent.step_index += 1
                 continue
             if receipt.status == "blocked_by_safety":
-                self._transition(intent, "paused", f"safety halt: {receipt.text}", needs_host=True)
+                self._transition(intent, "paused", f"safety halt: {receipt.text}", needs_host=True,
+                                 recoverable_pause="safety")
             elif receipt.status in ("unknown", "accepted"):
                 self._transition(intent, "paused", f"outcome unknown for {step.tool}; reconcile result({receipt.request_id}), do not replay",
                                  needs_host=True)

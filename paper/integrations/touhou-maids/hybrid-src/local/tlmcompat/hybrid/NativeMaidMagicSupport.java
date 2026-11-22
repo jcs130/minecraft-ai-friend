@@ -316,6 +316,7 @@ final class NativeMaidMagicSupport {
     }
 
     Result cast(EntityMaid maid, Attempt attempt, Predicate<Mob> hostile, MaidSpellPolicy.Selection selection) {
+        attempt.mana.castCommitted = false;
         var caster = (LivingEntity) maid.getBukkitEntity();
         var spell = attempt.spell;
         UUID operation = UUID.randomUUID();
@@ -324,6 +325,7 @@ final class NativeMaidMagicSupport {
         mana.cooldowns.put(spell.id(), attempt.now + spell.cooldown());
         mana.nextStaffCast = attempt.now + STAFF_INTERVAL;
         mana.current -= attempt.cost;
+        mana.castCommitted = true;
         var hits = new ArrayList<UUID>();
         var healed = new ArrayList<UUID>();
         double observedDamage = 0, observedHealing = 0;
@@ -386,6 +388,10 @@ final class NativeMaidMagicSupport {
         spell.play(context, impact, caster);
         return mana.lastCast;
     }
+
+    // Whether the given attempt committed mana before failing. The unified-body legacy cast path
+    // uses this to distinguish a provable no-effect failure from an unproven one; guard tick ignores it.
+    boolean castCommitted(Attempt attempt) { return attempt.mana.castCommitted; }
 
     private double heal(SpellContext context, MaidVortexSpell spell, Player owner, LivingEntity caster, Player ally) {
         double amount = spell.heal().amount(context);
@@ -480,6 +486,10 @@ final class NativeMaidMagicSupport {
     private static final class Mana {
         final Map<String, Long> cooldowns = new HashMap<>();
         double current;
+        // True once the current cast attempt deducted mana; reset at each cast start. Bookkeeping
+        // only — it never changes casting mechanics, and lets a failure be proven no-effect or left
+        // honestly unproven instead of becoming a silent, permanently frozen reason-only unknown.
+        boolean castCommitted;
         Long observedAt;
         long nextStaffCast = Long.MIN_VALUE;
         String lastHitSpell;

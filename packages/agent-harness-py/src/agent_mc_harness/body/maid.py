@@ -627,11 +627,13 @@ class MaidBody(BaseBody):
             for row in rows:
                 if isinstance(row, dict) and row.get("eventId") and self._fresh("inbox:" + str(row["eventId"])):
                     context = self._context.get("raw") or {}
-                    speaker = row.get("speakerId") or row.get("senderUuid")
+                    speaker = row.get("senderUuid") or row.get("speakerId")
                     prefix = "qdvoice:" + str(speaker) + ":"
                     relay = str(row["eventId"])[len(prefix):] if str(row["eventId"]).startswith(prefix) else ""
                     channel = ("public" if relay.startswith("public_") else "voice" if relay.startswith("voice_")
                                else "npc_chat" if relay.startswith("npc_") else "chat")
+                    if self._native and relay and row.get("channel") in ("voice", "chat", "npc_chat"):
+                        channel = row["channel"]
                     # Native inbox operations use sender UUID + operation ID for addressed chat/talk.
                     # The qdvoice relay instead supplies observations that may have merely been overheard.
                     direct = (self._native and isinstance(speaker, str) and UUID.fullmatch(speaker)
@@ -643,7 +645,9 @@ class MaidBody(BaseBody):
                                     "channel": channel, "listenerId": self.maid_id,
                                     **({"deliveryScope": "addressed", "recipientId": self.maid_id} if direct
                                        else {"deliveryScope": "nearby"} if relay else {}),
-                                    "receivedAt": row.get("receivedAt"), "source": row.get("source") or "untrusted_game_dialogue",
+                                    "receivedAt": row.get("receivedAt"),
+                                    **{key: row[key] for key in ("world", "worldId", "occurredAt") if key in row},
+                                    "source": row.get("source") or "untrusted_game_dialogue",
                                     "trusted": False,
                                     "serverAttributed": isinstance(self.bridge, NativeMaidBridge),
                                     "memoryNamespace": row.get("memoryNamespace") or data.get("memoryNamespace") or context.get("memoryNamespace"),

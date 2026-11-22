@@ -111,6 +111,9 @@ public final class HostedNativeSpeech {
                         inbox.getClass().getMethod("push",String.class,String.class,long.class,boolean.class)
                             .invoke(inbox,"qd_npc_dialogue",payload,System.currentTimeMillis(),false);
                         return true;
+                    }catch(InvocationTargetException uncertain){
+                        // push may already have accepted the event; the relay must not retry it as a missing binding.
+                        throw new IllegalStateException("NPC_INBOX_ACCEPTANCE_UNKNOWN",uncertain);
                     }catch(ReflectiveOperationException unavailable){return false;}
                 };
                 if(!Boolean.TRUE.equals(voice.getClass().getMethod("bindHostedNpcVoice",UUID.class,UUID.class,Function.class).invoke(voice,id,owner,input)))continue;

@@ -232,7 +232,10 @@ final class NativeMaidBodyActions {
                 case "ack"->plugin.nativeAck(id,value);
             }
             observed.addProperty("effectsApplied",true);observed.add("actualPosition",position(maid));var result=reply(true,control.finish(id,request,"applied",observed),null);if(resumeCompanion)companions.add(id);if(resumeGuard)resumeGuard(maid);return result;
-        }catch(Exception failure){var info=new JsonObject();info.addProperty("reason","execution_uncertain_query_original_request");
+        }catch(Exception failure){
+            // Never swallow silently: an uncertain native action must leave a trace for audit.
+            plugin.getLogger().warning("native body action uncertain maid="+id+" request="+request+" action="+action+" value="+value+" failure="+failure.getClass().getName()+": "+failure.getMessage());
+            var info=new JsonObject();info.addProperty("reason","execution_uncertain_query_original_request");
             try{return reply(false,control.finish(id,request,"unknown",info),"execution_uncertain_query_original_request");}catch(Exception journal){throw new MaidBodyControl.Fault(503,"RESULT_UNKNOWN");}}
     }
     private JsonObject read(UUID owner,UUID id,String action,JsonObject input)throws Exception {
@@ -385,6 +388,11 @@ final class NativeMaidBodyActions {
                 if(request.equals(resumeGuards.get(id))&&control.active(id)){var body=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));if(body!=null)resumeGuard(body);}return result;
             }
             if(Set.of("accepted","pending","running").contains(state))return control.finish(id,request,"running",original);
+            // A missing service ledger row proves the cast never reached the RPG service.
+            // Settle the original request as rejected with evidence; never replay the spell.
+            var evidence=MaidBodyControl.castPreDispatchEvidence(id,request,value.get("status").getAsString(),original);
+            if(evidence!=null){var result=control.finish(id,request,"rejected",evidence);
+                if(request.equals(resumeGuards.get(id))&&control.active(id)){var body=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));if(body!=null)resumeGuard(body);}return result;}
         }
         boolean inProgress = walks.containsKey(id)&&walks.get(id).request.equals(request)
                 || fishing.containsKey(id)&&fishing.get(id).request.equals(request);

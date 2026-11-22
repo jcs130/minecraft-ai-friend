@@ -14,6 +14,13 @@ exe='.exe' if os.name=='nt' else ''
 with tempfile.TemporaryDirectory(prefix='maid-native-body-test-') as tmp:
     subprocess.run([str(args.jdk/'bin'/('javac'+exe)),'--release','21','-encoding','UTF-8','-cp',str(args.gson),'-d',tmp,
         str(root/'hybrid-src/local/tlmcompat/hybrid/MaidBodyControl.java'),str(root/'tests/MaidBodyControlTest.java'),
-        str(root/'hybrid-src/local/tlmcompat/hybrid/MaidPlayerProfiles.java'),str(root/'tests/MaidPlayerProfilesTest.java')],check=True)
+        str(root/'tests/CastPreDispatchTest.java'),str(root/'tests/LegacyCastAuditQa.java'),
+        str(root/'hybrid-src/local/tlmcompat/hybrid/LegacyCastFailure.java'),str(root/'tests/LegacyCastFailureTest.java'),
+        str(root/'hybrid-src/local/tlmcompat/hybrid/MaidPlayerProfiles.java'),str(root/'tests/MaidPlayerProfilesTest.java'),
+        str(root/'hybrid-src/local/tlmcompat/hybrid/NpcVoiceEnvelopeStore.java'),str(root/'tests/NpcVoiceEnvelopeTest.java')],check=True)
     subprocess.run([str(args.jdk/'bin'/('java'+exe)),'-cp',tmp+os.pathsep+str(args.gson),'local.tlmcompat.hybrid.MaidBodyControlTest',str(Path(tmp)/'receipts')],check=True)
+    subprocess.run([str(args.jdk/'bin'/('java'+exe)),'-cp',tmp+os.pathsep+str(args.gson),'local.tlmcompat.hybrid.CastPreDispatchTest',str(Path(tmp)/'cast-receipts')],check=True)
+    subprocess.run([str(args.jdk/'bin'/('java'+exe)),'-cp',tmp+os.pathsep+str(args.gson),'local.tlmcompat.hybrid.LegacyCastAuditQa',str(Path(tmp)/'legacy-audit')],check=True)
+    subprocess.run([str(args.jdk/'bin'/('java'+exe)),'-cp',tmp+os.pathsep+str(args.gson),'local.tlmcompat.hybrid.LegacyCastFailureTest'],check=True)
     subprocess.run([str(args.jdk/'bin'/('java'+exe)),'-cp',tmp+os.pathsep+str(args.gson),'local.tlmcompat.hybrid.MaidPlayerProfilesTest'],check=True)
+    subprocess.run([str(args.jdk/'bin'/('java'+exe)),'-cp',tmp+os.pathsep+str(args.gson),'local.tlmcompat.hybrid.NpcVoiceEnvelopeTest',str(Path(tmp)/'dialogue-envelope')],check=True)

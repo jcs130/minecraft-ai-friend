@@ -419,7 +419,21 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         guard.mode = Mode.MAGIC;
         guard.selectedAt = System.nanoTime();
         guard.target = attempt.enemy() == null ? null : attempt.enemy().getUUID();
-        var result = magic.cast(maid, attempt, enemy -> hostile(maid, owner, enemy), null);
+        double manaBefore = attempt.availableMana();
+        NativeMaidMagicSupport.Result result;
+        try {
+            result = magic.cast(maid, attempt, enemy -> hostile(maid, owner, enemy), null);
+        } catch (RuntimeException | LinkageError failure) {
+            // The legacy magic layer deducts mana before applying effects and may throw mid-cast.
+            // Capture provable evidence here instead of letting a silent reason-only unknown freeze
+            // the host forever. Never claim success, and never claim no-effect once mana was committed.
+            boolean committed = magic.castCommitted(attempt);
+            double manaAfter = attempt.availableMana();
+            plugin.getLogger().warning("legacy cast interrupted maid=" + maid.getUUID() + " spell=" + spell
+                    + " manaCommitted=" + committed + " manaBefore=" + manaBefore + " manaAfter=" + manaAfter
+                    + " failure=" + failure.getClass().getName() + ": " + failure.getMessage());
+            return LegacyCastFailure.evidence(spell, committed, manaBefore, manaAfter, failure);
+        }
         guard.state = result.state();
         var observation = result.describe();
         if (!result.applied()) annotateRefusal(maid, observation, result.state());
