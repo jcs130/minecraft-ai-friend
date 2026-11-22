@@ -91,13 +91,8 @@ final class TrialSharedSupplies implements Listener {
         event.setCancelled(true);Player p=event.getPlayer();
         if(plugin.isObserver(p)||plugin.isDowned(p)||plugin.pvpParticipant(p)||p.isDead())return;
         if(p.getLocation().distanceSquared(event.getClickedBlock().getLocation().add(.5,.5,.5))>36)return;
-        Location at=event.getClickedBlock().getLocation();
-        if(plugin.lands().contains(at)&&!plugin.lands().publicContainer(at))return;
         if(event.getClickedBlock().getState() instanceof Chest chest&&chest.getInventory().getSize()==54){
-            // Native chest use sends the initial inventory on Youer and respects both physical halves.
-            event.setUseInteractedBlock(Event.Result.ALLOW);
-            event.setUseItemInHand(Event.Result.DENY);
-            p.sendMessage("§e[公共共享箱] 这里的物品所有人可取放；存入即分享。私人装备请存罗盘→个人仓库。");
+            p.openInventory(chest.getInventory());p.sendMessage("§e[公共共享箱] 这里的物品所有人可取放；存入即分享。私人装备请存罗盘→个人仓库。");
         }
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
