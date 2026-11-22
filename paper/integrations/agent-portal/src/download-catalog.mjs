@@ -47,6 +47,8 @@ const previousResidentPackages = Object.freeze([
     sha256:'eca225e804d3575a8e61ca7c878bb46a3821e96421b255a2c0e5218adb1f2531'}),
   Object.freeze({id:'resident-neko',version:'0.3.2',filename:'qiandengji-resident-0.3.2.neko-plugin',bytes:64040,
     sha256:'809446a1988e8d75fe3bd6e7f537356865c06a51b26d8ccf7ac3c2d1fa502768'}),
+  Object.freeze({id:'resident-neko',version:'0.3.4',filename:'qiandengji-resident-0.3.4.neko-plugin',bytes:68171,
+    sha256:'8921fa5897988ded677e19b9db55ab19dfdddf7dbd88190b25b7f2b72eb6fb6a'}),
 ]);
 export const packageAt = pathname => packageReleases.find(row =>
   pathname === '/downloads/' + row.filename || aliases[pathname] === row.id)

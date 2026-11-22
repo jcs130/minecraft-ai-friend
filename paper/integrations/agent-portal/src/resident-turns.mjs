@@ -6,6 +6,7 @@ const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
 const denied = (status, reason) => Object.assign(new Error(reason), {status, reason});
 const idle = {state: 'local'};
 const idleExpiry = 12 * 3600_000;
+const desktopExpiry = 15 * 60_000;
 const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const codeFormat = /^[2-9A-HJ-NP-Z]{4}(?:-[2-9A-HJ-NP-Z]{4}){2}$/;
 const newCode = () => [...randomBytes(12)].map(b => alphabet[b % alphabet.length]).join('').match(/.{4}/g).join('-');
@@ -56,6 +57,12 @@ export class ResidentTurns {
     store.db.exec(`CREATE TABLE IF NOT EXISTS resident_onboarding (
       owner TEXT NOT NULL, code_hash TEXT UNIQUE, code_until INTEGER, token_hash TEXT UNIQUE, token_until INTEGER, connected TEXT)`);
     store.db.exec('CREATE TABLE IF NOT EXISTS resident_grants (role TEXT PRIMARY KEY, body TEXT, character TEXT, kind TEXT, game_owner TEXT, owner TEXT, hash TEXT, until INTEGER)');
+    for (const column of ['desktop','instance']) {
+      if (!store.db.prepare('PRAGMA table_info(resident_grants)').all().some(row => row.name === column))
+        store.db.exec('ALTER TABLE resident_grants ADD COLUMN ' + column + ' TEXT');
+    }
+    if (!store.db.prepare('PRAGMA table_info(resident_grants)').all().some(row => row.name === 'last_seen'))
+      store.db.exec('ALTER TABLE resident_grants ADD COLUMN last_seen INTEGER');
     store.db.exec(`CREATE TABLE IF NOT EXISTS resident_births (
       role TEXT PRIMARY KEY, body TEXT UNIQUE NOT NULL, kind TEXT NOT NULL, game_owner TEXT NOT NULL,
       character TEXT UNIQUE NOT NULL, owner TEXT NOT NULL, request TEXT NOT NULL, name TEXT NOT NULL,
@@ -91,9 +98,9 @@ export class ResidentTurns {
           || keys.has(r.workerHash) || bodies.has(r.bodyId) || r.characterId && characters.has(r.characterId) || this.roles.has(r.id)) {
         throw Error('Invalid resident turn binding');
       }
-      const saved = store.db.prepare('SELECT owner,hash,until FROM resident_grants WHERE role=? AND body=? AND character=? AND kind=? AND game_owner=? AND until>?')
+      const saved = store.db.prepare('SELECT owner,hash,until,desktop,instance,last_seen FROM resident_grants WHERE role=? AND body=? AND character=? AND kind=? AND game_owner=? AND until>?')
         .get(r.id, r.bodyId, r.characterId, r.bodyKind, r.ownerGameId, this.now());
-      this.roles.set(r.id, {...r, grant: saved ? {...saved, lastPoll: -Infinity} : null, pending: null});
+      this.roles.set(r.id, {...r, grant: saved ? {...saved, lastPoll:saved.last_seen ?? -Infinity} : null, pending: null});
       bodies.add(r.bodyId); keys.add(r.workerHash); characters.add(r.characterId);
     }
   }
@@ -130,14 +137,25 @@ export class ResidentTurns {
     r.wake = null;
     r.pending?.finish(idle);
   }
-  grant(r, owner, origin, token = 'rdt_' + randomBytes(32).toString('base64url'), accountTokenHash = null) {
+  desktopController(r) {
+    if (!this.valid(r)) return null;
+    if (r.grant.desktop && this.now() - r.grant.lastPoll >= 20_000) {
+      this.clear(r);
+      return null;
+    }
+    return r.grant;
+  }
+  grant(r, owner, origin, token = 'rdt_' + randomBytes(32).toString('base64url'), accountTokenHash = null, desktop = null) {
     if (!this.owns(owner, r) || r.fresh && !r.ready) throw denied(409, 'RESIDENT_NOT_READY');
-    const grant = {owner, hash: hash(token), until: this.now() + idleExpiry, lastPoll: -Infinity};
+    if (r.grant?.desktop && this.desktopController(r)) throw denied(409,'DESKTOP_BODY_BUSY');
+    const grant = {owner, hash:hash(token), until:this.now() + (desktop ? desktopExpiry : idleExpiry),
+      lastPoll:desktop ? this.now() : -Infinity, desktop:desktop?.id ?? null, instance:desktop?.instance ?? null};
+    grant.last_seen = desktop ? grant.lastPoll : null;
     const db = this.store.db;
     db.exec('BEGIN IMMEDIATE');
     try {
-      db.prepare('INSERT OR REPLACE INTO resident_grants VALUES(?,?,?,?,?,?,?,?)')
-        .run(r.id,r.bodyId,r.characterId,r.bodyKind,r.ownerGameId,owner,grant.hash,grant.until);
+      db.prepare('INSERT OR REPLACE INTO resident_grants(role,body,character,kind,game_owner,owner,hash,until,desktop,instance,last_seen) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
+        .run(r.id,r.bodyId,r.characterId,r.bodyKind,r.ownerGameId,owner,grant.hash,grant.until,grant.desktop,grant.instance,grant.last_seen);
       db.prepare('DELETE FROM resident_pair_codes WHERE role=?').run(r.id);
       if (accountTokenHash) {
         const result = db.prepare('UPDATE resident_onboarding SET connected=? WHERE token_hash=? AND owner=? AND connected IS NULL AND token_until>?')
@@ -329,9 +347,11 @@ export class ResidentTurns {
     if (!value?.startsWith(worker ? 'rwt_' : 'rdt_') || !expected
         || !timingSafeEqual(Buffer.from(hash(value)), Buffer.from(expected))) throw denied(401, 'INVALID_RESIDENT_TOKEN');
     if (!worker && !this.valid(r)) throw denied(401, 'RESIDENT_GRANT_EXPIRED');
+    if (!worker && r.grant.desktop && !this.desktopAuthority?.(r.grant, req)) throw denied(401,'INVALID_RESIDENT_DEVICE');
   }
   valid(r) {
     if (r.grant && r.grant.until > this.now() && this.owns(r.grant.owner, r)
+        && (!r.grant.desktop || this.desktopAuthority?.(r.grant))
         && this.store.db.prepare('SELECT 1 FROM resident_grants WHERE role=? AND hash=?').get(r.id, r.grant.hash)) return true;
     this.clear(r);
     return false;
@@ -378,8 +398,13 @@ export class ResidentTurns {
       result = {state:'requested',requestId:r.wake.id};
     } else if (op === 'poll') {
       r.grant.lastPoll = this.now();
-      if (r.grant.until - this.now() < idleExpiry - 300_000) {
-        r.grant.until = this.now() + idleExpiry;
+      if (r.grant.desktop && r.grant.lastPoll - r.grant.last_seen >= 5_000) {
+        r.grant.last_seen = r.grant.lastPoll;
+        this.store.db.prepare('UPDATE resident_grants SET last_seen=? WHERE role=? AND hash=?').run(r.grant.last_seen,r.id,r.grant.hash);
+      }
+      const expiry = r.grant.desktop ? desktopExpiry : idleExpiry;
+      if (r.grant.until - this.now() < expiry - 300_000) {
+        r.grant.until = this.now() + expiry;
         this.store.db.prepare('UPDATE resident_grants SET until=? WHERE role=? AND hash=?').run(r.grant.until, r.id, r.grant.hash);
       }
       result = {turn: r.pending?.turn ?? null};

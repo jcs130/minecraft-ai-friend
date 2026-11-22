@@ -9,7 +9,9 @@ import sys
 import tempfile
 import time
 import uuid
+from hashlib import sha256
 from pathlib import Path
+from urllib.parse import urlencode, urlsplit
 from zipfile import ZipFile
 
 
@@ -53,7 +55,7 @@ async def run_test(root, neko):
     dest = root / "plugins/neko_resident"
     with ZipFile(artifact) as archive:
         assert archive.testzip() is None
-        for file in ("__init__.py", "connection.py", "pyproject.toml", "plugin.toml", "ui/panel.tsx", "LICENSE"):
+        for file in ("__init__.py", "connection.py", "desktop.py", "pyproject.toml", "plugin.toml", "ui/panel.tsx", "LICENSE"):
             content = archive.read("payload/plugins/neko_resident/" + file)
             original = src.parents[3] / file if file == "LICENSE" else src / file
             assert content.decode() == original.read_text(encoding="utf-8")
@@ -77,6 +79,42 @@ async def run_test(root, neko):
     browser_approved = False
     legacy_pair = False
     create_ids = set()
+    desktop_flow, desktop_calls = {}, []
+    access, refresh = "qda2_" + "a" * 43, "qdr2_" + "r" * 43
+    desktop_revoked = False
+
+    @api.post("/api/v1/desktop-devices/{operation}")
+    async def device_api(operation: str, payload: dict, request: Request):
+        nonlocal access, refresh
+        desktop_calls.append(operation)
+        proof = (request.headers["x-qd-device"], request.headers["x-qd-device-proof"])
+        if operation == "begin":
+            assert payload["redirectUri"].startswith("http://127.0.0.1:")
+            desktop_flow.update(payload, id="f" * 43, proof=proof)
+            return {"id": desktop_flow["id"], "expiresAt": int(time.time() * 1000) + 60_000,
+                    "url": origin + "/desktop-connect.html#" + desktop_flow["id"]}
+        assert desktop_flow["proof"] == proof
+        if desktop_revoked:
+            raise HTTPException(401)
+        if operation == "exchange":
+            import base64
+            verifier = base64.urlsafe_b64encode(sha256(payload["verifier"].encode()).digest()).decode().rstrip("=")
+            assert verifier == desktop_flow["challenge"] and payload["code"] == "c" * 43
+            assert all(payload[key] == desktop_flow[key] for key in ("state", "id", "redirectUri"))
+        if operation == "refresh":
+            assert payload["refreshToken"] == refresh and uuid.UUID(payload["rotationId"])
+            access, refresh = "qda2_" + "b" * 43, "qdr2_" + "s" * 43
+        if operation in ("exchange", "refresh"):
+            return {"accessToken": access, "refreshToken": refresh, "expiresAt": int(time.time() * 1000) + 60_000,
+                    "character": resident["characterId"], "role": resident["id"]}
+        assert request.headers["Authorization"] == "Bearer " + access
+        if operation == "status":
+            return {"character": resident, "account": "Fixture owner", "canStart": True, "modes": ["numen"]}
+        if operation == "start":
+            assert payload["mode"] == "numen" and uuid.UUID(payload["requestId"])
+            return {"endpoint": origin + endpoint, "token": secret, "resident": resident}
+        assert operation == "stop" and uuid.UUID(payload["requestId"])
+        return {"stopped": True}
 
     @api.get("/api/characters")
     async def characters():
@@ -321,6 +359,62 @@ async def run_test(root, neko):
         turn = plan_turn("qa-legacy-name", [])
         await packet_for("qa-legacy-name", controlled_resident="当前绑定的游戏身体")
         print("PASS packaged Hosted UI, distinct resident identity, legacy fallback, private speech, and body action.")
+
+        legacy_pair = False
+        resident["name"] = "桐人"
+        turn = None
+
+        async def device_op(op, **args):
+            state = (await host.get_ui_context("resident_connection"))["state"]
+            await host.trigger("desktop_device", {"op": op, "uiToken": state["uiToken"], **args})
+            return (await host.get_ui_context("resident_connection"))["state"]
+
+        async def consent():
+            waiting = await device_op("login")
+            assert waiting["deviceLogin"] and not waiting["deviceCode"]
+            base = desktop_flow["redirectUri"]
+            data = {"iss": origin, "state": desktop_flow["state"], "code": "c" * 43}
+            async with httpx.AsyncClient(trust_env=False) as client:
+                for changed in ({"iss": "https://other.example"}, {"state": "f" * 43}):
+                    assert (await client.get(base, params=data | changed)).status_code == 400
+                assert (await client.get(base, params=data, headers={"Host": "example.org"})).status_code == 400
+                assert (await client.get(base + "?" + urlencode(data))).status_code == 200
+            state = await device_op("complete")
+            assert not state["connected"] and not state["devicePlay"]
+            assert state["deviceState"]["character"]["characterId"] == resident["characterId"]
+            assert not any(token in str(state) for token in (access, refresh, desktop_flow["proof"][1]))
+            return state
+
+        from neko_resident.desktop import DeviceVault, SERVICE
+        vault = DeviceVault(dest / "data/desktop-device.lock", origin)
+        try:
+            await consent()
+            assert "start" not in desktop_calls
+            assert (await device_op("start", mode="numen", localRole="桐人桌面"))["devicePlay"]
+            await host.shutdown(timeout=12)
+            # Simulate an expired access credential across a separate process. The
+            # independent portal test advances its matching server clock by 13h.
+            with vault.lock():
+                saved = vault.load()
+                saved["expiresAt"] = 0
+                vault.save(saved)
+            host = new_host()
+            before = len(desktop_calls)
+            await host.start(message_target_queue=incoming, startup_timeout=25, startup_failure="raise")
+            assert len(desktop_calls) == before
+            restored = (await host.get_ui_context("resident_connection"))["state"]
+            assert desktop_calls[before:] == ["refresh", "status"]
+            assert not restored["connected"] and restored["deviceState"]["preferredMode"] == "numen"
+            assert restored["deviceState"]["character"]["characterId"] == resident["characterId"]
+            assert (await device_op("start", mode="numen", localRole="桐人桌面"))["devicePlay"]
+            assert not (await device_op("stop"))["devicePlay"]
+            desktop_revoked = True
+            assert (await device_op("refresh"))["deviceState"]["status"] == "reauthorize"
+            desktop_revoked = False
+            assert (await consent())["deviceState"]["preferredMode"] == "numen"
+            print("PASS packaged device login callback, Windows Credential Manager, expired session recovery, explicit play, revocation and reauthorization.")
+        finally:
+            vault.backend().delete_password(SERVICE, vault.account)
     finally:
         await host.shutdown(timeout=12)
         await shutdown_http_client()

@@ -130,7 +130,10 @@ def body_tools(turn):
 
 
 def post(session, operation, payload):
-    return request_json(session["endpoint"] + "/" + operation, payload, session["token"])
+    if session.get("deviceHeaders"):
+        return request_json(session["endpoint"] + "/" + operation,payload,session["token"],
+                            extra_headers=session["deviceHeaders"])
+    return request_json(session["endpoint"] + "/" + operation,payload,session["token"])
 
 
 @neko_plugin
@@ -153,6 +156,10 @@ class ResidentPlugin(ConnectionPanel, NekoPluginBase):
         filename = cfg.get("session_file") or os.environ.get("QD_RESIDENT_SESSION_FILE")
         try:
             self.portal = origin_of(cfg.get("portal_origin") or PORTAL)
+            await self.prepare_device()
+            if self.device_prefs.get("character"):
+                self.role = self.device_prefs.get("localRole") or self.role
+                return Ok({"role":self.role,"connected":False})
             saved = self.data_path("resident-binding.json")
             if saved.is_file():
                 binding = json.loads(saved.read_text(encoding="utf-8"))
@@ -190,6 +197,16 @@ class ResidentPlugin(ConnectionPanel, NekoPluginBase):
                                                   parts=[{"type": "text", "text": turn_notification(turn, self.role, self.session)}])
                     if not submitted.get("submitted"):
                         self.current = None
+            except HTTPError as exc:
+                if exc.code == 401 and self.session and self.session.get("deviceHeaders"):
+                    # Ownership and device revocation are enforced on every body request.
+                    for name in TOOLS:
+                        self.unregister_llm_tool(name)
+                    self.session = self.worker = self.current = self.sending = None
+                    self.play_request = None
+                    self.device_state = None
+                    return
+                delay = 5
             except (OSError, KeyError, ValueError):
                 delay = 5
             await asyncio.sleep(delay)
@@ -341,7 +358,15 @@ class ResidentPlugin(ConnectionPanel, NekoPluginBase):
     async def stop_resident(self, **_):
         self.panel_token = None
         self._clear_authorization()
-        await self.detach()
+        if self.desktop:
+            self.desktop.close_login()
+        try:
+            if self.play_request:
+                await self.stop_device_play()
+            else:
+                await self.detach()
+        except (OSError, ValueError, RuntimeError):
+            pass
         return Ok({})
 
     async def detach(self):
