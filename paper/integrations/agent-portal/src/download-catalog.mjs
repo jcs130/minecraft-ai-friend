@@ -42,8 +42,15 @@ export const packageReleases = Object.freeze([
 ]);
 
 const aliases=Object.freeze({'/downloads/java-client':'desktop-client-pack','/downloads/android-client':'android-client-pack','/downloads/android-native-client':'android-native-client-pack','/downloads/maid-client':'maids-client-pack','/downloads/maid-mods':'maids-client-mods','/downloads/cortico-lite':'cortico-lite','/downloads/cortico':'cortico-world','/downloads/dsh':'dsh-adapter','/downloads/neko':'neko-base','/downloads/audio':'shared-audio','/downloads/browser':'shared-browser'});
+const previousResidentPackages = Object.freeze([
+  Object.freeze({id:'resident-neko',version:'0.3.1',filename:'qiandengji-resident-0.3.1.neko-plugin',bytes:54858,
+    sha256:'eca225e804d3575a8e61ca7c878bb46a3821e96421b255a2c0e5218adb1f2531'}),
+  Object.freeze({id:'resident-neko',version:'0.3.2',filename:'qiandengji-resident-0.3.2.neko-plugin',bytes:64040,
+    sha256:'809446a1988e8d75fe3bd6e7f537356865c06a51b26d8ccf7ac3c2d1fa502768'}),
+]);
 export const packageAt = pathname => packageReleases.find(row =>
-  pathname === '/downloads/' + row.filename || aliases[pathname] === row.id);
+  pathname === '/downloads/' + row.filename || aliases[pathname] === row.id)
+  ?? previousResidentPackages.find(row => pathname === '/downloads/' + row.filename);
 export function publicDownloads(config) {
   return packageReleases.map(release => {
     const available = !!config.downloads?.baseUrl && (config.downloads?.enabledPackages || []).includes(release.id);

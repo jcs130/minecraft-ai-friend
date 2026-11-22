@@ -1,5 +1,5 @@
 [project]
 name = "qiandengji-neko-resident"
-version = "0.3.3"
+version = "0.3.4"
 requires-python = ">=3.11"
 dependencies = []

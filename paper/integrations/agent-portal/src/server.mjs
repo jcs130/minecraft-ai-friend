@@ -1024,7 +1024,7 @@ export function createPortal(config, options = {}) {
         store.audit(owner.id, 'credential.revoke', revokeCredential[1]); return respond(res, 200, { ok: true });
       }
       if(req.method==='GET' && pathname==='/api/v1/admin/npcs') {
-        browserAuth(req,true);return respond(res,200,npcAdmin.state());
+        browserAuth(req,true);return respond(res,200,{...npcAdmin.state(), residentActivity:residentTurns.operatorActivity()});
       }
       const npcProfileRoute=/^\/api\/v1\/admin\/npcs\/([a-f0-9-]{36})$/.exec(pathname);
       if(req.method==='PUT' && npcProfileRoute) {

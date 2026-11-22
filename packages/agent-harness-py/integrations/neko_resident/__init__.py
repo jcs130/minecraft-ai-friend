@@ -29,12 +29,17 @@ TOOLS = {
                            parameters({"answer": {"type": "object"}}, ["answer"])),
     "qd_resident_capabilities": ("capabilities", "查看当前身体可执行的动作及参数、沟通范围、发声方式和本轮消息。可以指定一个动作查看详情。",
                                  parameters({"tool": {"type": "string"}}, [])),
-    "qd_resident_communicate": ("communicate", "通过游戏里的身体发言。按本轮 outputs 选择 mode 和 scope。回复有来源的消息时原样传入 sourceEventId。"
-                                "主动发言请选择没有 sourceEventId 的输出，并省略该参数。完整回合 ID 必须原样传入。"
-                                "text 发送文字，speech 请求游戏端发声，native 采用身体默认的沟通方式。",
-                                parameters({"text": {"type": "string", "minLength": 1}, "mode": {"type": "string", "enum": list(MODES)},
-                                            "scope": {"type": "string", "enum": list(SCOPES)}, "sourceEventId": {"type": "string"}},
-                                           ["text", "mode", "scope"])),
+    "qd_resident_communicate": ("communicate", "通过游戏里的身体发言。先从 scene.communication.outputs 选择听众 scope 和消息来源。"
+                                "回复时原样传入该项的 sourceEventId。主动发言请选择没有 sourceEventId 的输出，并省略该参数。"
+                                "只想开口且这个听众和来源只有一个可用方式时，省略 mode，插件会选中这一项。"
+                                "要指定文字、语音或身体默认方式时，按本轮公布的 mode 传入 text、speech 或 native。"
+                                "outputs 为空时跳过发言。完整回合 ID 必须原样传入。",
+                                parameters({"text": {"type": "string", "minLength": 1},
+                                            "mode": {"type": "string", "enum": list(MODES),
+                                                     "description": "本轮输出项的 mode。若只想发言且选定的听众和来源只对应一种方式，可省略。"},
+                                            "scope": {"type": "string", "enum": list(SCOPES)},
+                                            "sourceEventId": {"type": "string"}},
+                                           ["text", "scope"])),
     "qd_resident_body_action": ("body_action", "执行本轮身体能力目录中的一个游戏动作。使用完整工具名和该动作的参数；结果以下一轮游戏回执为准。",
                                 parameters({"tool": {"type": "string"}, "arguments": {"type": "object"}}, ["tool", "arguments"])),
 }
@@ -88,7 +93,7 @@ NO_OUTPUT_INSTRUCTION = (
 def output_instruction(turn):
     if not communication_outputs(turn):
         return NO_OUTPUT_INSTRUCTION
-    return ("如需在游戏中发言，按 scene.communication.outputs 原样选择 mode 和 scope。"
+    return ("如需在游戏中发言，按 scene.communication.outputs 选择 scope 和来源。只有一种方式时可以省略 mode。"
             "只有 native 时用 native。有来源时原样传入 sourceEventId，主动发言省略该字段。")
 
 
@@ -241,13 +246,23 @@ class ResidentPlugin(ConnectionPanel, NekoPluginBase):
             tools = [item for item in tools if item["tool"] == tool]
         return {"resident": turn["resident"], "kind": turn["kind"], "bodyTools": tools, "communication": channels(turn)}
 
-    async def communicate(self, *, id, text, mode, scope, sourceEventId=None, **_):
-        if not self.active_turn(id):
+    async def communicate(self, *, id, text, scope, mode=None, sourceEventId=None, **_):
+        turn = self.active_turn(id)
+        if not turn:
             return self.reject_communication(id, "stale_turn", self.inactive_reason(id),
                                              mode=mode, scope=scope, source=sourceEventId)
         if scope not in SCOPES:
             return self.reject_communication(id, "output_not_offered", "invalid_scope",
                                              mode=mode, scope=scope, source=sourceEventId)
+        if mode is None:
+            outputs = communication_outputs(turn)
+            offered = [choice for choice in MODES if output_problem(outputs, choice, sourceEventId, scope) is None]
+            if len(offered) != 1:
+                detail = "mode_required" if offered else ("no_output_for_audience" if outputs else "no_output_available")
+                rejection = self.reject_communication(id, "output_not_offered", detail,
+                                                      scope=scope, source=sourceEventId, outputs=outputs)
+                return {**rejection, "offeredModes": offered}
+            mode = offered[0]
         item = {"mode": mode, "text": text}
         if sourceEventId is not None:
             item["sourceEventId"] = sourceEventId
@@ -303,8 +318,8 @@ class ResidentPlugin(ConnectionPanel, NekoPluginBase):
         try:
             result = await asyncio.to_thread(post, self.session, "reply", {"id": id, "answer": answer})
             if sending_communication:
-                logger.info("resident_communication stage=portal_result turnHash=%s accepted=%s",
-                            turn_hash(id), isinstance(result, dict) and result.get("accepted") is True)
+                logger.info("resident_communication stage=portal_result turnHash=%s mode=%s accepted=%s",
+                            turn_hash(id), mode, isinstance(result, dict) and result.get("accepted") is True)
             if self.current is turn:
                 self.current = None
             return result
