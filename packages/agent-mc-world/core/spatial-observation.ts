@@ -285,7 +285,7 @@ function readSpatialObservation(bot: Bot, input: SpatialObserveInput) {
       return sign ? { ...site, sign } : site;
     });
     const unknownTargets=sites.filter(s=>s.target===null).length;
-    const partial=unknownTargets>0||sites.some(s=>s.body.unknown>0||s.below.topArea===null||s.faces.some(f=>f.area===null));
+    const partial=unknownTargets>0||sites.some(s=>s.body.unknown>0||s.landing?.clearance==='unknown'||s.below.topArea===null||s.faces.some(f=>f.area===null));
     return {
     ...common, position,kind:'sites' as const,status:partial?'partial' as const:'complete' as const,
     selfFooting:{source:'client-contact' as const,...footingFromBot(bot)},
@@ -293,7 +293,7 @@ function readSpatialObservation(bot: Bot, input: SpatialObserveInput) {
       airTargets:sites.filter(s=>s.target&&AIR_NAMES.has(s.target.block)).length},
     interpretation:'null=未知（遮挡、未加载或未核实），不等于空气、无支撑或不可达。仅 target.block 明示 air/cave_air/void_air 才是已观察空气；selfFooting 是本人当前接触，不代表候选落点。',
     sites, blockReads: cache.size,
-    geometry: 'absolute cells; faces: ref+face=target, boundary area 0..1 (0 omitted, null unknown); body=0.6x1.8 centered, block collisions + 1-cell collar, first 3 hits/count, fluids by cell; not reachability, placement permission or safe footing',
+    geometry: 'absolute cells; faces: ref+face=target, boundary area 0..1 (0 omitted, null unknown); body=0.6x1.8 centered, block collisions + 1-cell collar, first 3 hits/count, fluids by cell. landing.topY is the measured slab/stair top; next is null if blocked, a walk-only dry run if fractional/unknown, or an exact goto candidate. Route and placement still need verification.',
   };
   }
   if (query?.format === 'visible') return visibleVoxelObservation(query,common,read);
