@@ -45,6 +45,12 @@ public final class DungeonEntranceTest {
                 "station_points_outside");
         rejects(() -> DungeonEntrance.parse(List.of(102,64,100),"路线",Map.of("name","空项目"),-64,320,100,205,130),
                 "invalid_station_fields");
+        var ground=DungeonEntrance.groundStation(List.of(102,64,100),"主世界落地后走向石钮",station,-64,320);
+        check(ground.station().covers(ground.entry()));
+        rejects(() -> DungeonEntrance.groundStation(List.of(102,63,100),"路线",station,-64,320),
+                "ground_station_landing_unprotected");
+        rejects(() -> DungeonEntrance.groundStation(List.of(102,319,100),"路线",station,-64,320),
+                "ground_station_entry_bounds");
         System.out.println("PASS " + passed + " protected entrance checks");
     }
 }

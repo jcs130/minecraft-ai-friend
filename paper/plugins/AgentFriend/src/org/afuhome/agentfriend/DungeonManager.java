@@ -96,6 +96,7 @@ final class DungeonManager implements Listener {
     private static final long REJOIN_GRACE_MS = 600_000L;
     private static final long OUTSIDE_GRACE_MS = 15_000L;
     private static final long RETURN_RETRY_MS = 5_000L;
+    private static final long RETURN_DELAY_MS = 30_000L;
     private static final String RUN_STATE = "dungeon-active-run";
     private static final String OWN_OUTCOME = "dungeon-activity-outcomes.";
     private static final int TRIAL_SCHEMA_VERSION = 1;
@@ -2425,7 +2426,10 @@ final class DungeonManager implements Listener {
             receipt.addProperty("schemaVersion", TRIAL_SCHEMA_VERSION);
             receipt.addProperty("activityType", "trial_tower");
             player.sendMessage("MC_TRIAL_RESULT " + receipt);
-            if (won) plugin.agentCoach().rememberAdventure(player, "本场试炼塔已经通关");
+            if (won) {
+                player.sendMessage("§a30 秒后自动返回地面试炼平台，奖励已经登记。");
+                plugin.agentCoach().rememberAdventure(player, "本场试炼塔已经通关");
+            }
         }
         if (won) for (UUID id : endedParticipants) {
             Player player = ResidentCli.find(id);
@@ -2443,6 +2447,12 @@ final class DungeonManager implements Listener {
         if (!player.isOnline() || player.isDead() || plugin.isDowned(player)
                 || plugin.isObserver(player) || !plugin.nativeRpgMayAct(player) || isParticipant(player)) return;
         long now = System.currentTimeMillis();
+        long remaining = config.getLong(path + ".endedAt", 0) + RETURN_DELAY_MS - now;
+        if (remaining > 0) {
+            if (floorAt(player.getLocation()) > 0)
+                player.sendActionBar(net.kyori.adventure.text.Component.text("试炼塔已通关 · " + ((remaining + 999) / 1000) + " 秒后返回地面"));
+            return;
+        }
         Long previous = returnAttemptAt.get(id);
         if (previous != null && now - previous < RETURN_RETRY_MS) return;
         returnAttemptAt.put(id, now);

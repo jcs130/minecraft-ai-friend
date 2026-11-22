@@ -201,9 +201,9 @@ def rebuild_region(original, replacements):
     return bytes(header)+b"".join(parts)
 
 
-def apply(world, geometry, out):
+def apply(world, geometry, out, plan_reader=read_plan):
     reader=Anvil(world/"region")
-    changes,signs=read_plan(geometry,reader)
+    changes,signs=plan_reader(geometry,reader)
     grouped=defaultdict(dict)
     for (cx,cz),rows in sorted(changes.items()):
         grouped[cx//32,cz//32][cx%32+32*(cz%32)]=replacement_chunk(

@@ -58,6 +58,20 @@ record DungeonEntrance(List<Integer> entry, String hint, Station station) {
         return List.copyOf(point);
     }
 
+    static DungeonEntrance groundStation(Object raw, String hint, Map<String,?> station, int minHeight, int maxHeight) {
+        var entry=integers(raw,3);
+        if (Math.abs((long)entry.get(0))>=29_000_000 || Math.abs((long)entry.get(2))>=29_000_000
+                || entry.get(1)<=minHeight || entry.get(1)+1>=maxHeight)
+            throw new IllegalArgumentException("ground_station_entry_bounds");
+        if (hint==null || hint.isBlank() || hint.length()>300)
+            throw new IllegalArgumentException("approach_hint_required_limit_300");
+        var platform=Station.parse(station,entry,minHeight,maxHeight);
+        int y=entry.get(1);
+        if (!platform.contains(entry.get(0),y-1,entry.get(2)) || !platform.contains(entry.get(0),y+1,entry.get(2)))
+            throw new IllegalArgumentException("ground_station_landing_unprotected");
+        return new DungeonEntrance(entry,hint.strip(),platform);
+    }
+
     static DungeonEntrance parse(Object raw,String hint,Map<String,?> station,int minHeight,int maxHeight,
                                  int firstX,int firstY,int firstZ) {
         if(!(raw instanceof List<?> values)||values.size()!=3)
