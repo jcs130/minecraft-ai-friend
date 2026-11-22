@@ -405,6 +405,11 @@ final class SiteDungeonManager implements Listener {
         return run == null || !run.invalid && run.pausedAt == 0 && run.fault.isEmpty() && !run.retryLoading
                 && !run.phase.equals("returning") && !run.phase.equals("retrying") && run.party.contains(player.getUniqueId());
     }
+    boolean activeBuilder(String id, Player player) {
+        Run run = runs.get(id);
+        return run != null && player.getGameMode() == GameMode.SURVIVAL && run.site.contains(player.getLocation())
+                && canUseSite(id, player);
+    }
     ProtectionArea protectionArea(Location at) {
         for (var station : groundMusters.values())if(station.platform().contains(at))return station.platform();
         for(BuildingAreas building:protectionAreas.values()){
