@@ -3876,7 +3876,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 && args[args.length - 1].startsWith("--")) {
             return List.of("--keep", "--include-hotbar", "--dry-run", "--json").stream().filter(option -> option.startsWith(args[args.length - 1])).toList();
         }
-        if (args.length == 2 && args[0].equalsIgnoreCase("dungeon")) return List.of("list", "info", "travel", "start", "join", "status", "resume", "leave", "claim", "menu");
+        if (args.length == 2 && args[0].equalsIgnoreCase("dungeon")) return List.of("list", "info", "travel", "start", "join", "status", "resume", "leave", "claim", "menu", "choose");
         if (args.length == 3 && args[0].equalsIgnoreCase("dungeon")) return siteDungeons.ids();
         if (args.length == 4 && args[0].equalsIgnoreCase("dungeon") && args[1].equalsIgnoreCase("start")) return List.of("normal", "adventure", "apocalypse");
         if (args.length == 2 && args[0].equalsIgnoreCase("profession")) return List.of("status", "list", "menu", "choose", "leave");
