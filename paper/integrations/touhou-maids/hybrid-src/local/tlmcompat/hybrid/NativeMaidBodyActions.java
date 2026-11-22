@@ -125,7 +125,7 @@ final class NativeMaidBodyActions {
             case "schedule"->{value=MaidBodyControl.string(input,"schedule");try{MaidSchedule.valueOf(value);}catch(IllegalArgumentException e){throw new MaidBodyControl.Fault(400,"INVALID_schedule");}}
             case "pickup"->{if(!input.has("enabled")||!input.get("enabled").isJsonPrimitive()||!input.getAsJsonPrimitive("enabled").isBoolean())throw new MaidBodyControl.Fault(400,"INVALID_enabled");}
             case "speak"->{value=MaidBodyControl.string(input,"text");if(value.isBlank()||value.codePointCount(0,value.length())>140||value.codePoints().anyMatch(x->Character.isISOControl(x)||x==0xA7))throw new MaidBodyControl.Fault(400,"INVALID_text");}
-            case "ack"->{value=MaidBodyControl.string(input,"eventId");if(!value.matches("[A-Za-z0-9_:-]{1,128}"))throw new MaidBodyControl.Fault(400,"INVALID_eventId");}
+            case "ack"->{value=MaidBodyControl.string(input,"eventId");if(!MaidBodyControl.dialogueEventId(value))throw new MaidBodyControl.Fault(400,"INVALID_eventId");}
         }
         if (action.equals("rendezvous")) {
             UUID targetId = MaidBodyControl.uuid(input, "targetUuid");

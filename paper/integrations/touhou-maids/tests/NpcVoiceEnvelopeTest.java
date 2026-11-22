@@ -186,6 +186,11 @@ public final class NpcVoiceEnvelopeTest {
         check(bounded.length <= NpcVoiceEnvelopeStore.MAX_FILE_BYTES, "persisted file exceeds byte bound");
         refused(() -> restarted.put(boundedMaid, envelope(boundedMaid, EVENT)), "record count unbounded");
         check(Arrays.equals(bounded, Files.readAllBytes(boundedFile)), "full store pruned or replaced existing events");
+        String grouped = "qdvoice:" + UUID.randomUUID() + ":voice_group_" + UUID.randomUUID() + "_" + UUID.randomUUID();
+        check(grouped.length() > 128 && MaidBodyControl.dialogueEventId(grouped), "a grouped microphone event can be acknowledged under its original identifier");
+        check(MaidBodyControl.dialogueEventId("a".repeat(192)), "the event envelope bound is accepted");
+        check(!MaidBodyControl.dialogueEventId("a".repeat(193)), "oversized event identifiers remain rejected");
+        check(!MaidBodyControl.dialogueEventId("bad/event") && !MaidBodyControl.dialogueEventId("bad\nevent"), "event identifiers never become paths or control text");
         System.out.println("NpcVoiceEnvelopeTest: " + checks + " checks passed (persistence/restart/isolation/conflict/age/world/bounds)");
     }
 }

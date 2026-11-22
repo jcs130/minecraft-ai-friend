@@ -67,6 +67,7 @@ final class MaidBodyControl {
     List<UUID> expired(long now){return leases.values().stream().filter(x->x.expiresAt<=now).map(Lease::maid).toList();}
     Set<UUID> ids(){var ids=new HashSet<>(bindings.keySet());ids.addAll(leases.keySet());return ids;}
     void release(UUID maid){if(leases.remove(maid)!=null)epochs.merge(maid,1L,Long::sum);}
+    static boolean dialogueEventId(String value){return value!=null&&value.matches("[A-Za-z0-9_:-]{1,192}");}
     static String string(JsonObject value,String key){
         if(!value.has(key)||!value.get(key).isJsonPrimitive()||!value.getAsJsonPrimitive(key).isString())throw new Fault(400,"INVALID_"+key);
         return value.get(key).getAsString();

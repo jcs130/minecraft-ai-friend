@@ -12,7 +12,7 @@ import argparse,hashlib,os,subprocess,tempfile,zipfile
 from pathlib import Path
 
 BASE_SHA256='f24186685b88b748eb10564a961b906ccc5e07fe935ba5d8488b031d81551bd7'
-VERSION='0.1.67-voice-recovery'
+VERSION='0.1.68-voice-recovery'
 CLASSES=('MaidBodyControl','NativeMaidBodyActions','HybridMaidPlugin','NativeMaidCompanionSupport','NativeMaidMagicSupport','LegacyCastFailure','NativeMaidVoices','NpcVoiceEnvelopeStore')
 
 def main():
