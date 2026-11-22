@@ -4,26 +4,31 @@ from pathlib import Path
 
 BASE_SHA256='a1bc43ffba96296bbe037d0703ab6bad3ea4a71aba74731b569a8ff2e74c0ad9'
 VERSION='0.1.8-life'
+ASYNC_BASE_SHA256='3af93d1df81a448d8511c49fd342e6cc84d983771ef8d9ec89038498b33f7dd7'
+ASYNC_VERSION='0.1.64-lifecycle-async'
+ASYNC_CLASSES=('NativeMaidAgentSupport','MaidLifeEpisodes','MaidLifecyclePersistence')
 CLASSES=('HybridMaidPlugin','NativeMaidAgentSupport','MaidLifeEpisodes')
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--baseline',type=Path,required=True);p.add_argument('--classpath-file',type=Path,required=True);p.add_argument('--javac',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--baseline',type=Path,required=True);p.add_argument('--classpath-file',type=Path,required=True);p.add_argument('--javac',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--async-lifecycle',action='store_true');p.add_argument('--brain',type=Path);a=p.parse_args()
     assert a.baseline.resolve()!=a.output.resolve()
-    assert hashlib.sha256(a.baseline.read_bytes()).hexdigest()==BASE_SHA256,'Unexpected baseline; re-audit before rebuilding'
+    digest,version,classes=(ASYNC_BASE_SHA256,ASYNC_VERSION,ASYNC_CLASSES) if a.async_lifecycle else (BASE_SHA256,VERSION,CLASSES)
+    assert hashlib.sha256(a.baseline.read_bytes()).hexdigest()==digest,'Unexpected baseline; re-audit before rebuilding'
     root=Path(__file__).parent;package='local/tlmcompat/hybrid/'
     a.output.parent.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(dir=a.output.parent,prefix='maid-life-build-') as tmp:
-        temp=Path(tmp);cp=str(a.baseline.resolve())+os.pathsep+a.classpath_file.read_text(encoding='utf-8-sig').strip()
-        args=['--release','21','-encoding','UTF-8','-proc:none','-classpath',cp,'-d',str(temp/'classes')]+[str(root/'hybrid-src'/package/(c+'.java')) for c in CLASSES]
+        temp=Path(tmp);cp=os.pathsep.join([str(a.baseline.resolve()),*([str(a.brain.resolve())] if a.brain else []),a.classpath_file.read_text(encoding='utf-8-sig').strip()])
+        args=['--release','21','-encoding','UTF-8','-proc:none','-classpath',cp,'-d',str(temp/'classes')]+[str(root/'hybrid-src'/package/(c+'.java')) for c in classes]
         options=temp/'javac.args';options.write_text('\n'.join('"'+s.replace('\\','/')+'"' for s in args),encoding='utf-8')
         subprocess.run([str(a.javac),'-J-Duser.language=en','@'+str(options)],check=True)
         compiled={p.relative_to(temp/'classes').as_posix():p.read_bytes() for p in (temp/'classes').rglob('*.class')}
-        replaced=lambda name:any(name==package+c+'.class' or name.startswith(package+c+'$') for c in CLASSES)
-        with zipfile.ZipFile(a.baseline) as old,zipfile.ZipFile(a.output,'w',zipfile.ZIP_DEFLATED) as new:
+        replaced=lambda name:any(name==package+c+'.class' or name.startswith(package+c+'$') for c in classes)
+        assert all(package+c+'.class' in compiled for c in classes),'Expected classes were not built'
+        with zipfile.ZipFile(a.baseline) as old,zipfile.ZipFile(a.output,'x',zipfile.ZIP_DEFLATED) as new:
             for e in old.infolist():
                 if replaced(e.filename):continue
                 content=old.read(e.filename)
-                if e.filename=='plugin.yml':content=('\n'.join('version: '+VERSION if s.startswith('version:') else s for s in content.decode().splitlines())+'\n').encode()
+                if e.filename=='plugin.yml':content=('\n'.join('version: '+version if s.startswith('version:') else s for s in content.decode().splitlines())+'\n').encode()
                 new.writestr(e,content)
             for name,content in sorted(compiled.items()):
                 e=zipfile.ZipInfo(name,(2026,11,7,0,0,0));e.compress_type=zipfile.ZIP_DEFLATED;new.writestr(e,content)

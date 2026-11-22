@@ -24,8 +24,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 public final class NativeMaidAgentSupport implements Listener {
     private final HybridMaidPlugin plugin;
     private final ReceiptJournal receipts;
-    private final Path file;
-    private final JsonObject deaths;
+    private final MaidLifecyclePersistence lifecyclePersistence;
     private final MaidLifeEpisodes lifecycle;
     private final NativeMaidFollowSupport following=new NativeMaidFollowSupport();
     private long lastPersistenceWarning;
@@ -40,9 +39,11 @@ public final class NativeMaidAgentSupport implements Listener {
                            Set<LLMMessage> before,long deadline) {}
 
     public NativeMaidAgentSupport(HybridMaidPlugin plugin,ReceiptJournal receipts)throws Exception {
-        this.plugin=plugin;this.receipts=receipts;this.file=plugin.getDataFolder().toPath().resolve("native-lifecycle.json");
-        deaths=Files.exists(file)?JsonParser.parseString(Files.readString(file)).getAsJsonObject():new JsonObject();
+        this.plugin=plugin;this.receipts=receipts;Path file=plugin.getDataFolder().toPath().resolve("native-lifecycle.json");
+        JsonObject deaths=Files.exists(file)?JsonParser.parseString(Files.readString(file)).getAsJsonObject():new JsonObject();
         lifecycle=new MaidLifeEpisodes(deaths);
+        lifecyclePersistence=new MaidLifecyclePersistence(lifecycle,
+            snapshot->ReceiptJournal.write(file,snapshot,Files.exists(file)),this::warnPersistence);
         deathListener=event->{if(event.getEntity() instanceof EntityMaid maid)Bukkit.getScheduler().runTask(plugin,()->{
             if(!event.isCanceled()&&!maid.isAlive())observeDeath(maid);
         });};
@@ -65,7 +66,7 @@ public final class NativeMaidAgentSupport implements Listener {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST,false,fishingListener);
         Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
     }
-    public void close(){net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(deathListener);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(fishingListener);persistLifecycle();}
+    public void close(){net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(deathListener);net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(fishingListener);lifecyclePersistence.close();}
     @EventHandler public void quit(PlayerQuitEvent event){notified.remove(event.getPlayer().getUniqueId());}
 
     /** Native saved tombstone carries the original maid UUID in the name's insertion style. */
@@ -116,10 +117,13 @@ public final class NativeMaidAgentSupport implements Listener {
         JsonArray position=new JsonArray();position.add(p.getX());position.add(p.getY());position.add(p.getZ());next.add("position",position);
         next.addProperty("tombstoneId",found.getEntityId().toString());next.addProperty("evidence","original_tlm_tombstone");return next;
     }
-    private void persistLifecycle(){
-        if(!lifecycle.dirty())return;
-        try{ReceiptJournal.write(file,deaths,Files.exists(file));lifecycle.saved();}
-        catch(Exception error){long now=System.nanoTime();if(now-lastPersistenceWarning>30_000_000_000L){lastPersistenceWarning=now;plugin.getLogger().warning("Maid lifecycle persistence unavailable; recovery is not durably confirmed: "+error.getClass().getSimpleName());}}
+    private void persistLifecycle(){lifecyclePersistence.pump();}
+    private void warnPersistence(Throwable error){
+        long now=System.nanoTime();
+        if(lastPersistenceWarning==0||now-lastPersistenceWarning>30_000_000_000L){
+            lastPersistenceWarning=now;
+            plugin.getLogger().warning("Maid lifecycle persistence unavailable; recovery is not durably confirmed: "+error.getClass().getSimpleName());
+        }
     }
     public void observeLoaded(EntityMaid maid){
         UUID owner=registeredOwner(maid);if(owner==null||!maid.isAlive()||maid.isRemoved())return;
@@ -239,6 +243,7 @@ public final class NativeMaidAgentSupport implements Listener {
             maid.getAiChatManager().getHistory().add(LLMMessage.systemChat(maid,"[服务器状态] 本轮模型收尾失败："+reason+"。不是女仆回复，未确认目标完成；原生执行记录保留，请查询原回执和当前状态，勿重放本轮动作。"));
     }
     private void tick() {
+        persistLifecycle();
         for(var entry:new ArrayList<>(pending.entrySet())) {
             UUID id=entry.getKey();Pending p=entry.getValue();String reason=modelFailures.get(id),reply=null;boolean user=false;
             var history=new ArrayList<>(p.maid.getAiChatManager().getHistory().getDeque());Collections.reverse(history);
