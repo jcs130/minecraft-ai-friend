@@ -1,21 +1,34 @@
 package org.afuhome.agentfriend;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Navigation metadata, deliberately outside Site's persisted combat definition. */
 record DungeonEntrance(List<Integer> entry, String hint, Station station) {
-    record Station(String name, List<Integer> board, List<Integer> button, List<Integer> bounds) {
+    record Station(String name, List<Integer> board, List<Integer> button, List<Integer> bounds,
+                   Map<String,List<Integer>> facilities) {
+        private static final Set<String> FACILITIES=Set.of("craftingTable","furnace","anvil","sharedChest","sharedChestOtherHalf");
         static Station parse(Map<String,?> raw, List<Integer> entry, int minHeight, int maxHeight) {
-            if (!raw.keySet().equals(java.util.Set.of("name","board","button","bounds")))
+            var keys=new HashSet<>(raw.keySet());
+            keys.remove("facilities");
+            if (!keys.equals(Set.of("name","board","button","bounds")))
                 throw new IllegalArgumentException("invalid_station_fields");
             if (!(raw.get("name") instanceof String name) || name.isBlank() || name.length() > 30)
                 throw new IllegalArgumentException("invalid_station_name");
             var board = integers(raw.get("board"),3);
             var button = integers(raw.get("button"),3);
             var bounds = integers(raw.get("bounds"),6);
-            var station = new Station(name,board,button,bounds);
+            Map<String,List<Integer>> facilities=new LinkedHashMap<>();
+            if (raw.containsKey("facilities")) {
+                if (!(raw.get("facilities") instanceof Map<?,?> points) || !points.keySet().equals(FACILITIES))
+                    throw new IllegalArgumentException("invalid_station_facilities");
+                for (String key : FACILITIES) facilities.put(key,integers(points.get(key),3));
+            }
+            var station = new Station(name,board,button,bounds,Map.copyOf(facilities));
             for (int axis=0;axis<3;axis++) {
                 long extent=(long) bounds.get(axis+3)-bounds.get(axis);
                 if (extent<0 || extent>48) throw new IllegalArgumentException("station_bounds");
@@ -24,6 +37,17 @@ record DungeonEntrance(List<Integer> entry, String hint, Station station) {
                     || !station.covers(entry) || !station.covers(board) || !station.covers(button)
                     || Math.abs((long) button.get(1)-entry.get(1))>3)
                 throw new IllegalArgumentException("station_points_outside");
+            var used=new HashSet<>(List.of(entry,board,button));
+            for (var at : facilities.values()) {
+                if (!station.covers(at) || at.get(1).intValue()!=entry.get(1) || !used.add(at))
+                    throw new IllegalArgumentException("station_facility_position");
+            }
+            if (!facilities.isEmpty()) {
+                var left=facilities.get("sharedChest");
+                var right=facilities.get("sharedChestOtherHalf");
+                if (Math.abs(left.get(0)-right.get(0))+Math.abs(left.get(2)-right.get(2))!=1)
+                    throw new IllegalArgumentException("station_double_chest");
+            }
             return station;
         }
         boolean covers(List<Integer> point) {
@@ -38,6 +62,10 @@ record DungeonEntrance(List<Integer> entry, String hint, Station station) {
                 for (int i=0;i<3;i++) if (b[i]>bounds.get(i)||b[i+3]<bounds.get(i+3)) return false;
                 return true;
             });
+        }
+        boolean isPublicStorage(List<Integer> position,boolean furnace) {
+            if(furnace)return position.equals(facilities.get("furnace"));
+            return position.equals(facilities.get("sharedChest"))||position.equals(facilities.get("sharedChestOtherHalf"));
         }
     }
 

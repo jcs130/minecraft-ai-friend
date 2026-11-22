@@ -18,13 +18,45 @@ COVER = AIR | {"minecraft:short_grass", "minecraft:fern", "minecraft:dead_bush",
 GROUND = {"minecraft:grass_block", "minecraft:dirt", "minecraft:stone", "minecraft:gravel",
           "minecraft:coarse_dirt", "minecraft:sand", "minecraft:sandstone", "minecraft:andesite",
           "minecraft:podzol", "minecraft:snow_block", "minecraft:moss_block", "minecraft:mycelium"}
+PUBLIC_SIGN = ["公共补给", "工作台·熔炉·铁砧", "共享箱可自由取放", "存入即公开分享"]
+TRIAL_SIGN = (-585, 91, -315)
+TRIAL_WORKSTATIONS = {
+    (-585, 91, -314): "minecraft:crafting_table",
+    (-585, 91, -313): "minecraft:furnace[facing=west,lit=false]",
+    (-585, 91, -312): "minecraft:anvil[facing=north]",
+    TRIAL_SIGN: "minecraft:oak_sign[rotation=4,waterlogged=false]",
+}
 
 
 def material(state):
     return (state or "").split("[", 1)[0]
 
 
-def plan(reader, sites, origin, excluded):
+def facility_layout(x, y, z):
+    return {
+        "sharedChest": ((x-3,y,z-1), "minecraft:chest[facing=east,type=left,waterlogged=false]"),
+        "sharedChestOtherHalf": ((x-3,y,z), "minecraft:chest[facing=east,type=right,waterlogged=false]"),
+        "craftingTable": ((x+3,y,z-1), "minecraft:crafting_table"),
+        "furnace": ((x+3,y,z), "minecraft:furnace[facing=west,lit=false]"),
+        "anvil": ((x+3,y,z+1), "minecraft:anvil[facing=north]"),
+        "sign": ((x-3,y,z+1), "minecraft:oak_sign[rotation=12,waterlogged=false]"),
+    }
+
+
+def trial_workstations(reader):
+    # Supplement the existing public boxes without editing either half or its inventory.
+    for z in (-314, -311, -308):
+        for x, half in ((-583, "left"), (-582, "right")):
+            if reader.read(x,91,z) != f"minecraft:chest[facing=north,type={half},waterlogged=false]":
+                raise ValueError("existing trial public double chests must be verified first")
+    for x,y,z in TRIAL_WORKSTATIONS:
+        if material(reader.read(x,y-1,z)) not in {"minecraft:stone_bricks", "minecraft:polished_andesite"} \
+                or any(material(reader.read(x,py,z)) not in AIR for py in (y,y+1,y+2)):
+            raise ValueError(f"trial workstation position is occupied or unsupported at {(x,y,z)}")
+    return [{"at":list(at),"before":reader.read(*at),"after":state} for at,state in TRIAL_WORKSTATIONS.items()]
+
+
+def plan(reader, sites, origin, excluded, include_trial=False):
     @lru_cache(maxsize=None)
     def top(x, z):
         sections = reader.sections(x // 16, z // 16)
@@ -78,22 +110,29 @@ def plan(reader, sites, origin, excluded):
             blocks[x-2,y,z+2]="minecraft:oak_sign[rotation=8,waterlogged=false]"
             for dx in (-3,3):
                 blocks[x+dx,y,z-3]="minecraft:lantern[hanging=false,waterlogged=false]"
+            facilities=facility_layout(x,y,z)
+            blocks.update(facilities.values())
             name=definition.get("name",site)
             short=name.split("·",1)[0][:12]
             signs.append({"at":[x-2,y,z+2],"front":[short,"请全员站到地砖","用石钮进入副本","通关30秒回地面"]})
+            signs.append({"at":list(facilities["sign"][0]),"front":PUBLIC_SIGN})
             for at, after in sorted(blocks.items()):
                 before=reader.read(*at)
                 if before!=after:
                     changes.append({"site":site,"at":list(at),"before":before,"after":after})
             layout["platforms"][site]={"entry":[x,y,z-3],
-                "hint":f"{name}的集结平台在主世界地面 {x},{y},{z-3}。沿铺装到入口牌，准备好后使用石钮。",
+                "hint":f"{name}的集结平台在主世界地面 {x},{y},{z-3}。两侧有公共补给设施，准备好后使用石钮。",
                 "station":{"name":short+"集结台","board":[x-2,y,z+2],"button":[x,y,z+2],
-                           "bounds":[x-3,floor-1,z-4,x+3,y+2,z+4]}}
+                           "bounds":[x-3,floor-1,z-4,x+3,y+2,z+4],
+                           "facilities":{key:list(at) for key,(at,_) in facilities.items() if key!="sign"}}}
             reserved.append(rect)
             break
         else:
             raise ValueError(f"找不到 {site} 的安全平地")
-    return layout,{"schema":1,"world":"world","changes":changes,"signs":signs}
+    edits={"schema":2,"world":"world","changes":changes,"signs":signs}
+    if include_trial:
+        edits["trialWorkstations"]=trial_workstations(reader)
+    return layout,edits
 
 
 def main():
@@ -103,6 +142,8 @@ def main():
     parser.add_argument("--regions",type=Path,required=True,help="Read-only WorldGuard overworld registry")
     parser.add_argument("--origin",nargs=2,type=int,required=True)
     parser.add_argument("--output",type=Path,required=True)
+    parser.add_argument("--include-trial-facilities",action="store_true",
+                        help="Add workstations next to the three existing trial public chests")
     args=parser.parse_args()
     sites=yaml.safe_load(args.sites.read_text(encoding="utf-8"))["sites"]
     region_rows=yaml.safe_load(args.regions.read_text(encoding="utf-8"))["regions"]
@@ -124,7 +165,7 @@ def main():
                              max(p["x"] for p in points),max(p["z"] for p in points)))
         else:
             raise ValueError(f"Cannot check protected region {name}")
-    layout,edits=plan(Anvil(args.world / "region"),sites,args.origin,excluded)
+    layout,edits=plan(Anvil(args.world / "region"),sites,args.origin,excluded,args.include_trial_facilities)
     args.output.mkdir(parents=True,exist_ok=False)
     (args.output / "dungeon-muster.yml").write_text(yaml.safe_dump(layout,allow_unicode=True,sort_keys=False),encoding="utf-8")
     (args.output / "muster-block-plan.json").write_text(json.dumps(edits,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
