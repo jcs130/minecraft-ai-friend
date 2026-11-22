@@ -148,7 +148,7 @@ async function load() {
       return;
     }
     status.textContent = '当前账号 · ' + session.owner.username;
-    if (bodyManagement) handoff.select(session.owner.id, null);
+    if (bodyManagement) handoff.select(session.owner.id, params.get('character'), params.get('targetKind'));
     if (legacy) {
       await refresh();
       if (!params.has('bodyKind') && flow.value === 'connect' && catalog.residents[0]) {

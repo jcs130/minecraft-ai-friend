@@ -52,6 +52,7 @@ import {hostingRoutes} from './hosting-routes.mjs';
 import {characterBodyRoutes} from './character-body-routes.mjs';
 import {PlayerCompanions} from './player-companions.mjs';
 import {characterDeviceRoutes} from './character-device-routes.mjs';
+import {DesktopDevices} from './desktop-devices.mjs';
 import {ResidentTurns} from './resident-turns.mjs';
 import { WorldMap } from './world-map.mjs';
 
@@ -193,6 +194,8 @@ export function createPortal(config, options = {}) {
       nekoAuth:nekoAuth.capabilities(session?.owner_id?store.ownerById(session.owner_id):null) };
   }
   const residentTurns = new ResidentTurns(config, store);
+  const desktopDevices = new DesktopDevices({store, residents:residentTurns, publicOrigin:config.publicOrigin,
+    provider:options.characterBodies ?? hostedAgents?.characterBodies});
   function auth(req, scopes = []) {
     const bearer = req.headers.authorization;
     if (bearer) {
@@ -343,6 +346,8 @@ export function createPortal(config, options = {}) {
         const principal = residentTurns.pollingPrincipal(req,pathname);
         rate(principal ? 'resident:' + principal : 'api:' + digest(rateAddress(req, config)), 300, 60000);
       }
+      if (await desktopDevices.route({req,res,pathname,jsonBody,respond,rate,browserAuth,csrf,
+        peer:digest(rateAddress(req,config))})) return;
       if (await maidConnectionRoute({ req, res, pathname, connections: maidConnections,
         browserAuth, csrf, jsonBody, respond, rate,
         address: () => digest(rateAddress(req, config)) })) return;

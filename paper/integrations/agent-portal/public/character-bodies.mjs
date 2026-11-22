@@ -71,14 +71,15 @@ export function bodyHandoffPanel(byId, request) {
   async function refresh(view) {
     const data = await request(api);
     if (view !== selected) return;
-    view.state = data.characters.find(row => row.characterId === view.characterId) ?? data.characters[0];
+    const matching = data.characters.find(row => row.characterId === view.characterId);
+    view.state = matching ?? (view.targetKind && view.characterId ? null : data.characters[0]);
     const empty = byId('handoff-empty');
     const dedicated = !!empty && new URLSearchParams(location.search).get('flow') === 'bodies';
     section.hidden = dedicated && !view.state;
     if (dedicated) {
       empty.hidden = !section.hidden;
       empty.textContent = data.available
-        ? '当前账号还没有可管理身体的角色。'
+        ? (view.targetKind && view.characterId ? '当前账号无法管理此角色的身体。' : '当前账号还没有可管理身体的角色。')
         : '服务器尚未开放角色换身。';
     }
     if (!data.available || !view.state) {
@@ -102,6 +103,8 @@ export function bodyHandoffPanel(byId, request) {
     }
     if (!view.draft && view.state.pendingRequestId) remember(view, {requestId:view.state.pendingRequestId});
     target.replaceChildren(...view.state.targetKinds.map(kind => new Option(names[kind], kind)));
+    if (view.state.targetKinds.includes(view.targetKind)) target.value = view.targetKind;
+    view.targetKind = null;
     const current = names[view.state.activeKind] || '交接待核实';
     byId('handoff-current').textContent = '当前身体 · ' + current + (view.state.autonomous ? '。此角色也可以自主换身。' : '。');
     view.refresh = true;
@@ -169,7 +172,7 @@ export function bodyHandoffPanel(byId, request) {
     if (drafts.has(key)) return drafts.get(key);
     try { return JSON.parse(sessionStorage.getItem(key)); } catch { return null; }
   }
-  function select(owner, characterId) {
+  function select(owner, characterId, targetKind = null) {
     const key = owner && keyOf(owner, characterId || '@self');
     if (key && selected?.key === key) return;
     selected = null;
@@ -185,7 +188,7 @@ export function bodyHandoffPanel(byId, request) {
     byId('handoff-receipt-id').textContent = '';
     target.replaceChildren();
     if (!key) return;
-    const view = {key, owner, characterId, draft:pending(key)};
+    const view = {key, owner, characterId, targetKind, draft:pending(key)};
     selected = view;
     void run(view, async () => {
       await refresh(view);
