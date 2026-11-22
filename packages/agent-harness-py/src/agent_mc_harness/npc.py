@@ -1030,6 +1030,7 @@ class NpcHost:
         self.closed = False
         self.pausing = False
         self.next_plan = 0.0
+        self.next_ack = 0.0
         self.last_danger = False
         self.last_activity_scene = None
         self.desktop_request_id = None
@@ -1652,12 +1653,20 @@ class NpcHost:
                         self.pending_dialogue.pop(event, None)
                     events = [event for event in events if event not in acknowledged]
                 if acknowledged and self.role.body_kind == "maid":
-                    ack_steps = self._ack_steps(acknowledged)
-                    if ack_steps:
-                        self.runtime.submit_intent("Acknowledge already handled dialogue without repeating speech.", agent=self.role.id,
-                                                   steps=[step.model_dump() for step in ack_steps])
+                    # Submission is not confirmation. Retain the original inbox event
+                    # through definite refusals; unresolved acks use the original-ID
+                    # reconciliation above, never a second dispatch or repeated speech.
                     for event in acknowledged:
-                        self.pending_dialogue.pop(event, None)
+                        if self.journal.acknowledged(identity.body_id, event):
+                            self.pending_dialogue.pop(event, None)
+                    if (snapshot is not None and snapshot.life_state == "alive"
+                            and 0 <= time.time() - snapshot.sampled_at.timestamp() <= 5
+                            and self.body.health().connected and self.body.health().lifecycle == "ready" and now >= self.next_ack):
+                        ack_steps = self._ack_steps(acknowledged)
+                        if ack_steps:
+                            self.runtime.submit_intent("Acknowledge already handled dialogue without repeating speech.", agent=self.role.id,
+                                                       steps=[step.model_dump() for step in ack_steps])
+                            self.next_ack = now + 5  # Ack-only bounded lifecycle-race backoff.
                 elif desktop_ready or activity_changed or threatened and not self.last_danger or now >= self.next_plan:
                     goal = DIALOGUE_GOAL if events else DANGER_GOAL if threatened else DESKTOP_GOAL if desktop_ready else IDLE_GOAL
                     intent = self.runtime.submit_intent(goal, agent=self.role.id)
