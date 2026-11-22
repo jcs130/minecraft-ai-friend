@@ -92,7 +92,10 @@ final class TrialSharedSupplies implements Listener {
         if(plugin.isObserver(p)||plugin.isDowned(p)||plugin.pvpParticipant(p)||p.isDead())return;
         if(p.getLocation().distanceSquared(event.getClickedBlock().getLocation().add(.5,.5,.5))>36)return;
         if(event.getClickedBlock().getState() instanceof Chest chest&&chest.getInventory().getSize()==54){
-            p.openInventory(chest.getInventory());p.sendMessage("§e[公共共享箱] 这里的物品所有人可取放；存入即分享。私人装备请存罗盘→个人仓库。");
+            if(p.openInventory(chest.getInventory())==null)return;
+            // Youer may announce a programmatically opened double chest without sending its initial slots.
+            p.updateInventory();
+            p.sendMessage("§e[公共共享箱] 这里的物品所有人可取放；存入即分享。私人装备请存罗盘→个人仓库。");
         }
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
