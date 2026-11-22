@@ -1,3 +1,8 @@
+## 0.5.7-rc.160-preview.126
+
+- Recheck queued checkpoint actions when the fire reflex returns movement control and finishes bucket recovery. Other active body holds continue to gate the queue.
+- Show acknowledged actions waiting to start in the body activity HUD.
+
 ## 0.5.7-rc.160-preview.124
 
 - Spatial site observations identify a measured slab or stair landing and supply a ready-to-submit exact navigation step. Unknown clearance yields a walking-only route probe.
