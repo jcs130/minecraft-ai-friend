@@ -90,6 +90,11 @@ try{
   result.lowerBeachCannotStart=true;
   for(const [index,site] of sites.entries()){
     if(index>0) await connect(index);
+    if(index===1){
+      await place([8211,72,8201]);
+      assert.equal((await request('start','corsair_cove',' normal')).reason,'walk_to_first_room');
+      result.lowerBeachDoesNotJoinActiveRun=true;
+    }
     const id=site.id;
     const info=await request('info',id);
     assert.deepEqual(info.arrival.station.landing,site.landing);
@@ -133,7 +138,8 @@ try{
                            physicalButton:index%2===0});
     console.log('PASS '+id);
   }
-  result.passed=result.locations.length===10&&result.lowerBeachCannotStart&&result.ordinaryStartAndActivityGuard;
+  result.passed=result.locations.length===10&&result.lowerBeachCannotStart&&result.ordinaryStartAndActivityGuard
+    &&result.lowerBeachDoesNotJoinActiveRun;
 }catch(e){
   result.error=String(e);
   console.error(e);

@@ -107,6 +107,9 @@ final class SiteDungeonManager implements Listener {
         return site.contains(at)&&first.contains(at)&&(station(site)==null
                 || !atStation(site,at)&&at.getY()>=first.y-.6);
     }
+    private boolean belowEncounter(Site site,Location at){
+        return station(site)!=null&&at.getY()<site.rooms.stream().mapToInt(Room::y).min().orElseThrow()-.6;
+    }
     private static Location point(World world,List<Integer> xyz){
         return new Location(world,xyz.get(0)+.5,xyz.get(1),xyz.get(2)+.5);
     }
@@ -445,6 +448,7 @@ final class SiteDungeonManager implements Listener {
     private String entryProblem(Player p,Run r,Location at){
         if(!playing(p)||roomVisitor(p)||plugin.isDowned(p))return "not_survival_or_observer";
         if(!r.site.contains(at)||atStation(r.site,at))return "walk_to_site";
+        if(!r.attendance.containsKey(p.getUniqueId())&&belowEncounter(r.site,at))return "walk_to_station";
         Run other=own(p);DungeonManager trial=plugin.dungeon();
         if((other!=null&&other!=r)||(trial!=null&&trial.isParticipant(p))||plugin.pvpParticipant(p))return "already_in_activity_or_not_survival";
         if(!r.fault.isEmpty()||r.phase.equals("returning"))return "challenge_not_accepting";
@@ -461,7 +465,8 @@ final class SiteDungeonManager implements Listener {
         if(r.party.contains(p.getUniqueId()))return true;
         String problem=entryProblem(p,r,p.getLocation());
         if(!problem.isEmpty()){
-            if(!roomVisitor(p)&&r.site.contains(p.getLocation())&&!atStation(r.site,p.getLocation())&&!problem.equals("left_this_visit")){
+            if(!roomVisitor(p)&&r.site.contains(p.getLocation())&&!atStation(r.site,p.getLocation())
+                    &&!Set.of("left_this_visit","walk_to_station").contains(problem)){
                 long now=System.currentTimeMillis();if(now-lockHints.getOrDefault(p.getUniqueId(),0L)>=10_000){
                     lockHints.put(p.getUniqueId(),now);
                     if(problem.equals("equipment_required"))p.sendMessage("§e[战备不足] 尚未自动参战："+String.join("、",DungeonLoadout.missing(p))+"。"+DungeonLoadoutRules.REQUIREMENTS+"；补齐后在遗迹内自动加入。"+DungeonLoadoutRules.SUPPLIES);
