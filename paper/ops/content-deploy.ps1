@@ -187,6 +187,49 @@ function Wait-ContentWindow($plan) {
     }
 }
 
+function Content-RuinsRetrofitRows($plan, [string]$coldBackup) {
+    if ($plan.id -cne 'ruins-grounded-20261122-r1' -or
+        $plan.maintenanceWindow -cne 'reviewed-party-checkpoint-v1' -or
+        -not $coldBackup -or [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($coldBackup)) -ine 'F:\' -or
+        -not (Test-Path -LiteralPath (Join-Path $coldBackup '.complete'))) {
+        throw 'A scoped ruins retrofit requires the new verified F: cold backup'
+    }
+    $caseRoot = Join-Path $opsDir 'repairs/ruins-grounded-20261122-r1'
+    $geometry = Join-Path $caseRoot 'geometry.json'
+    $writer = Join-Path $caseRoot 'apply_access.py'
+    $survey = Join-Path $caseRoot 'retrofit_access.py'
+    $digests = @(
+        @{path=$geometry;sha256=$plan.ruinsRetrofit.geometrySha256},
+        @{path=$writer;sha256=$plan.ruinsRetrofit.writerSha256},
+        @{path=$survey;sha256=$plan.ruinsRetrofit.surveySha256}
+    )
+    foreach ($entry in $digests) {
+        if ($entry.sha256 -notmatch '^[A-Fa-f0-9]{64}$' -or
+            (Get-FileHash -LiteralPath $entry.path -Algorithm SHA256).Hash -ine $entry.sha256) {
+            throw 'Ruins geometry, planner or writer differs from the verified candidate'
+        }
+    }
+    $destination = Join-Path $caseRoot ('region-build-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
+    $previousPythonPath = $env:PYTHONPATH
+    try {
+        $env:PYTHONPATH = 'E:/MC/ops/repairs/conquest-rpg-20261026/venv/Lib/site-packages'
+        $result = & 'E:/MC/runtime/python-3.12.14/python.exe' -X utf8 -B $writer --world (Join-Path $coldBackup 'server/aincrad') --geometry $geometry --out $destination
+        if ($LASTEXITCODE -ne 0) { throw 'Cold ruins cell validation or region construction failed' }
+    } finally {
+        $env:PYTHONPATH = $previousPythonPath
+    }
+    $report = Get-Content -LiteralPath (Join-Path $destination 'world-patch.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($report.cells -ne 515491 -or $report.chunks -ne 247 -or @($report.regions).Count -ne 18) {
+        throw 'Ruins region report differs from isolated acceptance'
+    }
+    foreach ($image in @($report.regions)) {
+        if ($image.name -cnotmatch '^r\.(15|16|17|18|19|20)\.(15|16|17)\.mca$' -or
+            $image.beforeSha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Unexpected ruins region row' }
+        [pscustomobject]@{source=(Join-Path $destination $image.name);target=('aincrad/region/'+$image.name);
+            beforeSha256=$image.beforeSha256;sha256=$image.sha256}
+    }
+}
+
 function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='') {
     $planPath = Join-Path $opsDir 'content-plugins.pending.json'
     if (-not (Test-Path -LiteralPath $planPath)) { return }
@@ -225,9 +268,13 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
     $allowed = @('AgentFriend','BetonQuest','FancyNpcs','Citizens','Denizen','ConditionalEvents','WorldEvents','MythicMobs','Shopkeepers','NPCSpeak','ImageFrame','FancyAnalytics','WorldVariety','VillagerLife','Sentinel','OlEncounters','CommandAPI','FastAsyncWorldEdit')
     $worldVarietyPacks = @('more-chinese-structures','chinese-village','zhengsz-wonderland','aoe4mc','japanese-castle','castles-castles','grim-kingdoms-lost-structures-ruins','caleari-castle','ati-structures-vanilla-edition','towns-and-towers','ct-overhaul-village','lukis-grand-capitals','adorabuild-structures','dungeons-and-taverns-end-castle-standalone','hopo-better-ruined-portals','hopo-better-underwater-ruins','moogs-voyager-structures','when-dungeons-arise','when-dungeons-arise-seven-seas','sky-villages','peakscape','mss-moogs-soaring-structures','mes-moogs-end-structures','mmv-moogs-missing-villages','mtr-moogs-temples-reimagined','hopo-better-mineshaft')
     $entries = @(); $seen = @{}
-    foreach ($file in @($plan.files)) {
+    $retrofitRows = @()
+    if ($plan.ruinsRetrofit) { $retrofitRows = @(Content-RuinsRetrofitRows $plan $coldBackup) }
+    foreach ($file in ($retrofitRows + @($plan.files))) {
         $relative = [string]$file.target
-        if ($relative -ceq $personalConfig) {
+        if ($retrofitRows -ccontains $file) {
+            $target = Join-Path $serverDir $relative
+        } elseif ($relative -ceq $personalConfig) {
             $target = Join-Path $serverDir $relative
         } elseif (Content-MaidBridgeConfig $relative) {
             if ($file.beforeSha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Maid body port replacement requires its current digest' }

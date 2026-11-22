@@ -93,6 +93,35 @@ final class SiteDungeonManager implements Listener {
     private Map<String,DungeonEntrance> approaches=Map.of();
     private List<Integer> entry(Site site){var approach=approaches.get(site.id);return approach==null?site.entry:approach.entry();}
     private String routeHint(Site site){var approach=approaches.get(site.id);return approach==null?site.hint:approach.hint();}
+    private DungeonEntrance.Station station(Site site){
+        var approach=approaches.get(site.id);
+        return approach==null?null:approach.station();
+    }
+    private boolean atStation(Site site,Location at){
+        var station=station(site);
+        return station!=null&&at.getWorld().getName().equals(site.world)
+                &&station.contains(at.getBlockX(),at.getBlockY(),at.getBlockZ());
+    }
+    private boolean atFirstRoom(Site site,Location at){
+        Room first=site.rooms.getFirst();
+        return site.contains(at)&&first.contains(at)&&(station(site)==null
+                || !atStation(site,at)&&at.getY()>=first.y-.6);
+    }
+    private boolean belowEncounter(Site site,Location at){
+        return station(site)!=null&&at.getY()<site.rooms.stream().mapToInt(Room::y).min().orElseThrow()-.6;
+    }
+    private static Location point(World world,List<Integer> xyz){
+        return new Location(world,xyz.get(0)+.5,xyz.get(1),xyz.get(2)+.5);
+    }
+    private Map<String,Object> stationGuide(Site site){
+        var station=station(site);
+        if(station==null)return Map.of();
+        var first=site.rooms.getFirst();var relic=DungeonRelics.at(site.id);
+        return Map.of("world",site.world,"name",station.name(),"landing",entry(site),"board",station.board(),
+                "button",station.button(),"upperLanding",site.entry,"firstRoom",List.of(first.x,first.y,first.z),
+                "challengeButton",relic==null?List.of():List.of(relic.x(),relic.y(),relic.z()),
+                "enterCommand","/mycli dungeon enter "+site.id,"returnCommand","/mycli dungeon exit "+site.id);
+    }
     private boolean protectedApproachLanding(Site site,Location at){
         if(!approaches.containsKey(site.id))return true;
         var building=protectionAreas.get(site.id);if(building==null)return false;
@@ -124,7 +153,18 @@ final class SiteDungeonManager implements Listener {
         }
         facts.put("otherActivity",mine!=null&&mine!=run||plugin.dungeonParticipant(p)&&mine==null||plugin.pvpParticipant(p));
         facts.put("occupied",run!=null);facts.put("joinable",run!=null&&!run.phase.equals("returning")&&run.fault.isEmpty()&&run.party.size()<PARTY_LIMIT);
-        facts.put("atFirstRoom",first.contains(p.getLocation())&&s.contains(p.getLocation()));facts.put("atSite",s.contains(p.getLocation()));
+        facts.put("atFirstRoom",atFirstRoom(s,p.getLocation()));facts.put("atSite",s.contains(p.getLocation()));
+        var station=station(s);
+        if(station!=null){
+            facts.put("stationName",station.name());facts.put("atStation",atStation(s,p.getLocation()));
+            facts.put("stationButton",station.button().toString());
+            if(p.getWorld().getName().equals(s.world)){
+                var pad=point(p.getWorld(),entry(s));
+                facts.put("nearStation",Math.abs(p.getLocation().getY()-pad.getY())<=4
+                        &&p.getLocation().distanceSquared(pad)<=4096);
+                facts.put("stationLanding",entry(s).toString());
+            }
+        }
         var expedition=DungeonExpeditions.site(s.expedition);
         if(entry(s).isEmpty()&&expedition!=null)facts.put("nearApproach",DungeonArrival.nearApproach(
                 p.getWorld().getName(),p.getLocation().getX(),p.getLocation().getZ(),s.world,
@@ -156,6 +196,7 @@ final class SiteDungeonManager implements Listener {
         List<String> nativeEnemies=s.rooms.stream().flatMap(room->room.enemies.stream()).map(DungeonWaveCatalog.Enemy::mythic).filter(mob->mob!=null&&!mob.isEmpty()).distinct().toList();
         if(!nativeEnemies.isEmpty()){out.put("nativeEnemies",nativeEnemies);out.put("nativeContent",s.conquestFloor>0?"普通难度也启用Mythic首领机制":"冒险与末日启用Mythic精英；普通保留原版战斗");}
         String hint=routeHint(s);if(out.get("state").equals("approach")&&!hint.isBlank())out.put("nextAction",out.get("nextAction")+" 路线："+(hint.length()>180?hint.substring(0,180)+"…":hint));
+        if(station!=null)out.put("station",stationGuide(s));
         if(run!=null&&run.party.contains(p.getUniqueId())&&Set.of("moving","fighting").contains(out.get("state"))&&!run.room().hint.isBlank()){
             out.put("routeHint",run.room().hint);
             out.put("nextAction",out.get("nextAction")+" 路线："+run.room().hint);
@@ -275,6 +316,7 @@ final class SiteDungeonManager implements Listener {
         Site site = sites.get(id);
         BuildingAreas building = protectionAreas.get(id);
         if (!ready || site == null || building == null || blockedCheckpoints.contains(id) || campRescueLatch(at.getBlock())) return false;
+        if (atStation(site,at)) return false;
         if (!canUseSite(id, player)) return false;
         // Piece zero is the broad combat/search buffer. Authored structure pieces define the
         // shell, including shared seams. A site without pieces opens just its combat rooms.
@@ -405,7 +447,8 @@ final class SiteDungeonManager implements Listener {
     private boolean playing(Player p){return p!=null&&p.isOnline()&&!p.isDead()&&p.getGameMode()==GameMode.SURVIVAL;}
     private String entryProblem(Player p,Run r,Location at){
         if(!playing(p)||roomVisitor(p)||plugin.isDowned(p))return "not_survival_or_observer";
-        if(!r.site.contains(at))return "walk_to_site";
+        if(!r.site.contains(at)||atStation(r.site,at))return "walk_to_site";
+        if(!r.attendance.containsKey(p.getUniqueId())&&belowEncounter(r.site,at))return "walk_to_station";
         Run other=own(p);DungeonManager trial=plugin.dungeon();
         if((other!=null&&other!=r)||(trial!=null&&trial.isParticipant(p))||plugin.pvpParticipant(p))return "already_in_activity_or_not_survival";
         if(!r.fault.isEmpty()||r.phase.equals("returning"))return "challenge_not_accepting";
@@ -422,7 +465,8 @@ final class SiteDungeonManager implements Listener {
         if(r.party.contains(p.getUniqueId()))return true;
         String problem=entryProblem(p,r,p.getLocation());
         if(!problem.isEmpty()){
-            if(!roomVisitor(p)&&r.site.contains(p.getLocation())&&!problem.equals("left_this_visit")){
+            if(!roomVisitor(p)&&r.site.contains(p.getLocation())&&!atStation(r.site,p.getLocation())
+                    &&!Set.of("left_this_visit","walk_to_station").contains(problem)){
                 long now=System.currentTimeMillis();if(now-lockHints.getOrDefault(p.getUniqueId(),0L)>=10_000){
                     lockHints.put(p.getUniqueId(),now);
                     if(problem.equals("equipment_required"))p.sendMessage("§e[战备不足] 尚未自动参战："+String.join("、",DungeonLoadout.missing(p))+"。"+DungeonLoadoutRules.REQUIREMENTS+"；补齐后在遗迹内自动加入。"+DungeonLoadoutRules.SUPPLIES);
@@ -439,7 +483,7 @@ final class SiteDungeonManager implements Listener {
     private void reconcile(Run r){
         Set<UUID> before=new LinkedHashSet<>(r.party),declinedBefore=new LinkedHashSet<>(r.declined);
         r.declined.removeIf(id->{Player p=ResidentCli.find(id);return p==null||!r.site.contains(p.getLocation());});
-        r.party.removeIf(id->{Player p=ResidentCli.find(id);return p==null||!r.site.contains(p.getLocation());});
+        r.party.removeIf(id->{Player p=ResidentCli.find(id);return p==null||!r.site.contains(p.getLocation())||atStation(r.site,p.getLocation());});
         if(!before.equals(r.party)||!declinedBefore.equals(r.declined)){
             try{persist();}catch(RuntimeException failure){r.party.clear();r.party.addAll(before);r.declined.clear();r.declined.addAll(declinedBefore);throw failure;}
         }
@@ -699,9 +743,17 @@ final class SiteDungeonManager implements Listener {
                 }
                 var approach=defs.getConfigurationSection(s.id).getConfigurationSection("approach");
                 if(approach!=null){
-                    require(Set.of("entry","hint").containsAll(approach.getKeys(false)),"unknown_approach_field");Room first=s.rooms.getFirst();
-                    var entrance=DungeonEntrance.parse(approach.get("entry"),approach.getString("hint"),world.getMinHeight(),world.getMaxHeight(),first.x,first.y,first.z);
+                    require(Set.of("entry","hint","station").containsAll(approach.getKeys(false)),"unknown_approach_field");Room first=s.rooms.getFirst();
+                    var terminal=approach.getConfigurationSection("station");
+                    require(terminal!=null||!approach.contains("station"),"invalid_station");
+                    var entrance=DungeonEntrance.parse(approach.get("entry"),approach.getString("hint"),
+                            terminal==null?null:terminal.getValues(false),world.getMinHeight(),world.getMaxHeight(),first.x,first.y,first.z);
                     require(entrance.protectedBy(declaredBounds),"approach_entry_unprotected");
+                    if(entrance.station()!=null){
+                        require(!s.entry.isEmpty()&&first.contains(point(world,s.entry))
+                                &&!entrance.station().covers(s.entry),"station_missing_separate_upper_landing");
+                        require(entrance.station().protectedBy(declaredBounds),"station_unprotected");
+                    }
                     Location at=new Location(world,entrance.entry().get(0),entrance.entry().get(1),entrance.entry().get(2));
                     for(Site other:next.values())if(other!=s)require(!other.contains(at),"approach_inside_other_site");
                     entrances.put(s.id,entrance);
@@ -742,7 +794,7 @@ final class SiteDungeonManager implements Listener {
     }
     private void execute(Player p,String[] args,int page){
         String action=args.length>1?args[1].toLowerCase(Locale.ROOT):"list",id=args.length>2?args[2]:"";
-        if(verboseOutput.get()&&!jsonOutput.get()&&Set.of("list","info","status").contains(action))p.sendMessage("[提示] dungeon为真实遗迹；arena为练习塔。逐室清怪后回首室结算，奖励进入个人箱。");
+        if(verboseOutput.get()&&!jsonOutput.get()&&Set.of("list","info","status").contains(action))p.sendMessage("[提示] dungeon为真实遗迹；arena为练习塔。逐室清怪后就地登记奖励，可领取到个人箱。");
         try{
             require(ready,"configuration_unavailable");
             switch(action){
@@ -751,12 +803,14 @@ final class SiteDungeonManager implements Listener {
                 case "info"->info(p,site(id));
                 case "travel"->travel(p,site(id));
                 case "start"->start(p,site(id),Mode.parse(args.length>3?args[3]:"normal"));
+                case "enter"->stationPassage(p,site(id),false);
+                case "exit"->stationPassage(p,site(id),true);
                 case "join"->join(p,site(id));
                 case "status"->status(p,id);
                 case "resume"->{Run r=own(p);require(r!=null&&!r.fault.isEmpty(),"not_fault_paused");resume(r);runResult(p,"resume",r.site.id,r.id);p.sendMessage("§a原地下城场次已恢复，已清进度保留；5分钟内返回目标房间。查询：/mycli dungeon status "+r.site.id);}
                 case "leave"->leave(p);
                 case "claim"->claim(p,id);
-                default->throw new IllegalArgumentException("use_list_info_travel_start_join_status_resume_leave_claim_menu");
+                default->throw new IllegalArgumentException("use_list_info_travel_enter_exit_start_join_status_resume_leave_claim_menu");
             }
         }catch(IllegalArgumentException e){result(p,action,id,e.getMessage());}
     }
@@ -783,6 +837,10 @@ final class SiteDungeonManager implements Listener {
         detail.put("roomHints",s.rooms.stream().map(Room::hint).toList());
         var arrival=DungeonArrival.describe(s.world,entry(s),expedition==null?null:expedition.approachX(),expedition==null?null:expedition.approachZ());
         if(approaches.containsKey(s.id)){arrival.put("entranceScope","navigation_only");arrival.put("buildingProtected",true);arrival.put("startRequiresFirstRoom",true);}
+        if(station(s)!=null){
+            arrival.put("station",stationGuide(s));
+            arrival.put("instruction",routeHint(s));
+        }
         detail.put("arrival",arrival);
         var relic=DungeonRelics.at(s.id);
         if(relic!=null){
@@ -828,11 +886,18 @@ final class SiteDungeonManager implements Listener {
             }
             if(landing==null){result(p,"travel",s.id,"entry_blocked");return;}
             if(plugin.travelMagic().teleport(p,landing,"dungeon:"+s.id,"遗迹入口传送术",TravelMagic.DISTANT_MANA)){
+                if(station(s)!=null){
+                    Location actual=p.getLocation();
+                    result(p,"travel",s.id,"success",Map.of("position",List.of(actual.getBlockX(),actual.getBlockY(),actual.getBlockZ()),"station",stationGuide(s)));
+                    p.sendMessage("§6"+routeHint(s));
+                    highlight(p,point(w,station(s).button()).add(0,.5,0));
+                    return;
+                }
                 result(p,"travel",s.id,"success");
-                highlightEntrance(p,s);
                 if (s.id.equals(BlackBannerCamp.SITE) && surveyedCamp() != null) {
                     p.sendMessage("§6已到黑旗林营外哨。用「使用」打开入口路牌，选择开始清剿，守卫在集结倒计时后出现。");
                 } else {
+                    highlightEntrance(p,s);
                     var relic=DungeonRelics.at(s.id);
                     p.sendMessage(relic==null ? "§6已到"+label(s)+"入口，站到首室后选择难度。"
                             : "§6已到"+s.name+"。找发光路牌和石钮，按使用键打开挑战菜单。");
@@ -840,6 +905,61 @@ final class SiteDungeonManager implements Listener {
             }
             else result(p,"travel",s.id,"travel_denied");
         })));
+    }
+
+    private void stationPassage(Player p,Site s,boolean exit){
+        String action=exit?"exit":"enter";
+        var station=station(s);require(station!=null,"station_unavailable");
+        require(playing(p)&&!plugin.isDowned(p)&&!p.isInsideVehicle()&&own(p)==null
+                &&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
+        var origin=p.getLocation().clone();var w=origin.getWorld();
+        require(w.getName().equals(s.world),"walk_to_station");
+        var button=point(w,station.button());
+        require(exit?atFirstRoom(s,origin):atStation(s,origin)&&origin.distanceSquared(button)<=36
+                &&button.getBlock().getType()==Material.STONE_BUTTON,"walk_to_station");
+        var target=exit?entry(s):s.entry;
+        int cx=target.get(0)>>4,cz=target.get(2)>>4;
+        require(w.isChunkGenerated(cx,cz),"entry_not_generated");
+        boolean json=jsonOutput.get(),verbose=verboseOutput.get();
+        ExistingChunkAccess.load(plugin,w,cx,cz).whenComplete((chunk,error)->Bukkit.getScheduler().runTask(plugin,()->format(json,verbose,()->{
+            if(!p.isOnline())return;
+            if(error!=null||chunk==null){result(p,action,s.id,"entry_unavailable");return;}
+            if(!playing(p)||plugin.isDowned(p)||p.isInsideVehicle()||own(p)!=null||plugin.dungeonParticipant(p)
+                    ||plugin.pvpParticipant(p)||p.getWorld()!=w||p.getLocation().distanceSquared(origin)>2){
+                result(p,action,s.id,"player_state_changed");return;
+            }
+            Location landing=null;var center=point(w,target);
+            for(int radius=0;radius<=2&&landing==null;radius++){
+                for(int dx=-radius;dx<=radius&&landing==null;dx++)for(int dz=-radius;dz<=radius;dz++){
+                    if(Math.max(Math.abs(dx),Math.abs(dz))!=radius)continue;
+                    var at=center.clone().add(dx,0,dz);
+                    if(!w.isChunkLoaded(at.getBlockX()>>4,at.getBlockZ()>>4)
+                            ||!(exit?atStation(s,at):atFirstRoom(s,at))||!AgentFriendPlugin.safeLanding(at.getBlock())
+                            ||!w.getNearbyEntities(at,.6,1,.6,e->e instanceof LivingEntity).isEmpty())continue;
+                    landing=at;break;
+                }
+            }
+            if(landing==null){result(p,action,s.id,"entry_blocked");return;}
+            if(!p.teleport(landing,PlayerTeleportEvent.TeleportCause.PLUGIN)){
+                result(p,action,s.id,"travel_denied");return;
+            }
+            Location arrived=p.getLocation();
+            if(arrived.getWorld()!=w||arrived.distanceSquared(landing)>1){
+                boolean returned=p.teleport(origin,PlayerTeleportEvent.TeleportCause.PLUGIN);
+                result(p,action,s.id,"station_landing_unconfirmed",Map.of("returnedToOrigin",returned));
+                return;
+            }
+            result(p,action,s.id,"success",Map.of("position",List.of(arrived.getBlockX(),arrived.getBlockY(),arrived.getBlockZ()),"station",stationGuide(s)));
+            if(!exit){
+                highlightEntrance(p,s);
+                if(!json)open(p,s.id);
+            }
+        })));
+    }
+
+    private void highlight(Player player,Location mark){
+        if(player.getWorld()==mark.getWorld()&&player.getLocation().distanceSquared(mark)<400)
+            player.spawnParticle(Particle.HAPPY_VILLAGER,mark,12,.25,.4,.25,.002);
     }
 
     private void highlightEntrance(Player player,Site site){
@@ -857,7 +977,7 @@ final class SiteDungeonManager implements Listener {
         conquestAdmission(p,s);
         require(own(p)==null,"already_in_site_dungeon");
         require(playing(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
-        require(s.contains(p.getLocation())&&s.rooms.getFirst().contains(p.getLocation()),"walk_to_first_room");
+        require(atFirstRoom(s,p.getLocation()),"walk_to_first_room");
         require(!runs.containsKey(s.id),"site_busy");require(receipt(p.getUniqueId(),s.id)==null,"claim_previous_reward_first");
         require(!plugin.dungeonEdits().failed("site-" + s.id), "site_reset_fault");
         require(!plugin.dungeonEdits().dirty("site-" + s.id), "site_reset_pending");
@@ -1436,6 +1556,28 @@ final class SiteDungeonManager implements Listener {
         return true;
     }
 
+    @EventHandler(priority=EventPriority.HIGH,ignoreCancelled=true)
+    public void approachButton(PlayerInteractEvent event){
+        Block block=event.getClickedBlock();
+        if(event.getHand()!=EquipmentSlot.HAND||event.getAction()!=Action.RIGHT_CLICK_BLOCK
+                ||block==null||block.getType()!=Material.STONE_BUTTON)return;
+        var player=event.getPlayer();
+        for(Site s:sites.values()){
+            var station=station(s);
+            if(station==null||!s.world.equals(block.getWorld().getName()))continue;
+            if(station.button().equals(List.of(block.getX(),block.getY(),block.getZ()))){
+                event.setCancelled(true);
+                command(player,new String[]{"dungeon","enter",s.id});
+                return;
+            }
+            var relic=DungeonRelics.at(s.id);
+            if(relic!=null&&relic.x()==block.getX()&&relic.y()==block.getY()&&relic.z()==block.getZ()
+                    &&playing(player)&&atFirstRoom(s,player.getLocation())){
+                event.setCancelled(true);open(player,s.id);return;
+            }
+        }
+    }
+
     private boolean campGuardCleared(Player player, int room) {
         UUID id = player.getUniqueId();
         Run current = runs.get(BlackBannerCamp.SITE);
@@ -1456,7 +1598,7 @@ final class SiteDungeonManager implements Listener {
                 if(receipt(p.getUniqueId(),s.id)!=null)inv.setItem(slot,icon(s.icon,"§e"+s.name+" · 有奖励待领取",routeHint(s),"点击打开，再点奖励箱领取上次奖励","领取后才可开始或加入这处的新挑战"));
                 else if(relic!=null)inv.setItem(slot,icon(s.icon,"§6"+s.name,
                         "秘宝："+relic.name()+(relicClaimed(p.getUniqueId(),s.id)?"（已收录）":"（待发现）"),
-                        "点击查看装备效果、传送和难度"));
+                        "点击查看秘宝、入口路线和难度"));
                 slot++;
             }
             var collection=relicCollection(p.getUniqueId());
@@ -1483,9 +1625,18 @@ final class SiteDungeonManager implements Listener {
                         "入口："+relic.x()+", "+relic.y()+", "+relic.z(),relic.tactic()));
             }
             Site selected=site(id);
+            var station=station(selected);
             var rooms=selected.rooms.stream().map(room->room.name+" · "+room.x+", "+room.y+", "+room.z).toList();
             inv.setItem(29,icon(Material.MAP,"§e行进路线",rooms.toArray(String[]::new)));
             inv.setItem(32,icon(Material.ENDER_CHEST,"§b打开个人箱","领取后的装备会在个人箱中装入"));
+            if(station!=null){
+                inv.setItem(10,icon(Material.ENDER_PEARL,"§b前往"+station.name(),"8魔力；落地沿铺装和地灯走到入口牌"));
+                inv.setItem(28,icon(Material.COMPASS,"§6入口 · "+station.name(),
+                        "落脚点 "+entry(selected),"入口牌 "+station.board(),"地面石钮 "+station.button(),
+                        "到石钮按使用键进入首室，再选难度"));
+                if(atStation(selected,p.getLocation()))inv.setItem(11,icon(Material.STONE_BUTTON,"§a使用入口","走到入口牌旁后点击，免费到首室"));
+                if(atFirstRoom(selected,p.getLocation()))inv.setItem(23,icon(Material.OAK_DOOR,"§b返回"+station.name(),"空闲时免费返回地面入口"));
+            }
         }
         if (!id.isEmpty() && id.equals(BlackBannerCamp.SITE) && surveyedCamp() != null) {
             inv.setItem(24, icon(Material.DARK_OAK_FENCE, "§e救援牢笼",
@@ -1532,7 +1683,15 @@ final class SiteDungeonManager implements Listener {
             if(menu.site.isEmpty()){List<Site> list=new ArrayList<>(sites.values());if(slot>=10&&slot<10+list.size())open(p,list.get(slot-10).id);return;}
             if(slot==32){p.closeInventory();plugin.dungeon().openStash(p);return;}
             if(slot==33&&menu.site.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled()){learnCircle(p);return;}
-            String action=switch(slot){case 10->"travel";case 12,13,14->"start";case 16->"join";case 22->"leave";case 30->"claim";case 31->"info";default->"";};
+            Site selected=sites.get(menu.site);
+            if(selected==null)return;
+            String action=switch(slot){
+                case 10->"travel";
+                case 11->atStation(selected,p.getLocation())?"enter":"";
+                case 12,13,14->"start";case 16->"join";case 22->"leave";
+                case 23->station(selected)!=null&&atFirstRoom(selected,p.getLocation())?"exit":"";
+                case 30->"claim";case 31->"info";default->"";
+            };
             if(slot==49){open(p,"");return;}if(action.isEmpty())return;
             if((action.equals("start")||action.equals("join"))&&(menu.pendingReward||receipt(p.getUniqueId(),menu.site)!=null)){
                 // Inspecting the blocker never implicitly claims or starts a challenge.
