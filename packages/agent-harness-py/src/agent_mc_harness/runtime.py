@@ -25,6 +25,7 @@ from .memory.base import Fact, MemoryEpisode, episode_from_event, episode_from_r
 from .memory.router import MemoryRouter
 from .models import ACTION_VERBS, ActionReceipt, BodyAction, BodyEvent, BodyIdentity, BodySnapshot, Capabilities, utcnow
 from .journal import ActionJournal
+from .resident_trace import ResidentDecisionError, correlation_hash, trace_resident_turn
 from .scheduler import BodyLease, BrainMetrics, WorkerPool
 
 IntentState = Literal["queued", "active", "paused", "completed", "failed", "cancelled"]
@@ -65,10 +66,31 @@ class Intent(BaseModel):
     source_events: list[str] = Field(default_factory=list, max_length=32)  # host-observed inbox IDs, never model-generated
     desktop_request_id: str | None = None  # From the role-scoped worker's check endpoint.
     resident_turn_hash: str | None = Field(default=None, exclude=True)  # Assigned by the host, never by the model.
+    planning_status: Literal["pending", "completed", "deferred", "rejected", "unavailable"] = Field(default="pending", exclude=True)
+    planning_error: dict[str, str] | None = Field(default=None, exclude=True)
+    action_receipts: dict[str, dict[str, Any]] = Field(default_factory=dict, exclude=True)
     remember_wait_purpose: bool = False
     recall_query: str | None = Field(default=None, max_length=500)
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+    @property
+    def completion_kind(self) -> str | None:
+        if self.state == "completed":
+            return "body_actions" if any(row["terminal"] and row["status"] == "completed" for row in self.action_receipts.values()) else "planning"
+        return None
+
+
+def intent_health(intent: Intent, journal: ActionJournal | None, body_id: str) -> dict:
+    actions = []
+    for request_id, action in list(intent.action_receipts.items())[-20:]:
+        if journal is not None and not action["terminal"] and (receipt := journal.receipt(body_id, request_id)):
+            action = {**action, "status": receipt.status, "terminal": receipt.terminal}
+        actions.append(action)
+    return {"id": intent.id, "state": intent.state, "reason": intent.reason,
+            "turnHash": intent.resident_turn_hash, "planningStatus": intent.planning_status,
+            "planningError": intent.planning_error, "completionKind": intent.completion_kind,
+            "actionReceipts": actions, "goalVerified": intent.verified}
 
 
 class HarnessEvent(BaseModel):
@@ -226,7 +248,11 @@ class HarnessRuntime:
         self.emit("intent_state", f"{intent.goal}: {previous} -> {state}" + (f" ({reason})" if reason else ""), severity,
                   {"intentId": intent.id, "from": previous, "state": state, "needsHost": needs_host, "reason": reason})
         if state == "completed":
-            self.emit("task_completed", intent.goal, 2, {"intentId": intent.id})
+            data = {"intentId": intent.id, "completionKind": intent.completion_kind,
+                    "bodyActionReceipts": list(intent.action_receipts.values()), "goalVerified": intent.verified}
+            if intent.resident_turn_hash:
+                data["turnHash"] = intent.resident_turn_hash
+            self.emit("task_completed", intent.goal, 2, data)
         elif state == "failed":
             self.emit("task_failed", f"{intent.goal}: {reason}", 2, {"intentId": intent.id})
 
@@ -412,11 +438,16 @@ class HarnessRuntime:
         assert self.body is not None
         self._active = intent
         try:
+            intent.planning_status = "pending"
+            intent.planning_error = None
             self._transition(intent, "active")
             context = await self._context(intent)
             if self.fastslow is not None or not intent.steps:
                 context.snapshot = await self._snapshot()
             decision, steps = await self.decide(intent, context)
+            intent.planning_status = "completed" if steps is not None else "deferred"
+            if intent.resident_turn_hash and steps is not None:
+                trace_resident_turn(intent.resident_turn_hash, "plan_completed", plannedActionCount=len(steps))
             intent.decision = decision
             self.metrics.decision(decision.tier, decision.requested_tier, decision.effective_tier)
             if decision.defer and intent.defers >= self.max_defers:
@@ -443,9 +474,17 @@ class HarnessRuntime:
             else:
                 self.metrics.goals[intent.state] += 1
         except Exception as error:
+            if intent.planning_status == "pending":
+                intent.planning_status = "rejected" if isinstance(error, ValueError) else "unavailable"
+                if not isinstance(error, ResidentDecisionError) and isinstance(error, ValueError) and intent.resident_turn_hash:
+                    error = ResidentDecisionError(intent.resident_turn_hash, "validate_host_plan", "plan", error)
+                if isinstance(error, ResidentDecisionError):
+                    intent.resident_turn_hash = error.turn_hash
+                    intent.planning_error = {"step": error.step, "code": error.code}
             identity = self.body.identity()
             uncertain = bool(self.journal and identity and self.journal.unresolved(identity.body_id))
-            self._transition(intent, "paused" if uncertain else "failed", "execution_or_planning_unavailable:" + type(error).__name__, needs_host=uncertain)
+            error_kind = "ValueError" if isinstance(error, ResidentDecisionError) else type(error).__name__
+            self._transition(intent, "paused" if uncertain else "failed", "execution_or_planning_unavailable:" + error_kind, needs_host=uncertain)
         finally:
             self._active = None
             self._settle_strategies(intent)
@@ -462,6 +501,9 @@ class HarnessRuntime:
         while intent.step_index < len(intent.steps) and intent.state == "active":
             step = intent.steps[intent.step_index]
             if (reason := step_support(step, caps)) is not None:
+                if intent.resident_turn_hash:
+                    trace_resident_turn(intent.resident_turn_hash, "action_blocked", step="authorize_action",
+                                        errorCode="action_not_in_current_body_catalogue")
                 self._transition(intent, "paused", reason, needs_host=True)
                 return
             jit = self._jitrl()
@@ -501,16 +543,27 @@ class HarnessRuntime:
         action = step.action(rid)
         if self.journal is not None:
             if not body_key or self.journal.unresolved(body_key):
+                if intent.resident_turn_hash:
+                    trace_resident_turn(intent.resident_turn_hash, "action_blocked", step="reconcile_original_request",
+                                        errorCode="unresolved_original_request_requires_reconciliation")
                 return ActionReceipt(request_id=rid, verb=action.verb, status="unknown", terminal=False,
                                      text="unresolved_original_request_requires_reconciliation")
             # This commit must succeed before any body write is dispatched.
             self.journal.begin(body_key, action, intent.source_events, note=step.note if intent.remember_wait_purpose else None,
-                               resident_turn_hash=intent.resident_turn_hash if action.verb == "chat" else None)
+                               resident_turn_hash=intent.resident_turn_hash)
+        summary = {"requestHash": correlation_hash(rid), "verb": action.name or action.verb, "status": "dispatched", "terminal": False}
+        intent.action_receipts[rid] = summary
+        if intent.resident_turn_hash:
+            trace_resident_turn(intent.resident_turn_hash, "action_dispatched", **summary)
         future: asyncio.Future[BodyEvent] = asyncio.get_running_loop().create_future()
         self._results[rid] = future
         def record(receipt: ActionReceipt) -> ActionReceipt:
             if self.journal is not None:
                 self.journal.settle(body_key, receipt)
+            elif intent.resident_turn_hash:
+                trace_resident_turn(intent.resident_turn_hash, "action_terminal" if receipt.terminal else "action_result",
+                                    requestHash=summary["requestHash"], status=receipt.status, terminal=receipt.terminal)
+            summary.update(status=receipt.status, terminal=receipt.terminal)
             if identity is not None and receipt.request_id == rid:
                 self.remember_receipt(receipt, identity)
             return receipt

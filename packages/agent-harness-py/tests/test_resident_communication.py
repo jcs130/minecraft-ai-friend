@@ -7,11 +7,11 @@ import httpx
 import pytest
 
 from agent_mc_harness.journal import ActionJournal
-from agent_mc_harness.models import ActionReceipt, BodyEvent
+from agent_mc_harness.models import ActionReceipt, BodyAction, BodyEvent
 from agent_mc_harness.npc import DIALOGUE_GOAL, IDLE_GOAL, NpcHost, NpcPlanner
 from agent_mc_harness.resident_protocol import prepare_scene, social_communication, speech_receipt, translate_answer
 from agent_mc_harness.resident_turns import ResidentTurnsClient
-from agent_mc_harness.runtime import Intent, PlanContext
+from agent_mc_harness.runtime import Intent, PlanContext, intent_health
 from simbody import SimBody
 from test_server_npc import role
 
@@ -175,3 +175,104 @@ def test_quiet_desktop_maid_can_greet_observed_nearby_players(audience_distance,
             await host.close()
             await client.close()
     asyncio.run(run())
+
+
+@pytest.mark.parametrize(("answer", "rejection", "execute"), [
+    ({"steps": []}, None, False),
+    ({"steps": [{"tool": "body:move", "args": {"x": 5, "y": 64, "z": 0}}]}, None, True),
+    ({"communication": {"mode": "text", "text": "private test marker"}}, ("translate_answer", "communication_not_available_for_this_turn"), False),
+    ({"steps": [{"tool": "body:move", "args": {"ownerId": "private test marker"}}]}, ("validate_actions", "model_cannot_change_body_or_request_identity"), False),
+    ({"steps": [{"tool": "body:move", "note": ["private test marker"]}]}, ("validate_actions", "schema_validation_error"), False),
+])
+def test_resident_turn_trace_distinguishes_planning_from_action_receipts(answer, rejection, execute, tmp_path, capsys):
+    async def run():
+        actor = role()
+        body_id = str(actor.body_id)
+        body = SimBody(body_id=body_id)
+        body.effects["move"] = {"x": 5}
+        await body.spawn()
+        turn_id = str(uuid4())
+        turn_hash = hashlib.sha256(turn_id.encode()).hexdigest()[:12]
+        token = tmp_path / "token"
+        token.write_text("private-token")
+        def handle(req):
+            return httpx.Response(200, json={"state": "answered", "id": turn_id, "answer": answer})
+        client = ResidentTurnsClient(actor, {"endpoint": "https://example.test/api/v1/resident-turns/kirito", "tokenFile": token},
+                                     http=httpx.AsyncClient(transport=httpx.MockTransport(handle)))
+        journal_path = tmp_path / "journal.sqlite"
+        journal = ActionJournal(journal_path)
+        host = NpcHost(actor, body, NpcPlanner(actor, None, resident_turns=client), None, journal)
+        try:
+            intent = host.runtime.submit_intent(IDLE_GOAL, agent=actor.id)
+            await host.runtime.run_intent(intent)
+            status = intent_health(intent, journal, body_id)
+            output = capsys.readouterr().out
+            rows = [json.loads(line.removeprefix("resident_turn ")) for line in output.splitlines()
+                    if line.startswith("resident_turn ")]
+            assert rows[0]["stage"] == "decision_received"
+            assert status["turnHash"] == turn_hash == host.planner.last_route["turnHash"]
+            assert all(row["turnHash"] == turn_hash for row in rows)
+            assert all(private not in output for private in (turn_id, "private test marker", "private-token"))
+            completions = [e for e in host.runtime.events if e.kind == "task_completed"]
+            if rejection:
+                step, code = rejection
+                assert status["planningStatus"] == "rejected"
+                assert status["planningError"] == {"step": step, "code": code}
+                assert status["completionKind"] is None and status["actionReceipts"] == [] and not completions
+                rejected = rows[1]
+                assert rejected["stage"] == "decision_rejected" and rejected["step"] == step and rejected["errorCode"] == code
+                assert not body.acts and len(rows) == 2
+            else:
+                assert status["planningStatus"] == "completed"
+                assert status["completionKind"] == ("body_actions" if execute else "planning")
+                assert rows[1]["stage"] == "plan_completed" and rows[1]["plannedActionCount"] == int(execute)
+                [event] = completions
+                assert event.data["completionKind"] == status["completionKind"]
+                assert event.data["bodyActionReceipts"] == status["actionReceipts"]
+                assert event.data["turnHash"] == turn_hash and event.data["goalVerified"] is None
+            if execute:
+                [action] = body.acts
+                [receipt] = status["actionReceipts"]
+                request_hash = hashlib.sha256(action.request_id.encode()).hexdigest()[:12]
+                assert receipt == {"requestHash": request_hash, "verb": "move", "status": "completed", "terminal": True}
+                assert [row["stage"] for row in rows[2:]] == ["action_dispatched", "action_terminal"]
+                assert all(row["requestHash"] == request_hash for row in rows[2:])
+                assert action.request_id not in output
+                assert (await body.snapshot()).position["x"] == 5
+                reopened = ActionJournal(journal_path)
+                try:
+                    assert reopened.resident_turn_hash(action.request_id) == turn_hash
+                    assert reopened.receipt(body_id, action.request_id).status == "completed"
+                finally:
+                    reopened.close()
+        finally:
+            await host.close()
+            await client.close()
+    asyncio.run(run())
+
+
+def test_reconciliation_preserves_the_original_turn_and_request_hashes(tmp_path, capsys):
+    path = tmp_path / "actions.sqlite"
+    request_id = "original-move"
+    turn_hash = "012345abcdef"
+    receipt = ActionReceipt(request_id=request_id, verb="move", status="unknown", terminal=False)
+    journal = ActionJournal(path)
+    journal.begin("body", BodyAction(verb="move", request_id=request_id), resident_turn_hash=turn_hash)
+    journal.settle("body", receipt)
+    journal.close()
+
+    journal = ActionJournal(path)
+    try:
+        [pending] = journal.unresolved("body")
+        assert pending.request_id == request_id
+        result = receipt.model_copy(update={"status": "completed", "terminal": True})
+        journal.settle("body", result)
+        journal.settle("body", result)
+        assert not journal.unresolved("body")
+    finally:
+        journal.close()
+
+    rows = [json.loads(line.removeprefix("resident_turn ")) for line in capsys.readouterr().out.splitlines()]
+    assert [(row["stage"], row["status"]) for row in rows] == [("action_result", "unknown"), ("action_terminal", "completed")]
+    assert {row["turnHash"] for row in rows} == {turn_hash}
+    assert {row["requestHash"] for row in rows} == {hashlib.sha256(request_id.encode()).hexdigest()[:12]}

@@ -222,6 +222,8 @@ async def run_test(root, neko):
         async with asyncio.timeout(12):
             while len(registry) < 5:
                 await asyncio.sleep(.05)
+        speech_schema = registry["qd_resident_communicate"]["parameters"]
+        assert "mode" not in speech_schema["required"] and "scope" in speech_schema["required"]
         panel = (await host.get_ui_context("resident_connection"))["state"]
         assert (panel["connected"], panel["role"], panel["resident"]) == (True, "桐人桌面", "桐人")
         assert code not in str(panel) and secret not in str(panel)
@@ -243,7 +245,7 @@ async def run_test(root, neko):
                 result = await callback(client, "communicate", **args)
                 assert not result["accepted"] and result["detail"] == detail
             assert not replies
-            assert (await callback(client, "communicate", id="qa-voice", text="听见了。", **route))["accepted"]
+            assert (await callback(client, "communicate", id="qa-voice", text="听见了。", scope="private", sourceEventId=msg["id"]))["accepted"]
             assert replies == [{"id": "qa-voice", "answer": {"communication": {
                 "mode": "speech", "text": "听见了。", "sourceEventId": "voice-42"}}}]
             def plan_turn(id, outputs, tools=None):
@@ -269,6 +271,8 @@ async def run_test(root, neko):
 
             turn = plan_turn("qa-text-allowed", [native, {"mode": "text", "scope": "nearby"}])
             await packet_for("qa-text-allowed")
+            ambiguous = await callback(client, "communicate", id="qa-text-allowed", text=args["text"], scope="nearby")
+            assert ambiguous["detail"] == "mode_required" and set(ambiguous["offeredModes"]) == {"native", "text"}
             assert (await callback(client, "communicate", **{**args, "id": "qa-text-allowed"}))["accepted"]
             assert replies[-1] == {"id": "qa-text-allowed", "answer": {"communication": {"mode": "text", "text": args["text"]}}}
 
