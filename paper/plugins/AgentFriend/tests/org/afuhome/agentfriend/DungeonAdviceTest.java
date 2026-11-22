@@ -27,7 +27,7 @@ public final class DungeonAdviceTest {
         state("ready","atFirstRoom",true,"nearApproach",true);
         state("approach","loadoutReady",false,"nearApproach",true,"missingLoadout","靴子");
         check(advice("loadoutReady",false,"atFirstRoom",true,"missingLoadout","靴子").get("nextAction").toString().contains("确认缺装风险"),"equipment warning offers a way to enter");
-        String token="dd280934-3c16-49eb-b2e1-50eb446011ce";
+        String token=java.util.UUID.randomUUID().toString();
         var confirmed=DungeonAdvice.parse(new String[]{"dungeon","enter","void_citadel","--confirm",token,"--json"});
         check(confirmed.confirmation().equals(token)&&confirmed.args().length==3&&confirmed.json(),"confirmation leaves the dungeon action and parsing intact");
         check(advice("atFirstRoom",true).get("nextCommand").equals("/mycli dungeon start undead_crypt normal"),"idle false never interpreted as closed");
