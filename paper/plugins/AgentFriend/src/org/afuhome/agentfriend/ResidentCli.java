@@ -29,7 +29,7 @@ public final class ResidentCli {
             case "archive" -> ARCHIVE.contains(a[1]); case "photo" -> PHOTO.contains(a[1]);
             case "inventory" -> InventoryBatch.supports(a);
             case "tasks" -> Set.of("list","info","status").contains(a[1]);
-            case "dungeon" -> Set.of("list","info","status","travel","start","join","resume","leave","claim").contains(a[1]);
+            case "dungeon" -> Set.of("list","info","status","travel","enter","exit","start","join","resume","leave","claim").contains(a[1]);
             case "land" -> a.length==2&&a[1].equals("here")
                 ||a[1].equals("list")&&(a.length==2||a.length==3&&a[2].matches("[1-9][0-9]{0,3}"))
                 ||a.length==3&&Set.of("info","members").contains(a[1])
