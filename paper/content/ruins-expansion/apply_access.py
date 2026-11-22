@@ -161,25 +161,43 @@ def replacement_chunk(reader, id, rows, signs):
 
 
 def rebuild_region(original, replacements):
-    if len(original)<8192 or len(original)%4096:
+    if len(original) < 8192:
         raise ValueError("invalid source region")
-    header=bytearray(original[:8192])
-    parts=[]
-    new_offset=2
+    header = bytearray(original[:8192])
+    sector_limit = (len(original)+4095)//4096
+    occupied = set()
+    parts = []
+    new_offset = 2
     for slot in range(1024):
-        loc,=struct.unpack_from(">I",original,slot*4)
+        loc, = struct.unpack_from(">I", original, slot*4)
         if not loc:
-            if slot in replacements:raise ValueError("missing original region slot")
+            if slot in replacements:
+                raise ValueError("missing original region slot")
             continue
-        old_start,old_count=loc>>8,loc&255
-        if old_start<2 or old_count<1 or (old_start+old_count)*4096>len(original):
+        old_start, old_count = loc>>8, loc&255
+        old_end = old_start+old_count
+        if old_start < 2 or old_count < 1 or old_end > sector_limit:
             raise ValueError("invalid source region pointer")
-        record=replacements.get(slot,original[old_start*4096:(old_start+old_count)*4096])
-        length=(len(record)+4095)//4096
-        if length>255: raise ValueError("external chunk storage needed")
-        struct.pack_into(">I",header,slot*4,(new_offset<<8)|length)
+        span = range(old_start, old_end)
+        if occupied.intersection(span):
+            raise ValueError("overlapping source region pointers")
+        occupied.update(span)
+        start = old_start*4096
+        end = min(old_end*4096, len(original))
+        # Moonrise can end immediately after the final record's payload.
+        # Check the stored length before restoring sector padding on output.
+        if end-start < 5:
+            raise ValueError("truncated region record")
+        size, = struct.unpack_from(">I", original, start)
+        if size < 1 or start+4+size > end:
+            raise ValueError("truncated region record")
+        record = replacements.get(slot, original[start:end])
+        length = (len(record)+4095)//4096
+        if length > 255:
+            raise ValueError("external chunk storage needed")
+        struct.pack_into(">I", header, slot*4, (new_offset<<8)|length)
         parts.append(record+b"\0"*(length*4096-len(record)))
-        new_offset+=length
+        new_offset += length
     return bytes(header)+b"".join(parts)
 
 
