@@ -47,6 +47,8 @@ class ResidentRun:
     restart_after: float = 0
     restart_error: str | None = None
     external_release: bool = False
+    host_closed: bool = False
+    vacancy_retry_at: float | None = None
 
     def close_in_background(self, external=False):
         if self.closing is None:
@@ -54,9 +56,24 @@ class ResidentRun:
             self.closing = asyncio.create_task(self.close(external), name="npc-close-" + self.host.role.id)
 
     async def close(self, external):
-        await self.host.close()
+        if not self.host_closed:
+            await self.host.close()
+            self.host_closed = True
         if external and self.host.role.body_kind == "numen":
-            await self.host.body.port.wait_voluntary_release()
+            try:
+                await self.host.body.port.wait_voluntary_release()
+            except TimeoutError:
+                # A surviving external controller may hold its lease for hours.
+                # Only retry the read of its vacancy, not local shutdown or an action.
+                self.vacancy_retry_at = time.monotonic() + 15
+                raise
+
+    def retry_external_vacancy(self, now: float):
+        if (self.vacancy_retry_at is not None and now >= self.vacancy_retry_at and
+                self.closing is not None and self.closing.done()):
+            self.closing = None
+            self.vacancy_retry_at = None
+            self.close_in_background(external=True)
 
 
 def read(path):
@@ -459,16 +476,22 @@ async def serve(path: Path):
                 status["roles"].append(row)
                 if resident.closing is not None and not resident.closing.done():
                     row["controlMode"] = "closing"
+                elif resident.vacancy_retry_at is not None:
+                    row["controlMode"] = "waiting_for_external_release"
                 elif resident.closing is not None and not resident.released:
                     row["controlMode"] = "close_failed"
                 if resident.released and holding:
                     row.update(controlMode="available_for_external_controller", unknownRequests=0)
                 if not task.done():
                     continue
+                if resident.vacancy_retry_at is not None:
+                    if not pausing:
+                        resident.retry_external_vacancy(time.monotonic())
+                    continue
                 if holding:
                     if row["unknownRequests"] == 0:
                         resident.close_in_background(external=True)
-                elif not pausing and can_reopen(host):
+                elif not pausing and (can_reopen(host) or resident.released and resident.external_release):
                     if resident.released:
                         if time.monotonic() >= resident.restart_after:
                             try:

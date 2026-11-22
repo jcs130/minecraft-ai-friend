@@ -120,6 +120,42 @@ def test_first_start_with_active_handoff_only_observes_lease(tmp_path, monkeypat
     run(check())
 
 
+def test_external_vacancy_timeout_keeps_probing_without_reclosing_the_host(run):
+    async def check():
+        calls = []
+        available = False
+
+        async def close():
+            calls.append("close local driver")
+
+        async def wait_for_release():
+            calls.append("read native vacancy")
+            if not available:
+                raise TimeoutError
+
+        host = SimpleNamespace(role=SimpleNamespace(id="kirito", body_kind="numen"), close=close,
+                               body=SimpleNamespace(port=SimpleNamespace(wait_voluntary_release=wait_for_release)))
+        resident = ResidentRun(host, None)
+        resident.close_in_background(external=True)
+        with pytest.raises(TimeoutError):
+            await resident.closing
+        initial = resident.closing
+        assert not resident.released
+        resident.retry_external_vacancy(resident.vacancy_retry_at - 1)
+        assert resident.closing is initial
+        resident.retry_external_vacancy(resident.vacancy_retry_at)
+        with pytest.raises(TimeoutError):
+            await resident.closing
+        assert not resident.released
+        available = True
+        resident.retry_external_vacancy(resident.vacancy_retry_at)
+        await resident.closing
+        assert resident.closing.exception() is None and resident.vacancy_retry_at is None
+        assert calls == ["close local driver", "read native vacancy", "read native vacancy", "read native vacancy"]
+
+    run(check())
+
+
 def test_incomplete_handoff_never_opens_a_second_controller(tmp_path):
     role = npc_role(body_kind="maid", body_id=uuid4(), owner_id=uuid4(), allowed_tools=["body:observe"])
     marker = tmp_path / "handoff.json"
