@@ -339,6 +339,7 @@ export class MinecraftWorldProxy implements World {
           extension: this.opts.extension ? { ...this.opts.extension,
             tools: this.opts.extension.tools.map(({ readOnlyCall: _readPredicate, learningCall: _learningPredicate, ...tool }) => tool),
           } : undefined,
+          detachedStorageOpeners: this.opts.detachedStorageOpeners,
           cfg: JSON.parse(this.lastConfigJson) as MinecraftWorldOptions['cfg'],
         },
       },

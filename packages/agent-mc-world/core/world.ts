@@ -181,6 +181,7 @@ import { invItemNamed, itemsInReach } from './inventory.ts';
 import { selectionMenuTitle } from './window-semantics.ts';
 import { readOpenWindow, renderWindowReadout, type WindowReadout } from './window-readout.ts';
 import { serverWindows } from './orphan-windows.ts';
+import { DetachedStorageWindow, detachedStorageMatcher, type DetachedStorageOpener } from './detached-storage-window.ts';
 import { readEnchants } from './item-facts.ts';
 import { ItemBreakDecoder, type ItemBreakFact } from './item-break.ts';
 import { WorksBook } from './works.ts';
@@ -2816,6 +2817,8 @@ export interface MinecraftWorldOptions {
   cfg: MinecraftConfigSection;
   /** Explicit server extension module, tool declarations and configuration. */
   extension?: { module: string; tools: ReadonlyArray<Omit<ToolDef, 'handler'>>; config?: Record<string, unknown> };
+  /** Locally declared storage commands whose detached native windows may be recovered after inactivity. */
+  detachedStorageOpeners?: readonly DetachedStorageOpener[];
   timezone?: string;
   botName?: string;
   /**
@@ -3078,6 +3081,7 @@ export class MinecraftWorld implements World {
 
   constructor(opts: MinecraftWorldOptions) {
     this.cfg = opts.cfg;
+    this.detachedStorageOpeners = opts.detachedStorageOpeners ?? [];
 
     this.timezone = opts.timezone ?? SYSTEM_TIMEZONE;
     this.botName = opts.botName ?? 'bot';
@@ -4798,13 +4802,23 @@ export class MinecraftWorld implements World {
 
   /** This hook wraps actual transport dispatch, not task admission. */
   private chatDeliverySequence = 0;
+  private readonly detachedStorageWindow = new DetachedStorageWindow<NonNullable<Bot['currentWindow']>>();
+  private readonly detachedStorageOpeners: readonly DetachedStorageOpener[];
   private dispatchServerChat(text: string, send: () => void, context?: ChatDispatchContext): ChatDeliveryReceipt | undefined {
     const previous = new Map(this.recentSystemMessages);
     const mutates = text.trim().startsWith('/') && !this.serverActionWait.isReadOnlyQuery(text);
     let delivery: ChatDeliveryReceipt | undefined;
     if (mutates) this.recentSystemMessages.clear();
     try { this.serverActionWait.dispatchChat(text, () => {
-      send();
+      if (text.trim().startsWith('/')) {
+        const matches = context?.taskId === undefined ? undefined : detachedStorageMatcher(this.detachedStorageOpeners, text);
+        this.detachedStorageWindow.expect(this.bridge?.bot ?? null,
+          matches ? window => matches(minecraftTextComponent(window.title)) : undefined);
+      }
+      try { send(); } catch (error) {
+        if (text.trim().startsWith('/')) this.detachedStorageWindow.expect(null, undefined);
+        throw error;
+      }
       const message = chatDeliveryMessage(text);
       if (!message) return;
       const audience = message.channel === 'public' ? this.extensionChatAudience(text) : undefined;
@@ -4900,6 +4914,7 @@ export class MinecraftWorld implements World {
   protected extensionServerFeedback(_text: string): void {}
   /** A server pack can opt exact transfer commands into receipt and inventory verification. */
   protected extensionInventoryArrival(_command: string): InventoryArrivalMatcher | undefined { return undefined; }
+  /** Only opt in known detached storage commands and their native window titles. */
   /** Optional routing evidence; the common core does not assume a server's chat radius or prefixes. */
   protected extensionChatAudience(_text: string, _serverRenderedText?: string, _direction: 'incoming'|'outgoing'='outgoing'): import('../src/contracts/chat-delivery.ts').ChatAudienceEvidence | undefined { return undefined; }
   /** Consume a server-rendered chat relay after login; display text does not establish player identity. */
@@ -5167,6 +5182,7 @@ export class MinecraftWorld implements World {
       },
       mc_view_map: async (args) => this.viewMap(args),
       mc_window: async (args) => {
+        if (this.bridge?.bot) this.detachedStorageWindow.touched(this.bridge.bot);
         const readout=this.windowReadout();
         return { text: this.toolLog('mc_window', args, readout.text), data: readout.data as unknown as Record<string, unknown> };
       },
@@ -8264,6 +8280,7 @@ export class MinecraftWorld implements World {
       this.emit('minecraft.event', `[Minecraft] ${renderScreen(screen).split('\n').slice(0, 8).join(' ')}。服务端界面开着时会拒绝指令；用 mc_window 读，再 menu_click 选按钮或 menu_close 关闭。`, true);
     });
     bot.on('windowOpen', () => {
+      this.detachedStorageWindow.opened(bot, bot.currentWindow);
       this.interruptIdle('container');
       if (this.guiKickTimer) clearTimeout(this.guiKickTimer);
       this.guiKickTimer = null;
@@ -8716,6 +8733,19 @@ export class MinecraftWorld implements World {
       }
     }
     this.observeBodyControl();
+    // A chat command can return and drain the queue before the server opens the
+    // window. Only close an attested storage window with no owner or recent use.
+    if (this.detachedStorageWindow.expired(bot, serverWindows(bot)?.lastClickAt() ?? 0, () => {
+      const queue = this.executor?.status();
+      return !this.shuttingDown && this.bridge?.connectionState?.ready === true && bot._client.state === 'play'
+        && queue != null && !queue.running && !queue.waiting.length && !queue.hold && !this.methodOwnsBody()
+        && !this.combat?.active && !this.reflexes?.environmentOwnerKind && !serverScreen(bot);
+    })) {
+      try { this.closeStrayWindow(); }
+      catch (error) {
+        this.diag.write({ lane: 'skill', event: 'stray-window-close-failed', msg: String(error), level: 'warn' });
+      }
+    }
     this.autoEatTick(bot);
     this.nutritionTick(bot);
     this.tryArrivalIdle();

@@ -12,6 +12,7 @@ import type { MinecraftConfigSection } from './config.ts';
 
 /** 构造引擎子进程 World 的一次性参数。 */
 export interface EngineInit {
+  detachedStorageOpeners?: import('./world.ts').MinecraftWorldOptions['detachedStorageOpeners'];
   timezone: string;
   botName: string;
   /** 账本目录 data/;null = 只在内存 */

@@ -188,6 +188,7 @@ async function handleRequest(req: EngineRequest, signal: AbortSignal): Promise<u
       timezone: req.init.timezone,
       botName: req.init.botName,
       extension: req.init.extension,
+      detachedStorageOpeners: req.init.detachedStorageOpeners,
       ...(req.init.dataDir ? { dataDir: req.init.dataDir } : {}),
     });
     if (!mod) throw new Error('Engine factory returned no engine');

@@ -40,6 +40,7 @@ export interface ServerWindowApi {
   /** The window the server believes is open, tracked or not. */
   current(): ServerWindowRecord | null;
   lastCommandAt(): number;
+  lastClickAt(): number;
   /** Close the open server window (mineflayer window first). Returns the id released, or null. */
   close(): number | null;
   /**
@@ -233,6 +234,7 @@ export function installOrphanWindowClose(bot: BotLike, options: OrphanWindowClos
       return open ? { ...open } : null;
     },
     lastCommandAt: () => commandAt,
+    lastClickAt: () => lastClickAt,
     escape: () => {
       const id = open?.id ?? bot.currentWindow?.id ?? lastSeenId;
       if (bot.currentWindow && bot.currentWindow.id !== 0 && typeof bot.closeWindow === 'function') bot.closeWindow(bot.currentWindow);
