@@ -95,7 +95,7 @@ final class DungeonBuildPolicy implements Listener {
         String domain = domain(at);
         if (domain == null) return null;
         if (action.equals("container") && (plugin.lands().contains(at) || plugin.dungeon().stashAnchor(at)
-                || containerAllowed(player, domain, at))) return null;
+                || publicStorage(at.getBlock()) || containerAllowed(player, domain, at))) return null;
         if (scopedCrypt(domain) && !maintenance(player, domain)) {
             boolean place = action.equals("place") && editable(player, domain, at)
                     && allowedCryptPlacement(player, at, at.getBlock().getType(), player.getInventory().getItemInMainHand().getType());
@@ -192,6 +192,9 @@ final class DungeonBuildPolicy implements Listener {
         if (holder instanceof Container container) return List.of(container.getBlock());
         return List.of();
     }
+    private boolean publicStorage(Block block) {
+        return plugin.siteDungeons().publicMusterStorage(block) || plugin.trialSharedSupplies().publicStorage(block);
+    }
     private boolean accessInventory(Player p, Inventory inventory, boolean snapshot) {
         String affected = null;
         List<Block> physical = containers(inventory);
@@ -200,14 +203,14 @@ final class DungeonBuildPolicy implements Listener {
             if (domain != null && !plugin.lands().readyForDungeonEdits(block.getWorld())) return false;
             // Existing private inventories and declared public supplies have their own policies.
             // The tower's personal stash opens a virtual inventory with no physical holder.
-            if (domain == null || plugin.lands().contains(block.getLocation())) continue;
+            if (domain == null || plugin.lands().contains(block.getLocation()) || publicStorage(block)) continue;
             if (affected != null && !affected.equals(domain)) return false;
             affected = domain;
         }
         if (affected == null) return true;
         for (Block block : physical) {
             Location at = block.getLocation();
-            if (plugin.lands().contains(at) || !affected.equals(domain(at)) || !containerAllowed(p, affected, at)
+            if (plugin.lands().contains(at) || publicStorage(block) || !affected.equals(domain(at)) || !containerAllowed(p, affected, at)
                     || snapshot && !plugin.dungeonEdits().capture(affected, block.getState())) return false;
         }
         return true;

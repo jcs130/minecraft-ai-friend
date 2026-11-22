@@ -208,10 +208,12 @@ final class SiteDungeonManager implements Listener {
         var station=station(site);
         if(station==null)return Map.of();
         var first=site.rooms.getFirst();var relic=DungeonRelics.at(site.id);
-        return Map.of("world",entryWorld(site).getName(),"name",station.name(),"landing",entry(site),"board",station.board(),
+        var guide=new LinkedHashMap<String,Object>(Map.of("world",entryWorld(site).getName(),"name",station.name(),"landing",entry(site),"board",station.board(),
                 "button",station.button(),"upperLanding",combatEntry(site),"firstRoom",List.of(first.x,first.y,first.z),
                 "challengeButton",relic==null?List.of():List.of(relic.x(),relic.y(),relic.z()),
-                "enterCommand","/mycli dungeon enter "+site.id,"returnCommand","/mycli dungeon exit "+site.id);
+                "enterCommand","/mycli dungeon enter "+site.id,"returnCommand","/mycli dungeon exit "+site.id));
+        if(!station.facilities().isEmpty())guide.put("facilities",station.facilities());
+        return guide;
     }
     private boolean protectedApproachLanding(Site site,Location at){
         var muster=groundMusters.get(site.id);
@@ -413,6 +415,17 @@ final class SiteDungeonManager implements Listener {
         return route;
     }
     boolean activityArea(Location at){return protectionArea(at)!=null;}
+    boolean publicMusterStorage(Block block) {
+        boolean furnace=block.getType()==Material.FURNACE;
+        if(!furnace&&block.getType()!=Material.CHEST)return false;
+        Location at=block.getLocation();
+        for(var muster:groundMusters.values()) {
+            if(muster.platform().contains(at))
+                return muster.entrance().station().isPublicStorage(
+                        List.of(at.getBlockX(),at.getBlockY(),at.getBlockZ()),furnace);
+        }
+        return false;
+    }
     String editDomain(Location at) {
         for (var station : groundMusters.entrySet())if(station.getValue().platform().contains(at))return "site-"+station.getKey();
         for (var item : protectionAreas.entrySet()) {
@@ -1075,7 +1088,10 @@ final class SiteDungeonManager implements Listener {
             var row=platforms.getConfigurationSection(site.id);
             require(row!=null&&row.getKeys(false).equals(Set.of("entry","hint","station")),"muster_fields:"+site.id);
             var station=row.getConfigurationSection("station");require(station!=null,"muster_station:"+site.id);
-            var route=DungeonEntrance.groundStation(row.get("entry"),row.getString("hint"),station.getValues(false),world.getMinHeight(),world.getMaxHeight());
+            var stationValues=station.getValues(false);
+            var facilities=station.getConfigurationSection("facilities");
+            if(facilities!=null)stationValues.put("facilities",facilities.getValues(false));
+            var route=DungeonEntrance.groundStation(row.get("entry"),row.getString("hint"),stationValues,world.getMinHeight(),world.getMaxHeight());
             var bounds=route.station().bounds();
             var area=ProtectionArea.box("site_muster_"+site.id,"地面集结·"+site.name,world,bounds.get(0),bounds.get(1),bounds.get(2),bounds.get(3),bounds.get(4),bounds.get(5));
             require(result.values().stream().noneMatch(other->WildRuinResets.overlaps(area,other.platform()))

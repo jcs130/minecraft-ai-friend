@@ -129,10 +129,19 @@ def replacement_chunk(reader, id, rows, signs):
         raise ValueError(f"full 1.21.1 saved chunk required: {id}")
     sections={int(s["Y"]):s for s in original["sections"]}
     by_height=defaultdict(list)
+    block_entities=original.get("block_entities")
+    occupied = {(int(b["x"]),int(b["y"]),int(b["z"])) for b in block_entities or []}
+    added_entities = [sign_nbt(pos,lines) for pos,lines in signs]
     for x,y,z,before,after in rows:
         live=reader.read(x,y,z)
         if live!=before:
             raise ValueError(f"changed source block {(x,y,z)}: expected {before}, got {live}")
+        if (x,y,z) in occupied:
+            raise ValueError(f"existing block entity at {(x,y,z)}")
+        kind=after.split("[",1)[0]
+        if kind in {"minecraft:chest", "minecraft:furnace"}:
+            added_entities.append(Compound({"id":String(kind),"x":Int(x),"y":Int(y),"z":Int(z),
+                                            "Items":List[Compound]([])}))
         by_height[y//16].append((x,y,z,after))
     # Source chunks are full, including biome sections. Never invent a section
     # biome or restore a neighboring chunk from an older snapshot.
@@ -140,15 +149,11 @@ def replacement_chunk(reader, id, rows, signs):
         raise ValueError(f"missing biome section in edited chunk {id}")
     for height,cells in by_height.items():
         replace_section(sections[height],cells)
-    block_entities=original.get("block_entities", [])
-    if signs and not block_entities:
-        block_entities=List[Compound]([])
-        original["block_entities"]=block_entities
-    occupied={(int(b["x"]),int(b["y"]),int(b["z"])) for b in block_entities}
-    for pos,lines in signs:
-        if tuple(pos) in occupied:
-            raise ValueError("original block entity at station sign")
-        block_entities.append(sign_nbt(pos,lines))
+    if added_entities:
+        if not block_entities:
+            block_entities=List[Compound]([])
+            original["block_entities"]=block_entities
+        block_entities.extend(added_entities)
     for section in original["sections"]:
         section.pop("BlockLight",None)
         section.pop("SkyLight",None)
