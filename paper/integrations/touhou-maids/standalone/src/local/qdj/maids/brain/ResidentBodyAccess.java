@@ -125,6 +125,38 @@ public final class ResidentBodyAccess {
         body(id);MaidAgentsMod.residents().notice(id,text);
     }
     public static String rpg(UUID id){var b=body(id);return new com.google.gson.Gson().toJson(ResidentRpg.observe(b,MaidAgentsMod.residents().role(id).profession()));}
+    public static String swordControl(UUID id) {
+        var residents=MaidAgentsMod.residents();
+        return residents==null ? "" : residents.swordControl(id);
+    }
+    public static double swordStep(UUID id, UUID targetId, boolean move) {
+        if (swordControl(id).isBlank()) return 0;
+        var maid=body(id);
+        var level=(net.minecraft.server.level.ServerLevel)maid.level();
+        var target=level.getEntity(targetId);
+        if (!(target instanceof net.minecraft.world.entity.LivingEntity living)
+                || !ResidentCombat.visibleHostile(maid,living,5) || !maid.onGround()) return 0;
+        var start=maid.position();
+        var toward=living.position().subtract(start).multiply(1,0,1);
+        double advance=Math.min(1.5, Math.max(0, toward.length()-1.5));
+        var direction=toward.normalize();
+        double safe=0;
+        for (double offset=.15; offset<=advance+.00001; offset+=.15) {
+            var delta=direction.scale(offset);
+            var at=net.minecraft.core.BlockPos.containing(start.add(delta));
+            var box=maid.getBoundingBox().move(delta);
+            if (!level.hasChunkAt(at) || !ResidentProtection.travel(maid,level,at) || !level.noCollision(maid,box)
+                    || level.noCollision(maid,box.move(0,-.15,0))
+                    || !level.getBlockState(at.below()).isFaceSturdy(level,at.below(),net.minecraft.core.Direction.UP)
+                    || !level.getFluidState(at).isEmpty() || !level.getWorldBorder().isWithinBounds(at)) break;
+            safe=offset;
+        }
+        if (!move || safe<.15) return safe;
+        maid.getNavigation().stop();
+        maid.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
+        maid.move(net.minecraft.world.entity.MoverType.SELF,direction.scale(safe));
+        return maid.position().distanceTo(start);
+    }
     public static boolean visibleHostile(UUID id,UUID target,double range){
         if(!Double.isFinite(range)||range<0||range>64)return false;
         var b=body(id);var entity=((net.minecraft.server.level.ServerLevel)b.level()).getEntity(target);
