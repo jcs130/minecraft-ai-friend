@@ -23,6 +23,8 @@ public final class CompanionFollow {
     private WalkTarget walk;
     private Path path;
     private BlockPos pathGoal;
+    private int pathTolerance;
+    private long nextPathAttempt;
     private Vec3 previousPosition, previousDirection, leaderAnchor;
 
     public static Distances distances(EntityMaid maid, Distances defaults) {
@@ -64,6 +66,7 @@ public final class CompanionFollow {
         walk = null;
         path = null;
         pathGoal = null;
+        nextPathAttempt = 0;
     }
 
     public void pause() {
@@ -90,9 +93,11 @@ public final class CompanionFollow {
         if (leaderAnchor == null || leaderMoved || advancing) leaderAnchor = leader.position();
         previousPosition = sameWorld ? maid.position() : null;
         previousDirection = sameWorld ? leader.position().subtract(maid.position()).normalize() : null;
+        double heightGap = sameWorld ? Math.abs(maid.getY() - leader.getY()) : Double.POSITIVE_INFINITY;
         var step = policy.sample(profile, leg, sameWorld, sameWorld ? maid.distanceTo(leader) : Double.POSITIVE_INFINITY,
-                                 advancing, leaderMoved, now);
-        if (step == CompanionFollowPolicy.Step.WALK) return approach(maid, leader, (int) profile.stopWithin(), directPath);
+                                 heightGap, advancing, leaderMoved, now);
+        if (step == CompanionFollowPolicy.Step.WALK)
+            return approach(maid, leader, profile.pathTolerance(heightGap), directPath, now);
         releaseWalk();
         return switch (step) {
             case NEAR -> Result.NEAR;
@@ -102,7 +107,7 @@ public final class CompanionFollow {
         };
     }
 
-    private Result approach(EntityMaid maid, LivingEntity leader, int stop, boolean directPath) {
+    private Result approach(EntityMaid maid, LivingEntity leader, int stop, boolean directPath, long now) {
         var brain = maid.getBrain();
         var existing = brain.getMemory(MemoryModuleType.WALK_TARGET).orElse(null);
         if (existing == null || !(existing.getTarget() instanceof EntityTracker tracker)
@@ -114,11 +119,20 @@ public final class CompanionFollow {
             // A non-owner can be paired while the native idle AI still has a path to its owner.
             var navigation = maid.getNavigation();
             var goal = leader.blockPosition();
-            if (path == null || navigation.isDone() || navigation.getPath() != path || pathGoal.distSqr(goal) > 4) {
+            boolean changed = pathGoal == null || Math.abs(pathGoal.getY() - goal.getY()) >= 2 || pathGoal.distSqr(goal) > 4
+                || pathTolerance != stop;
+            if (changed || path == null || navigation.isDone() || navigation.getPath() != path) {
+                if (!changed && now < nextPathAttempt) return path == null ? Result.PATH_BLOCKED : Result.WALKING;
                 var next = navigation.createPath(goal, stop);
-                if (next == null || !next.canReach() || !navigation.moveTo(next, .9)) return Result.PATH_BLOCKED;
-                path = navigation.getPath();
                 pathGoal = goal;
+                pathTolerance = stop;
+                nextPathAttempt = now + 500;
+                if (next == null || !next.canReach() || !navigation.moveTo(next, .9)) {
+                    if (path != null && navigation.getPath() == path) navigation.stop();
+                    path = null;
+                    return Result.PATH_BLOCKED;
+                }
+                path = navigation.getPath();
             }
         }
         return Result.WALKING;

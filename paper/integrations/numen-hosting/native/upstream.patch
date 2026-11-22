@@ -271,7 +271,7 @@ index 8ceb71520..34cdeee71 100644
          loop.halt(HaltReason.DISCONNECT);
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/HostedBootstrap.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/HostedBootstrap.java
 new file mode 100644
-index 000000000..222a0bff5
+index 000000000..712581378
 --- /dev/null
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/HostedBootstrap.java
 @@ -0,0 +1,161 @@
@@ -668,7 +668,7 @@ index cff945562..69cfb3840 100644
          for (UUID companion : registry.all()) {
              try {
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionFactory.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionFactory.java
-index 8382f3580..7d309b1c4 100644
+index 8382f3580..0c158757f 100644
 --- a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionFactory.java
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionFactory.java
 @@ -81,7 +81,11 @@ public final class CompanionFactory {
@@ -773,10 +773,10 @@ index 18d18c7ad..2f0ee4aee 100644
                  NumenPlayer body = NumenPlayer.findByUuid(server, e.getKey());
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedActionReceipts.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedActionReceipts.java
 new file mode 100644
-index 000000000..4ec851863
+index 000000000..830f9b475
 --- /dev/null
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedActionReceipts.java
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,106 @@
 +package com.dwinovo.numen.api.entity;
 +
 +import com.dwinovo.numen.api.store.Atomic;
@@ -795,7 +795,8 @@ index 000000000..4ec851863
 +public final class HostedActionReceipts implements AutoCloseable {
 +    private final Path root;
 +    private final ExecutorService io=Executors.newSingleThreadExecutor(r->{var t=new Thread(r,"numen-hosted-receipts");t.setDaemon(true);return t;});
-+    private final Map<String,CompletableFuture<JsonObject>> active=new HashMap<>();
++    private record Active(CompletableFuture<JsonObject> result, boolean speech) {}
++    private final Map<Path,Active> active=new HashMap<>();
 +    /** 扫描旧回执只在每具身体首次访问时做，常驻运行不能每个动作重读全部历史。 */
 +    private final Map<UUID,Set<String>> unresolved=new HashMap<>();
 +    public HostedActionReceipts(Path root) { this.root=root; }
@@ -837,21 +838,29 @@ index 000000000..4ec851863
 +    }
 +    public CompletableFuture<JsonObject> call(UUID body,String id,JsonObject args,Supplier<CompletableFuture<JsonObject>> action){
 +        var result=new CompletableFuture<JsonObject>();
++        // The endpoint builds this signature from the validated tool name.
++        // Only say uses the separate lane; Lua and chat-like game commands remain serialized.
++        boolean speech="say".equals(args.has("tool") ? args.get("tool").getAsString() : null);
 +        io.execute(()->{
 +            try{
-+                Path file=path(body,id);String key=file.toString(),signature=digest(canonical(args).toString());
++                Path file=path(body,id);String signature=digest(canonical(args).toString());
 +                if(Files.exists(file)){
 +                    var saved=read(file);
 +                    if(!signature.equals(saved.get("signature").getAsString()))throw new IllegalStateException("request ID was already used with different arguments");
-+                    var running=active.get(key);
-+                    if(running!=null)running.whenComplete((r,e)->{if(e!=null)result.completeExceptionally(e);else result.complete(r.deepCopy());});
++                    var running=active.get(file);
++                    if(running!=null)running.result().whenComplete((r,e)->{if(e!=null)result.completeExceptionally(e);else result.complete(r.deepCopy());});
 +                    else result.complete(persistedResult(saved));
 +                    return;
 +                }
 +                var pending=unresolved(body,file.getParent());
-+                if(!pending.isEmpty())throw new IllegalStateException("an earlier action is unresolved; query its original receipt");
++                if(!pending.isEmpty()){
++                    // A live, acknowledged reservation on this server can run beside one speech.
++                    // Anything with an unknown outcome after a crash still fences both lanes.
++                    var running=pending.size()==1 ? active.get(path(body,pending.iterator().next())) : null;
++                    if(!speech||running==null||running.speech())throw new IllegalStateException("an earlier action is unresolved; query its original receipt");
++                }
 +                var saved=new JsonObject();saved.addProperty("id",id);saved.addProperty("state","pending");saved.addProperty("signature",signature);
-+                write(file,saved);pending.add(id);active.put(key,result);
++                write(file,saved);pending.add(id);active.put(file,new Active(result,speech));
 +                CompletableFuture<JsonObject> execution;
 +                try{execution=action.get();}catch(Throwable error){execution=CompletableFuture.failedFuture(error);}
 +                execution.whenComplete((value,error)->{
@@ -863,7 +872,7 @@ index 000000000..4ec851863
 +                        write(file,saved);
 +                        if(!Set.of("pending","unknown").contains(finalValue.get("state").getAsString()))pending.remove(id);
 +                        result.complete(finalValue);
-+                    }catch(Throwable failure){result.completeExceptionally(failure);}finally{active.remove(key);}
++                    }catch(Throwable failure){result.completeExceptionally(failure);}finally{active.remove(file);}
 +                  });}catch(RejectedExecutionException stopping){result.completeExceptionally(stopping);}
 +                });
 +            }catch(Throwable error){result.completeExceptionally(error);}
@@ -876,7 +885,7 @@ index 000000000..4ec851863
 +}
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedBodyControls.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedBodyControls.java
 new file mode 100644
-index 000000000..2b6aee337
+index 000000000..120a9397a
 --- /dev/null
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedBodyControls.java
 @@ -0,0 +1,155 @@
@@ -1344,7 +1353,7 @@ index 000000000..0d9cadcfa
 +}
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBodyEndpoint.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBodyEndpoint.java
 new file mode 100644
-index 000000000..b1543ca3b
+index 000000000..ec23b7fc8
 --- /dev/null
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBodyEndpoint.java
 @@ -0,0 +1,208 @@
@@ -1803,10 +1812,10 @@ index 6e4b8bf86..2ee87e66b 100644
  }
 diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/HostedActionReceiptsTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/HostedActionReceiptsTest.java
 new file mode 100644
-index 000000000..57d545d9a
+index 000000000..6ade33b16
 --- /dev/null
 +++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/HostedActionReceiptsTest.java
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,81 @@
 +package com.dwinovo.numen.api.entity;
 +
 +import com.google.gson.*;
@@ -1854,7 +1863,38 @@ index 000000000..57d545d9a
 +        try(var journal=new HostedActionReceipts(directory)){
 +            assertEquals("unknown",journal.call(body,"request-unknown",args,()->{calls.incrementAndGet();return CompletableFuture.completedFuture(result("request-unknown"));}).get(5,TimeUnit.SECONDS).get("state").getAsString());
 +            assertThrows(ExecutionException.class,()->journal.call(body,"request-new",args,()->CompletableFuture.completedFuture(result("request-new"))).get(5,TimeUnit.SECONDS));
++            var speech=JsonParser.parseString("{\"tool\":\"say\"}").getAsJsonObject();
++            assertThrows(ExecutionException.class,()->journal.call(body,"request-say",speech,()->{
++                calls.incrementAndGet();return CompletableFuture.completedFuture(result("request-say"));
++            }).get(5,TimeUnit.SECONDS));
 +        }assertEquals(1,calls.get());
++    }
++
++    @Test void activeWalkAndOneSpeechMayOverlapWithoutAdmittingAnotherWrite()throws Exception {
++        var lua=JsonParser.parseString("{\"tool\":\"lua\",\"args\":{\"code\":\"numen.move.walk({x=10,y=64,z=0})\"}}").getAsJsonObject();
++        var speech=JsonParser.parseString("{\"tool\":\"say\",\"args\":{\"text\":\"Looking for stairs.\"}}").getAsJsonObject();
++        var audible=new CountDownLatch(1);
++        var walkResult=new CompletableFuture<JsonObject>();
++        var speechResult=new CompletableFuture<JsonObject>();
++        var calls=new AtomicInteger();
++        try(var journal=new HostedActionReceipts(directory)){
++            var walk=journal.call(body,"request-walk",lua,()->{calls.incrementAndGet();return walkResult;});
++            var say=journal.call(body,"request-speech",speech,()->{
++                calls.incrementAndGet();audible.countDown();return speechResult;
++            });
++            assertTrue(audible.await(5,TimeUnit.SECONDS));
++            var duplicate=journal.call(body,"request-speech",speech,()->{calls.incrementAndGet();return speechResult;});
++            assertThrows(ExecutionException.class,()->journal.call(body,"another-speech",speech,
++                ()->CompletableFuture.completedFuture(result("another-speech"))).get(5,TimeUnit.SECONDS));
++            assertThrows(ExecutionException.class,()->journal.call(body,"another-lua",lua,
++                ()->CompletableFuture.completedFuture(result("another-lua"))).get(5,TimeUnit.SECONDS));
++            speechResult.complete(result("request-speech"));
++            assertEquals(say.get(5,TimeUnit.SECONDS),duplicate.get(5,TimeUnit.SECONDS));
++            assertFalse(walk.isDone());
++            walkResult.complete(result("request-walk"));
++            assertEquals(walk.get(5,TimeUnit.SECONDS),journal.result(body,"request-walk").get(5,TimeUnit.SECONDS));
++            assertEquals(2,calls.get());
++        }
 +    }
 +}
 diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/HostedControlLeaseTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/HostedControlLeaseTest.java

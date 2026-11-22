@@ -29,6 +29,62 @@ class Session:
 def port(tmp_path,session):
     return HostedMcpPort(dict(endpoint='http://127.0.0.1:1/mcp',bodyId=BODY,ownerId=OWNER,name='QaKirito',serverId='qa',journalDirectory=str(tmp_path)),session=session)
 
+def test_slow_hosted_walk_yields_to_speech_and_reconciles_original_id(tmp_path, monkeypatch):
+    from agent_mc_harness import Scope
+    from agent_mc_harness.body.numen import NumenBody
+    from agent_mc_harness.models import BodyAction
+
+    async def run():
+        dispatched = asyncio.Event()
+        finish = asyncio.Event()
+
+        class WalkingSession(Session):
+            async def call_tool(self, tool, args):
+                if args["op"] == "call":
+                    self.calls.append(args)
+                    if args["tool"] == "say":
+                        message = "Speech dispatched; it is not evidence of a reply."
+                        state, success = "partial", True
+                    else:
+                        assert args["args"]["code"] == "return numen_hosted.move.walk({x=3,y=60,z=7})"
+                        dispatched.set()
+                        await finish.wait()
+                        message = "no_path; stood at (2, 64, 2)"
+                        state, success = "blocked", False
+                    return SimpleNamespace(isError=False, structuredContent=dict(
+                        id=args["id"], state=state, message=json.dumps(dict(success=success, message=message))))
+                return await super().call_tool(tool, args)
+
+        session = WalkingSession()
+        adapter = port(tmp_path, session)
+        body = NumenBody(adapter, scope=Scope(realm="isolation", account="owner", agent="companion"), poll_seconds=60)
+        await body.spawn()
+        move = BodyAction(verb="move", args={"x": 3, "y": 60, "z": 7}, request_id="first-walk")
+        try:
+            async with asyncio.timeout(3):
+                accepted = await body.act(move)
+                assert dispatched.is_set() and accepted.status == "accepted" and not accepted.terminal
+                assert accepted.data["targetReached"] is False
+                assert (await body.result(move.request_id)).status == "accepted"
+                assert (await body.act(move)).status == "accepted"
+                repeat = move.model_copy(update={"request_id": "second-walk"})
+                blocked = await body.act(repeat)
+                assert blocked.status == "rejected" and blocked.data["originalRequestId"] == move.request_id
+                voice = await body.act(BodyAction(verb="chat", name="svc", args={"text": "我去找楼梯。"}, request_id="say-nearby"))
+                assert voice.status == "completed" and "Speech dispatched" in voice.text
+                assert not finish.is_set()
+                finish.set()
+                await adapter.walk_request[2]
+                settled = await body.result(move.request_id)
+                assert settled.terminal and settled.status == "rejected" and "no_path" in settled.text
+                assert [row["id"] for row in session.calls if row["op"] == "call"] == ["first-walk", "say-nearby"]
+        finally:
+            finish.set()
+            await body.destroy()
+
+    monkeypatch.setattr("agent_mc_harness.body.hosted_mcp.WALK_INLINE_SECONDS", 0.01)
+    asyncio.run(run())
+
 def test_hosted_leases_and_original_receipts(tmp_path):
     async def run():
         session=Session();p=port(tmp_path,session)
