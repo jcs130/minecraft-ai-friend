@@ -36,3 +36,16 @@ coordination lease expires on its own. Do not remove an active native lease.
 
 Run test-hosted-cortico-watchdog.ps1 with Windows PowerShell to check adoption,
 World failure, process and lease identity, unknown receipts, exit and stop behavior.
+
+## Optional nearby commentary for Kirito
+
+Append [the Cortico profile](kirito-nearby-narration.md) to this role's orientation
+and use Cortico's Apply Now button to reload the prompt in the current session.
+Append [the resident fallback profile](kirito-nearby-narration-resident.txt) to the
+same role's persona in roles.json; the resident service reads it on its next start.
+
+Use one Numen voice call for a useful decision or confirmed milestone. QiandengVoice
+delivers its existing nearby captions and SVC audio from that same utterance.
+A voice queue acknowledgement is not a listener receipt. Verify the role's voice
+ledger and, during a spectator check, an attached viewer's voice connection and
+proximity. Keep normal player captions and voice preferences in effect.
