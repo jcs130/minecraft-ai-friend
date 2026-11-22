@@ -25,6 +25,9 @@ nametags:
   - 9ad939f0-c56e-3b7b-ba68-e359b67af0c5 # corti
 dungeon-enemy-moves:
   enabled: false
+dungeon-encounters:
+  # Opt in after validating this map's layout. Requires dungeon-enemy-moves.enabled.
+  void-citadel: false
 coach:
   adventure-enabled: true
   adventure-first-seconds: 1200
