@@ -301,6 +301,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case GUILD_MENU -> openGuildMenu(p);
             case CONTRACT_MENU -> taskMarket.openMenu(p);
             case PLACES_MENU -> openPlacesMenu(p);
+            case TRAVEL_APPLY -> confirmCompassTravel(p,payload);
             case BACKPACK -> {
                 if(!p.hasPermission("backpack.use")){
                     p.sendMessage("§e随身大背包权限未开放，本次未打开。可先使用远程个人箱；请服主核对普通玩家的 backpack.use 权限。");
@@ -2026,6 +2027,43 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         p.sendMessage(ChatColor.RED + "未知或重名地点；先 /mycli waypoint 查看准确目标，个人点用 personal:<名字>，分享点用 shared:<码>，地标用 landmark:<ID>。");
     }
+
+    record CompassDestination(String title, String location, String terms) { }
+
+    CompassDestination compassDestination(Player p,String key){
+        if(key.startsWith("team:")){
+            UUID id=UUID.fromString(key.substring(5)); // bound to the selected menu entry
+            var target=TeammateDirectory.find(p,id);
+            if(target==null)return null;
+            var at=target.body().getLocation();
+            return new CompassDestination(target.name(),LocationOutput.worldLabel(at.getWorld())+" "+LocationOutput.shortForm(at),"8 魔力 · 20 秒冷却；确认时检查队友和落点");
+        }
+        if(key.startsWith("expedition:")){
+            var site=DungeonExpeditions.site(key.substring(11));
+            return site==null?null:new CompassDestination(site.name(),"主世界外围 "+site.approachX()+", "+site.approachZ(),"到达消耗 8 魔力；此入口用于游览自然遗迹");
+        }
+        if(key.equals("rest"))return new CompassDestination("深层驿站","试炼塔内部驿站","通关第六层后解锁；使用原有入场与落点检查");
+        if(key.equals("support"))return new CompassDestination("支援传送术","村庄当前敌情","8 魔力 · 20 秒冷却；确认时重查是否有敌情");
+        PublicPlace place=PUBLIC_PLACES.stream().filter(candidate->candidate.id().equals(key)).findFirst().orElse(null);
+        if(place==null&&!key.equals("arena"))return null;
+        var at=place==null?(arenaBuilt?arenaEntrance():null):publicWarp(key);
+        if(at==null)return null;
+        return new CompassDestination(place==null?"村庄试炼塔集合平台":ChatColor.stripColor(place.title()),
+                LocationOutput.worldLabel(at.getWorld())+" "+LocationOutput.shortForm(at),"到达消耗 6 魔力；确认时重新检查落点");
+    }
+
+    private void previewCompassTravel(Player p,String key){
+        playerAdventureMenus.open(p,AdventureMenuModel.Page.TRAVEL_CONFIRM,key);
+    }
+
+    private void confirmCompassTravel(Player p,String key){
+        if(compassDestination(p,key)==null){p.sendMessage("§e目的地或队友已不可用。本次未传送，请返回罗盘重新选择。");return;}
+        if(key.startsWith("team:"))teleportToTeammate(p,UUID.fromString(key.substring(5)));
+        else if(key.startsWith("expedition:"))guild.command(p,new String[]{"guild","travel",key.substring(11)});
+        else if(key.equals("rest"))dungeon.command(p,new String[]{"arena","rest"});
+        else if(key.equals("support"))villageWatch.support(p,null);
+        else gotoPlace(p,key);
+    }
     void travelPublic(Player p, String id, String title, Location destination) {
         if (destination == null) { p.sendMessage("§e[world_unavailable] 地点暂未开放；/mycli waypoint 查看当前目录。"); return; }
         boolean trial = id.equals("arena");
@@ -2187,7 +2225,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         if (args.length == 1) { openMenu(viewer, "players"); return; }
         if (args.length == 3 && (args[1].equalsIgnoreCase("tp") || args[1].equals("传送"))) {
-            if (args[2].equalsIgnoreCase("nearest")) { teleportNearest(viewer); return; }
+            if (args[2].equalsIgnoreCase("nearest")) { teleportNearest(viewer,false); return; }
             namedTeammate(viewer, args[2], true);
             return;
         }
@@ -2221,11 +2259,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         () -> viewer.sendMessage(ChatColor.YELLOW + "当前世界没有可定位的在线队友；/mycli locate list 查看其他世界队友，先通过正常入口到同一世界再追踪。"));
     }
 
-    private void teleportNearest(Player viewer) {
+    private void teleportNearest(Player viewer,boolean preview) {
         TeammateDirectory.list(viewer).stream()
                 .filter(target -> target.body().getWorld().equals(viewer.getWorld()))
                 .min(Comparator.comparingDouble(target -> target.body().getLocation().distanceSquared(viewer.getLocation())))
-                .ifPresentOrElse(target -> teleportToTeammate(viewer, target.id()),
+                .ifPresentOrElse(target -> {
+                    if(preview)previewCompassTravel(viewer,"team:"+target.id());
+                    else teleportToTeammate(viewer,target.id());
+                },
                         () -> viewer.sendMessage(ChatColor.YELLOW + "当前世界没有可传送的在线队友；/mycli locate list 核对世界和状态，等队友在线且位置安全后再试。"));
     }
 
@@ -2527,7 +2568,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 && stack.getItemMeta().getPersistentDataContainer().has(focusKey, PersistentDataType.BYTE);
     }
     private boolean imprintable(ItemStack stack) {
-        if (stack == null || stack.getType().isAir() || stack.getAmount() != 1 || isFocus(stack)) return false;
+        if (stack == null || stack.getType().isAir() || stack.getAmount() != 1 || isFocus(stack) || isCompass(stack)) return false;
         String type = stack.getType().name();
         return type.endsWith("_PICKAXE") || type.endsWith("_AXE") || type.endsWith("_SHOVEL")
                 || type.endsWith("_HOE") || type.endsWith("_SWORD")
@@ -2918,13 +2959,13 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         inv.setItem(32, item(Material.END_CRYSTAL, "§d施法轮盘", "打开后点选通用或已学职业技能"));
         for (CompassButton button : COMPASS_BUTTONS)
             inv.setItem(button.slot(), item(button.icon(), (button.slot() < 9 ? "§d" : button.slot() < 18 ? "§a" : "§b")
-                    + button.title(), button.hint(), button.action().equals("arena") ? "点击传送；成功消耗6魔力"
+                    + button.title(), button.hint(), button.action().equals("arena") ? "点击查看落点；确认后才传送"
                     : button.action().equals("stash") ? "只打开本人奖励箱；照片成片也存这里；选择页码不扣魔力" : "点击查看；打开页面不会施法"));
         if(nativeRpg.selected()){
             var common=List.of("home","travel","prospect","night","feather");
             for(int i=0;i<9;i++){
                 String id=i<common.size()?common.get(i):null;
-                inv.setItem(36+i,id==null?item(Material.GRAY_STAINED_GLASS_PANE,"§7职业技能在技能书中查看"):item(SpellGuide.find(id).icon(),"§e"+SpellGuide.find(id).name(),SpellGuide.find(id).costLine(),"通用技能；无需职业，点击施放"));
+                inv.setItem(36+i,id==null?item(Material.GRAY_STAINED_GLASS_PANE,"§7职业技能在技能书中查看"):item(SpellGuide.find(id).icon(),"§e"+SpellGuide.find(id).name(),SpellGuide.find(id).costLine(),"左键使用，右键查看说明"));
             }return;
         }
         for (int slot = 27; slot < 36; slot++) {
@@ -2936,7 +2977,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             String id = COMPASS_QUICK.get(i); SpellGuide.Entry entry = SpellGuide.find(id);
             boolean known = compassKnown(p, id);
             inv.setItem(36 + i, item(entry.icon(), (known ? "§e" : "§8") + entry.name() + (known ? " · 施放" : " · 未学习"),
-                    entry.costLine(), known ? "点击直接施法；失败与冷却按原规则处理" : "点击打开技能学习页；不会自动购买",
+                    entry.costLine(), known ? "左键使用，右键查看说明" : "左键打开学习，右键查看说明",
                     entry.command()));
         }
     }
@@ -2945,11 +2986,17 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if(EconomyPresentation.compassClick(p,slot))return;
         if(nativeRpg.selected()&&slot>=36&&slot<45){
             var common=List.of("home","travel","prospect","night","feather");
-            if(slot-36<common.size())cast(p,common.get(slot-36));else nativeRpg.delegate(p,"skills","menu");return;
+            if(slot-36<common.size()){
+                String id=common.get(slot-36);
+                if(rightClick)playerAdventureMenus.open(p,AdventureMenuModel.Page.COMMON_DETAIL,id);
+                else cast(p,id);
+            }else nativeRpg.delegate(p,"skills","menu");
+            return;
         }
         if (slot >= 36 && slot < 45) {
             String id = COMPASS_QUICK.get(slot - 36);
-            if (compassKnown(p, id)) cast(p, id);
+            if (rightClick) openMenu(p,"spell_info:"+id);
+            else if (compassKnown(p, id)) cast(p, id);
             else {
                 p.sendMessage("§d尚未学会" + SpellGuide.find(id).name() + "；先在学习页确认，快捷栏不会自动扣技能点。");
                 professions.open(p, "learn");
@@ -2968,7 +3015,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "book" -> playerAdventureMenus.open(p,AdventureMenuModel.Page.BOOK,"");
             case "lands" -> lands.open(p, 1);
             case "market" -> taskMarket.openMenu(p);
-            case "arena" -> gotoPlace(p, "arena");
+            case "arena" -> previewCompassTravel(p, "arena");
             case "dungeons" -> siteDungeons.command(p, new String[]{"dungeon", "menu"});
             case "skins" -> { if (!p.performCommand("skins")) p.sendMessage("§c皮肤画廊暂不可用；稍后 /mycli world list 查看服务，持续异常请把时间与 skins 命令告知服主。"); }
             default -> { }
@@ -3140,7 +3187,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             }
         } else if (page.equals("places")) {
             for (PublicPlace place : PUBLIC_PLACES) {
-                inv.setItem(place.slot(), item(place.icon(), place.title(), place.hint(), publicWarp(place.id()) == null ? "地点未就绪" : LocationOutput.worldLabel(publicWarp(place.id()).getWorld()) + " " + LocationOutput.shortForm(publicWarp(place.id())), "落点重新检查；成功后6魔力"));
+                inv.setItem(place.slot(), item(place.icon(), place.title(), place.hint(), publicWarp(place.id()) == null ? "地点未就绪" : LocationOutput.worldLabel(publicWarp(place.id()).getWorld()) + " " + LocationOutput.shortForm(publicWarp(place.id())), "先查看，确认后传送；到达消耗 6 魔力"));
             }
             inv.setItem(13, item(Material.IRON_SWORD, "§6试炼场", dungeon.isBuilt() ? "入口传送6魔力；三个按钮选难度，再确认组队" : "传送 6 魔力；按钮启动三波战斗"));
             inv.setItem(14, item(Material.NAME_TAG, "§b新建传送点", "记录当前位置，在聊天框起名字", "支持中文；默认私有；记录免费"));
@@ -3268,7 +3315,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     private ItemStack skillCompass() {
-        ItemStack stack = item(Material.COMPASS, ChatColor.LIGHT_PURPLE + "✦ 技能罗盘", "手持时自动指向最近的队友", "右键选定队友或打开技能与传送");
+        ItemStack stack = item(Material.COMPASS, ChatColor.LIGHT_PURPLE + "✦ 技能罗盘", "按使用键打开冒险大厅", "潜行使用打开施法轮盘；地点先查看再确认");
         ItemMeta meta = stack.getItemMeta();
         meta.getPersistentDataContainer().set(compassKey, PersistentDataType.BYTE, (byte) 1);
         stack.setItemMeta(meta);
@@ -3306,6 +3353,12 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             startArena(event.getPlayer()); return;
         }
         Player player = event.getPlayer();
+        if (isCompass(event.getItem())) {
+            event.setCancelled(true);
+            if(player.isSneaking())openSpellWheel(player);
+            else playerAdventureMenus.open(player);
+            return;
+        }
         if (player.isSneaking() && event.getAction() == Action.RIGHT_CLICK_BLOCK
                 && event.getClickedBlock().getType() == Material.ENCHANTING_TABLE
                 && imprintable(event.getItem())) {
@@ -3326,10 +3379,6 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             FocusSpell spell = focusSpell(event.getItem());
             if (spell == null) player.sendMessage(ChatColor.RED + "法杖绑定已失效；潜行使用重新选择技能。");
             else cast(player, spell.id());
-        } else if (isCompass(event.getItem())) {
-            event.setCancelled(true);
-            if(player.isSneaking())openSpellWheel(player);
-            else playerAdventureMenus.open(player);
         } else if (isStatusBook(event.getItem())) {
             event.setCancelled(true);
             if (player.isSneaking()) player.openBook(statusBook(player));
@@ -3344,7 +3393,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p)) return;
         int slot = event.getRawSlot();
-        if (slot < 0 || slot >= top.getSize() || event.getClick().isShiftClick()) return;
+        if (slot < 0 || slot >= top.getSize() || event.getClick() != ClickType.LEFT && event.getClick() != ClickType.RIGHT) return;
         if (page.equals("skills") && slot >= 27 && slot < 35 && slot != 30 && slot != 32) return;
         if (isSpellGuidePage(page) && slot < 9) return;
         var weaponPreset = page.equals("imprint") ? WeaponEngravings.Preset.at(slot) : null;
@@ -3458,36 +3507,36 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 }
             } else if (page.equals("places")) {
                 switch (slot) {
-                    case 13 -> gotoPlace(p, "arena");
+                    case 13 -> previewCompassTravel(p, "arena");
                     case 14 -> waypoints.beginCreate(p);
                     case 15 -> waypoints.open(p, "own", 1);
                     case 16 -> openMenu(p, "expeditions");
-                    case 17 -> { if (dungeon.isExpanded()) dungeon.command(p, new String[]{"arena", "rest"}); }
+                    case 17 -> { if (dungeon.isExpanded()) previewCompassTravel(p, "rest"); }
                     case 18 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "normal"}); }
                     case 19 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "adventure"}); }
                     case 20 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "apocalypse"}); }
                     case 21 -> { if (dungeon.isBuilt()) dungeon.command(p, new String[]{"arena", "difficulty", "auto"}); }
-                    case 23 -> villageWatch.support(p, null);
+                    case 23 -> previewCompassTravel(p, "support");
                     case 24 -> waypoints.open(p, "shared", 1);
                     case 25 -> landmarks.open(p, false, 1);
                     case 26 -> siteDungeons.command(p, new String[]{"dungeon", "menu"});
                     case 22 -> openMenu(p, "skills");
                     default -> PUBLIC_PLACES.stream().filter(place -> place.slot() == slot).findFirst()
-                            .ifPresent(place -> gotoPlace(p, place.id()));
+                            .ifPresent(place -> previewCompassTravel(p, place.id()));
                 }
             } else if (page.equals("expeditions")) {
                 if (slot == 22) openMenu(p, "places");
                 else if (slot >= 10 && slot < 10 + DungeonExpeditions.SITES.size())
-                    guild.command(p, new String[]{"guild", "travel", DungeonExpeditions.SITES.get(slot - 10).id()});
+                    previewCompassTravel(p,"expedition:"+DungeonExpeditions.SITES.get(slot-10).id());
             } else if (page.equals("players")) {
                 if (slot == 0) openMenu(p, "skills");
                 else if (slot == 4) trackNearest(p);
                 else if (slot == 6) stopTracking(p);
-                else if (slot == 8) teleportNearest(p);
+                else if (slot == 8) teleportNearest(p,true);
                 else if ((slot == 2 || slot == 7) && targets != null && top.getItem(slot) != null)
                     openMenu(p, "players", targets.index() + (slot == 2 ? -1 : 1));
                 else if (targets != null && targets.slots().containsKey(slot)) {
-                    if (slot >= 19) teleportToTeammate(p, targets.slots().get(slot));
+                    if (slot >= 19) previewCompassTravel(p,"team:"+targets.slots().get(slot));
                     else trackPlayer(p, targets.slots().get(slot));
                 }
             } else if (page.equals("pvp")) {
@@ -3522,7 +3571,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             } else if (page.equals("guild")) {
                 if(slot==50&&event.isRightClick()){dungeon.openStashPages(p);return;}
                 if(slot==53){taskMarket.routes().open(p,"",1);return;}
-                if (slot == 51) gotoPlace(p, "arena");
+                if (slot == 51) previewCompassTravel(p, "arena");
                 else if (slot == 52) openMenu(p, "skills");
                 else if (slot == 47) openMenu(p, "life");
                 else {

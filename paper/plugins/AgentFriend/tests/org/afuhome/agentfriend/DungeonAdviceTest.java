@@ -25,7 +25,11 @@ public final class DungeonAdviceTest {
         check(advice("nearApproach",true).get("nextCommand").equals("/mycli dungeon info undead_crypt"),"nearby discovery never asks for repeated paid travel");
         check(advice("nearApproach",true).get("nextAction").toString().contains("首室坐标不是入口"),"nearby is not entrance or first room");
         state("ready","atFirstRoom",true,"nearApproach",true);
-        state("requirements","loadoutReady",false,"nearApproach",true,"missingLoadout","靴子");
+        state("approach","loadoutReady",false,"nearApproach",true,"missingLoadout","靴子");
+        check(advice("loadoutReady",false,"atFirstRoom",true,"missingLoadout","靴子").get("nextAction").toString().contains("确认缺装风险"),"equipment warning offers a way to enter");
+        String token="dd280934-3c16-49eb-b2e1-50eb446011ce";
+        var confirmed=DungeonAdvice.parse(new String[]{"dungeon","enter","void_citadel","--confirm",token,"--json"});
+        check(confirmed.confirmation().equals(token)&&confirmed.args().length==3&&confirmed.json(),"confirmation leaves the dungeon action and parsing intact");
         check(advice("atFirstRoom",true).get("nextCommand").equals("/mycli dungeon start undead_crypt normal"),"idle false never interpreted as closed");
         state("unavailable","configured",false);state("cooldown","cooldownMs",12001L);
         check(advice("cooldownMs",12001L).get("retryAfterMs").equals(12001L),"actual cooldown not an invented fixed wait");
