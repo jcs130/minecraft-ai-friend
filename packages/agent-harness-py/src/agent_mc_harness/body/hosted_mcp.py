@@ -328,7 +328,12 @@ class HostedMcpPort:
             return PortResult("accepted", text, value, task)
         if outcome is False:
             return PortResult("failed",text,value)
-        if state == "completed" or state == "partial" and tool == "say" and "Speech dispatched" in text:
+        # A persisted result contains the server's outcome but omits the tool name.
+        # The exact successful say acknowledgement proves dispatch, not a reply.
+        speech_dispatched = (tool == "say" and "Speech dispatched" in text
+                             or tool is None and outcome is True
+                             and text == "Speech dispatched; it is not evidence of a reply.")
+        if state == "completed" or state == "partial" and speech_dispatched:
             return PortResult("completed", text, value)
         # Synchronous Lua completion has no remaining native job. A partial
         # envelope alone is not completion evidence.
