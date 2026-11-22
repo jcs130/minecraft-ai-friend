@@ -24,7 +24,8 @@ function Get-NetTCPConnection($State) {
 function Invoke-RestMethod($Uri, $TimeoutSec, $MaximumRedirection) {
     Expect $Uri 'http://127.0.0.1:17788/api/worlds'
     if (!$script:healthyWorld) { throw 'mock endpoint unavailable' }
-    [pscustomobject]@{ worlds=@([pscustomobject]@{ id='mymc'; status='active' }) }
+    [pscustomobject]@{ worlds=@([pscustomobject]@{ id='mymc'; status='active'
+        lamps=@([pscustomobject]@{ label='Numen'; state=$script:worldLamp }) }) }
 }
 function Get-ScheduledTask($TaskName) { [pscustomobject]@{ State='Ready' } }
 function Start-ScheduledTask($TaskName) {
@@ -59,6 +60,7 @@ try {
         CreationDate=$began.AddSeconds(10); ExecutablePath=$config.node
         CommandLine=('"' + $config.node + '" --import tsx "' + (Join-Path $config.repo 'src/launcher.ts') + '" kirito') }
     $script:cliPresent=$true; $script:socket='owned'; $script:healthyWorld=$true; $script:starts=0
+    $script:worldLamp='online'
 
     Put $marker @{bodyId='test-body'; ownerId='test-owner'; until=[datetimeoffset]::UtcNow.ToUnixTimeSeconds()-120}
     $null = Invoke-RecoveryTick $config
@@ -81,6 +83,42 @@ try {
     Expect (Read-Json $status).state 'unverified_process'
     Expect $script:starts 0
     $fixtureWorker.ParentProcessId=201
+
+    $expiredOwn = Read-Json $marker
+    $expiredOwn.until = [datetimeoffset]::UtcNow.ToUnixTimeSeconds()-10
+    Put $marker $expiredOwn
+    $snapshot.roles[0].health.connected=$true
+    Put "$work/npc/health.json" $snapshot
+    $null = Invoke-RecoveryTick $config
+    Expect (Read-Json $status).state 'waiting_for_native_release'
+    Expect (Read-Json $marker).until $expiredOwn.until
+    $script:worldLamp='loading'
+    $expiredOther = @{bodyId='test-body'; ownerId='test-owner'; until=$expiredOwn.until; controller='other'}
+    Put $marker $expiredOther
+    $null = Invoke-RecoveryTick $config
+    Expect (Read-Json $status).state 'waiting_for_native_release'
+    Expect (Read-Json $marker).controller 'other'
+    Put $marker $expiredOwn
+    $snapshot.roles[0].unknownRequests=1
+    Put "$work/npc/health.json" $snapshot
+    $null = Invoke-RecoveryTick $config
+    Expect (Read-Json $status).state 'waiting_for_original_receipt'
+    Expect (Read-Json $marker).until $expiredOwn.until
+    $snapshot.roles[0].unknownRequests=0
+    Put "$work/npc/health.json" $snapshot
+    $null = Invoke-RecoveryTick $config
+    Expect (Read-Json $status).state 'native_release_requested'
+    $renewed = Read-Json $marker
+    Expect ($renewed.until -gt [datetimeoffset]::UtcNow.ToUnixTimeSeconds()) $true
+    Expect $renewed.processId 201
+    $null = Invoke-RecoveryTick $config
+    Expect (Read-Json $status).state 'waiting_for_native_release'
+    Expect (Read-Json $marker).until $renewed.until
+    Expect $script:starts 0
+    $snapshot.roles[0].health.connected=$false
+    Put "$work/npc/health.json" $snapshot
+    $null = Invoke-RecoveryTick $config
+    Expect (Read-Json $status).state 'adopted'
 
     $freshOther=@{bodyId='test-body'; ownerId='test-owner'; until=[datetimeoffset]::UtcNow.ToUnixTimeSeconds()+85}
     Put $marker $freshOther
