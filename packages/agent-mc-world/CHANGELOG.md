@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.124
+
+- Spatial site observations identify a measured slab or stair landing and supply a ready-to-submit exact navigation step. Unknown clearance yields a walking-only route probe.
+
 ## 0.5.7-rc.160-preview.123
 
 - Use native arrow crossbows and throwable tridents in ranged combat, with ammunition and enchantment checks, confirmed loading and launch, and projectile-specific hit evidence on Java 1.21.1.
