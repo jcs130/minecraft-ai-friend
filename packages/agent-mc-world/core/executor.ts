@@ -4443,6 +4443,13 @@ export class Executor {
     return notes.join(';');
   }
 
+  /** A transient movement owner released the body without holding a queue token. */
+  wakeCheckpointQueue(bot: Bot): void {
+    if (this.opts.getBot() !== bot || bot._client.state !== 'play' || (bot as Bot & { isAlive?: boolean }).isAlive === false
+      || !(bot.health > 0) || nativeBodyBlockedReason(bot)) return;
+    if (this.queue.some(task => task.checkpointRequest || task.checkpointContinuation)) this.pump();
+  }
+
   /** 队列空着且没在做事就开下一件;身体被战斗占着时闸住(resume 时再泵) */
   private pump(): void {
     const bot = this.opts.getBot();
@@ -6424,6 +6431,8 @@ interface ReflexOptions {
   pauseEnvironment: (reason: string) => QueueHoldToken | null;
   /** 所有环境危险清除并稳定落脚后恢复冻结断点。 */
   resumeEnvironment: (token: QueueHoldToken) => QueueResumeResult;
+  /** Nonfreezing fire recovery can finish while a checkpoint waits on its movement. */
+  onBurningRecovered?: (bot: Bot) => void;
   /** 深坠落只终止当前危险任务，排队与冻结计划继续保留。 */
   stopFallTask: (reason: string) => QueueHoldToken | null;
   /** 深坠落结束并满足安全恢复条件后，释放对应队列租约。 */
@@ -7280,6 +7289,7 @@ export class Reflexes {
     /** 找水目标零推进过的格,这一段着火里不再选 */
     excluded: Set<string>;
   } | null = null;
+  private readonly burnCleanups = new WeakMap<Bot, number>();
 
   /**
    * 灭火反射。包里有水桶就往自己身上倒水,火灭后用空桶舀回;没有水桶、在下界或倒不成时,
@@ -7390,14 +7400,39 @@ export class Reflexes {
   private endBurning(bot: Bot, b: NonNullable<Reflexes['burning']>): void {
     this.burning = null;
     if (this.escapeGoal?.kind === 'burn') {
+      const ownedGoal = this.escapeGoal.goal;
       this.escapeGoal = null;
-      dropGoal(bot, 'escape', '火灭了,不用再去找水', this.opts.diag);
+      const owner = goalOwnerOf(bot);
+      if (owner?.kind === 'escape' && owner.goal === ownedGoal) dropGoal(bot, 'escape', '火灭了,不用再去找水', this.opts.diag);
     }
+    // Evaluate after this tick has processed other environmental holds and
+    // after all overlapping bucket recovery for the same body has settled.
+    const boundary = nativeBodyReadiness(bot);
+    const wake = () => queueMicrotask(() => {
+      if (this.stopped || this.opts.getBot() !== bot || this.burning || this.burnCleanups.get(bot)) return;
+      const current = nativeBodyReadiness(bot);
+      if (current?.boundaryAt === boundary?.boundaryAt && current?.boundary === boundary?.boundary)
+        this.opts.onBurningRecovered?.(bot);
+    });
     if (b.pour !== 'poured' || b.water === null) {
       this.reportBurn(bot, '身上的火灭了');
+      wake();
       return;
     }
-    void this.scoopBack(bot, b.water);
+    this.burnCleanups.set(bot, (this.burnCleanups.get(bot) ?? 0) + 1);
+    const settled = () => {
+      const remaining = (this.burnCleanups.get(bot) ?? 1) - 1;
+      if (remaining) this.burnCleanups.set(bot, remaining);
+      else this.burnCleanups.delete(bot);
+    };
+    void this.scoopBack(bot, b.water).then(() => {
+      settled();
+      wake();
+    }, error => {
+      settled();
+      this.opts.log.warn('灭火后收水结果未知', {error:String(error)});
+      wake();
+    });
   }
 
   private async scoopBack(bot: Bot, water: Cell): Promise<void> {

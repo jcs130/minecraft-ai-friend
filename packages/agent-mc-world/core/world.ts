@@ -4558,6 +4558,10 @@ export class MinecraftWorld implements World {
       },
       resumeEnvironment: (token) => this.executor?.resumeAfterEnvironment(token)
         ?? { released: false, note: null },
+      onBurningRecovered: bot => {
+        if (!this.shuttingDown && this.bridge?.bot === bot && this.connectionReadiness().ready)
+          this.executor?.wakeCheckpointQueue(bot);
+      },
       stopFallTask: (reason) => {
         this.interruptIdle('fall');
         return this.executor?.stopCurrent(reason) ?? null;
@@ -8688,16 +8692,19 @@ export class MinecraftWorld implements World {
     if (!bot || !queue) return;
     const reaction = this.combat?.reactionState();
     const idle = this.idleBehavior?.actionId;
+    const waiting = queue.waiting[0];
     // Never echo chat, commands or arbitrary tool arguments into an audience HUD.
     const labels: Record<string,string> = { attack:'接近并攻击',goto:'前往目标',goto_player:'跟随玩家',
       eat:'进食',equip:'更换装备',craft:'合成物品',take:'取出物品',put:'存放物品',cast:'施法',chat:'发送游戏消息',
       find:'寻找目标',collect:'采集',mine:'挖掘',interact:'交互',wait:'等待' };
     const title = this.combat?.active ? reaction?.retreating ? '身体：撤离危险' : '身体：交战中'
       : queue.hold ? '身体：等待控制权' : queue.running ? `身体：${labels[queue.running.skill ?? ''] ?? '执行游戏任务'}`
+      : waiting ? '身体：动作排队中'
       : idle === 'wander' || idle === 'stroll' ? '身体：安全闲逛' : idle ? '身体：观察周围'
       : bot.currentWindow ? '身体：查看交互窗口' : '身体：空闲，等待任务';
     const detail = queue.hold ? '任务暂时让出身体控制权' : (queue.running ? `任务 #${queue.running.id} · 第 ${queue.running.stepIndex + 1}/${queue.running.stepCount} 步`
       : reaction?.targetId != null && this.combat?.active ? `当前目标实体 #${reaction.targetId}`
+      : waiting ? `任务 #${waiting.id} 已排队，尚未开始`
       : idle ? '短暂动作，可被新任务打断' : '暂无正在执行的身体任务；不是游戏目标已完成');
     const key = JSON.stringify([this.connectionGeneration, title, detail]);
     if (this.bodyDisplay?.key !== key) this.bodyDisplay = { key, since: now, published: 0 };
