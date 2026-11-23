@@ -37,6 +37,9 @@ DIALOGUE_GOAL = "Decide whether current dialogue is addressed to you and needs a
 NATIVE_DIALOGUE_TTL_MS = 120_000
 COMPANION_CHECK_IN_SECONDS = 180
 COMPANION_TRAVEL_BLOCKS = 16
+SELF_CHOSEN_WAIT = "自主选择在这里等候"  # Recorded when a rest had no addressed order behind it.
+REGISTERED_HOME_RANGE = 48
+JOURNEY_ANCHOR_RETRY_SECONDS = 600
 MAID_BOND_TONES = (
     "Friendly and practical, as companions just getting to know each other.",
     "Familiar and relaxed. Suggest a helpful next step when it fits.",
@@ -286,6 +289,60 @@ def restore_default_guard(role: NpcRole, context: PlanContext) -> Step | None:
     return step if context.capabilities is not None and not step_support(step, context.capabilities) else None
 
 
+def at_registered_home(snapshot, home) -> bool | None:
+    """None when the registered house cannot be compared with the current position."""
+    position = getattr(snapshot, "position", None)
+    if (not isinstance(home, dict) or not isinstance(home.get("dimension"), str) or not home["dimension"]
+            or not getattr(snapshot, "dimension", None) or not isinstance(position, dict)):
+        return None
+    here = [position.get(axis) for axis in "xyz"]
+    if any(type(value) not in (int, float) for value in here):
+        return None
+    if home["dimension"] != snapshot.dimension:
+        return False
+    points = [[point.get(axis) for axis in "xyz"] for point in (home.get(key) for key in ("work", "door", "bed"))
+              if isinstance(point, dict)]
+    points = [point for point in points if all(type(value) in (int, float) for value in point)]
+    if not points:
+        return None
+    return any(math.dist(here, point) <= REGISTERED_HOME_RANGE for point in points)
+
+
+def leave_journey_anchor(role: NpcRole, context: PlanContext) -> list[Step] | None:
+    """End an expired, unprompted rest on the temporary anchor left by a journey.
+
+    Arriving somewhere holds a resident on a native anchor that the body reports as home mode.
+    Neither native guard nor the expedition moves a body in that mode, so its own short rest
+    would otherwise never end. An ordered wait and a stay at the registered house are kept.
+    """
+    native = current_native_state(context)
+    review = context.activity_review or {}
+    resident = native.get("resident") or {}
+    expedition = resident.get("expedition") or {}
+    elapsed = review.get("elapsedSeconds")
+    if (not role.default_native_guard or role.expedition_wait_seconds is None or role.activity_review_seconds is None
+            or native.get("nativeGuardDelegated") is not False
+            or review.get("activity") != "waiting" or review.get("waitPurpose") != SELF_CHOSEN_WAIT
+            or type(elapsed) is not int or elapsed < role.expedition_wait_seconds
+            or native.get("sitting") is not True or native.get("homeMode") is not True
+            or native.get("taskId") != "touhou_little_maid:idle" or native.get("passenger") is not False
+            or not isinstance(native.get("follow"), dict) or resident.get("loaded") is not True
+            or expedition.get("state") != "not_delegated" or not expedition.get("leaderId")
+            or not expedition.get("leaderDimension")
+            or resident.get("sleeping") or resident.get("leased") or resident.get("thinking")
+            or (resident.get("combat") or {}).get("targetId") or danger(context.snapshot)
+            or at_registered_home(context.snapshot, resident.get("home")) is not False):
+        return None
+    scene = activity_scene(context.snapshot)
+    if scene is None or scene[0] != "waiting":
+        return None
+    steps = [Step(tool="body:follow"), Step(tool="body:native:guard")]
+    if context.capabilities is None or any(
+            step.tool not in role.allowed_tools or step_support(step, context.capabilities) for step in steps):
+        return None
+    return steps
+
+
 def surveyed_here(context: PlanContext) -> bool:
     snap = context.snapshot
     if not snap or not snap.position or context.dialogue or danger(snap) or not context.body_results:
@@ -419,6 +476,7 @@ class NpcPlanner:
         self.social_receipts = {}
         self.next_meal = 0.0
         self.next_catch = 0.0
+        self.next_anchor_leave = 0.0
         self.next_guard_review = 0.0
         self.next_companion_check_in = time.monotonic() + 25
         self.companion_anchor: tuple[str, tuple[float, float, float]] | None = None
@@ -515,6 +573,11 @@ class NpcPlanner:
             if restore and (not current_agenda or role.expedition_wait_seconds is not None):
                 self.last_route = {"layer": "native-policy", "reason": "resume_configured_guard"}
                 return [restore]
+            if now >= self.next_anchor_leave and (leave := leave_journey_anchor(role, context)):
+                # A refused write leaves the body seated; do not repeat it on every review.
+                self.next_anchor_leave = now + JOURNEY_ANCHOR_RETRY_SECONDS
+                self.last_route = {"layer": "native-policy", "reason": "leave_expired_journey_anchor"}
+                return leave
         if intent.goal == IDLE_GOAL and not context.dialogue and available_for_routine:
             if not following and not current_agenda and now >= self.next_catch and (catch := routine_catch(role, context)):
                 self.next_catch = now + 300.0
@@ -1406,7 +1469,7 @@ class NpcHost:
                 direct = next((e for e in dialogue if addressed_dialogue(e, body_id, (self.role.name, self.role.id))), None)
                 for step in steps:
                     if step.tool in wait_tools and not step.note:
-                        step.note = direct.text[:200] if direct else "自主选择在这里等候"
+                        step.note = direct.text[:200] if direct else SELF_CHOSEN_WAIT
                 # A renewed promise while already seated only changes the remembered reason.
                 if scene[0] == "waiting" and steps and steps[0].tool in wait_tools:
                     renewed_purpose = steps[0].note if direct else None
