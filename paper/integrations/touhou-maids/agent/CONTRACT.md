@@ -199,8 +199,12 @@
 ```text
 death: {maidId, ownerId, name, eventId, diedAt, dimension, position,
         tombstoneId（墓碑出现后补充）, evidence:"original_tlm_tombstone|original_tlm_death_event",
-        tombstoneRegistered, tombstoneLoaded, nextStep}
+        tombstoneRegistered, tombstoneLoaded, nextStep,
+        tombstone（仅墓碑实体已加载时）: {entityId, vanillaAppearance:"armor_stand", vanillaName:"[女仆墓碑]",
+                    position:[x,y,z], itemStacks, items:[{id,count,damage,name}], itemsTruncated, claim}}
 ```
+
+没有单独的“遗物箱”：遗物（含复活胶片）都在原生墓碑实体里。未装模组的客户端（Mineflayer、原版 Java、基岩）收到的是同一实体编号的盔甲架，名牌以 `[女仆墓碑]` 开头；它不是可拆的盔甲架，原实体和归属不变。`tombstone` 只在墓碑所在区块已加载时出现，`items` 最多列32组。取回走原生交互：主人靠近后用主手对该实体右键，全部遗物进背包并移除墓碑；背包放不下时原模组拒绝，潜行右键则放不下的掉在脚边。本接口只读，不代取、不补发。
 
 死亡状态本地持久保存；墓碑记录消失仅说明原记录不在，可能已取走，不证明复活或遗物丢失。主人在线时发一次带 `[女仆·死亡]` 的文字，并发 `action:"lifecycle"`，requestId 为 eventId；同一连接不重复刷屏，重连补告。宿主将事实交给原主人格决策，不据此自动复活、发物品或创建替代实体。
 
