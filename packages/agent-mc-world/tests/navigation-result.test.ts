@@ -69,6 +69,23 @@ it.each(['changed', 'stopped'])('cancellation by %s cannot become success or lea
   if (reason === 'changed') expect(h.bot.pathfinder.goal).toBe(replacement);
 });
 
+it.each(['reached', 'changed'])('settles %s after synchronous cleanup without needing a zero-delay timer', async reason => {
+  const h = rig(), result = observe(h.start());
+  const timer = vi.spyOn(globalThis, 'setTimeout');
+  const replacement = new pathfinder.goals.GoalBlock(10, 65, 0);
+  try {
+    if (reason === 'reached') h.bot.emit('goal_reached', h.goal);
+    else h.bot.pathfinder.setGoal(replacement);
+    cleaned(h.bot);
+    expect(result.settled).toBe(false); // Never settle inside the native event callback.
+    await Promise.resolve(); await Promise.resolve();
+    expect(result.settled).toBe(true);
+    expect(result.error?.name ?? null).toBe(reason === 'reached' ? null : 'GoalChanged');
+    expect(timer).not.toHaveBeenCalled();
+    if (reason === 'changed') expect(h.bot.pathfinder.goal).toBe(replacement);
+  } finally { timer.mockRestore(); }
+});
+
 it('cleans up synchronous startup errors without waiting for a path event', async () => {
   const h = rig(); h.bot.pathfinder.setGoal = () => { throw new Error('startup failed'); };
   const result = observe(h.start());
