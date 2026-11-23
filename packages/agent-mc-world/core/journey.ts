@@ -55,7 +55,7 @@ export class JourneyObserver {
     const noveltyKey=(c:JourneyCue)=>JSON.stringify([sample.scope,dimension,c.kind,
       // Different villagers/sign boards in the same small area form one encounter, not a wake-up each.
       Math.floor(c.position[0]/32),Math.floor(c.position[2]/32),c.kind==='npc'?c.label:c.key]);
-    const water=sample.surfaceWater===true&&this.route.long&&remaining>=96&&this.route.waterSince!==null&&atMs-this.route.waterSince>=10_000
+    const water=sample.surfaceWater===true&&remaining>=40&&this.route.waterSince!==null&&atMs-this.route.waterSince>=10_000
       &&(this.route.waterNoticeAt===null||atMs-this.route.waterNoticeAt>=120_000);
     const fresh=!water&&this.route.long?cues.filter(c=>!this.seen.has(noveltyKey(c))).slice(0,3):[];
     const elapsedMs=atMs-this.route.startedAt,netProgressBlocks=Math.hypot(position[0]-this.route.noticePosition[0],position[2]-this.route.noticePosition[2]);
