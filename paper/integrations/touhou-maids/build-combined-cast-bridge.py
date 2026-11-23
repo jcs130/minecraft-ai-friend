@@ -7,14 +7,15 @@ reviewed fixes that share one release window:
     NativeMaidCompanionSupport, HybridMaidPlugin, new LegacyCastFailure) — legacy review.
   * Original NPC voice envelopes and read-only maid voice diagnostics, retaining the legacy ABI.
   * Read-only grave details for an owner whose client cannot see the mod tombstone (NativeMaidAgentSupport).
+  * Players cannot hurt an owned maid, directly or through projectiles, pets and summons (new MaidPlayerDamage).
 Only the explicitly listed classes are recompiled; every other baseline entry is preserved byte-for-byte.
 """
 import argparse,hashlib,os,subprocess,tempfile,zipfile
 from pathlib import Path
 
 BASE_SHA256='f24186685b88b748eb10564a961b906ccc5e07fe935ba5d8488b031d81551bd7'
-VERSION='0.1.69-grave-view'
-CLASSES=('MaidBodyControl','NativeMaidBodyActions','HybridMaidPlugin','NativeMaidCompanionSupport','NativeMaidMagicSupport','LegacyCastFailure','NativeMaidVoices','NpcVoiceEnvelopeStore','NativeMaidAgentSupport')
+VERSION='0.1.70-maid-protect'
+CLASSES=('MaidBodyControl','NativeMaidBodyActions','HybridMaidPlugin','NativeMaidCompanionSupport','NativeMaidMagicSupport','LegacyCastFailure','NativeMaidVoices','NpcVoiceEnvelopeStore','NativeMaidAgentSupport','MaidPlayerDamage')
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--baseline',type=Path,required=True);p.add_argument('--classpath-file',type=Path,required=True);p.add_argument('--javac',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
