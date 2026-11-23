@@ -835,6 +835,7 @@ final class SiteDungeonManager implements Listener {
                 plugin.getConfig().getString(ROOT+".claimed."+id+"."+r.site.id));
     }
     private String rewardStatus(Run r,UUID id,String reason){
+        if(plugin.getConfig().getBoolean(ROOT+".on-site-issued."+r.id+"."+id,false))return "issued_on_site";
         String slot=siteRewardSlot(r,id,day());
         if(slot.equals("ready")||slot.equals("claimed"))return slot;
         if(!reason.equals("completed"))return "run_incomplete";
@@ -884,9 +885,11 @@ final class SiteDungeonManager implements Listener {
             commands=List.of("/mycli guild exam status",info);
         }
         if(BlackBannerCamp.SITE.equals(id)&&"completed".equals(data.get("reason")))
-            next="营地敌群已清。新场次战利品在外哨实体宝箱里，直接开箱；无须救人或交任务。沿外哨原路离开，继续探索。";
+            next=reward.equals("daily_limit")?"营地敌群已清。今日奖励已领取，本场不重复生成物品；宝箱原物品保留，可继续探索。"
+                :"营地敌群已清。新场次战利品在外哨实体宝箱里，直接开箱；无须救人或交任务。沿外哨原路离开，继续探索。";
         if(Set.of("undead_crypt","creeping_crypt").contains(id)&&"completed".equals(data.get("reason")))
-            next="全部波次已清，挑战通关。新场次战利品掉落在本场战区，直接捡取；原路离开后继续探索。旧场次未领凭据仍按原领取方式保留。";
+            next=reward.equals("daily_limit")?"全部波次已清，挑战通关。今日奖励已领，本场不重复掉落；可原路离开继续探索。"
+                :"全部波次已清，挑战通关。新场次战利品掉落在本场战区，直接捡取；原路离开后继续探索。旧场次未领凭据仍按原领取方式保留。";
         data.put("nextAction",next);data.put("nextCommands",commands);
     }
     private void saveOutcome(UUID id,String site,Map<String,Object> data){
@@ -1538,6 +1541,7 @@ final class SiteDungeonManager implements Listener {
     }
     private void start(Player p,Site s,Mode mode,String confirmation){
         s=encounterArena(s);
+        if(wildCamp(s)||sameArena(s))require(!ResidentCli.isResident(p.getUniqueId()),"not_survival_or_observer");
         conquestAdmission(p,s);
         require(own(p)==null,"already_in_site_dungeon");
         require(playing(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
@@ -1563,6 +1567,11 @@ final class SiteDungeonManager implements Listener {
         try{persist();}catch(RuntimeException failure){runs.remove(s.id);throw failure;}
         for(EntryMember member:roster)permit(s,member);entryPermits.remove(p.getUniqueId());
         reconcile(r);
+        for(Player member:present(r)){
+            Menu pending=menus.get(member.getOpenInventory().getTopInventory());
+            if(pending!=null&&pending.site.equals(s.id)&&pending.choices.values().stream().anyMatch(choice->choice.startsWith("difficulty:")))
+                member.closeInventory();
+        }
         if(wildCamp(s)){
             runResult(p,"start",s.id,r.id);
             notice(r,"§c【野外敌群】黑旗营地12名敌人进入警戒！借建筑挡箭，清掉弩哨、突击兵和头目。清完直接打开战利品宝箱拿奖励，不用救人、报名或交任务。");
@@ -2400,21 +2409,30 @@ final class SiteDungeonManager implements Listener {
     private void completeCamp(Run r){
         // New outdoor encounters use one real shared chest batch per original run. Old receipts and
         // old two-room checkpoints still use the original settlement path below.
+        String plan=ROOT+".on-site-plans."+r.id;
+        if(!plugin.getConfig().contains(plan)){
+            var recipients=r.attendance.keySet().stream().filter(id->rewardEligible(r,id)&&siteRewardSlot(r,id,day()).equals("eligible")).map(UUID::toString).toList();
+            var relic=DungeonRelics.at(r.site.id);
+            var rare=r.attendance.keySet().stream().filter(id->rewardEligible(r,id)&&r.roomAttendance.getOrDefault(r.stages()-1,Set.of()).contains(id)
+                &&relic!=null&&!relicClaimed(id,r.site.id)&&receipt(id,r.site.id)==null).map(UUID::toString).toList();
+            atomic(()->plugin.getConfig().createSection(plan,Map.of("day",day(),"recipients",recipients,"relicRecipients",rare)));
+        }
+        String rewardDay=plugin.getConfig().getString(plan+".day");
+        var recipients=plugin.getConfig().getStringList(plan+".recipients").stream().map(UUID::fromString).toList();
+        var relicRecipients=plugin.getConfig().getStringList(plan+".relicRecipients").stream().map(UUID::fromString).toList();
+        require(rewardDay!=null&&rewardDay.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}"),"data_unavailable");
+        require(recipients.stream().allMatch(r.attendance::containsKey)&&relicRecipients.stream().allMatch(r.attendance::containsKey),"reward_plan_invalid");
         var loot=new ArrayList<ItemStack>();
-        loot.add(new ItemStack(Material.EMERALD,r.site.emeralds*r.mode.reward));
-        if(wildCamp(r.site)){
-            loot.add(new ItemStack(Material.ARROW,32*r.mode.reward));loot.add(new ItemStack(Material.COOKED_BEEF,8));loot.add(new ItemStack(Material.IRON_INGOT,4));
-        }else{
-            loot.add(new ItemStack(r.site.bonus,r.site.bonusCount*r.mode.reward));loot.add(new ItemStack(Material.BREAD,4));
+        for(UUID id:recipients){
+            loot.add(new ItemStack(Material.EMERALD,r.site.emeralds*r.mode.reward));
+            if(wildCamp(r.site)){
+                loot.add(new ItemStack(Material.ARROW,32*r.mode.reward));loot.add(new ItemStack(Material.COOKED_BEEF,8));loot.add(new ItemStack(Material.IRON_INGOT,4));
+            }else{
+                loot.add(new ItemStack(r.site.bonus,r.site.bonusCount*r.mode.reward));loot.add(new ItemStack(Material.BREAD,4));
+            }
         }
         var relic=DungeonRelics.at(r.site.id);
-        List<UUID> relicRecipients=new ArrayList<>();
-        for(UUID id:r.attendance.keySet())if(rewardEligible(r,id)
-                &&r.roomAttendance.getOrDefault(r.stages()-1,Set.of()).contains(id)
-                &&relic!=null&&!relicClaimed(id,r.site.id)&&receipt(id,r.site.id)==null){
-            loot.add(DungeonRelics.create(relic,r.mode.ordinal(),java.util.concurrent.ThreadLocalRandom.current()));
-            relicRecipients.add(id);
-        }
+        for(UUID id:relicRecipients)if(relic!=null)loot.add(DungeonRelics.create(relic,r.mode.ordinal(),java.util.concurrent.ThreadLocalRandom.current()));
         Location dropAt=r.room().center(Bukkit.getWorld(r.site.world));
         if(sameArena(r.site)){
             if(!AgentFriendPlugin.safeLanding(dropAt.getBlock())){
@@ -2423,7 +2441,11 @@ final class SiteDungeonManager implements Listener {
             campOutpost.drop(r.id,dropAt.clone().add(0,.5,0),loot);
         }else campOutpost.publish(r.id,loot);
         atomic(()->{
-            for(UUID id:relicRecipients)plugin.getConfig().set(relicPath(id,r.site.id),r.id);
+            for(UUID id:recipients){
+                plugin.getConfig().set(ROOT+".claimed."+id+"."+r.site.id,rewardDay);
+                plugin.getConfig().set(ROOT+".on-site-issued."+r.id+"."+id,true);
+            }
+            for(UUID id:relicRecipients){plugin.getConfig().set(relicPath(id,r.site.id),r.id);plugin.getConfig().set(ROOT+".on-site-issued."+r.id+"."+id,true);}
             for(UUID id:r.attendance.keySet())if(rewardEligible(r,id)){
                 Player p=ResidentCli.find(id);if(p!=null)plugin.taskMarket().worldAction(p,GuildManager.Goal.SITE_CLEAR,r.site.id,"site:"+r.id,r.started,false);
             }
@@ -2433,11 +2455,17 @@ final class SiteDungeonManager implements Listener {
             plugin.nativeSiteCompleted(p,r.site.id,r.id);
             if(plugin.nativeRpgSelected()&&plugin.skillAssessments()!=null&&missingRooms(r,id).isEmpty()&&unverifiedRooms(r).isEmpty())
                 plugin.skillAssessments().siteCompleted(p,r.site.id,r.id,r.started);
-            if(sameArena(r.site)){
+            if(loot.isEmpty()){
+                p.sendTitle("§6通关","§f全部敌人已清，今日奖励不重复发放",5,80,20);
+                p.sendMessage("§6【通关】全部敌人已清。今日奖励已领取，本场不再重复生成物品；现场剩余战利品保持原样，可继续探索。");
+            }else if(sameArena(r.site)){
                 p.sendTitle("§6通关","§f"+r.stages()+"波敌人已全部清掉，战利品已掉落",5,80,20);
                 p.sendMessage("§6【通关】"+r.site.name+"全部"+r.stages()+"波已清。战利品掉落在 "+dropAt.getBlockX()+","+dropAt.getBlockY()+","+dropAt.getBlockZ()+"，直接捡取；原路离开后可继续探索。无须交任务或找下一间房。");
             }else p.sendMessage("§6营地12名敌人已清，战利品已放入外哨宝箱 "+campOutpost.chestPoint()+"。直接开箱拿走；无须救人或交任务，接着继续探索。");
         }
+        for(Player viewer:ResidentCli.online())if(!r.party.contains(viewer.getUniqueId())&&!ResidentCli.isResident(viewer.getUniqueId())
+                &&viewer.getWorld().getName().equals(r.site.world)&&r.room().contains(viewer.getLocation()))
+            viewer.sendTitle("§6战区通关","§f全部敌人已清，参战者可收取本场战利品",5,80,20);
         end(r,"completed");
     }
     private void complete(Run r){
@@ -2961,7 +2989,7 @@ final class SiteDungeonManager implements Listener {
     }
 
     private void openDifficulty(Player p,Site site){
-        require(playing(p)&&!roomVisitor(p)&&!plugin.isDowned(p),"not_survival_or_observer");
+        require(playing(p)&&!roomVisitor(p)&&!plugin.isDowned(p)&&!ResidentCli.isResident(p.getUniqueId()),"not_survival_or_observer");
         require(own(p)==null&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
         require(!runs.containsKey(site.id),"site_busy");
         Inventory inv=Bukkit.createInventory(null,27,"选择难度 · "+site.name);

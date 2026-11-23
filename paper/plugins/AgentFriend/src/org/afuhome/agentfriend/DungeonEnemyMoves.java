@@ -130,6 +130,7 @@ final class DungeonEnemyMoves implements Listener {
     void changeMove(Mob mob,Move move,Scope scope){
         Actor previous=actors.remove(mob.getUniqueId());if(previous!=null)reset(previous);
         register(mob,move,scope);
+        Actor next=actors.get(mob.getUniqueId());if(next!=null)next.next=tick+2; // Keep the full windup, not a second idle delay at the phase break.
     }
     void shutdown() {
         actors.values().forEach(this::reset);

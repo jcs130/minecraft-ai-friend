@@ -80,6 +80,8 @@ def audit(source, outpost):
     check('.receipts.' not in settlement and '.claimed-runs.' not in settlement and 'saveOutcome(' not in settlement,
           'new settlement must not overwrite old receipts')
     check('receipt(id,r.site.id)==null' in settlement, 'old receipts must prevent duplicate relic delivery')
+    check('siteRewardSlot(r,id,day()).equals("eligible")' in settlement, 'existing per-player daily limits still gate physical loot')
+    ordered(settlement, 'if(!plugin.getConfig().contains(plan))', '"recipients",recipients', 'campOutpost.drop(r.id,', 'ROOT+".claimed."+id', 'end(r,"completed")')
 
     replaceable = method(outpost, 'private static boolean replaceable(Block block)')
     building = method(outpost, 'private void building(World world,String id,List<Cell> cells)')
@@ -157,6 +159,7 @@ class SiteDungeonManager {
   void setTitle(String s){title=s;}void setProgress(double p){progress=p;}
   List<Player> getPlayers(){return players;}void addPlayer(Player p){players.add(p);}void removePlayer(Player p){players.remove(p);}void removeAll(){players.clear();}
  }
+ static class SiteRewardPolicy {__REWARD_STATUS__}
  static class DungeonWaveCatalog {record Enemy(EntityType type,double health,String name,String mythic){
   Enemy(EntityType type,double health,String name){this(type,health,name,"");}}}
  static class EncounterDesign {
@@ -277,7 +280,8 @@ class SiteDungeonManager {
  void atomic(Runnable change){change.run();}String definition(Site s){return s.toString();}String beaconLayoutSignature(BeaconLayout b){return "fixture";}
  boolean echoGeometry(Site s){return false;}long activeMillis(long start,long pause,long now){return now-start-pause;}
  void end(Run r,String reason){runs.remove(r.site.id);}List<Location> safeSpots(Run r){return List.of(r.room().center(WORLD));}
- boolean relicClaimed(UUID id,String site){return false;}String relicPath(UUID id,String site){return ROOT+".relics."+id+"."+site;}
+ String day(){return "2026-11-23";}
+ boolean relicClaimed(UUID id,String site){return plugin.config.contains(relicPath(id,site));}String relicPath(UUID id,String site){return ROOT+".relics."+id+"."+site;}
  List<String> missingRooms(Run r,UUID id){return List.of();}List<String> unverifiedRooms(Run r){return List.of();}
  __METHODS__
  static Site camp(){
@@ -441,9 +445,14 @@ class SiteDungeonManager {
    check(m.campOutpost.dropPoint.x==100.5&&m.campOutpost.dropPoint.z==200.5,"crypt loot remains in first-room arena "+id);
    check(!m.runs.containsKey(id),"final settlement ends original run "+id);
   }
-  SiteDungeonManager m=new SiteDungeonManager();Run r=new Run(campArena(camp()),Mode.NORMAL);r.stage=1;r.phase="returning";m.runs.put(r.site.id,r);m.completeCamp(r);
+  SiteDungeonManager m=new SiteDungeonManager();Run r=new Run(campArena(camp()),Mode.NORMAL);Player member=actor(90,r.site);
+  ResidentCli.players=new ArrayList<>(List.of(member));r.party.add(member.id);r.attendance.put(member.id,1);r.roomAttendance.put(0,Set.of(member.id));
+  r.stage=1;r.phase="returning";m.runs.put(r.site.id,r);m.completeCamp(r);
   check(m.campOutpost.published==1&&m.campOutpost.dropped==0&&m.campOutpost.deliveredRun.equals(r.id),"real camp settlement selects shared chest batch");
   check(m.campOutpost.loot.stream().anyMatch(i->i.type==Material.ARROW&&i.amount==32),"camp shared loot includes arrows");
+  check(m.plugin.config.getString(ROOT+".claimed."+member.id+"."+r.site.id).equals(m.day()),"original per-player daily reward cap retained");
+  Run repeat=new Run(campArena(camp()),Mode.NORMAL);repeat.stage=1;repeat.phase="returning";repeat.party.add(member.id);repeat.attendance.put(member.id,1);repeat.roomAttendance.put(0,Set.of(member.id));
+  m.runs.put(repeat.site.id,repeat);m.completeCamp(repeat);check(m.campOutpost.loot.isEmpty(),"new physical visit does not bypass the existing daily reward cap");
   ResidentCli.players=new ArrayList<>();
  }
  static void appendItems(){
@@ -478,7 +487,7 @@ def main():
     args = parser.parse_args()
     root = args.source_root or Path(__file__).resolve().parents[1]
     inputs = {name: (root / f'src/org/afuhome/agentfriend/{name}.java').read_bytes()
-              for name in ('SiteDungeonManager', 'CampOutpost', 'EncounterDesign')}
+              for name in ('SiteDungeonManager', 'CampOutpost', 'EncounterDesign', 'SiteRewardPolicy')}
     source = inputs['SiteDungeonManager'].decode('utf8')
     outpost = inputs['CampOutpost'].decode('utf8')
     args.output.mkdir(parents=True, exist_ok=False)
@@ -496,7 +505,7 @@ def main():
         'private void tickOutdoorCamp()', 'private void tickCryptWaves()', 'private Site surveyedCamp()',
         'public void approachButton(PlayerInteractEvent event)', 'private void updateCampBattle(Run run)', 'private List<DungeonWaveCatalog.Enemy> waveEnemies(Run r)',
         'private void persist(Runnable extra)', 'private void restore()',
-        'private boolean rewardEligible(Run r, UUID id)', 'private void completeCamp(Run r)',
+        'private boolean rewardEligible(Run r, UUID id)', 'private void completeCamp(Run r)', 'private String siteRewardSlot(Run r,UUID id,String day)',
     ]
     records = [method(source, signature) for signature in [
         'private record Room(', 'private record Site(', 'private enum Mode {', 'private static final class Run {']]
@@ -504,7 +513,8 @@ def main():
         '__METHODS__', '\n'.join(method(source, signature) for signature in signatures)).replace(
         '__APPEND__', method(outpost, 'static ItemStack[] append(ItemStack[] before,List<ItemStack> items)')).replace(
         '__DESIGN_METHODS__', '\n'.join(method(inputs['EncounterDesign'].decode('utf8'), s) for s in [
-            'static List<DungeonWaveCatalog.Enemy> enemies(', 'static List<DungeonWaveCatalog.Enemy> pressure(']))
+            'static List<DungeonWaveCatalog.Enemy> enemies(', 'static List<DungeonWaveCatalog.Enemy> pressure('])).replace(
+        '__REWARD_STATUS__', method(inputs['SiteRewardPolicy'].decode('utf8'), 'static String status('))
     java = args.output / 'SiteDungeonManager.java'
     java.write_text(generated, encoding='utf8')
     suffix = '.exe' if os.name == 'nt' else ''
