@@ -51,6 +51,12 @@ public class EncounterDesignProbe {
   Method topology=method(moves,"shape"),covers=method(moves,"covers",double.class,double.class,double.class);
   Object barrage=val(moves,"CRYPT_BARRAGE"),miasma=val(moves,"CRYPT_MIASMA");
   check(topology.invoke(barrage).equals("line")&&topology.invoke(miasma).equals("circle"),"telegraph topology differs by stage");
+  Method projectile=method(moves,"blocksNativeProjectile",boolean.class);
+  for(Object move:moves.getEnumConstants()){
+   boolean authored=move==barrage||move==miasma;
+   check((Boolean)projectile.invoke(move,true)==authored,"only authored ranged enemies pause ordinary shots during windup and recovery "+move);
+   check(!(Boolean)projectile.invoke(move,false),"ordinary ranged attacks remain available outside the visible skill window "+move);
+  }
   check((Boolean)covers.invoke(barrage,7,.8,0),"blue line contains danger");check(!(Boolean)covers.invoke(barrage,7,1.2,0),"sidestep clears blue line");
   check((Boolean)covers.invoke(miasma,-1,2,0),"green ring covers radial interior");check(!(Boolean)covers.invoke(miasma,0,4,0),"retreat clears green ring");
   for(Object move:List.of(barrage,miasma,val(moves,"GRAVE_CLEAVE"),val(moves,"FORGE_SWEEP"),val(moves,"ECHO_NOVA"))){

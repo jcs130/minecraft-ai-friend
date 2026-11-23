@@ -24,6 +24,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
@@ -71,6 +72,10 @@ final class DungeonEnemyMoves implements Listener {
                 case FROST_LINE, ECHO_BEAM, CRYPT_BARRAGE -> "line";
                 default -> "arc";
             };
+        }
+
+        boolean blocksNativeProjectile(boolean casting) {
+            return casting && (this == CRYPT_BARRAGE || this == CRYPT_MIASMA);
         }
 
         boolean covers(double forward, double side, double height) {
@@ -144,6 +149,16 @@ final class DungeonEnemyMoves implements Listener {
         if (actor != null && actor.origin != null && !actor.resolving && actor.scope.active().getAsBoolean()) {
             event.setCancelled(true);
         }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void authoredProjectile(ProjectileLaunchEvent event) {
+        if (!enabled() || !(event.getEntity().getShooter() instanceof Mob shooter)) return;
+        Actor actor = actors.get(shooter.getUniqueId());
+        // Only the two new authored ranged enemies pause their ordinary shots.
+        // Already flying projectiles, scripted strikes and legacy encounters remain unchanged.
+        if (actor != null && actor.scope.active().getAsBoolean()
+                && actor.move.blocksNativeProjectile(actor.origin != null)) event.setCancelled(true);
     }
 
     List<Map<String, Object>> hazards(Player viewer) {

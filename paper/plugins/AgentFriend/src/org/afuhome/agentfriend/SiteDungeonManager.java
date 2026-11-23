@@ -730,10 +730,15 @@ final class SiteDungeonManager implements Listener {
     private void result(Player p,String action,String site,String reason){
         result(p,action,site,reason,Map.of());
     }
+    private static boolean pendingDifficultyChoice(String action,String reason,Map<String,?> detail){
+        return action.equals("start")&&reason.equals("choose_difficulty")
+            &&Boolean.TRUE.equals(detail.get("requiresChoice"))&&Boolean.FALSE.equals(detail.get("changed"));
+    }
     private void result(Player p,String action,String site,String reason,Map<String,?> detail){
         Map<String,Object> data=new LinkedHashMap<>();data.put("action",action);data.put("id",site);
         data.put("success",reason.equals("success"));data.put("reason",reason);
-        ActionFeedback.Advice advice=reason.equals("success")?null:ActionFeedback.advice("dungeon",reason,site);
+        // Selecting a difficulty is a pending choice, not a failed prerequisite or an opened run.
+        ActionFeedback.Advice advice=reason.equals("success")||pendingDifficultyChoice(action,reason,detail)?null:ActionFeedback.advice("dungeon",reason,site);
         if(advice!=null){
             data.put("errorMessage",advice.message());data.put("nextAction",advice.next());data.put("nextCommands",advice.commands());
             if(reason.equals("unknown_dungeon"))data.put("nextCommand",advice.commands().getFirst());
@@ -3037,6 +3042,7 @@ final class SiteDungeonManager implements Listener {
         p.openInventory(inv);
         result(p,"start",site.id,"choose_difficulty",Map.of("changed",false,"requiresChoice",true,"requiresConfirmation",false,
             "errorMessage","尚未开场。点击普通、冒险或末日，一次选择直接开始。","difficultyOptions",options,
+            "lifecycle","awaiting_difficulty","nextAction","在当前选择菜单点击一个难度；选定前本场尚未开启。",
             "nextCommands",options.stream().map(option->option.get("command")).toList()));
     }
     private void openEntryReview(Player p,EntryOffer offer){

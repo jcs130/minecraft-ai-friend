@@ -479,7 +479,15 @@ class SiteDungeonManager {
   ItemStack[] batches=CampOutpost.append(new ItemStack[]{old,null,null},List.of(new ItemStack(Material.ARROW,2),new ItemStack(Material.BREAD,3)));
   check(batches[0].amount==10&&batches[1].type==Material.ARROW&&batches[2].type==Material.BREAD,"multiple rewards consume only empty slots in order");
  }
- public static void main(String[] args){overlays();localIds();victoriesAndButtons();visits();checkpoints();hudAndSettlement();appendItems();System.out.println("PASS "+checks+" outdoor/crypt/append real-method checks (synthetic boundaries; not in-game)");}
+ static void pendingChoices(){
+  Map<String,Object> choice=Map.of("requiresChoice",true,"changed",false);
+  check(pendingDifficultyChoice("start","choose_difficulty",choice),"difficulty selection remains pending without generic prerequisite failure");
+  check(!pendingDifficultyChoice("join","choose_difficulty",choice),"join cannot disguise a failure as a difficulty choice");
+  check(!pendingDifficultyChoice("start","save_failed",choice),"storage failure keeps original feedback");
+  check(!pendingDifficultyChoice("start","choose_difficulty",Map.of("requiresChoice",true,"changed",true)),"changed result cannot enter pending-choice feedback");
+  check(!pendingDifficultyChoice("start","choose_difficulty",Map.of()),"missing choice evidence stays a normal failure");
+ }
+ public static void main(String[] args){overlays();localIds();victoriesAndButtons();visits();checkpoints();hudAndSettlement();appendItems();pendingChoices();System.out.println("PASS "+checks+" outdoor/crypt/append real-method checks (synthetic boundaries; not in-game)");}
 }
 '''
 
@@ -503,6 +511,7 @@ def main():
     signatures = [
         'private static boolean wildCamp(Site site)', 'private static Site campArena(Site site)',
         'private static boolean cryptSite(Site site)', 'private static boolean sameArena(Site site)',
+        'private static boolean pendingDifficultyChoice(String action,String reason,Map<String,?> detail)',
         'private static Site encounterArena(Site site)', 'private String[] localCampCommand(Player p,String[] raw)',
         'private boolean campVictory(Site camp)', 'private boolean bossLocked(Run r)',
         'private boolean playing(Player p)', 'private boolean roomVisitor(Player p)',
