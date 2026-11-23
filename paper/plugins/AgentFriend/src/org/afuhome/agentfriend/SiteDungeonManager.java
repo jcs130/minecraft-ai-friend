@@ -234,6 +234,7 @@ final class SiteDungeonManager implements Listener {
     }
     private final Map<String,Run> runs=new LinkedHashMap<>();
     private final Map<Inventory,Menu> menus=new IdentityHashMap<>();
+    private final Map<UUID,Inventory> difficultyOffers=new HashMap<>();
     private final Map<UUID,Shot> shots=new HashMap<>();
     private final Set<String> blockedCheckpoints=new HashSet<>();
     private final Map<UUID,Long> lockHints=new HashMap<>();
@@ -2848,7 +2849,7 @@ final class SiteDungeonManager implements Listener {
         String state=run!=null?"fighting":campVictory(camp)?"loot":"approach";
         String next=run!=null?"清掉黑旗头目、突击兵与弩哨，利用营地建筑挡箭。剩余 "+run.mobs.size()+" 名标记敌人。清完直接开战利品宝箱，不用救人或交任务。"
             :state.equals("loot")?"营地已清。直接打开外哨战利品宝箱拿奖励；原路出营，继续探索其他野外据点。"
-            :"进入营地选一次难度开打：8名弩哨、3名突击兵和1名头目。清完怪物 → 打开战利品宝箱 → 继续探索。不用报名、菜单或救村民。";
+            :"进入营地选一次难度开打：8名弩哨、3名突击兵和1名头目。清完怪物 → 打开战利品宝箱 → 继续探索。不用报名、确认令牌或救村民。";
         out.put("state",state);out.put("reason","OUTDOOR_CAMP_"+state.toUpperCase(Locale.ROOT));out.put("nextAction",next);
         out.put("target",state.equals("loot")?campOutpost.chestPoint():List.of(-1069,67,-1116));
         out.put("nextCommand","/mycli dungeon status illager_camp");out.put("nextCommands",List.of("/mycli dungeon status illager_camp"));
@@ -3016,6 +3017,37 @@ final class SiteDungeonManager implements Listener {
         return campVictory(surveyedCamp());
     }
 
+    private static boolean difficultyPoseStable(Location before,Location after){
+        double dx=after.getX()-before.getX(),dy=after.getY()-before.getY(),dz=after.getZ()-before.getZ();
+        return before.getWorld()==after.getWorld()&&dx*dx+dy*dy+dz*dz<=.01;
+    }
+    /** Wait before the single initial popup; never reopen a menu closed by movement.
+     * Physical-container movement/range rules are deliberately left unchanged. */
+    private final class DifficultyPopup extends org.bukkit.scheduler.BukkitRunnable {
+        final Player player;final Site site;final Inventory inventory,initialTop;final World world;
+        final boolean startedInside;final long expires=System.currentTimeMillis()+30_000;
+        Location previous;
+        DifficultyPopup(Player player,Site site,Inventory inventory){
+            this.player=player;this.site=site;this.inventory=inventory;
+            previous=player.getLocation().clone();world=player.getWorld();startedInside=atFirstRoom(site,previous);
+            initialTop=player.getOpenInventory().getTopInventory();
+        }
+        @Override public void run(){
+            Inventory top=player.getOpenInventory().getTopInventory();
+            if(!plugin.isEnabled()||!playing(player)||roomVisitor(player)||plugin.isDowned(player)
+                ||ResidentCli.isResident(player.getUniqueId())||player.getWorld()!=world
+                ||own(player)!=null||plugin.dungeonParticipant(player)||plugin.pvpParticipant(player)
+                ||runs.containsKey(site.id)||System.currentTimeMillis()>expires
+                ||difficultyOffers.get(player.getUniqueId())!=inventory||!menus.containsKey(inventory)
+                ||startedInside&&!atFirstRoom(site,player.getLocation())
+                ||top.getType()!=InventoryType.CRAFTING&&top!=initialTop){
+                difficultyOffers.remove(player.getUniqueId(),inventory);menus.remove(inventory);cancel();return;
+            }
+            Location current=player.getLocation();boolean settled=difficultyPoseStable(previous,current);
+            previous=current.clone();if(!settled)return;
+            cancel();player.openInventory(inventory);
+        }
+    }
     private void openDifficulty(Player p,Site site){
         require(playing(p)&&!roomVisitor(p)&&!plugin.isDowned(p)&&!ResidentCli.isResident(p.getUniqueId()),"not_survival_or_observer");
         require(own(p)==null&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
@@ -3038,11 +3070,15 @@ final class SiteDungeonManager implements Listener {
                 "command","/mycli dungeon start "+site.id+" "+mode.id));
         }
         inv.setItem(4,icon(Material.BOOK,"§e先选难度，再开始战斗","只选一次，无须报名或确认令牌。","同场刷波，HUD显示波次和剩余敌人，全部清完才算通关。"));
-        menus.put(inv,new Menu(site.id,receipt(p.getUniqueId(),site.id)!=null,null,Map.copyOf(choices)));
-        p.openInventory(inv);
+        Inventory previous=difficultyOffers.get(p.getUniqueId());Menu pending=previous==null?null:menus.get(previous);
+        if(pending==null||!pending.site.equals(site.id)){
+            menus.put(inv,new Menu(site.id,receipt(p.getUniqueId(),site.id)!=null,null,Map.copyOf(choices)));
+            difficultyOffers.put(p.getUniqueId(),inv);
+            new DifficultyPopup(p,site,inv).runTaskTimer(plugin,2L,2L);
+        }
         result(p,"start",site.id,"choose_difficulty",Map.of("changed",false,"requiresChoice",true,"requiresConfirmation",false,
             "errorMessage","尚未开场。点击普通、冒险或末日，一次选择直接开始。","difficultyOptions",options,
-            "lifecycle","awaiting_difficulty","nextAction","在当前选择菜单点击一个难度；选定前本场尚未开启。",
+            "lifecycle","awaiting_difficulty","nextAction","停步后会弹出难度选择；点击一次普通、冒险或末日。选定前本场尚未开启。",
             "nextCommands",options.stream().map(option->option.get("command")).toList()));
     }
     private void openEntryReview(Player p,EntryOffer offer){
@@ -3215,5 +3251,7 @@ final class SiteDungeonManager implements Listener {
         });
     }
     @EventHandler public void drag(InventoryDragEvent e){if(menus.containsKey(e.getView().getTopInventory()))e.setCancelled(true);}
-    @EventHandler public void close(InventoryCloseEvent e){menus.remove(e.getInventory());}
+    @EventHandler public void close(InventoryCloseEvent e){
+        menus.remove(e.getInventory());difficultyOffers.remove(e.getPlayer().getUniqueId(),e.getInventory());
+    }
 }

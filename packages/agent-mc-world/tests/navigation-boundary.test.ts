@@ -78,7 +78,12 @@ it('preserves the relocation reason in the executor terminal instead of retrying
   const r = rig(), reports: TaskReport[] = [];
   Object.assign((r.h.exec as any).opts, { report: (report: TaskReport) => reports.push(report), fleeHealth: () => 0 });
   expect(r.h.exec.submitDetailed([{ skill: 'goto', at: [30, 64, 0], walkOnly: true }]).accepted).toBe(true);
-  await vi.advanceTimersByTimeAsync(300);
+  // The fixture must first own an in-flight route; fixed startup timing can
+  // relocate before asynchronous executor preparation finishes on a busy runner.
+  for (let elapsed = 0; !r.bot.pathfinder.isMoving() && elapsed < 3000; elapsed += 50) {
+    await vi.advanceTimersByTimeAsync(50);
+  }
+  expect(r.bot.pathfinder.isMoving()).toBe(true);
   r.position(20, 0, 100, true); // Relative packet must be interpreted by native physics.
   await vi.advanceTimersByTimeAsync(300);
   expect(reports).toHaveLength(1);

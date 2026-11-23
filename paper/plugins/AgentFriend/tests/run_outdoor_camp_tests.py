@@ -480,6 +480,12 @@ class SiteDungeonManager {
   check(batches[0].amount==10&&batches[1].type==Material.ARROW&&batches[2].type==Material.BREAD,"multiple rewards consume only empty slots in order");
  }
  static void pendingChoices(){
+  World w=WORLD;Location anchor=new Location(w,0,67,0);
+  check(difficultyPoseStable(anchor,anchor.clone()),"stationary player can receive one difficulty popup");
+  check(difficultyPoseStable(anchor,new Location(w,.03,67,.03)),"small settled-position jitter is harmless");
+  check(!difficultyPoseStable(anchor,new Location(w,.4,67,0)),"walking delays initial popup rather than loosening container movement rules");
+  check(!difficultyPoseStable(anchor,new Location(w,0,67.2,0)),"vertical movement delays popup");
+  check(!difficultyPoseStable(anchor,new Location(new World("other"),0,67,0)),"world change cannot open a stale popup");
   Map<String,Object> choice=Map.of("requiresChoice",true,"changed",false);
   check(pendingDifficultyChoice("start","choose_difficulty",choice),"difficulty selection remains pending without generic prerequisite failure");
   check(!pendingDifficultyChoice("join","choose_difficulty",choice),"join cannot disguise a failure as a difficulty choice");
@@ -512,6 +518,7 @@ def main():
         'private static boolean wildCamp(Site site)', 'private static Site campArena(Site site)',
         'private static boolean cryptSite(Site site)', 'private static boolean sameArena(Site site)',
         'private static boolean pendingDifficultyChoice(String action,String reason,Map<String,?> detail)',
+        'private static boolean difficultyPoseStable(Location before,Location after)',
         'private static Site encounterArena(Site site)', 'private String[] localCampCommand(Player p,String[] raw)',
         'private boolean campVictory(Site camp)', 'private boolean bossLocked(Run r)',
         'private boolean playing(Player p)', 'private boolean roomVisitor(Player p)',
