@@ -1367,6 +1367,62 @@ final class SiteDungeonManager implements Listener {
                 .toList();
     }
 
+    // Spectators and native maid residents are never auto-mustered. Eligible nearby players/agents are
+    // invited to join voluntarily with one command that teleports them into the muster area; no confirmation
+    // token is required, so a ready starter is never blocked by a co-located bystander.
+    private void inviteMuster(Site site,Player starter){
+        String command="/mycli dungeon join "+site.id;
+        for(Player member:selectMusterInvitees(ResidentCli.online(),starter.getUniqueId(),
+                plugin::isObserver,m->ResidentCli.isResident(m.getUniqueId()),
+                m->musterAdmission(site,m),m->atFirstRoom(site,m.getLocation()))){
+            member.sendMessage("§a[遗迹集结] "+site.name+" 已开启。想参加输入 "+command+" 加入并传送到集结区；观战与女仆不计入集结。");
+        }
+    }
+    // Pure invite filter: exclude the starter, observers (spectators) and native maid residents, keep only
+    // eligible players standing in the first room. Sorted for deterministic order. No confirmation gate.
+    static List<Player> selectMusterInvitees(List<Player> online,UUID starter,
+            java.util.function.Predicate<Player> observer,java.util.function.Predicate<Player> resident,
+            java.util.function.Function<Player,String> admission,java.util.function.Predicate<Player> atFirst){
+        return online.stream().filter(member->!member.getUniqueId().equals(starter))
+                .filter(member->!observer.test(member)).filter(member->!resident.test(member))
+                .filter(atFirst).filter(member->admission.apply(member).isEmpty())
+                .sorted(Comparator.comparing(Player::getUniqueId)).toList();
+    }
+    // Voluntary join from outside the site: teleport to the first-room muster area using the same
+    // chunk-load / safe-landing / state-recheck guards as the station passage, then enroll. Equipment is
+    // notify-only; no confirmation token is required.
+    private void musterTravel(Player p,Site s,Run r){
+        require(own(p)==null,"already_in_site_dungeon");
+        require(playing(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
+        List<Integer> destination=combatEntry(s);
+        World w=Bukkit.getWorld(s.world);require(w!=null,"entry_unavailable");
+        int x=destination.get(0),z=destination.get(2);
+        require(w.isChunkGenerated(x>>4,z>>4),"entry_not_generated");
+        Location origin=p.getLocation().clone();
+        boolean json=jsonOutput.get(),verbose=verboseOutput.get();
+        ExistingChunkAccess.load(plugin,w,x>>4,z>>4).whenComplete((chunk,error)->Bukkit.getScheduler().runTask(plugin,()->format(json,verbose,()->{
+            if(!p.isOnline())return;
+            if(error!=null||chunk==null){result(p,"join",s.id,"entry_unavailable");return;}
+            if(!playing(p)||plugin.isDowned(p)||p.isInsideVehicle()||own(p)!=null||plugin.dungeonParticipant(p)
+                    ||plugin.pvpParticipant(p)||p.getWorld()!=origin.getWorld()||p.getLocation().distanceSquared(origin)>2){
+                result(p,"join",s.id,"player_state_changed");return;}
+            Location center=point(w,destination),landing=passageLanding(s,center,false);
+            if(landing==null){result(p,"join",s.id,"entry_blocked");return;}
+            if(!p.teleport(landing,PlayerTeleportEvent.TeleportCause.PLUGIN)){result(p,"join",s.id,"travel_denied");return;}
+            Location arrived=p.getLocation();
+            if(arrived.getWorld()!=w||arrived.distanceSquared(landing)>1){
+                boolean returned=p.teleport(origin,PlayerTeleportEvent.TeleportCause.PLUGIN);
+                result(p,"join",s.id,"station_landing_unconfirmed",Map.of("returnedToOrigin",returned));return;}
+            Run current=runs.get(s.id);
+            if(current==null){result(p,"join",s.id,"not_participating");return;}
+            String problem=entryProblem(p,current,p.getLocation());
+            if(problem.equals("equipment_required")){permit(s,entryMember(s,p));problem="";}
+            if(!problem.isEmpty()){result(p,"join",s.id,problem);return;}
+            if(!enroll(p,current)){result(p,"join",s.id,"not_participating");return;}
+            runResult(p,"join",s.id,current.id);
+        })));
+    }
+
     private Location passageLanding(Site site,Location center,boolean exit){
         World world=center.getWorld();
         for(int radius=0;radius<=2;radius++)for(int dx=-radius;dx<=radius;dx++)for(int dz=-radius;dz<=radius;dz++){
@@ -1412,8 +1468,15 @@ final class SiteDungeonManager implements Listener {
         require(!plugin.dungeonEdits().dirty("site-" + s.id), "site_reset_pending");
         require(System.currentTimeMillis()-plugin.getConfig().getLong(ROOT+".cooldowns."+s.id,0)>=120_000,"site_cooldown");
         require(receiptCount()<1024,"pending_receipt_capacity");
-        var roster=entryRoster(p,s,false);
-        if(!reviewEntry(p,s,"start",mode.id,roster,confirmation))return;
+        // Simplified muster: the starter opens directly once their own admission passes. Bystanders are
+        // never auto-pulled into a blocking confirmation; spectators and native maid residents are ignored,
+        // and eligible nearby players/agents are invited to join voluntarily with one command. Equipment is
+        // notify-only, so an Agent starter is never stuck replaying a --confirm token.
+        EntryMember starter=entryMember(s,p);
+        require(starter.blocker().isEmpty(),"already_in_activity_or_not_survival");
+        var roster=List.of(starter);
+        if(!starter.missing().isEmpty())p.sendMessage("§e[战备提示] 缺少 "+String.join("、",starter.missing())+"；仍可开场，注意补给。");
+        inviteMuster(s,p);
         Run r=new Run(s,mode,beaconLayout!=null&&s==beaconLayout.site?beaconLayout:null);r.altarTactics=s.id.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled();
         r.enemyMoves=r.beacon==null&&BOSS_SKILLS.containsKey(s.id)&&plugin.dungeonEnemyMoves().enabled();
         if(echoAvailable(s))r.echo=new EchoCitadel.Progress();
@@ -1426,21 +1489,21 @@ final class SiteDungeonManager implements Listener {
     }
     private void join(Player p,Site s,String confirmation){
         Run r=runs.get(s.id);require(r!=null,"not_participating");
-        // Kept as an idempotent compatibility entry; normal play auto-enrolls.
-        boolean declined=r.declined.remove(p.getUniqueId());
-        try{
-            String problem=entryProblem(p,r,p.getLocation());
-            if(problem.equals("equipment_required")||confirmation!=null&&problem.isEmpty()){
-                EntryMember member=entryMember(s,p);
-                if(!reviewEntry(p,s,"join","",List.of(member),confirmation)){
-                    if(declined)r.declined.add(p.getUniqueId());return;
-                }
-                permit(s,member);
-            }else require(problem.isEmpty(),problem);
-            require(enroll(p,r),"not_participating");
+        require(!plugin.isObserver(p),"already_in_activity_or_not_survival");
+        // Voluntary join, no confirmation token. Already inside the muster area: enroll directly with
+        // equipment notify-only. Outside the site: teleport to the first-room muster area, then enroll.
+        if(r.site.contains(p.getLocation())&&!atStation(s,p.getLocation())){
+            boolean declined=r.declined.remove(p.getUniqueId());
+            try{
+                String problem=entryProblem(p,r,p.getLocation());
+                if(problem.equals("equipment_required")){permit(s,entryMember(s,p));problem="";}
+                require(problem.isEmpty(),problem);
+                require(enroll(p,r),"not_participating");
+            }
+            catch(RuntimeException failure){if(declined)r.declined.add(p.getUniqueId());throw failure;}
+            runResult(p,"join",s.id,r.id);return;
         }
-        catch(RuntimeException failure){if(declined)r.declined.add(p.getUniqueId());throw failure;}
-        runResult(p,"join",s.id,r.id);
+        musterTravel(p,s,r);
     }
     private void conquestAdmission(Player p,Site s){
         if(s.conquestFloor==0)return;

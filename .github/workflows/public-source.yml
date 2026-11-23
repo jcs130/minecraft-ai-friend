@@ -218,6 +218,8 @@ jobs:
         run: python paper/plugins/AgentFriend/tests/run_exam_completion_tests.py --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/exam-completion-tests"
       - name: Dungeon muster roster bystander regression
         run: python paper/plugins/AgentFriend/tests/run_muster_roster_tests.py --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/muster-roster-tests"
+      - name: Dungeon muster simplify voluntary-join regression
+        run: python paper/plugins/AgentFriend/tests/run_muster_simplify_tests.py --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/muster-simplify-tests"
       - name: Independent bounded recycle quotes
         run: python paper/plugins/AgentFriend/tests/run_recycle_quotes.py --jdk "$JAVA_HOME"
       - name: Exact maid identity and Bedrock allay fallback
