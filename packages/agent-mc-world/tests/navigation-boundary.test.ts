@@ -85,7 +85,13 @@ it('preserves the relocation reason in the executor terminal instead of retrying
   }
   expect(r.bot.pathfinder.isMoving()).toBe(true);
   r.position(20, 0, 100, true); // Relative packet must be interpreted by native physics.
-  await vi.advanceTimersByTimeAsync(300);
+  // Safety is synchronous; the executor report follows asynchronous goto/checkpoint cleanup.
+  expect(r.bot.pathfinder.goal).toBeNull();
+  expect(r.bot.pathfinder.isMoving()).toBe(false);
+  expect(r.bot.getControlState('forward')).toBe(false);
+  for (let elapsed = 0; reports.length === 0 && elapsed < 3000; elapsed += 50) {
+    await vi.advanceTimersByTimeAsync(50);
+  }
   expect(reports).toHaveLength(1);
   expect(reports[0]).toMatchObject({ kind: 'blocked', steps: [{ outcome: 'fail', decision: {
     status: 'blocked', reason: 'navigation-location-changed', retryable: false,

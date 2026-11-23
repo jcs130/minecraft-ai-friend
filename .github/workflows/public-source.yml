@@ -61,6 +61,8 @@ jobs:
           node --check paper/plugins/AgentFriend/tests/verified-travel-stage.mjs
           node --check paper/plugins/AgentFriend/tests/travel-markers-stage.mjs
           node --check paper/integrations/touhou-maids/tests/maid-scene-stage.mjs
+      - name: Check recipe guide offline source-safety contracts
+        run: python -m unittest discover -s paper/integrations/touhou-maids/tests -p test_recipebook_guide.py -v
       - name: Check optional maid adapter without connecting
         run: |
           node --test paper/integrations/touhou-maids/tests/maid-port.test.mjs
