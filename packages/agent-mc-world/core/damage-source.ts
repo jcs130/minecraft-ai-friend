@@ -6,6 +6,7 @@
  */
 import type { Bot } from 'mineflayer';
 import { zhEntity } from './names.ts';
+import { runtimeRegistryShortName } from './runtime-registry.ts';
 
 export interface SelfDamage {
   /** 伤害类型名(去掉 minecraft: 前缀);注册表没收到时为 null */
@@ -23,29 +24,18 @@ interface DamageEventPacket {
   sourceDirectId: number;
 }
 
-interface RegistryDataPacket {
-  id?: string;
-  entries?: Array<{ key: string }>;
-}
-
-const damageTypes = new WeakMap<Bot, string[]>();
 const pending = new WeakMap<Bot, SelfDamage[]>();
 
 /** createBot 之后立刻挂上:registry_data 在 login 之前的配置阶段就到了 */
 export function trackDamageSources(bot: Bot): void {
   const client = (bot as unknown as { _client: { on(n: string, f: (p: never) => void): void } })._client;
-  // 1.20.5 起一个注册表一个包,条目顺序即序号
-  client.on('registry_data', (p: RegistryDataPacket) => {
-    if (p.id !== 'minecraft:damage_type' || !p.entries) return;
-    damageTypes.set(bot, p.entries.map((e) => e.key.replace(/^minecraft:/, '')));
-  });
   client.on('damage_event', (p: DamageEventPacket) => {
     if (p.entityId !== bot.entity?.id) return;
     const nameOf = (idPlusOne: number): string | null =>
       idPlusOne > 0 ? (bot.entities[idPlusOne - 1]?.name ?? null) : null;
     const list = pending.get(bot) ?? [];
     list.push({
-      type: damageTypes.get(bot)?.[p.sourceTypeId] ?? null,
+      type: runtimeRegistryShortName(bot, 'minecraft:damage_type', p.sourceTypeId),
       cause: nameOf(p.sourceCauseId),
       direct: nameOf(p.sourceDirectId),
     });

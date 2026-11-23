@@ -1,0 +1,871 @@
+[
+  {
+    "id": "minecraft:inventory",
+    "menuId": -1,
+    "name": "Player",
+    "totalSlots": 46,
+    "inventoryStart": 9,
+    "inventoryEnd": 44,
+    "craft": 0,
+    "slots": [
+      {
+        "name": "craft result",
+        "index": 0
+      },
+      {
+        "name": "craft grid",
+        "index": 1,
+        "size": 4
+      },
+      {
+        "name": "armor",
+        "index": 5,
+        "size": 4
+      },
+      {
+        "name": "helmet",
+        "index": 5
+      },
+      {
+        "name": "chestplate",
+        "index": 6
+      },
+      {
+        "name": "leggings",
+        "index": 7
+      },
+      {
+        "name": "boots",
+        "index": 8
+      },
+      {
+        "name": "main inventory",
+        "index": 9,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 36,
+        "size": 9
+      },
+      {
+        "name": "offhand",
+        "index": 45
+      }
+    ],
+    "layoutSource": "player inventory convention (46 slots including offhand); not a minecraft:menu id",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:generic_9x1",
+    "menuId": 0,
+    "name": "Generic 9x1",
+    "totalSlots": 45,
+    "inventoryStart": 9,
+    "inventoryEnd": 44,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "container",
+        "index": 0,
+        "size": 9
+      },
+      {
+        "name": "inventory",
+        "index": 9,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 36,
+        "size": 9
+      }
+    ],
+    "layoutSource": "purpur 26.2 127.0.0.1 Bukkit createInventory(rows*9) via Velocity; no vanilla block opens this menu type",
+    "layoutVerified": true,
+    "layoutEvidence": "purpur-26.2-2633 127.0.0.1 via Velocity 25577 2026-11-23 Asia/Shanghai; plugin AmwMenuAudit /amwmenu; open_window inventoryType=0 title=audit-generic-9x1; window_items slotCount=45; inventoryStart=9 inventoryEnd=45; container items at index 0 (diamond 2) and 8 (apple 3). Vanilla 26.2 has no block that opens this menu type; this is plugin/custom inventory evidence only."
+  },
+  {
+    "id": "minecraft:generic_9x2",
+    "menuId": 1,
+    "name": "Generic 9x2",
+    "totalSlots": 54,
+    "inventoryStart": 18,
+    "inventoryEnd": 53,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "container",
+        "index": 0,
+        "size": 18
+      },
+      {
+        "name": "inventory",
+        "index": 18,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 45,
+        "size": 9
+      }
+    ],
+    "layoutSource": "purpur 26.2 127.0.0.1 Bukkit createInventory(rows*9) via Velocity; no vanilla block opens this menu type",
+    "layoutVerified": true,
+    "layoutEvidence": "purpur-26.2-2633 127.0.0.1 via Velocity 25577 2026-11-23 Asia/Shanghai; plugin AmwMenuAudit /amwmenu; open_window inventoryType=1 title=audit-generic-9x2; window_items slotCount=54; inventoryStart=18 inventoryEnd=54; container items at index 0 (diamond 2) and 17 (apple 3). Vanilla 26.2 has no block that opens this menu type; this is plugin/custom inventory evidence only."
+  },
+  {
+    "id": "minecraft:generic_9x3",
+    "menuId": 2,
+    "name": "Generic 9x3",
+    "totalSlots": 63,
+    "inventoryStart": 27,
+    "inventoryEnd": 62,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "container",
+        "index": 0,
+        "size": 27
+      },
+      {
+        "name": "inventory",
+        "index": 27,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 54,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:generic_9x4",
+    "menuId": 3,
+    "name": "Generic 9x4",
+    "totalSlots": 72,
+    "inventoryStart": 36,
+    "inventoryEnd": 71,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "container",
+        "index": 0,
+        "size": 36
+      },
+      {
+        "name": "inventory",
+        "index": 36,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 63,
+        "size": 9
+      }
+    ],
+    "layoutSource": "purpur 26.2 127.0.0.1 Bukkit createInventory(rows*9) via Velocity; no vanilla block opens this menu type",
+    "layoutVerified": true,
+    "layoutEvidence": "purpur-26.2-2633 127.0.0.1 via Velocity 25577 2026-11-23 Asia/Shanghai; plugin AmwMenuAudit /amwmenu; open_window inventoryType=3 title=audit-generic-9x4; window_items slotCount=72; inventoryStart=36 inventoryEnd=72; container items at index 0 (diamond 2) and 35 (apple 3). Vanilla 26.2 has no block that opens this menu type; this is plugin/custom inventory evidence only."
+  },
+  {
+    "id": "minecraft:generic_9x5",
+    "menuId": 4,
+    "name": "Generic 9x5",
+    "totalSlots": 81,
+    "inventoryStart": 45,
+    "inventoryEnd": 80,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "container",
+        "index": 0,
+        "size": 45
+      },
+      {
+        "name": "inventory",
+        "index": 45,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 72,
+        "size": 9
+      }
+    ],
+    "layoutSource": "purpur 26.2 127.0.0.1 Bukkit createInventory(rows*9) via Velocity; no vanilla block opens this menu type",
+    "layoutVerified": true,
+    "layoutEvidence": "purpur-26.2-2633 127.0.0.1 via Velocity 25577 2026-11-23 Asia/Shanghai; plugin AmwMenuAudit /amwmenu; open_window inventoryType=4 title=audit-generic-9x5; window_items slotCount=81; inventoryStart=45 inventoryEnd=81; container items at index 0 (diamond 2) and 44 (apple 3). Vanilla 26.2 has no block that opens this menu type; this is plugin/custom inventory evidence only."
+  },
+  {
+    "id": "minecraft:generic_9x6",
+    "menuId": 5,
+    "name": "Generic 9x6",
+    "totalSlots": 90,
+    "inventoryStart": 54,
+    "inventoryEnd": 89,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "container",
+        "index": 0,
+        "size": 54
+      },
+      {
+        "name": "inventory",
+        "index": 54,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 81,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 127.0.0.1 open_window+window_items",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1:25770 2026-11-23 Asia/Shanghai; adjacent chests facing=south type=right+(type=left sibling); open_window inventoryType=5 title.translate=container.chestDouble; window_items slotCount=90; inventoryStart=54 inventoryEnd=90; items: diamond 2 at index 0 (right half container.0) and apple 3 at index 27 (left half container.0). Unconnected singles stay generic_9x3/63."
+  },
+  {
+    "id": "minecraft:generic_3x3",
+    "menuId": 6,
+    "name": "Generic 3x3",
+    "totalSlots": 45,
+    "inventoryStart": 9,
+    "inventoryEnd": 44,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "container",
+        "index": 0,
+        "size": 9
+      },
+      {
+        "name": "inventory",
+        "index": 9,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 36,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:crafter_3x3",
+    "menuId": 7,
+    "name": "Crafter",
+    "totalSlots": 46,
+    "inventoryStart": 10,
+    "inventoryEnd": 45,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "crafter",
+        "index": 0,
+        "size": 9
+      },
+      {
+        "name": "extra",
+        "index": 9,
+        "size": 1,
+        "notes": "vanilla window_items length is 46=10+36, not 9+36"
+      },
+      {
+        "name": "inventory",
+        "index": 10,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 37,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "notes": "live vanilla 26.2 window_items length 46 (inventoryType 7); not 9+36",
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:anvil",
+    "menuId": 8,
+    "name": "Anvil",
+    "totalSlots": 39,
+    "inventoryStart": 3,
+    "inventoryEnd": 38,
+    "craft": 2,
+    "slots": [
+      {
+        "name": "tool",
+        "index": 0
+      },
+      {
+        "name": "combined",
+        "index": 1
+      },
+      {
+        "name": "result",
+        "index": 2
+      },
+      {
+        "name": "inventory",
+        "index": 3,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 30,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:beacon",
+    "menuId": 9,
+    "name": "Beacon",
+    "totalSlots": 37,
+    "inventoryStart": 1,
+    "inventoryEnd": 36,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "input",
+        "index": 0
+      },
+      {
+        "name": "inventory",
+        "index": 1,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 28,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:blast_furnace",
+    "menuId": 10,
+    "name": "Blast Furnace",
+    "totalSlots": 39,
+    "inventoryStart": 3,
+    "inventoryEnd": 38,
+    "craft": 2,
+    "slots": [
+      {
+        "name": "smelted",
+        "index": 0
+      },
+      {
+        "name": "fuel",
+        "index": 1
+      },
+      {
+        "name": "result",
+        "index": 2
+      },
+      {
+        "name": "inventory",
+        "index": 3,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 30,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:brewing_stand",
+    "menuId": 11,
+    "name": "Brewing Stand",
+    "totalSlots": 41,
+    "inventoryStart": 5,
+    "inventoryEnd": 40,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "bottle",
+        "index": 0,
+        "size": 3
+      },
+      {
+        "name": "ingredient",
+        "index": 3
+      },
+      {
+        "name": "fuel",
+        "index": 4
+      },
+      {
+        "name": "inventory",
+        "index": 5,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 32,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:crafting",
+    "menuId": 12,
+    "name": "Crafting",
+    "totalSlots": 46,
+    "inventoryStart": 10,
+    "inventoryEnd": 45,
+    "craft": 0,
+    "slots": [
+      {
+        "name": "craft result",
+        "index": 0
+      },
+      {
+        "name": "craft grid",
+        "index": 1,
+        "size": 9
+      },
+      {
+        "name": "inventory",
+        "index": 10,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 37,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:enchantment",
+    "menuId": 13,
+    "name": "Enchantment",
+    "totalSlots": 38,
+    "inventoryStart": 2,
+    "inventoryEnd": 37,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "item",
+        "index": 0
+      },
+      {
+        "name": "lapis",
+        "index": 1
+      },
+      {
+        "name": "inventory",
+        "index": 2,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 29,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:furnace",
+    "menuId": 14,
+    "name": "Furnace",
+    "totalSlots": 39,
+    "inventoryStart": 3,
+    "inventoryEnd": 38,
+    "craft": 2,
+    "slots": [
+      {
+        "name": "smelted",
+        "index": 0
+      },
+      {
+        "name": "fuel",
+        "index": 1
+      },
+      {
+        "name": "result",
+        "index": 2
+      },
+      {
+        "name": "inventory",
+        "index": 3,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 30,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:grindstone",
+    "menuId": 15,
+    "name": "Grindstone",
+    "totalSlots": 39,
+    "inventoryStart": 3,
+    "inventoryEnd": 38,
+    "craft": 2,
+    "slots": [
+      {
+        "name": "input 1",
+        "index": 0
+      },
+      {
+        "name": "input 2",
+        "index": 1
+      },
+      {
+        "name": "result",
+        "index": 2
+      },
+      {
+        "name": "inventory",
+        "index": 3,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 30,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:hopper",
+    "menuId": 16,
+    "name": "Hopper",
+    "totalSlots": 41,
+    "inventoryStart": 5,
+    "inventoryEnd": 40,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "container",
+        "index": 0,
+        "size": 5
+      },
+      {
+        "name": "inventory",
+        "index": 5,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 32,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:lectern",
+    "menuId": 17,
+    "name": "Lectern",
+    "totalSlots": 1,
+    "inventoryStart": 1,
+    "inventoryEnd": 0,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "book",
+        "index": 0
+      }
+    ],
+    "layoutSource": "vanilla 26.2 127.0.0.1 open_window+window_items",
+    "layoutVerified": true,
+    "notes": "Vanilla window_items length is 1. Player inventory is not included. prismarine-windows historically assumed 37 slots; 26.2 runtime patch aligns to 1.",
+    "layoutEvidence": "vanilla 26.2 127.0.0.1:25770 2026-11-23 Asia/Shanghai; lectern has_book=true with written_book via data merge; open_window inventoryType=17 title.translate=container.lectern; window_items slotCount=1, occupied index 0 written_book_content; mineflayer window type=minecraft:lectern slots=1 inventoryStart=1 inventoryEnd=1 (no player inventory). item replace block container.0 is rejected because a lectern is not a container. Not an ordinary container."
+  },
+  {
+    "id": "minecraft:loom",
+    "menuId": 18,
+    "name": "Loom",
+    "totalSlots": 40,
+    "inventoryStart": 4,
+    "inventoryEnd": 39,
+    "craft": 3,
+    "slots": [
+      {
+        "name": "banner",
+        "index": 0
+      },
+      {
+        "name": "dye",
+        "index": 1
+      },
+      {
+        "name": "pattern",
+        "index": 2
+      },
+      {
+        "name": "result",
+        "index": 3
+      },
+      {
+        "name": "inventory",
+        "index": 4,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 31,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:merchant",
+    "menuId": 19,
+    "name": "Merchant",
+    "totalSlots": 39,
+    "inventoryStart": 3,
+    "inventoryEnd": 38,
+    "craft": 2,
+    "slots": [
+      {
+        "name": "give 1",
+        "index": 0
+      },
+      {
+        "name": "give 2",
+        "index": 1
+      },
+      {
+        "name": "result",
+        "index": 2
+      },
+      {
+        "name": "inventory",
+        "index": 3,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 30,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 127.0.0.1 open_window+window_items+trade_list",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1:25770 2026-11-23 Asia/Shanghai; librarian villager; open_window inventoryType=19 title=Librarian; window_items slotCount=39; inventoryStart=3 inventoryEnd=39; trade_list tradeCount=1; occupied player slots began at index 3 (36 player slots). Not an ordinary container."
+  },
+  {
+    "id": "minecraft:shulker_box",
+    "menuId": 20,
+    "name": "Shulker Box",
+    "totalSlots": 63,
+    "inventoryStart": 27,
+    "inventoryEnd": 62,
+    "craft": -1,
+    "slots": [
+      {
+        "name": "container",
+        "index": 0,
+        "size": 27
+      },
+      {
+        "name": "inventory",
+        "index": 27,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 54,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:smithing",
+    "menuId": 21,
+    "name": "Smithing",
+    "totalSlots": 40,
+    "inventoryStart": 4,
+    "inventoryEnd": 39,
+    "craft": 3,
+    "slots": [
+      {
+        "name": "template",
+        "index": 0
+      },
+      {
+        "name": "base",
+        "index": 1
+      },
+      {
+        "name": "addition",
+        "index": 2
+      },
+      {
+        "name": "result",
+        "index": 3
+      },
+      {
+        "name": "inventory",
+        "index": 4,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 31,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "notes": "1.20+ four container slots; not the 1.16-1.19 three-slot table",
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:smoker",
+    "menuId": 22,
+    "name": "Smoker",
+    "totalSlots": 39,
+    "inventoryStart": 3,
+    "inventoryEnd": 38,
+    "craft": 2,
+    "slots": [
+      {
+        "name": "smelted",
+        "index": 0
+      },
+      {
+        "name": "fuel",
+        "index": 1
+      },
+      {
+        "name": "result",
+        "index": 2
+      },
+      {
+        "name": "inventory",
+        "index": 3,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 30,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:cartography_table",
+    "menuId": 23,
+    "name": "Cartography Table",
+    "totalSlots": 39,
+    "inventoryStart": 3,
+    "inventoryEnd": 38,
+    "craft": 2,
+    "slots": [
+      {
+        "name": "map",
+        "index": 0
+      },
+      {
+        "name": "paper",
+        "index": 1
+      },
+      {
+        "name": "result",
+        "index": 2
+      },
+      {
+        "name": "inventory",
+        "index": 3,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 30,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  },
+  {
+    "id": "minecraft:stonecutter",
+    "menuId": 24,
+    "name": "Stonecutter",
+    "totalSlots": 38,
+    "inventoryStart": 2,
+    "inventoryEnd": 37,
+    "craft": 1,
+    "slots": [
+      {
+        "name": "input",
+        "index": 0
+      },
+      {
+        "name": "result",
+        "index": 1
+      },
+      {
+        "name": "inventory",
+        "index": 2,
+        "size": 27
+      },
+      {
+        "name": "hotbar",
+        "index": 29,
+        "size": 9
+      }
+    ],
+    "layoutSource": "vanilla 26.2 minecraft:menu protocol_id + standard container+player-inventory (36) convention",
+    "layoutVerified": true,
+    "layoutEvidence": "vanilla 26.2 127.0.0.1 open_window+window_items 2026-11-23"
+  }
+]

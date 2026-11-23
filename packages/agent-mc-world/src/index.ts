@@ -12,4 +12,6 @@ export { navigationFallBudget, estimateFallDamage, installNavigationFallCosts, s
 export type { FallMode, NavigationFallBudget } from '../core/navigation-fall.ts';
 
 export {attachProximityVoice, inspectVoiceWav} from './proximity-voice.ts';
+export {attachSimpleVoiceChat, parseVoicechatSecret, createOfficialOpusCodec, inspectVoiceWav as inspectSvcWav, SVC_COMPATIBILITY_VERSION} from './simple-voice-chat.ts';
+
 export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing} from './proximity-voice.ts';

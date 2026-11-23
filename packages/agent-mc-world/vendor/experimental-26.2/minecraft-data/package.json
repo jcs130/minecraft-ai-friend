@@ -1,0 +1,7 @@
+{
+  "name": "minecraft-data",
+  "version": "3.119.0-exp262",
+  "description": "Official minecraft-data 3.119.0 plus a locally locked 26.2 overlay. Experimental; not an official release.",
+  "main": "index.js",
+  "license": "MIT"
+}

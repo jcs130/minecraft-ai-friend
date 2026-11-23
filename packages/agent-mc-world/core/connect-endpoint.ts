@@ -14,12 +14,31 @@ export interface ConnectEndpoint {
   source: string;
 }
 
+export type EndpointLookup = (name: string, type: 'A' | 'AAAA' | 'SRV') => Promise<LookupResult>;
+
+export interface EndpointFallback {
+  /** Short source label, such as `public-dns` or `doh-dns.google`. */
+  source: string;
+  lookup: EndpointLookup;
+}
+
 export interface ResolveEndpointOptions {
   host: string;
   port: number;
   handshakeHost?: string;
   publicDnsFallback?: boolean;
-  lookup?: (name: string, type: 'A' | 'AAAA' | 'SRV') => Promise<LookupResult>;
+  lookup?: EndpointLookup;
+  /** Optional public/DoH (or test) lookups used when `publicDnsFallback` is on. */
+  fallbackLookups?: EndpointFallback[];
+}
+
+/** Raised when public fallback is enabled but no usable A/AAAA/SRV target is found. */
+export class MinecraftEndpointUnresolvedError extends Error {
+  readonly code = 'ENOTFOUND';
+  constructor(host: string, port: number) {
+    super(`Minecraft host ${host}:${port} could not be resolved to a usable public address`);
+    this.name = 'MinecraftEndpointUnresolvedError';
+  }
 }
 
 export interface LookupResult {
@@ -112,14 +131,35 @@ async function lookupDoh(name: string, type: 'A' | 'AAAA' | 'SRV'): Promise<Look
 }
 
 async function firstAddress(
-  lookup: ResolveEndpointOptions['lookup'],
+  lookup: EndpointLookup,
   name: string,
 ): Promise<string | undefined> {
-  const a = await lookup!(name, 'A');
+  const a = await lookup(name, 'A');
   const usable = (a.addresses ?? []).find((ip) => !isUnusableResolvedAddress(ip));
   if (usable) return usable;
-  const aaaa = await lookup!(name, 'AAAA');
+  const aaaa = await lookup(name, 'AAAA');
   return (aaaa.addresses ?? []).find((ip) => !isUnusableResolvedAddress(ip));
+}
+
+function usableSrv(srv: LookupResult['srv']): { port: number; name: string } | null {
+  if (!srv?.name || !Number.isInteger(srv.port) || srv.port <= 0 || srv.port > 65535) return null;
+  return { name: srv.name.replace(/\.$/, ''), port: srv.port };
+}
+
+async function lookupSrv(lookup: EndpointLookup, srvName: string): Promise<{ port: number; name: string } | null> {
+  try {
+    return usableSrv((await lookup(srvName, 'SRV')).srv);
+  } catch {
+    // SRV is optional discovery: a timeout or resolver failure must not block A/AAAA.
+    return null;
+  }
+}
+
+function defaultFallbackLookups(): EndpointFallback[] {
+  return [
+    { source: 'public-dns', lookup: (name, type) => lookupResolver(PUBLIC_DNS, name, type) },
+    { source: 'doh-dns.google', lookup: lookupDoh },
+  ];
 }
 
 export async function resolveMinecraftConnectEndpoint(options: ResolveEndpointOptions): Promise<ConnectEndpoint> {
@@ -132,33 +172,52 @@ export async function resolveMinecraftConnectEndpoint(options: ResolveEndpointOp
   }
 
   const lookup = options.lookup ?? lookupSystem;
+  const useFallback = options.publicDnsFallback !== false;
+  const fallbacks = useFallback ? (options.fallbackLookups ?? defaultFallbackLookups()) : [];
   const srvName = `_minecraft._tcp.${host}`;
   let target = host;
   let resolvedPort = port;
+  let srvSource: string | null = null;
   // Match minecraft-protocol: an explicit port must never be replaced by SRV.
   // SRV is optional discovery, so a timeout must not block a valid direct A/AAAA route.
-  const srv = port === 25565 ? await lookup(srvName, 'SRV').catch(() => ({ srv: null })) : { srv: null };
-  if (srv.srv?.name && Number.isInteger(srv.srv.port) && srv.srv.port > 0 && srv.srv.port <= 65535) {
-    target = srv.srv.name;
-    resolvedPort = srv.srv.port;
+  if (port === 25565) {
+    const systemSrv = await lookupSrv(lookup, srvName);
+    if (systemSrv) {
+      target = systemSrv.name;
+      resolvedPort = systemSrv.port;
+      srvSource = 'system-srv';
+    } else {
+      for (const fallback of fallbacks) {
+        const discovered = await lookupSrv(fallback.lookup, srvName);
+        if (!discovered) continue;
+        target = discovered.name;
+        resolvedPort = discovered.port;
+        srvSource = `${fallback.source}-srv`;
+        break;
+      }
+    }
   }
 
-  const useFallback = options.publicDnsFallback !== false;
   let address = await firstAddress(lookup, target);
-  let source = srv.srv ? 'system-srv' : 'system-a';
-  if ((!address || isUnusableResolvedAddress(address)) && useFallback) {
-    try {
-      address = await firstAddress((name, type) => lookupResolver(PUBLIC_DNS, name, type), target);
-      source = 'public-dns';
-    } catch { /* try DoH next */ }
-  }
-  if ((!address || isUnusableResolvedAddress(address)) && useFallback) {
-    try {
-      address = await firstAddress(lookupDoh, target);
-      source = 'doh-dns.google';
-    } catch { /* keep previous failure */ }
+  let source = srvSource ?? 'system-a';
+  if ((!address || isUnusableResolvedAddress(address)) && fallbacks.length) {
+    for (const fallback of fallbacks) {
+      try {
+        address = await firstAddress(fallback.lookup, target);
+      } catch {
+        continue;
+      }
+      if (address && !isUnusableResolvedAddress(address)) {
+        source = srvSource && srvSource.endsWith('-srv') ? srvSource : fallback.source;
+        break;
+      }
+      address = undefined;
+    }
   }
   if (!address || isUnusableResolvedAddress(address)) {
+    // With public fallback on, do not silently dial the configured name: box
+    // resolvers may map it to a fake 198.18.0.0/15 intercept (HTTP 400).
+    if (useFallback) throw new MinecraftEndpointUnresolvedError(host, port);
     return { host, port, fakeHost: handshake ?? host, source: 'unresolved-use-configured-host' };
   }
   return { host: address, port: resolvedPort, fakeHost: handshake ?? host, source };

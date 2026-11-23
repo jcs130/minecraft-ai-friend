@@ -26,9 +26,12 @@ export const MINECRAFT_DEFAULTS = {
   fakeHost: '',
   /** Retry public DNS when the system resolver returns a fake 198.18.0.0/15 address. */
   publicDnsFallback: true,
+  /** Automatic reconnect after a dropped connection. Set false to require an explicit reconnect. */
+  autoReconnect: true,
   /** Maximum gap between server keepalive packets; not an action retry budget. */
   keepAliveTimeoutMs: 60_000,
   proximityVoice: { enabled:false, audioProducerUrl:'', outputMode:'game-only' as const },
+  simpleVoiceChat: { enabled:false, officialJar:'', javaPath:'', compatibilityVersion:20 },
   chatDuplicateWindowMs: 120_000,
   /** Honest mining throttle (budgets per rolling minute / 10 min, gaps, rest, warning back-off). */
   miningLimits: structuredClone(MINING_LIMIT_DEFAULTS),
@@ -223,6 +226,7 @@ export const MINECRAFT_DEFAULTS = {
 
 export interface MinecraftConfigSection {
   proximityVoice?: import('./proximity-voice-lane.ts').ProximityVoiceConfig;
+  simpleVoiceChat?: import('./simple-voice-chat-lane.ts').SimpleVoiceChatConfig;
   /** Observed journey opportunities wake the host; never force a stop or start inference in the core. */
   journey?: {enabled:boolean;choiceMinBlocks?:number;choiceMaxBlocks?:number;dangerChoiceMaxBlocks?:number};
   provider?: 'mineflayer' | 'java-client';
@@ -240,6 +244,8 @@ export interface MinecraftConfigSection {
   fakeHost?: string;
   /** Retry public DNS when the system resolver returns a fake 198.18.0.0/15 address. Default true. */
   publicDnsFallback?: boolean;
+  /** Automatic reconnect after a dropped connection. Default true. */
+  autoReconnect?: boolean;
   /** Keepalive packet timeout in milliseconds, default 60 seconds. */
   keepAliveTimeoutMs?: number;
   /** Requested server chunk radius, 2..32; omitted preserves Mineflayer's default. Not a visibility/security boundary. */
@@ -380,6 +386,10 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.publicDnsFallback': {
         type: 'boolean', title: '公共 DNS 回退', 'x-hot': false,
         description: '系统 DNS 返回 198.18.0.0/15 这类不可用地址时，改用公共 DNS 解析并保留原域名作为握手主机。默认开启。',
+      },
+      'worlds.minecraft.autoReconnect': {
+        type: 'boolean', title: '断线自动重连', 'x-hot': false,
+        description: '连接失败或断开后是否自动重连。关闭后需明确重连，避免在登录确认超时等情况下重复提交凭据。默认开启。',
       },
       'worlds.minecraft.viewerPort': {
         type: 'integer', title: 'viewer 端口', minimum: 0, maximum: 65535, 'x-hot': false,
@@ -542,6 +552,8 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
         description: '只走已加载、连续实心平地上的短步，不挖掘、搭路或进入水中。',
       },
       'worlds.minecraft.proximityVoice.enabled': {type:'boolean',title:'游戏附近语音',description:'按需发给附近玩家，复用当前已认证连接；不自动配音游戏文字。'},
+      'worlds.minecraft.simpleVoiceChat.enabled': {type:'boolean',title:'原生 Simple Voice Chat',description:'在已认证连接上使用原生 SVC 客户端发声，不是 mc_voice/mcagent:voice。默认关闭。sent 不表示听见。'},
+      'worlds.minecraft.simpleVoiceChat.officialJar': {type:'string',title:'官方 SVC jar',description:'用于 48kHz 20ms VOIP Concentus 编解码的官方 Simple Voice Chat jar 路径。不是 TTS 凭据。'},
       'worlds.minecraft.proximityVoice.audioProducerUrl': {type:'string',title:'演出音频服务',description:'显式配置的音频产物服务地址。音色与 TTS 由演出扩展维护。'},
       'worlds.minecraft.proximityVoice.outputMode': {type:'string',enum:['game-only','live-and-game'],title:'游戏语音输出',description:'game-only 仅游戏；live-and-game 同一音频也进入直播队列。观众解说始终不转发游戏。','x-hot':true},
       'worlds.minecraft.movementPace.enabled': { type: 'boolean', title: '寻路/转身按真人节奏', 'x-hot': true,

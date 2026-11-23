@@ -1,0 +1,11 @@
+Vanilla 26.2 reports used as audit fixtures.
+
+Generator: net.minecraft.data.Main --reports --server
+Jar: official Mojang server.jar 26.2 (already downloaded locally)
+JDK: Temurin 25.0.5+8
+Generated at: 2026-11-23 15:44 Asia/Shanghai (UTC+8)
+No credentials, no official-server traffic.
+
+registries-excerpt.json is a trimmed copy of reports/registries.json (selected registries only).
+packets.json is an unmodified copy of reports/packets.json (protocol_id only; no field layouts).
+blocks.json (6.5 MiB) is not vendored here; full reports are regenerated with the command above.

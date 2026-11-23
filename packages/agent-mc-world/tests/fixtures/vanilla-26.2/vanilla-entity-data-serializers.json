@@ -1,0 +1,177 @@
+{
+  "source": "vanilla 26.2 EntityDataSerializers.getSerializedId",
+  "serializers": [
+    {
+      "field": "BYTE",
+      "id": 0
+    },
+    {
+      "field": "INT",
+      "id": 1
+    },
+    {
+      "field": "LONG",
+      "id": 2
+    },
+    {
+      "field": "FLOAT",
+      "id": 3
+    },
+    {
+      "field": "STRING",
+      "id": 4
+    },
+    {
+      "field": "COMPONENT",
+      "id": 5
+    },
+    {
+      "field": "OPTIONAL_COMPONENT",
+      "id": 6
+    },
+    {
+      "field": "ITEM_STACK",
+      "id": 7
+    },
+    {
+      "field": "BOOLEAN",
+      "id": 8
+    },
+    {
+      "field": "ROTATIONS",
+      "id": 9
+    },
+    {
+      "field": "BLOCK_POS",
+      "id": 10
+    },
+    {
+      "field": "OPTIONAL_BLOCK_POS",
+      "id": 11
+    },
+    {
+      "field": "DIRECTION",
+      "id": 12
+    },
+    {
+      "field": "OPTIONAL_LIVING_ENTITY_REFERENCE",
+      "id": 13
+    },
+    {
+      "field": "BLOCK_STATE",
+      "id": 14
+    },
+    {
+      "field": "OPTIONAL_BLOCK_STATE",
+      "id": 15
+    },
+    {
+      "field": "PARTICLE",
+      "id": 16
+    },
+    {
+      "field": "PARTICLES",
+      "id": 17
+    },
+    {
+      "field": "VILLAGER_DATA",
+      "id": 18
+    },
+    {
+      "field": "OPTIONAL_UNSIGNED_INT",
+      "id": 19
+    },
+    {
+      "field": "POSE",
+      "id": 20
+    },
+    {
+      "field": "CAT_VARIANT",
+      "id": 21
+    },
+    {
+      "field": "CAT_SOUND_VARIANT",
+      "id": 22
+    },
+    {
+      "field": "COW_VARIANT",
+      "id": 23
+    },
+    {
+      "field": "COW_SOUND_VARIANT",
+      "id": 24
+    },
+    {
+      "field": "WOLF_VARIANT",
+      "id": 25
+    },
+    {
+      "field": "WOLF_SOUND_VARIANT",
+      "id": 26
+    },
+    {
+      "field": "FROG_VARIANT",
+      "id": 27
+    },
+    {
+      "field": "PIG_VARIANT",
+      "id": 28
+    },
+    {
+      "field": "PIG_SOUND_VARIANT",
+      "id": 29
+    },
+    {
+      "field": "CHICKEN_VARIANT",
+      "id": 30
+    },
+    {
+      "field": "CHICKEN_SOUND_VARIANT",
+      "id": 31
+    },
+    {
+      "field": "ZOMBIE_NAUTILUS_VARIANT",
+      "id": 32
+    },
+    {
+      "field": "OPTIONAL_GLOBAL_POS",
+      "id": 33
+    },
+    {
+      "field": "PAINTING_VARIANT",
+      "id": 34
+    },
+    {
+      "field": "SNIFFER_STATE",
+      "id": 35
+    },
+    {
+      "field": "ARMADILLO_STATE",
+      "id": 36
+    },
+    {
+      "field": "COPPER_GOLEM_STATE",
+      "id": 37
+    },
+    {
+      "field": "WEATHERING_COPPER_STATE",
+      "id": 38
+    },
+    {
+      "field": "VECTOR3",
+      "id": 39
+    },
+    {
+      "field": "QUATERNION",
+      "id": 40
+    },
+    {
+      "field": "RESOLVABLE_PROFILE",
+      "id": 41
+    },
+    {
+      "field": "HUMANOID_ARM",
+      "id": 42
+    }
+  ]
+}

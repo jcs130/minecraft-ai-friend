@@ -97,6 +97,10 @@ export { ServerQueryLane, SERVER_QUERY_TOOL, SERVER_QUERY_RECEIPT_TOOL, serverQu
   type ServerQueryReceipt } from '../core/server-query.ts';
 
 export {attachProximityVoice, inspectVoiceWav} from './proximity-voice.ts';
+export {attachSimpleVoiceChat, parseVoicechatSecret, createOfficialOpusCodec, inspectVoiceWav as inspectSvcWav, SVC_COMPATIBILITY_VERSION} from './simple-voice-chat.ts';
+
 export {ProximityVoiceLane, PROXIMITY_VOICE_TOOL} from '../core/proximity-voice-lane.ts';
+export {SimpleVoiceChatLane, SIMPLE_VOICE_CHAT_TOOL} from '../core/simple-voice-chat-lane.ts';
+export type {SimpleVoiceChatConfig, SimpleVoiceChatContext} from '../core/simple-voice-chat-lane.ts';
 export type {ProximityVoiceConfig,ProximityVoiceContext,GameVoiceReceipt} from '../core/proximity-voice-lane.ts';
 export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing} from './proximity-voice.ts';

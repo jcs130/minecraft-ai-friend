@@ -3,6 +3,7 @@ import { onConnectionEnd } from './connection-end.ts';
 /** Preserve server damage provenance before Mineflayer reduces it to entityHurt. */
 import type { Bot } from 'mineflayer';
 import type { HurtSource } from './melee.ts';
+import { runtimeRegistryName } from './runtime-registry.ts';
 
 type Point = { x: number; y: number; z: number };
 type DamagePacket = {
@@ -25,7 +26,6 @@ export interface DamageEvidence {
 
 interface DamageState {
   listeners: Set<(evidence: DamageEvidence) => void>;
-  types: string[];
   sequence: number;
   life: number;
   loss: number;
@@ -58,7 +58,7 @@ function entityType(bot: Bot, entity: HurtSource): string | undefined {
 export function installDamageEvidence(bot: Bot): void {
   if (states.has(bot)) return;
   const state: DamageState = {
-    listeners: new Set(), types: [], sequence: 0, life: 0, loss: 0,
+    listeners: new Set(), sequence: 0, life: 0, loss: 0,
     health: Number.isFinite(bot.health) ? bot.health : null, absorption: null, pending: new Map(), legacy: [],
     rawTimer: null, legacyTimer: null, lastRawAt: -Infinity, rawSeen: new Map(),
   };
@@ -95,11 +95,6 @@ export function installDamageEvidence(bot: Bot): void {
   bot.on('respawn', clearLife);
   onConnectionEnd(bot, () => { clearLife(); state.listeners.clear(); });
 
-  bot._client?.on('registry_data', (packet: { id?: string; entries?: Array<{ key: string }> }) => {
-    if (packet.id === 'minecraft:damage_type' && Array.isArray(packet.entries)) {
-      state.types = packet.entries.map((entry) => entry.key);
-    }
-  });
   bot._client?.on('update_health', (packet: { health: number }) => {
     if (!Number.isFinite(packet.health)) return;
     if (state.health !== null && packet.health < state.health) state.loss += 1;
@@ -134,7 +129,7 @@ export function installDamageEvidence(bot: Bot): void {
     const evidence: DamageEvidence = {
       origin: 'packet', sequence: ++state.sequence,
       sourceType: packet.nativeDecodedIds && typeof packet.nativeSourceType === 'string' && /^[a-z0-9_:/.]+$/.test(packet.nativeSourceType)
-        ? packet.nativeSourceType : Number.isSafeInteger(packet.sourceTypeId) ? state.types[packet.sourceTypeId] ?? null : null,
+        ? packet.nativeSourceType : Number.isSafeInteger(packet.sourceTypeId) ? runtimeRegistryName(bot, 'minecraft:damage_type', packet.sourceTypeId) : null,
       causeId, directId, actor, projectile, sourcePosition,
     };
     state.lastRawAt = Date.now();

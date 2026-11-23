@@ -1,0 +1,345 @@
+{
+  "source": "Finite official 26.2 StreamCodec structural branches (vanilla constructors + leftover=0 + official field semantics). Not a mathematical exhaustion of all numeric values. One sample must not stand in for a structurally different branch.",
+  "inlineHolders": {
+    "minecraft:instrument": {
+      "registryIdSamples": [
+        {
+          "origin": "curated_json",
+          "ok": true,
+          "hex": "05",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        }
+      ],
+      "inlineSample": {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "00ca0640e00000438000000a0800097472616e736c6174650025696e737472756d656e742e6d696e6563726166742e706f6e6465725f676f61745f686f726e00",
+        "length": 64
+      }
+    },
+    "minecraft:provides_trim_material": {
+      "inlineSample": {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "000469726f6e010e6d696e6563726166743a69726f6e0b69726f6e5f6461726b65720a080005636f6c6f720007234543454345430800097472616e736c617465001c7472696d5f6d6174657269616c2e6d696e6563726166742e69726f6e00",
+        "length": 95
+      }
+    },
+    "minecraft:jukebox_playable": {
+      "registryIdSamples": [
+        {
+          "origin": "curated_json",
+          "ok": true,
+          "hex": "0e",
+          "length": 1
+        }
+      ],
+      "limits": "Official Holder.direct inline (variable-range and fixed-range sound) and registry-holder encodings are proven with leftover=0 and official decode remaining 0. Curated JSON shapes still fail and must not be used. Numeric field values of the inline song are representative, not an exhaustion of all floats/ints.",
+      "officialConstructor": "JukeboxPlayable(Holder.direct(JukeboxSong(...))) and JukeboxPlayable(registry holder)",
+      "inlineSample": {
+        "origin": "official_java_Holder.direct",
+        "ok": true,
+        "hex": "00001e6d696e6563726166743a6d757369635f646973632e6f746865727369646500080010696e6c696e652d6f74686572736964654148000007",
+        "length": 58,
+        "branch": "inline_holder",
+        "officialDecodeRemaining": 0
+      },
+      "inlineFixedRangeSoundSample": {
+        "origin": "official_java_Holder.direct",
+        "ok": true,
+        "hex": "0000266d696e6563726166743a656e746974792e657870657269656e63655f6f72622e7069636b757001418000000a0800097472616e736c6174650025696e737472756d656e742e6d696e6563726166742e706f6e6465725f676f61745f686f726e003f80000001",
+        "length": 104,
+        "branch": "inline_holder_fixed_range_sound",
+        "officialDecodeRemaining": 0
+      },
+      "registryHolderSample": {
+        "origin": "official_java_registry_holder",
+        "ok": true,
+        "hex": "0e",
+        "length": 1,
+        "branch": "registry_holder",
+        "officialDecodeRemaining": 0
+      },
+      "failedCuratedJson": [
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a string: {\"song\":\"minecraft:otherside\"}']"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a string: {\"song\":{\"comparator_output\":14,\"description\":{\"translate\":\"jukebox_song.minecraft.otherside\"},\"length_in_seconds\":195.0,\"sound_event\":\"minecraft:music_disc.otherside\"}}']"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a string: {\"comparator_output\":14,\"description\":{\"translate\":\"jukebox_song.minecraft.otherside\"},\"length_in_seconds\":195.0,\"sound_event\":\"minecraft:music_disc.otherside\"}']"
+        }
+      ]
+    }
+  },
+  "lists": {
+    "minecraft:lore": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "00",
+        "length": 1
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "010800036f6e65",
+        "length": 7
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "030800036f6e6508000374776f0800057468726565",
+        "length": 21
+      }
+    ],
+    "minecraft:enchantments": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "012105",
+        "length": 3
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "00",
+        "length": 1
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "0221052803",
+        "length": 5
+      }
+    ],
+    "minecraft:stored_enchantments": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "012101",
+        "length": 3
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "00",
+        "length": 1
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "0228031701",
+        "length": 5
+      }
+    ],
+    "minecraft:charged_projectiles": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "00",
+        "length": 1
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "019b07010000",
+        "length": 6
+      }
+    ],
+    "minecraft:bundle_contents": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "00",
+        "length": 1
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "0101010000",
+        "length": 5
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "020101000037020000",
+        "length": 9
+      }
+    ],
+    "minecraft:container": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "00",
+        "length": 1
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "010101010000",
+        "length": 6
+      }
+    ],
+    "minecraft:bees": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "00",
+        "length": 1
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "010b0a000001",
+        "length": 6
+      }
+    ],
+    "minecraft:fireworks": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "0100",
+        "length": 2
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "0201040100b3312c000100",
+        "length": 11
+      }
+    ],
+    "minecraft:suspicious_stew_effects": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "00",
+        "length": 1
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "010f50",
+        "length": 3
+      }
+    ],
+    "minecraft:recipes": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "090000000000",
+        "length": 6
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "090800000001000f6d696e6563726166743a737469636b",
+        "length": 23
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "090800000002000f6d696e6563726166743a737469636b000f6d696e6563726166743a746f726368",
+        "length": 40
+      }
+    ],
+    "minecraft:written_book_content": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "0a417564697420426f6f6b000761756469746f720001080008706167652d6f6e650000",
+        "length": 35
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "0a417564697420426f6f6b000761756469746f720001080008706167652d6f6e650000",
+        "length": 35
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "05456d707479000761756469746f72000000",
+        "length": 18
+      }
+    ]
+  },
+  "optionals": {
+    "minecraft:lodestone_tracker": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "01136d696e6563726166743a6f766572776f726c64000000000000004001",
+        "length": 30
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "0000",
+        "length": 2
+      }
+    ],
+    "minecraft:profile": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "0001055374657665000000000000",
+        "length": 14
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "01000000000000000000000000000000000553746576650000000000",
+        "length": 28
+      }
+    ],
+    "minecraft:potion_contents": [
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "0118000000",
+        "length": 5
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "0100000000",
+        "length": 5
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "00000000",
+        "length": 4
+      },
+      {
+        "origin": "curated_json",
+        "ok": true,
+        "hex": "0000020001c801000101000400640001010000",
+        "length": 19
+      }
+    ]
+  },
+  "unprovenThisBatch": [
+    "Numeric field values inside proven structural branches are representative official defaults or constructor samples only (not a mathematical exhaustion of all ints/floats). This is not an admission blocker.",
+    "Not every sound event was played on a live server; the official static 1968-id table plus the shared holder codec is the coverage. This is not an admission blocker."
+  ],
+  "structureOracleFile": "tests/fixtures/vanilla-26.2/vanilla-structure-oracle.json",
+  "toolEquippableKineticOracle": "tests/fixtures/vanilla-26.2/vanilla-structure-oracle.json component:tool / component:equippable / component:kinetic_weapon optional present/absent arms"
+}

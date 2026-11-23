@@ -11,3 +11,5 @@
 The shared upload client retains 16 KiB packets, sequence numbers, SHA-256 and existing limits (30 seconds, 4 MiB). It yields after each 64 KiB burst, allowing connection changes, cancellation and incoming status messages to run, instead of adding a fixed wait to every packet.
 
 `timings` records client-observed synthesis start, valid audio readiness, upload start and first observed server queued/playing/sent timestamps. These are not recipient audio start or human hearing. `sent` still means server frames were sent. Native generators without a reliable completeness signal keep `generationComplete: null`; HTTP success does not prove complete speech.
+
+`mc_voice` is not the native Simple Voice Chat client. Use `mc_svc` for `voicechat:*` UDP; see [SIMPLE_VOICE_CHAT.md](./SIMPLE_VOICE_CHAT.md).

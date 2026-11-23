@@ -10,7 +10,7 @@ export { offlineUuid, buildClientLaunch } from '../../core/client-launch.ts';
 /** Transport/authentication hooks for hosts retaining an existing Mineflayer body. */
 export { installConfigurationPhaseGuard, installConfigurationRoundCleanup, configurationTransportReady } from '../../core/configuration-round.ts';
 export { installNativeBodyReadiness, nativeBodyReadiness, nativeBodyBlockedReason, type NativeBodyReadiness } from '../../core/body-readiness.ts';
-export { installServerLogin, serverLoginFailureText } from '../../core/server-login.mjs';
+export { installServerLogin, serverLoginFailureText, normalizeAuthReceipt } from '../../core/server-login.mjs';
 export type { ServerAuthState } from '../../core/server-login.mjs';
 export { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady, parseMinecraftServerAddress, type MinecraftClientConfig } from './config.ts';
 export { loadMinecraftClientConfig } from './config-file.ts';
@@ -62,6 +62,10 @@ export { preferExistingRoute, type TravelRoutePreference } from '../../core/trav
 export { createDefensiveWeaponSelector, type DefensiveWeaponFrame } from '../../core/defensive-weapon.ts';
 export { bossBarChange, classifyBossBarTitle, readBossBarHud, renderBossBarHud, type BossBarChange, type BossBarReading } from '../../core/boss-bar.ts';
 export { displaySlotName, installServerDisplay, readServerDisplay, renderServerDisplayHud, statsFromChatText, statsFromLoreLines, viewerScoreboardState, type ServerDisplaySnapshot, type LabeledStat } from '../../core/server-display.ts';
+export { advertisedPluginChannels, classifyPluginChannels, parseRegisterChannelList, readVoicechatRequestSecretVersion, readVoicechatSecretUdpPort, type PluginChannelKinds } from '../../core/plugin-channel-facts.ts';
+export { commandEntryHints, commandTreeFacts } from '../../core/command-tree-facts.ts';
+export { itemComponentEvidence, itemComponentTypes, itemCustomDataKeys, itemCustomModelData, itemEvidenceFields } from '../../core/item-display.ts';
+
 export type { RouteProbe } from '../../core/skill-context.ts';
 export { MessageInbox, MESSAGE_TOOL, MESSAGE_PARAMETERS, MESSAGE_LIMIT, MESSAGE_CHANNELS, messageChannel,
   messageInboxHost, messageInboxFacts, type MessageInboxOptions, type ReceivedMessage, type MessageChannel } from './message-inbox.ts';
@@ -95,4 +99,6 @@ export { planInventoryOrganization, inventoryOrganizationPlanView, planInventory
 export { PHOTOGRAPHY_DEFAULTS } from '../../core/photo-image.ts';
 
 export {attachProximityVoice, inspectVoiceWav} from '../proximity-voice.ts';
+export {attachSimpleVoiceChat, parseVoicechatSecret, createOfficialOpusCodec, inspectVoiceWav as inspectSvcWav, SVC_COMPATIBILITY_VERSION} from '../simple-voice-chat.ts';
+
 export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing} from '../proximity-voice.ts';

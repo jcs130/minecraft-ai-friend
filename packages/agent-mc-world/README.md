@@ -1,5 +1,6 @@
 # Agent MC World
 
+Native Simple Voice Chat is a separate lane: tool `mc_svc` and `agent-mc-world/simple-voice-chat`. It is not `mc_voice` / `mcagent:voice`. Disabled by default; `sent` is not heard. See [native SVC client and future Kemi hookup](docs/SIMPLE_VOICE_CHAT.md). This source change is not published.
 Voice diagnostics candidate: `mc_voice` and the proximity SDK retain bounded server `nextStep` guidance and optional `delivery` counters. `packetOffers` counts server send events, not client playback. `sent` still leaves `recipientHeard: unknown` and `goal_completed: false`; never replay an unknown request with a new ID. This source change requires a rebuilt client package and a compatible server; it is not automatically installed in existing hosts.
 The Numen hosting source candidate adds `NumenClientWorld` and `NumenBodyPort`
 to the public client/extension API. An explicitly supplied authenticated native

@@ -7,7 +7,7 @@ const NBT_TYPES = new Set([
 
 /** Flatten a prismarine-nbt tag or any nested `{type,value}` tree into plain data. */
 export function unwrapNbt(node, depth = 0) {
-  if (depth > 16 || node == null || typeof node !== 'object') return node;
+  if (depth > 160 || node == null || typeof node !== 'object') return node;
   if (Array.isArray(node)) return node.map((part) => unwrapNbt(part, depth + 1));
   const type = node.type;
   if (typeof type === 'string' && NBT_TYPES.has(type) && Object.prototype.hasOwnProperty.call(node, 'value')) {
@@ -46,8 +46,10 @@ export function collectActionIds(node, out = []) {
   return out;
 }
 
+// Chat plugins nest hover/guild prefixes deeply; keep a bound for hostile input, not 8.
+const MAX_TEXT_DEPTH = 80;
 function renderText(input, depth = 0) {
-  if (depth > 8 || input === null || input === undefined) return '';
+  if (depth > MAX_TEXT_DEPTH || input === null || input === undefined) return '';
   if (typeof input === 'number' || typeof input === 'boolean') return String(input);
   if (typeof input === 'string') {
     const text = input.trim();
@@ -66,7 +68,9 @@ function renderText(input, depth = 0) {
   if (component.value !== undefined && component.text === undefined && component.extra === undefined) {
     return renderText(component.value, depth + 1);
   }
-  let text = component.text === undefined ? '' : renderText(component.text, depth + 1);
+  // Heterogeneous NBT lists wrap bare strings as {"": "..."} (26.x chat); treat that as text.
+  let text = component.text !== undefined ? renderText(component.text, depth + 1)
+    : (typeof component[''] === 'string' || typeof component[''] === 'number') ? String(component['']) : '';
   if (!text && typeof component.translate === 'string') {
     const args = Array.isArray(component.with)
       ? component.with.map((part) => renderText(part, depth + 1)) : [];

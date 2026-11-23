@@ -82,3 +82,34 @@ it('revokes a pending startup and ignores late IPC and exits from an older child
   expect(child.sent.find((m:any)=>m.req?.kind==='tool').req).toMatchObject({turnId:'t',round:3});
   await proxy.stop();await vi.advanceTimersByTimeAsync(10000);expect(state.children).toHaveLength(2);
 });
+
+it('stops auto-restarting an engine child after a bounded number of unexpected exits', async () => {
+  vi.useFakeTimers();
+  const proxy = new MinecraftWorldProxy({ cfg: structuredClone(MINECRAFT_CLIENT_DEFAULTS) }), host = new FakeHost();
+  const started = proxy.start(host);
+  const first = state.children[0], init = first.sent.find((m: any) => m.req?.kind === 'init');
+  first.emit('message', { t: 'rep', id: init.id, ok: true, value: null });
+  await started;
+  const crash = async (child: any) => {
+    child.connected = false;
+    child.exitCode = 1;
+    child.emit('exit', 1);
+    await vi.advanceTimersByTimeAsync(3100);
+  };
+  await crash(first);
+  expect(state.children.length).toBe(2);
+  const second = state.children[1], init2 = second.sent.find((m: any) => m.req?.kind === 'init');
+  second.emit('message', { t: 'rep', id: init2.id, ok: true, value: null });
+  await crash(second);
+  expect(state.children.length).toBe(3);
+  const third = state.children[2], init3 = third.sent.find((m: any) => m.req?.kind === 'init');
+  third.emit('message', { t: 'rep', id: init3.id, ok: true, value: null });
+  await crash(third);
+  expect(state.children.length).toBe(4);
+  const fourth = state.children[3], init4 = fourth.sent.find((m: any) => m.req?.kind === 'init');
+  fourth.emit('message', { t: 'rep', id: init4.id, ok: true, value: null });
+  await crash(fourth);
+  expect(state.children.length).toBe(4);
+  expect(host.events.some((e) => String(e.text).includes('停止自动重启'))).toBe(true);
+  await proxy.stop();
+});

@@ -1,0 +1,40 @@
+{
+  "generatedAt": "2026-11-23",
+  "zone": "Asia/Shanghai",
+  "source": "vanilla 26.2 127.0.0.1:25770 official UpdateMobEffect / RemoveMobEffect plus entity_metadata effect_particles",
+  "vanillaBroadcast": {
+    "self": "ServerPlayer.onEffectAdded sends ClientboundUpdateMobEffectPacket to the affected player connection.",
+    "otherEntityObservers": "LivingEntity.onEffectAdded only sendEffectToPassengers (ServerPlayer passengers). ServerEntity.sendPairingData does not include UpdateMobEffect. Nearby observers do not receive entity_effect.",
+    "observerVisible": "SynchedEntityData DATA_EFFECT_PARTICLES / DATA_EFFECT_AMBIENCE. Particle list is display-only and does not carry effect id, amplifier or duration.",
+    "passenger": "After the observer mounts the entity, sendEffectToPassengers emits UpdateMobEffect for already-applied and later effects."
+  },
+  "samples": [
+    {
+      "label": "self-speed",
+      "packet": "entity_effect",
+      "hex": "8401ac080001d8040e",
+      "decoded": {"entityId": 1068, "effectId": 0, "effectName": "speed", "amplifier": 1, "duration": 600, "flags": 14}
+    },
+    {
+      "label": "passenger-existing-speed",
+      "packet": "entity_effect",
+      "hex": "8401800c0001cb0406",
+      "decoded": {"entityId": 1536, "effectId": 0, "effectName": "speed", "amplifier": 1, "duration": 587, "flags": 6},
+      "notes": "emitted when the auditor mounted probe-zombie that already had Speed; duration is remaining ticks"
+    },
+    {
+      "label": "passenger-new-strength",
+      "packet": "entity_effect",
+      "hex": "8401800c0400d80406",
+      "decoded": {"entityId": 1536, "effectId": 4, "effectName": "strength", "amplifier": 0, "duration": 600, "flags": 6}
+    }
+  ],
+  "observerParticles": {
+    "speed": {"type": "entity_effect", "data": -13374465, "argb": "0xff33ebff"},
+    "speedThenStrength": [
+      {"type": "entity_effect", "data": -13374465, "argb": "0xff33ebff"},
+      {"type": "entity_effect", "data": -14592}
+    ],
+    "limits": "Color is not used to invent effect id or duration in core facts."
+  }
+}

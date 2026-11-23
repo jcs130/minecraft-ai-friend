@@ -1,0 +1,322 @@
+[
+  {
+    "id": 0,
+    "name": "airDragModifier",
+    "resource": "minecraft:air_drag_modifier",
+    "min": 0.0,
+    "max": 2048.0,
+    "default": 1.0
+  },
+  {
+    "id": 1,
+    "name": "armor",
+    "resource": "minecraft:armor",
+    "min": 0.0,
+    "max": 30.0,
+    "default": 0.0
+  },
+  {
+    "id": 2,
+    "name": "armorToughness",
+    "resource": "minecraft:armor_toughness",
+    "min": 0.0,
+    "max": 20.0,
+    "default": 0.0
+  },
+  {
+    "id": 3,
+    "name": "attackDamage",
+    "resource": "minecraft:attack_damage",
+    "min": 0.0,
+    "max": 2048.0,
+    "default": 2.0
+  },
+  {
+    "id": 4,
+    "name": "attackKnockback",
+    "resource": "minecraft:attack_knockback",
+    "min": 0.0,
+    "max": 5.0,
+    "default": 0.0
+  },
+  {
+    "id": 5,
+    "name": "attackSpeed",
+    "resource": "minecraft:attack_speed",
+    "min": 0.0,
+    "max": 1024.0,
+    "default": 4.0
+  },
+  {
+    "id": 6,
+    "name": "belowNameDistance",
+    "resource": "minecraft:below_name_distance",
+    "min": 0.0,
+    "max": 512.0,
+    "default": 10.0
+  },
+  {
+    "id": 7,
+    "name": "blockBreakSpeed",
+    "resource": "minecraft:block_break_speed",
+    "min": 0.0,
+    "max": 1024.0,
+    "default": 1.0
+  },
+  {
+    "id": 8,
+    "name": "blockInteractionRange",
+    "resource": "minecraft:block_interaction_range",
+    "min": 0.0,
+    "max": 64.0,
+    "default": 4.5
+  },
+  {
+    "id": 9,
+    "name": "bounciness",
+    "resource": "minecraft:bounciness",
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0
+  },
+  {
+    "id": 10,
+    "name": "burningTime",
+    "resource": "minecraft:burning_time",
+    "min": 0.0,
+    "max": 1024.0,
+    "default": 1.0
+  },
+  {
+    "id": 11,
+    "name": "cameraDistance",
+    "resource": "minecraft:camera_distance",
+    "min": 0.0,
+    "max": 32.0,
+    "default": 4.0
+  },
+  {
+    "id": 12,
+    "name": "explosionKnockbackResistance",
+    "resource": "minecraft:explosion_knockback_resistance",
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0
+  },
+  {
+    "id": 13,
+    "name": "entityInteractionRange",
+    "resource": "minecraft:entity_interaction_range",
+    "min": 0.0,
+    "max": 64.0,
+    "default": 3.0
+  },
+  {
+    "id": 14,
+    "name": "fallDamageMultiplier",
+    "resource": "minecraft:fall_damage_multiplier",
+    "min": 0.0,
+    "max": 100.0,
+    "default": 1.0
+  },
+  {
+    "id": 15,
+    "name": "flyingSpeed",
+    "resource": "minecraft:flying_speed",
+    "min": 0.0,
+    "max": 1024.0,
+    "default": 0.4
+  },
+  {
+    "id": 16,
+    "name": "followRange",
+    "resource": "minecraft:follow_range",
+    "min": 0.0,
+    "max": 2048.0,
+    "default": 32.0
+  },
+  {
+    "id": 17,
+    "name": "frictionModifier",
+    "resource": "minecraft:friction_modifier",
+    "min": 0.0,
+    "max": 2048.0,
+    "default": 1.0
+  },
+  {
+    "id": 18,
+    "name": "gravity",
+    "resource": "minecraft:gravity",
+    "min": -1.0,
+    "max": 1.0,
+    "default": 0.08
+  },
+  {
+    "id": 19,
+    "name": "jumpStrength",
+    "resource": "minecraft:jump_strength",
+    "min": 0.0,
+    "max": 32.0,
+    "default": 0.41999998688697815
+  },
+  {
+    "id": 20,
+    "name": "knockbackResistance",
+    "resource": "minecraft:knockback_resistance",
+    "min": -2.0,
+    "max": 1.0,
+    "default": 0.0
+  },
+  {
+    "id": 21,
+    "name": "luck",
+    "resource": "minecraft:luck",
+    "min": -1024.0,
+    "max": 1024.0,
+    "default": 0.0
+  },
+  {
+    "id": 22,
+    "name": "maxAbsorption",
+    "resource": "minecraft:max_absorption",
+    "min": 0.0,
+    "max": 2048.0,
+    "default": 0.0
+  },
+  {
+    "id": 23,
+    "name": "maxHealth",
+    "resource": "minecraft:max_health",
+    "min": 1.0,
+    "max": 1024.0,
+    "default": 20.0
+  },
+  {
+    "id": 24,
+    "name": "miningEfficiency",
+    "resource": "minecraft:mining_efficiency",
+    "min": 0.0,
+    "max": 1024.0,
+    "default": 0.0
+  },
+  {
+    "id": 25,
+    "name": "movementEfficiency",
+    "resource": "minecraft:movement_efficiency",
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0
+  },
+  {
+    "id": 26,
+    "name": "movementSpeed",
+    "resource": "minecraft:movement_speed",
+    "min": 0.0,
+    "max": 1024.0,
+    "default": 0.7
+  },
+  {
+    "id": 27,
+    "name": "nameTagDistance",
+    "resource": "minecraft:name_tag_distance",
+    "min": 0.0,
+    "max": 512.0,
+    "default": 64.0
+  },
+  {
+    "id": 28,
+    "name": "oxygenBonus",
+    "resource": "minecraft:oxygen_bonus",
+    "min": 0.0,
+    "max": 1024.0,
+    "default": 0.0
+  },
+  {
+    "id": 29,
+    "name": "safeFallDistance",
+    "resource": "minecraft:safe_fall_distance",
+    "min": -1024.0,
+    "max": 1024.0,
+    "default": 3.0
+  },
+  {
+    "id": 30,
+    "name": "scale",
+    "resource": "minecraft:scale",
+    "min": 0.0625,
+    "max": 16.0,
+    "default": 1.0
+  },
+  {
+    "id": 31,
+    "name": "sneakingSpeed",
+    "resource": "minecraft:sneaking_speed",
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.3
+  },
+  {
+    "id": 32,
+    "name": "spawnReinforcements",
+    "resource": "minecraft:spawn_reinforcements",
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0
+  },
+  {
+    "id": 33,
+    "name": "stepHeight",
+    "resource": "minecraft:step_height",
+    "min": 0.0,
+    "max": 10.0,
+    "default": 0.6
+  },
+  {
+    "id": 34,
+    "name": "submergedMiningSpeed",
+    "resource": "minecraft:submerged_mining_speed",
+    "min": 0.0,
+    "max": 20.0,
+    "default": 0.2
+  },
+  {
+    "id": 35,
+    "name": "sweepingDamageRatio",
+    "resource": "minecraft:sweeping_damage_ratio",
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0
+  },
+  {
+    "id": 36,
+    "name": "temptRange",
+    "resource": "minecraft:tempt_range",
+    "min": 0.0,
+    "max": 2048.0,
+    "default": 10.0
+  },
+  {
+    "id": 37,
+    "name": "waterMovementEfficiency",
+    "resource": "minecraft:water_movement_efficiency",
+    "min": 0.0,
+    "max": 1.0,
+    "default": 0.0
+  },
+  {
+    "id": 38,
+    "name": "waypointTransmitRange",
+    "resource": "minecraft:waypoint_transmit_range",
+    "min": 0.0,
+    "max": 60000000.0,
+    "default": 0.0
+  },
+  {
+    "id": 39,
+    "name": "waypointReceiveRange",
+    "resource": "minecraft:waypoint_receive_range",
+    "min": 0.0,
+    "max": 60000000.0,
+    "default": 0.0
+  }
+]

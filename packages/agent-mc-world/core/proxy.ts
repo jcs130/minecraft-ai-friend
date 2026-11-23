@@ -44,6 +44,8 @@ const DEPENDENCY_PATCHES_URL = new URL('./dependency-patches.ts', import.meta.ur
 
 const CONFIG_SAMPLE_MS = 1000;
 const RESTART_DELAY_MS = 3000;
+/** Unexpected child exits in one start() session; further recovery needs an explicit start. */
+export const MAX_UNEXPECTED_ENGINE_RESTARTS = 3;
 /** Windows STATUS_CONTROL_C_EXIT。 */
 const CONSOLE_KILL_EXIT_CODE = 3221225786;
 /** 工具 RPC 超时。 */
@@ -94,6 +96,7 @@ export class MinecraftWorldProxy implements World {
   private lastCaps: boolean | null = null;
   private configTimer: ReturnType<typeof setInterval> | null = null;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
+  private unexpectedExits = 0;
 
   constructor(private readonly opts: MinecraftWorldOptions) {}
 
@@ -279,6 +282,7 @@ export class MinecraftWorldProxy implements World {
     if (this.child) throw new Error('Engine is already running or starting');
     this.host = host;
     this.stopping = false;
+    this.unexpectedExits = 0;
     await this.spawn();
     if (this.stopping) throw new Error('Engine startup cancelled');
     this.configTimer = setInterval(() => this.pushConfigIfChanged(), CONFIG_SAMPLE_MS);
@@ -345,6 +349,7 @@ export class MinecraftWorldProxy implements World {
       INIT_TIMEOUT_MS,
     );
     if (this.stopping || this.child !== child) return;
+    // Engine IPC is up. This is not a Minecraft spawn or connection.ready.
     this.ready = true;
     this.lastCaps = null;
 
@@ -380,7 +385,22 @@ export class MinecraftWorldProxy implements World {
       this.host?.pushEvent({ts:nowIso(this.opts.timezone ?? 'UTC'),source:this.id,type:'minecraft.lifecycle',text:'Engine interrupted; reconnect explicitly.'},{trigger:'flush'}).catch(()=>{});
       return;
     }
-    this.host?.log.error(`Minecraft 引擎子进程意外退出(code=${code}),${RESTART_DELAY_MS / 1000}s 后重启`);
+    this.unexpectedExits += 1;
+    if (this.unexpectedExits > MAX_UNEXPECTED_ENGINE_RESTARTS) {
+      this.host?.log.error(`Minecraft 引擎子进程意外退出(code=${code})，已连续 ${this.unexpectedExits} 次，停止自动重启，需要明确重连`);
+      this.host?.pushEvent(
+        {
+          ts: nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE),
+          source: this.id,
+          type: 'minecraft.event',
+          text: '[Minecraft] 游戏引擎多次崩溃，已停止自动重启；重新连上之前，游戏里的动作都不会生效。',
+          senderKey: 'minecraft',
+        },
+        { trigger: 'flush' },
+      ).catch(() => {  });
+      return;
+    }
+    this.host?.log.error(`Minecraft 引擎子进程意外退出(code=${code}),${RESTART_DELAY_MS / 1000}s 后重启（第 ${this.unexpectedExits} 次）`);
     this.host?.pushEvent(
       {
         ts: nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE),

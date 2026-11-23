@@ -1,0 +1,282 @@
+[
+  {
+    "id": 0,
+    "name": "speed",
+    "displayName": "Speed",
+    "resource": "minecraft:speed",
+    "type": "good"
+  },
+  {
+    "id": 1,
+    "name": "slowness",
+    "displayName": "Slowness",
+    "resource": "minecraft:slowness",
+    "type": "bad"
+  },
+  {
+    "id": 2,
+    "name": "haste",
+    "displayName": "Haste",
+    "resource": "minecraft:haste",
+    "type": "good"
+  },
+  {
+    "id": 3,
+    "name": "mining_fatigue",
+    "displayName": "Mining Fatigue",
+    "resource": "minecraft:mining_fatigue",
+    "type": "bad"
+  },
+  {
+    "id": 4,
+    "name": "strength",
+    "displayName": "Strength",
+    "resource": "minecraft:strength",
+    "type": "good"
+  },
+  {
+    "id": 5,
+    "name": "instant_health",
+    "displayName": "Instant Health",
+    "resource": "minecraft:instant_health",
+    "type": "good"
+  },
+  {
+    "id": 6,
+    "name": "instant_damage",
+    "displayName": "Instant Damage",
+    "resource": "minecraft:instant_damage",
+    "type": "bad"
+  },
+  {
+    "id": 7,
+    "name": "jump_boost",
+    "displayName": "Jump Boost",
+    "resource": "minecraft:jump_boost",
+    "type": "good"
+  },
+  {
+    "id": 8,
+    "name": "nausea",
+    "displayName": "Nausea",
+    "resource": "minecraft:nausea",
+    "type": "bad"
+  },
+  {
+    "id": 9,
+    "name": "regeneration",
+    "displayName": "Regeneration",
+    "resource": "minecraft:regeneration",
+    "type": "good"
+  },
+  {
+    "id": 10,
+    "name": "resistance",
+    "displayName": "Resistance",
+    "resource": "minecraft:resistance",
+    "type": "good"
+  },
+  {
+    "id": 11,
+    "name": "fire_resistance",
+    "displayName": "Fire Resistance",
+    "resource": "minecraft:fire_resistance",
+    "type": "good"
+  },
+  {
+    "id": 12,
+    "name": "water_breathing",
+    "displayName": "Water Breathing",
+    "resource": "minecraft:water_breathing",
+    "type": "good"
+  },
+  {
+    "id": 13,
+    "name": "invisibility",
+    "displayName": "Invisibility",
+    "resource": "minecraft:invisibility",
+    "type": "good"
+  },
+  {
+    "id": 14,
+    "name": "blindness",
+    "displayName": "Blindness",
+    "resource": "minecraft:blindness",
+    "type": "bad"
+  },
+  {
+    "id": 15,
+    "name": "night_vision",
+    "displayName": "Night Vision",
+    "resource": "minecraft:night_vision",
+    "type": "good"
+  },
+  {
+    "id": 16,
+    "name": "hunger",
+    "displayName": "Hunger",
+    "resource": "minecraft:hunger",
+    "type": "bad"
+  },
+  {
+    "id": 17,
+    "name": "weakness",
+    "displayName": "Weakness",
+    "resource": "minecraft:weakness",
+    "type": "bad"
+  },
+  {
+    "id": 18,
+    "name": "poison",
+    "displayName": "Poison",
+    "resource": "minecraft:poison",
+    "type": "bad"
+  },
+  {
+    "id": 19,
+    "name": "wither",
+    "displayName": "Wither",
+    "resource": "minecraft:wither",
+    "type": "bad"
+  },
+  {
+    "id": 20,
+    "name": "health_boost",
+    "displayName": "Health Boost",
+    "resource": "minecraft:health_boost",
+    "type": "good"
+  },
+  {
+    "id": 21,
+    "name": "absorption",
+    "displayName": "Absorption",
+    "resource": "minecraft:absorption",
+    "type": "good"
+  },
+  {
+    "id": 22,
+    "name": "saturation",
+    "displayName": "Saturation",
+    "resource": "minecraft:saturation",
+    "type": "good"
+  },
+  {
+    "id": 23,
+    "name": "glowing",
+    "displayName": "Glowing",
+    "resource": "minecraft:glowing",
+    "type": "bad"
+  },
+  {
+    "id": 24,
+    "name": "levitation",
+    "displayName": "Levitation",
+    "resource": "minecraft:levitation",
+    "type": "bad"
+  },
+  {
+    "id": 25,
+    "name": "luck",
+    "displayName": "Luck",
+    "resource": "minecraft:luck",
+    "type": "good"
+  },
+  {
+    "id": 26,
+    "name": "unluck",
+    "displayName": "Bad Luck",
+    "resource": "minecraft:unluck",
+    "type": "bad"
+  },
+  {
+    "id": 27,
+    "name": "slow_falling",
+    "displayName": "Slow Falling",
+    "resource": "minecraft:slow_falling",
+    "type": "good"
+  },
+  {
+    "id": 28,
+    "name": "conduit_power",
+    "displayName": "Conduit Power",
+    "resource": "minecraft:conduit_power",
+    "type": "good"
+  },
+  {
+    "id": 29,
+    "name": "dolphins_grace",
+    "displayName": "Dolphin's Grace",
+    "resource": "minecraft:dolphins_grace",
+    "type": "good"
+  },
+  {
+    "id": 30,
+    "name": "bad_omen",
+    "displayName": "Bad Omen",
+    "resource": "minecraft:bad_omen",
+    "type": "bad"
+  },
+  {
+    "id": 31,
+    "name": "hero_of_the_village",
+    "displayName": "Hero of the Village",
+    "resource": "minecraft:hero_of_the_village",
+    "type": "good"
+  },
+  {
+    "id": 32,
+    "name": "darkness",
+    "displayName": "Darkness",
+    "resource": "minecraft:darkness",
+    "type": "bad"
+  },
+  {
+    "id": 33,
+    "name": "trial_omen",
+    "displayName": "Trial Omen",
+    "resource": "minecraft:trial_omen",
+    "type": "bad"
+  },
+  {
+    "id": 34,
+    "name": "raid_omen",
+    "displayName": "Raid Omen",
+    "resource": "minecraft:raid_omen",
+    "type": "bad"
+  },
+  {
+    "id": 35,
+    "name": "wind_charged",
+    "displayName": "Wind Charged",
+    "resource": "minecraft:wind_charged",
+    "type": "bad"
+  },
+  {
+    "id": 36,
+    "name": "weaving",
+    "displayName": "Weaving",
+    "resource": "minecraft:weaving",
+    "type": "bad"
+  },
+  {
+    "id": 37,
+    "name": "oozing",
+    "displayName": "Oozing",
+    "resource": "minecraft:oozing",
+    "type": "bad"
+  },
+  {
+    "id": 38,
+    "name": "infested",
+    "displayName": "Infested",
+    "resource": "minecraft:infested",
+    "type": "bad"
+  },
+  {
+    "id": 39,
+    "name": "breath_of_the_nautilus",
+    "displayName": "Breath of the Nautilus",
+    "resource": "minecraft:breath_of_the_nautilus",
+    "type": "good"
+  }
+]

@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { installServerLogin } from '../src/client/index.ts';
+import { installServerLogin, normalizeAuthReceipt } from '../src/client/index.ts';
 import { readProtectedCredential } from '../core/server-login.mjs';
 
 const dirs: string[] = [];
@@ -324,6 +324,133 @@ describe('scoped automatic server authentication', () => {
     const login = installServerLogin(unreadable.bot, unreadable.options); unreadable.messages('AUTH_LOGIN');
     await settle(() => login.status().stage === 'blocked'); unreadable.messages('AUTH_LOGIN'); expect(unreadable.sent).toEqual([]);
   });
+  it('normalizes MaxAuth prefixes, colors and punctuation without using a bare include', () => {
+    expect(normalizeAuthReceipt('§a[MaxAuth] §f» §e你已成功登录。')).toBe('你已成功登录');
+    expect(normalizeAuthReceipt('[MaxAuth]» 登录成功')).toBe('登录成功');
+    expect(normalizeAuthReceipt('[AuthMe] Successful login!')).toBe('Successful login');
+  });
+
+  it.each([
+    '[MaxAuth] » 你已成功登录。',
+    '§a[MaxAuth] §f» §e你已成功登录。',
+    '[MaxAuth]» 你已成功登录',
+  ])('confirms the official MaxAuth success system receipt: %s', async receipt => {
+    const r = fixture(), login = installServerLogin(r.bot, r.options);
+    r.messages('AUTH_LOGIN');
+    await settle(() => r.sent.length === 1);
+    expect(login.ready()).toBe(false);
+    r.messages(receipt);
+    expect(login.ready()).toBe(true);
+    expect(login.status().stage).toBe('confirmed');
+    expect(JSON.stringify(r.reports)).not.toContain('fixture-pass');
+    login.stop();
+  });
+
+  it('confirms a MaxAuth title independently of chat, and ignores a mere welcome title', async () => {
+    const r = fixture(), login = installServerLogin(r.bot, r.options);
+    r.messages('AUTH_LOGIN');
+    await settle(() => r.sent.length === 1);
+    r.bot.emit('title', 'Welcome!', 'title');
+    r.bot.emit('title', '欢迎 ag_cormy', 'title');
+    expect(login.ready()).toBe(false);
+    r.bot.emit('title', '登录成功', 'title');
+    expect(login.ready()).toBe(true);
+    r.bot.emit('title', '登录成功', 'title');
+    expect(r.reports.filter((s: any) => s.status === 'confirmed')).toHaveLength(1);
+    login.stop();
+  });
+
+  it.each([
+    '[MaxAuth] » 密码错误',
+    '[MaxAuth] » 密码不正确。',
+    '§c[MaxAuth] » 错误的密码',
+  ])('blocks a MaxAuth failure receipt and does not resubmit: %s', async receipt => {
+    const r = fixture(), login = installServerLogin(r.bot, r.options);
+    r.messages('AUTH_LOGIN');
+    await settle(() => r.sent.length === 1);
+    r.messages(receipt);
+    r.messages('AUTH_LOGIN');
+    expect(login.detail()).toMatchObject({ stage: 'blocked', reason: 'server-rejected' });
+    expect(r.sent).toHaveLength(1);
+    login.stop();
+  });
+
+  it.each([
+    '未成功登录',
+    '尚未成功登录',
+    '你未成功登录',
+    '未登录成功',
+    '<Player> [MaxAuth] » 你已成功登录。',
+    '[Global] <Player> 登录成功',
+    '<ag_cormy> 登录成功',
+  ])('rejects negated or player-forged success text: %s', receipt => {
+    const r = fixture(), login = installServerLogin(r.bot, r.options);
+    r.messages(receipt);
+    expect(login.ready()).toBe(false);
+    expect(r.sent).toEqual([]);
+    login.stop();
+  });
+
+  it('does not treat body spawn, play state or health as a successful password confirmation', async () => {
+    const r = fixture(), login = installServerLogin(r.bot, r.options);
+    r.messages('AUTH_LOGIN');
+    await settle(() => r.sent.length === 1);
+    r.bot.emit('spawn');
+    r.bot.emit('health');
+    expect(login.ready()).toBe(false);
+    expect(login.status().stage).toBe('submitted');
+    login.stop();
+  });
+
+  it('keeps a no-auth installation ready without waiting for a password receipt', () => {
+    const r = fixture();
+    writeFileSync(r.configFile, JSON.stringify({ enabled: false }));
+    const login = installServerLogin(r.bot, r.options);
+    expect(login.status().stage).toBe('disabled');
+    expect(login.ready()).toBe(true);
+    r.messages('[MaxAuth] » 你已成功登录。');
+    expect(login.status().stage).toBe('disabled');
+    login.stop();
+  });
+
+  it('restarts the confirmation timer at submit instead of leaving the arm timer running', async () => {
+    vi.useFakeTimers();
+    try {
+      const r = fixture();
+      writeFileSync(r.configFile, JSON.stringify({ enabled: true, accounts: [{ ...r.account, timeoutMs: 1000 }] }));
+      const login = installServerLogin(r.bot, { ...r.options, readCredential: async () => Buffer.from('fixture-pass') });
+      await vi.advanceTimersByTimeAsync(800);
+      expect(login.status().stage).toBe('armed');
+      r.messages('AUTH_LOGIN');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(login.status().stage).toBe('submitted');
+      await vi.advanceTimersByTimeAsync(800);
+      expect(login.status().stage).toBe('submitted');
+      expect(login.ready()).toBe(false);
+      r.messages('[MaxAuth] » 你已成功登录。');
+      expect(login.ready()).toBe(true);
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(login.status().stage).toBe('confirmed');
+      login.stop();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('times out confirmation from submit, then ignores a late success receipt', async () => {
+    vi.useFakeTimers();
+    try {
+      const r = fixture();
+      writeFileSync(r.configFile, JSON.stringify({ enabled: true, accounts: [{ ...r.account, timeoutMs: 1000 }] }));
+      const login = installServerLogin(r.bot, { ...r.options, readCredential: async () => Buffer.from('fixture-pass') });
+      r.messages('AUTH_LOGIN');
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(login.detail()).toMatchObject({ stage: 'retrying', reason: 'confirmation-timeout' });
+      r.messages('[MaxAuth] » 你已成功登录。');
+      expect(login.ready()).toBe(false);
+      login.stop();
+    } finally { vi.useRealTimers(); }
+  });
+
   it.skipIf(process.platform !== 'win32')('reads a real current-user DPAPI credential without plaintext process arguments', async context => {
     const r = fixture(), encrypted = join(r.dir, 'private.dpapi');
     try {

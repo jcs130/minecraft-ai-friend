@@ -1,0 +1,105 @@
+{
+  "title": "Experimental Java 26.2 protocol stack (not official support)",
+  "lockedAt": "2026-11-23",
+  "copiedFrom": "local experimental checkout (maintainer machine)",
+  "sources": {
+    "minecraft-data-overlay": {
+      "packageVersion": "3.119.0-exp262",
+      "dataRepo": "Cyverno/minecraft-data",
+      "branch": "pc26.2-data-fixes",
+      "commit": "6cff26d8dd4cc3fe8c54728695124b95e3c8e0ae",
+      "upstreamNotes": "PR #1344, stacked on PrismarineJS pc_26_2 / PR #1219",
+      "wrapper": "PrismarineJS/node-minecraft-data 1cdd2d17afbb3f03d97767611a22edb2c1ee6ff6 (tag 3.119.0) with data.js overlay for 26.2; typings were not regenerated"
+    },
+    "minecraft-protocol": {
+      "packageVersion": "1.68.0",
+      "repo": "Cyverno/node-minecraft-protocol",
+      "branch": "pc26_2-finish",
+      "commit": "5527f8aa8d94bf2e2fdd5f5ab7963917cb96df37",
+      "upstreamNotes": "PR #1550"
+    },
+    "mineflayer": {
+      "packageVersion": "4.39.0",
+      "repo": "Cyverno/mineflayer",
+      "branch": "pc26_2-finish",
+      "commit": "dda625d98d4bab3857383bf8c662b76f847075fe",
+      "upstreamNotes": "PR #4192 on top of #3926"
+    }
+  },
+  "defaultStackUnchanged": {
+    "minecraft-data": "3.119.0",
+    "mineflayer": "4.39.0",
+    "minecraft-protocol": "1.68.0"
+  },
+  "compatibilityIntent": "This vendor tree is loaded only when the negotiated Java version is 26.2 (protocol 776). Official dependencies remain the default for 1.21.1, 1.21.11, 26.1 and other supported versions.",
+  "licenses": {
+    "mineflayer": {
+      "spdx": "MIT",
+      "file": "mineflayer/LICENSE"
+    },
+    "minecraft-protocol": {
+      "spdx": "BSD-3-Clause",
+      "file": "minecraft-protocol/LICENSE"
+    },
+    "minecraft-data": {
+      "spdx": "MIT",
+      "declaredIn": "minecraft-data/package.json",
+      "note": "Upstream LICENSE file was not present in the local experimental copy; package.json declares MIT."
+    }
+  },
+  "notVendored": {
+    "prismarine-chunk": "official 1.41.0 with a 26.2\u21921.18/26.1 alias in dependency-patches.ts. 26.2 vs 26.1 protocol.json schemas for map_chunk, update_light, block_change, multi_block_change, tile_entity_data, chunk_biomes and unload_chunk are deep-equal. This supports sharing the 1.18 world decoder for those packet layouts; it is not a standalone vanilla field-layout report (packets.json has ids only) and does not by itself prove every palette/heightmap/light edge case.",
+    "prismarine-physics": "official 1.11.1 with majorVersion 26.2 treated as 26.1 only for feature-flag lookup (proportionalLiquidGravity, climbUsingJump). Without the alias, Physics() throws because lib/features.json lists those flags through 26.1 only and not 26.2. proportionalLiquidGravity is independently supported by a 127.0.0.1 vanilla 26.2 water-column capture: terminal vertical step \u2248 -0.0249 blocks/tick matches gravity/16 with water inertia 0.8 (-0.005/0.2=-0.025), not independentLiquidGravity 0.02 (terminal -0.1). climbUsingJump remains unproven by a 26.2 ladder/jump trial. 26.2 entity_update_attributes key mapper is NOT the 26.1 table; it matches vanilla 26.2 attribute protocol ids (movement_speed=26, scale=30).",
+    "note": "instruments.json is the 26.2 note-block instrument enum (27) from vanilla reports/blocks.json note_block.properties.instrument order, used by mineflayer noteHeard. goatHornInstruments.json is the separate datapack/runtime registry (8) with ids 0-7 from a 127.0.0.1 vanilla 26.2 registry_data capture (ponder_goat_horn=4). windows.json is the 26.2 minecraft:menu table (25 menuIds plus player inventory -1). Slot counts for 19 of 26 entries were verified by vanilla open_window/window_items, including smithing=40 and crafter_3x3=46 (not 45). Still unverified: generic_9x1/2/4/5/6, lectern, merchant. mapIcons.json is vanilla map_decoration_type (35, trial_chambers=34). enchantments.json was copied from official 26.1 and independently confirmed id/name-equal to vanilla 26.2 registry_data (43). A local Purpur backend inserted paper:raw into chat_type, shifting later vanilla chat ids \u2014 static vanilla chat_type tables are not sufficient on Paper/Purpur; use runtime registry_data. Official 26.2 version manifest (sha1 09165f570b16394790c4e37c93b0918729615d17) publishes client and server jars only, no client_mappings/server_mappings."
+  },
+  "overlayDerivedFromVanillaReports": {
+    "effects.json": {
+      "source": "vanilla 26.2 server.jar data generator reports/registries.json minecraft:mob_effect, with displayName/type carried from official minecraft-data 26.1 by protocol id",
+      "generatedAt": "2026-11-23",
+      "replaces": "previous 26.1 PascalCase alias"
+    },
+    "instruments.json": {
+      "source": "vanilla 26.2 server.jar data generator reports/blocks.json minecraft:note_block.properties.instrument (enum order = id 0-26)",
+      "generatedAt": "2026-11-23",
+      "count": 27,
+      "replaces": "official 26.1 instruments alias; same 27 names/order independently confirmed from the 26.2 block report",
+      "notToBeConfusedWith": "goatHornInstruments.json datapack registry"
+    },
+    "goatHornInstruments.json": {
+      "source": "vanilla 26.2 datapack data/minecraft/instrument (8 json files)",
+      "generatedAt": "2026-11-23",
+      "count": 8,
+      "idStatus": "runtime-registry-vanilla-127.0.0.1",
+      "idSource": "vanilla 26.2 registry_data capture 2026-11-23 127.0.0.1:25770; admire=0 \u2026 ponder=4 \u2026 yearn=7"
+    },
+    "mapIcons.json": {
+      "source": "vanilla 26.2 reports/registries.json minecraft:map_decoration_type; appearance/visibleInItemFrame for 0-33 from official minecraft-data pc/1.20.2 with swamp_hut typo fix",
+      "generatedAt": "2026-11-23",
+      "count": 35,
+      "added": "trial_chambers id 34"
+    },
+    "windows.json": {
+      "source": "vanilla 26.2 reports/registries.json minecraft:menu (25 protocol ids) plus player inventory (menuId -1); slot counts use standard container+36 player inventory convention",
+      "generatedAt": "2026-11-23",
+      "menuCount": 25,
+      "layoutVerified": "19 of 26 (player inventory + 18 menus). Unverified: generic_9x1/2/4/5/6, lectern, merchant.",
+      "notes": "smithing uses 4 container slots (1.20+); crafter_3x3 assumed 9+36; lectern player-inventory inclusion unverified",
+      "crafterSlots": "live window_items length 46 (inventoryStart 10), not 9+36=45"
+    },
+    "enchantments.json": {
+      "source": "official minecraft-data 26.1 enchantments.json; ids/names independently equal to vanilla 26.2 registry_data on 127.0.0.1:25770",
+      "generatedAt": "2026-11-23",
+      "count": 43
+    }
+  },
+  "strictProtocol": {
+    "unknownSlotComponent": "vendor minecraft-protocol createProtocol for 26.2 installs a throwing default on SlotComponent and entityMetadataEntry so compiled protodef cannot skip unknown types as void (0 bytes) and silently misalign the cursor. Evidence records kind, discriminator, remainingBytes only \u2014 no payload/NBT/item bytes.",
+    "addedAt": "2026-11-23"
+  },
+  "liveCaptures": {
+    "vanilla": "127.0.0.1:25770 vanilla 26.2 jar sha1 823e2250d24b3ddac457a60c92a6a941943fcd6a, offline amw_auditor, no secrets",
+    "chain": "127.0.0.1:25577 Velocity 4.3.1-45 + NanoLimbo 1.13.0 + Purpur 26.2-2633, all bound 127.0.0.1",
+    "playerLoaded": "exactly one accepted player_loaded per play session on vanilla join (1) and on the Velocity limbo\u2192lobby transfer (1+1). Unit tests already covered the session owner; this is the live 127.0.0.1 revalidation.",
+    "reconfiguration": "transfer emitted start_configuration once, registry_data for 29 registries again, then play. /reload on vanilla did not re-enter configuration."
+  }
+}

@@ -1,3 +1,7 @@
+## Unreleased
+
+Experimental Java 26.2 stack (protocol 776) with audited data parsing, still `officialSupportRecommended=false`. Native Simple Voice Chat client `mc_svc` (compat 20, off by default) with official receive layout, DNS voice hosts via public-DNS fallback, Authenticate/ConnectionCheck retries, and a `simpleVoiceChatGate` hook so server packs can hold voice until the right backend. Deeply nested chat components (TrChat) and CESU/MUTF-8 NBT strings decode correctly. Server-specific behaviour for 橘乡 lives in the optional pack `packages/agent-mc-world-packs/tangerinecology`, not in the core.
+
 ## 0.5.7-rc.160-preview.115
 
 Equipment and inventory lookups accept the qualified vanilla IDs returned by transfers. Qualified IDs match an exact inventory identity, including when checking armor already worn. Display names and category selectors remain available for ordinary queries.

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { dirname, resolve as resolvePath } from 'node:path';
 import { execFile } from 'node:child_process';
-import { authMePasswordNbt, isAuthMeLoginDialog } from './nbt-text.mjs';
+import { authMePasswordNbt, isAuthMeLoginDialog, minecraftTextComponent } from './nbt-text.mjs';
 import { writeCustomClickLengthPrefixed } from './custom-click-action.mjs';
 
 export function readProtectedCredential(file) {
@@ -21,20 +21,101 @@ export function readProtectedCredential(file) {
 }
 
 const address = value => value.trim().toLowerCase().includes(':') ? value.trim().toLowerCase() : value.trim().toLowerCase() + ':25565';
-const matches = (message, markers) => markers.some(marker => message.startsWith(marker) || message.startsWith('[' + marker + ']'));
-// Exact standard AuthMe receipts, not a broad "success" or "login" substring.
+// Known auth plugins only. Do not strip an arbitrary [Name] prefix: that would
+// treat a forwarded player line as a plugin receipt.
+const AUTH_PLUGIN_PREFIX = /^\[(?:MaxAuth|AuthMe|玩家系统|LoginSecurity|nLogin|CrazyLogin|AuthMan|LibreLogin|OpeNLogin)\]\s*[»›▸>：:\-—|]?\s*/i;
+const COLOR_CODES = /§[0-9A-FK-ORX]/gi;
+const TRAILING_PUNCT = /[\s。．.！!？?、,，；;:：…·•]+$/u;
+const LEADING_FILLER = /^(?:你|您|已经)+/u;
+const PLAYER_WRAPPED = /^(?:\[[^\]\r\n]+\]\s*)?<[^>\r\n]+>\s/;
+const NEGATION_BEFORE = /(?:未|没有|尚未|未能|没能|不是|非|not\s+(?:a\s+)?|un)$/i;
+
+/** Plain text of a system receipt: colors, chat components, then known plugin prefix/separator. */
+export function normalizeAuthReceipt(value) {
+  let text = typeof value === 'string' ? value
+    : (value && typeof value === 'object') ? (minecraftTextComponent(value) || (typeof value.toString === 'function' && value.toString !== Object.prototype.toString ? value.toString() : ''))
+    : String(value ?? '');
+  if (typeof text !== 'string') text = String(text ?? '');
+  text = text.replace(COLOR_CODES, '').replace(/\s+/g, ' ').trim();
+  for (let i = 0; i < 3; i++) {
+    const next = text.replace(AUTH_PLUGIN_PREFIX, '').trim();
+    if (next === text) break;
+    text = next;
+  }
+  return text.replace(TRAILING_PUNCT, '').trim();
+}
+
+function receiptKey(value) {
+  return normalizeAuthReceipt(value).toLowerCase();
+}
+
+function residualReceipt(text) {
+  return text.replace(LEADING_FILLER, '').replace(TRAILING_PUNCT, '').trim();
+}
+
+function isPlayerWrapped(value) {
+  const raw = String(value ?? '').replace(COLOR_CODES, '').trim();
+  return PLAYER_WRAPPED.test(raw);
+}
+
+function hasNegation(text, marker) {
+  const n = text.toLowerCase(), m = marker.toLowerCase();
+  if (!m) return false;
+  const idx = n.lastIndexOf(m);
+  if (idx < 0) return false;
+  return NEGATION_BEFORE.test(n.slice(0, idx).replace(/\s+/g, ' ').trimEnd());
+}
+
+function remainderIsSeparator(text, marker) {
+  const rest = text.slice(marker.length);
+  return rest === '' || /^[:：,，.\s»›\-—]/.test(rest);
+}
+
+/** Configured markers keep startsWith (AUTH_SUCCESS: welcome) and [marker] form; also match after prefix/filler. Never bare includes. */
+function matchesConfigured(message, markers) {
+  const colored = String(message ?? '').replace(COLOR_CODES, '').replace(/\s+/g, ' ').trim();
+  const stripped = receiptKey(message);
+  const residual = residualReceipt(stripped);
+  return markers.some((marker) => {
+    const mColored = String(marker ?? '').replace(COLOR_CODES, '').trim();
+    const m = receiptKey(marker);
+    if (!m && !mColored) return false;
+    if ((m && hasNegation(stripped, m)) || (mColored && hasNegation(colored, mColored))) return false;
+    if (mColored && (colored.startsWith(mColored) || colored.startsWith('[' + mColored + ']'))) {
+      return remainderIsSeparator(colored.startsWith(mColored) ? colored : colored.slice(1), mColored) || colored.startsWith('[' + mColored + ']');
+    }
+    if (m && (stripped === m || residual === m)) return true;
+    if (m && stripped.startsWith(m) && remainderIsSeparator(stripped, m)) return true;
+    if (m && residual.startsWith(m) && remainderIsSeparator(residual, m)) return true;
+    return false;
+  });
+}
+
+function matchesBuiltIn(message, receipts) {
+  const stripped = receiptKey(message);
+  const residual = residualReceipt(stripped);
+  for (const candidate of [stripped, residual]) {
+    if (receipts.has(candidate)) {
+      if (hasNegation(stripped, candidate)) return false;
+      return true;
+    }
+  }
+  return false;
+}
+
+// Exact standard AuthMe / MaxAuth receipts, not a broad "success" or "login" substring.
 // Custom markers remain available; authoritative structured state takes priority
 // over these compatibility receipts. Registration is never inferred here.
+// Stored already-normalized (lowercase, no trailing punctuation).
 const loginSuccessReceipts = new Set([
-  'successful login!',
-  'logged-in due to session reconnection.',
-  "you're already logged in!",
-  '已成功登录！',
-  '已成功登录!',
+  'successful login',
+  'logged-in due to session reconnection',
+  "you're already logged in",
+  '已成功登录',
+  '登录成功',
 ]);
-const loginFailureReceipts = new Set(['wrong password!', '密码错误!', '密码错误！']);
+const loginFailureReceipts = new Set(['wrong password', '密码错误', '密码不正确', '错误的密码']);
 const loginPendingNotices = ['登录数据异常，请等待登录结束', '登录数据异常,请等待登录结束'];
-const receiptText = (value) => value.replace(/^\[(?:AuthMe|玩家系统)\]\s*/i, '').trim().toLowerCase();
 const failureMessages = {
   'request-not-detected': '未识别到服务器登录提示，尚未提交密码',
   'credential-read-timeout': '服务器登录凭据读取超时，尚未提交密码',
@@ -87,7 +168,11 @@ export function installServerLogin(bot, options) {
     if (stage === status && reason === detail) return;
     if (status === 'confirmed' && recovering) { recoveredAt = Date.now(); recovering = false; }
     stage = status; reason = detail;
-    if (['confirmed', 'required', 'retrying', 'blocked', 'closed'].includes(status)) clearTimeout(timer);
+    // armed: wait for a login prompt (timer starts at arm).
+    // submitted: wait for a success/failure receipt (timer restarts at submit, not left running from arm).
+    // confirmed/blocked/required/retrying/closed: stop the timer. Never treat body/network ready as success.
+    if (status === 'submitted' || status === 'armed') armTimer();
+    else if (['confirmed', 'required', 'retrying', 'blocked', 'closed'].includes(status)) clearTimeout(timer);
     options.report?.({ status, reason, username: options.username, server: options.server });
   };
   const armTimer = () => {
@@ -125,12 +210,12 @@ export function installServerLogin(bot, options) {
             || (account.reauthenticateOnRevoked !== undefined && typeof account.reauthenticateOnRevoked !== 'boolean')
             || ['requestMarkers', 'successMarkers', 'failureMarkers'].some(key => !Array.isArray(account[key])
               || account[key].length > 16 || account[key].some(m => typeof m !== 'string' || !m.trim() || m.length > 160))) throw new Error('incomplete account');
-          report('armed');
           timeoutMs = account.timeoutMs ?? 30000;
           if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 300000) throw new Error('invalid timeout');
           // Missing final authorization is unknown, not a rejected credential.
           // End this attempt and let the connection owner use its normal backoff.
-          armTimer();
+          // report('armed') starts the prompt-wait timer with the validated timeout.
+          report('armed');
         } else report('blocked', 'account-not-matched');
       } else if (config.enabled === true) {
         throw new Error('missing accounts');
@@ -139,7 +224,7 @@ export function installServerLogin(bot, options) {
   } catch { account = undefined; report('blocked', 'invalid-configuration'); }
   const stop = () => {
     active = false; clearTimeout(timer);
-    bot.off('message', onMessage); bot.off('end', stop); bot.off('kicked', stop);
+    bot.off('message', onMessage); bot.off('title', onTitle); bot.off('end', stop); bot.off('kicked', stop);
     bot._client?.off?.('show_dialog', onDialog); bot._client?.off?.('clear_dialog', onClearDialog);
     stage = 'closed';
   };
@@ -187,9 +272,15 @@ export function installServerLogin(bot, options) {
     submitCredential();
   };
   const onClearDialog = () => { dialogSubmit = false; };
-  const onMessage = (message, position) => {
-    if (!active || !account || !['armed', 'submitted', 'confirmed', 'required'].includes(stage) || position !== 'system') return;
-    const value = message.toString().replace(/§[0-9A-FK-OR]/gi, '').trimStart();
+  const displayText = (message) => {
+    if (typeof message === 'string') return message;
+    if (message && typeof message.toString === 'function' && message.toString !== Object.prototype.toString) return message.toString();
+    return minecraftTextComponent(message) || '';
+  };
+  const onReceipt = (message, position) => {
+    if (!active || !account || !['armed', 'submitted', 'confirmed', 'required'].includes(stage)) return;
+    if (position !== 'system' && position !== 'title' && position !== 'subtitle') return;
+    const value = displayText(message).replace(COLOR_CODES, '').trimStart();
     if (loginPendingNotices.some(notice => value.includes(notice))) return;
     const stateMatch = /^(?:MC_AUTH_STATE|\[MC_AUTH_STATE\])\s+(\{.*\})\s*$/s.exec(value);
     if (stateMatch) {
@@ -221,26 +312,32 @@ export function installServerLogin(bot, options) {
       revoke(true);
       return;
     }
-    const playerChat = /^(?:\[[^\]\r\n]+\]\s*)?<[^>\r\n]+>\s/.test(value);
-    const loginReceipt = account.command === 'login' && !playerChat && !authState
-      ? receiptText(value) : null;
-    if (matches(value, account.failureMarkers) || loginFailureReceipts.has(loginReceipt)) {
+    const playerChat = isPlayerWrapped(value);
+    if (playerChat) return;
+    const loginReceiptAllowed = account.command === 'login' && !authState;
+    if (matchesConfigured(value, account.failureMarkers) || (loginReceiptAllowed && matchesBuiltIn(value, loginFailureReceipts))) {
       report(['confirmed', 'required'].includes(stage) ? 'required' : 'blocked', 'server-rejected'); return;
     }
-    if (matches(value, account.successMarkers) || loginSuccessReceipts.has(loginReceipt)) {
+    if (matchesConfigured(value, account.successMarkers) || (loginReceiptAllowed && matchesBuiltIn(value, loginSuccessReceipts))) {
       if (authState) authState = { ...authState, authorized: true, status: 'authenticated' };
       report('confirmed'); return;
     }
-    // AuthMe wording and plugin prefixes vary. Only the configured login action
-    // may use this fallback; it never selects register or a command from text.
-    // Mineflayer labels player chat separately; also reject common forwarded
-    // player-chat wrappers if a server transports them as system messages.
-    const wantsLogin = matches(value, account.requestMarkers) || (account.command === 'login'
-      && !playerChat && /\/login\b/i.test(value));
+    // Titles are not login prompts. AuthMe wording and plugin prefixes vary.
+    // Only the configured login action may use this fallback; it never selects
+    // register or a command from text. Player-chat wrappers are rejected above.
+    if (position === 'title' || position === 'subtitle') return;
+    const wantsLogin = matchesConfigured(value, account.requestMarkers) || (account.command === 'login'
+      && /\/login\b/i.test(value));
     if (attempted || ['confirmed', 'required'].includes(stage) || !wantsLogin) return;
     submitCredential();
   };
+  const onMessage = (message, position) => onReceipt(message, position);
+  const onTitle = (text, kind) => {
+    if (kind && kind !== 'title' && kind !== 'subtitle') return;
+    onReceipt(text, kind === 'subtitle' ? 'subtitle' : 'title');
+  };
   bot.on('message', onMessage);
+  bot.on('title', onTitle);
   bot._client?.on?.('show_dialog', onDialog);
   bot._client?.on?.('clear_dialog', onClearDialog);
   bot.once('end', stop);

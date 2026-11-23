@@ -1,0 +1,98 @@
+[
+  {
+    "name": "admire_goat_horn",
+    "resource": "minecraft:admire_goat_horn",
+    "soundEvent": "minecraft:item.goat_horn.sound.4",
+    "useDuration": 7.0,
+    "range": 256.0,
+    "descriptionKey": "instrument.minecraft.admire_goat_horn",
+    "idStatus": "runtime-registry-vanilla-127.0.0.1",
+    "source": "vanilla-26.2-datapack-data/minecraft/instrument",
+    "id": 0,
+    "idSource": "vanilla 26.2 registry_data capture 2026-11-23 127.0.0.1:25770"
+  },
+  {
+    "name": "call_goat_horn",
+    "resource": "minecraft:call_goat_horn",
+    "soundEvent": "minecraft:item.goat_horn.sound.5",
+    "useDuration": 7.0,
+    "range": 256.0,
+    "descriptionKey": "instrument.minecraft.call_goat_horn",
+    "idStatus": "runtime-registry-vanilla-127.0.0.1",
+    "source": "vanilla-26.2-datapack-data/minecraft/instrument",
+    "id": 1,
+    "idSource": "vanilla 26.2 registry_data capture 2026-11-23 127.0.0.1:25770"
+  },
+  {
+    "name": "dream_goat_horn",
+    "resource": "minecraft:dream_goat_horn",
+    "soundEvent": "minecraft:item.goat_horn.sound.7",
+    "useDuration": 7.0,
+    "range": 256.0,
+    "descriptionKey": "instrument.minecraft.dream_goat_horn",
+    "idStatus": "runtime-registry-vanilla-127.0.0.1",
+    "source": "vanilla-26.2-datapack-data/minecraft/instrument",
+    "id": 2,
+    "idSource": "vanilla 26.2 registry_data capture 2026-11-23 127.0.0.1:25770"
+  },
+  {
+    "name": "feel_goat_horn",
+    "resource": "minecraft:feel_goat_horn",
+    "soundEvent": "minecraft:item.goat_horn.sound.3",
+    "useDuration": 7.0,
+    "range": 256.0,
+    "descriptionKey": "instrument.minecraft.feel_goat_horn",
+    "idStatus": "runtime-registry-vanilla-127.0.0.1",
+    "source": "vanilla-26.2-datapack-data/minecraft/instrument",
+    "id": 3,
+    "idSource": "vanilla 26.2 registry_data capture 2026-11-23 127.0.0.1:25770"
+  },
+  {
+    "name": "ponder_goat_horn",
+    "resource": "minecraft:ponder_goat_horn",
+    "soundEvent": "minecraft:item.goat_horn.sound.0",
+    "useDuration": 7.0,
+    "range": 256.0,
+    "descriptionKey": "instrument.minecraft.ponder_goat_horn",
+    "idStatus": "runtime-registry-vanilla-127.0.0.1",
+    "source": "vanilla-26.2-datapack-data/minecraft/instrument",
+    "id": 4,
+    "idSource": "vanilla 26.2 registry_data capture 2026-11-23 127.0.0.1:25770"
+  },
+  {
+    "name": "seek_goat_horn",
+    "resource": "minecraft:seek_goat_horn",
+    "soundEvent": "minecraft:item.goat_horn.sound.2",
+    "useDuration": 7.0,
+    "range": 256.0,
+    "descriptionKey": "instrument.minecraft.seek_goat_horn",
+    "idStatus": "runtime-registry-vanilla-127.0.0.1",
+    "source": "vanilla-26.2-datapack-data/minecraft/instrument",
+    "id": 5,
+    "idSource": "vanilla 26.2 registry_data capture 2026-11-23 127.0.0.1:25770"
+  },
+  {
+    "name": "sing_goat_horn",
+    "resource": "minecraft:sing_goat_horn",
+    "soundEvent": "minecraft:item.goat_horn.sound.1",
+    "useDuration": 7.0,
+    "range": 256.0,
+    "descriptionKey": "instrument.minecraft.sing_goat_horn",
+    "idStatus": "runtime-registry-vanilla-127.0.0.1",
+    "source": "vanilla-26.2-datapack-data/minecraft/instrument",
+    "id": 6,
+    "idSource": "vanilla 26.2 registry_data capture 2026-11-23 127.0.0.1:25770"
+  },
+  {
+    "name": "yearn_goat_horn",
+    "resource": "minecraft:yearn_goat_horn",
+    "soundEvent": "minecraft:item.goat_horn.sound.6",
+    "useDuration": 7.0,
+    "range": 256.0,
+    "descriptionKey": "instrument.minecraft.yearn_goat_horn",
+    "idStatus": "runtime-registry-vanilla-127.0.0.1",
+    "source": "vanilla-26.2-datapack-data/minecraft/instrument",
+    "id": 7,
+    "idSource": "vanilla 26.2 registry_data capture 2026-11-23 127.0.0.1:25770"
+  }
+]

@@ -15,6 +15,7 @@ import { readWorldIdentity, worldScopedRealm } from './world-scope.ts';
 import { fatalDamageText, observeMobDeaths, ownKillCredit } from './mob-death.ts';
 import { identityObservations } from './identity-observation.ts';
 import {ProximityVoiceLane, PROXIMITY_VOICE_TOOL} from './proximity-voice-lane.ts';
+import {SimpleVoiceChatLane, SIMPLE_VOICE_CHAT_TOOL} from './simple-voice-chat-lane.ts';
 import { TaskProgressReading } from './task-progress-reading.ts';
 import { TaskRecoveryBook } from './task-recovery.ts';
 import { GoalCheckpointBook, type GoalCheckpointScope } from './goal-checkpoint.ts';
@@ -2281,6 +2282,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   SERVER_QUERY_TOOL,
   SERVER_QUERY_RECEIPT_TOOL,
   PROXIMITY_VOICE_TOOL,
+  SIMPLE_VOICE_CHAT_TOOL,
   ...PERCEPTION_TOOLS,
   RAILWAY_TOOL_DECL,
   {
@@ -2930,6 +2932,7 @@ export class MinecraftWorld implements World {
   protected hookedBots = new WeakSet<object>();
   protected readonly attention = new AttentionReader();
   protected readonly proximityVoice: ProximityVoiceLane;
+  protected readonly simpleVoiceChat: SimpleVoiceChatLane;
   protected hearingDetach: (() => void) | null = null;
   protected hookedMessageBots = new WeakSet<object>();
   /** 服务端同一条系统提示在短时间连发时只投递首条；原始重复次数进诊断。 */
@@ -3108,6 +3111,10 @@ export class MinecraftWorld implements World {
         +(receipt.game.state==='sent'&&receipt.requestedText?` 本次台词输入：${receipt.requestedText}。`:'')
         +'音频帧发送不证明对方听见或全文生成完整；按原请求ID查状态。',false,{trigger:'piggyback',meta:{proximityVoice:receipt}}),
       file:this.dataDir?join(this.dataDir,'minecraft-voice',createHash('sha256').update(JSON.stringify([this.cfg.host,this.cfg.port,this.cfg.auth,this.cfg.username])).digest('hex')+'.json'):null,
+    });
+    this.simpleVoiceChat = new SimpleVoiceChatLane({
+      config: () => ({enabled:false,officialJar:'',javaPath:'',compatibilityVersion:20,...this.cfg.simpleVoiceChat}),
+      blob: handle => this.host?.blob(handle) ?? null,
     });
     this.goalCheckpoints = new GoalCheckpointBook(this.dataDir ? join(this.dataDir, 'minecraft-goals') : null);
     this.photography = new PhotographyService({
@@ -4593,6 +4600,7 @@ export class MinecraftWorld implements World {
       version: this.cfg.version,
       fakeHost: this.cfg.fakeHost || undefined,
       publicDnsFallback: this.cfg.publicDnsFallback,
+      autoReconnect: this.cfg.autoReconnect,
       keepAliveTimeoutMs: this.cfg.keepAliveTimeoutMs,
       viewDistance: this.cfg.viewDistance,
       deathRespawnDelayMs: this.cfg.deathRespawnDelayMs,
@@ -4633,6 +4641,7 @@ export class MinecraftWorld implements World {
       // 复述,压成不唤醒的一条,免得连不上的那半小时里每隔几十秒炸一次
       onDisconnect: (reason, willReconnect, attempt) => {
         this.proximityVoice.disconnect('Minecraft disconnected; query original voice request');
+        this.simpleVoiceChat?.disconnect('Minecraft disconnected');
         this.serverQueries.reset('游戏连接已断开，查询结果未知；重连后需重新读取');
         this.pendingDeathCause = null;
         this.bodyInhibitReason = null; this.bodyInhibitHold = null;
@@ -4715,6 +4724,7 @@ export class MinecraftWorld implements World {
 
   async stop(): Promise<void> {
     await this.proximityVoice.stop();
+    await this.simpleVoiceChat?.stop();
     this.serverQueries.reset('Minecraft World 已停止，查询结果未知');
     this.pendingDeathCause = null;
     this.photography.stop();
@@ -4911,6 +4921,12 @@ export class MinecraftWorld implements World {
   }
   protected extensionImportantMessage(_text: string): boolean { return false; }
   protected attachExtension(_bot: Bot): void {}
+  /**
+   * Server packs may hold native Simple Voice Chat until the body reaches the backend that owns
+   * voice (e.g. after a proxy lobby hop). Default: any authenticated play connection. Returning
+   * false closes an attached client; it reconnects once this returns true again.
+   */
+  protected simpleVoiceChatGate(_bot: Bot): boolean { return true; }
   protected disposeExtension(): void {}
   protected extensionAdmission(_steps: readonly SkillCall[]): string | null { return null; }
 
@@ -4920,6 +4936,7 @@ export class MinecraftWorld implements World {
   tools(): ToolDef[] {
     const handlers: Record<string, ToolDef['handler']> = {
       mc_voice: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.proximityVoice.call(args); },
+      mc_svc: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.simpleVoiceChat.call(args, ctx.signal); },
       mc_query: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.queryServer(args,ctx.signal); },
       mc_query_receipt: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.serverQueries.readReceipt(args); },
       mc_tool_help: async (args, ctx) => { ctx.signal?.throwIfAborted(); return readToolHelp(this.tools(), args); },
@@ -7573,6 +7590,7 @@ export class MinecraftWorld implements World {
       this.idleContext.clear();
       this.setPersonalSpawn(undefined, '世界身份已改变，等待核实', { announce: false });
       this.proximityVoice.disconnect('Native world changed; do not replay game voice');
+      this.simpleVoiceChat?.disconnect('Native world changed');
       this.serverQueries.reset('世界身份已改变，旧查询结果未知');
       this.spatialRealm = scope;
       this.lastDimension = dim || null;
@@ -8657,6 +8675,9 @@ export class MinecraftWorld implements World {
     // 1s 心跳里做昼夜检测(转换点不能等节流窗口),节流窗口做世界摘要
     void this.syncManagedServerLifecycle();
     const bot = this.bridge?.bot;
+    const svcCurrent = (b: NonNullable<typeof bot>) => this.bridge?.bot===b && this.bridge?.connectionState?.ready===true
+      && b._client?.state==='play' && this.simpleVoiceChatGate(b);
+    this.simpleVoiceChat?.sync(bot && svcCurrent(bot) ? {bot, stillCurrent:()=>svcCurrent(bot)} : undefined);
     if (!bot?.entity || !this.host) return;
     const viewerUrl = this.bridge?.viewerUrl;
     if (this.cfg.viewerAssetsDir && viewerUrl && this.bridge?.viewerKind !== 'basic') {

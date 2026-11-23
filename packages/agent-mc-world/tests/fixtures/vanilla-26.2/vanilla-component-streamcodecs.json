@@ -1,0 +1,5313 @@
+{
+  "source": "vanilla 26.2 server-26.2.jar DataComponentType.streamCodec + codec.parse (no handwritten wire oracle)",
+  "typeCount": 111,
+  "typesWithAtLeastOneEncodedSample": 111,
+  "typesWithoutEncodedSample": 0,
+  "types": [
+    {
+      "id": 0,
+      "name": "minecraft:custom_data",
+      "javaType": "minecraft:custom_data",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.CustomData",
+          "ok": true,
+          "hex": "0a0100016e0101000570726f62650100",
+          "length": 16
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 1,
+      "name": "minecraft:max_stack_size",
+      "javaType": "minecraft:max_stack_size",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "40",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "40",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "40",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "40",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "40",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "40",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "40",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "10",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "40",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 2,
+      "name": "minecraft:max_damage",
+      "javaType": "minecraft:max_damage",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "netherite_sword",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "ef0f",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "warped_fungus_on_a_stick",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "64",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_sword",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "990c",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_helmet",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "79",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "990c",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_hoe",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "ef0f",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_leggings",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "ef03",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "chainmail_helmet",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "a501",
+          "length": 2
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "0a",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "64",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 3,
+      "name": "minecraft:damage",
+      "javaType": "minecraft:damage",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "netherite_sword",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "warped_fungus_on_a_stick",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_sword",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_helmet",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_hoe",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_leggings",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "chainmail_helmet",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 4,
+      "name": "minecraft:unbreakable",
+      "javaType": "minecraft:unbreakable",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "unit_instance",
+          "label": "Unit.INSTANCE",
+          "valueClass": "net.minecraft.util.Unit",
+          "ok": true,
+          "hex": "",
+          "length": 0
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 5,
+      "name": "minecraft:use_effects",
+      "javaType": "minecraft:use_effects",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "valueClass": "net.minecraft.world.item.component.UseEffects",
+          "ok": true,
+          "hex": "00013e4ccccd",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "valueClass": "net.minecraft.world.item.component.UseEffects",
+          "ok": true,
+          "hex": "00013e4ccccd",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "valueClass": "net.minecraft.world.item.component.UseEffects",
+          "ok": true,
+          "hex": "00013e4ccccd",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "valueClass": "net.minecraft.world.item.component.UseEffects",
+          "ok": true,
+          "hex": "00013e4ccccd",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "valueClass": "net.minecraft.world.item.component.UseEffects",
+          "ok": true,
+          "hex": "00013e4ccccd",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "valueClass": "net.minecraft.world.item.component.UseEffects",
+          "ok": true,
+          "hex": "00013e4ccccd",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "net.minecraft.world.item.component.UseEffects",
+          "ok": true,
+          "hex": "00013e4ccccd",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "valueClass": "net.minecraft.world.item.component.UseEffects",
+          "ok": true,
+          "hex": "00013e4ccccd",
+          "length": 6
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 6,
+      "name": "minecraft:custom_name",
+      "javaType": "minecraft:custom_name",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.network.chat.MutableComponent",
+          "ok": true,
+          "hex": "08000970726f62652d686174",
+          "length": 12
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.network.chat.MutableComponent",
+          "ok": true,
+          "hex": "08000970726f62652d686174",
+          "length": 12
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 7,
+      "name": "minecraft:minimum_attack_charge",
+      "javaType": "minecraft:minimum_attack_charge",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "valueClass": "java.lang.Float",
+          "ok": true,
+          "hex": "3f800000",
+          "length": 4
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_spear",
+          "valueClass": "java.lang.Float",
+          "ok": true,
+          "hex": "3f800000",
+          "length": 4
+        },
+        {
+          "origin": "item_default_report",
+          "label": "golden_spear",
+          "valueClass": "java.lang.Float",
+          "ok": true,
+          "hex": "3f800000",
+          "length": 4
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_spear",
+          "valueClass": "java.lang.Float",
+          "ok": true,
+          "hex": "3f800000",
+          "length": 4
+        },
+        {
+          "origin": "item_default_report",
+          "label": "iron_spear",
+          "valueClass": "java.lang.Float",
+          "ok": true,
+          "hex": "3f800000",
+          "length": 4
+        },
+        {
+          "origin": "item_default_report",
+          "label": "wooden_spear",
+          "valueClass": "java.lang.Float",
+          "ok": true,
+          "hex": "3f800000",
+          "length": 4
+        },
+        {
+          "origin": "item_default_report",
+          "label": "stone_spear",
+          "valueClass": "java.lang.Float",
+          "ok": true,
+          "hex": "3f800000",
+          "length": 4
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 8,
+      "name": "minecraft:damage_type",
+      "javaType": "minecraft:damage_type",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "25",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_spear",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "25",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "golden_spear",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "25",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_spear",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "25",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "iron_spear",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "25",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "wooden_spear",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "25",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "stone_spear",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "25",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "25",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "12",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 9,
+      "name": "minecraft:item_name",
+      "javaType": "minecraft:item_name",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "valueClass": "net.minecraft.network.chat.MutableComponent",
+          "ok": true,
+          "hex": "0a0800097472616e736c6174650021626c6f636b2e6d696e6563726166742e7761727065645f776172745f626c6f636b00",
+          "length": 49
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "valueClass": "net.minecraft.network.chat.MutableComponent",
+          "ok": true,
+          "hex": "0a0800097472616e736c6174650025626c6f636b2e6d696e6563726166742e626c61636b5f636f6e63726574655f706f7764657200",
+          "length": 53
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "valueClass": "net.minecraft.network.chat.MutableComponent",
+          "ok": true,
+          "hex": "0a0800097472616e736c6174650022626c6f636b2e6d696e6563726166742e736d6f6f74685f71756172747a5f736c616200",
+          "length": 50
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "valueClass": "net.minecraft.network.chat.MutableComponent",
+          "ok": true,
+          "hex": "0a0800097472616e736c617465001e6974656d2e6d696e6563726166742e6d757369635f646973635f7374616c00",
+          "length": 46
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "valueClass": "net.minecraft.network.chat.MutableComponent",
+          "ok": true,
+          "hex": "0a0800097472616e736c617465001d626c6f636b2e6d696e6563726166742e656d6572616c645f626c6f636b00",
+          "length": 45
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "valueClass": "net.minecraft.network.chat.MutableComponent",
+          "ok": true,
+          "hex": "0a0800097472616e736c617465001f626c6f636b2e6d696e6563726166742e7374727563747572655f626c6f636b00",
+          "length": 47
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "net.minecraft.network.chat.MutableComponent",
+          "ok": true,
+          "hex": "0a0800097472616e736c617465001d626c6f636b2e6d696e6563726166742e6465636f72617465645f706f7400",
+          "length": 45
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "valueClass": "net.minecraft.network.chat.MutableComponent",
+          "ok": true,
+          "hex": "0a0800097472616e736c617465001d626c6f636b2e6d696e6563726166742e7370727563655f627574746f6e00",
+          "length": 45
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 10,
+      "name": "minecraft:item_model",
+      "javaType": "minecraft:item_model",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "valueClass": "net.minecraft.resources.Identifier",
+          "ok": true,
+          "hex": "1b6d696e6563726166743a7761727065645f776172745f626c6f636b",
+          "length": 28
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "valueClass": "net.minecraft.resources.Identifier",
+          "ok": true,
+          "hex": "1f6d696e6563726166743a626c61636b5f636f6e63726574655f706f77646572",
+          "length": 32
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "valueClass": "net.minecraft.resources.Identifier",
+          "ok": true,
+          "hex": "1c6d696e6563726166743a736d6f6f74685f71756172747a5f736c6162",
+          "length": 29
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "valueClass": "net.minecraft.resources.Identifier",
+          "ok": true,
+          "hex": "196d696e6563726166743a6d757369635f646973635f7374616c",
+          "length": 26
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "valueClass": "net.minecraft.resources.Identifier",
+          "ok": true,
+          "hex": "176d696e6563726166743a656d6572616c645f626c6f636b",
+          "length": 24
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "valueClass": "net.minecraft.resources.Identifier",
+          "ok": true,
+          "hex": "196d696e6563726166743a7374727563747572655f626c6f636b",
+          "length": 26
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "net.minecraft.resources.Identifier",
+          "ok": true,
+          "hex": "176d696e6563726166743a6465636f72617465645f706f74",
+          "length": 24
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "valueClass": "net.minecraft.resources.Identifier",
+          "ok": true,
+          "hex": "176d696e6563726166743a7370727563655f627574746f6e",
+          "length": 24
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 11,
+      "name": "minecraft:lore",
+      "javaType": "minecraft:lore",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "valueClass": "net.minecraft.world.item.component.ItemLore",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "valueClass": "net.minecraft.world.item.component.ItemLore",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "valueClass": "net.minecraft.world.item.component.ItemLore",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "valueClass": "net.minecraft.world.item.component.ItemLore",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "valueClass": "net.minecraft.world.item.component.ItemLore",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "valueClass": "net.minecraft.world.item.component.ItemLore",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "net.minecraft.world.item.component.ItemLore",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "valueClass": "net.minecraft.world.item.component.ItemLore",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.ItemLore",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.ItemLore",
+          "ok": true,
+          "hex": "010800036f6e65",
+          "length": 7
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.ItemLore",
+          "ok": true,
+          "hex": "030800036f6e6508000374776f0800057468726565",
+          "length": 21
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 12,
+      "name": "minecraft:rarity",
+      "javaType": "minecraft:rarity",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "valueClass": "net.minecraft.world.item.Rarity",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "valueClass": "net.minecraft.world.item.Rarity",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "valueClass": "net.minecraft.world.item.Rarity",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "valueClass": "net.minecraft.world.item.Rarity",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "valueClass": "net.minecraft.world.item.Rarity",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "valueClass": "net.minecraft.world.item.Rarity",
+          "ok": true,
+          "hex": "03",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "net.minecraft.world.item.Rarity",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "valueClass": "net.minecraft.world.item.Rarity",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.Rarity",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.Rarity",
+          "ok": true,
+          "hex": "03",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 13,
+      "name": "minecraft:enchantments",
+      "javaType": "minecraft:enchantments",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "012105",
+          "length": 3
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a number: {\"minecraft:sharpness\":5}; Failed to get element minecraft:levels missed input: {\"levels\":{\"minecraft:sharpness\":5}}': ItemEnchantments{enchantments={}}]"
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "0221052803",
+          "length": 5
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 14,
+      "name": "minecraft:can_place_on",
+      "javaType": "minecraft:can_place_on",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a JSON object: [{\"blocks\":\"minecraft:stone\"}]': AdventureModePredicate{predicates=[BlockPredicate[blocks=Optional.empty, properties=Optional.empty, nbt=Optional.empty, components=DataComponentMatchers[exact=[], partial={}]]]}]"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a JSON object: []': AdventureModePredicate{predicates=[BlockPredicate[blocks=Optional.empty, properties=Optional.empty, nbt=Optional.empty, components=DataComponentMatchers[exact=[], partial={}]]]}]"
+        },
+        {
+          "origin": "generic_json_probe",
+          "label": "{}",
+          "valueClass": "net.minecraft.world.item.AdventureModePredicate",
+          "ok": true,
+          "hex": "010000000000",
+          "length": 6
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 15,
+      "name": "minecraft:can_break",
+      "javaType": "minecraft:can_break",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a JSON object: [{\"blocks\":\"minecraft:stone\"}]': AdventureModePredicate{predicates=[BlockPredicate[blocks=Optional.empty, properties=Optional.empty, nbt=Optional.empty, components=DataComponentMatchers[exact=[], partial={}]]]}]"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a JSON object: []': AdventureModePredicate{predicates=[BlockPredicate[blocks=Optional.empty, properties=Optional.empty, nbt=Optional.empty, components=DataComponentMatchers[exact=[], partial={}]]]}]"
+        },
+        {
+          "origin": "generic_json_probe",
+          "label": "{}",
+          "valueClass": "net.minecraft.world.item.AdventureModePredicate",
+          "ok": true,
+          "hex": "010000000000",
+          "length": 6
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 16,
+      "name": "minecraft:attribute_modifiers",
+      "javaType": "minecraft:attribute_modifiers",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "valueClass": "net.minecraft.world.item.component.ItemAttributeModifiers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "valueClass": "net.minecraft.world.item.component.ItemAttributeModifiers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "valueClass": "net.minecraft.world.item.component.ItemAttributeModifiers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "valueClass": "net.minecraft.world.item.component.ItemAttributeModifiers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "valueClass": "net.minecraft.world.item.component.ItemAttributeModifiers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "valueClass": "net.minecraft.world.item.component.ItemAttributeModifiers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "net.minecraft.world.item.component.ItemAttributeModifiers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "valueClass": "net.minecraft.world.item.component.ItemAttributeModifiers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a json array: {\"modifiers\":[]}']"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a json array: {\"modifiers\":[{\"type\":\"minecraft:generic.attack_damage\",\"id\":\"minecraft:probe\",\"amount\":1.0,\"operation\":\"add_value\"}]}']"
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 17,
+      "name": "minecraft:custom_model_data",
+      "javaType": "minecraft:custom_model_data",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.CustomModelData",
+          "ok": true,
+          "hex": "013f80000001010101610100ff0000",
+          "length": 15
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.CustomModelData",
+          "ok": true,
+          "hex": "00000000",
+          "length": 4
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 18,
+      "name": "minecraft:tooltip_display",
+      "javaType": "minecraft:tooltip_display",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "valueClass": "net.minecraft.world.item.component.TooltipDisplay",
+          "ok": true,
+          "hex": "0000",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "valueClass": "net.minecraft.world.item.component.TooltipDisplay",
+          "ok": true,
+          "hex": "0000",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "valueClass": "net.minecraft.world.item.component.TooltipDisplay",
+          "ok": true,
+          "hex": "0000",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "valueClass": "net.minecraft.world.item.component.TooltipDisplay",
+          "ok": true,
+          "hex": "0000",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "valueClass": "net.minecraft.world.item.component.TooltipDisplay",
+          "ok": true,
+          "hex": "0000",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "valueClass": "net.minecraft.world.item.component.TooltipDisplay",
+          "ok": true,
+          "hex": "0000",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "net.minecraft.world.item.component.TooltipDisplay",
+          "ok": true,
+          "hex": "0000",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "valueClass": "net.minecraft.world.item.component.TooltipDisplay",
+          "ok": true,
+          "hex": "0000",
+          "length": 2
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 19,
+      "name": "minecraft:repair_cost",
+      "javaType": "minecraft:repair_cost",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "07",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 20,
+      "name": "minecraft:creative_slot_lock",
+      "javaType": "minecraft:creative_slot_lock",
+      "transient": true,
+      "hasJsonCodec": false,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "unit_instance",
+          "label": "Unit.INSTANCE",
+          "valueClass": "net.minecraft.util.Unit",
+          "ok": true,
+          "hex": "",
+          "length": 0
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 21,
+      "name": "minecraft:enchantment_glint_override",
+      "javaType": "minecraft:enchantment_glint_override",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "end_crystal",
+          "valueClass": "java.lang.Boolean",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "debug_stick",
+          "valueClass": "java.lang.Boolean",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "written_book",
+          "valueClass": "java.lang.Boolean",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "nether_star",
+          "valueClass": "java.lang.Boolean",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "enchanted_book",
+          "valueClass": "java.lang.Boolean",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "experience_bottle",
+          "valueClass": "java.lang.Boolean",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "enchanted_golden_apple",
+          "valueClass": "java.lang.Boolean",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 22,
+      "name": "minecraft:intangible_projectile",
+      "javaType": "minecraft:intangible_projectile",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "unit_instance",
+          "label": "Unit.INSTANCE",
+          "valueClass": "net.minecraft.util.Unit",
+          "ok": true,
+          "hex": "0a00",
+          "length": 2
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 23,
+      "name": "minecraft:food",
+      "javaType": "minecraft:food",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "pufferfish",
+          "valueClass": "net.minecraft.world.food.FoodProperties",
+          "ok": true,
+          "hex": "013e4ccccd00",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "cooked_chicken",
+          "valueClass": "net.minecraft.world.food.FoodProperties",
+          "ok": true,
+          "hex": "0640e6666700",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "potato",
+          "valueClass": "net.minecraft.world.food.FoodProperties",
+          "ok": true,
+          "hex": "013f19999a00",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "cooked_rabbit",
+          "valueClass": "net.minecraft.world.food.FoodProperties",
+          "ok": true,
+          "hex": "0540c0000000",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "suspicious_stew",
+          "valueClass": "net.minecraft.world.food.FoodProperties",
+          "ok": true,
+          "hex": "0640e6666701",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "rotten_flesh",
+          "valueClass": "net.minecraft.world.food.FoodProperties",
+          "ok": true,
+          "hex": "043f4ccccd00",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "cooked_cod",
+          "valueClass": "net.minecraft.world.food.FoodProperties",
+          "ok": true,
+          "hex": "0540c0000000",
+          "length": 6
+        },
+        {
+          "origin": "item_default_report",
+          "label": "bread",
+          "valueClass": "net.minecraft.world.food.FoodProperties",
+          "ok": true,
+          "hex": "0540c0000000",
+          "length": 6
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.food.FoodProperties",
+          "ok": true,
+          "hex": "013dcccccd00",
+          "length": 6
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.food.FoodProperties",
+          "ok": true,
+          "hex": "043e99999a01",
+          "length": 6
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 24,
+      "name": "minecraft:consumable",
+      "javaType": "minecraft:consumable",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "pufferfish",
+          "valueClass": "net.minecraft.world.item.component.Consumable",
+          "ok": true,
+          "hex": "3fcccccd01bb05010100031201b009000101001002ac02000101000800ac02000101003f800000",
+          "length": 39
+        },
+        {
+          "origin": "item_default_report",
+          "label": "cooked_chicken",
+          "valueClass": "net.minecraft.world.item.component.Consumable",
+          "ok": true,
+          "hex": "3fcccccd01bb050100",
+          "length": 9
+        },
+        {
+          "origin": "item_default_report",
+          "label": "potato",
+          "valueClass": "net.minecraft.world.item.component.Consumable",
+          "ok": true,
+          "hex": "3fcccccd01bb050100",
+          "length": 9
+        },
+        {
+          "origin": "item_default_report",
+          "label": "cooked_rabbit",
+          "valueClass": "net.minecraft.world.item.component.Consumable",
+          "ok": true,
+          "hex": "3fcccccd01bb050100",
+          "length": 9
+        },
+        {
+          "origin": "item_default_report",
+          "label": "suspicious_stew",
+          "valueClass": "net.minecraft.world.item.component.Consumable",
+          "ok": true,
+          "hex": "3fcccccd01bb050100",
+          "length": 9
+        },
+        {
+          "origin": "item_default_report",
+          "label": "rotten_flesh",
+          "valueClass": "net.minecraft.world.item.component.Consumable",
+          "ok": true,
+          "hex": "3fcccccd01bb05010100011000d804000101003f4ccccd",
+          "length": 23
+        },
+        {
+          "origin": "item_default_report",
+          "label": "cooked_cod",
+          "valueClass": "net.minecraft.world.item.component.Consumable",
+          "ok": true,
+          "hex": "3fcccccd01bb050100",
+          "length": 9
+        },
+        {
+          "origin": "item_default_report",
+          "label": "bread",
+          "valueClass": "net.minecraft.world.item.component.Consumable",
+          "ok": true,
+          "hex": "3fcccccd01bb050100",
+          "length": 9
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.Consumable",
+          "ok": true,
+          "hex": "3fcccccd01bb050100",
+          "length": 9
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 25,
+      "name": "minecraft:use_remainder",
+      "javaType": "minecraft:use_remainder",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "suspicious_stew",
+          "valueClass": "net.minecraft.world.item.component.UseRemainder",
+          "ok": true,
+          "hex": "9807010000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "beetroot_soup",
+          "valueClass": "net.minecraft.world.item.component.UseRemainder",
+          "ok": true,
+          "hex": "9807010000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "mushroom_stew",
+          "valueClass": "net.minecraft.world.item.component.UseRemainder",
+          "ok": true,
+          "hex": "9807010000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "potion",
+          "valueClass": "net.minecraft.world.item.component.UseRemainder",
+          "ok": true,
+          "hex": "fd08010000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "rabbit_stew",
+          "valueClass": "net.minecraft.world.item.component.UseRemainder",
+          "ok": true,
+          "hex": "9807010000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "milk_bucket",
+          "valueClass": "net.minecraft.world.item.component.UseRemainder",
+          "ok": true,
+          "hex": "9008010000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "honey_bottle",
+          "valueClass": "net.minecraft.world.item.component.UseRemainder",
+          "ok": true,
+          "hex": "fd08010000",
+          "length": 5
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.UseRemainder",
+          "ok": true,
+          "hex": "9807010000",
+          "length": 5
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 26,
+      "name": "minecraft:use_cooldown",
+      "javaType": "minecraft:use_cooldown",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "wind_charge",
+          "valueClass": "net.minecraft.world.item.component.UseCooldown",
+          "ok": true,
+          "hex": "3f00000000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "ender_pearl",
+          "valueClass": "net.minecraft.world.item.component.UseCooldown",
+          "ok": true,
+          "hex": "3f80000000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "chorus_fruit",
+          "valueClass": "net.minecraft.world.item.component.UseCooldown",
+          "ok": true,
+          "hex": "3f80000000",
+          "length": 5
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.UseCooldown",
+          "ok": true,
+          "hex": "3f80000000",
+          "length": 5
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 27,
+      "name": "minecraft:damage_resistant",
+      "javaType": "minecraft:damage_resistant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "item": "netherite_sword",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:is_fire' in 'minecraft:damage_type'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "netherite_hoe",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:is_fire' in 'minecraft:damage_type'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "ancient_debris",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:is_fire' in 'minecraft:damage_type'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "netherite_horse_armor",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:is_fire' in 'minecraft:damage_type'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "netherite_nautilus_armor",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:is_fire' in 'minecraft:damage_type'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "netherite_leggings",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:is_fire' in 'minecraft:damage_type'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "netherite_pickaxe",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:is_fire' in 'minecraft:damage_type'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "netherite_ingot",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:is_fire' in 'minecraft:damage_type'']"
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "net.minecraft.world.item.component.DamageResistant",
+          "valueClass": "net.minecraft.world.item.component.DamageResistant",
+          "ok": true,
+          "hex": "00116d696e6563726166743a69735f66697265",
+          "length": 19
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "net.minecraft.world.item.component.DamageResistant",
+          "valueClass": "net.minecraft.world.item.component.DamageResistant",
+          "ok": true,
+          "hex": "0200",
+          "length": 2
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 28,
+      "name": "minecraft:tool",
+      "javaType": "minecraft:tool",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "netherite_sword",
+          "valueClass": "net.minecraft.world.item.component.Tool",
+          "ok": true,
+          "hex": "0302810101417000000101001f6d696e6563726166743a73776f72645f696e7374616e746c795f6d696e6573017f7fffff0000196d696e6563726166743a73776f72645f656666696369656e74013fc00000003f8000000200",
+          "length": 89
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_sword",
+          "valueClass": "net.minecraft.world.item.component.Tool",
+          "ok": true,
+          "hex": "0302810101417000000101001f6d696e6563726166743a73776f72645f696e7374616e746c795f6d696e6573017f7fffff0000196d696e6563726166743a73776f72645f656666696369656e74013fc00000003f8000000200",
+          "length": 89
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_hoe",
+          "valueClass": "net.minecraft.world.item.component.Tool",
+          "ok": true,
+          "hex": "0200266d696e6563726166743a696e636f72726563745f666f725f6e65746865726974655f746f6f6c00010000166d696e6563726166743a6d696e6561626c652f686f65014110000001013f8000000101",
+          "length": 81
+        },
+        {
+          "origin": "item_default_report",
+          "label": "golden_pickaxe",
+          "valueClass": "net.minecraft.world.item.component.Tool",
+          "ok": true,
+          "hex": "0200216d696e6563726166743a696e636f72726563745f666f725f676f6c645f746f6f6c000100001a6d696e6563726166743a6d696e6561626c652f7069636b617865014140000001013f8000000101",
+          "length": 80
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_pickaxe",
+          "valueClass": "net.minecraft.world.item.component.Tool",
+          "ok": true,
+          "hex": "0200236d696e6563726166743a696e636f72726563745f666f725f636f707065725f746f6f6c000100001a6d696e6563726166743a6d696e6561626c652f7069636b6178650140a0000001013f8000000101",
+          "length": 82
+        },
+        {
+          "origin": "item_default_report",
+          "label": "stone_axe",
+          "valueClass": "net.minecraft.world.item.component.Tool",
+          "ok": true,
+          "hex": "0200226d696e6563726166743a696e636f72726563745f666f725f73746f6e655f746f6f6c00010000166d696e6563726166743a6d696e6561626c652f617865014080000001013f8000000101",
+          "length": 77
+        },
+        {
+          "origin": "item_default_report",
+          "label": "iron_axe",
+          "valueClass": "net.minecraft.world.item.component.Tool",
+          "ok": true,
+          "hex": "0200216d696e6563726166743a696e636f72726563745f666f725f69726f6e5f746f6f6c00010000166d696e6563726166743a6d696e6561626c652f6178650140c0000001013f8000000101",
+          "length": 76
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_axe",
+          "valueClass": "net.minecraft.world.item.component.Tool",
+          "ok": true,
+          "hex": "0200236d696e6563726166743a696e636f72726563745f666f725f636f707065725f746f6f6c00010000166d696e6563726166743a6d696e6561626c652f6178650140a0000001013f8000000101",
+          "length": 78
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.Tool",
+          "ok": true,
+          "hex": "003f8000000101",
+          "length": 7
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.Tool",
+          "ok": true,
+          "hex": "010201014000000001013f8000000101",
+          "length": 16
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 29,
+      "name": "minecraft:weapon",
+      "javaType": "minecraft:weapon",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "netherite_sword",
+          "valueClass": "net.minecraft.world.item.component.Weapon",
+          "ok": true,
+          "hex": "0100000000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_sword",
+          "valueClass": "net.minecraft.world.item.component.Weapon",
+          "ok": true,
+          "hex": "0100000000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "valueClass": "net.minecraft.world.item.component.Weapon",
+          "ok": true,
+          "hex": "0100000000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_hoe",
+          "valueClass": "net.minecraft.world.item.component.Weapon",
+          "ok": true,
+          "hex": "0200000000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "golden_pickaxe",
+          "valueClass": "net.minecraft.world.item.component.Weapon",
+          "ok": true,
+          "hex": "0200000000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_spear",
+          "valueClass": "net.minecraft.world.item.component.Weapon",
+          "ok": true,
+          "hex": "0100000000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_pickaxe",
+          "valueClass": "net.minecraft.world.item.component.Weapon",
+          "ok": true,
+          "hex": "0200000000",
+          "length": 5
+        },
+        {
+          "origin": "item_default_report",
+          "label": "stone_axe",
+          "valueClass": "net.minecraft.world.item.component.Weapon",
+          "ok": true,
+          "hex": "0240a00000",
+          "length": 5
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 30,
+      "name": "minecraft:attack_range",
+      "javaType": "minecraft:attack_range",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "valueClass": "net.minecraft.world.item.component.AttackRange",
+          "ok": true,
+          "hex": "40000000409000004000000040d000003e0000003f000000",
+          "length": 24
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_spear",
+          "valueClass": "net.minecraft.world.item.component.AttackRange",
+          "ok": true,
+          "hex": "40000000409000004000000040d000003e0000003f000000",
+          "length": 24
+        },
+        {
+          "origin": "item_default_report",
+          "label": "golden_spear",
+          "valueClass": "net.minecraft.world.item.component.AttackRange",
+          "ok": true,
+          "hex": "40000000409000004000000040d000003e0000003f000000",
+          "length": 24
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_spear",
+          "valueClass": "net.minecraft.world.item.component.AttackRange",
+          "ok": true,
+          "hex": "40000000409000004000000040d000003e0000003f000000",
+          "length": 24
+        },
+        {
+          "origin": "item_default_report",
+          "label": "iron_spear",
+          "valueClass": "net.minecraft.world.item.component.AttackRange",
+          "ok": true,
+          "hex": "40000000409000004000000040d000003e0000003f000000",
+          "length": 24
+        },
+        {
+          "origin": "item_default_report",
+          "label": "wooden_spear",
+          "valueClass": "net.minecraft.world.item.component.AttackRange",
+          "ok": true,
+          "hex": "40000000409000004000000040d000003e0000003f000000",
+          "length": 24
+        },
+        {
+          "origin": "item_default_report",
+          "label": "stone_spear",
+          "valueClass": "net.minecraft.world.item.component.AttackRange",
+          "ok": true,
+          "hex": "40000000409000004000000040d000003e0000003f000000",
+          "length": 24
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 31,
+      "name": "minecraft:enchantable",
+      "javaType": "minecraft:enchantable",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "netherite_sword",
+          "valueClass": "net.minecraft.world.item.enchantment.Enchantable",
+          "ok": true,
+          "hex": "0f",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_sword",
+          "valueClass": "net.minecraft.world.item.enchantment.Enchantable",
+          "ok": true,
+          "hex": "0a",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_helmet",
+          "valueClass": "net.minecraft.world.item.enchantment.Enchantable",
+          "ok": true,
+          "hex": "08",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "valueClass": "net.minecraft.world.item.enchantment.Enchantable",
+          "ok": true,
+          "hex": "0a",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_hoe",
+          "valueClass": "net.minecraft.world.item.enchantment.Enchantable",
+          "ok": true,
+          "hex": "0f",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_leggings",
+          "valueClass": "net.minecraft.world.item.enchantment.Enchantable",
+          "ok": true,
+          "hex": "0a",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "chainmail_helmet",
+          "valueClass": "net.minecraft.world.item.enchantment.Enchantable",
+          "ok": true,
+          "hex": "0c",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "golden_pickaxe",
+          "valueClass": "net.minecraft.world.item.enchantment.Enchantable",
+          "ok": true,
+          "hex": "16",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 32,
+      "name": "minecraft:equippable",
+      "javaType": "minecraft:equippable",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "iron_nautilus_armor",
+          "valueClass": "net.minecraft.world.item.equipment.Equippable",
+          "ok": true,
+          "hex": "0650010e6d696e6563726166743a69726f6e000100216d696e6563726166743a63616e5f776561725f6e617574696c75735f61726d6f72010100010151",
+          "length": 61
+        },
+        {
+          "origin": "item_default_report",
+          "label": "pink_carpet",
+          "valueClass": "net.minecraft.world.item.equipment.Equippable",
+          "ok": true,
+          "hex": "06b40701156d696e6563726166743a70696e6b5f6361727065740001034e87010101010001b507",
+          "length": 39
+        },
+        {
+          "origin": "item_default_report",
+          "label": "green_harness",
+          "valueClass": "net.minecraft.world.item.equipment.Equippable",
+          "ok": true,
+          "hex": "06b50601176d696e6563726166743a677265656e5f6861726e6573730001001b6d696e6563726166743a63616e5f65717569705f6861726e6573730101010101b606",
+          "length": 66
+        },
+        {
+          "origin": "item_default_report",
+          "label": "iron_horse_armor",
+          "valueClass": "net.minecraft.world.item.equipment.Equippable",
+          "ok": true,
+          "hex": "06d606010e6d696e6563726166743a69726f6e0001001e6d696e6563726166743a63616e5f776561725f686f7273655f61726d6f720101000001d706",
+          "length": 60
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_helmet",
+          "valueClass": "net.minecraft.world.item.equipment.Equippable",
+          "ok": true,
+          "hex": "044b01106d696e6563726166743a636f7070657200000101010000a40b",
+          "length": 29
+        },
+        {
+          "origin": "item_default_report",
+          "label": "player_head",
+          "valueClass": "net.minecraft.world.item.equipment.Equippable",
+          "ok": true,
+          "hex": "04470000000100010000a40b",
+          "length": 12
+        },
+        {
+          "origin": "item_default_report",
+          "label": "dragon_head",
+          "valueClass": "net.minecraft.world.item.equipment.Equippable",
+          "ok": true,
+          "hex": "04470000000100010000a40b",
+          "length": 12
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_horse_armor",
+          "valueClass": "net.minecraft.world.item.equipment.Equippable",
+          "ok": true,
+          "hex": "06d60601116d696e6563726166743a6469616d6f6e640001001e6d696e6563726166743a63616e5f776561725f686f7273655f61726d6f720101000001d706",
+          "length": 63
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 33,
+      "name": "minecraft:repairable",
+      "javaType": "minecraft:repairable",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "netherite_sword",
+          "valueClass": "net.minecraft.world.item.enchantment.Repairable",
+          "ok": true,
+          "hex": "00226d696e6563726166743a6e65746865726974655f746f6f6c5f6d6174657269616c73",
+          "length": 36
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_sword",
+          "valueClass": "net.minecraft.world.item.enchantment.Repairable",
+          "ok": true,
+          "hex": "00206d696e6563726166743a6469616d6f6e645f746f6f6c5f6d6174657269616c73",
+          "length": 34
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_helmet",
+          "valueClass": "net.minecraft.world.item.enchantment.Repairable",
+          "ok": true,
+          "hex": "001e6d696e6563726166743a726570616972735f636f707065725f61726d6f72",
+          "length": 32
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "valueClass": "net.minecraft.world.item.enchantment.Repairable",
+          "ok": true,
+          "hex": "00206d696e6563726166743a6469616d6f6e645f746f6f6c5f6d6174657269616c73",
+          "length": 34
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_hoe",
+          "valueClass": "net.minecraft.world.item.enchantment.Repairable",
+          "ok": true,
+          "hex": "00226d696e6563726166743a6e65746865726974655f746f6f6c5f6d6174657269616c73",
+          "length": 36
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_leggings",
+          "valueClass": "net.minecraft.world.item.enchantment.Repairable",
+          "ok": true,
+          "hex": "001f6d696e6563726166743a726570616972735f6469616d6f6e645f61726d6f72",
+          "length": 33
+        },
+        {
+          "origin": "item_default_report",
+          "label": "chainmail_helmet",
+          "valueClass": "net.minecraft.world.item.enchantment.Repairable",
+          "ok": true,
+          "hex": "001d6d696e6563726166743a726570616972735f636861696e5f61726d6f72",
+          "length": 31
+        },
+        {
+          "origin": "item_default_report",
+          "label": "golden_pickaxe",
+          "valueClass": "net.minecraft.world.item.enchantment.Repairable",
+          "ok": true,
+          "hex": "001d6d696e6563726166743a676f6c645f746f6f6c5f6d6174657269616c73",
+          "length": 31
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 34,
+      "name": "minecraft:glider",
+      "javaType": "minecraft:glider",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "elytra",
+          "valueClass": "net.minecraft.util.Unit",
+          "ok": true,
+          "hex": "",
+          "length": 0
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 35,
+      "name": "minecraft:tooltip_style",
+      "javaType": "minecraft:tooltip_style",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.resources.Identifier",
+          "ok": true,
+          "hex": "0f6d696e6563726166743a6775696465",
+          "length": 16
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.resources.Identifier",
+          "ok": true,
+          "hex": "116d696e6563726166743a756e6b6e6f776e",
+          "length": 18
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 36,
+      "name": "minecraft:death_protection",
+      "javaType": "minecraft:death_protection",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "totem_of_undying",
+          "valueClass": "net.minecraft.world.item.component.DeathProtection",
+          "ok": true,
+          "hex": "020200030901840700010100150164000101000b00a006000101003f800000",
+          "length": 31
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 37,
+      "name": "minecraft:blocks_attacks",
+      "javaType": "minecraft:blocks_attacks",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "item": "shield",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:bypasses_shield' in 'minecraft:damage_type'': BlocksAttacks[blockDelaySeconds=0.25, disableCooldownScale=1.0, damageReductions=[DamageReduction[horizontalBlockingAngle=90.0, type=Optional.empty, base=0.0, factor=1.0]], itemDamage=ItemDamageFunction[threshold=3.0, base=1.0, factor=1.0], bypassedBy=Optional.empty, blockSound=Optional[Reference{ResourceKey[minecraft:sound_event / minecraft:item.shield.block]=SoundEvent[location=minecraft:item.shield.block, fixedRange=Optional.empty]}], disableSound=Optional[Reference{ResourceKey[minecraft:sound_event / minecraft:item.shield.break]=SoundEvent[location=minecraft:item.shield.break, fixedRange=Optional.empty]}]]]"
+        },
+        {
+          "origin": "generic_json_probe",
+          "label": "{}",
+          "valueClass": "net.minecraft.world.item.component.BlocksAttacks",
+          "ok": true,
+          "hex": "000000003f8000000142b4000000000000003f8000003f800000000000003f800000000000",
+          "length": 37
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 38,
+      "name": "minecraft:piercing_weapon",
+      "javaType": "minecraft:piercing_weapon",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "valueClass": "net.minecraft.world.item.component.PiercingWeapon",
+          "ok": true,
+          "hex": "010001f90b01f80b",
+          "length": 8
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_spear",
+          "valueClass": "net.minecraft.world.item.component.PiercingWeapon",
+          "ok": true,
+          "hex": "010001f90b01f80b",
+          "length": 8
+        },
+        {
+          "origin": "item_default_report",
+          "label": "golden_spear",
+          "valueClass": "net.minecraft.world.item.component.PiercingWeapon",
+          "ok": true,
+          "hex": "010001f90b01f80b",
+          "length": 8
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_spear",
+          "valueClass": "net.minecraft.world.item.component.PiercingWeapon",
+          "ok": true,
+          "hex": "010001f90b01f80b",
+          "length": 8
+        },
+        {
+          "origin": "item_default_report",
+          "label": "iron_spear",
+          "valueClass": "net.minecraft.world.item.component.PiercingWeapon",
+          "ok": true,
+          "hex": "010001f90b01f80b",
+          "length": 8
+        },
+        {
+          "origin": "item_default_report",
+          "label": "wooden_spear",
+          "valueClass": "net.minecraft.world.item.component.PiercingWeapon",
+          "ok": true,
+          "hex": "010001fc0b01fb0b",
+          "length": 8
+        },
+        {
+          "origin": "item_default_report",
+          "label": "stone_spear",
+          "valueClass": "net.minecraft.world.item.component.PiercingWeapon",
+          "ok": true,
+          "hex": "010001f90b01f80b",
+          "length": 8
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 39,
+      "name": "minecraft:kinetic_weapon",
+      "javaType": "minecraft:kinetic_weapon",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "valueClass": "net.minecraft.world.item.component.KineticWeapon",
+          "ok": true,
+          "hex": "0a0a013c412000000000000001820140a333330000000001c80100000000409333333ec28f5c3f89999a01f70b01f80b",
+          "length": 48
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_spear",
+          "valueClass": "net.minecraft.world.item.component.KineticWeapon",
+          "ok": true,
+          "hex": "0a0d0150414000000000000001a50140a333330000000001fa0100000000409333333ec28f5c3f51eb8501f70b01f80b",
+          "length": 48
+        },
+        {
+          "origin": "item_default_report",
+          "label": "golden_spear",
+          "valueClass": "net.minecraft.world.item.component.KineticWeapon",
+          "ok": true,
+          "hex": "0a0e0146415000000000000001aa0140a333330000000001930200000000409333333ec28f5c3f33333301f70b01f80b",
+          "length": 48
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_spear",
+          "valueClass": "net.minecraft.world.item.component.KineticWeapon",
+          "ok": true,
+          "hex": "0a0801324110000000000000016e40a333330000000001af0100000000409333333ec28f5c3f99999a01f70b01f80b",
+          "length": 47
+        },
+        {
+          "origin": "item_default_report",
+          "label": "iron_spear",
+          "valueClass": "net.minecraft.world.item.component.KineticWeapon",
+          "ok": true,
+          "hex": "0a0c0132413000000000000001870140a333330000000001e10100000000409333333ec28f5c3f73333301f70b01f80b",
+          "length": 48
+        },
+        {
+          "origin": "item_default_report",
+          "label": "wooden_spear",
+          "valueClass": "net.minecraft.world.item.component.KineticWeapon",
+          "ok": true,
+          "hex": "0a0f0164416000000000000001c80140a333330000000001ac0200000000409333333ec28f5c3f33333301fa0b01fb0b",
+          "length": 48
+        },
+        {
+          "origin": "item_default_report",
+          "label": "stone_spear",
+          "valueClass": "net.minecraft.world.item.component.KineticWeapon",
+          "ok": true,
+          "hex": "0a0e015a415000000000000001b40140a333330000000001930200000000409333333ec28f5c3f51eb8501f70b01f80b",
+          "length": 48
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 40,
+      "name": "minecraft:swing_animation",
+      "javaType": "minecraft:swing_animation",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "valueClass": "net.minecraft.world.item.component.SwingAnimation",
+          "ok": true,
+          "hex": "0106",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "valueClass": "net.minecraft.world.item.component.SwingAnimation",
+          "ok": true,
+          "hex": "0106",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "valueClass": "net.minecraft.world.item.component.SwingAnimation",
+          "ok": true,
+          "hex": "0106",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "valueClass": "net.minecraft.world.item.component.SwingAnimation",
+          "ok": true,
+          "hex": "0106",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "valueClass": "net.minecraft.world.item.component.SwingAnimation",
+          "ok": true,
+          "hex": "0106",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "valueClass": "net.minecraft.world.item.component.SwingAnimation",
+          "ok": true,
+          "hex": "0106",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "net.minecraft.world.item.component.SwingAnimation",
+          "ok": true,
+          "hex": "0106",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "valueClass": "net.minecraft.world.item.component.SwingAnimation",
+          "ok": true,
+          "hex": "0106",
+          "length": 2
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 41,
+      "name": "minecraft:additional_trade_cost",
+      "javaType": "minecraft:additional_trade_cost",
+      "transient": true,
+      "hasJsonCodec": false,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "no_json_codec"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "no_json_codec"
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "java.lang.Integer",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "java.lang.Integer",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "java.lang.Integer",
+          "valueClass": "java.lang.Integer",
+          "ok": true,
+          "hex": "07",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 42,
+      "name": "minecraft:stored_enchantments",
+      "javaType": "minecraft:stored_enchantments",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "enchanted_book",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "012101",
+          "length": 3
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a number: {\"minecraft:mending\":1}; Failed to get element minecraft:levels missed input: {\"levels\":{\"minecraft:mending\":1}}': ItemEnchantments{enchantments={}}]"
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.enchantment.ItemEnchantments",
+          "ok": true,
+          "hex": "0228031701",
+          "length": 5
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 43,
+      "name": "minecraft:dye",
+      "javaType": "minecraft:dye",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "green_dye",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "0d",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "light_blue_dye",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "03",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "purple_dye",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "0a",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_dye",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "0f",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "blue_dye",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "0b",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "cyan_dye",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "09",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "magenta_dye",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "light_gray_dye",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "08",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 44,
+      "name": "minecraft:dyed_color",
+      "javaType": "minecraft:dyed_color",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.DyedItemColor",
+          "ok": true,
+          "hex": "00b02e26",
+          "length": 4
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Failed to parse either. First: Not a number: {\"rgb\":11546150}; Second: Not a json array: {\"rgb\":11546150}']"
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 45,
+      "name": "minecraft:map_color",
+      "javaType": "minecraft:map_color",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "filled_map",
+          "valueClass": "net.minecraft.world.item.component.MapItemColor",
+          "ok": true,
+          "hex": "0046402e",
+          "length": 4
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 46,
+      "name": "minecraft:map_id",
+      "javaType": "minecraft:map_id",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.level.saveddata.maps.MapId",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.level.saveddata.maps.MapId",
+          "ok": true,
+          "hex": "07",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 47,
+      "name": "minecraft:map_decorations",
+      "javaType": "minecraft:map_decorations",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "filled_map",
+          "valueClass": "net.minecraft.world.item.component.MapDecorations",
+          "ok": true,
+          "hex": "0a00",
+          "length": 2
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 48,
+      "name": "minecraft:map_post_processing",
+      "javaType": "minecraft:map_post_processing",
+      "transient": true,
+      "hasJsonCodec": false,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "no_json_codec"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "no_json_codec"
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "net.minecraft.world.item.component.MapPostProcessing",
+          "valueClass": "net.minecraft.world.item.component.MapPostProcessing",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "net.minecraft.world.item.component.MapPostProcessing",
+          "valueClass": "net.minecraft.world.item.component.MapPostProcessing",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 49,
+      "name": "minecraft:charged_projectiles",
+      "javaType": "minecraft:charged_projectiles",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "crossbow",
+          "valueClass": "net.minecraft.world.item.component.ChargedProjectiles",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.ChargedProjectiles",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.ChargedProjectiles",
+          "ok": true,
+          "hex": "019b07010000",
+          "length": 6
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 50,
+      "name": "minecraft:bundle_contents",
+      "javaType": "minecraft:bundle_contents",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "white_bundle",
+          "valueClass": "net.minecraft.world.item.component.BundleContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "light_blue_bundle",
+          "valueClass": "net.minecraft.world.item.component.BundleContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "blue_bundle",
+          "valueClass": "net.minecraft.world.item.component.BundleContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "red_bundle",
+          "valueClass": "net.minecraft.world.item.component.BundleContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "purple_bundle",
+          "valueClass": "net.minecraft.world.item.component.BundleContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "pink_bundle",
+          "valueClass": "net.minecraft.world.item.component.BundleContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "brown_bundle",
+          "valueClass": "net.minecraft.world.item.component.BundleContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "lime_bundle",
+          "valueClass": "net.minecraft.world.item.component.BundleContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.BundleContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.BundleContents",
+          "ok": true,
+          "hex": "0101010000",
+          "length": 5
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.BundleContents",
+          "ok": true,
+          "hex": "020101000037020000",
+          "length": 9
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 51,
+      "name": "minecraft:potion_contents",
+      "javaType": "minecraft:potion_contents",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "lingering_potion",
+          "valueClass": "net.minecraft.world.item.alchemy.PotionContents",
+          "ok": true,
+          "hex": "00000000",
+          "length": 4
+        },
+        {
+          "origin": "item_default_report",
+          "label": "tipped_arrow",
+          "valueClass": "net.minecraft.world.item.alchemy.PotionContents",
+          "ok": true,
+          "hex": "00000000",
+          "length": 4
+        },
+        {
+          "origin": "item_default_report",
+          "label": "splash_potion",
+          "valueClass": "net.minecraft.world.item.alchemy.PotionContents",
+          "ok": true,
+          "hex": "00000000",
+          "length": 4
+        },
+        {
+          "origin": "item_default_report",
+          "label": "potion",
+          "valueClass": "net.minecraft.world.item.alchemy.PotionContents",
+          "ok": true,
+          "hex": "00000000",
+          "length": 4
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.alchemy.PotionContents",
+          "ok": true,
+          "hex": "0118000000",
+          "length": 5
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.alchemy.PotionContents",
+          "ok": true,
+          "hex": "0100000000",
+          "length": 5
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.alchemy.PotionContents",
+          "ok": true,
+          "hex": "00000000",
+          "length": 4
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.alchemy.PotionContents",
+          "ok": true,
+          "hex": "0000020001c801000101000400640001010000",
+          "length": 19
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 52,
+      "name": "minecraft:potion_duration_scale",
+      "javaType": "minecraft:potion_duration_scale",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "lingering_potion",
+          "valueClass": "java.lang.Float",
+          "ok": true,
+          "hex": "3e800000",
+          "length": 4
+        },
+        {
+          "origin": "item_default_report",
+          "label": "tipped_arrow",
+          "valueClass": "java.lang.Float",
+          "ok": true,
+          "hex": "3e000000",
+          "length": 4
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 53,
+      "name": "minecraft:suspicious_stew_effects",
+      "javaType": "minecraft:suspicious_stew_effects",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "suspicious_stew",
+          "valueClass": "net.minecraft.world.item.component.SuspiciousStewEffects",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.SuspiciousStewEffects",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.SuspiciousStewEffects",
+          "ok": true,
+          "hex": "010f50",
+          "length": 3
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 54,
+      "name": "minecraft:writable_book_content",
+      "javaType": "minecraft:writable_book_content",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "writable_book",
+          "valueClass": "net.minecraft.world.item.component.WritableBookContent",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 55,
+      "name": "minecraft:written_book_content",
+      "javaType": "minecraft:written_book_content",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.WrittenBookContent",
+          "ok": true,
+          "hex": "0a417564697420426f6f6b000761756469746f720001080008706167652d6f6e650000",
+          "length": 35
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.WrittenBookContent",
+          "ok": true,
+          "hex": "0a417564697420426f6f6b000761756469746f720001080008706167652d6f6e650000",
+          "length": 35
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.WrittenBookContent",
+          "ok": true,
+          "hex": "05456d707479000761756469746f72000000",
+          "length": 18
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 56,
+      "name": "minecraft:trim",
+      "javaType": "minecraft:trim",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.equipment.trim.ArmorTrim",
+          "ok": true,
+          "hex": "0609",
+          "length": 2
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 57,
+      "name": "minecraft:debug_stick_state",
+      "javaType": "minecraft:debug_stick_state",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "debug_stick",
+          "valueClass": "net.minecraft.world.item.component.DebugStickState",
+          "ok": true,
+          "hex": "0a00",
+          "length": 2
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 58,
+      "name": "minecraft:entity_data",
+      "javaType": "minecraft:entity_data",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "tropical_fish_spawn_egg",
+          "valueClass": "net.minecraft.world.item.component.TypedEntityData",
+          "ok": true,
+          "hex": "89010a00",
+          "length": 4
+        },
+        {
+          "origin": "item_default_report",
+          "label": "zoglin_spawn_egg",
+          "valueClass": "net.minecraft.world.item.component.TypedEntityData",
+          "ok": true,
+          "hex": "96010a00",
+          "length": 4
+        },
+        {
+          "origin": "item_default_report",
+          "label": "hoglin_spawn_egg",
+          "valueClass": "net.minecraft.world.item.component.TypedEntityData",
+          "ok": true,
+          "hex": "400a00",
+          "length": 3
+        },
+        {
+          "origin": "item_default_report",
+          "label": "sulfur_cube_spawn_egg",
+          "valueClass": "net.minecraft.world.item.component.TypedEntityData",
+          "ok": true,
+          "hex": "82010a00",
+          "length": 4
+        },
+        {
+          "origin": "item_default_report",
+          "label": "bee_spawn_egg",
+          "valueClass": "net.minecraft.world.item.component.TypedEntityData",
+          "ok": true,
+          "hex": "0b0a00",
+          "length": 3
+        },
+        {
+          "origin": "item_default_report",
+          "label": "creeper_spawn_egg",
+          "valueClass": "net.minecraft.world.item.component.TypedEntityData",
+          "ok": true,
+          "hex": "200a00",
+          "length": 3
+        },
+        {
+          "origin": "item_default_report",
+          "label": "ravager_spawn_egg",
+          "valueClass": "net.minecraft.world.item.component.TypedEntityData",
+          "ok": true,
+          "hex": "6d0a00",
+          "length": 3
+        },
+        {
+          "origin": "item_default_report",
+          "label": "camel_husk_spawn_egg",
+          "valueClass": "net.minecraft.world.item.component.TypedEntityData",
+          "ok": true,
+          "hex": "140a00",
+          "length": 3
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 59,
+      "name": "minecraft:bucket_entity_data",
+      "javaType": "minecraft:bucket_entity_data",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "sulfur_cube_bucket",
+          "valueClass": "net.minecraft.world.item.component.CustomData",
+          "ok": true,
+          "hex": "0a00",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "cod_bucket",
+          "valueClass": "net.minecraft.world.item.component.CustomData",
+          "ok": true,
+          "hex": "0a00",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "salmon_bucket",
+          "valueClass": "net.minecraft.world.item.component.CustomData",
+          "ok": true,
+          "hex": "0a00",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "tropical_fish_bucket",
+          "valueClass": "net.minecraft.world.item.component.CustomData",
+          "ok": true,
+          "hex": "0a00",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "axolotl_bucket",
+          "valueClass": "net.minecraft.world.item.component.CustomData",
+          "ok": true,
+          "hex": "0a00",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "pufferfish_bucket",
+          "valueClass": "net.minecraft.world.item.component.CustomData",
+          "ok": true,
+          "hex": "0a00",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "tadpole_bucket",
+          "valueClass": "net.minecraft.world.item.component.CustomData",
+          "ok": true,
+          "hex": "0a00",
+          "length": 2
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 60,
+      "name": "minecraft:block_entity_data",
+      "javaType": "minecraft:block_entity_data",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.TypedEntityData",
+          "ok": true,
+          "hex": "010a00",
+          "length": 3
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.TypedEntityData",
+          "ok": true,
+          "hex": "070a00",
+          "length": 3
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 61,
+      "name": "minecraft:instrument",
+      "javaType": "minecraft:instrument",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "goat_horn",
+          "valueClass": "net.minecraft.world.item.component.InstrumentComponent",
+          "ok": true,
+          "hex": "05",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.InstrumentComponent",
+          "ok": true,
+          "hex": "05",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.InstrumentComponent",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.InstrumentComponent",
+          "ok": true,
+          "hex": "00ca0640e00000438000000a0800097472616e736c6174650025696e737472756d656e742e6d696e6563726166742e706f6e6465725f676f61745f686f726e00",
+          "length": 64
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 62,
+      "name": "minecraft:provides_trim_material",
+      "javaType": "minecraft:provides_trim_material",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "diamond",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "03",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "iron_ingot",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "06",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "amethyst_shard",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "redstone",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "0a",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "gold_ingot",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "05",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_ingot",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "08",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "04",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_ingot",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "06",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "05",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Direct",
+          "ok": true,
+          "hex": "000469726f6e010e6d696e6563726166743a69726f6e0b69726f6e5f6461726b65720a080005636f6c6f720007234543454345430800097472616e736c617465001c7472696d5f6d6174657269616c2e6d696e6563726166742e69726f6e00",
+          "length": 95
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 63,
+      "name": "minecraft:ominous_bottle_amplifier",
+      "javaType": "minecraft:ominous_bottle_amplifier",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "ominous_bottle",
+          "valueClass": "net.minecraft.world.item.component.OminousBottleAmplifier",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 64,
+      "name": "minecraft:jukebox_playable",
+      "javaType": "minecraft:jukebox_playable",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "valueClass": "net.minecraft.world.item.JukeboxPlayable",
+          "ok": true,
+          "hex": "12",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_precipice",
+          "valueClass": "net.minecraft.world.item.JukeboxPlayable",
+          "ok": true,
+          "hex": "10",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_relic",
+          "valueClass": "net.minecraft.world.item.JukeboxPlayable",
+          "ok": true,
+          "hex": "11",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_blocks",
+          "valueClass": "net.minecraft.world.item.JukeboxPlayable",
+          "ok": true,
+          "hex": "04",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_mall",
+          "valueClass": "net.minecraft.world.item.JukeboxPlayable",
+          "ok": true,
+          "hex": "0c",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_far",
+          "valueClass": "net.minecraft.world.item.JukeboxPlayable",
+          "ok": true,
+          "hex": "0a",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_otherside",
+          "valueClass": "net.minecraft.world.item.JukeboxPlayable",
+          "ok": true,
+          "hex": "0e",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_strad",
+          "valueClass": "net.minecraft.world.item.JukeboxPlayable",
+          "ok": true,
+          "hex": "13",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.JukeboxPlayable",
+          "ok": true,
+          "hex": "0e",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a string: {\"song\":\"minecraft:otherside\"}']"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a string: {\"song\":{\"comparator_output\":14,\"description\":{\"translate\":\"jukebox_song.minecraft.otherside\"},\"length_in_seconds\":195.0,\"sound_event\":\"minecraft:music_disc.otherside\"}}']"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a string: {\"comparator_output\":14,\"description\":{\"translate\":\"jukebox_song.minecraft.otherside\"},\"length_in_seconds\":195.0,\"sound_event\":\"minecraft:music_disc.otherside\"}']"
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 65,
+      "name": "minecraft:provides_banner_patterns",
+      "javaType": "minecraft:provides_banner_patterns",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "item": "flower_banner_pattern",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:pattern_item/flower' in 'minecraft:banner_pattern'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "field_masoned_banner_pattern",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:pattern_item/field_masoned' in 'minecraft:banner_pattern'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "mojang_banner_pattern",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:pattern_item/mojang' in 'minecraft:banner_pattern'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "creeper_banner_pattern",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:pattern_item/creeper' in 'minecraft:banner_pattern'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "bordure_indented_banner_pattern",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:pattern_item/bordure_indented' in 'minecraft:banner_pattern'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "piglin_banner_pattern",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:pattern_item/piglin' in 'minecraft:banner_pattern'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "globe_banner_pattern",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:pattern_item/globe' in 'minecraft:banner_pattern'']"
+        },
+        {
+          "origin": "item_default_report",
+          "item": "guster_banner_pattern",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:pattern_item/guster' in 'minecraft:banner_pattern'']"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:pattern_item/flower' in 'minecraft:banner_pattern'']"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Missing tag: 'minecraft:pattern_item/creeper' in 'minecraft:banner_pattern'']"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Failed to parse either. First: Not a tag id; Second: Failed to parse either. First: Not a json array: \"minecraft:pattern_item/flower\"; Second: Failed to get element minecraft:pattern_item/flower']"
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "net.minecraft.core.HolderSet$1",
+          "valueClass": "net.minecraft.core.HolderSet$1",
+          "ok": true,
+          "hex": "001d6d696e6563726166743a7061747465726e5f6974656d2f666c6f776572",
+          "length": 31
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "net.minecraft.core.HolderSet$1",
+          "valueClass": "net.minecraft.core.HolderSet$1",
+          "ok": true,
+          "hex": "001e6d696e6563726166743a7061747465726e5f6974656d2f63726565706572",
+          "length": 32
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 66,
+      "name": "minecraft:recipes",
+      "javaType": "minecraft:recipes",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "knowledge_book",
+          "valueClass": "java.util.ImmutableCollections$ListN",
+          "ok": true,
+          "hex": "090000000000",
+          "length": 6
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "java.util.ImmutableCollections$ListN",
+          "ok": true,
+          "hex": "090000000000",
+          "length": 6
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "java.util.ImmutableCollections$List12",
+          "ok": true,
+          "hex": "090800000001000f6d696e6563726166743a737469636b",
+          "length": 23
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "java.util.ImmutableCollections$List12",
+          "ok": true,
+          "hex": "090800000002000f6d696e6563726166743a737469636b000f6d696e6563726166743a746f726368",
+          "length": 40
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 67,
+      "name": "minecraft:lodestone_tracker",
+      "javaType": "minecraft:lodestone_tracker",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.LodestoneTracker",
+          "ok": true,
+          "hex": "01136d696e6563726166743a6f766572776f726c64000000000000004001",
+          "length": 30
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.LodestoneTracker",
+          "ok": true,
+          "hex": "0000",
+          "length": 2
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 68,
+      "name": "minecraft:firework_explosion",
+      "javaType": "minecraft:firework_explosion",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.FireworkExplosion",
+          "ok": true,
+          "hex": "040100b3312c000100",
+          "length": 9
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 69,
+      "name": "minecraft:fireworks",
+      "javaType": "minecraft:fireworks",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "firework_rocket",
+          "valueClass": "net.minecraft.world.item.component.Fireworks",
+          "ok": true,
+          "hex": "0100",
+          "length": 2
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.Fireworks",
+          "ok": true,
+          "hex": "0100",
+          "length": 2
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.Fireworks",
+          "ok": true,
+          "hex": "0201040100b3312c000100",
+          "length": 11
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 70,
+      "name": "minecraft:profile",
+      "javaType": "minecraft:profile",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.ResolvableProfile$Dynamic",
+          "ok": true,
+          "hex": "0001055374657665000000000000",
+          "length": 14
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.ResolvableProfile$Static",
+          "ok": true,
+          "hex": "01000000000000000000000000000000000553746576650000000000",
+          "length": 28
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 71,
+      "name": "minecraft:note_block_sound",
+      "javaType": "minecraft:note_block_sound",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.resources.Identifier",
+          "ok": true,
+          "hex": "1c6d696e6563726166743a656e746974792e7069672e616d6269656e74",
+          "length": 29
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.resources.Identifier",
+          "ok": true,
+          "hex": "1f6d696e6563726166743a626c6f636b2e6e6f74655f626c6f636b2e68617270",
+          "length": 32
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 72,
+      "name": "minecraft:banner_patterns",
+      "javaType": "minecraft:banner_patterns",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "yellow_banner",
+          "valueClass": "net.minecraft.world.level.block.entity.BannerPatternLayers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "white_banner",
+          "valueClass": "net.minecraft.world.level.block.entity.BannerPatternLayers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "red_banner",
+          "valueClass": "net.minecraft.world.level.block.entity.BannerPatternLayers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "green_banner",
+          "valueClass": "net.minecraft.world.level.block.entity.BannerPatternLayers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "cyan_banner",
+          "valueClass": "net.minecraft.world.level.block.entity.BannerPatternLayers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "pink_banner",
+          "valueClass": "net.minecraft.world.level.block.entity.BannerPatternLayers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "shield",
+          "valueClass": "net.minecraft.world.level.block.entity.BannerPatternLayers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "lime_banner",
+          "valueClass": "net.minecraft.world.level.block.entity.BannerPatternLayers",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 73,
+      "name": "minecraft:base_color",
+      "javaType": "minecraft:base_color",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "0e",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 74,
+      "name": "minecraft:pot_decorations",
+      "javaType": "minecraft:pot_decorations",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "net.minecraft.world.level.block.entity.PotDecorations",
+          "ok": true,
+          "hex": "049e089e089e089e08",
+          "length": 9
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 75,
+      "name": "minecraft:container",
+      "javaType": "minecraft:container",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "net.minecraft.world.item.component.ItemContainerContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "pink_shulker_box",
+          "valueClass": "net.minecraft.world.item.component.ItemContainerContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "light_gray_shulker_box",
+          "valueClass": "net.minecraft.world.item.component.ItemContainerContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "lime_shulker_box",
+          "valueClass": "net.minecraft.world.item.component.ItemContainerContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "trapped_chest",
+          "valueClass": "net.minecraft.world.item.component.ItemContainerContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "barrel",
+          "valueClass": "net.minecraft.world.item.component.ItemContainerContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "hopper",
+          "valueClass": "net.minecraft.world.item.component.ItemContainerContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "dispenser",
+          "valueClass": "net.minecraft.world.item.component.ItemContainerContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.ItemContainerContents",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.ItemContainerContents",
+          "ok": true,
+          "hex": "010101010000",
+          "length": 6
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 76,
+      "name": "minecraft:block_state",
+      "javaType": "minecraft:block_state",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "weathered_copper_golem_statue",
+          "valueClass": "net.minecraft.world.item.component.BlockItemStateProperties",
+          "ok": true,
+          "hex": "0111636f707065725f676f6c656d5f706f7365087374616e64696e67",
+          "length": 28
+        },
+        {
+          "origin": "item_default_report",
+          "label": "exposed_copper_golem_statue",
+          "valueClass": "net.minecraft.world.item.component.BlockItemStateProperties",
+          "ok": true,
+          "hex": "0111636f707065725f676f6c656d5f706f7365087374616e64696e67",
+          "length": 28
+        },
+        {
+          "origin": "item_default_report",
+          "label": "oxidized_copper_golem_statue",
+          "valueClass": "net.minecraft.world.item.component.BlockItemStateProperties",
+          "ok": true,
+          "hex": "0111636f707065725f676f6c656d5f706f7365087374616e64696e67",
+          "length": 28
+        },
+        {
+          "origin": "item_default_report",
+          "label": "waxed_oxidized_copper_golem_statue",
+          "valueClass": "net.minecraft.world.item.component.BlockItemStateProperties",
+          "ok": true,
+          "hex": "0111636f707065725f676f6c656d5f706f7365087374616e64696e67",
+          "length": 28
+        },
+        {
+          "origin": "item_default_report",
+          "label": "waxed_weathered_copper_golem_statue",
+          "valueClass": "net.minecraft.world.item.component.BlockItemStateProperties",
+          "ok": true,
+          "hex": "0111636f707065725f676f6c656d5f706f7365087374616e64696e67",
+          "length": 28
+        },
+        {
+          "origin": "item_default_report",
+          "label": "bee_nest",
+          "valueClass": "net.minecraft.world.item.component.BlockItemStateProperties",
+          "ok": true,
+          "hex": "010b686f6e65795f6c6576656c0130",
+          "length": 15
+        },
+        {
+          "origin": "item_default_report",
+          "label": "waxed_copper_golem_statue",
+          "valueClass": "net.minecraft.world.item.component.BlockItemStateProperties",
+          "ok": true,
+          "hex": "0111636f707065725f676f6c656d5f706f7365087374616e64696e67",
+          "length": 28
+        },
+        {
+          "origin": "item_default_report",
+          "label": "beehive",
+          "valueClass": "net.minecraft.world.item.component.BlockItemStateProperties",
+          "ok": true,
+          "hex": "010b686f6e65795f6c6576656c0130",
+          "length": 15
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 77,
+      "name": "minecraft:bees",
+      "javaType": "minecraft:bees",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "bee_nest",
+          "valueClass": "net.minecraft.world.item.component.Bees",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "beehive",
+          "valueClass": "net.minecraft.world.item.component.Bees",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.Bees",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.Bees",
+          "ok": true,
+          "hex": "010b0a000001",
+          "length": 6
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 78,
+      "name": "minecraft:sulfur_cube_content",
+      "javaType": "minecraft:sulfur_cube_content",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Failed to parse either. First: No key id in MapLike[{}]; Second: Not a string: {}']"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Failed to parse either. First: Not a JSON object: \"small\"; Second: Unknown registry key in ResourceKey[minecraft:root / minecraft:item]: minecraft:small']"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Failed to parse either. First: Not a JSON object: \"medium\"; Second: Unknown registry key in ResourceKey[minecraft:root / minecraft:item]: minecraft:medium']"
+        },
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Failed to parse either. First: Not a JSON object: \"large\"; Second: Unknown registry key in ResourceKey[minecraft:root / minecraft:item]: minecraft:large']"
+        },
+        {
+          "origin": "generic_json_probe",
+          "label": "\"minecraft:stone\"",
+          "valueClass": "net.minecraft.world.item.component.SulfurCubeContent",
+          "ok": true,
+          "hex": "01010000",
+          "length": 4
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 79,
+      "name": "minecraft:lock",
+      "javaType": "minecraft:lock",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "ok": false,
+          "reason": "codec_parse_failed",
+          "detail": "DataResult.Error['Not a JSON object: \"secret\"']"
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.LockCode",
+          "ok": true,
+          "hex": "0a00",
+          "length": 2
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 80,
+      "name": "minecraft:container_loot",
+      "javaType": "minecraft:container_loot",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.component.SeededContainerLoot",
+          "ok": true,
+          "hex": "0a08000a6c6f6f745f7461626c65001f6d696e6563726166743a6368657374732f73696d706c655f64756e67656f6e00",
+          "length": 48
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 81,
+      "name": "minecraft:break_sound",
+      "javaType": "minecraft:break_sound",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "8f07",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "8f07",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "8f07",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "8f07",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "8f07",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "8f07",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "8f07",
+          "length": 2
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "8f07",
+          "length": 2
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 82,
+      "name": "minecraft:villager/variant",
+      "javaType": "minecraft:villager/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 83,
+      "name": "minecraft:wolf/variant",
+      "javaType": "minecraft:wolf/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "03",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "03",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 84,
+      "name": "minecraft:wolf/sound_variant",
+      "javaType": "minecraft:wolf/sound_variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 85,
+      "name": "minecraft:wolf/collar",
+      "javaType": "minecraft:wolf/collar",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "0e",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 86,
+      "name": "minecraft:fox/variant",
+      "javaType": "minecraft:fox/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.fox.Fox$Variant",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.fox.Fox$Variant",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 87,
+      "name": "minecraft:salmon/size",
+      "javaType": "minecraft:salmon/size",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.fish.Salmon$Variant",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.fish.Salmon$Variant",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.fish.Salmon$Variant",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 88,
+      "name": "minecraft:parrot/variant",
+      "javaType": "minecraft:parrot/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.parrot.Parrot$Variant",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.parrot.Parrot$Variant",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.parrot.Parrot$Variant",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.parrot.Parrot$Variant",
+          "ok": true,
+          "hex": "03",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.parrot.Parrot$Variant",
+          "ok": true,
+          "hex": "04",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 89,
+      "name": "minecraft:tropical_fish/pattern",
+      "javaType": "minecraft:tropical_fish/pattern",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.fish.TropicalFish$Pattern",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.fish.TropicalFish$Pattern",
+          "ok": true,
+          "hex": "8002",
+          "length": 2
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.fish.TropicalFish$Pattern",
+          "ok": true,
+          "hex": "8004",
+          "length": 2
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 90,
+      "name": "minecraft:tropical_fish/base_color",
+      "javaType": "minecraft:tropical_fish/base_color",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "0e",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 91,
+      "name": "minecraft:tropical_fish/pattern_color",
+      "javaType": "minecraft:tropical_fish/pattern_color",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "0e",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 92,
+      "name": "minecraft:mooshroom/variant",
+      "javaType": "minecraft:mooshroom/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.cow.MushroomCow$Variant",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.cow.MushroomCow$Variant",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 93,
+      "name": "minecraft:rabbit/variant",
+      "javaType": "minecraft:rabbit/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.rabbit.Rabbit$Variant",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.rabbit.Rabbit$Variant",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.rabbit.Rabbit$Variant",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 94,
+      "name": "minecraft:pig/variant",
+      "javaType": "minecraft:pig/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 95,
+      "name": "minecraft:pig/sound_variant",
+      "javaType": "minecraft:pig/sound_variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 96,
+      "name": "minecraft:cow/variant",
+      "javaType": "minecraft:cow/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 97,
+      "name": "minecraft:cow/sound_variant",
+      "javaType": "minecraft:cow/sound_variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 98,
+      "name": "minecraft:chicken/variant",
+      "javaType": "minecraft:chicken/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "egg",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "brown_egg",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        },
+        {
+          "origin": "item_default_report",
+          "label": "blue_egg",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 99,
+      "name": "minecraft:chicken/sound_variant",
+      "javaType": "minecraft:chicken/sound_variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 100,
+      "name": "minecraft:zombie_nautilus/variant",
+      "javaType": "minecraft:zombie_nautilus/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 101,
+      "name": "minecraft:frog/variant",
+      "javaType": "minecraft:frog/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 102,
+      "name": "minecraft:horse/variant",
+      "javaType": "minecraft:horse/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.equine.Variant",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.equine.Variant",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.equine.Variant",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.equine.Variant",
+          "ok": true,
+          "hex": "03",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.equine.Variant",
+          "ok": true,
+          "hex": "04",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.equine.Variant",
+          "ok": true,
+          "hex": "05",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.equine.Variant",
+          "ok": true,
+          "hex": "06",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 103,
+      "name": "minecraft:painting/variant",
+      "javaType": "minecraft:painting/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "19",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "22",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "19",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 104,
+      "name": "minecraft:llama/variant",
+      "javaType": "minecraft:llama/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.equine.Llama$Variant",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.equine.Llama$Variant",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.equine.Llama$Variant",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.equine.Llama$Variant",
+          "ok": true,
+          "hex": "03",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 105,
+      "name": "minecraft:axolotl/variant",
+      "javaType": "minecraft:axolotl/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.axolotl.Axolotl$Variant",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.axolotl.Axolotl$Variant",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.axolotl.Axolotl$Variant",
+          "ok": true,
+          "hex": "02",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.axolotl.Axolotl$Variant",
+          "ok": true,
+          "hex": "03",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.entity.animal.axolotl.Axolotl$Variant",
+          "ok": true,
+          "hex": "04",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 106,
+      "name": "minecraft:cat/variant",
+      "javaType": "minecraft:cat/variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "09",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "09",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 107,
+      "name": "minecraft:cat/sound_variant",
+      "javaType": "minecraft:cat/sound_variant",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "01",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.core.Holder$Reference",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 108,
+      "name": "minecraft:cat/collar",
+      "javaType": "minecraft:cat/collar",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "0e",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 109,
+      "name": "minecraft:sheep/color",
+      "javaType": "minecraft:sheep/color",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "0e",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "0f",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    },
+    {
+      "id": 110,
+      "name": "minecraft:shulker/color",
+      "javaType": "minecraft:shulker/color",
+      "transient": false,
+      "hasJsonCodec": true,
+      "hasStreamCodec": true,
+      "samples": [
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "0a",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "0e",
+          "length": 1
+        },
+        {
+          "origin": "curated_json",
+          "valueClass": "net.minecraft.world.item.DyeColor",
+          "ok": true,
+          "hex": "00",
+          "length": 1
+        }
+      ],
+      "encoded": true
+    }
+  ]
+}

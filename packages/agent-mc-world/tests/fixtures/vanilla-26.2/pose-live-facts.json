@@ -1,0 +1,143 @@
+{
+  "source": "live vanilla 26.2 127.0.0.1:25770 entitySnapshot after official pose-inducing actions",
+  "host": "127.0.0.1",
+  "port": 25770,
+  "capturedAt": "2026-11-23T09:57:59.828Z",
+  "sleeping": {
+    "label": "player-after-sleep-attempt",
+    "sleeping": true,
+    "name": "player",
+    "id": 640,
+    "index": 6,
+    "raw": 2,
+    "snapshotPose": 2,
+    "metadataLength": 17
+  },
+  "swimming": {
+    "label": "player-swimming-detected",
+    "position": {
+      "x": 311.5,
+      "y": 77.26950243409843,
+      "z": 47.554879999006985
+    },
+    "name": "player",
+    "id": 640,
+    "index": 6,
+    "raw": 3,
+    "snapshotPose": 3,
+    "metadataLength": 17
+  },
+  "phases": [
+    {
+      "label": "standing-self",
+      "name": "player",
+      "id": 640,
+      "index": 6,
+      "snapshotPose": null,
+      "metadataLength": 17,
+      "position": {
+        "x": 300.5,
+        "y": 80,
+        "z": 40.5
+      }
+    },
+    {
+      "label": "fox-sleeping-nbt",
+      "found": true,
+      "name": "fox",
+      "id": 898,
+      "index": 6,
+      "snapshotPose": null,
+      "metadataLength": 20
+    },
+    {
+      "label": "zombie-data-pose-sleeping",
+      "found": true,
+      "name": "zombie",
+      "id": 538,
+      "index": 6,
+      "snapshotPose": null,
+      "metadataLength": 10
+    },
+    {
+      "label": "zombie-data-pose-swimming",
+      "found": true,
+      "name": "zombie",
+      "id": 538,
+      "index": 6,
+      "snapshotPose": null,
+      "metadataLength": 10
+    },
+    {
+      "label": "player-after-sleep-attempt",
+      "sleeping": true,
+      "name": "player",
+      "id": 640,
+      "index": 6,
+      "raw": 2,
+      "snapshotPose": 2,
+      "metadataLength": 17
+    },
+    {
+      "label": "player-after-wake",
+      "name": "player",
+      "id": 640,
+      "index": 6,
+      "raw": 0,
+      "snapshotPose": 0,
+      "metadataLength": 17
+    },
+    {
+      "label": "player-swim-tick-0",
+      "position": {
+        "x": 311.5,
+        "y": 77.29312804570566,
+        "z": 47.519599999561905
+      },
+      "name": "player",
+      "id": 640,
+      "index": 6,
+      "raw": 0,
+      "snapshotPose": 0,
+      "metadataLength": 17
+    },
+    {
+      "label": "player-swim-tick-1",
+      "position": {
+        "x": 311.5,
+        "y": 77.26950243409843,
+        "z": 47.554879999006985
+      },
+      "name": "player",
+      "id": 640,
+      "index": 6,
+      "raw": 3,
+      "snapshotPose": 3,
+      "metadataLength": 17
+    },
+    {
+      "label": "player-swimming-detected",
+      "position": {
+        "x": 311.5,
+        "y": 77.26950243409843,
+        "z": 47.554879999006985
+      },
+      "name": "player",
+      "id": 640,
+      "index": 6,
+      "raw": 3,
+      "snapshotPose": 3,
+      "metadataLength": 17
+    },
+    {
+      "label": "player-back-on-land",
+      "name": "player",
+      "id": 640,
+      "index": 6,
+      "raw": 0,
+      "snapshotPose": 0,
+      "metadataLength": 17
+    }
+  ],
+  "errors": []
+}

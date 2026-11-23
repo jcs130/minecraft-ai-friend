@@ -3,6 +3,8 @@
 import { readBossBarHud, renderBossBarHud, type BossBarReading } from './boss-bar.ts';
 import { itemCustomName, itemLoreText } from './item-display.ts';
 import { minecraftTextComponent } from './nbt-text.mjs';
+import { commandEntryHints, commandTreeFacts, type CommandTreePacket } from './command-tree-facts.ts';
+import { advertisedPluginChannels, classifyPluginChannels, type PluginChannelKinds } from './plugin-channel-facts.ts';
 
 const TEAM_COLORS = [
   'black', 'dark_blue', 'dark_green', 'dark_aqua', 'dark_red', 'dark_purple', 'gold', 'gray',
@@ -43,16 +45,31 @@ export type LabeledStat = {
   at: number;
 };
 export type ExperienceReading = { level: number; progress: number | null; total: number | null };
+export type TitleReading = { title: string; subtitle: string; at: number };
+export type CommandTreeReading = {
+  nodeCount: number;
+  rootIndex: number;
+  rootLiteralCount: number;
+  rootLiterals: string[];
+  hasGive: boolean;
+  hasParticle: boolean;
+  hasPlaysound: boolean;
+  voiceRelated: string[];
+  helpRelated: string[];
+};
 export type ServerDisplaySnapshot = {
   scoreboards: ScoreboardSlot[];
   teams: TeamReading[];
   selfTeam: TeamReading | null;
   bossBars: BossBarReading[];
   actionBar: { text: string; at: number } | null;
+  title: TitleReading | null;
   tabHeader: string;
   tabFooter: string;
   experience: ExperienceReading | null;
   pluginChannels: string[];
+  pluginChannelKinds: PluginChannelKinds;
+  commandTree: CommandTreeReading | null;
   stats: LabeledStat[];
 };
 
@@ -163,6 +180,8 @@ class ServerDisplayStore {
   tabFooter = '';
   experience: ExperienceReading | null = null;
   pluginChannels: string[] = [];
+  title: TitleReading | null = null;
+  commandTree: CommandTreeReading | null = null;
   readonly chatStats = new Map<string, LabeledStat>();
   readonly itemStats = new Map<string, LabeledStat>();
   readonly itemSeenAt = new WeakMap<object, number>();
@@ -233,6 +252,18 @@ class ServerDisplayStore {
     for (const stat of statsFromChatText(text, at)) this.chatStats.set(stat.label, stat);
   }
 
+  noteChannels(names: readonly string[]): void {
+    if (!names.length) return;
+    const seen = new Set(this.pluginChannels);
+    const next = [...this.pluginChannels];
+    for (const name of names) {
+      if (seen.has(name) || next.length >= 96) continue;
+      seen.add(name);
+      next.push(name);
+    }
+    this.pluginChannels = next;
+  }
+
   noteItemStats(items: unknown[], at: number): void {
     for (const item of items) {
       if (!item || typeof item !== 'object') continue;
@@ -287,10 +318,13 @@ class ServerDisplayStore {
       selfTeam,
       bossBars: readBossBarHud(bot?.bossBars),
       actionBar: this.actionBar,
+      title: this.title,
       tabHeader: this.tabHeader,
       tabFooter: this.tabFooter,
       experience,
       pluginChannels: this.pluginChannels,
+      pluginChannelKinds: classifyPluginChannels(this.pluginChannels),
+      commandTree: this.commandTree,
       stats,
     };
   }
@@ -427,9 +461,30 @@ export function installServerDisplay(bot: DisplayBot): ServerDisplayHandle {
   }));
 
   stop.push(listen(client, 'custom_payload', (packet: Record<string, unknown>) => {
-    const channel = typeof packet.channel === 'string' ? packet.channel : '';
-    if (!channel || store.pluginChannels.includes(channel)) return;
-    store.pluginChannels = [...store.pluginChannels, channel].slice(0, 32);
+    // Record advertised register lists and received payload names. Do not parse or execute bodies.
+    store.noteChannels(advertisedPluginChannels(packet.channel, packet.data));
+  }));
+
+  stop.push(listen(client, 'declare_commands', (packet: CommandTreePacket) => {
+    const facts = commandTreeFacts(packet);
+    store.commandTree = { ...facts, ...commandEntryHints(facts.rootLiterals) };
+  }));
+
+  const titleText = (packet: Record<string, unknown>) => textOf(packet.text ?? packet.title ?? packet.message);
+  stop.push(listen(client, 'set_title_text', (packet: Record<string, unknown>) => {
+    const title = titleText(packet);
+    if (!title && !store.title) return;
+    store.title = { title, subtitle: store.title?.subtitle ?? '', at: Date.now() };
+  }));
+  stop.push(listen(client, 'set_title_subtitle', (packet: Record<string, unknown>) => {
+    const subtitle = titleText(packet);
+    store.title = { title: store.title?.title ?? '', subtitle, at: Date.now() };
+  }));
+  stop.push(listen(client, 'clear_titles', () => { store.title = null; }));
+  stop.push(listen(client, 'title', (packet: Record<string, unknown>) => {
+    // Older mineflayer high-level event; 26.2 also emits set_title_text above.
+    const title = titleText(packet) || textOf(packet);
+    if (title) store.title = { title, subtitle: store.title?.subtitle ?? '', at: Date.now() };
   }));
 
   const handle: ServerDisplayHandle = {
@@ -481,8 +536,9 @@ export function readServerDisplay(bot: DisplayBot | null | undefined): ServerDis
   if (bot?.serverDisplay) return bot.serverDisplay.snapshot();
   if (!bot) {
     return {
-      scoreboards: [], teams: [], selfTeam: null, bossBars: [], actionBar: null,
-      tabHeader: '', tabFooter: '', experience: null, pluginChannels: [], stats: [],
+      scoreboards: [], teams: [], selfTeam: null, bossBars: [], actionBar: null, title: null,
+      tabHeader: '', tabFooter: '', experience: null, pluginChannels: [],
+      pluginChannelKinds: classifyPluginChannels([]), commandTree: null, stats: [],
     };
   }
   const teams = Object.values(bot.teams ?? {}).map((team: any) => ({
@@ -499,10 +555,13 @@ export function readServerDisplay(bot: DisplayBot | null | undefined): ServerDis
     selfTeam: teams.find((team) => team.members.includes(selfName)) ?? null,
     bossBars: readBossBarHud(bot.bossBars),
     actionBar: null,
+    title: null,
     tabHeader: '',
     tabFooter: '',
     experience: experienceFromBot(bot),
     pluginChannels: [],
+    pluginChannelKinds: classifyPluginChannels([]),
+    commandTree: null,
     stats: statsFromLoreLines([
       ...(bot.inventory?.items?.() ?? []).flatMap((item) => itemLoreText(item as object)),
       ...(bot.currentWindow?.slots ?? []).flatMap((item) => item && typeof item === 'object' ? itemLoreText(item) : []),
@@ -537,7 +596,22 @@ export function renderServerDisplayHud(snapshot: ServerDisplaySnapshot): string 
   if (snapshot.experience && (snapshot.experience.level || snapshot.experience.total)) {
     parts.push(`经验等级 ${snapshot.experience.level}${snapshot.experience.total != null ? `（总计 ${snapshot.experience.total}）` : ''}`);
   }
-  if (snapshot.pluginChannels.length) parts.push(`插件通道 ${snapshot.pluginChannels.join('、')}`);
+  if (snapshot.title && (snapshot.title.title || snapshot.title.subtitle)) {
+    const when = new Date(snapshot.title.at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) + ' Asia/Shanghai';
+    parts.push(`标题 ${[snapshot.title.title, snapshot.title.subtitle].filter(Boolean).join(' / ')}（${when}）`);
+  }
+  if (snapshot.commandTree) {
+    const tree = snapshot.commandTree;
+    const voice = tree.voiceRelated.length ? `；语音相关字面量 ${tree.voiceRelated.join('、')}（入口线索，不是已实现发声）` : '';
+    parts.push(`命令树 ${tree.nodeCount} 节点 / ${tree.rootLiteralCount} 个根字面量${voice}`);
+  }
+  if (snapshot.pluginChannels.length) {
+    const kinds = snapshot.pluginChannelKinds;
+    const svc = kinds.svc.length ? `；其中 SVC 通道名 ${kinds.svc.join('、')}（登记或收到名称，不是已作为 SVC 客户端发声）` : '';
+    const plasmo = kinds.plasmo.length ? `；Plasmo 通道名 ${kinds.plasmo.join('、')}` : '';
+    const agent = kinds.mcagentVoice.length ? `；mcagent:voice 已见到` : '';
+    parts.push(`插件通道 ${snapshot.pluginChannels.join('、')}${svc}${plasmo}${agent}`);
+  }
   return parts.join('\n');
 }
 
