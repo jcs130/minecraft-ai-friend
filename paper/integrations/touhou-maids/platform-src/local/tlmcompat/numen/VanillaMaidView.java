@@ -44,11 +44,18 @@ final class VanillaMaidView {
             case "maid" -> EntityType.ALLAY; // Geyser replaces this only for an exact known maid with an offered model pack.
             case "fairy" -> EntityType.VEX;
             case "danmaku" -> EntityType.SMALL_FIREBALL;
+            // A grave is a standing, interactable entity. A projectile type is dropped as noise by vanilla-protocol clients.
+            case "tombstone" -> EntityType.ARMOR_STAND;
             default -> entity instanceof LivingEntity?EntityType.VILLAGER:EntityType.SNOWBALL;
         };
     }
     static Component name(Entity entity){
-        String kind=kind(entity);if(!Set.of("maid","fairy").contains(kind))return null;
+        String kind=kind(entity);
+        if(entity instanceof com.github.tartaricacid.touhoulittlemaid.entity.item.EntityTombstone grave){
+            String maid=plain(grave.getMaidName());if(maid.length()>32)maid=maid.substring(0,32);
+            return Component.literal("[女仆墓碑] "+(maid.isBlank()?"女仆":maid)+" · 主人右键取回遗物").withStyle(ChatFormatting.GOLD);
+        }
+        if(!Set.of("maid","fairy").contains(kind))return null;
         String custom=entity.hasCustomName()?plain(entity.getCustomName()):"";
         if(custom.length()>48)custom=custom.substring(0,48);
         return kind.equals("fairy")?Component.literal("[敌对妖精] "+(custom.isBlank()?"弹幕妖精":custom)).withStyle(ChatFormatting.RED):

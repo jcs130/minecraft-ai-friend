@@ -136,8 +136,29 @@ public final class NativeMaidAgentSupport implements Listener {
     private void annotateGrave(JsonObject death,JsonObject found){
         boolean matching=found!=null&&death.has("tombstoneId")&&death.get("tombstoneId").equals(found.get("tombstoneId"));
         death.addProperty("tombstoneRegistered",matching);
-        death.addProperty("tombstoneLoaded",matching&&Bukkit.getEntity(UUID.fromString(found.get("tombstoneId").getAsString()))!=null);
+        var loaded=matching?Bukkit.getEntity(UUID.fromString(found.get("tombstoneId").getAsString())):null;
+        death.addProperty("tombstoneLoaded",loaded!=null);
+        if(loaded==null||!(((org.bukkit.craftbukkit.entity.CraftEntity)loaded).getHandle()
+                instanceof com.github.tartaricacid.touhoulittlemaid.entity.item.EntityTombstone grave))return;
+        // A vanilla-protocol owner cannot see the mod entity. Name what its client shows and what the grave holds.
+        death.add("tombstone",describeGrave(grave));
     }
+    static JsonObject describeGrave(com.github.tartaricacid.touhoulittlemaid.entity.item.EntityTombstone grave){
+        JsonObject marker=new JsonObject();
+        marker.addProperty("entityId",grave.getId());
+        marker.addProperty("vanillaAppearance","armor_stand");
+        marker.addProperty("vanillaName","[女仆墓碑]");
+        JsonArray at=new JsonArray();at.add(grave.getX());at.add(grave.getY());at.add(grave.getZ());marker.add("position",at);
+        JsonArray items=new JsonArray();int stacks=0;var held=grave.getItems();
+        for(int slot=0;slot<held.getSlots();slot++){
+            var stack=held.getStackInSlot(slot);if(stack.isEmpty())continue;
+            stacks++;if(items.size()<GRAVE_ITEM_ROWS)items.add(HybridMaidPlugin.item(stack));
+        }
+        marker.addProperty("itemStacks",stacks);marker.add("items",items);marker.addProperty("itemsTruncated",stacks>items.size());
+        marker.addProperty("claim","主人走到墓碑旁，用主手对这个实体右键，即取回全部遗物并移除墓碑。背包放不下时会被拒绝；潜行右键则放不下的掉在脚边。");
+        return marker;
+    }
+    private static final int GRAVE_ITEM_ROWS=32;
     public void enrich(Player actor,UUID id,JsonObject context) {
         enrich(actor.getUniqueId(),id,context);
     }
@@ -165,7 +186,7 @@ public final class NativeMaidAgentSupport implements Listener {
             context.addProperty("nextStep","当前未加载。可用 /qdmaid recall "+id+" 尝试从最后确认的位置召回原伙伴，再查询当前状态。");return;
         }
         JsonObject death=context.getAsJsonObject("death");annotateGrave(death,found);context.addProperty("name",death.get("name").getAsString());
-        death.addProperty("nextStep",death.get("tombstoneRegistered").getAsBoolean()?"当前死亡有本次原生证据。先核对所列墓碑与遗物；原生胶片复活需模组祭坛，不要重复创建替代女仆。":"已观察到本次死亡，但原墓碑尚未确认或已取走；查询原状态，不自动补发物品或新建女仆。");
+        death.addProperty("nextStep",death.get("tombstoneRegistered").getAsBoolean()?"当前死亡有本次原生证据。墓碑在所列位置，不存在单独的遗物箱：遗物都在墓碑里。未装模组的客户端看到的是带[女仆墓碑]名牌的盔甲架；靠近后本结果的 tombstone 字段列出实体编号、遗物和取回方法。原生胶片复活需模组祭坛，不要重复创建替代女仆。":"已观察到本次死亡，但原墓碑尚未确认或已取走；查询原状态，不自动补发物品或新建女仆。");
         context.addProperty("nextStep",death.get("nextStep").getAsString());
     }
     public void notifyOwner(Player actor,UUID id,JsonObject context) {
