@@ -1345,12 +1345,26 @@ final class SiteDungeonManager implements Listener {
     private List<EntryMember> entryRoster(Player starter,Site site,boolean stationEntry){
         var roster=new ArrayList<EntryMember>();roster.add(entryMember(site,starter));
         if(!stationEntry||groundMusters.containsKey(site.id)){
-            ResidentCli.online().stream().filter(member->!member.getUniqueId().equals(starter.getUniqueId()))
+            var located=ResidentCli.online().stream()
                     .filter(member->stationEntry?atStation(site,member.getLocation()):atFirstRoom(site,member.getLocation()))
-                    .sorted(Comparator.comparing(Player::getUniqueId)).limit(PARTY_LIMIT-1L)
-                    .forEach(member->roster.add(entryMember(site,member)));
+                    .toList();
+            for(Player member:selectMusterBystanders(located,starter.getUniqueId(),m->musterAdmission(site,m),PARTY_LIMIT-1L))
+                roster.add(entryMember(site,member));
         }
         return List.copyOf(roster);
+    }
+
+    // A co-located bystander who cannot muster (spectator/observer, already in an activity, downed,
+    // mounted, in a passage, or holding an unclaimed reward) must not block a ready starter with
+    // confirmation_required. Only eligible bystanders join the roster; an eligible-but-underequipped
+    // bystander still triggers the normal equipment confirmation. The party limit is applied AFTER
+    // eligibility filtering so ineligible bystanders never consume a slot an eligible one could use.
+    static List<Player> selectMusterBystanders(List<Player> located,UUID starter,
+            java.util.function.Function<Player,String> admission,long limit){
+        return located.stream().filter(member->!member.getUniqueId().equals(starter))
+                .filter(member->admission.apply(member).isEmpty())
+                .sorted(Comparator.comparing(Player::getUniqueId)).limit(limit)
+                .toList();
     }
 
     private Location passageLanding(Site site,Location center,boolean exit){
