@@ -331,6 +331,11 @@ final class SiteDungeonManager implements Listener {
                 :run.phase.equals("returning")?"全部波次已清，正在生成通关掉落。"
                 :"留在同一战场，第"+(run.stage+1)+"/"+run.stages()+"波；"+(run.phase.equals("moving")?"下一波准备中，自动刷新。":"剩余 "+run.mobs.size()+"只，清完自动下一波。"));
             out.put("nextCommand","/mycli dungeon status "+s.id);out.put("nextCommands",List.of("/mycli dungeon status "+s.id));
+            if(run!=null&&!run.room().contains(p.getLocation())){
+                Room area=run.room();out.put("state","outside_combat_area");out.put("reason","COMBAT_AREA_RETURN_REQUIRED");
+                out.put("nextAction","当前波尚未清完。已离开战区，走回 "+area.x+","+area.y+","+area.z+" 继续，不用重开或确认。");
+                out.put("target",List.of(area.x,area.y,area.z));
+            }
         }
         out.put("difficulty",List.of(Map.of("id","normal","label","普通","stars",prep.stars(),"healthMultiplier",1.0,"damageMultiplier",1.0),Map.of("id","adventure","label","冒险","stars",Math.min(5,prep.stars()+1),"healthMultiplier",1.5,"damageMultiplier",1.25),Map.of("id","apocalypse","label","末日","stars",5,"healthMultiplier",2.1,"damageMultiplier",1.6)));
         return out;
@@ -541,17 +546,20 @@ final class SiteDungeonManager implements Listener {
     }
     private void returnToCheckpoint(Run r){
         if(r.retryLoading||runs.get(r.site.id)!=r||!r.phase.equals("retrying"))return;
-        Location point=checkpoint(r);World world=point.getWorld();if(world==null)throw new IllegalArgumentException("checkpoint_unavailable");
+        Location stored=checkpoint(r);World world=stored.getWorld();if(world==null)throw new IllegalArgumentException("checkpoint_unavailable");
+        Location point=sameArena(r.site)||wildCamp(r.site)?r.room().center(world):stored;
         r.retryLoading=true;
         ExistingChunkAccess.load(plugin,world,point.getBlockX()>>4,point.getBlockZ()>>4).whenComplete((chunk,error)->{if(!plugin.isEnabled())return;Bukkit.getScheduler().runTask(plugin,()->{
             r.retryLoading=false;if(runs.get(r.site.id)!=r||!r.phase.equals("retrying"))return;
             try{
             Location safe=null;
-            if(error==null)for(int dy:new int[]{0,1,-1})for(int dx=-2;dx<=2&&safe==null;dx++)for(int dz=-2;dz<=2;dz++){
+            if(error==null)for(int dy:new int[]{0,1,-1})for(int dx:new int[]{0,-1,1,-2,2})for(int dz:new int[]{0,-1,1,-2,2}){if(safe!=null)break;
                 Location candidate=point.clone().add(dx,dy,dz);
-                if(world.isChunkLoaded(candidate.getBlockX()>>4,candidate.getBlockZ()>>4)&&AgentFriendPlugin.safeLanding(candidate.getBlock())){safe=candidate;break;}
+                if(world.isChunkLoaded(candidate.getBlockX()>>4,candidate.getBlockZ()>>4)&&AgentFriendPlugin.safeLanding(candidate.getBlock())
+                    &&(!(sameArena(r.site)||wildCamp(r.site))||r.room().contains(candidate))){safe=candidate;break;}
             }
             if(safe==null){r.fault="checkpoint_unavailable";r.pausedAt=System.currentTimeMillis();r.pauseReason="runtime_error";persist();notice(r,"§c存档点暂不安全，场次已暂停、次数不再减少；不要拆建筑，联系服主检查后 /mycli dungeon resume。");return;}
+            if(sameArena(r.site)||wildCamp(r.site))r.checkpoint=safe.clone();
             r.retryReadyAt=System.currentTimeMillis()+10_000;persist();
             if(plugin.trialRescue()!=null)plugin.trialRescue().releaseTeam(rescueKey(r),safe);
             notice(r,r.stage>=r.stages()?"§a战斗已全部完成，已在最后存档点恢复；未扣机会，系统会按真实参战记录结算，无需返回首室。":"§e【存档点续关】本场第"+r.failures+"次战败，剩余"+(MAX_FAILURES-r.failures)+"次机会；已回第"+r.checkpointRoom+"室存档点，10秒后可继续当前段。已清房间保留，不必跑回主城；背包装备保留。");
@@ -1647,11 +1655,12 @@ final class SiteDungeonManager implements Listener {
         fields.put("nextCommand",r.party.contains(p.getUniqueId())&&!r.fault.isEmpty()?"/mycli dungeon resume":"/mycli dungeon status "+r.site.id);
         List<String> pending=pendingSites(p.getUniqueId());fields.put("pendingRewards",pending);
         fields.put("pendingRewardDetails",pending.stream().map(s->pendingReward(p.getUniqueId(),s)).toList());
+        fields.put("insideCombatArea",target.contains(p.getLocation()));fields.put("downed",plugin.isDowned(p));
         fields.put("combatBounds",Map.of("world",r.site.world,"min",List.of(target.x+.5-target.radius-2,target.y-3,target.z+.5-target.radius-2),"max",List.of(target.x+.5+target.radius+2,target.y+3,target.z+.5+target.radius+2)));
         if(r.poison!=null&&companionCombatPosition(r,p,p.getLocation())){
             var hazard=r.poison.observation(System.currentTimeMillis());if(!hazard.isEmpty())fields.put("hazard",hazard);
         }
-        if((r.enemyMoves||r.echo!=null)&&companionCombatPosition(r,p,p.getLocation())){
+        if((r.enemyMoves||r.echo!=null||sameArena(r.site)||wildCamp(r.site))&&companionCombatPosition(r,p,p.getLocation())){
             var moves=plugin.dungeonEnemyMoves().hazards(p);if(!moves.isEmpty())fields.put("enemyMoves",moves);
         }
         if(r.echo!=null&&r.party.contains(p.getUniqueId())){
@@ -2048,6 +2057,19 @@ final class SiteDungeonManager implements Listener {
         if(gear!=null)p.sendMessage("§d已收录秘宝「"+relic.name()+"」。查看装备说明了解触发方式；遗迹菜单可查收藏与称号。");
         plugin.agentCoach().rememberAdventure(p, "遗迹攻略奖励已经领取");
     }
+    private void arenaBoundary(Run r,List<Player> players,long now){
+        if(!(sameArena(r.site)||wildCamp(r.site)))return;
+        Room room=r.room();World world=Bukkit.getWorld(r.site.world);if(world==null)return;
+        double edge=room.radius+2;var dust=new Particle.DustOptions(Color.fromRGB(160,200,255),.8f);
+        for(double d=-edge;d<=edge;d+=2)for(int side:new int[]{-1,1}){
+            world.spawnParticle(Particle.DUST,room.x+.5+d,room.y+.12,room.z+.5+side*edge,1,0,0,0,0,dust);
+            world.spawnParticle(Particle.DUST,room.x+.5+side*edge,room.y+.12,room.z+.5+d,1,0,0,0,0,dust);
+        }
+        for(Player p:players)if(!plugin.isDowned(p)&&!room.contains(p.getLocation())&&now-lockHints.getOrDefault(p.getUniqueId(),0L)>=5000){
+            lockHints.put(p.getUniqueId(),now);
+            p.sendMessage("§e【回到战区】本波未清。你已离开蓝白边界，走回 "+room.x+","+room.y+","+room.z+" 继续；不会替你清怪或跳波。");
+        }
+    }
     private void tick(){
         tickOutdoorCamp();tickCryptWaves();
         long timestamp=System.currentTimeMillis();
@@ -2080,6 +2102,7 @@ final class SiteDungeonManager implements Listener {
             if(r.phase.equals("returning")){complete(r);continue;}
             long now=System.currentTimeMillis();if(activeMillis(r.started,r.faultPausedMillis,now)>TIMEOUT_MS){end(r,"time_limit");continue;}
             List<Player> present=present(r);
+            arenaBoundary(r,present,now);
             if(r.echo!=null)r.echo.sample(timestamp,r.phase,r.pausedAt==0&&!present.isEmpty());
             if(present.isEmpty() || present.stream().allMatch(plugin::isDowned)
                     && r.party.stream().anyMatch(id->ResidentCli.find(id)==null&&plugin.trialRescue()!=null&&!plugin.trialRescue().downed(id))){

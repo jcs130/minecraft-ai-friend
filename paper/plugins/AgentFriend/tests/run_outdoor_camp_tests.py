@@ -34,6 +34,11 @@ def audit(source, outpost):
                 position = found
 
     restore = method(source, 'private void restore()')
+    recovery = method(source, 'private void returnToCheckpoint(Run r)')
+    check('r.room().center(world):stored' in recovery, 'new arena recovery must aim at the real combat area, not an approach-edge checkpoint')
+    check('r.room().contains(candidate)' in recovery, 'recovery candidate must remain inside current combat bounds')
+    check('new int[]{0,-1,1,-2,2}' in recovery, 'recovery searches nearest safe landing before distant offsets')
+    check('COMBAT_AREA_RETURN_REQUIRED' in source and 'insideCombatArea' in source, 'out-of-area position is actionable guidance, not an empty-wave stall')
     persist = method(source, 'private void persist(Runnable extra)')
     definition = method(source, 'private String definition(Site site)')
     start = method(source, 'private void start(Player p,Site s,Mode mode,String confirmation)')

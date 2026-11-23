@@ -92,6 +92,7 @@ public class ExamCompletionProbe {
  static class Site {String id="synthetic_crypt",name="Synthetic";List<String> rooms=List.of("one","two","three");int conquestFloor=0,emeralds=8,bonusCount=1;Bonus bonus=new Bonus();}
  static class Bonus {String name(){return "STONE";}}
  enum Mode {NORMAL;int reward=1;}
+ static class BlackBannerCamp {static final String SITE="illager_camp";}
  static class DungeonRelics {
   record Relic(String name){}
   static Relic at(String site){return site.equals("synthetic_relic")?new Relic("Synthetic relic"):null;}
@@ -104,6 +105,10 @@ public class ExamCompletionProbe {
  static class Run {String id=UUID.randomUUID().toString();Site site=new Site();long started=200;int stage=3;boolean altarTactics;BeaconExpedition.Progress beacon;Mode mode=Mode.NORMAL;Map<UUID,Integer> attendance=new LinkedHashMap<>();Map<Integer,Set<UUID>> roomAttendance=new HashMap<>();int stages(){return beacon==null?site.rooms.size():6;}}
  static class Manager {
   static final String ROOT="site-dungeons";Plugin plugin=new Plugin();int ends,applications,announcements;
+  // This fixture exercises legacy receipt/exam completion. Authored outdoor/wave dispatch is
+  // executed by run_outdoor_camp_tests; never silently take that branch in these legacy cases.
+  boolean wildCamp(Site site){return false;}boolean sameArena(Site site){return false;}
+  void completeCamp(Run r){throw new AssertionError("legacy exam fixture entered authored combat branch");}
   String day(){return "2030-01-01";}Receipt receipt(UUID id,String site){var data=plugin.config.receipts.get(ROOT+".receipts."+id+"."+site);return data==null?null:new Receipt(data);}
   boolean relicClaimed(UUID id,String site){return plugin.config.values.containsKey("relic/"+id+"/"+site);}
   static String circleProof(UUID id){return ROOT+".healing-circle-proofs."+id;}boolean circleReward(UUID id){return plugin.config.values.containsKey(circleProof(id));}
