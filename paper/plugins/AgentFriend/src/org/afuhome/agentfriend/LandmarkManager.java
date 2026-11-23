@@ -221,7 +221,8 @@ final class LandmarkManager implements Listener {
     }
     @EventHandler public void click(InventoryClickEvent event) {
         Menu menu = menus.get(event.getView().getTopInventory()); if (menu == null) return;
-        event.setCancelled(true); if (!(event.getWhoClicked() instanceof Player p) || !p.getUniqueId().equals(menu.viewer) || event.getClick().isShiftClick()) return;
+        event.setCancelled(true); if (!(event.getWhoClicked() instanceof Player p) || !p.getUniqueId().equals(menu.viewer)
+                || event.getClick() != org.bukkit.event.inventory.ClickType.LEFT && event.getClick() != org.bukkit.event.inventory.ClickType.RIGHT) return;
         int slot = event.getRawSlot(); if (slot < 0 || slot >= 27) return;
         if (menu.detail == null && !menu.slots.containsKey(slot) && !List.of(18,22,23,26).contains(slot)
                 || menu.detail != null && !List.of(10,13,15,22).contains(slot)) return;

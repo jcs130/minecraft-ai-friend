@@ -59,6 +59,14 @@ final class MaidAgentsServer implements AutoCloseable {
 
     int size() { return agents.size(); }
     MaidAgent agent(UUID id) { return agents.get(id); }
+    void registerGuide(UUID id,UUID owner) {
+        var previous=agents.get(id);
+        if(previous!=null){
+            if(!previous.binding().ownerId().equals(owner))throw new IllegalStateException("guide_owner_mismatch");
+            return;
+        }
+        agents.put(id,new MaidAgent(new MaidAgentsConfig.Binding(id,owner,Map.of(),null,null)));
+    }
     List<MaidAgent> agents() { return List.copyOf(agents.values()); }
     MaidCompanions companions() { return companions; }
     void companions(MaidCompanions value) { companions = value; }
@@ -67,7 +75,7 @@ final class MaidAgentsServer implements AutoCloseable {
     boolean reserved(UUID id) { return companions != null && companions.reserved(id); }
 
     EntityMaid loaded(MaidAgent agent) {
-        if (agent == null) return null;
+        if (agent == null || MaidAgentsMod.custodyHeld(agent.binding().maidId())) return null;
         for (var level : server.getAllLevels()) {
             if (level.getEntity(agent.binding().maidId()) instanceof EntityMaid maid && agent.matches(maid)) return maid;
         }

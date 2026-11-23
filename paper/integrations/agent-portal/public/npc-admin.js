@@ -1,6 +1,7 @@
 const $=id=>document.getElementById(id);
 let session=null;
 const states={queued:'已提交',dispatched:'正在核对',unknown:'结果未知 · 保留原请求',waiting_body:'等待原角色加载',applied:'已生效',failed:'未生效'};
+const planningStates={pending:'规划中',completed:'规划结束',deferred:'规划暂缓',rejected:'规划被拒绝',unavailable:'规划不可用'};
 const professions={ranger:'游侠',guardian:'守卫',mage:'法师',healer:'治疗师',artisan:'工匠',farmer:'农夫'};
 const reasons={ADMIN_REQUIRED:'仅管理员可以操作。',AUTH_REQUIRED:'请先在官网登录管理员账号。',REAUTH_REQUIRED:'请到“我的账号”重新验证密码后再保存。',NPC_SOURCE_UNAVAILABLE:'游戏服暂未同步，稍后刷新。',NPC_REVISION_CHANGED:'配置已被更新，请刷新后重新编辑。',NPC_REQUEST_PENDING_READ_ORIGINAL:'这个居民已有待核对的请求，请先查看下方结果。',NPC_OPTION_NOT_CONFIGURED:'这个模型或音色尚未在服务器配置，请刷新选项。'};
 async function api(route,options={}){
@@ -41,9 +42,22 @@ function render(data){
     });card.append(form);$('residents').append(card);
   }
   history(data);
+  activity(data);
 }
 function history(data){$('jobs').replaceChildren();for(const job of data.jobs){const npc=data.residents.find(n=>n.id===job.id);const li=el('li',`${npc?.profile.name||job.id} · ${states[job.status]||job.status} · ${new Date(job.createdAt).toLocaleString('zh-CN')}`);li.append(el('div',job.requestId,'muted'));$('jobs').append(li);}}
-async function jobs(){history(await api('/admin/npcs'));}
+function activity(data){
+  const rows=data.residentActivity||[];
+  $('activity-panel').hidden=!rows.length;
+  $('resident-activity').replaceChildren(...rows.map(row=>{
+    const li=el('li',`${row.name||row.role} · ${planningStates[row.planningStatus]} · 回合 ${row.turnHash}`);
+    const summary=`游戏动作回执 · 完成 ${row.completedActions} · 失败 ${row.failedActions} · 待确认 ${row.pendingActions}`;
+    li.append(el('div',summary,'muted'));
+    if(row.planningError)li.append(el('div',`${row.planningError.step} · ${row.planningError.code}`,'muted'));
+    if(row.transferError)li.append(el('div',`传送未派发 · ${row.transferError}`,'muted'));
+    return li;
+  }));
+}
+async function jobs(){const data=await api('/admin/npcs');history(data);activity(data);}
 async function refresh(){try{session=await api('/session');if(session.owner?.role!=='admin')throw Error('仅管理员可管理居民，请先在官网登录管理员账号。');render(await api('/admin/npcs'));}catch(e){$('notice').textContent=e.message;$('residents').replaceChildren();}}
 $('refresh').addEventListener('click',()=>void refresh());
 await refresh();setInterval(()=>{if(session?.owner?.role==='admin'&&!document.hidden)void jobs().catch(()=>{});},5000);

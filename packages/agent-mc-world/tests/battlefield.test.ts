@@ -49,6 +49,16 @@ it('requires explicit telemetry opt-in and releases its listeners on disposal', 
 });
 
 describe('programmatic battlefield observations', () => {
+  it('reads non-player team membership by UUID without making hostile species safe', () => {
+    const r = rig();
+    Object.assign(r.bot.teamMap, { [enemyUuid]: { team: 'same-as-player' } });
+    expect(r.sample().actors.find((actor) => actor.uuid === enemyUuid)).toMatchObject({
+      scoreboardTeam: 'same-as-player', relation: 'hostile', relationSource: 'hostile-type',
+    });
+    expect(r.sample().actors.find((actor) => actor.uuid === allyUuid)?.scoreboardTeam).toBe('blue');
+    r.observer.close();
+  });
+
   it('retires confirmed deaths, keeps despawns uncertain and isolates reused entity IDs',()=>{
     const r=rig('1.21.1'); r.sample(1000);
     const old=r.bot.entities[3];

@@ -57,6 +57,8 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
     private final MaidGuardDecision decision;
     private final Consumer<MaidHurtTarget.Pre> beforeMelee;
     private final Consumer<LivingIncomingDamageEvent> beforeDamage;
+    private final Consumer<com.github.tartaricacid.touhoulittlemaid.api.event.MaidAttackEvent> beforeMaidHurt;
+    private final Map<UUID, Long> protectionNotices = new java.util.HashMap<>();
     private final Consumer<net.neoforged.neoforge.event.entity.living.LivingDamageEvent.Post> afterDamage;
     private final Consumer<EntityJoinLevelEvent> onProjectile;
     private final Method dungeonCombat;
@@ -84,6 +86,19 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         int port = config.getInt("companion.system-one-port", 8090);
         decision = config.getBoolean("companion.system-one", true) && port > 0 && port <= 65535
             ? new MaidGuardDecision(port) : null;
+        // First statement of the original hurt(): no damage, knockback, hurt animation or weapon wear follows.
+        beforeMaidHurt = event -> {
+            var attacker = event.getMaid().getOwnerUUID() == null ? null : MaidPlayerDamage.responsiblePlayer(event.getSource());
+            if (attacker == null) return;
+            event.setCanceled(true);
+            long now = System.nanoTime();
+            Long last = protectionNotices.get(attacker.getUUID());
+            if (Bukkit.isPrimaryThread() && (last == null || now - last >= QUIET) && attacker.getBukkitEntity() instanceof Player notified) {
+                if (protectionNotices.size() > 256) protectionNotices.clear();
+                protectionNotices.put(attacker.getUUID(), now);
+                notified.sendActionBar(net.kyori.adventure.text.Component.text("女仆受到保护，玩家无法伤害她"));
+            }
+        };
         beforeMelee = event -> {
             var maid = event.getMaid();
             if (automaticTask(maid) && !canHit(maid, event.getTarget())) {
@@ -111,6 +126,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
             if (!event.getLevel().isClientSide() && event.getEntity() instanceof Projectile shot
                     && shot.getOwner() instanceof EntityMaid maid && automaticTask(maid)) shot.addTag(PROJECTILE_TAG);
         };
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, false, beforeMaidHurt);
         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, false, beforeMelee);
         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, false, beforeDamage);
         NeoForge.EVENT_BUS.addListener(onProjectile);
@@ -118,6 +134,7 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
     }
 
     @Override public void close() {
+        NeoForge.EVENT_BUS.unregister(beforeMaidHurt);
         NeoForge.EVENT_BUS.unregister(beforeMelee);
         NeoForge.EVENT_BUS.unregister(beforeDamage);
         NeoForge.EVENT_BUS.unregister(onProjectile);
@@ -419,7 +436,21 @@ final class NativeMaidCompanionSupport implements AutoCloseable {
         guard.mode = Mode.MAGIC;
         guard.selectedAt = System.nanoTime();
         guard.target = attempt.enemy() == null ? null : attempt.enemy().getUUID();
-        var result = magic.cast(maid, attempt, enemy -> hostile(maid, owner, enemy), null);
+        double manaBefore = attempt.availableMana();
+        NativeMaidMagicSupport.Result result;
+        try {
+            result = magic.cast(maid, attempt, enemy -> hostile(maid, owner, enemy), null);
+        } catch (RuntimeException | LinkageError failure) {
+            // The legacy magic layer deducts mana before applying effects and may throw mid-cast.
+            // Capture provable evidence here instead of letting a silent reason-only unknown freeze
+            // the host forever. Never claim success, and never claim no-effect once mana was committed.
+            boolean committed = magic.castCommitted(attempt);
+            double manaAfter = attempt.availableMana();
+            plugin.getLogger().warning("legacy cast interrupted maid=" + maid.getUUID() + " spell=" + spell
+                    + " manaCommitted=" + committed + " manaBefore=" + manaBefore + " manaAfter=" + manaAfter
+                    + " failure=" + failure.getClass().getName() + ": " + failure.getMessage());
+            return LegacyCastFailure.evidence(spell, committed, manaBefore, manaAfter, failure);
+        }
         guard.state = result.state();
         var observation = result.describe();
         if (!result.applied()) annotateRefusal(maid, observation, result.state());

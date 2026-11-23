@@ -202,7 +202,7 @@ export class BattlefieldObserver {
         ...(observedEntityIdentity(bot,e)?{identity:observedEntityIdentity(bot,e)!}:{}),
         name: e.username ?? row?.name ?? null, relation: row?.relation ?? (hostile ? 'hostile' : 'unknown'),
         relationSource: row ? 'server' : hostile ? 'hostile-type' : 'unknown',
-        // Vanilla non-player score holders use UUID, not a player username.
+        // Vanilla identifies a non-player scoreboard holder by UUID.
         scoreboardTeam: team(e.type === 'player' ? e.username : e.uuid),
         health: row ? { ...row.health, source: 'server', updatedAtMs: server!.receivedAtMs }
           : { current: number(native) ? native : null, max: maxHealth(e), source: number(native) ? 'native' : 'unknown',

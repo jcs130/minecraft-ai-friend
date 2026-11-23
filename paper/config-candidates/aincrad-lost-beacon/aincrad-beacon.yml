@@ -1,0 +1,70 @@
+# Opt-in overlay for new aincrad_01 runs. Keep the original dungeons.yml.
+enabled: true
+chapter: lost_beacon_v1
+markers:
+  survey_west: [804, 69, -1210]
+  survey_east: [812, 69, -1210]
+  release: [774, 69, -1165]
+  seal_north: [784, 78, -1123]
+  seal_south: [791, 78, -1115]
+refuge: [779, 69, -1156]
+rooms:
+  - id: briefing
+    name: 东侧前哨
+    center: [856, 69, -1144]
+    radius: 5
+    hint: 在东墙前哨查看两条入口路线。队友到场后先选自己的祝福，再由一人确认路线。
+    mobs: []
+  - id: scout
+    name: 北廊暗道
+    center: [808, 69, -1210]
+    radius: 6
+    hint: 沿东墙向北，进入低拱后向西走北段柱廊。两处侦察印记分别在廊道两侧。
+    mobs: []
+  - id: gate
+    name: 东门守备
+    center: [844, 69, -1210]
+    radius: 6
+    hint: 沿东墙向北进入低拱。用柱脚挡箭，先处理弓手，再拉开近卫。
+    spawn-points: [[838, 69, -1216], [838, 69, -1213], [841, 69, -1216], [844, 69, -1216], [847, 69, -1216], [850, 69, -1213], [850, 69, -1210], [841, 69, -1207]]
+    mobs:
+      - {type: SKELETON, name: 东门弓手, health: 34}
+      - {type: HUSK, name: 拱廊近卫, health: 42, count: 2}
+  - id: rescue
+    name: 西廊接应
+    center: [776, 69, -1160]
+    radius: 7
+    hint: 沿北廊向西，再转向南到西侧柱廊。接出队员后，与他保持在7格内走向金色安全标记。
+    mobs: []
+  - id: camp
+    name: 南廊营地
+    center: [824, 69, -1118]
+    radius: 5
+    hint: 顺西廊向南，再转进南侧低拱。先调整个人祝福，随后确认下一站。
+    mobs: []
+  - id: altar
+    name: 上层看台·供能封印
+    center: [788, 78, -1120]
+    radius: 7
+    hint: 沿南廊到东南开口(862,69,-1119)，上原石梯再沿看台向西。两处封印都在Y78，不必挖墙。
+    mobs: []
+  - id: vault
+    name: 东南廊·宝库守卫
+    center: [850, 69, -1123]
+    radius: 6
+    hint: 从南廊沿内侧柱廊向东，留在下层。避开弩箭，等持斧守卫出手再反击。
+    spawn-points: [[844, 69, -1124], [844, 69, -1121], [847, 69, -1124], [853, 69, -1124], [856, 69, -1124], [856, 69, -1121], [847, 69, -1121], [853, 69, -1121]]
+    mobs:
+      - {type: VINDICATOR, name: 宝库卫长, health: 72}
+      - {type: PILLAGER, name: 宝库弩手, health: 36}
+      - {type: HUSK, name: 宝库近卫, health: 42}
+  - id: boss
+    name: 中央斗技场·失联信标守关者
+    center: [826, 69, -1160]
+    radius: 8
+    hint: 从东南开口沿看台内缘走下石梯，进入中央场。若封印仍在，看到红圈便离开蓄力点4格。
+    spawn-points: [[818, 69, -1168], [818, 69, -1165], [818, 69, -1156], [818, 69, -1153], [821, 69, -1168], [821, 69, -1152], [831, 69, -1168], [831, 69, -1152], [834, 69, -1156], [834, 69, -1165]]
+    mobs:
+      - {type: VINDICATOR, name: 伊尔芬格, health: 180}
+      - {type: HUSK, name: 首领近卫, health: 46}
+      - {type: SKELETON, name: 首领弓卫, health: 36}

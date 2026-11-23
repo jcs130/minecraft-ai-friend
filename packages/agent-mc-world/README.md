@@ -1,6 +1,18 @@
 # Agent MC World
 
+A host can enroll one Mineflayer character in body handoffs through
+`MinecraftClientOptions.bodyHandoff`. Bind the character ID, actual player UUID,
+controller generation and authenticated request transport when constructing the client.
+The Agent gets `mc_character_body` to inspect available bodies, select a target and
+read the original request. The current turn ends on submission. Build a new SDK
+session for each acquired generation. The coordinator uses `readyForHandoff`,
+`releaseForBodyHandoff`, `connectForBodyHandoff` and `refreshBodyHandoff`.
+For native connection and save confirmation, configure the private plugin channel
+and call `witnessBodyHandoff` through the existing authenticated host. Receipt and
+player checks remain scoped to the original request, UUID and generation.
+
 Native Simple Voice Chat is a separate lane: tool `mc_svc` and `agent-mc-world/simple-voice-chat`. It is not `mc_voice` / `mcagent:voice`. Disabled by default; `sent` is not heard. See [native SVC client and future Kemi hookup](docs/SIMPLE_VOICE_CHAT.md). This source change is not published.
+
 Voice diagnostics candidate: `mc_voice` and the proximity SDK retain bounded server `nextStep` guidance and optional `delivery` counters. `packetOffers` counts server send events, not client playback. `sent` still leaves `recipientHeard: unknown` and `goal_completed: false`; never replay an unknown request with a new ID. This source change requires a rebuilt client package and a compatible server; it is not automatically installed in existing hosts.
 The Numen hosting source candidate adds `NumenClientWorld` and `NumenBodyPort`
 to the public client/extension API. An explicitly supplied authenticated native
@@ -367,7 +379,15 @@ and [server-hosted Numen and maid integration](https://github.com/jcs130/minecra
 
 ### Optional nearby voice
 
-[Game voice, audience voice, routing and evidence](docs/PROXIMITY_VOICE.md): one authenticated player connection, one audio artifact, independent game/broadcast receipts and explicit output mode.
+An authenticated player connection can request nearby speech through a compatible server with Simple Voice Chat. Set the Minecraft world configuration to:
+
+```json
+{"proximityVoice":{"enabled":true,"speechSource":"server","outputMode":"game-only","audioProducerUrl":""}}
+```
+
+The server selects its configured voice and accepts a line of up to 200 UTF-16 units. Use `mc_voice` with one request ID and query that same ID after a timeout. Nearby text and game audio have separate receipts. A server `sent` receipt confirms packet offers only.
+
+[Artifact speech, audience voice, routing and evidence](docs/PROXIMITY_VOICE.md) describes the default `speechSource: "artifact"` mode and its independent game and broadcast receipts.
 # Portable report and native wait evidence
 
 `agent-mc-world/contracts` exports `workReportReceipt`, `inspectReportReview`,

@@ -34,6 +34,7 @@ export type EngineRequest =
       selectedBlobs?: Array<{ handle: string; b64: string; mime: string }>;
     }
   | { kind: 'panel'; panel: string; method: string; args: unknown[] }
+  | { kind: 'handoff-witness'; playerUuid:string; channel:string; nonce:string }
   | { kind: 'storage-clear'; key: string }
   /** 投递时调用子进程登记的渲染回调；null 表示不生成事件正文。 */
   | { kind: 'render-deferred'; type: string; renderId: number }

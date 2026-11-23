@@ -26,21 +26,34 @@ final class TrialRewardPolicy {
         static final Daily LEGACY_PAID = new Daily(1, 0, true, true);
     }
 
-    record Payout(Daily next, boolean items, int coins, String reason) { }
+    record Payout(Daily next, boolean items, int coins, int introductoryCoins, String reason) { }
 
     static Payout payout(Daily prior, boolean firstClear, int gap, int baseCoins) {
-        if (prior.legacyPaid()) return new Payout(prior, false, 0, "daily_limit");
-        if (!firstClear && gap >= 2) return new Payout(prior, false, 0, "practice");
+        return payout(prior, firstClear, gap, baseCoins, false);
+    }
+
+    static boolean introductory(int bossClears, int summitClears) {
+        return bossClears >= 0 && bossClears < 3 && summitClears == 0;
+    }
+
+    static int gap(int recommended, int played, boolean introductory) {
+        return introductory ? 0 : Math.max(0, recommended - played);
+    }
+
+    static Payout payout(Daily prior, boolean firstClear, int gap, int baseCoins, boolean introductoryAward) {
+        if (prior.legacyPaid()) return new Payout(prior, false, 0, 0, "daily_limit");
+        if (!firstClear && gap >= 2) return new Payout(prior, false, 0, 0, "practice");
         int coins = gap == 0 ? baseCoins : Math.max(1, baseCoins * (gap == 1 ? 60 : 30) / 100);
         boolean items = !prior.itemsIssued() && (firstClear || gap == 0);
-        if (coins == 0 && !items) return new Payout(prior, false, 0, "practice");
+        if (coins == 0 && !items) return new Payout(prior, false, 0, 0, "practice");
         int increase = Math.max(0, coins - prior.peakCoins());
-        int reward = increase + (prior.clears() == 1 ? coins / 2 : 0);
+        int introductoryCoins = items && introductoryAward ? (baseCoins + 1) / 2 : 0;
+        int reward = increase + (prior.clears() == 1 ? coins / 2 : 0) + introductoryCoins;
         Daily next = new Daily(Math.min(2, prior.clears() + 1), Math.max(prior.peakCoins(), coins),
                 prior.itemsIssued() || items, false);
         String reason = items ? "daily_items" : increase > 0 && prior.clears() > 0 ? "difficulty_upgrade"
                 : reward > 0 ? "coins_only" : "daily_limit";
-        return new Payout(next, items, reward, reason);
+        return new Payout(next, items, reward, introductoryCoins, reason);
     }
 
     /** Exact percentage points per clear eligible for rewards, before the difficulty penalty. */
@@ -68,6 +81,16 @@ final class TrialRewardPolicy {
     }
 
     static int pityAfter(int difficulty) { return difficulty == 2 ? 8 : 10; }
+
+    static boolean summitUpgrade(int floor, int difficulty, int rewardedDifficulty, boolean qualified) {
+        return floor == FINAL_FLOOR && qualified && difficulty > rewardedDifficulty;
+    }
+
+    static String summitAchievement(int rewardedDifficulty, int highestFloor) {
+        if (rewardedDifficulty == 2) return "星灯誓约者";
+        if (rewardedDifficulty == 1) return "踏云征服者";
+        return rewardedDifficulty == 0 || highestFloor >= FINAL_FLOOR ? "试炼登顶者" : "";
+    }
 
     static boolean milestone(int floor, int difficulty, boolean firstClear) {
         return switch (floor) {

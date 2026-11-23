@@ -6,7 +6,7 @@ export interface ProximityVoiceBot {
 export interface NearbyVoiceHearing {type:'nearby_voice';speaker:string;speakerUuid:string;utteranceId:string;text:string}
 export interface ProximityVoiceResult {type?:'voice_result';requestId:string;state:'uploading'|'queued'|'playing'|'sent'|'failed'|'cancelled'|'unknown'|'not_found'|'subscribed';reason?:string;lastState?:string|null;nextStep?:string;actualHearingVerified?:false;delivery?:{packetOffers:number;listenerCount:number;listenersTruncated:boolean}}
 export interface ProximityVoiceClient {
- say(text:string,options?:{requestId?:string;voice?:string}):Promise<ProximityVoiceResult>;
+ say(text:string,options?:{requestId?:string;voice?:string;signal?:AbortSignal}):Promise<ProximityVoiceResult>;
  upload(wav:Buffer,options?:{requestId?:string;signal?:AbortSignal}):Promise<ProximityVoiceResult>;
  status(requestId:string):Promise<ProximityVoiceResult>;close():void;
 }

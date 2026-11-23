@@ -12,6 +12,7 @@ export interface ProximityVoiceConfig {
   enabled: boolean;
   /** Explicit audio-artifact producer. This is not a TTS provider or credentials endpoint. */
   audioProducerUrl: string;
+  speechSource?: 'artifact' | 'server';
   outputMode: 'game-only' | 'live-and-game';
 }
 export interface ProximityVoiceContext {
@@ -32,13 +33,14 @@ export interface GameVoiceReceipt {
     audioError?:{code:'VOICE_AUDIO_DURATION_EXCEEDED';durationMs:number;maxDurationMs:number};
     actualHearingVerified?:false; delivery?:ProximityVoiceResult['delivery']};
   broadcast: {requested: boolean; state: string; actionId?: string; reason?: string; updatedAt?:number};
+  speechSource?: ProximityVoiceConfig['speechSource'];
   audioProducerUrl?: string;
   audioSha256?: string; generationComplete: boolean | null;
   /** Authored synthesis input, not a transcript or proof of complete spoken words. */
   requestedText?:string;
   nearbyText?: {state:'pending'|'sending'|'sent'|'unavailable'|'not-provided'|'failed'|'unknown'; reason?:string;
     deliveries:ChatDeliveryReceipt[]};
-  timings?: {synthesisStartedAt?:string;audioReadyAt?:string;uploadStartedAt?:string;
+  timings?: {synthesisStartedAt?:string;audioReadyAt?:string;uploadStartedAt?:string;serverRequestedAt?:string;
     serverQueuedAt?:string;serverPlayingAt?:string;serverSentAt?:string};
   goal_completed: false; recipientHeard: 'unknown';
 }
@@ -70,7 +72,8 @@ export const PROXIMITY_VOICE_TOOL: Omit<ToolDef,'handler'> = {
   name: 'mc_voice', tags: ['speak'], bodyControl: 'independent',
   description: 'Optional speech to nearby Minecraft players, using the existing authenticated game connection. '
     + 'Not audience commentary, private chat or shout. {} shows availability and output mode. '
-    + '{action:"speak",text,requestId?} synthesizes ONE full line through the configured audio producer (generated audio must also fit 30s); '
+    + '{action:"speak",text,requestId?} speaks one line. Server speech uses the server-selected voice, supports up to 200 UTF-16 units and is game-only. '
+    + 'Artifact speech uses the configured audio producer (generated audio must also fit 30s). '
     + '{action:"upload",audio_handle,text?,requestId?} uploads a PCM16 WAV blob (0.1–30s, max4MiB); text is an optional authored caption, not verified transcription. '
     + 'Authored text is also sent to the confirmed nearby text channel while synthesis proceeds; no global/private fallback. '
     + 'Game-only mode sends game audio and nearby text; live-and-game mirrors the SAME audio to the livestream, whose own queue still applies. '
@@ -189,9 +192,10 @@ export class ProximityVoiceLane {
             this.job=client.status(row.requestId).then(result=>this.serverResult(result),()=>{}).finally(()=>{if(this.active?.requestId===row.requestId)this.active=null;});
           }return this.outcome(row);
         }
-        return {text:JSON.stringify({enabled:this.options.config().enabled,connected:!!this.client,
-          world:this.context?.world??null,outputMode:this.options.config().outputMode,connectionError:this.connectionError,serverAcknowledged:this.serverAcknowledged,
-          audioProducerConfigured:!!this.options.config().audioProducerUrl,autoSpeechOff:'requested; server acknowledgement not verified',
+        const config=this.options.config();
+        return {text:JSON.stringify({enabled:config.enabled,connected:!!this.client,
+          world:this.context?.world??null,outputMode:config.outputMode,speechSource:config.speechSource??'artifact',connectionError:this.connectionError,serverAcknowledged:this.serverAcknowledged,
+          audioProducerConfigured:!!config.audioProducerUrl,autoSpeechOff:'requested; server acknowledgement not verified',
           autoSpeechOffRequested:this.autoSpeechOffRequested,activeRequest:this.active?.requestId??null,
           recent:[...this.receipts.values()].slice(-6),audience:'nearby game players; livestream mirror only in live-and-game mode'})};
       }
@@ -210,17 +214,28 @@ export class ProximityVoiceLane {
       if(this.active)throw Error('VOICE_BUSY_READ_EXISTING_REQUEST_'+this.active.requestId);
       const config=structuredClone(this.options.config());
       if(!['game-only','live-and-game'].includes(config.outputMode))throw Error('VOICE_OUTPUT_MODE_INVALID');
-      if(action==='speak'||config.outputMode==='live-and-game')this.producer(config.audioProducerUrl);
+      const speechSource=config.speechSource??'artifact';
+      if(!['artifact','server'].includes(speechSource))throw Error('VOICE_SPEECH_SOURCE_INVALID');
+      if(speechSource==='server'&&config.outputMode!=='game-only')throw Error('VOICE_SERVER_SPEECH_GAME_ONLY');
+      const serverSpeech=action==='speak'&&speechSource==='server';
+      if(serverSpeech){
+        const line=args.text as string;
+        if(line.length>200)throw Error('VOICE_TEXT_MAX_200');
+        const error=chatInputError(line);
+        if(error||line.trim().startsWith('/'))throw Error(error??'VOICE_TEXT_NOT_A_COMMAND');
+      }
+      if((action==='speak'&&!serverSpeech)||config.outputMode==='live-and-game')this.producer(config.audioProducerUrl);
       const receipt:GameVoiceReceipt={requestId,fingerprint,source:action==='speak'?'text':'artifact',createdAt:new Date().toISOString(),
         world:structuredClone(this.context.world),generation:this.context.generation,outputMode:config.outputMode,
         game:{state:'accepted'},broadcast:{requested:config.outputMode==='live-and-game',state:config.outputMode==='live-and-game'?'pending':'not-requested'},
-        ...(config.audioProducerUrl?{audioProducerUrl:this.producer(config.audioProducerUrl)}:{}),
+        ...(serverSpeech?{speechSource:'server' as const}:{}),
+        ...(speechSource==='artifact'&&config.audioProducerUrl?{audioProducerUrl:this.producer(config.audioProducerUrl)}:{}),
         ...(args.text!==undefined?{requestedText:args.text as string}:{}),
         nearbyText:{state:args.text===undefined?'not-provided':this.context.sendNearbyText?'pending':'unavailable',deliveries:[],
           ...(args.text!==undefined&&!this.context.sendNearbyText?{reason:'No attested nearby text transport configured'}:{})},timings:{},
         generationComplete:null,goal_completed:false,recipientHeard:'unknown'};
       this.receipts.set(requestId,receipt);while(this.receipts.size>128)this.receipts.delete(this.receipts.keys().next().value!);
-      // Admission is durable BEFORE any synthesis, upload or broadcast effect.
+      // Persist admission before sending text, requesting synthesis, uploading audio or mirroring it.
       const context=this.context,client=this.client,abort=new AbortController();this.active={requestId,abort};
       try {await this.save();}catch(error){this.active=null;this.receipts.delete(requestId);throw error;}
       this.job=this.run(receipt,config,context,client,abort,args.text as string|undefined,bytes)
@@ -238,9 +253,16 @@ export class ProximityVoiceLane {
     const current=()=>{signal.throwIfAborted();if(this.context!==context||!context.stillCurrent())throw Error('VOICE_WORLD_CHANGED_DO_NOT_REPLAY');};
     // Text admission has already been saved. It must not wait for TTS or audio upload.
     const caption=this.sendText(receipt,context,current,signal);
-    let uploadStarted=false;
+    let gameSubmitted=false;
     try {
       current();
+      if(receipt.speechSource==='server'&&text!==undefined){
+        receipt.game={state:'submitting'};
+        (receipt.timings??={}).serverRequestedAt=new Date().toISOString();
+        gameSubmitted=true;this.publish(receipt);
+        this.serverResult(await client.say(text,{requestId:receipt.requestId,signal}));
+        return;
+      }
       if(!bytes){receipt.game={state:'synthesizing'};(receipt.timings??={}).synthesisStartedAt=new Date().toISOString();this.publish(receipt);
         const response=await fetch(this.producer(config.audioProducerUrl)+'/api/voice-artifacts',{
           method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:receipt.requestId,text}),signal,redirect:'error'});
@@ -254,11 +276,11 @@ export class ProximityVoiceLane {
         if(receipt.generationComplete===false)throw Error('VOICE_GENERATION_KNOWN_INCOMPLETE_NOT_UPLOADED');
       }
       current();inspectVoiceWav(bytes);receipt.audioSha256=hash(bytes);(receipt.timings??={}).audioReadyAt=new Date().toISOString();
-      current();receipt.game={state:'uploading'};receipt.timings.uploadStartedAt=new Date().toISOString();uploadStarted=true;this.publish(receipt);
+      current();receipt.game={state:'uploading'};receipt.timings.uploadStartedAt=new Date().toISOString();gameSubmitted=true;this.publish(receipt);
       const game=client.upload(bytes,{requestId:receipt.requestId,signal});
       const broadcast=receipt.broadcast.requested?this.mirror(receipt,config,signal,receipt.source==='artifact'?bytes:undefined):Promise.resolve();
       const [result]=await Promise.all([game,broadcast]);this.serverResult(result);
-    }catch(error){receipt.game={state:uploadStarted||abort.signal.aborted?'unknown':'failed',reason:String(error).slice(0,240)};
+    }catch(error){receipt.game={state:gameSubmitted||abort.signal.aborted?'unknown':'failed',reason:String(error).slice(0,240)};
       if(error instanceof VoiceArtifactResponseError&&error.audioError){
         receipt.game.audioError=error.audioError;receipt.game.retryable=false;
         receipt.game.nextStep='这条完整语音超过游戏内 30 秒上限，未上传。若仍需说话，重新写一条更简短的完整台词；不要照原文换 ID 重试，不要裁音频或拆成多次克隆。附近文字有独立回执，已发送不等于对方听到。';

@@ -46,6 +46,13 @@ it.each(['underwater','short','unsafe','new-task'])('does not infer a boat oppor
   if(mode==='new-task')input.intent!.taskId=2;
   expect(observer.observe(input)).toBeNull();
 });
+it('advises boat transition for sustained 50-block water crossings under 96 blocks',()=>{
+  const observer=new JourneyObserver(),input=sample();input.cues=[];input.surfaceWater=true;
+  input.intent!.destination=[50,64,0];
+  expect(observer.observe(input)).toBeNull();
+  input.atMs+=10_000;
+  expect(observer.observe(input)).toMatchObject({reason:'water',remainingBlocks:50});
+});
 it('offers a fresh observed detour while retaining the original journey identity and destination',()=>{
   const observer=new JourneyObserver(),input=sample(),before=structuredClone(input),report=observer.observe(input)!;
   expect(report.journey).toEqual(input.intent);expect(report.choices).toEqual(['continue','inspect']);

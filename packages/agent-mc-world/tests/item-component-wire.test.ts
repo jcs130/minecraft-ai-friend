@@ -167,12 +167,16 @@ it('reads 1.21.11 custom-name/lore menu items and reports a truncated active-men
   expect(bot.currentWindow?.slots[0]?.name).toBe('clock');
   expect(bot.inventory.slots[9]?.name).toBe('iron_sword');
   expect(inventoryReadConfirmed(bot)).toBe(true);
+  parser.write(packet(258,90).subarray(0,20));
+  expect(inventoryReadState(bot).phase).toBe('ready'); // known closed window
   const complete=packet(256,90);
   parser.write(complete.subarray(0,20)); // active ID uses a multi-byte ContainerID
   expect(delivered).toBe(2);
   expect(inventoryReadState(bot).phase).toBe('decode_failed');
+  parser.write(packet(0,46));
+  expect(inventoryReadState(bot).phase).toBe('decode_failed'); // still missing active menu contents
   parser.write(complete);
   expect(inventoryReadState(bot).phase).toBe('ready');
-  expect(delivered).toBe(3);
+  expect(delivered).toBe(4);
   client.emit('end');
 });

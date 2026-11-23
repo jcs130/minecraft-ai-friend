@@ -30,12 +30,28 @@ public final class TrialRewardPolicyTest {
 
     public static void main(String[] args) {
         dailyRewards();
+        introductoryRewards();
+        require(!TrialRewardPolicy.summitUpgrade(14, 2, -1, true), "only the summit awards the guaranteed cache");
+        require(!TrialRewardPolicy.summitUpgrade(15, 1, -1, false), "practice does not award the cache");
+        require(TrialRewardPolicy.summitUpgrade(15, 0, -1, true), "first qualified summit awards a cache");
+        require(!TrialRewardPolicy.summitUpgrade(15, 0, 0, true), "same grade never duplicates a cache");
+        require(TrialRewardPolicy.summitUpgrade(15, 2, 1, true), "qualified higher difficulty awards an upgrade");
+        require(!TrialRewardPolicy.summitUpgrade(15, 1, 2, true), "clearing below a rewarded grade grants no cache");
+        require(TrialRewardPolicy.summitAchievement(-1, 10).isEmpty(), "a pre-summit clear does not unlock the title");
+        require(TrialRewardPolicy.summitAchievement(-1, 15).equals("试炼登顶者"), "historical summit retains recognition");
+        require(TrialRewardPolicy.summitAchievement(1, 15).equals("踏云征服者"), "adventure award title");
+        require(TrialRewardPolicy.summitAchievement(2, 15).equals("星灯誓约者"), "apocalypse award title");
         String today="2026-11-20", yesterday="2026-11-19";
         require(SiteRewardPolicy.status("run2",today,null,"run1",yesterday).equals("eligible"), "new day fresh site");
         require(SiteRewardPolicy.status("run2",today,null,"run1",today).equals("daily_limit"), "one expedition award per site/day");
         require(SiteRewardPolicy.status("run1",today,"run1",null,null).equals("ready"), "restart retains original receipt");
         require(SiteRewardPolicy.status("run1",today,null,"run1",yesterday).equals("claimed"), "claimed run replay next day");
         require(SiteRewardPolicy.status("run2",today,"run1",null,null).equals("previous_reward_pending"), "preserve earlier pending reward");
+        require(SiteRewardPolicy.relicEligible(true,false,false,false), "verified final room once grants relic");
+        require(!SiteRewardPolicy.relicEligible(false,false,false,false), "earlier room alone is not final credit");
+        require(!SiteRewardPolicy.relicEligible(true,true,false,false), "collected relic cannot be granted again");
+        require(!SiteRewardPolicy.relicEligible(true,false,true,false), "older pending receipt is always preserved");
+        require(!SiteRewardPolicy.relicEligible(true,false,false,true), "original run cannot be replayed");
         for (int difficulty = 0; difficulty <= 2; difficulty++) {
             var previous = TrialRewardPolicy.rates(1, difficulty);
             for (int floor = 1; floor <= 15; floor++) {
@@ -116,5 +132,43 @@ public final class TrialRewardPolicyTest {
                 require(itemAwards == 1 && coins >= hardest && coins <= hardest + hardest / 2,
                         "gear or coins inflated by difficulty switching");
             }
+    }
+
+    private static void introductoryRewards() {
+        var empty = TrialRewardPolicy.Daily.EMPTY;
+        boolean newcomer = TrialRewardPolicy.introductory(2, 0);
+        boolean veteran = TrialRewardPolicy.introductory(96, 42);
+        require(newcomer && !veteran && !TrialRewardPolicy.introductory(3, 0)
+                && !TrialRewardPolicy.introductory(0, 1), "personal boss history determines eligibility");
+        int newcomerGap = TrialRewardPolicy.gap(2, 1, newcomer);
+        int veteranGap = TrialRewardPolicy.gap(2, 1, veteran);
+        var novice = TrialRewardPolicy.payout(empty, false, newcomerGap, 3, true);
+        var experienced = TrialRewardPolicy.payout(empty, false, veteranGap, 3, false);
+        require(novice.items() && novice.coins() == 5 && novice.introductoryCoins() == 2,
+                "a player in introductory protection receives full Adventure loot plus the one-time award");
+        require(!experienced.items() && experienced.coins() == 1,
+                "a veteran sharing the same monsters still receives the personal below-target reward");
+        require(novice.next().peakCoins() == 3, "one-time gold must not inflate the daily difficulty watermark");
+        var second = TrialRewardPolicy.payout(novice.next(), false, newcomerGap, 3, true);
+        require(!second.items() && second.coins() == 1 && second.introductoryCoins() == 0,
+                "even an unconsumed award flag cannot create another same-day package or bonus");
+        var nextDay = TrialRewardPolicy.payout(empty, false, newcomerGap, 3, false);
+        require(nextDay.items() && nextDay.coins() == 3 && nextDay.introductoryCoins() == 0,
+                "a new day refreshes supplies, not the lifetime introductory award");
+        var migration = TrialRewardPolicy.payout(TrialRewardPolicy.Daily.LEGACY_PAID, false, newcomerGap, 3, true);
+        require(!migration.items() && migration.coins() == 0 && migration.introductoryCoins() == 0,
+                "unknown older payouts retain the replay fence");
+        var discounted = new TrialRewardPolicy.Daily(1, 1, false, false);
+        var corrected = TrialRewardPolicy.payout(discounted, false, newcomerGap, 3, true);
+        require(corrected.items() && corrected.coins() == 5 && corrected.next().peakCoins() == 3,
+                "first new run can unlock missed same-day gear, ordinary gold difference and the lifetime bonus");
+        var exhausted = TrialRewardPolicy.payout(corrected.next(), false, newcomerGap, 3, false);
+        require(!exhausted.items() && exhausted.coins() == 0, "corrected daily state cannot duplicate loot");
+        var upgrade = TrialRewardPolicy.payout(novice.next(), false, newcomerGap, 7, false);
+        require(!upgrade.items() && upgrade.coins() == 7 && upgrade.introductoryCoins() == 0,
+                "upgrading difficulty still only awards the ordinary difference plus second-clear share");
+        var ordinary = TrialRewardPolicy.payout(empty, false, TrialRewardPolicy.gap(2, 0, newcomer), 1, true);
+        require(ordinary.items() && ordinary.coins() == 2 && TrialRewardPolicy.rates(10, 0).gear() == 0,
+                "normal remains a training item pool even for an eligible newcomer");
     }
 }

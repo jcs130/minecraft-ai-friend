@@ -186,6 +186,12 @@ final class NativeMaidResidence implements AutoCloseable, Listener {
     }
 
     private void tick() {
+        if (local.qdj.maids.brain.MaidAgentsMod.custodyHeld(config.maid())) {
+            state = "body_parked";
+            releaseSource();
+            releaseHome();
+            return;
+        }
         if (!registered()) {
             state = "binding_unavailable";
             releaseSource();

@@ -19,11 +19,12 @@ final class PlayerAdventureMenus implements Listener {
     private record WheelSkill(Action action, String id, String icon, String name, List<String> lore) { }
     private final AgentFriendPlugin owner;
     private final BedrockMenuForms forms;
+    private final GuideCompanionMenu guides;
     private final Map<UUID,Session> sessions=new HashMap<>();
     private final Map<Inventory,Session> inventories=new IdentityHashMap<>();
     private volatile boolean stopped;
     PlayerAdventureMenus(AgentFriendPlugin owner){
-        this.owner=owner;forms=BedrockMenuForms.available();
+        this.owner=owner;forms=BedrockMenuForms.available();guides=new GuideCompanionMenu(owner,this);
         Bukkit.getPluginManager().registerEvents(this,owner);
     }
     void open(Player p){open(p,Page.HOME,"");}
@@ -40,14 +41,17 @@ final class PlayerAdventureMenus implements Listener {
             p.closeInventory();
             Session s=new Session(new Ticket(p.getUniqueId(),System.currentTimeMillis()),view,null,aim);
             sessions.put(p.getUniqueId(),s);
-            if(forms.show(p.getUniqueId(),view,index->onForm(p.getUniqueId(),s,index),()->onFormClosed(p.getUniqueId(),s)))return;
+            if(forms.show(p.getUniqueId(),view,index->onForm(p.getUniqueId(),s,index),()->onFormClosed(p.getUniqueId(),s))){
+                if(page==Page.COMMON)owner.recordWorldLesson(p,"catalog");
+                return;
+            }
             forget(p.getUniqueId()); // a late response cannot activate the chest fallback
         }
         var title=page==Page.WHEEL
                 ? net.kyori.adventure.text.Component.translatable().key("screen.qiandeng_controls.spell_wheel").fallback(view.title()).build()
                 : net.kyori.adventure.text.Component.text(view.title(),net.kyori.adventure.text.format.NamedTextColor.DARK_AQUA);
         Inventory inv=Bukkit.createInventory(null,SIZE,title);
-        ItemStack frame=item(button(0,Action.NONE,"GRAY_STAINED_GLASS_PANE"," "));
+        ItemStack frame=item(button(0,Action.NONE,page==Page.ONBOARDING?"CYAN_STAINED_GLASS_PANE":"GRAY_STAINED_GLASS_PANE"," "));
         for(int slot=0;slot<SIZE;slot++)inv.setItem(slot,frame);
         for(Button b:view.buttons())inv.setItem(b.slot(),item(b));
         // openInventory closes the previous screen synchronously; install this session afterwards.
@@ -55,15 +59,16 @@ final class PlayerAdventureMenus implements Listener {
         if(p.getOpenInventory().getTopInventory()==inv){
             Session s=new Session(new Ticket(p.getUniqueId(),System.currentTimeMillis()),view,inv,aim);
             sessions.put(p.getUniqueId(),s);inventories.put(inv,s);
+            if(page==Page.COMMON)owner.recordWorldLesson(p,"catalog");
         }
     }
     View view(Player p,Page page,String detail){
         var buttons=new ArrayList<Button>();String content="浏览不会选职、接任务或购买。";String title=switch(page){
-            case HOME->"千灯纪 · 冒险大厅";case TRAVEL->"传送与集合";case GROWTH->"角色与技能";case ADVENTURE->"冒险与任务";
+            case HOME->"千灯纪 · 冒险大厅";case TRAVEL->"传送与集合";case TRAVEL_CONFIRM->"确认传送";case GROWTH->"角色与技能";case BOOK->"命格书 · 角色与技能";case ADVENTURE->"冒险与任务";
             case STORAGE->"背包与仓库";case TRADE->"商城与交易";case SOCIAL->"队伍与伙伴";
             case MEMORIES->"留影与生活";case COMMON->"通用生存技能";case COMMON_DETAIL->"技能说明";
             case WHEEL->"施法轮盘";case WHEEL_EDIT->"配置快捷施法";case WHEEL_PICK->"选择槽位技能";
-            case CHARACTER->"我的角色";case TIDY_BAG,TIDY_STASH->"确认无损合并";case PARTY->"组队大厅";case PARTY_CONFIRM->"确认组队操作";case HELP->"聊天与入门";case ERROR->"入口暂不可用";
+            case CHARACTER->"我的角色";case TIDY_BAG,TIDY_STASH->"确认无损合并";case PARTY->"组队大厅";case PARTY_CONFIRM->"确认组队操作";case HELP->"聊天与入门";case ONBOARDING->"初来千灯纪";case GUIDE_COMPANION->"我的伙伴";case GUIDE_CLASS->"伙伴 · 职业";case GUIDE_SKILLS->"伙伴 · 技能";case ERROR->"入口暂不可用";
         };
         buttons.addAll(category(page));
         if(page==Page.HOME){
@@ -71,11 +76,28 @@ final class PlayerAdventureMenus implements Listener {
             buttons.add(button(4,Action.NONE,"COMPASS","欢迎，"+p.getName(),"点击图标浏览；物品只是按钮","按 Esc 关闭；CLI仍可使用"));
             buttons.add(button(28,Action.TRAVEL,"ENDER_PEARL","传送与集合","公共地标、个人传送点、归乡、战斗增援"));
             buttons.add(button(30,Action.STASH,"ENDER_CHEST","个人仓库 · 10页540格","直接选择页码；与大背包、公共箱分开"));
-            buttons.add(button(29,Action.ONBOARDING,"OAK_SIGN","我的下一步","查看职业、通用技能、公会委托和任务交付建议"));
+            buttons.add(button(29,Action.ONBOARDING,"BOOK","我的下一步","查看入门进度，继续当前目标"));
+            buttons.add(button(34,Action.GUIDE_COMPANION,"LANTERN","我的伙伴","领取或管理自己的冒险伙伴"));
             buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","八槽混排通用技与职业技；可按习惯配置"));
-        }else if(page!=Page.WHEEL&&page!=Page.WHEEL_EDIT&&page!=Page.WHEEL_PICK)buttons.add(button(4,Action.NONE,"PAPER",title,"先查看内容与条件，再自行决定","下方箭头返回；罗盘回到大厅"));
-        if(page==Page.GROWTH)buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","八槽混排通用技与职业技；可按习惯配置"));
-        if(page==Page.COMMON){
+            buttons.add(button(33,Action.WHEEL_EDIT,"REPEATER","选择快捷技能","选槽位，再选技能，立即保存"));
+        }else if(page!=Page.ONBOARDING&&page!=Page.GUIDE_COMPANION&&page!=Page.GUIDE_CLASS&&page!=Page.GUIDE_SKILLS&&page!=Page.WHEEL&&page!=Page.WHEEL_EDIT&&page!=Page.WHEEL_PICK)buttons.add(button(4,Action.NONE,"PAPER",title,"先查看内容与条件，再自行决定","下方箭头返回；罗盘回到大厅"));
+        if(page==Page.GROWTH){
+            buttons.add(staffSpellButton());
+            buttons.add(button(32,Action.WHEEL,"END_CRYSTAL","施法轮盘","八槽混排通用技与职业技；可按习惯配置"));
+            buttons.add(button(33,Action.WHEEL_EDIT,"REPEATER","选择快捷技能","选一个槽位，再选要放进去的技能"));
+        }
+        if(page==Page.BOOK)content="学习职业技能后，可单独选择法杖的右键法术或配置八个快捷槽位。通用技能可直接加入轮盘。";
+        if(page==Page.TRAVEL_CONFIRM){
+            var target=owner.compassDestination(p,detail);
+            if(target==null){
+                content="目的地或队友当前不可用，请返回并重新选择。";
+                buttons.add(button(13,Action.NONE,"BARRIER","目的地不可用",content));
+            }else{
+                content=target.title()+"\n"+target.location()+"\n"+target.terms();
+                buttons.add(button(13,Action.NONE,"MAP",target.title(),target.location(),target.terms()));
+                buttons.add(new Button(22,Action.TRAVEL_APPLY,detail,"ENDER_PEARL","确认传送",List.of(target.terms())));
+            }
+        }else if(page==Page.COMMON){
             content=NativeRpg.COMMON_IDS.size()+"项通用技能无需选职；公用同一个魔力池。选择页码，再点技能看条件和消耗。";
             int pageNumber=detail.equals("2")?1:0,start=pageNumber*CONTENT.length;
             for(int i=start;i<Math.min(start+CONTENT.length,NativeRpg.COMMON_IDS.size());i++){
@@ -93,6 +115,7 @@ final class PlayerAdventureMenus implements Listener {
             buttons.add(button(14,Action.NONE,"OAK_SIGN","使用提示",e.tip(),"失败："+e.failure()));
             String use=Set.of("travel","team","give","prospect").contains(detail)?"选择目标或配方":"使用一次";
             buttons.add(new Button(22,Action.COMMON_USE,detail,"LIME_DYE",use,List.of(e.costLine(),e.command(),"关闭本页后按当前状态检查；失败不自动重试")));
+            buttons.add(new Button(24,Action.COMMON_EQUIP,detail,"REPEATER","加入轮盘",List.of("选择一个快捷槽位，只配置，不施法")));
         }else if(page==Page.WHEEL){
             content=wheel(p,detail,buttons);
         }else if(page==Page.WHEEL_EDIT){content=wheelEdit(p,detail,buttons);
@@ -148,16 +171,46 @@ final class PlayerAdventureMenus implements Listener {
             buttons.add(new Button(22,Action.PARTY_APPLY,detail,"LIME_DYE","确认一次",List.of("操作后查看实际队伍状态，不自动重试")));
         }else if(page==Page.HELP){
             content="普通聊天与全服喊话以服务器当前设置为准。点击下方按钮获取当前范围与准确用法。\n大多数功能无需打指令：右键罗盘 → 选择分区。\n原生子菜单关闭后，再右键罗盘即可回到大厅。";
-            buttons.add(button(10,Action.ONBOARDING,"OAK_SIGN","查询聊天与入门","返回当前聊天规则和本人下一步"));
+            buttons.add(button(10,Action.ONBOARDING,"BOOK","查看入门进度"));
+            buttons.add(button(12,Action.CHAT_RULES,"OAK_SIGN","查看聊天规则"));
             buttons.add(button(14,Action.COMMON,"BLAZE_ROD","生存技能","全部通用技能的实际效果和使用条件"));
+        }else if(page==Page.ONBOARDING){
+            content=onboarding(p,buttons);
+        }else if(page==Page.GUIDE_COMPANION||page==Page.GUIDE_CLASS||page==Page.GUIDE_SKILLS){
+            content=guides.view(p,page,detail,buttons);
         }else if(page==Page.ERROR){
             content="这次入口未能确认完成，已停止。若是交易、学习或领取，不要连续重试；先查原记录或联系服主并说明时间。";
             buttons.add(button(13,Action.NONE,"BARRIER","服务暂不可用",content));
         }
-        if(page!=Page.HOME)buttons.add(button(27,Action.BACK,"ARROW","返回上一页"));
-        if(page!=Page.WHEEL)buttons.add(button(31,Action.HOME,"COMPASS","冒险大厅"));
+        if(page==Page.TRAVEL_CONFIRM)buttons.add(button(27,detail.startsWith("team:")?Action.PLAYERS_MENU:Action.PLACES_MENU,"ARROW","返回，取消传送"));
+        else if(page!=Page.HOME)buttons.add(button(27,Action.BACK,"ARROW","返回上一页"));
+        if(page!=Page.WHEEL&&page!=Page.ONBOARDING)buttons.add(button(31,Action.HOME,"COMPASS","冒险大厅"));
         buttons.add(button(35,Action.CLOSE,"BARRIER","关闭"));
         return new View(page,detail,title,content,buttons);
+    }
+    private String onboarding(Player player,List<Button> buttons){
+        JsonObject state=owner.agentCoach().entryState(player);
+        if(!state.get("eligible").getAsBoolean()){
+            String reason="观战账号不参加新手实习。";
+            buttons.add(button(13,Action.NONE,"SPYGLASS",reason));
+            return reason;
+        }
+        var checklist=state.getAsJsonArray("checklist");
+        int done=0;
+        for(int i=0;i<checklist.size();i++){
+            JsonObject milestone=checklist.get(i).getAsJsonObject();
+            boolean completed=milestone.get("done").getAsBoolean();
+            if(completed)done++;
+            buttons.add(button(11+i,Action.NONE,completed?"LIME_DYE":"GRAY_DYE",
+                    (completed?"已完成 · ":"待完成 · ")+milestone.get("title").getAsString()));
+        }
+        String summary="入门进度 "+done+"/"+checklist.size();
+        Button next=onboardingNext(state.get("step").getAsString());
+        buttons.add(button(4,Action.NONE,"LANTERN",summary));
+        if(next!=null)buttons.add(next);
+        buttons.add(button(30,Action.ONBOARDING_DETAILS,"WRITABLE_BOOK","查看详细清单与专项实练"));
+        buttons.add(button(34,Action.GUIDE_COMPANION,"LANTERN","我的伙伴","可以和她一起完成入门"));
+        return summary+(next==null?"":"\n当前目标 · "+next.title());
     }
     private List<WheelSkill> wheelSkills(Player player, boolean profession) {
         List<WheelSkill> skills = new ArrayList<>();
@@ -232,19 +285,27 @@ final class PlayerAdventureMenus implements Listener {
     }
     private String wheelEdit(Player p,String detail,List<Button> buttons) {
         var learned=wheelSkills(p,true);var catalogue=wheelCatalogue(p,learned);List<String> slots;
-        boolean equipCircle=detail.equals(NativeRpg.HEALING_CIRCLE)&&catalogue.containsKey(detail);
+        WheelSkill selected=catalogue.get(detail);
+        if(!detail.isEmpty()&&selected==null) {
+            buttons.add(button(4,Action.NONE,"BARRIER","技能暂不可用","重新查看职业技能或通用技能目录"));
+            buttons.add(button(33,Action.WHEEL_EDIT,"REPEATER","回到轮盘配置","保留当前快捷技能"));
+            return "该技能暂不可用。请从技能目录重新选择。";
+        }
         String message="选一个槽位，更换或清空。可混排通用技和已学职业技，保存后跨设备、重登及重启保留。";
-        try{slots=wheelSlots(p,learned);}catch(IllegalArgumentException invalid){slots=Collections.nCopies(8,"");message="配置资料暂不可读；可点恢复推荐，或保留资料并联系服主。";}
-        if(equipCircle)message="治愈之环已学会。选择一个替换位置，或关闭以保留现有搭配。";
+        try{slots=wheelSlots(p,learned);}catch(IllegalArgumentException invalid){
+            slots=Collections.nCopies(8,"");message="配置资料暂不可读；可点恢复推荐，或保留资料并联系服主。";
+            selected=null;
+        }
+        if(selected!=null)message="将「"+selected.name()+"」放入选定槽位。已有技能会被替换。";
         buttons.add(button(4,Action.NONE,"REPEATER","选择要调整的槽位",message));
         for(int index=0;index<8;index++) {
             String id=slots.get(index);WheelSkill spell=catalogue.get(id);
-            buttons.add(new Button(WHEEL_CELLS[index],equipCircle?Action.WHEEL_ASSIGN:Action.WHEEL_SLOT,
-                    equipCircle?index+"|"+detail:Integer.toString(index),spell==null?"LIGHT_GRAY_DYE":spell.icon(),
+            buttons.add(new Button(WHEEL_CELLS[index],selected==null?Action.WHEEL_SLOT:Action.WHEEL_ASSIGN,
+                    selected==null?Integer.toString(index):index+"|"+detail,spell==null?"LIGHT_GRAY_DYE":spell.icon(),
                     "槽位 "+(index+1)+" · "+(id.isEmpty()?"空":spell==null?id:spell.name()),
-                    List.of(equipCircle?"点击将治愈之环装入这里":"点击更换或清空","只调整快捷位置，不施法、不学习")));
+                    List.of(selected==null?"点击更换或清空":"将「"+selected.name()+"」装入此处","只调整快捷位置，不施法、不学习")));
         }
-        if(!equipCircle)buttons.add(button(22,Action.WHEEL_DEFAULTS,"CLOCK","恢复推荐布局","优先本人已学职业技，再加入治疗、控制与位移","这是恢复快捷位置，不会遗忘技能"));
+        if(selected==null)buttons.add(button(22,Action.WHEEL_DEFAULTS,"CLOCK","恢复推荐布局","优先本人已学职业技，再加入治疗、控制与位移","这是恢复快捷位置，不会遗忘技能"));
         buttons.add(button(33,Action.WHEEL,"END_CRYSTAL","完成 · 打开轮盘","配置即时保存，无需再点保存"));
         return message;
     }
@@ -348,12 +409,17 @@ final class PlayerAdventureMenus implements Listener {
         Page target=destination(b.action());
         if(target!=null){open(p,target,"");return;}
         if(b.action()==Action.BACK){open(p,parent(view.page()),"");return;}
+        if(b.action()==Action.GUIDE_CLASS_DETAIL){open(p,Page.GUIDE_CLASS,b.payload());return;}
+        if(b.action()==Action.GUIDE_SKILL_DETAIL){open(p,Page.GUIDE_SKILLS,b.payload());return;}
+        if(b.action()==Action.GUIDE_ACTION){guides.perform(p,b.payload());return;}
         if(b.action()==Action.COMMON_PAGE){open(p,Page.COMMON,b.payload());return;}
+        if(b.action()==Action.COMMON_EQUIP){open(p,Page.WHEEL_EDIT,b.payload());return;}
         if(b.action()==Action.WHEEL_PAGE){open(p,Page.WHEEL,b.payload());return;}
         if(b.action()==Action.WHEEL_SLOT){open(p,Page.WHEEL_PICK,b.payload()+"|common:0");return;}
         if(b.action()==Action.WHEEL_PICK_PAGE){open(p,Page.WHEEL_PICK,b.payload());return;}
         if(b.action()==Action.WHEEL_ASSIGN||b.action()==Action.WHEEL_CLEAR||b.action()==Action.WHEEL_DEFAULTS){
-            changeWheel(p,b,view.detail().equals(NativeRpg.HEALING_CIRCLE)?Page.WHEEL:Page.WHEEL_EDIT);return;
+            boolean singleSkill=view.page()==Page.WHEEL_EDIT&&!view.detail().isEmpty()&&b.action()==Action.WHEEL_ASSIGN;
+            changeWheel(p,b,singleSkill?Page.WHEEL:Page.WHEEL_EDIT);return;
         }
         if(b.action()==Action.WHEEL_CAST&&b.payload().equals(NativeRpg.HEALING_CIRCLE)){
             owner.nativeRpg().castHealingCircle(p,session.aim);

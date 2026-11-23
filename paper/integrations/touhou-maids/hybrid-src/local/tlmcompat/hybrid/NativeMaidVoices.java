@@ -98,7 +98,7 @@ final class NativeMaidVoices implements AutoCloseable {
         UUID id=maid.getUUID();
         var current=voices.get(id);
         if(current!=null&&!personalVoices.contains(id))return current;
-        if(!plugin.personalDialogue(maid)||media==null)return null;
+        if((!plugin.personalDialogue(maid)&&!plugin.guideVoice(maid))||media==null)return null;
         if(current!=null&&current.forSelection(maid))return current;
         if(current!=null){voices.remove(id);personalVoices.remove(id);current.close();}
         String selected=plugin.personal.selectedVoice(maid);
@@ -113,7 +113,7 @@ final class NativeMaidVoices implements AutoCloseable {
     void reply(EntityMaid maid,String operation,String text,Set<UUID> audience){
         var voice=forReply(maid);
         if(voice!=null){missingNotices.remove(maid.getUUID());voice.reply(maid,operation,text,audience);return;}
-        if(!plugin.personalDialogue(maid)||plugin.personal.selectedVoice(maid)!=null||maid.isSilent())return;
+        if((!plugin.personalDialogue(maid)&&!plugin.guideVoice(maid))||plugin.personal.selectedVoice(maid)!=null||maid.isSilent())return;
         var owner=Bukkit.getPlayer(maid.getOwnerUUID());
         if(owner==null||!audience.contains(owner.getUniqueId()))return;
         String selection=owner.getUniqueId()+":"+maid.getSoundPackId();
@@ -121,12 +121,13 @@ final class NativeMaidVoices implements AutoCloseable {
         if(missingNotices.size()>256)missingNotices.remove(missingNotices.keySet().iterator().next());
         owner.sendMessage("[女仆语音] 当前声音包尚未导入服务器，暂用文字回复。可在女仆的声音包菜单更换。");
     }
+    boolean serviceReady(){return api!=null;}
     void combat(EntityMaid maid,Mob target,String mode,float damage){var voice=voices.get(maid.getUUID());if(voice!=null)voice.combat(maid,target,mode,damage);}
     JsonObject describe(EntityMaid maid){
         var voice=voices.get(maid.getUUID());
         if(voice!=null&&(!personalVoices.contains(maid.getUUID())||voice.forSelection(maid)))return voice.describe(maid);
         var out=new JsonObject();
-        boolean personal=plugin.personalDialogue(maid);
+        boolean personal=plugin.personalDialogue(maid)||plugin.guideVoice(maid);
         String selected=personal?plugin.personal.selectedVoice(maid):null;
         out.addProperty("soundPackId",maid.getSoundPackId());
         boolean ready=selected!=null&&api!=null&&!maid.isSilent();

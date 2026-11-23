@@ -35,7 +35,12 @@ def main():
     if "siteRewardSlot(" in complete:
         policy = (root / "src/org/afuhome/agentfriend/SiteRewardPolicy.java").read_text(encoding="utf-8")
         complete += "\n" + method(site, "private String siteRewardSlot(")
-        complete += "\nstatic class SiteRewardPolicy {" + method(policy, "static String status(") + "}"
+        rules = method(policy, "static String status(")
+        if "SiteRewardPolicy.relicEligible(" in complete:
+            rules += method(policy, "static boolean relicEligible(")
+        complete += "\nstatic class SiteRewardPolicy {" + rules + "}"
+    eligibility_signature = "private boolean rewardEligible(Run r, UUID id)"
+    eligibility = method(site, eligibility_signature) if eligibility_signature in site else ""
     guidance = method(site, "private static void outcomeGuidance(Map<String,Object> data)") if "private static void outcomeGuidance(Map<String,Object> data)" in site else "private static void outcomeGuidance(Map<String,Object> data){}"
     durable = method(exams, "private static boolean durableSurvey(Run r)")
     durable += "\n" + (method(exams, "private static boolean durableRecord(Run r)") if "private static boolean durableRecord(Run r)" in exams else "private static boolean durableRecord(Run r){return durableSurvey(r);}")
@@ -75,21 +80,32 @@ public class ExamCompletionProbe {
  static class Receipt extends HashMap<String,Object> {
   Receipt(Map<String,Object> values){super(values);}
   String getString(String key,String fallback){return (String)getOrDefault(key,fallback);}
+  void set(String key,Object value){put(key,value);}
  }
  static class Config {
   Map<String,String> values=new HashMap<>();Map<String,Map<String,Object>> receipts=new HashMap<>();int writes;
   String getString(String k){return values.get(k);}void set(String k,Object v){values.put(k,String.valueOf(v));}
-  void createSection(String k,Map<String,Object> v){receipts.put(k,v);writes++;}
+  Receipt createSection(String k,Map<String,Object> v){var receipt=new Receipt(v);receipts.put(k,receipt);writes++;return receipt;}
  }
  static class Native {boolean circleEnabled;boolean selected(){return true;}boolean healingCircleEnabled(){return circleEnabled;}void siteCompleted(Player p,String site,String run){}}
  static class Plugin {Config config=new Config();Exam exams=new Exam(),skillAssessments=exams;Native nativeRpg=new Native();Config getConfig(){return config;}Exam skillAssessments(){return exams;}Native nativeRpg(){return nativeRpg;}boolean nativeRpgSelected(){return true;} __NATIVE__ }
  static class Site {String id="synthetic_crypt",name="Synthetic";List<String> rooms=List.of("one","two","three");int conquestFloor=0,emeralds=8,bonusCount=1;Bonus bonus=new Bonus();}
  static class Bonus {String name(){return "STONE";}}
- static class Mode {int reward=1;}
- static class Run {String id=UUID.randomUUID().toString();Site site=new Site();long started=200;int stage=3;boolean altarTactics;Mode mode=new Mode();Map<UUID,Integer> attendance=new LinkedHashMap<>();Map<Integer,Set<UUID>> roomAttendance=new HashMap<>();}
+ enum Mode {NORMAL;int reward=1;}
+ static class DungeonRelics {
+  record Relic(String name){}
+  static Relic at(String site){return site.equals("synthetic_relic")?new Relic("Synthetic relic"):null;}
+  static String create(Relic relic,int tier,java.util.concurrent.ThreadLocalRandom rng){return relic.name();}
+ }
+ static class BeaconExpedition {
+  static final int BRIEFING=0,CAMP=3,STAGES=6;
+  record Progress(int additionalMaterials){int rewardCount(int base){return base+additionalMaterials;}}
+ }
+ static class Run {String id=UUID.randomUUID().toString();Site site=new Site();long started=200;int stage=3;boolean altarTactics;BeaconExpedition.Progress beacon;Mode mode=Mode.NORMAL;Map<UUID,Integer> attendance=new LinkedHashMap<>();Map<Integer,Set<UUID>> roomAttendance=new HashMap<>();int stages(){return beacon==null?site.rooms.size():6;}}
  static class Manager {
   static final String ROOT="site-dungeons";Plugin plugin=new Plugin();int ends,applications,announcements;
   String day(){return "2030-01-01";}Receipt receipt(UUID id,String site){var data=plugin.config.receipts.get(ROOT+".receipts."+id+"."+site);return data==null?null:new Receipt(data);}
+  boolean relicClaimed(UUID id,String site){return plugin.config.values.containsKey("relic/"+id+"/"+site);}
   static String circleProof(UUID id){return ROOT+".healing-circle-proofs."+id;}boolean circleReward(UUID id){return plugin.config.values.containsKey(circleProof(id));}
   void announceCircleReward(Player p,Run r){check(circleReward(p.getUniqueId())&&ends>0);announcements++;}
   void atomic(Runnable work){work.run();}void applyCompletion(Player p,String id,Object saved){applications++;plugin.nativeSiteCompleted(p,id,(String)((Map<?,?>)saved).get("run"));}
@@ -97,6 +113,7 @@ public class ExamCompletionProbe {
   List<String> missingRooms(Run r,UUID id){List<String> out=new ArrayList<>();for(int i=0;i<r.stage;i++)if(r.roomAttendance.containsKey(i)&&!r.roomAttendance.get(i).contains(id))out.add("missing");return out;}
   List<String> unverifiedRooms(Run r){List<String> out=new ArrayList<>();for(int i=0;i<r.stage;i++)if(!r.roomAttendance.containsKey(i))out.add("unknown");return out;}
   __COMPLETE__
+  __REWARD_ELIGIBILITY__
   __GUIDANCE__
  }
  static Exam.Run exam(String primitive,String... proofs){Exam.Run r=new Exam.Run();r.definition=new Definition(primitive,List.of(proofs));return r;}
@@ -112,6 +129,14 @@ public class ExamCompletionProbe {
    check(r.id.equals(m.plugin.config.values.get(Manager.circleProof(p.id)))&&m.announcements==1&&m.plugin.config.writes==0&&m.applications==0);
   });
   test("first clear creates one reward and evidence",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);m.complete(r);check(m.plugin.config.writes==1&&m.applications==1&&m.plugin.exams.count==1);m.complete(r);check(m.plugin.config.writes==1&&m.plugin.exams.count==1);});
+  if(__HAS_RELIC__)test("first boss relic has its own durable slot even after the ordinary daily cap",()->{
+   Player p=new Player();Manager m=manager(p);Run r=run(p);r.site.id="synthetic_relic";
+   m.plugin.config.values.put(Manager.ROOT+".claimed."+p.id+"."+r.site.id,m.day());
+   m.complete(r);m.complete(r);
+   Receipt receipt=m.receipt(p.id,r.site.id);
+   check(m.plugin.config.writes==1&&Boolean.TRUE.equals(receipt.get("relic-only"))&&"Synthetic relic".equals(receipt.get("relic")));
+   check(Integer.valueOf(0).equals(receipt.get("emeralds")));
+  });
   test("pending older reward does not swallow new examination",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);m.plugin.config.receipts.put(Manager.ROOT+".receipts."+p.id+"."+r.site.id,Map.of("run","older"));m.complete(r);check(m.plugin.config.writes==0&&m.plugin.exams.count==1);});
   test("claiming an older reward cannot certify a new exam",()->{Player p=new Player();Manager m=manager(p);m.applyCompletion(p,"synthetic_crypt",Map.of("run","previous"));check(m.plugin.exams.count==0);});
   test("partial participation still gets original reward but no full-clear certificate",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);r.roomAttendance.put(0,Set.of());r.attendance.put(p.id,2);m.complete(r);check(m.plugin.config.writes==1&&m.plugin.exams.count==0);});
@@ -119,6 +144,7 @@ public class ExamCompletionProbe {
   test("bystander cannot certify or receive rewards",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);r.attendance.put(p.id,0);m.complete(r);check(m.plugin.config.writes==0&&m.plugin.exams.count==0);});
   test("old dungeon start cannot satisfy a later exam",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);r.started=50;m.complete(r);check(m.plugin.config.writes==1&&m.plugin.exams.count==0);});
   test("expired exam cannot gain proof",()->{Player p=new Player();Manager m=manager(p);m.plugin.exams.active.expires=1;m.complete(run(p));check(m.plugin.exams.count==0);});
+  __BEACON_CASES__
   test("unknown start is rejected",()->{Player p=new Player();Manager m=manager(p);Run r=run(p);r.started=0;m.complete(r);check(m.plugin.exams.count==0);});
   for(String state:List.of("cancelled","interrupted","submitted","ready"))test("terminal exam stays "+state,()->{Player p=new Player();Manager m=manager(p);m.plugin.exams.active.state=state;m.complete(run(p));check(m.plugin.exams.count==0&&m.plugin.exams.active.state.equals(state));});
   test("survey is transport durable",()->check(Exam.durableRecord(exam("contract_record","survey"))));
@@ -145,8 +171,23 @@ public class ExamCompletionProbe {
  }
 }
 '''
+    beacon_cases = r'''
+  test("chapter briefing and camp attendance alone cannot grant a reward",()->{
+   Player p=new Player();Manager m=manager(p);Run r=new Run();r.beacon=new BeaconExpedition.Progress(2);r.stage=r.stages();
+   r.attendance.put(p.id,2);r.roomAttendance.put(0,Set.of(p.id));r.roomAttendance.put(3,Set.of(p.id));
+   m.complete(r);check(m.plugin.config.writes==0&&m.plugin.exams.count==0);
+  });
+  test("chapter combat attendance uses actual last stage and bound material value",()->{
+   Player p=new Player();Manager m=manager(p);Run r=new Run();r.beacon=new BeaconExpedition.Progress(2);r.stage=r.stages();
+   r.attendance.put(p.id,1);r.roomAttendance.put(5,Set.of(p.id));m.complete(r);
+   var receipt=m.plugin.config.receipts.values().iterator().next();
+   check(receipt.get("bossParticipant").equals(true)&&receipt.get("count").equals(3)&&m.plugin.exams.count==0);
+  });
+''' if eligibility else ""
     generated = template.replace("__COMPLETE__", complete).replace("__DURABLE__", durable).replace("__PROOF__", proof).replace("__NATIVE__", native).replace("__LIFECYCLE__", lifecycle).replace("__GUIDANCE__", guidance)
     generated = generated.replace("__HAS_CIRCLE__", str("grantCircle" in complete).lower())
+    generated = generated.replace("__HAS_RELIC__", str("SiteRewardPolicy.relicEligible(" in complete).lower())
+    generated=generated.replace("__REWARD_ELIGIBILITY__",eligibility).replace("__BEACON_CASES__",beacon_cases)
     args.output.mkdir(parents=True, exist_ok=False)
     source = args.output / "ExamCompletionProbe.java"
     source.write_text(generated, encoding="utf-8")

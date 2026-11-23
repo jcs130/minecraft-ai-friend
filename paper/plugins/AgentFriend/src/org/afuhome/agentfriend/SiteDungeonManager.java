@@ -23,6 +23,7 @@ import org.bukkit.event.entity.*;
 import org.bukkit.event.inventory.*;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -34,8 +35,11 @@ import org.bukkit.projectiles.ProjectileSource;
  * eligible visitor in that encounter, independently of their persistent RPG party. */
 final class SiteDungeonManager implements Listener {
     private static final String ROOT="site-dungeons",TAG="afu_site_dungeon",SHOT_TAG="afu_site_projectile";
+    private static final String ESCORT_TAG = "qd_lost_beacon_escort";
+    private static final double SHOCK_RADIUS = 4.0, SHOCK_DAMAGE = 7.0;
     private static final int GLOBAL_MOBS=48,PARTY_LIMIT=40,HISTORY_LIMIT=256,MAX_FAILURES=3;
     private static final long REJOIN_MS=300_000,TIMEOUT_MS=1_800_000;
+    private static final long RETURN_DELAY_MS=30_000;
     private static final Gson JSON=new Gson();
     private record BossSkill(EntityType type,String name,DungeonEnemyMoves.Move move) { }
     private static final Map<String,BossSkill> BOSS_SKILLS=Map.of(
@@ -66,6 +70,12 @@ final class SiteDungeonManager implements Listener {
     }
     private static final class Run {
         final Site site;String id=UUID.randomUUID().toString();final Mode mode;
+        final BeaconLayout layout;
+        BeaconExpedition.Progress beacon;
+        UUID escort, boss;
+        long escortDeadline, nextShock;
+        int beaconPromptStage = -1, shockCount;
+        Shock shock;
         final Set<UUID> party=new LinkedHashSet<>();final Map<UUID,Integer> attendance=new HashMap<>();
         final Set<UUID> declined=new LinkedHashSet<>();
         final Set<UUID> roomParticipants=new LinkedHashSet<>();
@@ -73,27 +83,141 @@ final class SiteDungeonManager implements Listener {
         int attempt,resets,failures;String pauseReason="",lastResetReason="";long lastResetAt,retryReadyAt;
         Location checkpoint;int checkpointRoom=1;boolean retryLoading,storageFault;
         boolean altarTactics, enemyMoves;
+        EchoCitadel.Progress echo;
         AltarPoison poison;
         final Map<UUID,DungeonWaveCatalog.Enemy> mobs=new LinkedHashMap<>();final Set<Chunk> held=new HashSet<>();
         final Map<UUID,Long> hits=new HashMap<>();
         int stage;String phase="muster",fault="";long started=System.currentTimeMillis(),readyAt=started+10_000,pausedAt,faultPausedMillis,storageRetryAt;int storageRetryAttempts;boolean invalid;
-        Run(Site site,Mode mode){this.site=site;this.mode=mode;}
-        Room room(){return site.rooms.get(Math.min(stage,site.rooms.size()-1));}
+        Run(Site site, Mode mode) { this(site, mode, null); }
+        Run(Site site, Mode mode, BeaconLayout layout) {
+            this.site = site;
+            this.mode = mode;
+            this.layout = layout;
+            if (layout != null) beacon = BeaconExpedition.Progress.fresh();
+        }
+        int stages() { return beacon == null ? site.rooms.size() : BeaconExpedition.STAGES; }
+        Room roomAt(int index) { return site.rooms.get(beacon == null ? index : beacon.stop(index).ordinal()); }
+        Room room() { return roomAt(Math.min(stage, stages() - 1)); }
     }
-    private record Menu(String site,boolean pendingReward){}
+    private record EntryMember(UUID id,String name,String blocker,List<String> missing){}
+    private record EntryOffer(UUID token,long expires,String site,String action,String difficulty,List<EntryMember> roster){}
+    private record EntryPermit(String site,long expires){}
+    private record Menu(String site,boolean pendingReward,EntryOffer offer,Map<Integer,String> choices){
+        Menu(String site,boolean pendingReward){this(site,pendingReward,null,Map.of());}
+        Menu(String site,boolean pendingReward,EntryOffer offer){this(site,pendingReward,offer,Map.of());}
+    }
+    private final Map<UUID,EntryOffer> entryOffers=new HashMap<>();
+    private final Map<UUID,EntryPermit> entryPermits=new HashMap<>();
+    private record BeaconLayout(Site site, Map<String, BeaconExpedition.Point> markers, BeaconExpedition.Point refuge) {}
+    private record Shock(Location center, long resolvesAt) {}
     private record Shot(Run run,long expires){}
     private static final class StorageUnavailable extends IllegalArgumentException {
         StorageUnavailable(Exception cause){super("data_unavailable",cause);}
     }
     private final AgentFriendPlugin plugin;
     private Map<String,Site> sites=Map.of();
+    private BeaconLayout beaconLayout;
     Set<String> configuredSiteIds(){return Set.copyOf(sites.keySet());}
     private record BuildingAreas(ProtectionArea envelope,List<ProtectionArea> pieces) {}
     private Map<String,BuildingAreas> protectionAreas=Map.of();
     private Map<String,DungeonEntrance> approaches=Map.of();
-    private List<Integer> entry(Site site){var approach=approaches.get(site.id);return approach==null?site.entry:approach.entry();}
-    private String routeHint(Site site){var approach=approaches.get(site.id);return approach==null?site.hint:approach.hint();}
+    private record GroundMuster(DungeonEntrance entrance, ProtectionArea platform) {}
+    private Map<String,GroundMuster> groundMusters=Map.of();
+    private DungeonEntrance approach(Site site){var ground=groundMusters.get(site.id);return ground==null?approaches.get(site.id):ground.entrance();}
+    private List<Integer> entry(Site site){var approach=approach(site);return approach==null?site.entry:approach.entry();}
+    private String routeHint(Site site){var approach=approach(site);return approach==null?site.hint:approach.hint();}
+    private World entryWorld(Site site){var ground=groundMusters.get(site.id);return ground==null?Bukkit.getWorld(site.world):ground.platform().world();}
+    private List<Integer> combatEntry(Site site){var first=site.rooms.getFirst();return site.entry.isEmpty()||!first.contains(point(Bukkit.getWorld(site.world),site.entry))
+            ?List.of(first.x,first.y,first.z):site.entry;}
+    private DungeonEntrance.Station station(Site site){
+        var approach=approach(site);
+        return approach==null?null:approach.station();
+    }
+    private boolean atStation(Site site,Location at){
+        var station=station(site);
+        return station!=null&&at.getWorld()==entryWorld(site)
+                &&station.contains(at.getBlockX(),at.getBlockY(),at.getBlockZ());
+    }
+    private boolean atFirstRoom(Site site,Location at){
+        Room first=site.rooms.getFirst();
+        return site.contains(at)&&first.contains(at)&&(station(site)==null
+                || !atStation(site,at)&&at.getY()>=first.y-.6);
+    }
+    private boolean atReturnPoint(Site site,Location at){
+        if(station(site)==null||!site.contains(at)||atStation(site,at)||belowEncounter(site,at))return false;
+        return groundMusters.containsKey(site.id)||site.rooms.stream().anyMatch(room->room.contains(at)&&at.getY()>=room.y-.6);
+    }
+    private boolean canReturn(Site site,Player p){
+        return playing(p)&&!plugin.isDowned(p)&&!p.isInsideVehicle()&&own(p)==null
+                &&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p)&&atReturnPoint(site,p.getLocation());
+    }
+    private record ScheduledReturn(String site,String run,long dueAt) {}
+    private final Map<UUID,ScheduledReturn> scheduledReturns=new HashMap<>();
+    private final Set<UUID> passages=new HashSet<>();
+    private String returnPath(UUID id){return ROOT+".ground-returns."+id;}
+
+    private void restoreReturn(Player p){
+        var row=plugin.getConfig().getConfigurationSection(returnPath(p.getUniqueId()));
+        if(row==null)return;
+        String site=row.getString("site",""),run=row.getString("run","");long due=row.getLong("dueAt");
+        if(groundMusters.containsKey(site)&&!run.isEmpty()&&due>0)scheduledReturns.put(p.getUniqueId(),new ScheduledReturn(site,run,due));
+    }
+    private void clearReturn(UUID id,ScheduledReturn scheduled){
+        String path=returnPath(id);
+        if(scheduled.run().equals(plugin.getConfig().getString(path+".run")))atomic(()->plugin.getConfig().set(path,null));
+        scheduledReturns.remove(id,scheduled);
+    }
+    private void updateReturns(long now){
+        for(var entry:new ArrayList<>(scheduledReturns.entrySet())){
+            UUID id=entry.getKey();var scheduled=entry.getValue();var site=sites.get(scheduled.site());var p=ResidentCli.find(id);
+            if(p==null||!p.isOnline()){scheduledReturns.remove(id,scheduled);continue;}
+            if(site==null||!groundMusters.containsKey(site.id)||!atReturnPoint(site,p.getLocation())||own(p)!=null){clearReturn(id,scheduled);continue;}
+            long left=scheduled.dueAt()-now;
+            if(left>0){
+                p.sendActionBar(net.kyori.adventure.text.Component.text("已通关 · "+((left+999)/1000)+" 秒后返回地面 · 奖励已保留"));
+                continue;
+            }
+            if(!canReturn(site,p)||passages.contains(id))continue;
+            // Consume the exact completed run before dispatch; a canceled teleport leaves the manual exit available.
+            clearReturn(id,scheduled);
+            try{stationPassage(p,site,true,true);}
+            catch(IllegalArgumentException failure){result(p,"exit",site.id,failure.getMessage());}
+        }
+    }
+    private void returnGuidance(Map<String,Object> fields,Site site,Player p){
+        if(site==null||!canReturn(site,p))return;
+        var scheduled=scheduledReturns.get(p.getUniqueId());
+        var guide=new LinkedHashMap<String,Object>(Map.of("command","/mycli dungeon exit "+site.id,
+                "destination",station(site).name(),"position",entry(site),"world",entryWorld(site).getName(),"manaCost",0));
+        if(scheduled!=null&&scheduled.site().equals(site.id))guide.put("autoReturnAt",scheduled.dueAt());
+        fields.put("returnToGround",guide);
+    }
+    private void offerReturn(Site site,Player p){
+        if(!canReturn(site,p))return;
+        p.sendMessage(net.kyori.adventure.text.Component.text("[免费返回地面入口] "+station(site).name(),
+                net.kyori.adventure.text.format.NamedTextColor.AQUA)
+                .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/mycli dungeon exit "+site.id)));
+    }
+    private boolean belowEncounter(Site site,Location at){
+        return station(site)!=null&&at.getY()<site.rooms.stream().mapToInt(Room::y).min().orElseThrow()-.6;
+    }
+    private static Location point(World world,List<Integer> xyz){
+        return new Location(world,xyz.get(0)+.5,xyz.get(1),xyz.get(2)+.5);
+    }
+    private Map<String,Object> stationGuide(Site site){
+        var station=station(site);
+        if(station==null)return Map.of();
+        var first=site.rooms.getFirst();var relic=DungeonRelics.at(site.id);
+        var guide=new LinkedHashMap<String,Object>(Map.of("world",entryWorld(site).getName(),"name",station.name(),"landing",entry(site),"board",station.board(),
+                "button",station.button(),"upperLanding",combatEntry(site),"firstRoom",List.of(first.x,first.y,first.z),
+                "challengeButton",relic==null?List.of():List.of(relic.x(),relic.y(),relic.z()),
+                "enterCommand","/mycli dungeon enter "+site.id,"returnCommand","/mycli dungeon exit "+site.id));
+        if(!station.facilities().isEmpty())guide.put("facilities",station.facilities());
+        return guide;
+    }
     private boolean protectedApproachLanding(Site site,Location at){
+        var muster=groundMusters.get(site.id);
+        if(muster!=null)return muster.platform().contains(at.clone().add(0,-1,0))&&muster.platform().contains(at.clone().add(0,1,0));
         if(!approaches.containsKey(site.id))return true;
         var building=protectionAreas.get(site.id);if(building==null)return false;
         for(int dy=-1;dy<=1;dy++){Location part=at.clone().add(0,dy,0);if(building.pieces.stream().noneMatch(area->area.contains(part)))return false;}
@@ -111,7 +235,7 @@ final class SiteDungeonManager implements Listener {
     /** Read only current runtime facts. Does not load chunks, enroll, resume,
      * clear an expired task, save a checkpoint or grant completion evidence. */
     Map<String,Object> advice(Player p,String id){
-        Site s=sites.get(id);if(s==null)return DungeonAdvice.evaluate(id,id,Map.of("configured",false));
+        Site s=siteView(id);if(s==null)return DungeonAdvice.evaluate(id,id,Map.of("configured",false));
         Run run=runs.get(id),mine=own(p);Room first=s.rooms.getFirst();long now=System.currentTimeMillis();
         Map<String,Object> facts=new LinkedHashMap<>();
         var loadout=DungeonLoadout.missing(p);facts.put("loadoutReady",loadout.isEmpty());facts.put("missingLoadout",String.join("、",loadout));
@@ -124,7 +248,18 @@ final class SiteDungeonManager implements Listener {
         }
         facts.put("otherActivity",mine!=null&&mine!=run||plugin.dungeonParticipant(p)&&mine==null||plugin.pvpParticipant(p));
         facts.put("occupied",run!=null);facts.put("joinable",run!=null&&!run.phase.equals("returning")&&run.fault.isEmpty()&&run.party.size()<PARTY_LIMIT);
-        facts.put("atFirstRoom",first.contains(p.getLocation())&&s.contains(p.getLocation()));facts.put("atSite",s.contains(p.getLocation()));
+        facts.put("atFirstRoom",atFirstRoom(s,p.getLocation()));facts.put("atSite",s.contains(p.getLocation()));
+        var station=station(s);
+        if(station!=null){
+            facts.put("stationName",station.name());facts.put("atStation",atStation(s,p.getLocation()));
+            facts.put("stationButton",station.button().toString());
+            if(p.getWorld()==entryWorld(s)){
+                var pad=point(p.getWorld(),entry(s));
+                facts.put("nearStation",Math.abs(p.getLocation().getY()-pad.getY())<=4
+                        &&p.getLocation().distanceSquared(pad)<=4096);
+                facts.put("stationLanding",entry(s).toString());
+            }
+        }
         var expedition=DungeonExpeditions.site(s.expedition);
         if(entry(s).isEmpty()&&expedition!=null)facts.put("nearApproach",DungeonArrival.nearApproach(
                 p.getWorld().getName(),p.getLocation().getX(),p.getLocation().getZ(),s.world,
@@ -142,6 +277,7 @@ final class SiteDungeonManager implements Listener {
             facts.put("admissionReason",reason);facts.put("admissionHint",hint);facts.put("admissionCommand",command);
         }
         Map<String,Object> out=DungeonAdvice.evaluate(id,s.name,facts);var prep=DungeonAdvice.preparation(id,s.minimumLevel);
+        returnGuidance(out,s,p);
         out.put("recommendedLevel",prep.recommendedLevel());out.put("minimumLevel",s.conquestFloor>0?s.minimumLevel:1);
         out.put("playerCombatLevel",level);out.put("recommendedEquipment",prep.equipment());out.put("recommendedParty",prep.party());
         out.put("requiredEquipment",DungeonLoadoutRules.REQUIREMENTS);out.put("missingEquipment",loadout);
@@ -156,9 +292,26 @@ final class SiteDungeonManager implements Listener {
         List<String> nativeEnemies=s.rooms.stream().flatMap(room->room.enemies.stream()).map(DungeonWaveCatalog.Enemy::mythic).filter(mob->mob!=null&&!mob.isEmpty()).distinct().toList();
         if(!nativeEnemies.isEmpty()){out.put("nativeEnemies",nativeEnemies);out.put("nativeContent",s.conquestFloor>0?"普通难度也启用Mythic首领机制":"冒险与末日启用Mythic精英；普通保留原版战斗");}
         String hint=routeHint(s);if(out.get("state").equals("approach")&&!hint.isBlank())out.put("nextAction",out.get("nextAction")+" 路线："+(hint.length()>180?hint.substring(0,180)+"…":hint));
+        if(station!=null)out.put("station",stationGuide(s));
         if(run!=null&&run.party.contains(p.getUniqueId())&&Set.of("moving","fighting").contains(out.get("state"))&&!run.room().hint.isBlank()){
             out.put("routeHint",run.room().hint);
             out.put("nextAction",out.get("nextAction")+" 路线："+run.room().hint);
+        }
+        if (run != null && run.beacon != null && run.party.contains(p.getUniqueId())
+                && run.fault.isEmpty() && run.pausedAt == 0 && run.phase.equals("moving") && run.room().enemies.isEmpty()) {
+            out.put("state", "objective");
+            out.put("reason", "BEACON_OBJECTIVE");
+            out.put("nextAction", beaconObjective(run));
+            out.put("nextCommand", BeaconExpedition.STATUS + " --json");
+        }
+        if (beaconLayout != null && id.equals(BeaconExpedition.SITE) && run != null && run.beacon == null && !run.fault.isEmpty()) {
+            if (canRejoinStorageFault(p, run)) {
+                out.put("nextAction", "你是旧场次参战者。回到原遗迹范围内，用 resume 核对并续接已保存进度。");
+                out.put("nextCommand", run.site.contains(p.getLocation()) ? "/mycli dungeon resume" : "/mycli dungeon travel " + id);
+            } else {
+                out.put("nextAction", "第一层有原队伍的旧攻略存档，等原参战者续接。可以先改选其他遗迹。");
+                out.put("nextCommand", "/mycli dungeon list");
+            }
         }
         out.put("difficulty",List.of(Map.of("id","normal","label","普通","stars",prep.stars(),"healthMultiplier",1.0,"damageMultiplier",1.0),Map.of("id","adventure","label","冒险","stars",Math.min(5,prep.stars()+1),"healthMultiplier",1.5,"damageMultiplier",1.25),Map.of("id","apocalypse","label","末日","stars",5,"healthMultiplier",2.1,"damageMultiplier",1.6)));
         return out;
@@ -168,7 +321,7 @@ final class SiteDungeonManager implements Listener {
         this.plugin=plugin;
         if(!new File(plugin.getDataFolder(),"dungeons.yml").exists())plugin.saveResource("dungeons.yml",false);
         reload();plugin.getServer().getPluginManager().registerEvents(this,plugin);
-        for(World world:Bukkit.getWorlds())for(Entity e:world.getEntities())if(owned(e)||e.getScoreboardTags().contains(SHOT_TAG))e.remove();
+        for(World world:Bukkit.getWorlds())for(Entity e:world.getEntities())if(owned(e)||e.getScoreboardTags().contains(SHOT_TAG)||isEscort(e))e.remove();
         restore();new DungeonIntegrity(plugin);Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
     }
     private static void require(boolean yes,String reason){if(!yes)throw new IllegalArgumentException(reason);}
@@ -246,8 +399,35 @@ final class SiteDungeonManager implements Listener {
                 .anyMatch(site -> site.pieces.stream().anyMatch(piece -> WildRuinResets.overlaps(piece, area)));
     }
     List<String> ids(){return new ArrayList<>(sites.keySet());}
+    JsonObject gatheringRoute(Player player, String id) {
+        Site target = sites.get(id);
+        if (target == null) return null;
+        Room first = target.rooms.getFirst();
+        String hint = routeHint(target);
+        JsonObject route = WorldActivityGuide.siteRoute(id, first.name + "（" + target.world + " "
+                + first.x + "," + first.y + "," + first.z + "）",
+                hint.length() > 180 ? hint.substring(0, 180) + "…" : hint, advice(player, id));
+        route.add("firstRoomPosition", JSON.toJsonTree(Map.of(
+                "world", target.world, "x", first.x, "y", first.y, "z", first.z)));
+        List<Integer> approach = entry(target);
+        if (!approach.isEmpty()) route.add("configuredApproach", JSON.toJsonTree(Map.of(
+                "world", entryWorld(target).getName(), "x", approach.get(0), "y", approach.get(1), "z", approach.get(2))));
+        return route;
+    }
     boolean activityArea(Location at){return protectionArea(at)!=null;}
+    boolean publicMusterStorage(Block block) {
+        boolean furnace=block.getType()==Material.FURNACE;
+        if(!furnace&&block.getType()!=Material.CHEST)return false;
+        Location at=block.getLocation();
+        for(var muster:groundMusters.values()) {
+            if(muster.platform().contains(at))
+                return muster.entrance().station().isPublicStorage(
+                        List.of(at.getBlockX(),at.getBlockY(),at.getBlockZ()),furnace);
+        }
+        return false;
+    }
     String editDomain(Location at) {
+        for (var station : groundMusters.entrySet())if(station.getValue().platform().contains(at))return "site-"+station.getKey();
         for (var item : protectionAreas.entrySet()) {
             BuildingAreas building = item.getValue();
             if (building.envelope.contains(at) && building.pieces.stream().anyMatch(piece -> piece.contains(at)))
@@ -260,6 +440,7 @@ final class SiteDungeonManager implements Listener {
         Site site = sites.get(id);
         BuildingAreas building = protectionAreas.get(id);
         if (!ready || site == null || building == null || blockedCheckpoints.contains(id) || campRescueLatch(at.getBlock())) return false;
+        if (atStation(site,at)) return false;
         if (!canUseSite(id, player)) return false;
         // Piece zero is the broad combat/search buffer. Authored structure pieces define the
         // shell, including shared seams. A site without pieces opens just its combat rooms.
@@ -274,7 +455,13 @@ final class SiteDungeonManager implements Listener {
         return run == null || !run.invalid && run.pausedAt == 0 && run.fault.isEmpty() && !run.retryLoading
                 && !run.phase.equals("returning") && !run.phase.equals("retrying") && run.party.contains(player.getUniqueId());
     }
+    boolean activeBuilder(String id, Player player) {
+        Run run = runs.get(id);
+        return run != null && player.getGameMode() == GameMode.SURVIVAL && run.site.contains(player.getLocation())
+                && canUseSite(id, player);
+    }
     ProtectionArea protectionArea(Location at) {
+        for (var station : groundMusters.values())if(station.platform().contains(at))return station.platform();
         for(BuildingAreas building:protectionAreas.values()){
             if(!building.envelope.contains(at))continue;
             for(ProtectionArea area:building.pieces)if(area.contains(at))return area;
@@ -293,7 +480,7 @@ final class SiteDungeonManager implements Listener {
     TrialRescueManager.Team rescueTeam(UUID id){
         Run r=runs.values().stream().filter(run->run.party.contains(id)).findFirst().orElse(null);if(r==null)return null;
         return new TrialRescueManager.Team(rescueKey(r),Set.copyOf(r.party),r.site::contains,r.pausedAt>0||!r.fault.isEmpty(),
-                ()->r.phase.equals("fighting")&&r.mobs.isEmpty()&&!r.invalid,
+                ()->r.phase.equals("fighting")&&r.mobs.isEmpty()&&!r.invalid&&(r.echo==null||!r.echo.hasNext(r.stage)),
                 ()->defeated(r),checkpoint(r));
     }
     private Location checkpoint(Run r){return r.checkpoint==null?r.site.rooms.getFirst().center(Bukkit.getWorld(r.site.world)):r.checkpoint.clone();}
@@ -315,14 +502,14 @@ final class SiteDungeonManager implements Listener {
             fields.put("remainingSeconds",Math.max(0,(TIMEOUT_MS-activeMillis(run.started,run.faultPausedMillis,now)+999)/1000));
         }else if(!outcome.isEmpty()){
             fields.put("endReason",outcome.get("reason"));fields.put("endedAt",outcome.get("endedAt"));
-            fields.put("exitPolicy","standing_stay_downed_recover");
+            fields.put("exitPolicy",outcome.getOrDefault("exitPolicy","standing_stay_downed_recover"));
         }
     }
     private void defeated(Run r){
         if(runs.get(r.site.id)!=r||r.phase.equals("retrying")||!r.fault.isEmpty())return;
         int before=r.failures;String phase=r.phase;
         try{
-            if(r.stage<r.site.rooms.size())r.failures++;
+            if(r.stage<r.stages())r.failures++;
             if(r.failures>=MAX_FAILURES){end(r,"attempts_exhausted");return;}
             clean(r);r.phase="retrying";r.retryReadyAt=System.currentTimeMillis()+10_000;r.pausedAt=0;r.pauseReason="";persist();
             returnToCheckpoint(r);
@@ -347,12 +534,26 @@ final class SiteDungeonManager implements Listener {
             if(safe==null){r.fault="checkpoint_unavailable";r.pausedAt=System.currentTimeMillis();r.pauseReason="runtime_error";persist();notice(r,"§c存档点暂不安全，场次已暂停、次数不再减少；不要拆建筑，联系服主检查后 /mycli dungeon resume。");return;}
             r.retryReadyAt=System.currentTimeMillis()+10_000;persist();
             if(plugin.trialRescue()!=null)plugin.trialRescue().releaseTeam(rescueKey(r),safe);
-            notice(r,r.stage>=r.site.rooms.size()?"§a战斗已全部完成，已在最后存档点恢复；未扣机会，系统会按真实参战记录结算，无需返回首室。":"§e【存档点续关】本场第"+r.failures+"次战败，剩余"+(MAX_FAILURES-r.failures)+"次机会；已回第"+r.checkpointRoom+"室存档点，10秒后可继续当前段。已清房间保留，不必跑回主城；背包装备保留。");
+            notice(r,r.stage>=r.stages()?"§a战斗已全部完成，已在最后存档点恢复；未扣机会，系统会按真实参战记录结算，无需返回首室。":"§e【存档点续关】本场第"+r.failures+"次战败，剩余"+(MAX_FAILURES-r.failures)+"次机会；已回第"+r.checkpointRoom+"室存档点，10秒后可继续当前段。已清房间保留，不必跑回主城；背包装备保留。");
             }catch(RuntimeException failure){r.fault="data_unavailable";r.pauseReason="runtime_error";r.pausedAt=System.currentTimeMillis();plugin.getLogger().log(java.util.logging.Level.WARNING,"Checkpoint return paused: "+r.site.id,failure);notice(r,"§c续关结果暂不可确认，场次保留，先查询 dungeon status；不要重复开场，请联系服主。");}
         });});
     }
-    private boolean bossLocked(Run r){return r.stage==r.site.rooms.size()-1&&Set.of("moving","fighting","retrying").contains(r.phase);}
-    private boolean bossRoom(Run r,Location at){return at.getWorld()!=null&&at.getWorld().getName().equals(r.site.world)&&r.site.rooms.getLast().contains(at);}
+    private boolean echoAvailable(Site site){
+        return site.id.equals(EchoCitadel.SITE)&&site.world.equals("aincrad")
+            &&plugin.getConfig().getBoolean("dungeon-encounters.void-citadel",false)
+            &&plugin.dungeonEnemyMoves().enabled()&&echoGeometry(site);
+    }
+    private static boolean echoGeometry(Site site){
+        return site.rooms.stream().map(room->List.of(room.x,room.y,room.z)).toList().equals(EchoCitadel.CENTERS);
+    }
+    private EchoCitadel.Wave echoWave(Run r,int wave){
+        return EchoCitadel.wave(r.stage,wave,r.mode.id,r.room().enemies);
+    }
+    private boolean canSpawn(int count){
+        return runs.values().stream().mapToInt(run->run.mobs.size()).sum()+count<=GLOBAL_MOBS;
+    }
+    private boolean bossLocked(Run r){return r.stage==r.stages()-1&&Set.of("moving","fighting","retrying").contains(r.phase);}
+    private boolean bossRoom(Run r,Location at){return at.getWorld()!=null&&at.getWorld().getName().equals(r.site.world)&&r.roomAt(r.stages()-1).contains(at);}
     private boolean roomVisitor(Player p){return plugin.isObserver(p)||p.getGameMode()==GameMode.SPECTATOR||p.getGameMode()==GameMode.CREATIVE&&plugin.trustedBlockEditor(p);}
     private java.util.stream.Stream<Player> bossIntruders(Run r){return ResidentCli.online().stream().filter(p->p.getWorld()==Bukkit.getWorld(r.site.world)).filter(p->!roomVisitor(p)&&!r.party.contains(p.getUniqueId())&&bossRoom(r,p.getLocation()));}
     private void lockHint(Player p,String text){long now=System.currentTimeMillis();if(now-lockHints.getOrDefault(p.getUniqueId(),0L)<5000)return;lockHints.put(p.getUniqueId(),now);p.sendMessage("§e[boss_room_locked] "+text+" 可改选其他地点：/mycli dungeon list");}
@@ -386,20 +587,24 @@ final class SiteDungeonManager implements Listener {
             });});return;
         }
     }
-    @EventHandler public void forgetRoomHint(PlayerQuitEvent e){lockHints.remove(e.getPlayer().getUniqueId());}
+    @EventHandler public void forgetRoomHint(PlayerQuitEvent e){
+        UUID id=e.getPlayer().getUniqueId();lockHints.remove(id);entryOffers.remove(id);entryPermits.remove(id);
+    }
     private boolean playing(Player p){return p!=null&&p.isOnline()&&!p.isDead()&&p.getGameMode()==GameMode.SURVIVAL;}
     private String entryProblem(Player p,Run r,Location at){
         if(!playing(p)||roomVisitor(p)||plugin.isDowned(p))return "not_survival_or_observer";
-        if(!r.site.contains(at))return "walk_to_site";
+        if(!r.site.contains(at)||atStation(r.site,at))return "walk_to_site";
+        if(!r.attendance.containsKey(p.getUniqueId())&&belowEncounter(r.site,at))return "walk_to_station";
         Run other=own(p);DungeonManager trial=plugin.dungeon();
         if((other!=null&&other!=r)||(trial!=null&&trial.isParticipant(p))||plugin.pvpParticipant(p))return "already_in_activity_or_not_survival";
         if(!r.fault.isEmpty()||r.phase.equals("returning"))return "challenge_not_accepting";
         if(r.declined.contains(p.getUniqueId()))return "left_this_visit";
+        if(r.beacon!=null&&bossLocked(r)&&!r.attendance.containsKey(p.getUniqueId()))return "boss_room_locked";
         if(!r.party.contains(p.getUniqueId())&&r.party.size()>=PARTY_LIMIT)return "party_full";
         if(!r.attendance.containsKey(p.getUniqueId())&&r.attendance.size()>=HISTORY_LIMIT)return "party_full";
         if(receipt(p.getUniqueId(),r.site.id)!=null)return "claim_previous_reward_first";
         try{conquestAdmission(p,r.site);}catch(IllegalArgumentException problem){return problem.getMessage();}
-        return DungeonLoadout.missing(p).isEmpty()?"":"equipment_required";
+        return r.attendance.containsKey(p.getUniqueId())||hasEntryPermit(p,r.site)||DungeonLoadout.missing(p).isEmpty()?"":"equipment_required";
     }
     /** The attendance map is the existing durable contribution history; party
      * contains only this encounter's current members. Leaving never erases work. */
@@ -407,10 +612,11 @@ final class SiteDungeonManager implements Listener {
         if(r.party.contains(p.getUniqueId()))return true;
         String problem=entryProblem(p,r,p.getLocation());
         if(!problem.isEmpty()){
-            if(!roomVisitor(p)&&r.site.contains(p.getLocation())&&!problem.equals("left_this_visit")){
+            if(!roomVisitor(p)&&r.site.contains(p.getLocation())&&!atStation(r.site,p.getLocation())
+                    &&!Set.of("left_this_visit","walk_to_station").contains(problem)){
                 long now=System.currentTimeMillis();if(now-lockHints.getOrDefault(p.getUniqueId(),0L)>=10_000){
                     lockHints.put(p.getUniqueId(),now);
-                    if(problem.equals("equipment_required"))p.sendMessage("§e[战备不足] 尚未自动参战："+String.join("、",DungeonLoadout.missing(p))+"。"+DungeonLoadoutRules.REQUIREMENTS+"；补齐后在遗迹内自动加入。"+DungeonLoadoutRules.SUPPLIES);
+                    if(problem.equals("equipment_required"))p.sendMessage("§e[战备不足] 尚未自动参战："+String.join("、",DungeonLoadout.missing(p))+"。可先补给，或用 /mycli dungeon join "+r.site.id+" 核对并确认入场。");
                     else p.sendMessage("§e[尚未参战] "+problem+"；/mycli dungeon info "+r.site.id+" 查询具体条件。");
                 }
             }
@@ -418,13 +624,14 @@ final class SiteDungeonManager implements Listener {
         }
         UUID id=p.getUniqueId();boolean known=r.attendance.containsKey(id);r.party.add(id);r.attendance.putIfAbsent(id,0);
         try{persist();}catch(RuntimeException failure){r.party.remove(id);if(!known)r.attendance.remove(id);throw failure;}
+        entryPermits.remove(id);
         p.sendMessage("§a【自动参战】已加入 "+r.site.name+" 当前挑战；无需组队或加入指令。随时可离开，已经完成的参战记录保留；回来自动续接。全队最多3次战败机会，靠近倒地队友可救援。");
         return true;
     }
     private void reconcile(Run r){
         Set<UUID> before=new LinkedHashSet<>(r.party),declinedBefore=new LinkedHashSet<>(r.declined);
         r.declined.removeIf(id->{Player p=ResidentCli.find(id);return p==null||!r.site.contains(p.getLocation());});
-        r.party.removeIf(id->{Player p=ResidentCli.find(id);return p==null||!r.site.contains(p.getLocation());});
+        r.party.removeIf(id->{Player p=ResidentCli.find(id);return p==null||!r.site.contains(p.getLocation())||atStation(r.site,p.getLocation());});
         if(!before.equals(r.party)||!declinedBefore.equals(r.declined)){
             try{persist();}catch(RuntimeException failure){r.party.clear();r.party.addAll(before);r.declined.clear();r.declined.addAll(declinedBefore);throw failure;}
         }
@@ -435,14 +642,27 @@ final class SiteDungeonManager implements Listener {
     private String label(Site site){return site.conquestFloor>0?"正式楼层攻略":site.outdoor?"野外据点讨伐":"遗迹地下城";}
     private void send(Player p,String prefix,Map<String,?> fields){
         Map<String,Object> data=new LinkedHashMap<>();data.put("schemaVersion",1);data.put("activityType","site_dungeon");
-        Site site=sites.get(Objects.toString(fields.get("id"),""));data.put("activityLabel",site==null?"遗迹远征":label(site));
+        Site site=siteView(Objects.toString(fields.get("id"),""));data.put("activityLabel",site==null?"遗迹远征":label(site));
         if(site!=null)data.put("setting",site.outdoor?"outdoor":"interior");data.put("commandRoot","/mycli dungeon");data.put("language","zh-CN");data.putAll(fields);data.put("recipient",p.getName());
         Map<String,Object> guide=site==null?Map.of():advice(p,site.id);
         if(!guide.isEmpty())data.put("guidance",guide);
         if(!guide.isEmpty()&&prefix.equals("MC_SITE_DUNGEON_RESULT")&&!Boolean.TRUE.equals(fields.get("success"))&&Set.of("walk_to_first_room","site_busy","site_cooldown","muster_closed","claim_previous_reward_first","conquest_profession_required","conquest_level_required","previous_floor_required").contains(fields.get("reason"))){
             data.put("primaryBlocker",guide.get("reason"));data.put("nextAction",guide.get("nextAction"));data.put("nextCommand",guide.get("nextCommand"));data.put("nextCommands",List.of(guide.get("nextCommand")));
         }
-        if(jsonOutput.get()){p.sendMessage(prefix+" "+JSON.toJson(data));return;}
+        if(jsonOutput.get()){
+            String line=prefix+" "+JSON.toJson(data);
+            if(line.length()>4000&&!guide.isEmpty()){
+                // Mineflayer's plain-text accessor clips a chat line at 4096 characters.
+                // Keep the receipt and next action together, trimming repeated reference data first.
+                var compact=new LinkedHashMap<String,Object>();
+                for(String key:List.of("state","reason","nextAction","nextCommand","retryAfterMs","missingEquipment","station","returnToGround"))
+                    if(guide.containsKey(key)&&!fields.containsKey(key)&&!(key.equals("station")&&fields.containsKey("arrival")))
+                        compact.put(key,guide.get(key));
+                data.put("guidance",compact);
+                line=prefix+" "+JSON.toJson(data);
+            }
+            p.sendMessage(line);return;
+        }
         if(prefix.equals("MC_SITE_DUNGEON_ITEM")){
             var prep=DungeonAdvice.preparation(site.id,site.minimumLevel);
             p.sendMessage("[地下城] "+site.name+" ("+site.id+") · "+DungeonAdvice.label(guide.get("state").toString())+" · 普通"+prep.stars()+"/5星，建议战斗Lv."+prep.recommendedLevel()+"；详情：/mycli dungeon info "+site.id);return;
@@ -450,13 +670,14 @@ final class SiteDungeonManager implements Listener {
         if(prefix.equals("MC_SITE_DUNGEON_LIST")){p.sendMessage("[提示] 空闲需本人到首室 start；active=false不是未开放。详情用 info <ID>，状态用 status <ID>。" );return;}
         if(prefix.equals("MC_SITE_DUNGEON_RESULT")){
             boolean success=Boolean.TRUE.equals(fields.get("success"));String action=Objects.toString(fields.get("action"),"");
-            String done=switch(action){case "start"->"已开启本次集结";case "join"->"已加入本次队伍";case "claim"->"奖励结算已保存";case "travel"->DungeonArrival.travelSuccess(site!=null&&!entry(site).isEmpty());case "resume"->"已处理恢复请求";case "leave"->"已退出本次场次";default->"操作已完成";};
+            String done=switch(action){case "start"->"已开启本次集结";case "join"->"已加入本次队伍";case "claim"->"奖励结算已保存";case "travel"->DungeonArrival.travelSuccess(site!=null&&!entry(site).isEmpty());case "resume"->"已处理恢复请求";case "leave"->"已退出本次场次";case "choose"->Objects.toString(fields.get("message"),"已保存本次选择");default->"操作已完成";};
             p.sendMessage("[地下城] "+(success?done:Objects.toString(fields.get("errorMessage"),"操作未完成"))+"（"+fields.get("reason")+"）。");
             if(!success&&!guide.isEmpty()&&Set.of("walk_to_first_room","site_busy","site_cooldown","muster_closed","claim_previous_reward_first","conquest_profession_required","conquest_level_required","previous_floor_required").contains(fields.get("reason"))){p.sendMessage("下一步："+guide.get("nextAction")+" 命令："+guide.get("nextCommand"));}
             return;
         }
         if(prefix.equals("MC_SITE_DUNGEON_STATE")&&!Boolean.TRUE.equals(fields.get("participant"))){
-            if("ended".equals(fields.get("lifecycle")))p.sendMessage("[地下城] 本人上场已结束（"+endLabel(Objects.toString(fields.get("endReason")))+"）；存档点救援已失效。存活者留在原地，请沿原路及时撤离。查询：/mycli dungeon status"+(site==null?"":" "+site.id));
+            if("ended".equals(fields.get("lifecycle")))p.sendMessage("[地下城] 本人上场已结束（"+endLabel(Objects.toString(fields.get("endReason")))+"）；存档点救援已失效。"
+                    +(fields.containsKey("returnToGround")?"可以免费回地面。":"查询：/mycli dungeon status"+(site==null?"":" "+site.id)));
             else p.sendMessage("[地下城] 当前未参加该场次，存档点救援未生效。选择地点：/mycli dungeon list");
             if(!guide.isEmpty())p.sendMessage("下一步："+guide.get("nextAction")+" 命令："+guide.get("nextCommand"));
             else if(fields.get("pendingRewardDetails") instanceof List<?> pending&&!pending.isEmpty()&&pending.getFirst() instanceof Map<?,?> reward)
@@ -498,13 +719,51 @@ final class SiteDungeonManager implements Listener {
     private void runResult(Player p,String action,String site,String run){
         result(p,action,site,"success",run==null||run.isBlank()?Map.of():Map.of("run",run));
     }
-    private boolean loadout(Player p,String action,Site site){
-        var missing=DungeonLoadout.missing(p);if(missing.isEmpty())return true;
-        send(p,"MC_SITE_DUNGEON_RESULT",Map.of("action",action,"id",site.id,"success",false,"reason","equipment_required",
-            "errorMessage","未满足入场战备，缺少："+String.join("、",missing),"missingEquipment",missing,
-            "nextAction",DungeonLoadoutRules.REQUIREMENTS+"，再开场或加入。", "nextCommand",DungeonLoadoutRules.SUPPLIES));
-        if(!jsonOutput.get())p.sendMessage("[战备] "+DungeonLoadoutRules.REQUIREMENTS+"，再开场或加入。补给："+DungeonLoadoutRules.SUPPLIES);
+    private boolean hasEntryPermit(Player p,Site site){
+        var permit=entryPermits.get(p.getUniqueId());
+        return permit!=null&&permit.site().equals(site.id)&&permit.expires()>System.currentTimeMillis();
+    }
+    private void permit(Site site,EntryMember member){
+        if(member.blocker().isEmpty()&&!member.missing().isEmpty())entryPermits.put(member.id(),new EntryPermit(site.id,System.currentTimeMillis()+180_000));
+    }
+    private EntryMember entryMember(Site site,Player p){
+        String blocker=musterAdmission(site,p);
+        return new EntryMember(p.getUniqueId(),p.getName(),blocker,blocker.isEmpty()&&!hasEntryPermit(p,site)?List.copyOf(DungeonLoadout.missing(p)):List.of());
+    }
+    private boolean reviewEntry(Player p,Site site,String action,String difficulty,List<EntryMember> roster,String confirmation){
+        long now=System.currentTimeMillis();
+        entryOffers.values().removeIf(offer->offer.expires()<=now);
+        entryPermits.values().removeIf(permit->permit.expires()<=now);
+        UUID actor=p.getUniqueId();
+        var offer=entryOffers.get(actor);
+        boolean same=offer!=null&&offer.site().equals(site.id)&&offer.action().equals(action)
+                &&offer.difficulty().equals(difficulty)&&offer.roster().equals(roster);
+        if(confirmation!=null&&same&&offer.token().toString().equals(confirmation)
+                ||confirmation==null&&roster.stream().allMatch(member->member.blocker().isEmpty()&&member.missing().isEmpty())){
+            entryOffers.remove(actor);return true;
+        }
+        if(!same){offer=new EntryOffer(UUID.randomUUID(),now+45_000,site.id,action,difficulty,List.copyOf(roster));entryOffers.put(actor,offer);}
+        String command=entryConfirmation(offer);
+        p.sendMessage("§e[遗迹集结] 尚未传送或开场。请核对战备，45 秒内可选择「确认入场」。");
+        for(EntryMember member:roster){
+            String message=entryDescription(member);
+            p.sendMessage("§e"+message);
+            Player affected=ResidentCli.find(member.id());
+            if(affected!=null&&!member.id().equals(actor)&&(!member.blocker().isEmpty()||!member.missing().isEmpty()))affected.sendMessage("§e[遗迹集结] "+message);
+        }
+        result(p,action,site.id,"confirmation_required",Map.of("requiresConfirmation",true,"confirmationId",offer.token().toString(),
+                "expiresAt",offer.expires(),"errorMessage","集结名单需要确认。只缺装备的队员可确认入场。","nextCommand",command,"nextCommands",List.of(command),
+                "equipmentWarnings",roster.stream().filter(member->!member.missing().isEmpty()).limit(8)
+                        .map(member->Map.of("name",member.name(),"missing",member.missing())).toList()));
+        if(!jsonOutput.get())openEntryReview(p,offer);
         return false;
+    }
+    private String entryConfirmation(EntryOffer offer){
+        return "/mycli dungeon "+offer.action()+" "+offer.site()+(offer.difficulty().isEmpty()?"":" "+offer.difficulty())+" --confirm "+offer.token();
+    }
+    private String entryDescription(EntryMember member){
+        if(!member.blocker().isEmpty())return member.name()+"："+member.blocker()+"；仍留在原地";
+        return member.name()+"："+(member.missing().isEmpty()?"战备就绪":"缺少 "+String.join("、",member.missing())+"；确认后仍可入场");
     }
     private void tell(Run r,String message){for(UUID id:r.party){Player p=ResidentCli.find(id);if(p!=null)p.sendMessage("§6【"+label(r.site)+"·"+r.site.name+"】§r "+message);}}
     private void notice(Run r,String message){
@@ -523,17 +782,17 @@ final class SiteDungeonManager implements Listener {
     }
     private List<String> missingRooms(Run r,UUID id){
         List<String> missing=new ArrayList<>();
-        for(int i=0;i<r.stage;i++)if(r.roomAttendance.containsKey(i)&&!r.roomAttendance.get(i).contains(id))missing.add((i+1)+"·"+r.site.rooms.get(i).name);
+        for(int i=0;i<r.stage;i++)if(r.roomAttendance.containsKey(i)&&!r.roomAttendance.get(i).contains(id))missing.add((i+1)+"·"+r.roomAt(i).name);
         return missing;
     }
     private List<String> unverifiedRooms(Run r){
         List<String> unknown=new ArrayList<>();
-        for(int i=0;i<r.stage;i++)if(!r.roomAttendance.containsKey(i))unknown.add((i+1)+"·"+r.site.rooms.get(i).name);
+        for(int i=0;i<r.stage;i++)if(!r.roomAttendance.containsKey(i))unknown.add((i+1)+"·"+r.roomAt(i).name);
         return unknown;
     }
     private Map<String,Object> attendanceState(Run r,UUID id){
         Map<String,Object> data=new LinkedHashMap<>();
-        data.put("attendance",r.attendance.getOrDefault(id,0));data.put("requiredRooms",r.site.rooms.size());
+        data.put("attendance",r.attendance.getOrDefault(id,0));data.put("requiredRooms",r.stages());
         data.put("currentRoomParticipated",r.roomParticipants.contains(id));data.put("missingRooms",missingRooms(r,id));
         data.put("unverifiedRooms",unverifiedRooms(r));return data;
     }
@@ -559,7 +818,7 @@ final class SiteDungeonManager implements Listener {
         String slot=siteRewardSlot(r,id,day());
         if(slot.equals("ready")||slot.equals("claimed"))return slot;
         if(!reason.equals("completed"))return "run_incomplete";
-        if(r.attendance.getOrDefault(id,0)==0)return "missing_participation";
+        if(!rewardEligible(r,id))return "missing_participation";
         return slot.equals("eligible")?"not_returned":slot;
     }
     private Map<String,Object> outcome(Run r,UUID id,String reason){
@@ -570,6 +829,11 @@ final class SiteDungeonManager implements Listener {
         data.putAll(checkpointState(r));
         data.put("lifecycle","ended");data.put("active",false);data.put("participant",false);data.put("rescueActive",false);data.put("exitPolicy","standing_stay_downed_recover");
         data.put("resets",r.resets);data.put("lastResetReason",r.lastResetReason);
+        if(r.echo!=null)data.put("encounterTiming",r.echo.timing());
+        if (r.beacon != null) {
+            data.put("chapter", r.beacon.summary());
+            data.put("exitPolicy", reason.equals("completed") ? "victory_return_to_briefing" : "standing_stay_downed_recover");
+        }
         outcomeGuidance(data);return data;
     }
     private static void outcomeGuidance(Map<String,Object> data){
@@ -604,7 +868,12 @@ final class SiteDungeonManager implements Listener {
         ConfigurationSection chosen=site.isEmpty()?root.getKeys(false).stream().map(root::getConfigurationSection).filter(Objects::nonNull).max(Comparator.comparingLong(c->c.getLong("endedAt"))).orElse(null):root.getConfigurationSection(site);
         if(chosen==null)return Map.of();
         Map<String,Object> data=new LinkedHashMap<>(chosen.getValues(false));
-        data.put("lifecycle","ended");data.put("active",false);data.put("participant",false);data.put("rescueActive",false);data.put("exitPolicy","standing_stay_downed_recover");
+        var timing=chosen.getConfigurationSection("encounterTiming");
+        if(timing!=null)data.put("encounterTiming",timing.getValues(false));
+        var chapter = chosen.getConfigurationSection("chapter");
+        if (chapter != null) data.put("chapter", new LinkedHashMap<>(chapter.getValues(false)));
+        data.put("lifecycle","ended");data.put("active",false);data.put("participant",false);data.put("rescueActive",false);
+        data.putIfAbsent("exitPolicy","standing_stay_downed_recover");
         // Project current guidance without rewriting historical facts or granting proof.
         if("previous_reward_pending".equals(data.get("rewardStatus"))){
             var pending=receipt(id,Objects.toString(data.get("id"),""));
@@ -620,6 +889,109 @@ final class SiteDungeonManager implements Listener {
         p.sendMessage("§a下一步："+data.get("nextAction"));
     }
     private Site site(String id){Site s=sites.get(id);require(s!=null,"unknown_dungeon");return s;}
+    private Site siteView(String id) {
+        Run current = runs.get(id);
+        if (current != null) return current.site;
+        if (beaconLayout != null && id.equals(BeaconExpedition.SITE)) return beaconLayout.site;
+        return sites.get(id);
+    }
+
+    private BeaconLayout readBeacon(Map<String, Site> definitions) throws Exception {
+        File file = new File(plugin.getDataFolder(), "aincrad-beacon.yml");
+        if (!file.isFile()) return null;
+        var yaml = new YamlConfiguration();
+        yaml.load(file);
+        if (!yaml.getBoolean("enabled")) return null;
+        require(BeaconExpedition.VERSION.equals(yaml.getString("chapter")), "invalid_beacon_version");
+        Site legacy = definitions.get(BeaconExpedition.SITE);
+        require(legacy != null && legacy.conquestFloor == 1 && legacy.world.equals(ConquestWorld.WORLD), "beacon_first_floor_required");
+        require(legacy.bonus == Material.IRON_INGOT && legacy.bonusCount >= 3, "beacon_reward_baseline_mismatch");
+        List<Room> rooms = readRooms(yaml, true);
+        require(rooms.size() == BeaconExpedition.Stop.values().length, "incomplete_beacon_rooms");
+        require(rooms.getLast().enemies.getFirst().type() == EntityType.VINDICATOR, "beacon_boss_required");
+        for (Room room : rooms) {
+            Room entry = rooms.getFirst();
+            require(Math.abs(room.x - entry.x) <= 128 && Math.abs(room.y - entry.y) <= 128
+                && Math.abs(room.z - entry.z) <= 128, "beacon_site_bounds");
+        }
+        World world = Bukkit.getWorld(legacy.world);
+        var entry = rooms.getFirst();
+        Site site = new Site(legacy.id, "第一层·失联信标", legacy.expedition,
+                "东侧前哨集结。查北廊暗道或从东门突破，接应队员，经过南廊营地再选看台封印或宝库。",
+                Material.LANTERN, legacy.world, rooms, legacy.emeralds, legacy.bonus, legacy.bonusCount - 2,
+                List.of(entry.x, entry.y, entry.z), false, legacy.conquestFloor, legacy.minimumLevel);
+        for (Site other : definitions.values()) {
+            if (other == legacy || !other.world.equals(site.world)) continue;
+            require(!other.contains(entry.center(world)) && !site.contains(other.rooms.getFirst().center(world)), "overlapping_beacon_site");
+        }
+        var marks = yaml.getConfigurationSection("markers");
+        Map<String, BeaconExpedition.Point> markers = new TreeMap<>();
+        for (var choice : BeaconExpedition.Choice.values()) {
+            if (!choice.marked() || choice == BeaconExpedition.Choice.SALVAGE) continue;
+            var stop = switch (choice) {
+                case SURVEY_WEST, SURVEY_EAST -> BeaconExpedition.Stop.SCOUT;
+                case RELEASE -> BeaconExpedition.Stop.RESCUE;
+                case SEAL_NORTH, SEAL_SOUTH -> BeaconExpedition.Stop.ALTAR;
+                default -> throw new IllegalStateException("invalid_beacon_marker");
+            };
+            require(marks != null, "beacon_markers_missing");
+            markers.put(choice.id, beaconPoint(marks.getList(choice.id), rooms.get(stop.ordinal()), world));
+        }
+        require(new HashSet<>(markers.values()).size() == markers.size(), "beacon_duplicate_marker");
+        var refuge = beaconPoint(yaml.getList("refuge"), rooms.get(BeaconExpedition.Stop.RESCUE.ordinal()), world);
+        require(!markers.containsValue(refuge), "beacon_refuge_conflict");
+        return new BeaconLayout(site, Collections.unmodifiableMap(markers), refuge);
+    }
+
+    private static BeaconExpedition.Point beaconPoint(List<?> values, Room room, World world) {
+        require(values != null && values.size() == 3
+            && values.stream().allMatch(v -> v instanceof Number n && n.doubleValue() == n.intValue()), "invalid_beacon_point");
+        var point = new BeaconExpedition.Point(((Number) values.get(0)).intValue(),
+            ((Number) values.get(1)).intValue(), ((Number) values.get(2)).intValue());
+        require(room.contains(pointLocation(point, world)), "beacon_point_outside_room");
+        return point;
+    }
+
+    private static Location pointLocation(BeaconExpedition.Point point, World world) {
+        return new Location(world, point.x() + .5, point.y(), point.z() + .5);
+    }
+
+    private static List<Room> readRooms(ConfigurationSection c, boolean chapter) {
+        List<Room> rooms=new ArrayList<>();
+        for (Map<?,?> row : c.getMapList("rooms")) {
+            if (chapter) {
+                require(rooms.size() < BeaconExpedition.Stop.values().length, "beacon_rooms_limit");
+                var stop = BeaconExpedition.Stop.values()[rooms.size()];
+                require(stop.name().toLowerCase(Locale.ROOT).equals(row.get("id")), "beacon_room_order");
+            }
+            Object point=row.get("center");require(point instanceof List<?> && ((List<?>)point).size()==3,"invalid_room_center");List<?> v=(List<?>)point;
+            int x=Integer.parseInt(v.get(0).toString()),y=Integer.parseInt(v.get(1).toString()),z=Integer.parseInt(v.get(2).toString()),radius=Integer.parseInt(Objects.toString(row.get("radius"),"5"));
+            require(radius>=3&&radius<=8&&Math.abs((long)x)<29_000_000&&Math.abs((long)z)<29_000_000&&y>=-60&&y<310,"room_bounds");
+            var rawEnemies = (List<?>) row.get("mobs");
+            boolean objective = chapter && switch (BeaconExpedition.Stop.values()[rooms.size()]) {
+                case BRIEFING, SCOUT, RESCUE, CAMP, ALTAR -> true;
+                default -> false;
+            };
+            if (objective) require(rawEnemies != null && rawEnemies.isEmpty(), "beacon_objective_has_enemies");
+            var enemies = objective ? List.<DungeonWaveCatalog.Enemy>of() : DungeonWaveCatalog.parse(rawEnemies);
+            require(enemies.stream().noneMatch(e->e.type()==EntityType.RAVAGER),"large_enemy_requires_tower");
+            List<List<Integer>> spawnPoints=new ArrayList<>();
+            if(row.containsKey("spawn-points")){
+                require(row.get("spawn-points") instanceof List<?>,"invalid_spawn_points");
+                for(Object raw:(List<?>)row.get("spawn-points")){
+                    require(raw instanceof List<?> p&&p.size()==3,"invalid_spawn_point");List<?> p=(List<?>)raw;List<Integer> spawnPoint=new ArrayList<>();
+                    for(Object coordinate:p){require(coordinate instanceof Number n&&n.doubleValue()==n.intValue(),"integer_spawn_point_required");spawnPoint.add(((Number)coordinate).intValue());}
+                    require(Math.abs((long)spawnPoint.get(0)-x)<=radius&&Math.abs((long)spawnPoint.get(2)-z)<=radius&&Math.abs((long)spawnPoint.get(1)-y)<=3,"spawn_point_outside_room");
+                    require(!spawnPoints.contains(spawnPoint),"duplicate_spawn_point");spawnPoints.add(List.copyOf(spawnPoint));
+                }
+                require(spawnPoints.size()>=enemies.size()&&spawnPoints.size()<=24,"spawn_points_limit_24");
+            }
+            String roomHint=Objects.toString(row.get("hint"),"").strip();require(roomHint.length()<=220,"room_hint_limit_220");
+            rooms.add(new Room(Objects.toString(row.get("name"),"战斗室"),x,y,z,radius,enemies,List.copyOf(spawnPoints),roomHint));
+        }
+        return List.copyOf(rooms);
+    }
+
     private String reload(){
         if(hasActiveRuns())return "active_runs";
         if(sites.keySet().stream().anyMatch(id -> plugin.dungeonEdits().dirty("site-" + id))) return "pending_terrain_reset";
@@ -633,27 +1005,7 @@ final class SiteDungeonManager implements Listener {
                 List<Integer> entry=c.getIntegerList("entry");
                 require(entry.isEmpty()||entry.size()==3&&Math.abs((long)entry.get(0))<29_000_000&&Math.abs((long)entry.get(2))<29_000_000&&entry.get(1)>=-60&&entry.get(1)<310,"invalid_entry");
                 require(Bukkit.getWorld(world)!=null&&name.length()<=32&&(!entry.isEmpty()||DungeonExpeditions.site(expedition)!=null),"invalid_world_or_approach");
-                List<Room> rooms=new ArrayList<>();
-                for(Map<?,?> row:c.getMapList("rooms")){
-                    Object point=row.get("center");require(point instanceof List<?> && ((List<?>)point).size()==3,"invalid_room_center");List<?> v=(List<?>)point;
-                    int x=Integer.parseInt(v.get(0).toString()),y=Integer.parseInt(v.get(1).toString()),z=Integer.parseInt(v.get(2).toString()),radius=Integer.parseInt(Objects.toString(row.get("radius"),"5"));
-                    require(radius>=3&&radius<=8&&Math.abs((long)x)<29_000_000&&Math.abs((long)z)<29_000_000&&y>=-60&&y<310,"room_bounds");
-                    var enemies=DungeonWaveCatalog.parse((List<?>)row.get("mobs"));
-                    require(enemies.stream().noneMatch(e->e.type()==EntityType.RAVAGER),"large_enemy_requires_tower");
-                    List<List<Integer>> spawnPoints=new ArrayList<>();
-                    if(row.containsKey("spawn-points")){
-                        require(row.get("spawn-points") instanceof List<?>,"invalid_spawn_points");
-                        for(Object raw:(List<?>)row.get("spawn-points")){
-                            require(raw instanceof List<?> p&&p.size()==3,"invalid_spawn_point");List<?> p=(List<?>)raw;List<Integer> spawnPoint=new ArrayList<>();
-                            for(Object coordinate:p){require(coordinate instanceof Number n&&n.doubleValue()==n.intValue(),"integer_spawn_point_required");spawnPoint.add(((Number)coordinate).intValue());}
-                            require(Math.abs((long)spawnPoint.get(0)-x)<=radius&&Math.abs((long)spawnPoint.get(2)-z)<=radius&&Math.abs((long)spawnPoint.get(1)-y)<=3,"spawn_point_outside_room");
-                            require(!spawnPoints.contains(spawnPoint),"duplicate_spawn_point");spawnPoints.add(List.copyOf(spawnPoint));
-                        }
-                        require(spawnPoints.size()>=enemies.size()&&spawnPoints.size()<=24,"spawn_points_limit_24");
-                    }
-                    String roomHint=Objects.toString(row.get("hint"),"").strip();require(roomHint.length()<=220,"room_hint_limit_220");
-                    rooms.add(new Room(Objects.toString(row.get("name"),"战斗室"),x,y,z,radius,enemies,List.copyOf(spawnPoints),roomHint));
-                }
+                List<Room> rooms=readRooms(c, false);
                 require(!rooms.isEmpty()&&rooms.size()<=6,"rooms_limit_6");Room first=rooms.getFirst();
                 for(Room r:rooms)require(Math.abs(r.x-first.x)<=128&&Math.abs(r.z-first.z)<=128&&Math.abs(r.y-first.y)<=128,"site_bounds");
                 int emeralds=c.getInt("reward.emeralds",8),count=c.getInt("reward.count",4);Material bonus=Material.matchMaterial(c.getString("reward.item","LAPIS_LAZULI"));
@@ -667,12 +1019,25 @@ final class SiteDungeonManager implements Listener {
                 for(Site prior:next.values())require(!prior.contains(first.center(Bukkit.getWorld(world)))&&!s.contains(prior.rooms.getFirst().center(Bukkit.getWorld(prior.world))),"overlapping_sites");
                 next.put(id,s);
             }
+            BeaconLayout newBeacon = null;
+            try { newBeacon = readBeacon(next); }
+            catch (Exception failure) { plugin.getLogger().warning("Lost Beacon chapter disabled: " + failure.getMessage()); }
             Map<String,BuildingAreas> areas=new LinkedHashMap<>();Map<String,DungeonEntrance> entrances=new LinkedHashMap<>();
             for(Site s:next.values()){
                 World world=Bukkit.getWorld(s.world);List<ProtectionArea> pieces=new ArrayList<>();
                 pieces.add(ProtectionArea.box("site_dungeon_"+s.id,"副本建筑·"+s.name,world,
                     s.rooms.stream().mapToInt(Room::x).min().orElseThrow()-24,s.rooms.stream().mapToInt(Room::y).min().orElseThrow()-8,s.rooms.stream().mapToInt(Room::z).min().orElseThrow()-24,
                     s.rooms.stream().mapToInt(Room::x).max().orElseThrow()+24,s.rooms.stream().mapToInt(Room::y).max().orElseThrow()+12,s.rooms.stream().mapToInt(Room::z).max().orElseThrow()+24));
+                if (newBeacon != null && s.id.equals(BeaconExpedition.SITE)) {
+                    List<Room> chapterRooms = newBeacon.site.rooms;
+                    pieces.add(ProtectionArea.box("aincrad_lost_beacon", "失联信标·原图攻略", world,
+                        chapterRooms.stream().mapToInt(Room::x).min().orElseThrow() - 24,
+                        chapterRooms.stream().mapToInt(Room::y).min().orElseThrow() - 8,
+                        chapterRooms.stream().mapToInt(Room::z).min().orElseThrow() - 24,
+                        chapterRooms.stream().mapToInt(Room::x).max().orElseThrow() + 24,
+                        chapterRooms.stream().mapToInt(Room::y).max().orElseThrow() + 12,
+                        chapterRooms.stream().mapToInt(Room::z).max().orElseThrow() + 24));
+                }
                 var declared=defs.getConfigurationSection(s.id).getList("protection-boxes",List.of());require(declared.size()<=256,"protection_boxes_limit_256");
                 List<int[]> declaredBounds=new ArrayList<>();for(Object raw:declared){
                     require(raw instanceof List<?> b&&b.size()==6,"invalid_protection_box");List<?> b=(List<?>)raw;int[] v=new int[6];
@@ -684,9 +1049,17 @@ final class SiteDungeonManager implements Listener {
                 }
                 var approach=defs.getConfigurationSection(s.id).getConfigurationSection("approach");
                 if(approach!=null){
-                    require(Set.of("entry","hint").containsAll(approach.getKeys(false)),"unknown_approach_field");Room first=s.rooms.getFirst();
-                    var entrance=DungeonEntrance.parse(approach.get("entry"),approach.getString("hint"),world.getMinHeight(),world.getMaxHeight(),first.x,first.y,first.z);
+                    require(Set.of("entry","hint","station").containsAll(approach.getKeys(false)),"unknown_approach_field");Room first=s.rooms.getFirst();
+                    var terminal=approach.getConfigurationSection("station");
+                    require(terminal!=null||!approach.contains("station"),"invalid_station");
+                    var entrance=DungeonEntrance.parse(approach.get("entry"),approach.getString("hint"),
+                            terminal==null?null:terminal.getValues(false),world.getMinHeight(),world.getMaxHeight(),first.x,first.y,first.z);
                     require(entrance.protectedBy(declaredBounds),"approach_entry_unprotected");
+                    if(entrance.station()!=null){
+                        require(!s.entry.isEmpty()&&first.contains(point(world,s.entry))
+                                &&!entrance.station().covers(s.entry),"station_missing_separate_upper_landing");
+                        require(entrance.station().protectedBy(declaredBounds),"station_unprotected");
+                    }
                     Location at=new Location(world,entrance.entry().get(0),entrance.entry().get(1),entrance.entry().get(2));
                     for(Site other:next.values())if(other!=s)require(!other.contains(at),"approach_inside_other_site");
                     entrances.put(s.id,entrance);
@@ -696,8 +1069,36 @@ final class SiteDungeonManager implements Listener {
                     pieces.stream().mapToInt(ProtectionArea::maxX).max().orElseThrow(),pieces.stream().mapToInt(ProtectionArea::maxY).max().orElseThrow(),pieces.stream().mapToInt(ProtectionArea::maxZ).max().orElseThrow());
                 areas.put(s.id,new BuildingAreas(envelope,List.copyOf(pieces)));
             }
-            sites=Collections.unmodifiableMap(next);protectionAreas=Collections.unmodifiableMap(areas);approaches=Collections.unmodifiableMap(entrances);ready=true;return "success";
+            var musters=loadGroundMusters(next,areas);
+            sites=Collections.unmodifiableMap(next);protectionAreas=Collections.unmodifiableMap(areas);approaches=Collections.unmodifiableMap(entrances);
+            groundMusters=Map.copyOf(musters);beaconLayout=newBeacon;ready=true;return "success";
         }catch(Exception e){plugin.getLogger().warning("Dungeon sites configuration retained: "+e.getMessage());return "invalid_configuration";}
+    }
+    private Map<String,GroundMuster> loadGroundMusters(Map<String,Site> definitions,Map<String,BuildingAreas> buildings) throws Exception {
+        var file=new File(plugin.getDataFolder(),"dungeon-muster.yml");
+        if(!file.isFile())return Map.of();
+        var yaml=new YamlConfiguration();yaml.load(file);
+        require(yaml.getKeys(false).equals(Set.of("schema-version","world","platforms"))&&yaml.getInt("schema-version")==1,"muster_schema");
+        World world=Bukkit.getWorlds().getFirst();
+        require(world.getEnvironment()==World.Environment.NORMAL&&world.getName().equals(yaml.getString("world")),"muster_requires_overworld");
+        var platforms=yaml.getConfigurationSection("platforms");
+        require(platforms!=null&&platforms.getKeys(false).equals(definitions.keySet()),"muster_requires_all_sites");
+        Map<String,GroundMuster> result=new LinkedHashMap<>();
+        for(Site site:definitions.values()){
+            var row=platforms.getConfigurationSection(site.id);
+            require(row!=null&&row.getKeys(false).equals(Set.of("entry","hint","station")),"muster_fields:"+site.id);
+            var station=row.getConfigurationSection("station");require(station!=null,"muster_station:"+site.id);
+            var stationValues=station.getValues(false);
+            var facilities=station.getConfigurationSection("facilities");
+            if(facilities!=null)stationValues.put("facilities",facilities.getValues(false));
+            var route=DungeonEntrance.groundStation(row.get("entry"),row.getString("hint"),stationValues,world.getMinHeight(),world.getMaxHeight());
+            var bounds=route.station().bounds();
+            var area=ProtectionArea.box("site_muster_"+site.id,"地面集结·"+site.name,world,bounds.get(0),bounds.get(1),bounds.get(2),bounds.get(3),bounds.get(4),bounds.get(5));
+            require(result.values().stream().noneMatch(other->WildRuinResets.overlaps(area,other.platform()))
+                    &&buildings.values().stream().noneMatch(building->building.pieces.stream().anyMatch(piece->WildRuinResets.overlaps(area,piece))),"muster_overlaps:"+site.id);
+            result.put(site.id,new GroundMuster(route,area));
+        }
+        return result;
     }
     void admin(CommandSender sender,String action){
         if(action.equals("reload"))sender.sendMessage("MC_SITE_DUNGEON_ADMIN status="+reload());
@@ -719,36 +1120,43 @@ final class SiteDungeonManager implements Listener {
             if(Arrays.asList(raw).contains("--json"))p.sendMessage("MC_SITE_DUNGEON_RESULT "+out);
             else {p.sendMessage("[地下城] 未执行（INVALID_ARGUMENT）："+e.getMessage());plugin.cliRecovery().plain(out,p);}return;
         }
-        format(request.json(),request.verbose(),()->execute(p,request.args(),request.page()));
+        format(request.json(),request.verbose(),()->execute(p,request.args(),request.page(),request.confirmation()));
     }
     private void format(boolean json,boolean verbose,Runnable work){
         boolean beforeJson=jsonOutput.get(),beforeVerbose=verboseOutput.get();jsonOutput.set(json);verboseOutput.set(verbose);
         try{work.run();}finally{jsonOutput.set(beforeJson);verboseOutput.set(beforeVerbose);}
     }
-    private void execute(Player p,String[] args,int page){
+    private void execute(Player p,String[] args,int page,String confirmation){
         String action=args.length>1?args[1].toLowerCase(Locale.ROOT):"list",id=args.length>2?args[2]:"";
-        if(verboseOutput.get()&&!jsonOutput.get()&&Set.of("list","info","status").contains(action))p.sendMessage("[提示] dungeon为真实遗迹；arena为练习塔。逐室清怪后回首室结算，奖励进入个人箱。");
+        if(verboseOutput.get()&&!jsonOutput.get()&&Set.of("list","info","status").contains(action))p.sendMessage("[提示] dungeon为真实遗迹；arena为练习塔。逐室清怪后就地登记奖励，可领取到个人箱。");
         try{
             require(ready,"configuration_unavailable");
             switch(action){
                 case "list"->listing(p,page);
                 case "menu"->open(p,id);
-                case "info"->info(p,site(id));
+                case "info"->info(p,siteView(id));
                 case "travel"->travel(p,site(id));
-                case "start"->start(p,site(id),Mode.parse(args.length>3?args[3]:"normal"));
-                case "join"->join(p,site(id));
+                case "start"->start(p,siteView(id),Mode.parse(args.length>3?args[3]:"normal"),confirmation);
+                case "enter"->stationPassage(p,site(id),false,false,confirmation);
+                case "exit"->stationPassage(p,site(id),true);
+                case "join"->join(p,site(id),confirmation);
                 case "status"->status(p,id);
-                case "resume"->{Run r=own(p);require(r!=null&&!r.fault.isEmpty(),"not_fault_paused");resume(r);runResult(p,"resume",r.site.id,r.id);p.sendMessage("§a原地下城场次已恢复，已清进度保留；5分钟内返回目标房间。查询：/mycli dungeon status "+r.site.id);}
+                case "choose"->chooseBeacon(p, args[2]);
+                case "resume"->resumePlayer(p);
                 case "leave"->leave(p);
                 case "claim"->claim(p,id);
-                default->throw new IllegalArgumentException("use_list_info_travel_start_join_status_resume_leave_claim_menu");
+                default->throw new IllegalArgumentException("use_list_info_travel_enter_exit_start_join_status_resume_leave_claim_menu");
             }
-        }catch(IllegalArgumentException e){result(p,action,id,e.getMessage());}
+        }catch(IllegalArgumentException e){
+            if (action.equals("choose")) beaconResult(p, id, false, false, e.getMessage());
+            else result(p,action,id,e.getMessage());
+        }
     }
     private void listing(Player p,int page){
         int first=(page-1)*7;var rows=new ArrayList<>(sites.values());require(first<rows.size()||first==0,"page_out_of_range");
         List<Map<String,Object>> items=new ArrayList<>();
-        for(Site s:rows.subList(Math.min(first,rows.size()),Math.min(first+7,rows.size()))){
+        for(Site defined:rows.subList(Math.min(first,rows.size()),Math.min(first+7,rows.size()))){
+            Site s = siteView(defined.id);
             var prep=DungeonAdvice.preparation(s.id,s.minimumLevel);
             if(jsonOutput.get())items.add(Map.of("id",s.id,"name",s.name,"active",runs.containsKey(s.id),"state",advice(p,s.id).get("state"),"recommendedLevel",prep.recommendedLevel(),"normalStars",prep.stars(),"nextCommand","/mycli dungeon info "+s.id));
             else send(p,"MC_SITE_DUNGEON_ITEM",Map.of("id",s.id,"name",s.name,"rooms",s.rooms.size(),"active",runs.containsKey(s.id),"expedition",s.expedition));
@@ -765,10 +1173,38 @@ final class SiteDungeonManager implements Listener {
         Map<String,Object> detail=new LinkedHashMap<>(Map.of("id",s.id,"name",s.name,"world",s.world,"start",List.of(first.x,first.y,first.z),"rooms",s.rooms.stream().map(r->Map.of("name",r.name,"center",List.of(r.x,r.y,r.z),"radius",r.radius,"enemies",r.enemies.size())).toList(),"hint",s.hint,"dailyRewardPerSite",1,"approachMana",8,"lifecycleRules",Map.of("timeLimitSeconds",TIMEOUT_MS/1000,"rescueScope","current_run_and_site","exitPolicy","standing_stay_downed_recover","instruction","有效场次且身处范围内才有存档点救援；超时、结束或退出后失效，存活者留在原地须及时撤离。")));
         var expedition=DungeonExpeditions.site(s.expedition);
         detail.put("hint",routeHint(s));
-        var arrival=DungeonArrival.describe(s.world,entry(s),expedition==null?null:expedition.approachX(),expedition==null?null:expedition.approachZ());
-        if(approaches.containsKey(s.id)){arrival.put("entranceScope","navigation_only");arrival.put("buildingProtected",true);arrival.put("startRequiresFirstRoom",true);}
-        detail.put("arrival",arrival);send(p,"MC_SITE_DUNGEON_INFO",detail);
+        detail.put("roomHints",s.rooms.stream().map(Room::hint).toList());
+        var arrival=DungeonArrival.describe(entryWorld(s).getName(),entry(s),expedition==null?null:expedition.approachX(),expedition==null?null:expedition.approachZ());
+        if(approach(s)!=null){arrival.put("entranceScope","navigation_only");arrival.put("buildingProtected",true);arrival.put("startRequiresFirstRoom",true);}
+        if(station(s)!=null){
+            arrival.put("station",stationGuide(s));
+            arrival.put("instruction",routeHint(s));
+            returnGuidance(arrival,s,p);
+            if(groundMusters.containsKey(s.id)){
+                arrival.put("platformGroup",true);
+                arrival.put("autoReturnSeconds",RETURN_DELAY_MS/1000);
+            }
+        }
+        detail.put("arrival",arrival);
+        var relic=DungeonRelics.at(s.id);
+        if(relic!=null){
+            detail.put("relic",relic.preview(s.world,relicClaimed(p.getUniqueId(),s.id),pendingRelic(p.getUniqueId(),s.id)!=null));
+            detail.put("collection",relicCollection(p.getUniqueId()));
+        }
+        if(echoAvailable(s)){
+            var modes=Arrays.stream(Mode.values()).map(mode->Map.of("mode",mode.id,
+                "emeralds",s.emeralds*mode.reward,"item",s.bonus.name(),"count",s.bonusCount*mode.reward,
+                "bossMove",EchoCitadel.wave(2,1,mode.id,List.of()).move().name)).toList();
+            detail.put("encounter",Map.of("wavesByRoom",List.of(1,2,2),"rewards",modes,
+                "claim","/mycli dungeon claim "+s.id,"stash","/mycli arena stash",
+                "instruction","前庭热身 → 卫所侧翼援军 → 投影与执政官两阶段。按房间结算参战，通关原地领取。"));
+        }
+        send(p,"MC_SITE_DUNGEON_INFO",detail);
         if(!jsonOutput.get())p.sendMessage("[抵达] "+arrival.get("instruction"));
+        if(echoAvailable(s)&&!jsonOutput.get())p.sendMessage("§d【回响城】前庭一波、卫所两波、末室投影和本体。普通躲紫色圆圈，冒险横移出光带；掉落一次/日，通关原地领到个人箱。");
+        if(!jsonOutput.get()&&relic!=null)
+            p.sendMessage("§6【入口】"+relic.x()+", "+relic.y()+", "+relic.z()+" 石钮 · "+relic.tactic()
+                    +" §d秘宝："+relic.name()+"，首次登记终室参战并通关后可领。");
         if(verboseOutput.get()&&!jsonOutput.get())p.sendMessage("[路线] "+routeHint(s)+"；逐室清怪，通关后直接领取个人奖励。普通/冒险/末日的生命倍率为1/1.5/2.1，伤害倍率为1/1.25/1.6；进入遗迹自动同队，可中途加入和离开。");
     }
     private void travel(Player p,Site s){
@@ -788,7 +1224,7 @@ final class SiteDungeonManager implements Listener {
                 result(p,"travel",s.id,reason);
             }));return;
         }
-        World w=Bukkit.getWorld(s.world);int x=destination.get(0),y=destination.get(1),z=destination.get(2);
+        World w=entryWorld(s);int x=destination.get(0),y=destination.get(1),z=destination.get(2);
         require(w.isChunkGenerated(x>>4,z>>4),"entry_not_generated");Location origin=p.getLocation().clone();
         boolean requestedJson=jsonOutput.get(),requestedVerbose=verboseOutput.get();
         ExistingChunkAccess.load(plugin,w,x>>4,z>>4).whenComplete((chunk,error)->Bukkit.getScheduler().runTask(plugin,()->format(requestedJson,requestedVerbose,()->{
@@ -803,41 +1239,271 @@ final class SiteDungeonManager implements Listener {
             }
             if(landing==null){result(p,"travel",s.id,"entry_blocked");return;}
             if(plugin.travelMagic().teleport(p,landing,"dungeon:"+s.id,"遗迹入口传送术",TravelMagic.DISTANT_MANA)){
+                if(station(s)!=null){
+                    Location actual=p.getLocation();
+                    result(p,"travel",s.id,"success",Map.of("position",List.of(actual.getBlockX(),actual.getBlockY(),actual.getBlockZ()),"station",stationGuide(s)));
+                    p.sendMessage("§6"+routeHint(s));
+                    highlight(p,point(w,station(s).button()).add(0,.5,0));
+                    return;
+                }
                 result(p,"travel",s.id,"success");
                 if (s.id.equals(BlackBannerCamp.SITE) && surveyedCamp() != null) {
                     p.sendMessage("§6已到黑旗林营外哨。用「使用」打开入口路牌，选择开始清剿，守卫在集结倒计时后出现。");
                 } else {
-                    p.sendMessage("§6已到"+label(s)+"入口；空闲场地由一人 start，遗迹内达标者自动同队，通关后生成个人奖励。");
+                    highlightEntrance(p,s);
+                    var relic=DungeonRelics.at(s.id);
+                    p.sendMessage(relic==null ? "§6已到"+label(s)+"入口，站到首室后选择难度。"
+                            : "§6已到"+s.name+"。找发光路牌和石钮，按使用键打开挑战菜单。");
                 }
             }
             else result(p,"travel",s.id,"travel_denied");
         })));
     }
-    private void start(Player p,Site s,Mode mode){
+
+    private void stationPassage(Player p,Site s,boolean exit){
+        stationPassage(p,s,exit,false,null);
+    }
+    private void stationPassage(Player p,Site s,boolean exit,boolean automatic){
+        stationPassage(p,s,exit,automatic,null);
+    }
+    private void stationPassage(Player p,Site s,boolean exit,boolean automatic,String confirmation){
+        String action=exit?"exit":"enter";
+        var station=station(s);require(station!=null,"station_unavailable");
+        require(playing(p)&&!plugin.isDowned(p)&&!p.isInsideVehicle()&&own(p)==null
+                &&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
+        var origin=p.getLocation().clone();var w=exit?entryWorld(s):Bukkit.getWorld(s.world);
+        require(exit?origin.getWorld().getName().equals(s.world):origin.getWorld()==entryWorld(s),exit?"return_from_encounter_room":"walk_to_station");
+        var button=point(entryWorld(s),station.button());
+        if(exit)require(atReturnPoint(s,origin),"return_from_encounter_room");
+        else require(atStation(s,origin)&&origin.distanceSquared(button)<=36
+                &&button.getBlock().getType()==Material.STONE_BUTTON,"walk_to_station");
+        var target=exit?entry(s):combatEntry(s);
+        var roster=exit?List.<EntryMember>of():entryRoster(p,s,true);
+        if(!exit){
+            String blocked=roster.getFirst().blocker();
+            require(!blocked.equals("请先领取这处遗迹的旧奖励"),"claim_previous_reward_first");
+            require(blocked.isEmpty(),"already_in_activity_or_not_survival");
+            if(!reviewEntry(p,s,"enter","",roster,confirmation))return;
+        }
+        int cx=target.get(0)>>4,cz=target.get(2)>>4;
+        require(w.isChunkGenerated(cx,cz),"entry_not_generated");
+        require(passages.add(p.getUniqueId()),"station_passage_pending");
+        boolean json=jsonOutput.get(),verbose=verboseOutput.get();
+        ExistingChunkAccess.load(plugin,w,cx,cz).whenComplete((chunk,error)->Bukkit.getScheduler().runTask(plugin,()->format(json,verbose,()->{
+            passages.remove(p.getUniqueId());
+            if(!p.isOnline())return;
+            if(error!=null||chunk==null){result(p,action,s.id,"entry_unavailable");return;}
+            if(!playing(p)||plugin.isDowned(p)||p.isInsideVehicle()||own(p)!=null||plugin.dungeonParticipant(p)
+                    ||plugin.pvpParticipant(p)||p.getWorld()!=origin.getWorld()
+                    ||(automatic?!atReturnPoint(s,p.getLocation()):p.getLocation().distanceSquared(origin)>2)){
+                result(p,action,s.id,"player_state_changed");return;
+            }
+            if(!exit&&!roster.equals(entryRoster(p,s,true))){result(p,action,s.id,"assembly_changed");return;}
+            Location center=point(w,target),landing=passageLanding(s,center,exit);
+            if(landing==null){result(p,action,s.id,"entry_blocked");return;}
+            if(!p.teleport(landing,PlayerTeleportEvent.TeleportCause.PLUGIN)){
+                result(p,action,s.id,"travel_denied");return;
+            }
+            Location arrived=p.getLocation();
+            if(arrived.getWorld()!=w||arrived.distanceSquared(landing)>1){
+                boolean returned=p.teleport(origin,PlayerTeleportEvent.TeleportCause.PLUGIN);
+                result(p,action,s.id,"station_landing_unconfirmed",Map.of("returnedToOrigin",returned));
+                return;
+            }
+            List<String> entered=new ArrayList<>();Map<String,String> stayed=new LinkedHashMap<>();
+            if(!exit)permit(s,roster.getFirst());
+            for(EntryMember checked:exit?roster:roster.subList(1,roster.size())){
+                Player member=ResidentCli.find(checked.id());
+                if(member==null||!atStation(s,member.getLocation()))continue;
+                String reason=checked.blocker();
+                if(reason.isEmpty()){
+                    Location candidate=passageLanding(s,center,false);
+                    if(candidate==null)reason="入口没有空余安全落点";
+                    else if(!member.teleport(candidate,PlayerTeleportEvent.TeleportCause.PLUGIN)
+                            ||member.getWorld()!=w||member.getLocation().distanceSquared(candidate)>1)reason="入口传送被拒绝";
+                    else {entered.add(member.getName());permit(s,checked);}
+                }
+                if(!reason.isEmpty()){
+                    stayed.put(member.getName(),reason.startsWith("缺少 ")?"缺少入场装备，已通知本人具体项":reason);
+                    member.sendMessage("§e【集结】暂留地面。"+reason+"。准备好后可再次使用石钮。");
+                }
+            }
+            result(p,action,s.id,"success",Map.of("position",List.of(arrived.getBlockX(),arrived.getBlockY(),arrived.getBlockZ()),
+                    "world",w.getName(),"station",stationGuide(s),"companionsEntered",entered,"companionsStayed",stayed));
+            if(!stayed.isEmpty())p.sendMessage("§e【集结】以下队友仍在地面 "+stayed);
+            if(exit){
+                var scheduled=scheduledReturns.get(p.getUniqueId());
+                if(scheduled!=null&&scheduled.site().equals(s.id))clearReturn(p.getUniqueId(),scheduled);
+            }
+            if(!exit){
+                highlightEntrance(p,s);
+                if(!json)open(p,s.id);
+            }
+        })));
+    }
+
+    private List<EntryMember> entryRoster(Player starter,Site site,boolean stationEntry){
+        var roster=new ArrayList<EntryMember>();roster.add(entryMember(site,starter));
+        if(!stationEntry||groundMusters.containsKey(site.id)){
+            var located=ResidentCli.online().stream()
+                    .filter(member->stationEntry?atStation(site,member.getLocation()):atFirstRoom(site,member.getLocation()))
+                    .toList();
+            for(Player member:selectMusterBystanders(located,starter.getUniqueId(),m->musterAdmission(site,m),PARTY_LIMIT-1L))
+                roster.add(entryMember(site,member));
+        }
+        return List.copyOf(roster);
+    }
+
+    // A co-located bystander who cannot muster (spectator/observer, already in an activity, downed,
+    // mounted, in a passage, or holding an unclaimed reward) must not block a ready starter with
+    // confirmation_required. Only eligible bystanders join the roster; an eligible-but-underequipped
+    // bystander still triggers the normal equipment confirmation. The party limit is applied AFTER
+    // eligibility filtering so ineligible bystanders never consume a slot an eligible one could use.
+    static List<Player> selectMusterBystanders(List<Player> located,UUID starter,
+            java.util.function.Function<Player,String> admission,long limit){
+        return located.stream().filter(member->!member.getUniqueId().equals(starter))
+                .filter(member->admission.apply(member).isEmpty())
+                .sorted(Comparator.comparing(Player::getUniqueId)).limit(limit)
+                .toList();
+    }
+
+    // Spectators and native maid residents are never auto-mustered. Eligible nearby players/agents are
+    // invited to join voluntarily with one command that teleports them into the muster area; no confirmation
+    // token is required, so a ready starter is never blocked by a co-located bystander.
+    private void inviteMuster(Site site,Player starter){
+        String command="/mycli dungeon join "+site.id;
+        for(Player member:selectMusterInvitees(ResidentCli.online(),starter.getUniqueId(),
+                plugin::isObserver,m->ResidentCli.isResident(m.getUniqueId()),
+                m->musterAdmission(site,m),m->atFirstRoom(site,m.getLocation()))){
+            member.sendMessage("§a[遗迹集结] "+site.name+" 已开启。想参加输入 "+command+" 加入并传送到集结区；观战与女仆不计入集结。");
+        }
+    }
+    // Pure invite filter: exclude the starter, observers (spectators) and native maid residents, keep only
+    // eligible players standing in the first room. Sorted for deterministic order. No confirmation gate.
+    static List<Player> selectMusterInvitees(List<Player> online,UUID starter,
+            java.util.function.Predicate<Player> observer,java.util.function.Predicate<Player> resident,
+            java.util.function.Function<Player,String> admission,java.util.function.Predicate<Player> atFirst){
+        return online.stream().filter(member->!member.getUniqueId().equals(starter))
+                .filter(member->!observer.test(member)).filter(member->!resident.test(member))
+                .filter(atFirst).filter(member->admission.apply(member).isEmpty())
+                .sorted(Comparator.comparing(Player::getUniqueId)).toList();
+    }
+    // Voluntary join from outside the site: teleport to the first-room muster area using the same
+    // chunk-load / safe-landing / state-recheck guards as the station passage, then enroll. Equipment is
+    // notify-only; no confirmation token is required.
+    private void musterTravel(Player p,Site s,Run r){
+        require(own(p)==null,"already_in_site_dungeon");
+        require(playing(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
+        List<Integer> destination=combatEntry(s);
+        World w=Bukkit.getWorld(s.world);require(w!=null,"entry_unavailable");
+        int x=destination.get(0),z=destination.get(2);
+        require(w.isChunkGenerated(x>>4,z>>4),"entry_not_generated");
+        Location origin=p.getLocation().clone();
+        boolean json=jsonOutput.get(),verbose=verboseOutput.get();
+        ExistingChunkAccess.load(plugin,w,x>>4,z>>4).whenComplete((chunk,error)->Bukkit.getScheduler().runTask(plugin,()->format(json,verbose,()->{
+            if(!p.isOnline())return;
+            if(error!=null||chunk==null){result(p,"join",s.id,"entry_unavailable");return;}
+            if(!playing(p)||plugin.isDowned(p)||p.isInsideVehicle()||own(p)!=null||plugin.dungeonParticipant(p)
+                    ||plugin.pvpParticipant(p)||p.getWorld()!=origin.getWorld()||p.getLocation().distanceSquared(origin)>2){
+                result(p,"join",s.id,"player_state_changed");return;}
+            Location center=point(w,destination),landing=passageLanding(s,center,false);
+            if(landing==null){result(p,"join",s.id,"entry_blocked");return;}
+            if(!p.teleport(landing,PlayerTeleportEvent.TeleportCause.PLUGIN)){result(p,"join",s.id,"travel_denied");return;}
+            Location arrived=p.getLocation();
+            if(arrived.getWorld()!=w||arrived.distanceSquared(landing)>1){
+                boolean returned=p.teleport(origin,PlayerTeleportEvent.TeleportCause.PLUGIN);
+                result(p,"join",s.id,"station_landing_unconfirmed",Map.of("returnedToOrigin",returned));return;}
+            Run current=runs.get(s.id);
+            if(current==null){result(p,"join",s.id,"not_participating");return;}
+            String problem=entryProblem(p,current,p.getLocation());
+            if(problem.equals("equipment_required")){permit(s,entryMember(s,p));problem="";}
+            if(!problem.isEmpty()){result(p,"join",s.id,problem);return;}
+            if(!enroll(p,current)){result(p,"join",s.id,"not_participating");return;}
+            runResult(p,"join",s.id,current.id);
+        })));
+    }
+
+    private Location passageLanding(Site site,Location center,boolean exit){
+        World world=center.getWorld();
+        for(int radius=0;radius<=2;radius++)for(int dx=-radius;dx<=radius;dx++)for(int dz=-radius;dz<=radius;dz++){
+            if(Math.max(Math.abs(dx),Math.abs(dz))!=radius)continue;
+            var at=center.clone().add(dx,0,dz);
+            if(world.isChunkLoaded(at.getBlockX()>>4,at.getBlockZ()>>4)
+                    &&(exit?atStation(site,at)&&protectedApproachLanding(site,at):atFirstRoom(site,at))
+                    &&AgentFriendPlugin.safeLanding(at.getBlock())&&world.getNearbyEntities(at,.6,1,.6,e->e instanceof LivingEntity).isEmpty())return at;
+        }
+        return null;
+    }
+
+    private String musterAdmission(Site site,Player member){
+        if(!playing(member)||plugin.isDowned(member)||member.isInsideVehicle()||plugin.isObserver(member)||own(member)!=null
+                ||plugin.dungeonParticipant(member)||plugin.pvpParticipant(member)||passages.contains(member.getUniqueId()))return "当前状态不允许进入";
+        if(receipt(member.getUniqueId(),site.id)!=null)return "请先领取这处遗迹的旧奖励";
+        return "";
+    }
+
+    private void highlight(Player player,Location mark){
+        if(player.getWorld()==mark.getWorld()&&player.getLocation().distanceSquared(mark)<400)
+            player.spawnParticle(Particle.HAPPY_VILLAGER,mark,12,.25,.4,.25,.002);
+    }
+
+    private void highlightEntrance(Player player,Site site){
+        var relic=DungeonRelics.at(site.id);
+        if(relic==null)return;
+        World world=player.getWorld();
+        Location button=new Location(world,relic.x()+.5,relic.y()+.5,relic.z()+.5);
+        if(!site.world.equals(world.getName())||!site.rooms.getFirst().contains(button)
+                ||player.getLocation().distanceSquared(button)>144
+                ||!world.isChunkLoaded(relic.x()>>4,relic.z()>>4)
+                ||button.getBlock().getType()!=Material.STONE_BUTTON)return;
+        player.spawnParticle(Particle.HAPPY_VILLAGER,button,12,.25,.4,.25,.002);
+    }
+    private void start(Player p,Site s,Mode mode,String confirmation){
         conquestAdmission(p,s);
         require(own(p)==null,"already_in_site_dungeon");
         require(playing(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
-        require(s.contains(p.getLocation())&&s.rooms.getFirst().contains(p.getLocation()),"walk_to_first_room");
+        require(atFirstRoom(s,p.getLocation()),"walk_to_first_room");
         require(!runs.containsKey(s.id),"site_busy");require(receipt(p.getUniqueId(),s.id)==null,"claim_previous_reward_first");
         require(!plugin.dungeonEdits().failed("site-" + s.id), "site_reset_fault");
         require(!plugin.dungeonEdits().dirty("site-" + s.id), "site_reset_pending");
         require(System.currentTimeMillis()-plugin.getConfig().getLong(ROOT+".cooldowns."+s.id,0)>=120_000,"site_cooldown");
         require(receiptCount()<1024,"pending_receipt_capacity");
-        if(!loadout(p,"start",s))return;
-        Run r=new Run(s,mode);r.altarTactics=s.id.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled();
-        r.enemyMoves=BOSS_SKILLS.containsKey(s.id)&&plugin.dungeonEnemyMoves().enabled();
+        // Simplified muster: the starter opens directly once their own admission passes. Bystanders are
+        // never auto-pulled into a blocking confirmation; spectators and native maid residents are ignored,
+        // and eligible nearby players/agents are invited to join voluntarily with one command. Equipment is
+        // notify-only, so an Agent starter is never stuck replaying a --confirm token.
+        EntryMember starter=entryMember(s,p);
+        require(starter.blocker().isEmpty(),"already_in_activity_or_not_survival");
+        var roster=List.of(starter);
+        if(!starter.missing().isEmpty())p.sendMessage("§e[战备提示] 缺少 "+String.join("、",starter.missing())+"；仍可开场，注意补给。");
+        inviteMuster(s,p);
+        Run r=new Run(s,mode,beaconLayout!=null&&s==beaconLayout.site?beaconLayout:null);r.altarTactics=s.id.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled();
+        r.enemyMoves=r.beacon==null&&BOSS_SKILLS.containsKey(s.id)&&plugin.dungeonEnemyMoves().enabled();
+        if(echoAvailable(s))r.echo=new EchoCitadel.Progress();
         r.checkpoint=p.getLocation().clone();r.party.add(p.getUniqueId());r.attendance.put(p.getUniqueId(),0);runs.put(s.id,r);
         try{persist();}catch(RuntimeException failure){runs.remove(s.id);throw failure;}
+        roster.forEach(member->permit(s,member));entryPermits.remove(p.getUniqueId());
         reconcile(r);
         runResult(p,"start",s.id,r.id);tell(r,"§6"+s.name+"〔"+mode.label+"〕10秒后开始；遗迹内达标的玩家与Agent自动同队，目前"+r.party.size()+"人。中途可加入、离开，已参战的房间保留，通关奖励会给每位真实参战者生成凭据。致命伤害先倒地，队友靠近4格停留10秒救援，清室也可复活。单人或全队战败返回存档点，第三次战败才结束；时限30分钟，全员离场宽限5分钟，故障和断线不扣次数。无需建立或修改日常队伍。");
+        if (r.beacon != null) tell(r, "集结后在当前房间选择祝福和路线。真人打开地下城菜单，Agent 查询 " + BeaconExpedition.STATUS + " --json。");
     }
-    private void join(Player p,Site s){
+    private void join(Player p,Site s,String confirmation){
         Run r=runs.get(s.id);require(r!=null,"not_participating");
-        // Kept as an idempotent compatibility entry; normal play auto-enrolls.
-        boolean declined=r.declined.remove(p.getUniqueId());
-        try{String problem=entryProblem(p,r,p.getLocation());require(problem.isEmpty(),problem);require(enroll(p,r),"not_participating");}
-        catch(RuntimeException failure){if(declined)r.declined.add(p.getUniqueId());throw failure;}
-        runResult(p,"join",s.id,r.id);
+        require(!plugin.isObserver(p),"already_in_activity_or_not_survival");
+        // Voluntary join, no confirmation token. Already inside the muster area: enroll directly with
+        // equipment notify-only. Outside the site: teleport to the first-room muster area, then enroll.
+        if(r.site.contains(p.getLocation())&&!atStation(s,p.getLocation())){
+            boolean declined=r.declined.remove(p.getUniqueId());
+            try{
+                String problem=entryProblem(p,r,p.getLocation());
+                if(problem.equals("equipment_required")){permit(s,entryMember(s,p));problem="";}
+                require(problem.isEmpty(),problem);
+                require(enroll(p,r),"not_participating");
+            }
+            catch(RuntimeException failure){if(declined)r.declined.add(p.getUniqueId());throw failure;}
+            runResult(p,"join",s.id,r.id);return;
+        }
+        musterTravel(p,s,r);
     }
     private void conquestAdmission(Player p,Site s){
         if(s.conquestFloor==0)return;
@@ -856,6 +1522,7 @@ final class SiteDungeonManager implements Listener {
             fields.put("pendingRewardDetails",pending.stream().map(s->pendingReward(p.getUniqueId(),s)).toList());
             Map<String,Object> outcome=lastOutcome(p.getUniqueId(),id);fields.put("lastOutcome",outcome);fields.put("outcomeKnown",!outcome.isEmpty());
             fields.put("phase",outcome.isEmpty()?"idle":"ended");lifecycle(fields,null,p,outcome);
+            returnGuidance(fields,sites.get(id.isEmpty()?Objects.toString(outcome.get("id"),""):id),p);
             send(p,"MC_SITE_DUNGEON_STATE",fields);
             if(!verboseOutput.get())return;
             explainPending(p,pending);
@@ -864,8 +1531,16 @@ final class SiteDungeonManager implements Listener {
             else p.sendMessage("§e【遗迹远征】当前没有你的活动记录，也没有待领奖凭据；旧版未保存结束原因，不能据此确认通关或补发。用 /mycli dungeon list 选地点，info 查看规则。");
             return;
         }
-        Room target=r.stage>=r.site.rooms.size()?r.site.rooms.getFirst():r.room();
-        Map<String,Object> fields=new LinkedHashMap<>();fields.put("id",r.site.id);fields.put("run",r.id);fields.put("active",true);fields.put("participant",r.party.contains(p.getUniqueId()));fields.put("phase",r.phase);fields.put("stage",Math.min(r.stage+1,r.site.rooms.size()));fields.put("stages",r.site.rooms.size());fields.put("remainingMobs",r.mobs.size());fields.put("target",List.of(target.x,target.y,target.z));fields.put("difficulty",r.mode.id);fields.put("paused",r.pausedAt>0||!r.fault.isEmpty());fields.put("fault",r.fault);
+        Room target=r.stage>=r.stages()?r.site.rooms.getFirst():r.room();
+        Map<String,Object> fields=new LinkedHashMap<>();fields.put("id",r.site.id);fields.put("run",r.id);fields.put("active",true);fields.put("participant",r.party.contains(p.getUniqueId()));fields.put("phase",r.phase);fields.put("stage",Math.min(r.stage+1,r.stages()));fields.put("stages",r.stages());fields.put("remainingMobs",r.mobs.size());fields.put("target",List.of(target.x,target.y,target.z));fields.put("difficulty",r.mode.id);fields.put("paused",r.pausedAt>0||!r.fault.isEmpty());fields.put("fault",r.fault);
+        if(r.party.contains(p.getUniqueId())){
+            var present=present(r).stream().filter(member->target.contains(member.getLocation()))
+                .map(Player::getUniqueId).collect(java.util.stream.Collectors.toSet());
+            var count=CompanionTravelAccess.countPresent(target.center(Bukkit.getWorld(r.site.world)),
+                target.radius+2,3,r.party,present,target::contains);
+            fields.put("presentCount",count.total());fields.put("presentPlayers",count.players());
+            fields.put("presentMaidAgents",count.maids());
+        }
         fields.putAll(attendanceState(r,p.getUniqueId()));fields.put("attempt",r.attempt);fields.put("resets",r.resets);fields.put("pauseReason",r.pauseReason);fields.put("lastResetReason",r.lastResetReason);fields.put("lastResetAt",r.lastResetAt);
         fields.putAll(checkpointState(r));fields.put("bossRoomLocked",bossLocked(r));
         fields.put("faultPausedMillis",r.faultPausedMillis);fields.put("resumable",r.party.contains(p.getUniqueId())&&!r.fault.isEmpty());
@@ -877,17 +1552,30 @@ final class SiteDungeonManager implements Listener {
         if(r.poison!=null&&companionCombatPosition(r,p,p.getLocation())){
             var hazard=r.poison.observation(System.currentTimeMillis());if(!hazard.isEmpty())fields.put("hazard",hazard);
         }
-        if(r.enemyMoves&&companionCombatPosition(r,p,p.getLocation())){
+        if((r.enemyMoves||r.echo!=null)&&companionCombatPosition(r,p,p.getLocation())){
             var moves=plugin.dungeonEnemyMoves().hazards(p);if(!moves.isEmpty())fields.put("enemyMoves",moves);
+        }
+        if(r.echo!=null&&r.party.contains(p.getUniqueId())){
+            fields.put("encounterTiming",r.echo.timing());
+            if(r.phase.equals("moving"))fields.put("route",EchoCitadel.route(r.stage));
+            if(r.phase.equals("fighting")){
+                var wave=echoWave(r,r.echo.waiting()?r.echo.wave+1:r.echo.wave);
+                fields.put("encounter",Map.of("wave",r.echo.wave+(r.echo.waiting()?2:1),"waves",EchoCitadel.waves(r.stage),
+                    "name",wave.name(),"tactic",wave.tactic(),"waiting",r.echo.waiting(),
+                    "nextWaveInMs",r.echo.waiting()?Math.max(0,r.echo.nextAt-System.currentTimeMillis()):0));
+            }
         }
         Map<String,Object> previousOutcome=r.party.contains(p.getUniqueId())?Map.of():lastOutcome(p.getUniqueId(),r.site.id);
         lifecycle(fields,r,p,previousOutcome);
+        if (r.beacon != null && r.party.contains(p.getUniqueId())) fields.put("chapter", beaconStatus(p, r));
         if(!r.party.contains(p.getUniqueId())){fields.put("lastOutcome",previousOutcome);fields.put("outcomeKnown",!previousOutcome.isEmpty());}
+        returnGuidance(fields,r.site,p);
         send(p,"MC_SITE_DUNGEON_STATE",fields);
         if(!verboseOutput.get())return;
         explainPending(p,pending);
         if(r.party.contains(p.getUniqueId())){
-            p.sendMessage("§b【"+label(r.site)+"】"+r.site.name+" · "+target.name+"；参战登记 "+r.attendance.getOrDefault(p.getUniqueId(),0)+"/"+r.site.rooms.size()+"，"+(r.phase.equals("returning")?"正在登记通关奖励，无须返回首室":"本段"+(r.roomParticipants.contains(p.getUniqueId())?"已记录":"尚未记录"))+"。"+(!r.fault.isEmpty()?(r.storageFault?"存储故障暂停，等待不计挑战时限；原队伍回到遗迹后自动核对恢复，也可本人用 /mycli dungeon resume。":"故障暂停，等待不计挑战时限；准备好后本人用 /mycli dungeon resume，恢复后5分钟内回场。"):r.pausedAt>0?"暂停："+pauseLabel(r.pauseReason)+"；5分钟内回场，未清段落重刷。":""));
+            p.sendMessage("§b【"+label(r.site)+"】"+r.site.name+" · "+target.name+"；参战登记 "+r.attendance.getOrDefault(p.getUniqueId(),0)+"/"+r.stages()+"，"+(r.phase.equals("returning")?"正在登记通关奖励，无须返回首室":"本段"+(r.roomParticipants.contains(p.getUniqueId())?"已记录":"尚未记录"))+"。"+(!r.fault.isEmpty()?(r.storageFault?"存储故障暂停，等待不计挑战时限；原队伍回到遗迹后自动核对恢复，也可本人用 /mycli dungeon resume。":"故障暂停，等待不计挑战时限；准备好后本人用 /mycli dungeon resume，恢复后5分钟内回场。"):r.pausedAt>0?"暂停："+pauseLabel(r.pauseReason)+"；5分钟内回场，未清段落重刷。":""));
+            p.sendMessage("§7本室在场 "+fields.get("presentCount")+" 位，其中女仆 Agent "+fields.get("presentMaidAgents")+" 位。");
             if(!missingRooms(r,p.getUniqueId()).isEmpty())p.sendMessage("§e缺席房间："+String.join("、",missingRooms(r,p.getUniqueId()))+"；已有参战记录保留，实际参战者在全场通关后均可领奖。");
             if(!unverifiedRooms(r).isEmpty())p.sendMessage("§7旧版房间明细未保存，保留原登记数量，不推断缺席房间。本人当前总数以回执 attendance 为准。");
         }else if(!previousOutcome.isEmpty()){p.sendMessage("§7该地点有其他队伍正在挑战；以下是你本人最近一次结果。");explainOutcome(p,previousOutcome);}
@@ -899,14 +1587,327 @@ final class SiteDungeonManager implements Listener {
         try{persist();}catch(RuntimeException e){r.party.add(p.getUniqueId());r.declined.remove(p.getUniqueId());throw e;}
         runResult(p,"leave",r.site.id,r.id);p.sendMessage("§e已退出本次在场参战，已完成"+count+"室的记录保留；同伴通关后仍可领取奖励。请沿原路撤离；离开遗迹后再回来会自动续接。当前停留期间不会自动重新加入。");
     }
+
+    private static String beaconObjective(Run r) {
+        if (r.stage >= r.stages()) return "正在保存第一层攻略结果和个人奖励。";
+        Room room = r.room();
+        String instruction = switch (r.beacon.stop(r.stage)) {
+            case BRIEFING -> "在东侧前哨可选一个个人祝福，再由在场队员确认第一条路线。";
+            case SCOUT -> "靠近北廊两处金色标记，调查西侧与东侧印记。";
+            case RESCUE -> switch (r.beacon.rescue()) {
+                case ESCORTING -> "陪失联队员走向安全标记 " + r.layout.refuge.coordinates() + "，他抵达后才算救援完成。";
+                case STRANDED -> "接应未完成，回金色标记处取回遗留信标。";
+                default -> "在西侧柱廊的接应标记处接出失联队员。";
+            };
+            case CAMP -> "在南廊可改选一次个人祝福，再确认看台封印或宝库。";
+            case ALTAR -> "从东南石梯上到看台，关闭两处金色标记的封印。";
+            default -> "走到目标房间后迎战守卫。";
+        };
+        return room.name + " · " + r.site.world + " (" + room.x + "," + room.y + "," + room.z + ")。" + instruction;
+    }
+
+    private static BeaconExpedition.Point beaconMarker(Run r, BeaconExpedition.Choice choice) {
+        return r.layout.markers.get(choice == BeaconExpedition.Choice.SALVAGE ? "release" : choice.id);
+    }
+
+    private List<BeaconExpedition.Choice> beaconOptions(Run r, Player p) {
+        if (r.beacon == null || r.stage >= r.stages() || !r.phase.equals("moving") || !r.fault.isEmpty()
+                || !r.party.contains(p.getUniqueId()) || !playing(p) || roomVisitor(p) || plugin.isDowned(p)) return List.of();
+        return r.beacon.choices(r.stage, p.getUniqueId());
+    }
+
+    private String beaconChoiceProblem(Run r, Player p, BeaconExpedition.Choice choice) {
+        Location at = p.getLocation();
+        if (!r.fault.isEmpty() || r.pausedAt > 0 || !r.phase.equals("moving")) return "choice_not_ready";
+        if (!r.site.contains(at) || !r.room().contains(at)) return "go_to_beacon_room";
+        var point = beaconMarker(r, choice);
+        if (point == null) return "";
+        Location marker = pointLocation(point, p.getWorld());
+        if (marker.distanceSquared(at) > 12.25 || !safeBeaconLanding(marker)) return "go_to_beacon_marker";
+        // A nearby coordinate behind a wall or on another floor cannot activate this mark.
+        Location eye = p.getEyeLocation();
+        Location surface = marker.clone().subtract(0, .05, 0);
+        var offset = surface.toVector().subtract(eye.toVector());
+        var hit = p.getWorld().rayTraceBlocks(eye, offset, offset.length() + .02, FluidCollisionMode.NEVER, true);
+        return hit == null || surface.getBlock().equals(hit.getHitBlock()) ? "" : "go_to_beacon_marker";
+    }
+
+    private static boolean safeBeaconLanding(Location at) {
+        World world = at.getWorld();
+        return world != null && world.isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4)
+            && AgentFriendPlugin.safeLanding(at.getBlock()) && TeamTravelSafety.insideBorder(at);
+    }
+
+    private Map<String,Object> beaconStatus(Player p, Run r) {
+        Map<String,Object> data = new LinkedHashMap<>(r.beacon.summary());
+        data.put("node", r.stage == r.stages() ? "settlement" : r.beacon.stop(r.stage).name().toLowerCase(Locale.ROOT));
+        data.put("nodes", r.stages() + 1);
+        data.put("nodeIndex", r.stage + 1);
+        data.put("objective", beaconObjective(r));
+        var boon = r.beacon.boon(p.getUniqueId());
+        if (boon != null) data.put("boon", Map.of("id", boon.id, "name", boon.label, "strength", r.beacon.strength(p.getUniqueId()), "scope", "current_room"));
+        List<Map<String,Object>> options = new ArrayList<>();
+        for (var choice : beaconOptions(r, p)) {
+            String token = new BeaconExpedition.Token(r.id, r.stage, choice.id).value();
+            String problem = beaconChoiceProblem(r, p, choice);
+            var option = new LinkedHashMap<String,Object>();
+            option.put("id", choice.id);
+            option.put("kind", choice.boon == null ? choice.marked() ? "objective" : "route" : "blessing");
+            option.put("name", choice.label);
+            option.put("effect", boonDetail(r, choice));
+            option.put("available", problem.isEmpty());
+            option.put("reason", problem);
+            option.put("token", token);
+            option.put("command", "/mycli dungeon choose " + token + " --json");
+            var marker = beaconMarker(r, choice);
+            Room room = r.room();
+            option.put("target", marker == null ? List.of(room.x, room.y, room.z) : marker.coordinates());
+            options.add(option);
+        }
+        data.put("options", List.copyOf(options));
+        data.put("world", r.site.world);
+        if (r.shock != null) {
+            Location at = r.shock.center;
+            data.put("intent", Map.of("id", "shockwave", "center", List.of(at.getX(), at.getY(), at.getZ()),
+                "radius", SHOCK_RADIUS, "heightTolerance", 2, "resolvesAt", r.shock.resolvesAt));
+        }
+        return data;
+    }
+
+    private static String boonDetail(Run r, BeaconExpedition.Choice choice) {
+        return choice.boon != null && r.stage == BeaconExpedition.CAMP && r.beacon.safeRescue()
+            ? choice.detail.replace("2点", "3点") : choice.detail;
+    }
+
+    private void chooseBeacon(Player p, String value) {
+        var token = BeaconExpedition.Token.parse(value);
+        Run r = own(p);
+        require(r != null && r.beacon != null && r.id.equals(token.run()), "beacon_run_not_current");
+        if (r.beacon.committed(p.getUniqueId(), token.stage(), token.action())) {
+            beaconResult(p, value, true, false, "already_applied");
+            return;
+        }
+        require(token.stage() == r.stage, "stale_beacon_choice");
+        var choice = beaconOptions(r, p).stream().filter(option -> option.id.equals(token.action())).findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("stale_beacon_choice"));
+        String problem = beaconChoiceProblem(r, p, choice);
+        require(problem.isEmpty(), problem);
+        var decision = r.beacon.choose(r.stage, p.getUniqueId(), choice);
+        if (decision.advance()) advanceBeacon(r, decision.progress());
+        else saveBeaconProgress(r, decision.progress());
+        beaconResult(p, value, true, true, "success");
+        if (choice == BeaconExpedition.Choice.RELEASE) notice(r, "接应已确认。等失联队员出现后，沿西廊陪他走到金色安全标记。");
+    }
+
+    private void beaconResult(Player p, String value, boolean success, boolean changed, String reason) {
+        String message = switch (reason) {
+            case "success" -> "已保存选择";
+            case "already_applied" -> "此选择已记录";
+            case "go_to_beacon_room" -> "先沿通道到当前房间";
+            case "go_to_beacon_marker" -> "到同一层金色标记旁，确认中间没有墙";
+            case "choice_not_ready" -> "场次尚未就绪，先查看集结或暂停状态";
+            case "data_unavailable" -> "暂时无法确认本次存档，先查原场次选择";
+            default -> "选择已过期或不属于当前场次，请从最新状态读取可用选项";
+        };
+        Run r = own(p);
+        Map<String,Object> result = new LinkedHashMap<>();
+        result.put("id", BeaconExpedition.SITE);
+        result.put("action", "choose");
+        result.put("choiceToken", value);
+        result.put("success", success);
+        result.put("changed", changed);
+        result.put("reason", reason);
+        result.put("message", message);
+        result.put("errorMessage", success ? "" : message);
+        result.put("nextCommand", BeaconExpedition.STATUS + " --json");
+        if (r != null && r.beacon != null) result.put("chapter", beaconStatus(p, r));
+        send(p, "MC_SITE_DUNGEON_RESULT", result);
+        if (!jsonOutput.get() && !success) p.sendMessage("§e可从地下城菜单刷新选项，或查 " + BeaconExpedition.STATUS);
+    }
+
+    private void saveBeaconProgress(Run r, BeaconExpedition.Progress progress) {
+        var before = r.beacon;
+        r.beacon = progress;
+        try { persist(); }
+        catch (RuntimeException failure) { r.beacon = before; throw failure; }
+    }
+
+    private void advanceBeacon(Run r, BeaconExpedition.Progress progress) {
+        int stage = r.stage;
+        List<Player> present = present(r).stream()
+            .filter(p -> !plugin.isDowned(p) && !roomVisitor(p) && r.room().contains(p.getLocation())).toList();
+        require(!present.isEmpty(), "go_to_beacon_room");
+        Set<UUID> credited = new LinkedHashSet<>();
+        present.forEach(p -> credited.add(p.getUniqueId()));
+        Location previousCheckpoint = r.checkpoint;
+        int previousCheckpointRoom = r.checkpointRoom;
+        Map<UUID,Integer> before = new HashMap<>(r.attendance);
+        r.roomAttendance.put(stage, Set.copyOf(credited));
+        for (UUID id : credited) r.attendance.merge(id, 1, Integer::sum);
+        present.stream().map(Player::getLocation).filter(SiteDungeonManager::safeBeaconLanding).findFirst().ifPresent(point -> {
+            r.checkpoint = point;
+            r.checkpointRoom = stage + 1;
+        });
+        r.stage++;
+        try { saveBeaconProgress(r, progress); }
+        catch (RuntimeException failure) {
+            r.stage = stage;
+            r.attendance.clear();
+            r.attendance.putAll(before);
+            r.roomAttendance.remove(stage);
+            r.checkpoint = previousCheckpoint;
+            r.checkpointRoom = previousCheckpointRoom;
+            throw failure;
+        }
+        clearEscort(r);
+        try {
+            if (stage != BeaconExpedition.BRIEFING && stage != BeaconExpedition.CAMP)
+                DungeonRecovery.apply(plugin, present, r.site.id, r.stage);
+            notice(r, "§a本段已保存。下一站：" + beaconObjective(r) + " " + r.room().hint);
+        } catch (RuntimeException error) {
+            plugin.getLogger().log(java.util.logging.Level.WARNING, "Beacon progress saved; recovery message failed", error);
+        }
+    }
+
+    private void tickBeaconObjective(Run r, List<Player> present, long now) {
+        List<Player> nearby = present.stream().filter(p -> !plugin.isDowned(p) && !roomVisitor(p)
+            && r.room().contains(p.getLocation())).toList();
+        if (nearby.isEmpty()) {
+            Entity escort = r.escort == null ? null : Bukkit.getEntity(r.escort);
+            if (escort instanceof Mob mob && mob.isValid()) steerEscort(mob, null);
+            return;
+        }
+        if (r.beaconPromptStage != r.stage) {
+            r.beaconPromptStage = r.stage;
+            var card = net.kyori.adventure.text.Component.text(beaconObjective(r) + " [打开本段菜单]")
+                .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand(BeaconExpedition.MENU));
+            nearby.forEach(p -> p.sendMessage(card));
+        }
+        World world = Bukkit.getWorld(r.site.world);
+        var choices = r.beacon.choices(r.stage, nearby.getFirst().getUniqueId());
+        for (var choice : choices) {
+            var marker = beaconMarker(r, choice);
+            if (marker != null) showBeacon(world, marker);
+        }
+        if (r.stage == BeaconExpedition.RESCUE && r.beacon.rescue() == BeaconExpedition.Rescue.ESCORTING) {
+            showBeacon(world, r.layout.refuge);
+            tickEscort(r, nearby, world, now);
+        }
+    }
+
+    private static void showBeacon(World world, BeaconExpedition.Point point) {
+        Location spot = pointLocation(point, world);
+        if (world.isChunkLoaded(spot.getBlockX() >> 4, spot.getBlockZ() >> 4)) {
+            world.spawnParticle(Particle.DUST, spot.clone().add(0, .2, 0), 4, .22, .14, .22, 0,
+                new Particle.DustOptions(Color.fromRGB(0xffcd53), 1.25f));
+        }
+    }
+
+    private void tickEscort(Run r, List<Player> nearby, World world, long now) {
+        Location cell = pointLocation(r.layout.markers.get("release"), world);
+        Location refuge = pointLocation(r.layout.refuge, world);
+        if (r.escort == null) {
+            require(safeBeaconLanding(cell) && safeBeaconLanding(refuge), "beacon_rescue_landing_blocked");
+            Villager escort = world.spawn(cell, Villager.class, villager -> {
+                villager.addScoreboardTag(ESCORT_TAG);
+                villager.setPersistent(false);
+                villager.setSilent(true);
+                villager.setCollidable(false);
+                villager.setCanPickupItems(false);
+                villager.setCustomName("§e失联队员");
+                villager.setCustomNameVisible(true);
+            });
+            r.escort = escort.getUniqueId();
+            r.escortDeadline = now + 45_000;
+        }
+        Entity entity = Bukkit.getEntity(r.escort);
+        if (!(entity instanceof Villager escort) || !escort.isValid() || escort.isDead()
+                || !escort.getWorld().equals(world) || !r.site.contains(escort.getLocation()) || now >= r.escortDeadline) {
+            saveBeaconProgress(r, r.beacon.withRescue(BeaconExpedition.Rescue.STRANDED));
+            clearEscort(r);
+            notice(r, "§e队员未能安全撤离。回接应标记取回信标，可继续攻略。");
+            return;
+        }
+        if (nearby.stream().noneMatch(p -> p.getLocation().distanceSquared(escort.getLocation()) <= 49)) {
+            steerEscort(escort, null);
+            return;
+        }
+        if (refuge.distanceSquared(escort.getLocation()) <= 2.25) {
+            advanceBeacon(r, r.beacon.withRescue(BeaconExpedition.Rescue.SAFE));
+            return;
+        }
+        steerEscort(escort, refuge);
+    }
+
+    private static void steerEscort(Mob mob, Location destination) {
+        // Youer exposes vanilla Mojang navigation but lacks the Paper Mob#getPathfinder API.
+        try {
+            Object handle = mob.getClass().getMethod("getHandle").invoke(mob);
+            Object navigation = handle.getClass().getMethod("getNavigation").invoke(handle);
+            if (destination == null) navigation.getClass().getMethod("stop").invoke(navigation);
+            else navigation.getClass().getMethod("moveTo", double.class, double.class, double.class, double.class)
+                .invoke(navigation, destination.getX(), destination.getY(), destination.getZ(), .85);
+        } catch (ReflectiveOperationException failure) {
+            throw new IllegalStateException("beacon_escort_navigation_unavailable", failure);
+        }
+    }
+
+    private static boolean isEscort(Entity entity) { return entity.getScoreboardTags().contains(ESCORT_TAG); }
+
+    private void clearEscort(Run r) {
+        Entity escort = r.escort == null ? null : Bukkit.getEntity(r.escort);
+        if (escort != null && isEscort(escort)) escort.remove();
+        r.escort = null;
+        r.escortDeadline = 0;
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void beaconBlock(PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND || event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) return;
+        Player p = event.getPlayer();
+        Run r = own(p);
+        if (r == null || r.beacon == null || !r.site.contains(p.getLocation())) return;
+        for (var choice : beaconOptions(r, p)) {
+            var marker = beaconMarker(r, choice);
+            Block block = event.getClickedBlock();
+            if (marker == null || block.getX() != marker.x() || block.getY() != marker.y() - 1 || block.getZ() != marker.z()) continue;
+            event.setCancelled(true);
+            command(p, new String[]{"dungeon", "choose", new BeaconExpedition.Token(r.id, r.stage, choice.id).value()});
+            return;
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void escortInteraction(PlayerInteractEntityEvent event) {
+        if (isEscort(event.getRightClicked())) event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void escortPickup(EntityPickupItemEvent event) {
+        if (isEscort(event.getEntity())) event.setCancelled(true);
+    }
+
     private int receiptCount(){var c=plugin.getConfig().getConfigurationSection(ROOT+".receipts");if(c==null)return 0;int total=0;for(String owner:c.getKeys(false)){var section=c.getConfigurationSection(owner);if(section!=null)total+=section.getKeys(false).size();}return total;}
     private ConfigurationSection receipt(UUID id,String site){return plugin.getConfig().getConfigurationSection(ROOT+".receipts."+id+"."+site);}
+    private String relicPath(UUID id,String site){return ROOT+".relics."+id+"."+site;}
+    private boolean relicClaimed(UUID id,String site){return plugin.getConfig().isString(relicPath(id,site));}
+    private ItemStack pendingRelic(UUID id,String site){
+        var saved=receipt(id,site);
+        return saved==null?null:saved.getItemStack("relic");
+    }
+    private Map<String,Object> relicCollection(UUID id){
+        long completed=sites.keySet().stream().filter(site->relicClaimed(id,site)).count();
+        String title=completed>=15?"群境开拓者":completed>=10?"十境寻迹者":completed>=5?"遗迹巡行者":completed>=1?"遗迹先行者":"";
+        return Map.of("found",completed,"total",sites.keySet().stream().filter(site->DungeonRelics.at(site)!=null).count(),"title",title);
+    }
     private List<String> pendingSites(UUID id){var c=plugin.getConfig().getConfigurationSection(ROOT+".receipts."+id);return c==null?List.of():new ArrayList<>(c.getKeys(false));}
     private Map<String,Object> pendingReward(UUID owner,String id){
         var saved=receipt(owner,id);if(saved==null)return Map.of();Site s=sites.get(id);
         Map<String,Object> data=new LinkedHashMap<>();data.put("id",id);data.put("name",s==null?id:s.name);if(s!=null){data.put("activityLabel",label(s));data.put("setting",s.outdoor?"outdoor":"interior");}
         data.put("status","ready");data.put("run",saved.getString("run",""));data.put("day",saved.getString("day",""));
         data.put("emeralds",saved.getInt("emeralds"));data.put("item",saved.getString("item",""));data.put("count",saved.getInt("count"));
+        var relic=DungeonRelics.at(id);
+        if(relic!=null&&relic.recognizes(saved.getItemStack("relic")))data.put("relic",relic.name());
         data.put("claimCommand","/mycli dungeon claim "+id);return data;
     }
     private void explainPending(Player p,List<String> pending){
@@ -922,9 +1923,18 @@ final class SiteDungeonManager implements Listener {
         String chosen=id;var receipt=receipt(p.getUniqueId(),chosen);
         if(receipt==null){Map<String,Object> outcome=lastOutcome(p.getUniqueId(),chosen);if(!outcome.isEmpty())explainOutcome(p,outcome);require(false,"no_pending_reward");}
         String claimedRun=receipt.getString("run");
+        ItemStack gear=receipt.getItemStack("relic");
+        var relic=DungeonRelics.at(chosen);
+        if(receipt.contains("relic"))
+            require(relic!=null&&relic.recognizes(gear)&&!relicClaimed(p.getUniqueId(),chosen),"data_unavailable");
         applyCompletion(p,chosen,receipt);
         atomic(()->{
-            require(plugin.dungeon().queueGuildRewards(p.getUniqueId(),receipt.getInt("emeralds"),Material.valueOf(receipt.getString("item")),receipt.getInt("count")),"personal_reward_queue_full");
+            if(!receipt.getBoolean("relic-only"))
+                require(plugin.dungeon().queueGuildRewards(p.getUniqueId(),receipt.getInt("emeralds"),Material.valueOf(receipt.getString("item")),receipt.getInt("count")),"personal_reward_queue_full");
+            if(gear!=null){
+                require(plugin.dungeon().queuePurchased(p.getUniqueId(),gear),"personal_reward_queue_full");
+                plugin.getConfig().set(relicPath(p.getUniqueId(),chosen),claimedRun);
+            }
             // Proof and consumed receipt commit together; a crash cannot lose or duplicate the hand-in.
             plugin.taskMarket().worldAction(p,GuildManager.Goal.SITE_CLEAR,chosen,"site:"+receipt.getString("run"),receipt.getLong("started-at",0),false);
             plugin.getConfig().set(ROOT+".claimed."+p.getUniqueId()+"."+chosen,receipt.getString("day"));plugin.getConfig().set(ROOT+".receipts."+p.getUniqueId()+"."+chosen,null);
@@ -936,13 +1946,17 @@ final class SiteDungeonManager implements Listener {
             }
         });
         runResult(p,"claim",chosen,claimedRun);p.sendMessage("§a"+(sites.containsKey(chosen)?label(sites.get(chosen)):"遗迹远征")+"奖励已保存到待入箱队列；打开个人箱时装入，箱满会保留。开箱 /mycli arena stash；免费查库存和待入箱数量 "+PersonalStashOverview.COMMAND+"。重复领取不会再次发奖。");
+        if(gear!=null)p.sendMessage("§d已收录秘宝「"+relic.name()+"」。查看装备说明了解触发方式；遗迹菜单可查收藏与称号。");
         plugin.agentCoach().rememberAdventure(p, "遗迹攻略奖励已经领取");
     }
     private void tick(){
         long timestamp=System.currentTimeMillis();
+        if(!scheduledReturns.isEmpty())try{updateReturns(timestamp);}
+        catch(RuntimeException failure){plugin.getLogger().log(java.util.logging.Level.WARNING,"Ground return pending: storage unavailable",failure);}
         for(var entry:new ArrayList<>(shots.entrySet())){Entity e=Bukkit.getEntity(entry.getKey());if(e==null||!e.isValid()||timestamp>=entry.getValue().expires){if(e!=null)e.remove();shots.remove(entry.getKey());}}
         for(Run r:new ArrayList<>(runs.values())){
         if(!r.fault.isEmpty()){
+            if(r.echo!=null)r.echo.sample(timestamp,r.phase,false);
             // Only a proven storage fault may recover itself. Return to the
             // saved phase; never rerun a failed game callback or infer a reward.
             if(r.storageFault&&r.storageRetryAt==0&&r.storageRetryAttempts==0)r.storageRetryAt=timestamp+1000;
@@ -966,6 +1980,7 @@ final class SiteDungeonManager implements Listener {
             if(r.phase.equals("returning")){complete(r);continue;}
             long now=System.currentTimeMillis();if(activeMillis(r.started,r.faultPausedMillis,now)>TIMEOUT_MS){end(r,"time_limit");continue;}
             List<Player> present=present(r);
+            if(r.echo!=null)r.echo.sample(timestamp,r.phase,r.pausedAt==0&&!present.isEmpty());
             if(present.isEmpty() || present.stream().allMatch(plugin::isDowned)
                     && r.party.stream().anyMatch(id->ResidentCli.find(id)==null&&plugin.trialRescue()!=null&&!plugin.trialRescue().downed(id))){
                 if(r.pausedAt==0){
@@ -980,12 +1995,19 @@ final class SiteDungeonManager implements Listener {
             if(r.phase.equals("muster")){if(now<r.readyAt)continue;r.phase="moving";persist();}
             if(r.phase.equals("retrying")){
                 if(plugin.trialRescue()!=null&&plugin.trialRescue().hasDowned(rescueKey(r))){returnToCheckpoint(r);continue;}
-                if(now<r.retryReadyAt)continue;r.phase=r.stage>=r.site.rooms.size()?"returning":"moving";persist();
+                if(now<r.retryReadyAt)continue;r.phase=r.stage>=r.stages()?"returning":"moving";persist();
             }
             if(r.phase.equals("moving")){
-                if(present.stream().noneMatch(p->r.room().contains(p.getLocation())))continue;
+                if (r.beacon != null && r.room().enemies.isEmpty()) {
+                    tickBeaconObjective(r, present, now);
+                    continue;
+                }
+                if(present.stream().noneMatch(p->r.room().contains(p.getLocation()))){
+                    if(r.echo!=null)markEchoRoute(r,present);
+                    continue;
+                }
                 if(bossLocked(r)&&bossIntruders(r).findAny().isPresent()){for(Player member:present)lockHint(member,"Boss房间还有非本场队员，请其退出门外；未开始本段战斗、未扣次数。");continue;}
-                if(runs.values().stream().mapToInt(run->run.mobs.size()).sum()+r.room().enemies.size()>GLOBAL_MOBS)continue;
+                if(!canSpawn(r.echo==null?r.room().enemies.size():echoWave(r,0).enemies().size()))continue;
                 spawn(r);continue;
             }
             if(!r.phase.equals("fighting"))continue;
@@ -999,7 +2021,24 @@ final class SiteDungeonManager implements Listener {
             if(r.invalid)continue;
             tickAltar(r,present,timestamp);
             if(runs.get(r.site.id)!=r)continue;
+            if (r.beacon != null && r.stage == BeaconExpedition.BOSS && !r.beacon.altarDisabled()) {
+                tickShock(r, present, now);
+                if (!r.phase.equals("fighting") || runs.get(r.site.id) != r) continue;
+            }
             if(r.mobs.isEmpty()){
+                if(r.echo!=null&&r.echo.hasNext(r.stage)){
+                    var next=echoWave(r,r.echo.wave+1);
+                    if(!r.echo.waiting()){
+                        clearShots(r);
+                        r.echo.schedule(timestamp);
+                        notice(r,"§d"+next.name()+"即将出现。"+next.tactic());
+                    }
+                    if(timestamp<r.echo.nextAt||!canSpawn(next.enemies().size())
+                            ||present.stream().noneMatch(p->!plugin.isDowned(p)&&r.room().contains(p.getLocation())))continue;
+                    r.echo.advance();
+                    spawn(r);
+                    continue;
+                }
                 Set<UUID> credited=new LinkedHashSet<>(r.roomParticipants);credited.retainAll(r.attendance.keySet());
                 r.roomAttendance.put(r.stage,Set.copyOf(credited));
                 for(UUID id:credited)r.attendance.merge(id,1,Integer::sum);
@@ -1008,14 +2047,23 @@ final class SiteDungeonManager implements Listener {
                 Player anchor=present.stream().filter(p->r.room().contains(p.getLocation())&&AgentFriendPlugin.safeLanding(p.getLocation().getBlock())).findFirst().orElse(null);
                 if(anchor!=null){r.checkpoint=anchor.getLocation().clone();r.checkpointRoom=r.stage+1;}
                 var clearedRoom = r.room();
-                String roomName=clearedRoom.name;clean(r);r.stage++;r.attempt=0;r.phase=r.stage==r.site.rooms.size()?"returning":"moving";persist();
+                String roomName=clearedRoom.name;clean(r);r.stage++;r.attempt=0;r.phase=r.stage==r.stages()?"returning":"moving";persist();
                 roomCheckpointCommitted=true;
                 if(plugin.trialRescue()!=null)plugin.trialRescue().reviveTeam(rescueKey(r),"room_cleared");
                 DungeonRecovery.apply(plugin, present(r).stream()
                     .filter(p -> credited.contains(p.getUniqueId()) && clearedRoom.contains(p.getLocation())).toList(), r.site.id, r.stage);
                 if(plugin.lifeChallenges()!=null)plugin.lifeChallenges().roomCleared(challengeContext,challengePresent);
-                for(UUID id:r.party){Player p=ResidentCli.find(id);if(p!=null)p.sendMessage((credited.contains(id)?"§a":"§e")+"【"+label(r.site)+"·参战登记】"+roomName+"："+(credited.contains(id)?"已记录本段参战":"本段尚无参战记录")+"；累计 "+r.attendance.getOrDefault(id,0)+"/"+r.site.rooms.size()+"。中途离开仍保留已经完成的登记。");}
+                for(UUID id:r.party){Player p=ResidentCli.find(id);if(p!=null)p.sendMessage((credited.contains(id)?"§a":"§e")+"【"+label(r.site)+"·参战登记】"+roomName+"："+(credited.contains(id)?"已记录本段参战":"本段尚无参战记录")+"；累计 "+r.attendance.getOrDefault(id,0)+"/"+r.stages()+"。中途离开仍保留已经完成的登记。");}
                 notice(r,"§a战斗室已清理；"+(r.phase.equals("returning")?"全场通关，正在为所有真实参战者登记奖励，无须返回首室。":"步行前往下一室："+r.room().name+" "+r.room().x+","+r.room().y+","+r.room().z));
+                if(!r.phase.equals("returning")){
+                    Room next=r.room();
+                    for(Player player:present)if(player.isOnline()){
+                        player.sendTitle("§a"+roomName+" · 已攻克","§e下一步：前往"+next.name,5,38,10);
+                        if(r.echo!=null)player.sendMessage("§e【行进指引】沿紫色粒子和柱廊前进："+EchoCitadel.route(r.stage)
+                            +"。进到目标房间即开战。");
+                        else if(!next.hint.isBlank())player.sendMessage("§e【行进指引】"+next.hint);
+                    }
+                }
                 if(r.phase.equals("returning"))complete(r);
             }
         }catch(RuntimeException e){
@@ -1046,6 +2094,43 @@ final class SiteDungeonManager implements Listener {
         try{persist();}catch(RuntimeException failure){r.fault=fault;r.storageFault=storageFault;r.pausedAt=paused;r.pauseReason=reason;r.faultPausedMillis=excluded;throw failure;}
         r.storageRetryAt=0;
     }
+
+    private boolean canRejoinStorageFault(Player p, Run r) {
+        return r.party.isEmpty() && r.storageFault && r.fault.equals("data_unavailable")
+            && r.attendance.getOrDefault(p.getUniqueId(), 0) > 0 && !r.declined.contains(p.getUniqueId())
+            && own(p) == null && playing(p) && !roomVisitor(p) && !plugin.isDowned(p)
+            && !plugin.dungeonParticipant(p) && !plugin.pvpParticipant(p);
+    }
+
+    private void resumePlayer(Player p) {
+        Run run = own(p);
+        boolean returningMember = run == null;
+        if (returningMember) {
+            List<Run> paused = runs.values().stream().filter(r -> canRejoinStorageFault(p, r)).toList();
+            if (paused.size() == 1) {
+                Run recorded = paused.getFirst();
+                if (!recorded.site.contains(p.getLocation())) {
+                    result(p, "resume", recorded.site.id, "walk_to_site", Map.of(
+                        "errorMessage", "回到原遗迹范围才可续接这份旧存档",
+                        "nextCommand", "/mycli dungeon travel " + recorded.site.id));
+                    return;
+                }
+                conquestAdmission(p, recorded.site);
+                require(DungeonLoadout.missing(p).isEmpty(),"equipment_required");
+                run = recorded;
+            }
+        }
+        require(run != null && !run.fault.isEmpty(), "not_fault_paused");
+        require(!Boolean.TRUE.equals(DurableConfigStore.audit(plugin).get("commitUnknown")), "data_unavailable");
+        if (returningMember) run.party.add(p.getUniqueId());
+        try { resume(run); }
+        catch (RuntimeException failure) {
+            if (returningMember) run.party.remove(p.getUniqueId());
+            throw failure;
+        }
+        runResult(p, "resume", run.site.id, run.id);
+        p.sendMessage("§a原地下城场次已恢复，已清进度保留。请在5分钟内到目标房间。查询 /mycli dungeon status " + run.site.id);
+    }
     private String faultHint(Run r){
         if(r.fault.equals("data_unavailable")&&Boolean.TRUE.equals(DurableConfigStore.audit(plugin).get("commitUnknown")))return "存储提交结果未知，原始提交文件已保留；请运营核对真实状态，勿重复开场、领奖或清空任务";
         if(r.storageFault)return "已确认存储故障，原存档与计时保留；原队伍回到遗迹后自动核对恢复，勿重开或重复领奖";
@@ -1074,25 +2159,54 @@ final class SiteDungeonManager implements Listener {
         return floor.getType().isSolid()&&!name.endsWith("_LEAVES")&&!name.endsWith("_STAIRS")
                 &&(!name.endsWith("_SLAB")||floor.getBlockData() instanceof Slab slab&&slab.getType()==Slab.Type.DOUBLE);
     }
+    private void markEchoRoute(Run r,List<Player> present){
+        for(Player p:present)for(var point:EchoCitadel.route(r.stage)){
+            Location mark=new Location(p.getWorld(),point.get(0)+.5,point.get(1)+.1,point.get(2)+.5);
+            if(p.getLocation().distanceSquared(mark)<196)
+                p.spawnParticle(Particle.DUST,mark,4,.25,.07,.25,0,new Particle.DustOptions(org.bukkit.Color.FUCHSIA,1.2f));
+        }
+    }
     private void spawn(Run r){
-        World w=Bukkit.getWorld(r.site.world);Room room=r.room();List<Location> spots=safeSpots(r);
-        require(spots.size()>=room.enemies.size(),room.spawnPoints.isEmpty()?"room_blocked_clear_floor_and_retry":"camp_spawn_points_obstructed");Collections.shuffle(spots);
+        Room room=r.room();
+        var wave=r.echo==null?null:echoWave(r,r.echo.wave);
+        var enemies=wave==null?room.enemies:wave.enemies();
+        List<Location> spots=safeSpots(r);
+        require(spots.size()>=enemies.size(),room.spawnPoints.isEmpty()?"room_blocked_clear_floor_and_retry":"camp_spawn_points_obstructed");
+        Collections.shuffle(spots);
+        if(wave!=null&&wave.sideFlank()){
+            var order=new ArrayList<Location>();
+            spots.stream().min(Comparator.comparingDouble(Location::getX)).ifPresent(order::add);
+            if(r.mode!=Mode.NORMAL){
+                spots.stream().filter(at->!order.contains(at)).max(Comparator.comparingDouble(Location::getX)).ifPresent(order::add);
+            }
+            spots.removeAll(order);spots.addAll(0,order);
+        }
         try{
-            for(int i=0;i<room.enemies.size();i++){
-                var spec=room.enemies.get(i);Location at=spots.get(i);Chunk chunk=at.getChunk();if(r.held.add(chunk))chunk.addPluginChunkTicket(plugin);
+            for(int i=0;i<enemies.size();i++){
+                var spec=enemies.get(i);Location at=spots.get(i);Chunk chunk=at.getChunk();if(r.held.add(chunk))chunk.addPluginChunkTicket(plugin);
                 Mob mob=spec.spawn(at,r.mode!=Mode.NORMAL||r.site.conquestFloor>0);
                 r.mobs.put(mob.getUniqueId(),spec);
                 mob.addScoreboardTag(TAG);mob.addScoreboardTag("afu_site_"+r.site.id);spec.equip(mob,r.mode.health*(1+Math.max(0,r.party.size()-1)*.2));
                 String enemyName=spec.name().isEmpty()?(mob.getCustomName()==null?mob.getType().name():ChatColor.stripColor(mob.getCustomName())):spec.name();
                 mob.setCustomName("§c"+r.site.name+" · "+enemyName);mob.setCustomNameVisible(true);
                 r.mobs.put(mob.getUniqueId(),spec);
-                if(r.enemyMoves&&r.stage==r.site.rooms.size()-1){
+                if(wave!=null&&wave.move()!=null)registerBossMove(r,room,mob,wave.move());
+                if(r.enemyMoves&&r.stage==r.stages()-1){
                     var boss=BOSS_SKILLS.get(r.site.id);
                     if(boss!=null&&boss.type()==spec.type()&&boss.name().equals(spec.name()))
                         registerBossMove(r,room,mob,boss.move());
                 }
+                if (r.beacon != null && r.stage == BeaconExpedition.BOSS && i == 0) {
+                    r.boss = mob.getUniqueId();
+                    r.nextShock = System.currentTimeMillis() + 6000;
+                }
             }
-            r.phase="fighting";r.invalid=false;r.attempt++;observeRoom(r);persist();notice(r,"§c"+room.name+"："+room.enemies.size()+"个标记敌人（本室第"+r.attempt+"次出怪）。在室内参战、实际命中或援助队友会记录；不要求最后一刻留在室内。");
+            if(!r.phase.equals("fighting"))r.attempt++;
+            r.phase="fighting";r.invalid=false;
+            if(r.echo!=null)r.echo.spawn(r.stage);
+            observeRoom(r);persist();
+            if(wave==null)notice(r,"§c"+room.name+"："+enemies.size()+"个标记敌人（本室第"+r.attempt+"次出怪）。在室内参战、实际命中或援助队友会记录；不要求最后一刻留在室内。");
+            else notice(r,"§d【"+room.name+" "+(r.echo.wave+1)+"/"+EchoCitadel.waves(r.stage)+"】"+wave.name()+" · "+enemies.size()+"名敌人。"+wave.tactic());
         }catch(RuntimeException e){clean(r);r.phase="moving";throw e;}
     }
     private void registerBossMove(Run r,Room room,Mob mob,DungeonEnemyMoves.Move move){
@@ -1103,7 +2217,7 @@ final class SiteDungeonManager implements Listener {
         plugin.dungeonEnemyMoves().register(mob,move,scope);
     }
     private void tickAltar(Run r,List<Player> present,long now){
-        if(!r.altarTactics||r.stage!=r.site.rooms.size()-1||!plugin.nativeRpg().healingCircleEnabled())return;
+        if(!r.altarTactics||r.stage!=r.stages()-1||!plugin.nativeRpg().healingCircleEnabled())return;
         Mob boss=altarBoss(r);
         if(boss==null){r.poison=null;return;}
         if(r.poison==null)r.poison=new AltarPoison();
@@ -1129,33 +2243,88 @@ final class SiteDungeonManager implements Listener {
         return true;
     }
 
+    private void tickShock(Run r, List<Player> present, long now) {
+        if (r.boss == null || !(Bukkit.getEntity(r.boss) instanceof Mob boss) || boss.isDead()) {
+            r.shock = null;
+            return;
+        }
+        Shock shock = r.shock;
+        if (shock == null && now >= r.nextShock) {
+            int seconds = r.shockCount++ == 0 && r.beacon.opening() == BeaconExpedition.Opening.SCOUT ? 4 : 2;
+            r.shock = new Shock(boss.getLocation(), now + seconds * 1000L);
+            notice(r, "§c守关者蓄力震地！" + seconds + "秒后命中红圈。离开标记中心4格，或撤回廊道。");
+            shock = r.shock;
+            // Scout intelligence extends the first tell of this fight only.
+            r.nextShock = Long.MAX_VALUE;
+        }
+        if (shock == null) return;
+        Location center = shock.center;
+        if (now >= shock.resolvesAt) {
+            r.shock = null;
+            r.nextShock = now + 12_000;
+            for (Player p : present) {
+                Location at = p.getLocation();
+                if (r.phase.equals("fighting") && r.room().contains(at) && !plugin.isDowned(p)
+                        && Math.abs(at.getY() - center.getY()) <= 2
+                        && Math.hypot(at.getX() - center.getX(), at.getZ() - center.getZ()) <= SHOCK_RADIUS) {
+                    p.damage(SHOCK_DAMAGE, boss);
+                }
+            }
+            center.getWorld().playSound(center, Sound.ENTITY_IRON_GOLEM_HURT, .9f, .65f);
+            return;
+        }
+        var dust = new Particle.DustOptions(Color.RED, 1.4f);
+        for (int i = 0; i < 24; i++) {
+            double angle = i * Math.PI / 12;
+            Location at = center.clone().add(Math.cos(angle) * SHOCK_RADIUS, .23, Math.sin(angle) * SHOCK_RADIUS);
+            center.getWorld().spawnParticle(Particle.DUST, at, 1, 0, 0, 0, 0, dust);
+        }
+    }
+
+    private boolean rewardEligible(Run r, UUID id) {
+        if (r.beacon == null) return r.attendance.getOrDefault(id, 0) > 0;
+        return r.roomAttendance.entrySet().stream().anyMatch(room -> room.getKey() != BeaconExpedition.BRIEFING
+            && room.getKey() != BeaconExpedition.CAMP && room.getValue().contains(id));
+    }
+
     private void complete(Run r){
         // A contribution belongs to its real UUID, even after departure or
         // disconnect. Snapshot once; receipt creation remains atomic/idempotent.
         var newlyEligible=new ArrayList<Player>();
         for(UUID id:new LinkedHashSet<>(r.attendance.keySet())){
-            if(r.attendance.getOrDefault(id,0)==0)continue;
+            if(!rewardEligible(r,id))continue;
             Player participant=ResidentCli.find(id);
             if(participant!=null&&plugin.nativeRpgSelected()&&plugin.skillAssessments()!=null
                     &&missingRooms(r,id).isEmpty()&&unverifiedRooms(r).isEmpty())
                 plugin.skillAssessments().siteCompleted(participant,r.site.id,r.id,r.started);
             String rewardDay=day();
-            boolean bossParticipant=r.roomAttendance.getOrDefault(r.site.rooms.size()-1,Set.of()).contains(id);
+            boolean bossParticipant=r.roomAttendance.getOrDefault(r.stages()-1,Set.of()).contains(id);
+            int bonusCount=r.beacon==null?r.site.bonusCount:r.beacon.rewardCount(r.site.bonusCount);
             boolean grantLoot=siteRewardSlot(r,id,rewardDay).equals("eligible");
+            var relic=DungeonRelics.at(r.site.id);
+            boolean grantRelic=SiteRewardPolicy.relicEligible(relic!=null&&bossParticipant,relicClaimed(id,r.site.id),
+                    receipt(id,r.site.id)!=null,r.id.equals(plugin.getConfig().getString(ROOT+".claimed-runs."+id+"."+r.site.id)));
             boolean grantCircle=r.altarTactics&&bossParticipant&&!circleReward(id)&&plugin.nativeRpg().healingCircleEnabled();
-            if(!grantLoot&&!grantCircle)continue;
+            if(!grantLoot&&!grantRelic&&!grantCircle)continue;
             atomic(()->{
-                if(grantLoot){
+                if(grantLoot||grantRelic){
                     String path=ROOT+".receipts."+id+"."+r.site.id;
-                    plugin.getConfig().createSection(path,Map.of("day",rewardDay,"run",r.id,"started-at",r.started,"emeralds",r.site.emeralds*r.mode.reward,"item",r.site.bonus.name(),"count",r.site.bonusCount*r.mode.reward,"bossParticipant",bossParticipant));
+                    var saved=plugin.getConfig().createSection(path,Map.of("day",rewardDay,"run",r.id,"started-at",r.started,
+                            "emeralds",grantLoot?r.site.emeralds*r.mode.reward:0,"item",r.site.bonus.name(),
+                            "count",grantLoot?bonusCount*r.mode.reward:0,"bossParticipant",bossParticipant));
+                    if(grantRelic){
+                        saved.set("relic",DungeonRelics.create(relic,r.mode.ordinal(),java.util.concurrent.ThreadLocalRandom.current()));
+                        saved.set("relic-only",!grantLoot);
+                    }
                     if(r.site.conquestFloor>0&&bossParticipant)plugin.getConfig().set(ROOT+".conquest-proofs."+id+"."+r.site.conquestFloor,r.id);
                 }
                 if(grantCircle)plugin.getConfig().set(circleProof(id),r.id);
             });
             if(participant!=null&&grantCircle)newlyEligible.add(participant);
-            Player p=participant;if(p!=null&&grantLoot){
+            Player p=participant;if(p!=null&&(grantLoot||grantRelic)){
                 applyCompletion(p,r.site.id,receipt(id,r.site.id));
-                p.sendMessage("§6"+r.site.name+"已通关；你的真实参战记录已生成奖励，/mycli dungeon claim "+r.site.id+"领取到个人箱。无需返回首室，今日该处仅奖励一次。");
+                p.sendMessage("§6"+r.site.name+"已通关。罗盘 → 遗迹地下城 → "+r.site.name+" → 领取奖励。"
+                        +(grantRelic?" §d本次发现秘宝「"+relic.name()+"」。":""));
             }
         }
         end(r,"completed");
@@ -1175,21 +2344,88 @@ final class SiteDungeonManager implements Listener {
         if(s.conquestFloor>0&&boss&&plugin.combatRpg()!=null)plugin.combatRpg().formalClear(run,p,s.conquestFloor);
         if(s.conquestFloor==0||boss)plugin.nativeSiteCompleted(p,id,run);
     }
-    private void clean(Run r){r.poison=null;for(var entry:new ArrayList<>(shots.entrySet()))if(entry.getValue().run==r){Entity e=Bukkit.getEntity(entry.getKey());if(e!=null)e.remove();shots.remove(entry.getKey());}for(UUID id:r.mobs.keySet()){Entity e=Bukkit.getEntity(id);if(e!=null)e.remove();}r.mobs.clear();r.hits.clear();r.roomParticipants.clear();for(Chunk c:r.held)c.removePluginChunkTicket(plugin);r.held.clear();}
+    private void clearShots(Run r){for(var entry:new ArrayList<>(shots.entrySet()))if(entry.getValue().run==r){Entity e=Bukkit.getEntity(entry.getKey());if(e!=null)e.remove();shots.remove(entry.getKey());}}
+    private void clean(Run r) {
+        r.poison=null;
+        if(r.echo!=null)r.echo.resetRoom();
+        for (var entry : new ArrayList<>(shots.entrySet())) if (entry.getValue().run == r) {
+            Entity entity = Bukkit.getEntity(entry.getKey());
+            if (entity != null) entity.remove();
+            shots.remove(entry.getKey());
+        }
+        for (UUID id : r.mobs.keySet()) {
+            Entity entity = Bukkit.getEntity(id);
+            if (entity != null) entity.remove();
+        }
+        r.mobs.clear();
+        r.hits.clear();
+        r.roomParticipants.clear();
+        for (Chunk chunk : r.held) chunk.removePluginChunkTicket(plugin);
+        r.held.clear();
+        clearEscort(r);
+        r.boss = null;
+        r.shock = null;
+        r.nextShock = 0;
+        r.shockCount = 0;
+        r.beaconPromptStage = -1;
+    }
     private void end(Run r,String reason){
         Map<UUID,Map<String,Object>> outcomes=new LinkedHashMap<>();for(UUID id:r.attendance.keySet())outcomes.put(id,outcome(r,id,reason));
+        Map<UUID,ScheduledReturn> returns=new LinkedHashMap<>();
+        if(reason.equals("completed")&&groundMusters.containsKey(r.site.id)){
+            long due=System.currentTimeMillis()+RETURN_DELAY_MS;
+            for(UUID id:r.party){
+                var p=ResidentCli.find(id);
+                if(p!=null&&p.isOnline()&&atReturnPoint(r.site,p.getLocation()))returns.put(id,new ScheduledReturn(r.site.id,r.id,due));
+            }
+        }
         runs.remove(r.site.id);
         try{persist(()->{
             plugin.getConfig().set(ROOT+".cooldowns."+r.site.id,System.currentTimeMillis());
             plugin.getConfig().set(ROOT+".last-outcomes."+r.site.id,null);
-            plugin.getConfig().createSection(ROOT+".last-outcomes."+r.site.id,Map.of("run",r.id,"reason",reason,"endedAt",System.currentTimeMillis(),"clearedRooms",r.stage,"requiredRooms",r.site.rooms.size(),"resets",r.resets,"lastResetReason",r.lastResetReason));
+            plugin.getConfig().createSection(ROOT+".last-outcomes."+r.site.id,Map.of("run",r.id,"reason",reason,"endedAt",System.currentTimeMillis(),"clearedRooms",r.stage,"requiredRooms",r.stages(),"resets",r.resets,"lastResetReason",r.lastResetReason));
             outcomes.forEach((id,data)->saveOutcome(id,r.site.id,data));
+            returns.forEach((id,scheduled)->{
+                String path=returnPath(id);plugin.getConfig().set(path,null);
+                plugin.getConfig().createSection(path,Map.of("site",scheduled.site(),"run",scheduled.run(),"dueAt",scheduled.dueAt()));
+            });
         });}catch(RuntimeException e){runs.put(r.site.id,r);throw e;}
+        scheduledReturns.putAll(returns);
         plugin.dungeonEdits().restore("site-" + r.site.id, () -> emptyForRestore(r.site.id));
         if(plugin.trialRescue()!=null)plugin.trialRescue().releaseTeam(rescueKey(r),r.site.rooms.getFirst().center(Bukkit.getWorld(r.site.world)));
-        clean(r);notice(r,"§e【地下城结束】"+endLabel(reason)+"。本场参战与存档点救援已失效；存活者留在原地，请沿原路及时撤离。已保存结果；查询：/mycli dungeon status "+r.site.id);
-        outcomes.forEach((id,data)->{Player p=ResidentCli.find(id);if(p!=null)explainOutcome(p,data);});
+        clean(r);
+        if(r.beacon!=null&&reason.equals("completed")&&station(r.site)==null){
+            notice(r,"§a「失联信标」攻略完成。前哨返程准备中，可以查看结算记录。");
+            returnToBriefing(r);
+        }else notice(r,"§e【地下城结束】"+endLabel(reason)+"。本场参战与存档点救援已失效。"
+                +(!returns.isEmpty()?"30 秒后返回地面集结平台；也可立即回程。":station(r.site)==null?"存活者留在原地，请沿原路及时撤离。":"可在任一战斗房间免费返回地面入口。")
+                +"已保存结果；查询：/mycli dungeon status "+r.site.id);
+        outcomes.forEach((id,data)->{Player p=ResidentCli.find(id);if(p!=null){explainOutcome(p,data);offerReturn(r.site,p);}});
         plugin.getLogger().info("MC_SITE_DUNGEON_END "+JSON.toJson(Map.of("site",r.site.id,"run",r.id,"reason",reason,"clearedRooms",r.stage,"endedAt",System.currentTimeMillis(),"active",false,"rescueActive",false,"exitPolicy","standing_stay_downed_recover","participants",r.party.stream().map(UUID::toString).toList())));
+    }
+    private void returnToBriefing(Run r) {
+        World world = Bukkit.getWorld(r.site.world);
+        if (world == null) return;
+        Location point = r.site.rooms.getFirst().center(world);
+        Map<UUID,Location> departures = new LinkedHashMap<>();
+        for (Player p : present(r)) if (!roomVisitor(p) && rewardEligible(r, p.getUniqueId()))
+            departures.put(p.getUniqueId(), p.getLocation().clone());
+        if (departures.isEmpty()) return;
+        ExistingChunkAccess.load(plugin, world, point.getBlockX() >> 4, point.getBlockZ() >> 4)
+            .whenComplete((chunk, error) -> {
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> departures.forEach((id, origin) -> {
+                    Player p = Bukkit.getPlayer(id);
+                    if (!playing(p) || p.getWorld() != world || p.getLocation().distanceSquared(origin) > 16
+                            || plugin.dungeonParticipant(p) || plugin.pvpParticipant(p) || plugin.isDowned(p)) return;
+                    if (error != null || !safeBeaconLanding(point) || !p.teleport(point)
+                            || p.getWorld() != world || p.getLocation().distanceSquared(point) > 4) {
+                        p.sendMessage("§e前哨落点暂不可用。结算已保存，请沿原路撤离，或用 /mycli cast home 回村。");
+                        return;
+                    }
+                    p.sendMessage("§a已回东侧前哨。可领取已登记奖励，也可 /mycli photo 拍照留念。");
+                }));
+            });
     }
     private void atomic(Runnable change){
         String before=plugin.getConfig().saveToString();
@@ -1217,6 +2453,12 @@ final class SiteDungeonManager implements Listener {
                 saved.put("declined",r.declined.stream().map(UUID::toString).toList());
                 if(r.altarTactics)saved.put("altarTactics",true);
                 if(r.enemyMoves)saved.put("enemyMoves",true);
+                if(r.echo!=null){saved.put("echoEncounter",EchoCitadel.VERSION);saved.put("echoTiming",r.echo.timing());}
+                if (r.beacon != null) {
+                    saved.put("chapterVersion", BeaconExpedition.VERSION);
+                    saved.put("chapterLayout", beaconLayoutSignature(r.layout));
+                    saved.put("chapterProgress", r.beacon.save());
+                }
                 Map<String,Integer> attendance=new LinkedHashMap<>();r.attendance.forEach((id,count)->attendance.put(id.toString(),count));saved.put("attendance",attendance);plugin.getConfig().createSection(path,saved);
                 Map<String,List<String>> roomAttendance=new LinkedHashMap<>();r.roomAttendance.forEach((stage,ids)->roomAttendance.put(stage.toString(),ids.stream().map(UUID::toString).toList()));
                 plugin.getConfig().set(path+".roomAttendance",roomAttendance);plugin.getConfig().set(path+".attempt",r.attempt);plugin.getConfig().set(path+".resets",r.resets);
@@ -1233,17 +2475,40 @@ final class SiteDungeonManager implements Listener {
         for(var room:value.getAsJsonArray("rooms")){var object=room.getAsJsonObject();if(object.getAsJsonArray("spawnPoints").isEmpty())object.remove("spawnPoints");object.remove("hint");}
         return JSON.toJson(value);
     }
+    private static String beaconLayoutSignature(BeaconLayout layout) {
+        Map<String,Object> signature = new LinkedHashMap<>();
+        signature.put("markers", layout.markers);
+        signature.put("refuge", layout.refuge);
+        return JSON.toJson(signature);
+    }
     private void restore(){
         var saved=plugin.getConfig().getConfigurationSection(ROOT+".runs");if(saved==null)return;
         List<Run> expired=new ArrayList<>();
         for(String id:saved.getKeys(false))try{
-            Site site=site(id);var c=saved.getConfigurationSection(id);Run r=new Run(site,Mode.parse(c.getString("mode","normal")));
+            Site site=site(id);var c=saved.getConfigurationSection(id);
+            BeaconLayout layout = null;
+            if (c.contains("chapterVersion") || c.contains("chapterProgress") || c.contains("chapterLayout")) {
+                require(id.equals(BeaconExpedition.SITE) && beaconLayout != null
+                    && BeaconExpedition.VERSION.equals(c.getString("chapterVersion")), "beacon_checkpoint_layout_required");
+                require(beaconLayoutSignature(beaconLayout).equals(c.getString("chapterLayout")), "beacon_checkpoint_layout_changed");
+                layout = beaconLayout;
+                site = layout.site;
+            }
+            Run r=new Run(site,Mode.parse(c.getString("mode","normal")), layout);
             r.altarTactics=id.equals(AltarPoison.SITE)&&c.getBoolean("altarTactics",false);
-            r.enemyMoves=BOSS_SKILLS.containsKey(id)&&c.getBoolean("enemyMoves",false);
+            r.enemyMoves=layout==null&&BOSS_SKILLS.containsKey(id)&&c.getBoolean("enemyMoves",false);
+            if(c.contains("echoEncounter")){
+                require(id.equals(EchoCitadel.SITE)&&c.getInt("echoEncounter")==EchoCitadel.VERSION
+                    &&site.world.equals("aincrad")&&echoGeometry(site),"echo_checkpoint_incompatible");
+                r.echo=new EchoCitadel.Progress();
+                var timing=c.getConfigurationSection("echoTiming");
+                if(timing!=null)r.echo.restore(timing.getLong("battleMs"),timing.getLong("travelMs"),
+                    timing.getLong("waveTransitionMs"),timing.getIntegerList("observedWaves"));
+            }
             r.id=c.getString("id",r.id);UUID.fromString(r.id);
             require(definition(site).equals(c.getString("definition")),"definition_changed_checkpoint_preserved");
-            r.stage=c.getInt("stage");require(r.stage>=0&&r.stage<=site.rooms.size(),"invalid_checkpoint");r.started=c.getLong("started");
-            r.phase=r.stage==site.rooms.size()?"returning":"moving";r.fault=c.getString("fault","");r.pausedAt=c.getLong("pausedAt",System.currentTimeMillis());if(r.pausedAt==0)r.pausedAt=System.currentTimeMillis();
+            r.stage=c.getInt("stage");require(r.stage>=0&&r.stage<=r.stages(),"invalid_checkpoint");r.started=c.getLong("started");
+            r.phase=r.stage==r.stages()?"returning":"moving";r.fault=c.getString("fault","");r.pausedAt=c.getLong("pausedAt",System.currentTimeMillis());if(r.pausedAt==0)r.pausedAt=System.currentTimeMillis();
             r.faultPausedMillis=c.getLong("faultPausedMillis",0);require(r.faultPausedMillis>=0&&r.faultPausedMillis<=Math.max(0,System.currentTimeMillis()-r.started),"invalid_fault_pause");
             if(!r.fault.isEmpty()&&c.getString("phase","").equals("muster"))r.phase="muster";
             for(String raw:c.getStringList("party")){UUID uuid=UUID.fromString(raw);require(r.party.size()<PARTY_LIMIT,"party_limit");require(runs.values().stream().noneMatch(old->old.party.contains(uuid)),"duplicate_participant");r.party.add(uuid);r.attendance.put(uuid,c.getInt("attendance."+raw));}
@@ -1264,6 +2529,7 @@ final class SiteDungeonManager implements Listener {
             }
             if(c.getString("phase","").equals("fighting")){r.resets++;r.pauseReason="server_restart";r.lastResetReason="server_restart";r.lastResetAt=System.currentTimeMillis();}
             for(UUID uuid:r.attendance.keySet())require(r.attendance.getOrDefault(uuid,0)>=0&&r.attendance.getOrDefault(uuid,0)<=r.stage,"invalid_attendance_count");
+            if (layout != null) r.beacon = BeaconExpedition.Progress.restore(c.getString("chapterProgress"), r.stage, r.attendance.keySet());
             require(!r.attendance.isEmpty(),"empty_party");runs.put(id,r);
             if(r.fault.isEmpty()&&activeMillis(r.started,r.faultPausedMillis,System.currentTimeMillis())>TIMEOUT_MS)expired.add(r);
         }catch(RuntimeException e){blockedCheckpoints.add(id);ready=false;plugin.getLogger().warning("Site dungeon checkpoint preserved for operator: "+id+" "+e.getMessage());}
@@ -1297,10 +2563,28 @@ final class SiteDungeonManager implements Listener {
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void damage(EntityDamageByEntityEvent e){
         Run from=owner(e.getDamager());if(from==null)from=owner(actor(e.getDamager()));Run to=owner(e.getEntity());
         Player victim=ResidentCli.fromEntity(e.getEntity()),attacker=ResidentCli.fromEntity(actor(e.getDamager()));
+        if(isEscort(e.getEntity())&&attacker!=null){e.setCancelled(true);return;}
         if(from!=null&&victim!=null&&from.site.contains(victim.getLocation()))enroll(victim,from);
         if(to!=null&&attacker!=null&&to.site.contains(attacker.getLocation()))enroll(attacker,to);
         if(from!=null){if(!validParticipant(from,e.getEntity()))e.setCancelled(true);else{e.setDamage(e.getDamage()*from.mode.damage);from.hits.put(actor(e.getDamager()).getUniqueId(),System.currentTimeMillis());}}
         if(to!=null&&attacker!=null&&!to.party.contains(attacker.getUniqueId()))e.setCancelled(true);
+        if (e.isCancelled() || e.getDamage() <= 0) return;
+        if (from != null && victim != null && activeBeaconBoon(from, victim, BeaconExpedition.Boon.WARD))
+            e.setDamage(Math.max(Math.min(1, e.getDamage()), e.getDamage() - from.beacon.strength(victim.getUniqueId())));
+        if (to != null && attacker != null && to.beacon != null) {
+            Player p = attacker;
+            boolean melee = e.getDamager() == p && e.getCause() == EntityDamageEvent.DamageCause.ENTITY_ATTACK
+                && org.bukkit.damage.DamageType.PLAYER_ATTACK.equals(e.getDamageSource().getDamageType())
+                && DungeonLoadoutRules.melee(p.getInventory().getItemInMainHand().getType().name());
+            if (melee && activeBeaconBoon(to, p, BeaconExpedition.Boon.EDGE)
+                    || e.getDamager() instanceof AbstractArrow && activeBeaconBoon(to, p, BeaconExpedition.Boon.AIM))
+                e.setDamage(e.getDamage() + to.beacon.strength(p.getUniqueId()));
+        }
+    }
+    private boolean activeBeaconBoon(Run r, Player p, BeaconExpedition.Boon boon) {
+        return r.beacon != null && r.phase.equals("fighting") && r.fault.isEmpty()
+            && r.party.contains(p.getUniqueId()) && playing(p) && !roomVisitor(p) && !plugin.isDowned(p)
+            && r.site.contains(p.getLocation()) && r.room().contains(p.getLocation()) && r.beacon.boon(p.getUniqueId()) == boon;
     }
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)public void participation(EntityDamageByEntityEvent e){
         if(e.getFinalDamage()<=0)return;
@@ -1310,9 +2594,14 @@ final class SiteDungeonManager implements Listener {
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void launch(ProjectileLaunchEvent e){Run r=owner(actor(e.getEntity()));if(r==null)return;if(shots.size()>=128){e.setCancelled(true);return;}e.getEntity().addScoreboardTag(SHOT_TAG);shots.put(e.getEntity().getUniqueId(),new Shot(r,System.currentTimeMillis()+15_000));}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void splash(PotionSplashEvent e){Run r=owner(e.getPotion());if(r==null)r=owner(actor(e.getPotion()));if(r!=null)for(LivingEntity l:e.getAffectedEntities())if(!validParticipant(r,l))e.setIntensity(l,0);}
-    @EventHandler public void death(EntityDeathEvent e){Run r=owner(e.getEntity());if(r!=null){r.mobs.remove(e.getEntity().getUniqueId());e.getDrops().clear();e.setDroppedExp(0);}}
-    @EventHandler public void load(EntitiesLoadEvent e){for(Entity entity:e.getEntities())if((owned(entity)||entity.getScoreboardTags().contains(SHOT_TAG))&&owner(entity)==null)entity.remove();}
-    @EventHandler public void rejoin(PlayerJoinEvent e){Run r=own(e.getPlayer());if(r!=null)e.getPlayer().sendMessage("§e地下城进度保留，剩余机会 "+(MAX_FAILURES-r.failures)+"/3；dungeon status 查本场。断线不扣次数，倒地续关会自动回存档点；主动离场仍须5分钟内回场。");Bukkit.getScheduler().runTaskLater(plugin,()->clearLoginIntruder(e.getPlayer()),5L);}
+    @EventHandler public void death(EntityDeathEvent e){Run r=owner(e.getEntity());if(r!=null||isEscort(e.getEntity())){if(r!=null)r.mobs.remove(e.getEntity().getUniqueId());e.getDrops().clear();e.setDroppedExp(0);}}
+    @EventHandler public void load(EntitiesLoadEvent e){
+        for(Entity entity:e.getEntities()){
+            boolean untrackedEscort = isEscort(entity) && runs.values().stream().noneMatch(r -> entity.getUniqueId().equals(r.escort));
+            if(untrackedEscort||(owned(entity)||entity.getScoreboardTags().contains(SHOT_TAG))&&owner(entity)==null)entity.remove();
+        }
+    }
+    @EventHandler public void rejoin(PlayerJoinEvent e){Run r=own(e.getPlayer());if(r!=null)e.getPlayer().sendMessage("§e地下城进度保留，剩余机会 "+(MAX_FAILURES-r.failures)+"/3；dungeon status 查本场。断线不扣次数，倒地续关会自动回存档点；主动离场仍须5分钟内回场。");Bukkit.getScheduler().runTaskLater(plugin,()->{clearLoginIntruder(e.getPlayer());restoreReturn(e.getPlayer());},5L);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnNatural(SpawnerSpawnEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnWild(CreatureSpawnEvent e){if(e.getSpawnReason()==CreatureSpawnEvent.SpawnReason.NATURAL&&runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
     private Site surveyedCamp() {
@@ -1347,6 +2636,28 @@ final class SiteDungeonManager implements Listener {
         return true;
     }
 
+    @EventHandler(priority=EventPriority.HIGH,ignoreCancelled=true)
+    public void approachButton(PlayerInteractEvent event){
+        Block block=event.getClickedBlock();
+        if(event.getHand()!=EquipmentSlot.HAND||event.getAction()!=Action.RIGHT_CLICK_BLOCK
+                ||block==null||block.getType()!=Material.STONE_BUTTON)return;
+        var player=event.getPlayer();
+        for(Site s:sites.values()){
+            var station=station(s);
+            if(station==null)continue;
+            if(block.getWorld()==entryWorld(s)&&station.button().equals(List.of(block.getX(),block.getY(),block.getZ()))){
+                event.setCancelled(true);
+                command(player,new String[]{"dungeon","enter",s.id});
+                return;
+            }
+            var relic=DungeonRelics.at(s.id);
+            if(relic!=null&&block.getWorld().getName().equals(s.world)&&relic.x()==block.getX()&&relic.y()==block.getY()&&relic.z()==block.getZ()
+                    &&playing(player)&&atFirstRoom(s,player.getLocation())){
+                event.setCancelled(true);open(player,s.id);return;
+            }
+        }
+    }
+
     private boolean campGuardCleared(Player player, int room) {
         UUID id = player.getUniqueId();
         Run current = runs.get(BlackBannerCamp.SITE);
@@ -1356,20 +2667,77 @@ final class SiteDungeonManager implements Listener {
                 && cleared.intValue() >= 2;
     }
 
+    private void openEntryReview(Player p,EntryOffer offer){
+        Inventory inv=Bukkit.createInventory(null,54,"遗迹集结 · 确认入场");
+        inv.setItem(4,icon(Material.BOOK,"§e确认前核对名单","缺装备可确认后入场；其他入场限制继续生效。"));
+        int slot=9;
+        for(EntryMember member:offer.roster()){
+            inv.setItem(slot++,icon(member.missing().isEmpty()&&member.blocker().isEmpty()?Material.LIME_DYE:Material.ORANGE_DYE,
+                    "§f"+member.name(),entryDescription(member)));
+            if(slot==45)break;
+        }
+        inv.setItem(49,icon(Material.LIME_CONCRETE,"§a确认入场","保留当前队伍和装备，继续挑战"));
+        inv.setItem(45,icon(Material.ARROW,"§7返回补给","本次不入场"));
+        menus.put(inv,new Menu(offer.site(),false,offer));p.openInventory(inv);
+    }
     private ItemStack icon(Material material,String name,String... lore){ItemStack item=new ItemStack(material);var meta=item.getItemMeta();meta.setDisplayName(name);meta.setLore(List.of(lore));item.setItemMeta(meta);return item;}
     private void open(Player p,String id){
-        Inventory inv=Bukkit.createInventory(null,54,id.isEmpty()?"遗迹地下城":"地下城 · "+site(id).name);menus.put(inv,new Menu(id,receipt(p.getUniqueId(),id)!=null));
-        if(id.isEmpty()){int slot=10;for(Site s:sites.values())inv.setItem(slot++,icon(s.icon,"§6"+s.name,routeHint(s),"点击查看入口、组队、挑战与奖励"));}
-        else{Site s=site(id);inv.setItem(10,icon(Material.ENDER_PEARL,entry(s).isEmpty()?"§b前往遗迹外围":"§b前往挑战入口","8魔力；抵达后仍须主动开始、逐室清怪"));inv.setItem(12,icon(Material.IRON_SWORD,"§a开始普通挑战","须亲自站在首室；10秒组队集结"));inv.setItem(13,icon(Material.DIAMOND_SWORD,"§6开始冒险挑战","更强怪物；每日奖励二倍"));inv.setItem(14,icon(Material.NETHERITE_SWORD,"§5开始末日挑战","更强怪物；每日奖励三倍"));inv.setItem(16,icon(Material.SUNFLOWER,"§a确认当前参战","遗迹内达标者自动同队，可随时加入"));inv.setItem(22,icon(Material.BARRIER,"§c退出自己的挑战","留在原地；自行步行或使用传送技能"));inv.setItem(30,icon(Material.CHEST,"§6领取已完成奖励","存入个人箱；满队列时保留凭据"));inv.setItem(31,icon(Material.WRITTEN_BOOK,"§e路线与当前进度","逐室攻略，通关后就地登记奖励"));inv.setItem(49,icon(Material.ARROW,"§7返回地下城列表"));}
+        if (!id.isEmpty()) site(id);
+        Site visible = siteView(id);
+        Inventory inv=Bukkit.createInventory(null,54,id.isEmpty()?"遗迹地下城":"地下城 · "+visible.name);
+        Map<Integer,String> choices = new LinkedHashMap<>();
+        if(id.isEmpty()){int slot=10;for(String siteId:sites.keySet()){Site s=siteView(siteId);inv.setItem(slot++,icon(s.icon,"§6"+s.name,routeHint(s),"点击查看入口、组队、挑战与奖励"));}}
+        else{Site s=visible;inv.setItem(10,icon(Material.ENDER_PEARL,entry(s).isEmpty()?"§b前往遗迹外围":"§b前往挑战入口","8魔力；到达后可在入口开始挑战"));inv.setItem(12,icon(Material.IRON_SWORD,"§a开始普通挑战","须亲自站在首室；10秒组队集结"));inv.setItem(13,icon(Material.DIAMOND_SWORD,"§6开始冒险挑战","更强怪物；每日奖励二倍"));inv.setItem(14,icon(Material.NETHERITE_SWORD,"§5开始末日挑战","更强怪物；每日奖励三倍"));inv.setItem(16,icon(Material.SUNFLOWER,"§a确认当前参战","遗迹内达标者自动同队，Boss战开始后限制新加入"));inv.setItem(22,icon(Material.BARRIER,"§c退出自己的挑战","留在原地；自行步行或使用传送技能"));inv.setItem(30,icon(Material.CHEST,"§6领取已完成奖励","存入个人箱；满队列时保留凭据"));inv.setItem(31,icon(Material.WRITTEN_BOOK,"§e路线与当前进度","查看本段目标和通关奖励"));inv.setItem(49,icon(Material.ARROW,"§7返回地下城列表"));}
         if(id.isEmpty()){
             int slot=10;for(Site s:sites.values()){
+                var relic=DungeonRelics.at(s.id);
                 if(receipt(p.getUniqueId(),s.id)!=null)inv.setItem(slot,icon(s.icon,"§e"+s.name+" · 有奖励待领取",routeHint(s),"点击打开，再点奖励箱领取上次奖励","领取后才可开始或加入这处的新挑战"));
+                else if(relic!=null)inv.setItem(slot,icon(s.icon,"§6"+s.name,
+                        "秘宝："+relic.name()+(relicClaimed(p.getUniqueId(),s.id)?"（已收录）":"（待发现）"),
+                        "点击查看秘宝、入口路线和难度"));
                 slot++;
             }
+            var collection=relicCollection(p.getUniqueId());
+            String title=collection.get("title").toString();
+            inv.setItem(45,icon(Material.NAME_TAG,"§d遗迹秘宝收藏 "+collection.get("found")+"/"+collection.get("total"),
+                    title.isEmpty()?"首件秘宝解锁「遗迹先行者」":"当前称号："+title,
+                    "不同遗迹累计收录 1、5、10、15 件时提升称号"));
         }else if(receipt(p.getUniqueId(),id)!=null){
             var saved=receipt(p.getUniqueId(),id);
             for(int slot:new int[]{12,13,14,16})inv.setItem(slot,icon(Material.GRAY_DYE,"§e先领取上次奖励","上次已完成，奖励保留中","请点下方「领取上次奖励」箱子","不会自动领取或替你开启新挑战"));
             inv.setItem(30,icon(Material.ENDER_CHEST,"§a领取上次奖励",saved.getString("day","日期未记录")+"完成的挑战","点击领取到个人奖励箱，随后重新开场","满队列时保留凭据；无需重打旧场次"));
+        }
+        if(!id.isEmpty()){
+            var relic=DungeonRelics.at(id);
+            if(relic!=null){
+                var lore=new ArrayList<String>();
+                lore.add(relicClaimed(p.getUniqueId(),id)?"已收录 · 秘宝每个角色限领一次"
+                        :pendingRelic(p.getUniqueId(),id)!=null?"本次秘宝待领 · 点击右侧奖励箱"
+                        :"首次在终室登记参战并通关，保证取得");
+                lore.addAll(relic.instructions());
+                inv.setItem(27,icon(relic.material(),"§d秘宝 · "+relic.name(),lore.toArray(String[]::new)));
+                inv.setItem(28,icon(Material.COMPASS,"§6从哪里进",
+                        "传送后沿实体路标到石钮，按使用键",
+                        "入口："+relic.x()+", "+relic.y()+", "+relic.z(),relic.tactic()));
+            }
+            Site selected=site(id);
+            var station=station(selected);
+            var rooms=selected.rooms.stream().map(room->room.name+" · "+room.x+", "+room.y+", "+room.z).toList();
+            inv.setItem(29,icon(Material.MAP,"§e行进路线",rooms.toArray(String[]::new)));
+            if(echoAvailable(selected))inv.setItem(29,icon(Material.MAP,"§e回响城路线与打法",
+                "前庭一波热身。卫所清完哨队后，有侧翼援军。",
+                "末室先清投影，再战执政官本体。",
+                "普通／末日撤出紫圈。冒险横移离开光带。",
+                "战后沿紫色粒子转场，通关原地领取到个人箱。"));
+            inv.setItem(32,icon(Material.ENDER_CHEST,"§b打开个人箱","领取后的装备会在个人箱中装入"));
+            if(station!=null){
+                inv.setItem(10,icon(Material.ENDER_PEARL,"§b前往"+station.name(),"8魔力；落地沿铺装和地灯走到入口牌"));
+                inv.setItem(28,icon(Material.COMPASS,"§6入口 · "+station.name(),
+                        "落脚点 "+entry(selected),"入口牌 "+station.board(),"地面石钮 "+station.button(),
+                        groundMusters.containsKey(selected.id)?"站到地面集结区，石钮送达符合条件的队友；通关 30 秒后返回":"到石钮按使用键进入首室，再选难度"));
+                if(atStation(selected,p.getLocation()))inv.setItem(11,icon(Material.STONE_BUTTON,"§a使用入口","走到入口牌旁后点击，免费到首室"));
+                if(canReturn(selected,p))inv.setItem(23,icon(Material.OAK_DOOR,"§b返回"+station.name(),"免费返回地面入口，可先在原地领奖"));
+            }
         }
         if (!id.isEmpty() && id.equals(BlackBannerCamp.SITE) && surveyedCamp() != null) {
             inv.setItem(24, icon(Material.DARK_OAK_FENCE, "§e救援牢笼",
@@ -1386,6 +2754,20 @@ final class SiteDungeonManager implements Listener {
                         ?icon(Material.GLISTERING_MELON_SLICE,"§a学会并装入轮盘","免费学习治愈之环。空槽自动装入，满槽可自己选择。")
                         :icon(Material.BOOK,"§b治愈之环","参与终室并通关后可免费学习。也可在牧师Lv.3用1个学习点学习。"));
         }
+        Run r = runs.get(id);
+        if (r != null && r.beacon != null && r.party.contains(p.getUniqueId())) {
+            inv.setItem(31, icon(Material.WRITTEN_BOOK, "§6当前目标", beaconObjective(r), "点击输出文字和坐标"));
+            int slot = 36;
+            for (var option : beaconOptions(r, p)) {
+                String problem = beaconChoiceProblem(r, p, option);
+                var point = beaconMarker(r, option);
+                String action = problem.isEmpty() ? "点击确认" : point == null ? "先到当前房间，重新打开菜单" : "先到标记 " + point.coordinates();
+                inv.setItem(slot, icon(option.boon != null ? Material.AMETHYST_SHARD : option.marked() ? Material.GOLD_NUGGET : Material.MAP,
+                    "§e" + option.label, boonDetail(r, option), action));
+                choices.put(slot++, new BeaconExpedition.Token(r.id, r.stage, option.id).value());
+            }
+        }
+        menus.put(inv,new Menu(id,receipt(p.getUniqueId(),id)!=null,null,Map.copyOf(choices)));
         p.openInventory(inv);
     }
     private void learnCircle(Player p){
@@ -1411,11 +2793,35 @@ final class SiteDungeonManager implements Listener {
     }
     @EventHandler public void click(InventoryClickEvent e){
         Menu menu=menus.get(e.getView().getTopInventory());if(menu==null)return;e.setCancelled(true);if(!(e.getWhoClicked() instanceof Player p))return;int slot=e.getRawSlot();if(slot<0||slot>=54)return;
+        if(e.getClick()!=ClickType.LEFT&&e.getClick()!=ClickType.RIGHT)return;
         Bukkit.getScheduler().runTask(plugin,()->{
             if(!p.isOnline() || p.getOpenInventory().getTopInventory() != e.getView().getTopInventory())return;
+            if(menu.offer!=null){
+                if(slot==45){entryOffers.remove(p.getUniqueId(),menu.offer);open(p,menu.site);}
+                else if(slot==49){p.closeInventory();command(p,entryConfirmation(menu.offer).substring("/mycli ".length()).split(" "));}
+                return;
+            }
+            if(menu.choices.containsKey(slot)) {
+                command(p,new String[]{"dungeon","choose",menu.choices.get(slot)});
+                open(p,menu.site);
+                return;
+            }
+            if(slot==31 && runs.containsKey(menu.site)){
+                Run current=runs.get(menu.site);
+                if(current.beacon!=null){status(p,menu.site);return;}
+            }
             if(menu.site.isEmpty()){List<Site> list=new ArrayList<>(sites.values());if(slot>=10&&slot<10+list.size())open(p,list.get(slot-10).id);return;}
+            if(slot==32){p.closeInventory();plugin.dungeon().openStash(p);return;}
             if(slot==33&&menu.site.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled()){learnCircle(p);return;}
-            String action=switch(slot){case 10->"travel";case 12,13,14->"start";case 16->"join";case 22->"leave";case 30->"claim";case 31->"info";default->"";};
+            Site selected=sites.get(menu.site);
+            if(selected==null)return;
+            String action=switch(slot){
+                case 10->"travel";
+                case 11->atStation(selected,p.getLocation())?"enter":"";
+                case 12,13,14->"start";case 16->"join";case 22->"leave";
+                case 23->canReturn(selected,p)?"exit":"";
+                case 30->"claim";case 31->"info";default->"";
+            };
             if(slot==49){open(p,"");return;}if(action.isEmpty())return;
             if((action.equals("start")||action.equals("join"))&&(menu.pendingReward||receipt(p.getUniqueId(),menu.site)!=null)){
                 // Inspecting the blocker never implicitly claims or starts a challenge.

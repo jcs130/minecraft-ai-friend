@@ -34,7 +34,9 @@ final class DungeonEnemyMoves implements Listener {
     enum Move {
         GRAVE_CLEAVE("grave_cleave", "封印重劈", "从侧面或背后绕开扇形", 34, 22, 240, 4.5, 55, 6, Color.ORANGE),
         FORGE_SWEEP("forge_sweep", "炉卫横扫", "绕到监工身后或退到橙色弧线外", 40, 26, 260, 5, 65, 7, Color.fromRGB(255, 100, 35)),
-        FROST_LINE("frost_line", "霜痕直劈", "横移出霜线", 28, 18, 220, 5.5, .8, 4, Color.AQUA);
+        FROST_LINE("frost_line", "霜痕直劈", "横移出霜线", 28, 18, 220, 5.5, .8, 4, Color.AQUA),
+        ECHO_NOVA("echo_nova", "虚空震荡", "撤出紫色圆圈", 40, 26, 120, 5, 0, 8, Color.FUCHSIA),
+        ECHO_BEAM("echo_beam", "回响贯穿", "横移离开紫色光带", 32, 22, 108, 7, 1.25, 8, Color.FUCHSIA);
 
         final String id;
         final String name;
@@ -61,9 +63,19 @@ final class DungeonEnemyMoves implements Listener {
             this.warning = new Particle.DustOptions(color, 1.1f);
         }
 
+        String shape() {
+            return switch (this) {
+                case ECHO_NOVA -> "circle";
+                case FROST_LINE, ECHO_BEAM -> "line";
+                default -> "arc";
+            };
+        }
+
         boolean covers(double forward, double side, double height) {
-            if (Math.abs(height) > 1.75 || forward < 0 || forward > reach) return false;
-            if (this == FROST_LINE) return Math.abs(side) <= spread;
+            if (Math.abs(height) > 1.75) return false;
+            if (this == ECHO_NOVA) return forward * forward + side * side <= reach * reach;
+            if (forward < 0 || forward > reach) return false;
+            if (this == FROST_LINE || this == ECHO_BEAM) return Math.abs(side) <= spread;
             return forward * forward + side * side <= reach * reach
                 && Math.abs(side) <= forward * Math.tan(Math.toRadians(spread));
         }
@@ -108,7 +120,8 @@ final class DungeonEnemyMoves implements Listener {
 
     void register(Mob mob, Move move, Scope scope) {
         if (!enabled()) return;
-        actors.putIfAbsent(mob.getUniqueId(), new Actor(mob, move, scope, tick + 60));
+        long initialDelay = move == Move.ECHO_NOVA || move == Move.ECHO_BEAM ? 20 : 60;
+        actors.putIfAbsent(mob.getUniqueId(), new Actor(mob, move, scope, tick + initialDelay));
         if (task == null) task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 2L, 2L);
     }
 
@@ -142,9 +155,10 @@ final class DungeonEnemyMoves implements Listener {
                 Map.entry("origin", List.of(actor.origin.getX(), actor.origin.getY(), actor.origin.getZ())),
                 Map.entry("direction", List.of(actor.direction.getX(), actor.direction.getZ())),
                 Map.entry("world", actor.origin.getWorld().getName()),
-                Map.entry("shape", move == Move.FROST_LINE ? "line" : "arc"),
+                Map.entry("shape", move.shape()),
                 Map.entry("reach", move.reach),
-                Map.entry(move == Move.FROST_LINE ? "halfWidth" : "halfAngleDegrees", move.spread),
+                Map.entry(switch(move.shape()){case "line" -> "halfWidth"; case "circle" -> "radius"; default -> "halfAngleDegrees";},
+                    move == Move.ECHO_NOVA ? move.reach : move.spread),
                 Map.entry("response", move.response)));
         }
         return List.copyOf(out);
@@ -295,7 +309,14 @@ final class DungeonEnemyMoves implements Listener {
 
     private void outline(Actor actor) {
         Move move = actor.move;
-        if (move == Move.FROST_LINE) {
+        if (move == Move.ECHO_NOVA) {
+            for (int i = 0; i < 20; i++) {
+                double angle = i * Math.PI / 10;
+                mark(actor, at(actor, move.reach * Math.cos(angle), move.reach * Math.sin(angle), .18));
+            }
+            return;
+        }
+        if (move == Move.FROST_LINE || move == Move.ECHO_BEAM) {
             for (int i = 1; i <= 7; i++) {
                 double ahead = move.reach * i / 7;
                 mark(actor, at(actor, ahead, -move.spread, .18));

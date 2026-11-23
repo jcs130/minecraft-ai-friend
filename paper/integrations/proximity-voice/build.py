@@ -18,10 +18,18 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     classes = output / "classes"
     classes.mkdir(exist_ok=True)
-    jars = [args.paper / "versions/1.21.1/paper-1.21.1.jar", args.svc]
-    jars.extend((args.paper / "libraries").rglob("*.jar"))
+    paper = args.paper / "versions/1.21.1/paper-1.21.1.jar"
+    if paper.is_file():
+        jars = [paper, args.svc]
+    else:
+        patched = sorted((args.paper / "libraries/net/neoforged/neoforge").glob("21.1.*/neoforge-*-server.jar"))
+        game = sorted((args.paper / "libraries/net/minecraft/server").glob("1.21.1-*/server-*-srg.jar"))
+        if len(patched) != 1 or len(game) != 1:
+            raise SystemExit("Use a matching isolated Paper or Youer/NeoForge 1.21.1 dependency installation")
+        jars = [patched[0], game[0], args.svc]
+    jars.extend(sorted(jar for jar in (args.paper / "libraries").rglob("*.jar") if jar not in jars))
     if any(not jar.is_file() for jar in jars):
-        raise SystemExit("Paper runtime and verified SVC candidate are required")
+        raise SystemExit("Matching runtime and verified SVC candidate are required")
     shared = repo / "world/god-voice-src/dev/god/godvoice"
     sources = list((source / "src").rglob("*.java"))
     sources += [shared / name for name in ("SpeechFrames.java", "SpeechLane.java", "CaptureFence.java")]

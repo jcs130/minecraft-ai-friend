@@ -5,8 +5,9 @@ import { numenCorePort } from './core-port.mjs';
 // The game-side driver owns the last fence. It must confirm that native tasks,
 // model calls and held inputs are stopped before a new epoch can drive the body.
 export class HostedRoles {
-  constructor({store,body,harness,profiles,now=Date.now}) {
+  constructor({store,body,harness,profiles,bodyControl,now=Date.now}) {
     this.store=store; this.body=body; this.harness=harness; this.profiles=profiles; this.now=now;
+    this.bodyControl=bodyControl;
     this.boot=randomUUID(); this.locks=new Map(); this.manual=new Map(); this.transitions=new Map();
   }
   async serial(id, task) {
@@ -24,7 +25,8 @@ export class HostedRoles {
       unresolvedRequest:this.store.unknown(row.id)?.id??null};
   }
   status(role) { return this.public(this.owned(role)); }
-  async attach(role) {
+  async attach(role,{handoff=false}={}) {
+    if(!handoff)this.bodyControl?.(role);
     const row=this.store.bind(role);
     if(row.state==='ready')return this.public(row);
     return this.serial(row.id,async()=>{
@@ -44,7 +46,8 @@ export class HostedRoles {
         || result.name!==row.name || result.bodyKind!=='numen')
       throw fail('BODY_IDENTITY_MISMATCH','身体身份或后端不匹配，已停止接管；不会另开 Mineflayer 登录。');
   }
-  async switch(role,mode,{controllerId,runtime}={}) {
+  async switch(role,mode,{controllerId,runtime,handoff=false}={}) {
+    if(mode!=='paused'&&!handoff)this.bodyControl?.(role);
     const row=this.owned(role);
     if(mode==='paused'&&row.state==='detached')return this.public(row);
     if (!MODES.includes(mode)) throw fail('MODE_INVALID','请选择 numen、harness、manual 或 paused。',400);
@@ -93,7 +96,8 @@ export class HostedRoles {
       }
     });
   }
-  async release(role) {
+  async release(role,{handoff=false}={}) {
+    if(!handoff)this.bodyControl?.(role);
     const original=this.owned(role);if(original.state==='detached')return this.public(original);
     await this.switch(role,'paused');
     return this.serial(original.id,async()=>{
@@ -116,6 +120,7 @@ export class HostedRoles {
     });
   }
   async input(role,controllerId,epoch,value) {
+    this.bodyControl?.(role);
     const frame=inputFrame(value),row=this.owned(role),lease=this.manual.get(row.id);
     if (row.state!=='ready'||row.mode!=='manual'||epoch!==row.epoch||!lease||lease.epoch!==epoch
         ||lease.controllerId!==controllerId||lease.expires<=this.now())
@@ -136,6 +141,7 @@ export class HostedRoles {
       if(saved.signature!==signature) throw fail('REQUEST_CONFLICT','同一请求编号不能更换动作参数。');
       return saved.receipt?JSON.parse(saved.receipt):{id,state:saved.state};
     }
+    this.bodyControl?.(role);
     if (row.state!=='ready'||row.mode!=='harness'||epoch!==row.epoch)
       throw fail('CONTROL_CHANGED','Harness 已失去身体控制权，请重新观察；不要重放旧决定。');
     if(this.store.unknown(row.id)) throw fail('ACTION_UNRESOLVED','已有未结算动作；先查询原请求。');

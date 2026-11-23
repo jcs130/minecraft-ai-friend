@@ -495,7 +495,7 @@ final class WaypointManager implements Listener {
         Menu menu = menus.get(event.getView().getTopInventory()); if (menu == null) return;
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p) || !menu.viewer.equals(p.getUniqueId()) || event.getRawSlot() < 0 || event.getRawSlot() >= event.getView().getTopInventory().getSize()) return;
-        if (event.getClick().isShiftClick()) return;
+        if (event.getClick() != org.bukkit.event.inventory.ClickType.LEFT && event.getClick() != org.bukkit.event.inventory.ClickType.RIGHT) return;
         int slot = event.getRawSlot();
         boolean action = menu.point == null ? menu.slots.containsKey(slot) || List.of(45, 46, 48, 49, 50).contains(slot)
                 : slot == 22 || slot == 13 || !menu.kind.equals("delete") && List.of(10, 11, 15, 16).contains(slot);

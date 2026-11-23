@@ -7,7 +7,7 @@ import java.util.*;
  * frozen task, spends mana, awards progress or polls an unavailable dungeon. */
 final class DungeonAdvice {
     private DungeonAdvice() { }
-    record Request(String[] args,boolean json,boolean verbose,int page) { }
+    record Request(String[] args,boolean json,boolean verbose,int page,String confirmation) { }
     static final class Usage extends IllegalArgumentException {
         final String nextCommand;
         Usage(String message,String nextCommand){super(message);this.nextCommand=nextCommand;}
@@ -20,11 +20,16 @@ final class DungeonAdvice {
         };
     }
     static Request parse(String[] raw){
-        List<String> words=new ArrayList<>();boolean json=false,verbose=false;int page=1;boolean seenPage=false;
+        List<String> words=new ArrayList<>();boolean json=false,verbose=false;int page=1;boolean seenPage=false;String confirmation=null;
         for(int i=0;i<raw.length;i++){
             String word=raw[i];
             if(word.equals("--json")){if(json)throw new IllegalArgumentException("--json不可重复");json=true;}
             else if(word.equals("--verbose")){if(verbose)throw new IllegalArgumentException("--verbose不可重复");verbose=true;}
+            else if(word.equals("--confirm")){
+                if(confirmation!=null||++i>=raw.length||!raw[i].matches("[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}"))
+                    throw new IllegalArgumentException("--confirm 需要原入场凭据编号");
+                confirmation=raw[i];
+            }
             else if(word.equals("--page")){if(seenPage||++i>=raw.length)throw new IllegalArgumentException("--page需要正整数");seenPage=true;try{page=Integer.parseInt(raw[i]);}catch(NumberFormatException e){throw new IllegalArgumentException("--page需要正整数");}if(page<1||page>100)throw new IllegalArgumentException("页码需为1–100");}
             else if(word.startsWith("--"))throw new IllegalArgumentException("未知选项："+word);
             else words.add(word);
@@ -33,18 +38,22 @@ final class DungeonAdvice {
         if(words.size()==1)words.add("list");
         String action=words.get(1).toLowerCase(Locale.ROOT);words.set(0,"dungeon");words.set(1,action);
         if(Set.of("abandon","cancel","quit").contains(action))throw new Usage("副本退出用 leave，不是放弃任务；留在原地，不自动回城。返城用 /mycli cast home，成功耗6魔力","/mycli dungeon leave");
-        if(!Set.of("list","info","travel","start","join","status","resume","leave","claim","menu").contains(action))throw new IllegalArgumentException("未知动作；用 dungeon --help 分页查看");
+        if(!Set.of("list","info","travel","enter","exit","start","join","status","resume","leave","claim","menu","choose").contains(action))throw new IllegalArgumentException("未知动作；用 dungeon --help 分页查看");
         int size=words.size();
-        boolean valid=switch(action){case "list","resume","leave"->size==2;case "info","travel","join"->size==3;case "start"->size==3||size==4;default->size==2||size==3;};
+        boolean valid=switch(action){case "list","resume","leave"->size==2;case "info","travel","enter","exit","join","choose"->size==3;case "start"->size==3||size==4;default->size==2||size==3;};
         if(!valid){
             if(action.equals("leave"))throw new Usage("leave 不带地点ID，只退出本人当前场次并留在原地；回城另用 /mycli cast home，成功耗6魔力","/mycli dungeon leave");
             throw new IllegalArgumentException("参数数量不符；先查该动作的 --help");
         }
-        if(size>=3&&!words.get(2).matches("[a-z0-9_]{1,32}"))throw new IllegalArgumentException("地点ID需从 dungeon list 选择");
+        if (action.equals("choose")) {
+            try { BeaconExpedition.Token.parse(words.get(2)); }
+            catch (IllegalArgumentException e) { throw new Usage("从本人当前场次的 chapter.options 复制选择命令", BeaconExpedition.STATUS + " --json"); }
+        } else if(size>=3&&!words.get(2).matches("[a-z0-9_]{1,32}"))throw new IllegalArgumentException("地点ID需从 dungeon list 选择");
         if(size==4&&!Set.of("normal","adventure","apocalypse").contains(words.get(3)))throw new IllegalArgumentException("难度为normal、adventure、apocalypse");
         if(seenPage&&!action.equals("list"))throw new IllegalArgumentException("--page只用于地点列表");
+        if(confirmation!=null&&!Set.of("enter","start","join").contains(action))throw new IllegalArgumentException("--confirm 只用于 enter、start 或 join");
         if(json&&action.equals("menu"))throw new IllegalArgumentException("此旧界面暂不支持--json，本次未打开；使用 dungeon menu");
-        return new Request(words.toArray(String[]::new),json,verbose,page);
+        return new Request(words.toArray(String[]::new),json,verbose,page,confirmation);
     }
     record Preparation(int stars,int recommendedLevel,String equipment,String party) { }
     record Outing(String id,int level,boolean claimed,long lastEnded) {
@@ -135,13 +144,14 @@ final class DungeonAdvice {
         }else if(!text(f,"admissionReason").isEmpty()) {
             state="requirements";reason=text(f,"admissionReason");
             action=text(f,"admissionHint");command=text(f,"admissionCommand");
-        }else if(f.containsKey("loadoutReady")&&!yes(f,"loadoutReady")){
-            state="requirements";reason="EQUIPMENT_REQUIRED";
-            action="缺少："+text(f,"missingLoadout")+"。"+DungeonLoadoutRules.REQUIREMENTS+"。";command=DungeonLoadoutRules.SUPPLIES;
         }else if(yes(f,"occupied")) {
             if(yes(f,"joinable")) {
                 state="joinable";reason="PARTY_MUSTER_OPEN";
-                action="此处有正在进行的共同挑战；进入遗迹后装备达标即自动同队，无需加入指令。";command=base+"info "+id;
+                if(yes(f,"atStation")){
+                    action="已有队伍。走到"+text(f,"stationName")+"石钮 "+text(f,"stationButton")+" 并按使用键，抵达后按本场条件自动入队。";command=base+"enter "+id;
+                }else{
+                    action="此处有正在进行的共同挑战；达标或确认缺装风险后可自动同队。";command=base+"info "+id;
+                }
             }else {
                 state="occupied";reason="DUNGEON_OCCUPIED";
                 action="已有队伍进行中，你尚未参战；不要在场外等刷新，改选空闲地点。";command=base+"list";
@@ -152,6 +162,15 @@ final class DungeonAdvice {
         }else if(yes(f,"atFirstRoom")) {
             state="ready";reason="DUNGEON_IDLE_READY";
             action="空闲可开；active=false 只表示尚未开场。你已到首室，可选普通难度开始。";command=base+"start "+id+" normal";
+        }else if(yes(f,"atStation")){
+            state="approach";reason="USE_TRAILHEAD";
+            action="已到"+text(f,"stationName")+"。沿铺装和地灯走到石钮 "+text(f,"stationButton")+"，按使用键进入首室，再选难度。";command=base+"enter "+id;
+        }else if(yes(f,"nearStation")){
+            state="approach";reason="WALK_TO_TRAILHEAD";
+            action="沿遗迹外庭走到"+text(f,"stationName")+" "+text(f,"stationLanding")+"；进入铺装路后沿地灯走到石钮。";command=base+"info "+id;
+        }else if(!text(f,"stationName").isEmpty()){
+            state="travel";reason="TRAVEL_TO_TRAILHEAD";
+            action="前往"+text(f,"stationName")+"，沿铺装和地灯到入口牌，靠近石钮后按使用键进入。";command=base+"travel "+id;
         }else if(yes(f,"atSite")||yes(f,"nearApproach")) {
             state="approach";reason="WALK_TO_FIRST_ROOM";
             action="已在遗迹附近；先核对实际入口和通路，再到首室 "+text(f,"firstRoom")+" 并 start。附近不等于已进入，首室坐标不是入口；不要重复传送或原地等待。";command=base+"info "+id;
@@ -159,6 +178,8 @@ final class DungeonAdvice {
             state="travel";reason="TRAVEL_TO_DUNGEON";
             action="空闲可开；可先 travel 到配置落点（需8魔力，可能只是遗迹外围），再找实际入口、沿通道到首室 "+text(f,"firstRoom")+" 并 start。传送成功不证明已到入口或进入首室。";command=base+"travel "+id;
         }
+        if(f.containsKey("loadoutReady")&&!yes(f,"loadoutReady")&&Set.of("ready","approach","joinable","travel").contains(state))
+            action+=" 建议补齐："+text(f,"missingLoadout")+"。可以确认缺装风险后入场。";
         var out=new LinkedHashMap<String,Object>();out.put("state",state);out.put("reason",reason);out.put("name",name);
         out.put("available",yes(f,"configured"));out.put("activeMeaning","是否已有开启的场次，不代表是否开放");
         out.put("nextAction",action);out.put("nextCommand",command);out.put("retryAfterMs",retry);
@@ -177,5 +198,5 @@ final class DungeonAdvice {
         for(String key:List.of("state","recommendedLevel","playerCombatLevel","currentEquipment","retryAfterMs"))if(advice.containsKey(key))brief.put(key,advice.get(key));
         out.add("adventure",new Gson().toJsonTree(brief));return out;
     }
-    static String label(String state){return switch(state){case "unavailable"->"暂不可用，改选其他地点";case "claimable"->"有待领奖凭据";case "fault_paused"->"故障暂停，保留进度";case "cooldown"->"场地冷却";case "occupied"->"其他队伍进行中";case "ready","travel","approach"->"空闲可开";case "fighting"->"正在清怪";case "returning"->"返回首室结算";case "moving"->"前往下一室";case "muster","joinable"->"队伍正在集结";default->"按下一步处理";};}
+    static String label(String state){return switch(state){case "unavailable"->"暂不可用，改选其他地点";case "claimable"->"有待领奖凭据";case "fault_paused"->"故障暂停，保留进度";case "cooldown"->"场地冷却";case "occupied"->"其他队伍进行中";case "ready","travel","approach"->"空闲可开";case "fighting"->"正在清怪";case "returning"->"正在登记结算";case "moving"->"前往下一室";case "objective"->"本段有可操作目标";case "muster","joinable"->"队伍正在集结";default->"按下一步处理";};}
 }

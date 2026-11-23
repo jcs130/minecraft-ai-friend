@@ -26,7 +26,7 @@ def main():
              "AgentCliRecoveryTest", "GuildAdventureGuideTest", "GuildRankPointsTest", "GuildPromotionLedgerTest",
              "AdventureChoiceTest", "AtomicConfigFileTest",
              "DurableConfigFilesTest", "EconomyPresentationTest", "StashGuidanceCatalogTest", "DungeonEnchantmentsTest",
-             "WeaponSkillRollsTest"]
+             "WeaponSkillRollsTest", "EchoCitadelTest", "CryptBuildingRulesTest"]
     suffix = ".exe" if os.name == "nt" else ""
     tool = lambda name: str(args.jdk / "bin" / (name + suffix)) if args.jdk else name
     version = subprocess.run([tool("javac"), "-version"], capture_output=True, text=True, check=True)

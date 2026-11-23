@@ -41,7 +41,6 @@
     document.querySelector('#game-client-downloads').replaceChildren(...packages.filter(row => row.category === 'game-client' && !row.id.startsWith('maids-client-')).map(card));
     document.querySelector('#package-downloads').replaceChildren(...packages.filter(row => row.category === 'host').map(card));
     document.querySelector('#component-downloads').replaceChildren(...packages.filter(row => row.category === 'component').map(card));
-    document.querySelector('#advanced-downloads').replaceChildren(...packages.filter(row => !row.category || row.category === 'advanced').map(card));
     status.textContent = packages.some(row => row.available) ? '从官网下载固定版本，文件由对象存储直接提供。' : '下载目录已加载；各包的开放状态见下方。';
   }).catch(() => { status.textContent = '暂时无法读取下载目录，请刷新页面或打开接入说明。'; });
 })();

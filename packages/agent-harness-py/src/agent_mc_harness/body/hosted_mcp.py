@@ -20,6 +20,11 @@ from .native_tasks import HOSTED_STOP, NativeTasks, background_task, finished_ta
 from .numen import PortResult, RawEvent, command_lua, _field
 
 
+HEARTBEAT_INTERVAL_SECONDS = 2
+HEARTBEAT_RPC_SECONDS = 3
+WALK_INLINE_SECONDS = 2
+
+
 class HostedMcpPort:
     transport = "numen-hosted-mcp"
     dialect = "numen-hosted-0.1.5"
@@ -59,6 +64,7 @@ class HostedMcpPort:
         self.closing = False
         self.next_receipt_probe = {}
         self.next_vacancy_probe = None
+        self.walk_request: tuple[str, int, asyncio.Task[PortResult]] | None = None
         self.action_journal = action_journal
         self.ledger = NativeTasks(Path(config["journalDirectory"]) / "hosted-tasks.sqlite3", self.body)
 
@@ -150,14 +156,20 @@ class HostedMcpPort:
             if not self.connected.done(): self.connected.set_exception(error)
 
     async def _heartbeat(self):
-        try:
-            while True:
-                await asyncio.sleep(2)
+        missed = False
+        while True:
+            await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+            try:
                 await self._heartbeat_once()
-        except asyncio.CancelledError:
-            raise
-        except Exception as error:
-            await self._lose_control(error)
+            except Exception as error:
+                # A missed response does not itself change the server fence.
+                # Let the next scheduled heartbeat confirm the same fence.
+                if not self.lost and not missed and self._transient_facts_error(error):
+                    missed = True
+                    continue
+                await self._lose_control(error)
+                return
+            missed = False
 
     async def _lose_control(self, error):
         if self.lost:
@@ -208,7 +220,14 @@ class HostedMcpPort:
             return all(HostedMcpPort._transient_facts_error(child) for child in error.exceptions)
         from anyio import BrokenResourceError, ClosedResourceError, EndOfStream
         from httpx import TransportError
-        return isinstance(error, (OSError, TransportError, BrokenResourceError, ClosedResourceError, EndOfStream))
+        if isinstance(error, (OSError, TransportError, BrokenResourceError, ClosedResourceError, EndOfStream)):
+            return True
+        # MCP 2 uses httpx2, whose transport exceptions are separate classes.
+        try:
+            from httpx2 import TransportError as NewTransportError
+        except ImportError:
+            return False
+        return isinstance(error, NewTransportError)
 
     def _unfinished_local_work(self):
         if self.action_journal and self.action_journal.unresolved(self.body):
@@ -227,7 +246,8 @@ class HostedMcpPort:
         # The queue drain can take longer than a lease. Renew our deliberate
         # pause while it runs, but never race an epoch/mode change.
         async with self.transition_lock:
-            status = await self.rpc("heartbeat")
+            async with asyncio.timeout(HEARTBEAT_RPC_SECONDS):
+                status = await self.rpc("heartbeat")
             if not self._confirmed(status, self.lease_mode):
                 raise RuntimeError("CONTROL_CHANGED")
 
@@ -243,25 +263,52 @@ class HostedMcpPort:
         port.previous_states = {(self.owned_epoch, self.lease_mode), (self.epoch, self.requested_mode)}
         return port
 
-    async def wait_previous_release(self):
+    async def wait_previous_release(self, *, never_attached=False):
         """Observe the prior seat becoming vacant without extending its lease."""
-        if not self.previous_states:
+        if not self.previous_states and not never_attached:
             return
         async with asyncio.timeout(25):
             if self._provided_session is None:
                 async with self._mcp_session() as session:
-                    await self._wait_for_vacancy(session)
+                    await self._wait_for_vacancy(session, never_attached=never_attached)
             else:
-                await self._wait_for_vacancy(self._provided_session)
+                await self._wait_for_vacancy(self._provided_session, never_attached=never_attached)
 
-    async def _wait_for_vacancy(self, session):
+    async def wait_voluntary_release(self):
+        """Verify the closed controller's native seat before announcing a handoff."""
+        if not self.closing or self.attached:
+            raise RuntimeError("hosted_control_still_open")
+        self.previous_states = {(self.owned_epoch, self.lease_mode), (self.epoch, self.requested_mode)}
+        for attempt in range(2):
+            try:
+                await self.wait_previous_release(never_attached=self.owned_epoch == 0)
+                return
+            except Exception as error:
+                if attempt or not self._transient_facts_error(error):
+                    raise
+                await asyncio.sleep(.5)
+
+    async def wait_for_return(self, paused):
+        """Wait without renewing another controller's lease or attaching early."""
+        while not paused():
+            try:
+                await self.wait_previous_release(never_attached=True)
+            except Exception as error:
+                if not self._transient_facts_error(error):
+                    raise
+                await asyncio.sleep(2)
+            else:
+                return not paused()
+        return False
+
+    async def _wait_for_vacancy(self, session, *, never_attached=False):
         epochs = {epoch for epoch, _ in self.previous_states}
         while True:
             facts = await self._request(session, "facts")
             epoch, mode = facts.get("epoch"), facts.get("mode")
-            if self._vacant(facts, epochs):
+            if self._vacant(facts, {epoch} if never_attached else epochs):
                 return  # attach still has to win the native fence atomically
-            if facts.get("roleUuid") != self.body or (epoch, mode) not in self.previous_states:
+            if facts.get("roleUuid") != self.body or not never_attached and (epoch, mode) not in self.previous_states:
                 self.lost = True
                 raise RuntimeError("CONTROL_CHANGED")
             await asyncio.sleep(.5)
@@ -301,7 +348,12 @@ class HostedMcpPort:
             return PortResult("accepted", text, value, task)
         if outcome is False:
             return PortResult("failed",text,value)
-        if state == "completed" or state == "partial" and tool == "say" and "Speech dispatched" in text:
+        # A persisted result contains the server's outcome but omits the tool name.
+        # The exact successful say acknowledgement proves dispatch, not a reply.
+        speech_dispatched = (tool == "say" and "Speech dispatched" in text
+                             or tool is None and outcome is True
+                             and text == "Speech dispatched; it is not evidence of a reply.")
+        if state == "completed" or state == "partial" and speech_dispatched:
             return PortResult("completed", text, value)
         # Synchronous Lua completion has no remaining native job. A partial
         # envelope alone is not completion evidence.
@@ -309,7 +361,13 @@ class HostedMcpPort:
             return PortResult("completed", text, value)
         return PortResult("unknown", text, value)
 
+    async def start_walk(self, code, request_id):
+        return await self._submit("lua", {"code": code}, request_id, walk=True)
+
     async def call(self, tool, args, request_id):
+        return await self._submit(tool, args, request_id, walk=False)
+
+    async def _submit(self, tool, args, request_id, *, walk):
         signature = hashlib.sha256(json.dumps([tool,args], sort_keys=True).encode()).hexdigest()
         # Only admission is serialized. A long-running call must stay interruptible.
         async with self.control_lock:
@@ -322,23 +380,54 @@ class HostedMcpPort:
                 return PortResult(**old)
             if self.lost or self.closing:
                 return PortResult("rejected", "Hosted control unavailable; this new action was not dispatched.")
+            if walk and self.walk_request:
+                original, walk_epoch, pending = self.walk_request
+                if walk_epoch == self.epoch and (
+                    not pending.done() or self.ledger.get(original, self.task_connection)["status"] in {"accepted", "unknown"}
+                ):
+                    return PortResult("rejected", "The previous hosted walk has no terminal result. Query its original request or stop it before choosing another route.",
+                                      {"reason": "walk_in_progress", "originalRequestId": original, "targetReached": False})
             self.ledger.begin(request_id, signature, self.task_connection)
+            epoch, generation = self.epoch, self.task_connection
+            if walk:
+                task = asyncio.create_task(self._dispatch(tool, args, request_id, epoch, generation))
+                self.walk_request = (request_id, epoch, task)
+        if not walk:
+            return await self._dispatch(tool, args, request_id, epoch, generation)
+        done, _ = await asyncio.wait({task}, timeout=WALK_INLINE_SECONDS)
+        if task.cancelled():
+            return PortResult("unknown", "The local walk wait ended after a control change. Query the original request without resending.",
+                              {"reason": "walk_wait_ended", "originalRequestId": request_id})
+        return task.result() if done else self._walk_pending(request_id)
+
+    @staticmethod
+    def _walk_pending(request_id):
+        return PortResult("accepted", "Walk admitted by the local controller; arrival is unconfirmed. Query the original request without resending.",
+                          {"reason": "walk_in_progress", "originalRequestId": request_id, "targetReached": False,
+                           "nextSafeRead": "result"})
+
+    async def _dispatch(self, tool, args, request_id, epoch, generation):
         try:
-            value = await self.rpc("call", id=request_id, tool=tool, args=args)
+            value = await self.rpc("call", fence_epoch=epoch, id=request_id, tool=tool, args=args)
             result = self.mapped(value, request_id, tool)
             if result.status == "accepted" and result.execution_id:
-                bound = self.ledger.bind_background(request_id, self.task_connection, result.execution_id, result.text)
+                bound = self.ledger.bind_background(request_id, generation, result.execution_id, result.text)
                 return result if bound["status"] == "accepted" else PortResult(**bound)
             self.ledger.save(request_id, result.status, result.text, result.execution_id)
             return result
-        except Exception:
-            return PortResult("unknown", "Original hosted action outcome unknown; query its request ID.")
+        except Exception as error:
+            return PortResult("unknown", "Original hosted action outcome unknown; query its request ID.",
+                              {"reason": "native_rpc_unconfirmed", "errorType": type(error).__name__})
 
     async def result(self, request_id):
         if self.stopping.is_set():
             return PortResult("unknown", "Session closed; query the original request after reconnect.")
         saved = self.ledger.get(request_id, self.task_connection)
         if saved and saved["status"] not in ("accepted", "unknown"): return PortResult(**saved)
+        if self.walk_request and self.walk_request[0] == request_id:
+            task = self.walk_request[2]
+            if not task.done() and not self.lost:
+                return self._walk_pending(request_id)
         if saved and saved["data"]["fingerprint"] == HOSTED_STOP:
             # No "result" file exists for lease transitions on the Numen server.
             async with self.control_lock:
@@ -451,6 +540,13 @@ class HostedMcpPort:
                 if not self.ledger.pending(self.task_connection):
                     break
 
+    async def _retire_walk_waiter(self):
+        if self.walk_request:
+            task = self.walk_request[2]
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
     async def events(self):
         if self.next_vacancy_probe is not None:
             await self._recheck_vacancy()
@@ -561,6 +657,9 @@ class HostedMcpPort:
             try:
                 await self._stop_transition("paused")
                 self.ledger.confirm_stop(request_id)
+                # The server already fenced the old actuator. Retire only
+                # the local waiter; the original receipt remains queryable.
+                await self._retire_walk_waiter()
                 with contextlib.suppress(Exception):
                     await self._drain_stopped()
                 await self._start_task_window()
@@ -595,5 +694,6 @@ class HostedMcpPort:
                         await self._drain_stopped()
             self.attached = False
             self.stopping.set()
+        await self._retire_walk_waiter()
         if self.connection_task: await asyncio.gather(self.connection_task,return_exceptions=True)
         self.ledger.close()

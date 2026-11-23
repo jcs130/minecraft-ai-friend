@@ -9,7 +9,10 @@ import java.util.regex.Pattern;
 
 /** Explicit NPC voice identities, never inferred from names or chat text. */
 final class NpcDialoguePolicy {
-    record Profile(UUID id,UUID owner,String kind,String name,String voice,double range,List<String> aliases,List<String> spokenAliases,String residentId) {
+    record Profile(UUID id,UUID owner,String kind,String name,String voice,double range,List<String> aliases,List<String> spokenAliases,String residentId,String serviceCounter) {
+        Profile(UUID id,UUID owner,String kind,String name,String voice,double range,List<String> aliases,List<String> spokenAliases,String residentId) {
+            this(id,owner,kind,name,voice,range,aliases,spokenAliases,residentId,null);
+        }
         Profile(UUID id,UUID owner,String kind,String name,String voice,double range,List<String> aliases,List<String> spokenAliases) {
             this(id,owner,kind,name,voice,range,aliases,spokenAliases,null);
         }
@@ -64,14 +67,22 @@ final class NpcDialoguePolicy {
             String kind=row.get("kind").getAsString(),name=row.get("name").getAsString(),voice=row.get("voice").getAsString();
             UUID owner=null;
             String residentId=null;
+            String serviceCounter=null;
             if(kind.equals("villager")){
                 if(row.has("ownerId")||!row.has("residentId")||!row.get("residentId").isJsonPrimitive()||!row.get("residentId").getAsJsonPrimitive().isString())
                     throw new IllegalArgumentException("VILLAGER_VOICE_IDENTITY_INVALID");
                 residentId=row.get("residentId").getAsString();
                 if(!residentId.matches("[A-Za-z0-9_-]{1,48}")||!residents.add(residentId))
                     throw new IllegalArgumentException("VILLAGER_VOICE_IDENTITY_INVALID");
+                if(row.has("serviceCounter")){
+                    var service=row.get("serviceCounter");
+                    if(!service.isJsonPrimitive()||!service.getAsJsonPrimitive().isString()
+                            ||!"guild-receptionist".equals(service.getAsString()))
+                        throw new IllegalArgumentException("VILLAGER_VOICE_SERVICE_INVALID");
+                    serviceCounter=service.getAsString();
+                }
             }else{
-                if(!Set.of("maid","numen").contains(kind)||row.has("residentId")||!row.has("ownerId"))
+                if(!Set.of("maid","numen").contains(kind)||row.has("residentId")||row.has("serviceCounter")||!row.has("ownerId"))
                     throw new IllegalArgumentException("NPC_VOICE_PROFILE_INVALID");
                 owner=UUID.fromString(row.get("ownerId").getAsString());
             }
@@ -92,7 +103,7 @@ final class NpcDialoguePolicy {
                     (field.equals("aliases")?aliases:spokenAliases).add(alias);
                 }
             }
-            var profile=new Profile(id,owner,kind,name,voice,range,List.copyOf(aliases),List.copyOf(spokenAliases),residentId);
+            var profile=new Profile(id,owner,kind,name,voice,range,List.copyOf(aliases),List.copyOf(spokenAliases),residentId,serviceCounter);
             if(result.putIfAbsent(id,profile)!=null)throw new IllegalArgumentException("NPC_VOICE_DUPLICATE_ID");
             for(String label:labels(profile,true)){
                 UUID other=names.putIfAbsent(label.toLowerCase(Locale.ROOT),id);
@@ -171,13 +182,23 @@ final class NpcDialoguePolicy {
     }
     static boolean fresh(long at,long now){return at<=now&&now-at<=15_000;}
     static String text(String text){
-        if(text==null||text.isBlank()||text.length()>1200||text.codePoints().anyMatch(c->Character.isISOControl(c)||c==0xA7))throw new IllegalArgumentException("NPC_DIALOGUE_TEXT_INVALID");
+        if(text==null||text.length()>1200||!isPlainText(text))throw new IllegalArgumentException("NPC_DIALOGUE_TEXT_INVALID");
         return text;
     }
+    static void validateConversationText(String message) {
+        if (message == null || message.codePointCount(0, message.length()) > 400 || !isPlainText(message))
+            throw new IllegalArgumentException("请输入一行不超过 400 字的消息");
+    }
+
+    private static boolean isPlainText(String text) {
+        return !text.isBlank() && text.codePoints().noneMatch(c -> Character.isISOControl(c) || c == 0xA7);
+    }
+
     static boolean nearby(UUID source,UUID target,UUID sourceWorld,UUID targetWorld,double squaredDistance,double range){
         return !source.equals(target)&&sourceWorld.equals(targetWorld)&&Double.isFinite(squaredDistance)&&squaredDistance>=0
             &&Double.isFinite(range)&&range>0&&squaredDistance<=range*range;
     }
+    enum Delivery { ACCEPTED, ALREADY_SEEN, NOT_READY, UNKNOWN }
     static final class Seen {
         private final LinkedHashMap<String,Long> rows=new LinkedHashMap<>();
         boolean add(UUID listener,UUID source,String event,long now){
@@ -185,6 +206,18 @@ final class NpcDialoguePolicy {
             String key=listener+"/"+source+"/"+event;
             if(rows.putIfAbsent(key,now)!=null)return false;
             while(rows.size()>4096)rows.remove(rows.keySet().iterator().next());return true;
+        }
+        Delivery deliver(UUID listener,UUID source,String event,long now,java.util.function.Supplier<Boolean> input){
+            if(!add(listener,source,event,now))return Delivery.ALREADY_SEEN;
+            try {
+                if(Boolean.TRUE.equals(input.get()))return Delivery.ACCEPTED;
+            } catch(RuntimeException|LinkageError uncertain) {
+                // A callback may already have enqueued the input. Quarantine the original ID, never replay it.
+                return Delivery.UNKNOWN;
+            }
+            // A missing binding or an explicit no-acceptance must not consume the event's deduplication key.
+            rows.remove(listener+"/"+source+"/"+event);
+            return Delivery.NOT_READY;
         }
     }
 }

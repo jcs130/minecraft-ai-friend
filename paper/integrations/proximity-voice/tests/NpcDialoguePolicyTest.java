@@ -5,13 +5,33 @@ public final class NpcDialoguePolicyTest {
     static int checks;
     static void check(boolean value){if(!value)throw new AssertionError("NPC dialogue check "+checks);checks++;}
     static void rejected(Runnable work){try{work.run();throw new AssertionError("expected rejection");}catch(IllegalArgumentException expected){checks++;}}
+
     public static void main(String[] args)throws Exception{
+        NpcDialoguePolicy.validateConversationText("🐋".repeat(400));
+        rejected(() -> NpcDialoguePolicy.validateConversationText("🐋".repeat(401)));
+        rejected(() -> NpcDialoguePolicy.validateConversationText(""));
+        rejected(() -> NpcDialoguePolicy.validateConversationText("抬头\n看"));
+        rejected(() -> NpcDialoguePolicy.validateConversationText("§0input"));
         UUID a=UUID.randomUUID(),b=UUID.randomUUID(),world=UUID.randomUUID();
         JsonObject config=JsonParser.parseString("{\"schema\":1,\"roles\":[{\"id\":\""+a+"\",\"ownerId\":\""+b+"\",\"kind\":\"maid\",\"name\":\"结衣\",\"voice\":\"neko-yui-cn\",\"range\":24}]}").getAsJsonObject();
         check(NpcDialoguePolicy.profiles(config).get(a).owner().equals(b));
         JsonObject villagers=JsonParser.parseString("{\"schema\":1,\"roles\":[{\"id\":\""+a+"\",\"kind\":\"villager\",\"residentId\":\"qinghe\",\"name\":\"青禾\",\"voice\":\"qa\",\"range\":8}]}").getAsJsonObject();
         var farmer=NpcDialoguePolicy.profiles(villagers).get(a);
-        check(farmer.owner()==null&&farmer.residentId().equals("qinghe"));
+        check(farmer.owner()==null&&farmer.residentId().equals("qinghe")&&farmer.serviceCounter()==null);
+        var guild=villagers.deepCopy();
+        var counter=guild.getAsJsonArray("roles").get(0).getAsJsonObject();
+        counter.addProperty("residentId","guild_receptionist");
+        counter.addProperty("serviceCounter","guild-receptionist");
+        var receptionist=NpcDialoguePolicy.profiles(guild).get(a);
+        check(receptionist.id().equals(a)&&receptionist.residentId().equals("guild_receptionist")
+                &&receptionist.serviceCounter().equals("guild-receptionist"));
+        counter.addProperty("serviceCounter","guessed-counter");
+        rejected(()->NpcDialoguePolicy.profiles(guild));
+        counter.addProperty("serviceCounter",true);
+        rejected(()->NpcDialoguePolicy.profiles(guild));
+        var foreignCounter=config.deepCopy();
+        foreignCounter.getAsJsonArray("roles").get(0).getAsJsonObject().addProperty("serviceCounter","guild-receptionist");
+        rejected(()->NpcDialoguePolicy.profiles(foreignCounter));
         check(NpcDialoguePolicy.addressed(List.of(farmer),"青禾，你在忙什么？",true).profile().equals(farmer));
         var mixed=villagers.deepCopy();mixed.getAsJsonArray("roles").get(0).getAsJsonObject().addProperty("ownerId",b.toString());
         rejected(()->NpcDialoguePolicy.profiles(mixed));
@@ -93,6 +113,16 @@ public final class NpcDialoguePolicyTest {
         check(!NpcDialoguePolicy.nearby(a,b,world,world,Double.NaN,24));
         var seen=new NpcDialoguePolicy.Seen();check(seen.add(b,a,"original",1000));check(!seen.add(b,a,"original",2000));
         check(seen.add(UUID.randomUUID(),a,"original",2000));check(seen.add(b,a,"new",2000));
+        var delivery=new NpcDialoguePolicy.Seen();int[] calls={0};
+        check(delivery.deliver(b,a,"recoverable",1000,()->{calls[0]++;return false;})==NpcDialoguePolicy.Delivery.NOT_READY);
+        check(delivery.deliver(b,a,"recoverable",1500,()->{calls[0]++;return null;})==NpcDialoguePolicy.Delivery.NOT_READY);
+        check(delivery.deliver(b,a,"recoverable",2000,()->{calls[0]++;return true;})==NpcDialoguePolicy.Delivery.ACCEPTED);
+        check(delivery.deliver(b,a,"recoverable",2500,()->{calls[0]++;return true;})==NpcDialoguePolicy.Delivery.ALREADY_SEEN);
+        check(calls[0]==3); // readiness recovery uses the original input once, not a new event or another model request
+        check(delivery.deliver(b,a,"uncertain",3000,()->{calls[0]++;throw new IllegalStateException("acceptance unknown");})==NpcDialoguePolicy.Delivery.UNKNOWN);
+        check(delivery.deliver(b,a,"uncertain",3500,()->{calls[0]++;return true;})==NpcDialoguePolicy.Delivery.ALREADY_SEEN);
+        check(calls[0]==4); // a callback exception is not replay permission
+        check(delivery.deliver(UUID.randomUUID(),a,"recoverable",4000,()->true)==NpcDialoguePolicy.Delivery.ACCEPTED);
         UUID session=UUID.randomUUID();
         var source=new VoiceAudience.Actor(a,session,world,0,80,0,"human",true);
         var distant=new VoiceAudience.Actor(b,session,world,30,80,0,"npc",true,24);

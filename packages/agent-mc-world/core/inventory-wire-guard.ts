@@ -19,25 +19,30 @@ export function installInventoryWireGuard(bot: Bot, failed: (failure: InventoryD
   const attach = (): void => {
     const parser = client.deserializer;
     if (client.state !== 'play' || !parser || parsers.has(parser)) return;
-    const registry = bot.registry as unknown as { protocol?: { play?: { toClient?: { types?: {
-      packet?: [string, Array<{ name?: string; type?: [string, { mappings?: Record<string, string> }] }>];
-    } } } } };
+    const registry = bot.registry as unknown as { protocol?: {
+      types?: { ContainerID?: string };
+      play?: { toClient?: { types?: {
+        packet?: [string, Array<{ name?: string; type?: [string, { mappings?: Record<string, string> }] }>];
+      } } };
+    } };
     const mappings = registry.protocol?.play?.toClient?.types?.packet?.[1]?.find(f => f.name === 'name')?.type?.[1]?.mappings;
     if (!mappings) return;
     const inventoryPackets = new Set(['window_items', 'set_slot', 'set_cursor_item', 'set_player_inventory']);
     const ids = new Map(Object.entries(mappings).filter(([,name]) => inventoryPackets.has(name))
       .map(([id,name]) => [Number(id), name as InventoryDecodeFailure['packet']]));
-    const varintContainer = (bot.registry as unknown as {protocol?: {types?: {ContainerID?: unknown}}}).protocol?.types?.ContainerID === 'varint';
+    const varintContainer = registry.protocol?.types?.ContainerID === 'varint';
     const original = parser.parsePacketBuffer;
     parsers.add(parser);
     parser.parsePacketBuffer = function(bytes) {
-      const id = readVarint(bytes), packet = id ? ids.get(id.value) : undefined;
-      // Closed-window late packets must not poison the current inventory.
-      // Modern ContainerID is VarInt, not one byte (menu IDs can exceed 127).
-      const windowId = id && (varintContainer ? readVarint(bytes.subarray(id.offset))?.value : bytes[id.offset]);
+      const id = readVarint(bytes);
+      const packet = id && ids.get(id.value);
+      if (!id || !packet) return original.call(this, bytes);
+      // Modern ContainerID is VarInt. Quarantine packets whose window ID was
+      // truncated, but ignore an identified closed-window response.
+      const windowId = varintContainer ? readVarint(bytes, id.offset)?.value : bytes[id.offset];
       const relevant = packet === 'set_cursor_item' || packet === 'set_player_inventory'
-        || !!packet && (windowId === 0 || windowId === bot.currentWindow?.id
-          || packet === 'set_slot' && (windowId === -1 || windowId === 255));
+        || windowId === undefined || windowId === 0 || windowId === bot.currentWindow?.id
+        || (packet === 'set_slot' && (windowId === -1 || (!varintContainer && windowId === 255)));
       try {
         const result = original.call(this, bytes);
         if (relevant && result.metadata.size !== bytes.length) {
@@ -57,10 +62,11 @@ export function installInventoryWireGuard(bot: Bot, failed: (failure: InventoryD
   client.on('end', () => client.removeListener('state', attach));
 }
 
-function readVarint(bytes: Buffer): {value:number; offset:number} | undefined {
+function readVarint(bytes: Buffer, offset = 0): {value:number; offset:number} | undefined {
   let value = 0;
-  for (let i = 0; i < 5 && i < bytes.length; i++) {
-    const byte = bytes[i]; value |= (byte & 127) << (i * 7);
-    if (!(byte & 128)) return {value, offset:i+1};
+  for (let i = 0; i < 5 && offset + i < bytes.length; i++) {
+    const byte = bytes[offset + i];
+    value |= (byte & 127) << (i * 7);
+    if (!(byte & 128)) return {value, offset:offset+i+1};
   }
 }

@@ -46,16 +46,19 @@ class LocalMemory:
     async def add(self, group_id: str, episode: MemoryEpisode, hints: list[str] | None = None) -> dict[str, Any]:
         check_group(group_id)
         async with self.lock:
-            previous = self.db.execute("SELECT kind,name,body FROM episodes WHERE group_id=? AND id=?", (group_id, episode.id)).fetchone()
-            if previous and previous != (episode.kind, episode.name, episode.body):
-                raise ValueError("memory_episode_id_conflict")
-            self.db.execute("INSERT OR IGNORE INTO episodes (group_id, id, kind, name, body, reference_time, actors, provenance)"
-                            " VALUES (?,?,?,?,?,?,?,?)",
-                            (group_id, episode.id, episode.kind, episode.name, episode.body,
-                             episode.reference_time.astimezone(UTC).isoformat(), json.dumps(episode.actors, ensure_ascii=False),
-                             json.dumps(episode.provenance, ensure_ascii=False)))
-            self.db.commit()
-        return {"stored": "local", "episode": episode.id}
+            with self.db:
+                cursor = self.db.execute("INSERT INTO episodes (group_id, id, kind, name, body, reference_time, actors, provenance)"
+                                         " VALUES (?,?,?,?,?,?,?,?) ON CONFLICT (group_id,id) DO NOTHING",
+                                         (group_id, episode.id, episode.kind, episode.name, episode.body,
+                                          episode.reference_time.astimezone(UTC).isoformat(), json.dumps(episode.actors, ensure_ascii=False),
+                                          json.dumps(episode.provenance, ensure_ascii=False)))
+                inserted = cursor.rowcount == 1
+                if not inserted:
+                    previous = self.db.execute("SELECT kind,name,body FROM episodes WHERE group_id=? AND id=?",
+                                               (group_id, episode.id)).fetchone()
+                    if previous != (episode.kind, episode.name, episode.body):
+                        raise ValueError("memory_episode_id_conflict")
+        return {"stored": "local", "episode": episode.id, "inserted": inserted}
 
     async def search(self, group_id: str, query: str, limit: int = 8, at: datetime | None = None) -> list[Fact]:
         check_group(group_id)

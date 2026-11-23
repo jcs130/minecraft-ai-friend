@@ -10,7 +10,7 @@ Citizens and the DeepSeek plugin are reached by reflection, so they are not need
 from pathlib import Path
 import argparse, hashlib, json, os, subprocess, zipfile
 
-VERSION = '0.1.3'
+VERSION = '0.1.4'
 p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 src_group = p.add_mutually_exclusive_group(required=True)
 src_group.add_argument('--server', type=Path)
@@ -55,10 +55,13 @@ core = sorted(here.glob('src/org/qiandengji/villagerquests/core/*.java'))
 test_src = sorted(here.glob('tests/**/*.java'))
 # Same classpath as the plugin, so the rules run against the gson the server actually ships.
 cp = os.pathsep.join(map(str, libs))
-run('compile-tests', [javac, args_file('tests.args', ['-proc:none', '-encoding', 'UTF-8', '--release', '21', '-cp', cp, '-d', tests, *core, *test_src])])
+test_cp = os.pathsep.join([str(classes), cp])
+run('compile-tests', [javac, args_file('tests.args', ['-proc:none', '-encoding', 'UTF-8', '--release', '21', '-cp', test_cp, '-d', tests, *core, *test_src])])
 schema = repo / 'packages/agent-harness-py/schemas/villager_quest.schema.json'
 rules = run('rules', [java, '-ea', args_file('rules.args', ['-cp', os.pathsep.join([str(tests), cp]), 'org.qiandengji.villagerquests.core.CoreRulesTest', str(schema)])])
 assert 'passed=true' in rules, rules
+run('memory-wire', [java, '-ea', args_file('memory-wire.args', ['-cp', os.pathsep.join([str(tests), test_cp]),
+    'org.qiandengji.villagerquests.VillagerHarnessMemoryContractTest'])])
 
 jar = a.output / f'qiandeng-villager-quests-{VERSION}.jar'
 with zipfile.ZipFile(jar, 'x', zipfile.ZIP_DEFLATED) as z:

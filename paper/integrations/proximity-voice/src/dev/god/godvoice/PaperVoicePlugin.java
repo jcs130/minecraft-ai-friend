@@ -247,9 +247,27 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         if(!(sender instanceof Player p)){
             if((sender instanceof ConsoleCommandSender||sender instanceof RemoteConsoleCommandSender)&&args.length>=2&&args.length<=3&&args[0].equalsIgnoreCase("status")){
                 Player receiver=Bukkit.getPlayerExact(args[1]),speaker=args.length==3?Bukkit.getPlayerExact(args[2]):null;
-                if(receiver==null||(args.length==3&&speaker==null))sender.sendMessage("VOICE_PLAYER_OFFLINE: /voice status <online receiver> [online speaker]");
-                else connectionStatus(sender,receiver,speaker);
-            }else sender.sendMessage("Read-only diagnostic: /voice status <online receiver> [online speaker]. Player requests remain owned by their connection.");
+                var registered=npcs==null?null:npcs.find(args[1]);
+                Entity body=receiver!=null?receiver:registered==null?null:npcs.live(registered.id());
+                Entity source=speaker;
+                if(source==null&&args.length==3&&npcs!=null){var named=npcs.find(args[2]);if(named!=null)source=npcs.live(named.id());}
+                if(body instanceof Player player){
+                    connectionStatus(sender,player,speaker);
+                }else if(registered!=null){
+                    var status=npcs.status(registered.id());status.addProperty("voiceServerReady",api!=null);
+                    sender.sendMessage("VOICE_NPC_DIAGNOSTIC "+status);
+                    sender.sendMessage("[语音] 登记、入箱和发送不是听见；还需核对该角色控制器的决策进展与真实接收端。");
+                }else sender.sendMessage("VOICE_PLAYER_OR_NPC_UNAVAILABLE: /voice status <online player or registered NPC> [speaker]");
+                if(args.length==3){
+                    if(body==null||source==null)sender.sendMessage("VOICE_SOURCE_OR_BODY_UNAVAILABLE");
+                    else if(!(body instanceof Player&&source instanceof Player)){
+                        boolean same=body.getWorld().equals(source.getWorld());
+                        double range=registered==null?distanceCap:Math.min(distanceCap,registered.range());
+                        double distance=same?body.getLocation().distance(source.getLocation()):Double.NaN;
+                        sender.sendMessage("[语音位置] sameWorld="+same+"; distance="+(same?String.format(Locale.ROOT,"%.1f",distance):"different_world")+"; inRange="+(same&&distance<=range)+"; actualHearingVerified=false");
+                    }
+                }
+            }else sender.sendMessage("Read-only diagnostic: /voice status <online player or registered NPC> [speaker]. Player requests remain owned by their connection.");
             return true;
         }
         try{
@@ -334,10 +352,30 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         return row == null ? null : row.toString();
     }
     public String queueNpcPrivateConversation(UUID body, UUID speakerId, String message) throws java.io.IOException {
+        if (!Bukkit.isPrimaryThread() || social == null || body == null || speakerId == null)
+            throw new IllegalArgumentException("npc_private_dialogue_unavailable");
         var speaker = Bukkit.getPlayer(speakerId);
-        if (social == null || speaker == null) throw new IllegalArgumentException("npc_private_dialogue_unavailable");
+        if (speaker == null) throw new IllegalArgumentException("npc_private_dialogue_unavailable");
         return social.queue(body, speaker, message, true).toString();
     }
+
+    /**
+     * Native server bridge for a signed or unsigned message already resolved to a specific recipient.
+     * Returns null if the service is unavailable or the body has no registered Numen profile,
+     * an empty string for a handled rejection, or the canonical request ID when accepted.
+     * A storage error is a handled failure and must never fall back to a second recipient delivery.
+     */
+    public String queueHostedPrivateConversation(UUID body, UUID speakerId, String message) throws java.io.IOException {
+        if (!Bukkit.isPrimaryThread() || !isEnabled() || npcs == null || social == null || body == null) return null;
+        var profile = npcs.profile(body);
+        if (profile == null || !profile.kind().equals("numen")) return null;
+        try {
+            return queueNpcPrivateConversation(body, speakerId, message);
+        } catch (IllegalArgumentException denied) {
+            return "";
+        }
+    }
+
     public boolean bindHostedNpcVoice(UUID actor,UUID owner,java.util.function.Function<String,Boolean> input){
         return Bukkit.isPrimaryThread()&&npcs!=null&&npcs.bind(actor,owner,input);
     }

@@ -10,5 +10,9 @@ final class SiteRewardPolicy {
         return "eligible";
     }
 
+    static boolean relicEligible(boolean bossParticipant, boolean earned, boolean pending, boolean replay) {
+        return bossParticipant && !earned && !pending && !replay;
+    }
+
     private SiteRewardPolicy() {}
 }

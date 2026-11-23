@@ -1,6 +1,6 @@
 name: qiandeng-villager-quests
 main: org.qiandengji.villagerquests.VillagerQuestsPlugin
-version: 0.1.3
+version: 0.1.4
 api-version: '1.21'
 description: 千灯纪村民委托：村民按规则发委托，玩家与常驻英雄都可接取，只凭服务器证据验收，奖励按配置表发放。
 authors: [Zhongli Li]

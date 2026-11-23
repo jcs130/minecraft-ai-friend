@@ -55,11 +55,15 @@ final class ResidentSettings {
             }
         }
     }
+    static String defaultBrain(String current, Set<String> configured) {
+        // Unified residents may intentionally have no Java-side model. Report that state without inventing one.
+        return configured.contains(current) ? current : configured.stream().sorted().findFirst().orElse("unmanaged");
+    }
     JsonObject profile(UUID id) {
         var saved=profiles.get(id);if(saved!=null)return saved.getAsJsonObject("profile").deepCopy();
         var r=residents.role(id);var a=agents.agent(id);var maid=residents.body(id);
         var p=new JsonObject();p.addProperty("name",r.name());p.addProperty("persona",a.persona(agents.companions()==null?"Minecraft居民":agents.companions().persona(id)));
-        String brain=maid==null?"":a.brain(maid);p.addProperty("brain",a.binding().choices().containsKey(brain)?brain:a.binding().choices().keySet().stream().sorted().findFirst().orElseThrow());
+        String brain=maid==null?"":a.brain(maid);p.addProperty("brain",defaultBrain(brain,a.binding().choices().keySet()));
         p.addProperty("appearance","original");p.addProperty("voice",a.binding().voice()==null?"none":"default");p.addProperty("autonomous",r.autonomous());p.addProperty("mapVisible",true);return p;
     }
     long revision(UUID id){return profiles.containsKey(id)?profiles.get(id).get("revision").getAsLong():0;}
@@ -91,6 +95,7 @@ final class ResidentSettings {
     Map<String,Object> catalogue() {
         var rows=new ArrayList<Map<String,Object>>();
         for(var id:residents.ids()) {
+            if(residents.guide(id))continue;
             var a=agents.agent(id);var maid=residents.body(id);
             rows.add(Map.of("id",id.toString(),"revision",revision(id),"profile",profile(id),"loaded",maid!=null,
                 "profession",residents.role(id).profession(),"brains",a.binding().choices().entrySet().stream().sorted(Map.Entry.comparingByKey()).map(e->Map.of("id",e.getKey(),"model",e.getValue().model())).toList(),
@@ -114,6 +119,7 @@ final class ResidentSettings {
     }
     Map<String,Object> apply(UUID id,UUID request,long expected,JsonObject profile)throws Exception {
         if(residents.role(id)==null)throw new IllegalArgumentException("unknown_resident");
+        if(residents.guide(id))throw new IllegalArgumentException("player_guide_uses_owner_settings");
         validate(id,profile);
         var old=profiles.get(id);
         if(old!=null&&request.toString().equals(old.get("requestId").getAsString())) {

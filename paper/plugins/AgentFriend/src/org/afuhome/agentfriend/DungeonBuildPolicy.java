@@ -3,6 +3,7 @@ package org.afuhome.agentfriend;
 import java.util.List;
 import java.util.Objects;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
@@ -36,7 +37,28 @@ final class DungeonBuildPolicy implements Listener {
     private static final List<BlockFace> FACES = List.of(BlockFace.UP, BlockFace.DOWN, BlockFace.NORTH,
             BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST);
     private final AgentFriendPlugin plugin;
-    DungeonBuildPolicy(AgentFriendPlugin plugin) { this.plugin = plugin; }
+    private final boolean reservedCrypt;
+    private final CryptBuildingRules cryptRules;
+
+    DungeonBuildPolicy(AgentFriendPlugin plugin) {
+        this.plugin = plugin;
+        var settings = plugin.getConfig().getConfigurationSection("crypt-temporary");
+        reservedCrypt = settings != null && settings.getBoolean("enabled");
+        CryptBuildingRules rules = null;
+        if (reservedCrypt) {
+            try { rules = CryptBuildingRules.load(settings); }
+            catch (IllegalArgumentException bad) { plugin.getLogger().warning("Crypt building disabled: " + bad.getMessage()); }
+        }
+        cryptRules = rules;
+    }
+
+    private boolean scopedCrypt(String domain) { return reservedCrypt && CryptBuildingRules.DOMAIN.equals(domain); }
+
+    private boolean allowedCryptPlacement(Player player, Location at, Material original, Material placed) {
+        return cryptRules != null && cryptRules.permits(at, original, placed)
+                && plugin.siteDungeons().activeBuilder(CryptBuildingRules.SITE, player)
+                && plugin.dungeonEdits().hasRoom(CryptBuildingRules.DOMAIN, at, cryptRules.limit());
+    }
 
     static boolean insidePieces(List<ProtectionArea> pieces, Location at) {
         int x = at.getBlockX(), y = at.getBlockY(), z = at.getBlockZ();
@@ -73,7 +95,12 @@ final class DungeonBuildPolicy implements Listener {
         String domain = domain(at);
         if (domain == null) return null;
         if (action.equals("container") && (plugin.lands().contains(at) || plugin.dungeon().stashAnchor(at)
-                || containerAllowed(player, domain, at))) return null;
+                || publicStorage(at.getBlock()) || containerAllowed(player, domain, at))) return null;
+        if (scopedCrypt(domain) && !maintenance(player, domain)) {
+            boolean place = action.equals("place") && editable(player, domain, at)
+                    && allowedCryptPlacement(player, at, at.getBlock().getType(), player.getInventory().getItemInMainHand().getType());
+            return place ? null : "site_dungeon";
+        }
         if ((action.equals("break") || action.equals("place") || action.equals("damage"))
                 && (editable(player, domain, at) || maintenance(player, domain))) return null;
         return domain.equals("tower") ? "dungeon" : "site_dungeon";
@@ -85,7 +112,10 @@ final class DungeonBuildPolicy implements Listener {
                 : editable(player, domain, at);
     }
     private boolean before(Player p, String domain, BlockState state) {
-        return editable(p, domain, state.getLocation()) && plugin.dungeonEdits().capture(domain, state);
+        if (!editable(p, domain, state.getLocation())) return false;
+        return scopedCrypt(domain) && cryptRules != null
+                ? plugin.dungeonEdits().capture(domain, state, cryptRules.limit())
+                : plugin.dungeonEdits().capture(domain, state);
     }
     private boolean maintenance(Player p, String domain) {
         return p.getGameMode() == org.bukkit.GameMode.CREATIVE && plugin.trustedBlockEditor(p)
@@ -102,7 +132,8 @@ final class DungeonBuildPolicy implements Listener {
     @EventHandler(priority=EventPriority.HIGHEST, ignoreCancelled=true)
     public void damage(BlockDamageEvent e) {
         String domain = domain(e.getBlock().getLocation());
-        if (domain != null && !editable(e.getPlayer(), domain, e.getBlock().getLocation()) && !maintenance(e.getPlayer(), domain)) {
+        if (domain != null && (scopedCrypt(domain) || !editable(e.getPlayer(), domain, e.getBlock().getLocation()))
+                && !maintenance(e.getPlayer(), domain)) {
             e.setCancelled(true); denied(e.getPlayer(), "break", e.getBlock(), domain);
         }
     }
@@ -111,7 +142,7 @@ final class DungeonBuildPolicy implements Listener {
         Block block = e.getBlock();
         String domain = domain(block.getLocation());
         if (domain == null || maintenance(e.getPlayer(), domain)) return;
-        if (!before(e.getPlayer(), domain, block.getState()) || !captureNeighbors(e.getPlayer(), domain, block)) {
+        if (scopedCrypt(domain) || !before(e.getPlayer(), domain, block.getState()) || !captureNeighbors(e.getPlayer(), domain, block)) {
             e.setCancelled(true); denied(e.getPlayer(), "break", block, domain);
         }
     }
@@ -138,6 +169,10 @@ final class DungeonBuildPolicy implements Listener {
             if (d != null) { target = d; break; }
         }
         if (target == null || maintenance(e.getPlayer(), target)) return;
+        if (scopedCrypt(target) && (e instanceof BlockMultiPlaceEvent || !allowedCryptPlacement(e.getPlayer(),
+                e.getBlockPlaced().getLocation(), e.getBlockReplacedState().getType(), e.getBlockPlaced().getType()))) {
+            e.setCancelled(true); denied(e.getPlayer(), "place", e.getBlockPlaced(), target); return;
+        }
         for (BlockState state : old) {
             if (!target.equals(domain(state.getLocation())) || state instanceof TileState || !before(e.getPlayer(), target, state)) {
                 e.setCancelled(true); denied(e.getPlayer(), "place", state.getBlock(), target); return;
@@ -157,6 +192,9 @@ final class DungeonBuildPolicy implements Listener {
         if (holder instanceof Container container) return List.of(container.getBlock());
         return List.of();
     }
+    private boolean publicStorage(Block block) {
+        return plugin.siteDungeons().publicMusterStorage(block) || plugin.trialSharedSupplies().publicStorage(block);
+    }
     private boolean accessInventory(Player p, Inventory inventory, boolean snapshot) {
         String affected = null;
         List<Block> physical = containers(inventory);
@@ -165,14 +203,14 @@ final class DungeonBuildPolicy implements Listener {
             if (domain != null && !plugin.lands().readyForDungeonEdits(block.getWorld())) return false;
             // Existing private inventories and declared public supplies have their own policies.
             // The tower's personal stash opens a virtual inventory with no physical holder.
-            if (domain == null || plugin.lands().contains(block.getLocation())) continue;
+            if (domain == null || plugin.lands().contains(block.getLocation()) || publicStorage(block)) continue;
             if (affected != null && !affected.equals(domain)) return false;
             affected = domain;
         }
         if (affected == null) return true;
         for (Block block : physical) {
             Location at = block.getLocation();
-            if (plugin.lands().contains(at) || !affected.equals(domain(at)) || !containerAllowed(p, affected, at)
+            if (plugin.lands().contains(at) || publicStorage(block) || !affected.equals(domain(at)) || !containerAllowed(p, affected, at)
                     || snapshot && !plugin.dungeonEdits().capture(affected, block.getState())) return false;
         }
         return true;
@@ -231,7 +269,8 @@ final class DungeonBuildPolicy implements Listener {
         // Opening a workbench, door or container while holding a tool is a regular use.
         if (b.getType().isInteractable() && !e.getPlayer().isSneaking()) return;
         String domain = domain(b.getLocation());
-        if (domain != null && !before(e.getPlayer(), domain, b.getState())) e.setUseItemInHand(org.bukkit.event.Event.Result.DENY);
+        if (domain != null && (scopedCrypt(domain) && !maintenance(e.getPlayer(), domain)
+                || !before(e.getPlayer(), domain, b.getState()))) e.setUseItemInHand(org.bukkit.event.Event.Result.DENY);
     }
     @EventHandler(ignoreCancelled=true) public void fertilize(BlockFertilizeEvent e) {
         if (e.getBlocks().stream().anyMatch(s -> managed(s.getLocation()))) e.setCancelled(true);

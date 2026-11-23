@@ -510,6 +510,19 @@ final class GuildHallManager implements Listener {
         return ensureReceptionist();
     }
 
+    boolean isReceptionistVoiceBody(UUID id) {
+        if (!Bukkit.isPrimaryThread() || !servicesBuilt || !ready || world == null || id == null
+                || !id.toString().equals(plugin.getConfig().getString("guild-hall.receptionist-voice-uuid"))) return false;
+        if (!(Bukkit.getEntity(id) instanceof Villager villager) || !villager.isValid()
+                || villager.isDead() || villager.hasAI() || !world.equals(villager.getWorld())
+                || !Byte.valueOf((byte) 1).equals(villager.getPersistentDataContainer().get(receptionistKey, PersistentDataType.BYTE))) return false;
+
+        Location at = villager.getLocation();
+        return Math.abs(at.getX() - (x - 3.5)) <= 2
+                && Math.abs(at.getY() - (y + 1)) <= 3
+                && Math.abs(at.getZ() - (z + 4.5)) <= 2;
+    }
+
     private Villager ensureReceptionist() {
         if (!servicesBuilt || !ready || world == null) return null;
         Location at = new Location(world, x - 3.5, y + 1, z + 4.5, 20, 0);

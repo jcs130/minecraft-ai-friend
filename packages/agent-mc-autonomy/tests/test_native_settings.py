@@ -11,6 +11,20 @@ def test_omitted_native_options_preserve_core_defaults(tmp_path):
     world = Settings.parse(config()).client_config(tmp_path)['world']
     assert all(key not in world for key in ('combat', 'reflex', 'scaffoldBlocks', 'idle', 'journey', 'show'))
 
+@pytest.mark.parametrize("voice", [None, {}, {"enabled": False}, {"enabled": True}])
+def test_proximity_voice_requires_opt_in_and_projects_only_server_game_audio(tmp_path, voice):
+    native = {} if voice is None else {"proximity_voice": voice}
+    settings = Settings.parse(config(native))
+    world = settings.client_config(tmp_path)["world"]
+    enabled = voice == {"enabled": True}
+    assert settings.proximity_voice_enabled is enabled
+    assert settings.native.public_config() == native
+    assert settings.identity == Settings.parse(config()).identity
+    if enabled:
+        assert world["proximityVoice"] == {"enabled": True, "speechSource": "server", "outputMode": "game-only"}
+        assert "proximityVoice" not in settings.native.client_config(mineflayer=False)
+    else:
+        assert "proximityVoice" not in world
 
 def test_explicit_native_options_are_forwarded_without_aliasing(tmp_path):
     raw = {'combat': {'enabled': False, 'engageRadius': 4}, 'reflex': {'fleeHealth': 8},
@@ -43,6 +57,9 @@ def test_perception_defaults_and_explicit_awareness_do_not_enable_mineral_vision
     {'perception': {'entityRange': 64.5}}, {'perception': {'entityRange': True}},
     {'perception': {'nearbyOccludedRange': 17}}, {'perception': {'nearbyOccludedRange': -1}},
     {'perception': {'entityView': 'omniscient'}}, {'perception': {'mineralVision': True}},
+    {'proximity_voice': {'enabled': 'true'}}, {'proximity_voice': {'enabled': 1}},
+    {'proximity_voice': {'enabled': True, 'outputMode': 'live-and-game'}},
+    {'proximity_voice': {'enabled': True, 'audioProducerUrl': 'http://fixture.test'}},
 ])
 def test_native_options_reject_unsupported_or_invalid_values(native):
     with pytest.raises(ValueError):

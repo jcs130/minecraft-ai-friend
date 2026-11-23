@@ -95,6 +95,13 @@ final class ActionFeedback {
                 default -> fallback(reason, "/mycli commission mine");
             };
             case "dungeon" -> switch (reason) {
+                case "walk_to_station" -> a("尚未到达这处遗迹的入口石钮或返程位置。","查看落脚点、入口牌、石钮和首室坐标，再沿地灯前进。",dungeon);
+                case "return_from_encounter_room" -> a("请在这处遗迹的任一战斗房间使用回程。","查看房间坐标，回到最近的一间；结束参战后可免费返回地面入口。",dungeon);
+                case "station_passage_pending" -> a("入口或回程的传送正在确认。","等待当前位置与传送回执，再查询副本状态。",dungeon);
+                case "confirmation_required" -> a("请核对遗迹平台的战备与名单。","补给后重新检查，或使用本次回执中的确认入场动作。",dungeon);
+                case "assembly_changed" -> a("加载入口时，集结名单或装备已变化。","留在平台，重新使用入口按钮核对最新名单。",dungeon);
+                case "station_unavailable" -> a("这处遗迹没有配置入口接驳设施。","查看该地点自己的通道说明。",dungeon);
+                case "station_landing_unconfirmed" -> a("实际落点与入口设施的目标不符。","先查当前世界与位置，再查该地点路线。",dungeon);
                 case "walk_to_first_room", "party_full_or_not_at_first_room" -> a("未到首室，或队伍已满8人。", "用 " + dungeon + " 核对入口和首室坐标；沿原通道进入首室。加入需在10秒集结期且有空位，否则等下一场。", dungeon);
                 case "muster_closed" -> a("本场10秒集结期已关闭。", "用 /mycli dungeon status 查看场次；等本场结束后到首室与队友重新开场，不要强行加入。", "/mycli dungeon status", dungeon);
                 case "party_data_unavailable" -> a("队伍资料暂不可用，未开场。", "稍后重新查询队伍；不会把未知队伍当单人，也不要重复开场。", "/mycli guild party status");

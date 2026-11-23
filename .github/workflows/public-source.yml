@@ -33,6 +33,12 @@ jobs:
         run: python paper/ops/test-dungeon-entrance.py
       - name: Check training reward progression and ordinary-difficulty caps
         run: python paper/ops/test-trial-reward-balance.py
+      - name: Check Lost Beacon route, saved choices and reward bounds
+        run: |
+          curl --fail --silent --show-error --location --retry 2 https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar --output "$RUNNER_TEMP/beacon-gson.jar"
+          javac --release 21 -encoding UTF-8 -cp "$RUNNER_TEMP/beacon-gson.jar" -d "$RUNNER_TEMP/beacon" paper/plugins/AgentFriend/src/org/afuhome/agentfriend/BeaconExpedition.java paper/plugins/AgentFriend/tests/org/afuhome/agentfriend/BeaconExpeditionTest.java
+          java -cp "$RUNNER_TEMP/beacon:$RUNNER_TEMP/beacon-gson.jar" org.afuhome.agentfriend.BeaconExpeditionTest
+          node --check paper/plugins/AgentFriend/tests/lost-beacon-stage.mjs
       - name: Check dungeon equipment categories and acceptance scripts
         run: |
           javac -encoding UTF-8 -d "$RUNNER_TEMP/dungeon-readiness" paper/plugins/AgentFriend/src/org/afuhome/agentfriend/DungeonLoadoutRules.java paper/probe/DungeonLoadoutRulesTest.java
@@ -116,6 +122,11 @@ jobs:
           curl --proto '=https' --tlsv1.2 -fsSL https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar -o "$RUNNER_TEMP/gson-2.10.1.jar"
           printf '%s  %s\n' '4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593' "$RUNNER_TEMP/gson-2.10.1.jar" | sha256sum --check
           python tests/verify_issue43_java.py --jdk "$JAVA_HOME" --gson "$RUNNER_TEMP/gson-2.10.1.jar" --output "$RUNNER_TEMP/review-boundaries"
+      - name: Original role assets scope and read-only projection
+        run: |
+          mkdir -p "$RUNNER_TEMP/role-assets"
+          javac --release 21 -cp "$RUNNER_TEMP/maid-life-gson.jar" -d "$RUNNER_TEMP/role-assets" paper/integrations/numen-hosting/native-bridge/src/local/hosting/CanonicalRoleAssets.java paper/integrations/numen-hosting/native-bridge/tests/CanonicalRoleAssetsTest.java
+          java -cp "$RUNNER_TEMP/role-assets:$RUNNER_TEMP/maid-life-gson.jar" local.hosting.CanonicalRoleAssetsTest
       - name: Check bidirectional voice authorization and client receipts offline
         shell: bash
         run: |
@@ -205,6 +216,10 @@ jobs:
         run: python paper/plugins/AgentFriend/tests/run_cli_tests.py --inputs "$RUNNER_TEMP/paper-inputs" --build "$RUNNER_TEMP/plugin-build" --output "$RUNNER_TEMP/cli-tests"
       - name: Dungeon examination completion regression
         run: python paper/plugins/AgentFriend/tests/run_exam_completion_tests.py --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/exam-completion-tests"
+      - name: Dungeon muster roster bystander regression
+        run: python paper/plugins/AgentFriend/tests/run_muster_roster_tests.py --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/muster-roster-tests"
+      - name: Dungeon muster simplify voluntary-join regression
+        run: python paper/plugins/AgentFriend/tests/run_muster_simplify_tests.py --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/muster-simplify-tests"
       - name: Independent bounded recycle quotes
         run: python paper/plugins/AgentFriend/tests/run_recycle_quotes.py --jdk "$JAVA_HOME"
       - name: Exact maid identity and Bedrock allay fallback

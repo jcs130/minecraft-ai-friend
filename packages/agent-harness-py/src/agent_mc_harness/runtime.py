@@ -21,10 +21,11 @@ from .body.base import BodyAdapter, new_request_id
 from .fastslow import Candidate, Decision, FastSlow
 from .learning.reflection import ReflectionLoop
 from .learning.strategies import StrategyStore
-from .memory.base import Fact, MemoryEpisode
+from .memory.base import Fact, MemoryEpisode, episode_from_event, episode_from_receipt
 from .memory.router import MemoryRouter
-from .models import ACTION_VERBS, ActionReceipt, BodyAction, BodyEvent, BodySnapshot, Capabilities, utcnow
+from .models import ACTION_VERBS, ActionReceipt, BodyAction, BodyEvent, BodyIdentity, BodySnapshot, Capabilities, utcnow
 from .journal import ActionJournal
+from .resident_trace import ResidentDecisionError, correlation_hash, trace_resident_turn
 from .scheduler import BodyLease, BrainMetrics, WorkerPool
 
 IntentState = Literal["queued", "active", "paused", "completed", "failed", "cancelled"]
@@ -54,6 +55,8 @@ class Intent(BaseModel):
     state: IntentState = "queued"
     reason: str | None = None
     needs_host: bool = False
+    # Only native death/safety transitions set this; a host-supplied reason is not a recovery permit.
+    recoverable_pause: Literal["death", "safety"] | None = Field(default=None, exclude=True)
     step_index: int = 0
     candidates: list[Candidate] = Field(default_factory=list, max_length=8)  # System 1 options (2-8)
     decision: Decision | None = None  # who decided (host/reflex/system1/system2), route, thinking tier, profile
@@ -65,10 +68,31 @@ class Intent(BaseModel):
     source_events: list[str] = Field(default_factory=list, max_length=32)  # host-observed inbox IDs, never model-generated
     desktop_request_id: str | None = None  # From the role-scoped worker's check endpoint.
     resident_turn_hash: str | None = Field(default=None, exclude=True)  # Assigned by the host, never by the model.
+    planning_status: Literal["pending", "completed", "deferred", "rejected", "unavailable"] = Field(default="pending", exclude=True)
+    planning_error: dict[str, str] | None = Field(default=None, exclude=True)
+    action_receipts: dict[str, dict[str, Any]] = Field(default_factory=dict, exclude=True)
     remember_wait_purpose: bool = False
     recall_query: str | None = Field(default=None, max_length=500)
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+    @property
+    def completion_kind(self) -> str | None:
+        if self.state == "completed":
+            return "body_actions" if any(row["terminal"] and row["status"] == "completed" for row in self.action_receipts.values()) else "planning"
+        return None
+
+
+def intent_health(intent: Intent, journal: ActionJournal | None, body_id: str) -> dict:
+    actions = []
+    for request_id, action in list(intent.action_receipts.items())[-20:]:
+        if journal is not None and not action["terminal"] and (receipt := journal.receipt(body_id, request_id)):
+            action = {**action, "status": receipt.status, "terminal": receipt.terminal}
+        actions.append(action)
+    return {"id": intent.id, "state": intent.state, "reason": intent.reason,
+            "turnHash": intent.resident_turn_hash, "planningStatus": intent.planning_status,
+            "planningError": intent.planning_error, "completionKind": intent.completion_kind,
+            "actionReceipts": actions, "goalVerified": intent.verified}
 
 
 class HarnessEvent(BaseModel):
@@ -174,11 +198,12 @@ class HarnessRuntime:
             self.lease.preempt("safety")  # reflex bypasses the queue; the holder's late results are discarded
             self.emit("safety", event.text, 3, event.data)
             if self._active and self._active.state == "active":
-                self._transition(self._active, "paused", f"safety halt: {event.text}", needs_host=True)
+                self._transition(self._active, "paused", f"safety halt: {event.text}", needs_host=True,
+                                 recoverable_pause="safety")
         elif event.kind == "death":
             self.emit("death", event.text or "body died", 3, event.data)
             if self._active and self._active.state == "active":
-                self._transition(self._active, "paused", "body died", needs_host=True)
+                self._transition(self._active, "paused", "body died", needs_host=True, recoverable_pause="death")
         elif event.kind in ("lifecycle", "connection") and event.severity >= 2:
             self.emit("body", event.text, 2, event.data)
         elif event.kind in ("chat", "whisper", "dialogue"):
@@ -186,10 +211,24 @@ class HarnessRuntime:
         elif event.kind in ("player_join", "player_leave"):
             self.emit("player_presence", event.text, 1, event.data)
         if self.memory is not None and self.body is not None and (identity := self.body.identity()) is not None:
+            self._remember(episode_from_event(event, identity), identity)
+
+    def _remember(self, episode: MemoryEpisode | None, identity: BodyIdentity) -> None:
+        if self.memory is not None and episode is not None:
             with contextlib.suppress(RuntimeError):
-                task = asyncio.get_running_loop().create_task(self.memory.observe(event, identity))
+                task = asyncio.get_running_loop().create_task(self._archive(episode, identity.group_id()))
                 self._memory_tasks.add(task)
                 task.add_done_callback(self._memory_tasks.discard)
+
+    async def _archive(self, episode: MemoryEpisode, group: str) -> None:
+        if self.memory is not None:
+            try:
+                await self.memory.add(group, episode)
+            except Exception as error:
+                self.emit("body", "memory archive unavailable", 1, {"error": type(error).__name__})
+
+    def remember_receipt(self, receipt: ActionReceipt, identity: BodyIdentity) -> None:
+        self._remember(episode_from_receipt(receipt), identity)
 
     # ---- events -----------------------------------------------------------------------------------
     def emit(self, kind: EventKind, text: str, severity: int = 1, data: dict[str, Any] | None = None) -> HarnessEvent:
@@ -205,14 +244,20 @@ class HarnessRuntime:
                 "dropped": after + 1 < oldest, "hasMore": len(rows) > limit}
 
     # ---- intents ----------------------------------------------------------------------------------
-    def _transition(self, intent: Intent, state: IntentState, reason: str | None = None, needs_host: bool = False) -> None:
+    def _transition(self, intent: Intent, state: IntentState, reason: str | None = None, needs_host: bool = False,
+                    *, recoverable_pause: Literal["death", "safety"] | None = None) -> None:
         previous = intent.state
         intent.state, intent.reason, intent.needs_host, intent.updated_at = state, reason, needs_host, utcnow()
+        intent.recoverable_pause = recoverable_pause if state == "paused" else None
         severity = 3 if needs_host else (2 if state in ("completed", "failed") else 1)
         self.emit("intent_state", f"{intent.goal}: {previous} -> {state}" + (f" ({reason})" if reason else ""), severity,
                   {"intentId": intent.id, "from": previous, "state": state, "needsHost": needs_host, "reason": reason})
         if state == "completed":
-            self.emit("task_completed", intent.goal, 2, {"intentId": intent.id})
+            data = {"intentId": intent.id, "completionKind": intent.completion_kind,
+                    "bodyActionReceipts": list(intent.action_receipts.values()), "goalVerified": intent.verified}
+            if intent.resident_turn_hash:
+                data["turnHash"] = intent.resident_turn_hash
+            self.emit("task_completed", intent.goal, 2, data)
         elif state == "failed":
             self.emit("task_failed", f"{intent.goal}: {reason}", 2, {"intentId": intent.id})
 
@@ -257,9 +302,10 @@ class HarnessRuntime:
         intent = self.intents[str(intent_id)]
         if action == "get":
             return intent
-        if action == "pause" and intent.state in ("queued", "active"):
-            if intent is self._active and self.body:
+        if action == "pause" and intent.state in ("queued", "active", "paused"):
+            if intent is self._active and intent.state == "active" and self.body:
                 await self.body.stop("paused by host")
+            # An explicit host pause also overrides an earlier recoverable native pause.
             self._transition(intent, "paused", reason or "paused by host")
         elif action == "resume" and intent.state == "paused":
             self._transition(intent, "queued", reason or "resumed")
@@ -269,6 +315,29 @@ class HarnessRuntime:
             self._transition(intent, "cancelled", reason or "cancelled by host")
         self._wake.set()
         return intent
+
+    def retire_recovered_pauses(self, snapshot: BodySnapshot | None) -> bool:
+        """Retire stale native safety plans; never resume their steps or reconcile an unknown by inference."""
+        if self.body is None or snapshot is None or snapshot.life_state != "alive" or self._active is not None:
+            return False
+        if not -1 <= (utcnow() - snapshot.sampled_at).total_seconds() <= 5:
+            return False
+        if any(intent.state in ("active", "queued") for intent in self.intents.values()):
+            return False
+        identity, health = self.body.identity(), self.body.health()
+        if identity is None or not health.connected or health.lifecycle != "ready" or health.safety and health.safety.halted:
+            return False
+        if self.journal is not None and self.journal.unresolved(identity.body_id):
+            return False
+        recovered = False
+        for intent in self.intents.values():
+            if intent.state != "paused" or intent.recoverable_pause not in ("death", "safety"):
+                continue
+            if intent.recoverable_pause == "safety" and health.safety is None:
+                continue  # An alive snapshot alone cannot prove the native safety guard was cleared.
+            self._transition(intent, "cancelled", "body_recovered_replan_from_current_observation")
+            recovered = True
+        return recovered
 
     # ---- memory access point ---------------------------------------------------------------------
     async def recall(self, query: str, limit: int = 8) -> list[Fact]:
@@ -398,11 +467,16 @@ class HarnessRuntime:
         assert self.body is not None
         self._active = intent
         try:
+            intent.planning_status = "pending"
+            intent.planning_error = None
             self._transition(intent, "active")
             context = await self._context(intent)
             if self.fastslow is not None or not intent.steps:
                 context.snapshot = await self._snapshot()
             decision, steps = await self.decide(intent, context)
+            intent.planning_status = "completed" if steps is not None else "deferred"
+            if intent.resident_turn_hash and steps is not None:
+                trace_resident_turn(intent.resident_turn_hash, "plan_completed", plannedActionCount=len(steps))
             intent.decision = decision
             self.metrics.decision(decision.tier, decision.requested_tier, decision.effective_tier)
             if decision.defer and intent.defers >= self.max_defers:
@@ -429,9 +503,17 @@ class HarnessRuntime:
             else:
                 self.metrics.goals[intent.state] += 1
         except Exception as error:
+            if intent.planning_status == "pending":
+                intent.planning_status = "rejected" if isinstance(error, ValueError) else "unavailable"
+                if not isinstance(error, ResidentDecisionError) and isinstance(error, ValueError) and intent.resident_turn_hash:
+                    error = ResidentDecisionError(intent.resident_turn_hash, "validate_host_plan", "plan", error)
+                if isinstance(error, ResidentDecisionError):
+                    intent.resident_turn_hash = error.turn_hash
+                    intent.planning_error = {"step": error.step, "code": error.code}
             identity = self.body.identity()
             uncertain = bool(self.journal and identity and self.journal.unresolved(identity.body_id))
-            self._transition(intent, "paused" if uncertain else "failed", "execution_or_planning_unavailable:" + type(error).__name__, needs_host=uncertain)
+            error_kind = "ValueError" if isinstance(error, ResidentDecisionError) else type(error).__name__
+            self._transition(intent, "paused" if uncertain else "failed", "execution_or_planning_unavailable:" + error_kind, needs_host=uncertain)
         finally:
             self._active = None
             self._settle_strategies(intent)
@@ -448,6 +530,9 @@ class HarnessRuntime:
         while intent.step_index < len(intent.steps) and intent.state == "active":
             step = intent.steps[intent.step_index]
             if (reason := step_support(step, caps)) is not None:
+                if intent.resident_turn_hash:
+                    trace_resident_turn(intent.resident_turn_hash, "action_blocked", step="authorize_action",
+                                        errorCode="action_not_in_current_body_catalogue")
                 self._transition(intent, "paused", reason, needs_host=True)
                 return
             jit = self._jitrl()
@@ -471,7 +556,8 @@ class HarnessRuntime:
                 intent.step_index += 1
                 continue
             if receipt.status == "blocked_by_safety":
-                self._transition(intent, "paused", f"safety halt: {receipt.text}", needs_host=True)
+                self._transition(intent, "paused", f"safety halt: {receipt.text}", needs_host=True,
+                                 recoverable_pause="safety")
             elif receipt.status in ("unknown", "accepted"):
                 self._transition(intent, "paused", f"outcome unknown for {step.tool}; reconcile result({receipt.request_id}), do not replay",
                                  needs_host=True)
@@ -487,16 +573,29 @@ class HarnessRuntime:
         action = step.action(rid)
         if self.journal is not None:
             if not body_key or self.journal.unresolved(body_key):
+                if intent.resident_turn_hash:
+                    trace_resident_turn(intent.resident_turn_hash, "action_blocked", step="reconcile_original_request",
+                                        errorCode="unresolved_original_request_requires_reconciliation")
                 return ActionReceipt(request_id=rid, verb=action.verb, status="unknown", terminal=False,
                                      text="unresolved_original_request_requires_reconciliation")
             # This commit must succeed before any body write is dispatched.
             self.journal.begin(body_key, action, intent.source_events, note=step.note if intent.remember_wait_purpose else None,
-                               resident_turn_hash=intent.resident_turn_hash if action.verb == "chat" else None)
+                               resident_turn_hash=intent.resident_turn_hash)
+        summary = {"requestHash": correlation_hash(rid), "verb": action.name or action.verb, "status": "dispatched", "terminal": False}
+        intent.action_receipts[rid] = summary
+        if intent.resident_turn_hash:
+            trace_resident_turn(intent.resident_turn_hash, "action_dispatched", **summary)
         future: asyncio.Future[BodyEvent] = asyncio.get_running_loop().create_future()
         self._results[rid] = future
         def record(receipt: ActionReceipt) -> ActionReceipt:
             if self.journal is not None:
                 self.journal.settle(body_key, receipt)
+            elif intent.resident_turn_hash:
+                trace_resident_turn(intent.resident_turn_hash, "action_terminal" if receipt.terminal else "action_result",
+                                    requestHash=summary["requestHash"], status=receipt.status, terminal=receipt.terminal)
+            summary.update(status=receipt.status, terminal=receipt.terminal)
+            if identity is not None and receipt.request_id == rid:
+                self.remember_receipt(receipt, identity)
             return receipt
         try:
             receipt = await self.body.act(action)

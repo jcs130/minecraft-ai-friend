@@ -38,6 +38,10 @@ final class ResidentCombat {
         row.put("lastHit",s.hit);row.put("lastSkill",s.skill);row.put("decisionIntervalMs",250);
         row.put("attackExecutor","native_tlm");row.put("modelCallsPerAttack",0);return row;
     }
+    void swordReceipt(UUID id, UUID request, Map<String,Object> result) {
+        var state=states.get(id);
+        if(state!=null && request.toString().equals(state.skill.get("requestId"))) state.skill=result;
+    }
     static boolean hostile(EntityMaid maid,LivingEntity target){
         if(target==maid||!target.isAlive()||target.isInvulnerable()||target.isSpectator()||target.level()!=maid.level()
             ||target instanceof EntityMaid||target instanceof net.minecraft.world.entity.player.Player
@@ -113,11 +117,19 @@ final class ResidentCombat {
         if(newlyActive)residents.combatStarted(id);
         if(!target.getUUID().equals(s.target)){s.target=target.getUUID();s.acquired=now;}
         LivingEntity enemy=target;
+        boolean swordsman=ResidentVortex.selected() && ResidentVortex.usesSwords(id);
+        if(swordsman && now-s.lastSkill>=20) {
+            s.lastSkill=now;
+            var queued=residents.swordReflex(maid,enemy.getUUID());
+            if(!queued.isEmpty()) {s.skill=queued;return;}
+        }
         boolean clear=clearShot(maid,enemy);
-        boolean ranged=maid.distanceToSqr(enemy)>(s.mode.equals("ranged")?9:25)&&clear;
-        var loadout=weapons(maid).stream().filter(w->(!w.ranged()||clear)&&w.task().canAttack(maid,enemy)).toList();
+        boolean ranged=!swordsman&&maid.distanceToSqr(enemy)>(s.mode.equals("ranged")?9:25)&&clear;
+        var loadout=weapons(maid).stream()
+                .filter(w->!swordsman||w.stack().is(net.minecraft.tags.ItemTags.SWORDS))
+                .filter(w->(!w.ranged()||clear)&&w.task().canAttack(maid,enemy)).toList();
         var choice=loadout.stream().filter(w->w.ranged()==ranged).findFirst().orElse(loadout.isEmpty()?null:loadout.getFirst());
-        support(maid,s,role,now,true);
+        if(!swordsman) support(maid,s,role,now,true);
         if(choice==null){s.mode="unarmed";s.reason="no_usable_weapon_or_ammunition";s.weaponId=null;s.attackTaskId=null;maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);maid.setTarget(null);return;}
         try{
             if(choice.slot()>=0){MaidAgent.equip(maid,"mainhand",choice.slot(),BuiltInRegistries.ITEM.getKey(choice.stack().getItem()));s.swaps++;s.switched=now;}

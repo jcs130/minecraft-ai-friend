@@ -9,13 +9,156 @@ import com.github.tartaricacid.touhoulittlemaid.item.bauble.ExtraLifeBauble;
 import com.github.tartaricacid.touhoulittlemaid.item.bauble.UndyingTotemBauble;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import local.tlmcompat.core.CompatibilityException;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.BundleContents;
+import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
+import org.bukkit.craftbukkit.inventory.CraftItemStack;
+import org.bukkit.persistence.PersistentDataType;
 
 /** Starting equipment on the original, explicitly registered unified body. */
 final class NativeMaidKit {
     private static final String INITIALIZED = "qiandengji_native_starter_kit";
+
+    static void provision(EntityMaid maid, NativeMaidCompanionSupport companion) {
+        var backpack = BackpackManager.findBackpack(BigBackpack.ID).orElseThrow();
+        var worn = maid.getMaidBackpackType();
+        if (worn.getAvailableMaxContainerIndex() < backpack.getAvailableMaxContainerIndex()
+                && (worn == BackpackManager.getEmptyBackpack()
+                    || worn instanceof com.github.tartaricacid.touhoulittlemaid.entity.backpack.SmallBackpack
+                    || worn instanceof com.github.tartaricacid.touhoulittlemaid.entity.backpack.MiddleBackpack)) {
+            maid.setMaidBackpackType(backpack);
+        }
+        maid.getConfigManager().setShowBackpack(false);
+        for (var entry:keepsakes(maid).entrySet()) issueKeepsake(maid,entry.getKey(),entry.getValue());
+        if (companion != null) {
+            try {
+                companion.provisionStaff(maid);
+            } catch (CompatibilityException refused) {
+                if (!java.util.Set.of("starter_already_issued","maid_inventory_full","rpg_unavailable",
+                        "rpg_item_unavailable").contains(refused.code())) throw refused;
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String,org.bukkit.inventory.ItemStack> keepsakes(EntityMaid maid) {
+        var game = Bukkit.getPluginManager().getPlugin("AgentFriend");
+        if (game == null || !game.isEnabled()) return Map.of();
+        try {
+            return (Map<String,org.bukkit.inventory.ItemStack>) Class.forName(
+                "org.afuhome.agentfriend.CompanionTravelAccess",false,game.getClass().getClassLoader())
+                .getMethod("companionKeepsakes",String.class).invoke(null,maid.getName().getString());
+        } catch (ReflectiveOperationException | LinkageError unavailable) {
+            return Map.of();
+        }
+    }
+
+    private static void issueKeepsake(EntityMaid maid, String id, org.bukkit.inventory.ItemStack original) {
+        var saved = maid.getPersistentData();
+        String marker = "qiandengji_starter_" + id;
+        if (saved.getBoolean(marker)) return;
+        var key = new NamespacedKey("agentfriend",id);
+        var inventory = maid.getMaidInv();
+        boolean exists = keepsake(maid.getMainHandItem(),key) || keepsake(maid.getOffhandItem(),key);
+        int free = -1;
+        for (int slot=0;slot<inventory.getSlots();slot++) {
+            ItemStack stack = inventory.getStackInSlot(slot);
+            if (keepsake(stack,key)) { exists = true; break; }
+            if (free<0 && stack.isEmpty() && slot<NativeMaidInventory.capacity(maid)) free=slot;
+        }
+        if (exists) {
+            saved.putBoolean(marker,true);
+        } else {
+            var stack=CraftItemStack.asNMSCopy(original);
+            if (free<0) free=compactOneSlot(maid,stack);
+            if (free<0 || !inventory.isItemValid(free,stack)) return;
+            inventory.setStackInSlot(free,stack);
+            saved.putBoolean(marker,true);
+        }
+    }
+
+    // Only make room when an entire stack fits. Keep all existing items in
+    // the original backpack and preserve components and native stack limits.
+    private static int compactOneSlot(EntityMaid maid, ItemStack keepsake) {
+        var inventory=maid.getMaidInv();
+        int capacity=NativeMaidInventory.capacity(maid);
+        for (int from=capacity-1;from>=0;from--) {
+            var source=inventory.getStackInSlot(from);
+            if (source.isEmpty() || !inventory.isItemValid(from,keepsake)) continue;
+            int excess=source.getCount();
+            var transfers=new LinkedHashMap<Integer,ItemStack>();
+            for (int to=0;to<capacity && excess>0;to++) {
+                if (to==from) continue;
+                var target=inventory.getStackInSlot(to);
+                if (!ItemStack.isSameItemSameComponents(source,target) || !inventory.isItemValid(to,source)) continue;
+                int limit=Math.min(inventory.getSlotLimit(to),target.getMaxStackSize());
+                int move=Math.min(excess,limit-target.getCount());
+                if (move<=0) continue;
+                transfers.put(to,target.copyWithCount(target.getCount()+move));
+                excess-=move;
+            }
+            if (excess>0) continue;
+            transfers.forEach(inventory::setStackInSlot);
+            inventory.setStackInSlot(from,ItemStack.EMPTY);
+            return from;
+        }
+        return -1;
+    }
+
+    static void packStarterSpace(EntityMaid maid, List<Integer> slots) {
+        var saved=maid.getPersistentData();
+        if (saved.getBoolean("qiandengji_starter_packed")
+                || saved.getBoolean("qiandengji_starter_skill_compass")
+                || saved.getBoolean("qiandengji_starter_status_book")) {
+            throw new CompatibilityException("starter_already_issued", "这只伙伴已领过起始道具或完成过一次整理。");
+        }
+        var bag=maid.getMaidInv();
+        int capacity=NativeMaidInventory.capacity(maid);
+        if (slots.size()!=3 || slots.stream().distinct().count()!=3
+                || slots.stream().anyMatch(slot -> slot<0 || slot>=capacity)) {
+            throw new CompatibilityException("invalid_slot", "填写三个不同的已解锁背包槽位。");
+        }
+        for (int slot=0;slot<capacity;slot++) {
+            if (bag.getStackInSlot(slot).isEmpty()) {
+                throw new CompatibilityException("starter_space_available", "背包已有空位，直接补发起始道具。");
+            }
+        }
+        var packed=slots.stream().map(bag::getStackInSlot).map(ItemStack::copy).toList();
+        if (packed.stream().anyMatch(item -> item.getMaxStackSize()<=1 || !item.getComponentsPatch().isEmpty())) {
+            throw new CompatibilityException("starter_pack_not_plain", "只整理无自定义属性的普通可堆叠物品。");
+        }
+        var contents=new BundleContents.Mutable(BundleContents.EMPTY);
+        for (ItemStack item:packed) {
+            int count=item.getCount();
+            if (contents.tryInsert(item)!=count) {
+                throw new CompatibilityException("starter_pack_too_large", "三个槽位的物品超过一个收纳袋容量。");
+            }
+        }
+        var bagItem=new ItemStack(Items.BUNDLE);
+        bagItem.set(DataComponents.BUNDLE_CONTENTS,contents.toImmutable());
+        bagItem.set(DataComponents.CUSTOM_NAME,Component.literal("起始装备收纳 · 原有物品"));
+        int first=slots.getFirst();
+        if (!bag.isItemValid(first,bagItem)) {
+            throw new CompatibilityException("starter_pack_unavailable", "原生背包不接受这个收纳袋。");
+        }
+        bag.setStackInSlot(first,bagItem);
+        for (int slot:slots.subList(1,3)) bag.setStackInSlot(slot,ItemStack.EMPTY);
+        saved.putBoolean("qiandengji_starter_packed",true);
+    }
+
+    private static boolean keepsake(ItemStack stack, NamespacedKey key) {
+        return !stack.isEmpty() && CraftItemStack.asCraftMirror(stack).getItemMeta()
+            .getPersistentDataContainer().has(key,PersistentDataType.BYTE);
+    }
 
     static void initialize(EntityMaid maid) {
         var saved = maid.getPersistentData();

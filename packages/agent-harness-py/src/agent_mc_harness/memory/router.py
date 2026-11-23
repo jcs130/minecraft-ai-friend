@@ -13,8 +13,8 @@ from collections import deque
 from datetime import datetime
 from typing import Any
 
-from ..models import BodyEvent, BodyIdentity
-from .base import Fact, MemoryEpisode, MemoryStore, episode_from_event
+from ..models import ActionReceipt, BodyEvent, BodyIdentity
+from .base import Fact, MemoryEpisode, MemoryStore, episode_from_event, episode_from_receipt
 from .local import LocalMemory
 
 log = logging.getLogger("agent_mc_harness.memory")
@@ -26,7 +26,6 @@ class MemoryRouter:
         self.hot_size = hot_size
         self._hot: dict[str, deque[MemoryEpisode]] = {}
         self.graph_errors = 0
-        self._seq = 0
 
     def start(self):
         if self.graph is not None and callable(getattr(self.graph, "start", None)):
@@ -39,8 +38,10 @@ class MemoryRouter:
                 {"extractionReady": getattr(self.graph, "extraction_ready", True), "errors": self.graph_errors}}
 
     async def add(self, group_id: str, episode: MemoryEpisode, hints: list[str] | None = None) -> dict[str, Any]:
-        self._hot.setdefault(group_id, deque(maxlen=self.hot_size)).append(episode)
         out = {"local": await self.local.add(group_id, episode, hints)}
+        if out["local"].get("inserted") is False:
+            return out
+        self._hot.setdefault(group_id, deque(maxlen=self.hot_size)).append(episode)
         if self.graph is not None and getattr(self.graph, "extraction_ready", True):
             try:
                 out["graphiti"] = await self.graph.add(group_id, episode, hints)
@@ -68,8 +69,11 @@ class MemoryRouter:
         return list(self._hot.get(group_id, ()))[-limit:][::-1]
 
     async def observe(self, event: BodyEvent, identity: BodyIdentity) -> dict[str, Any] | None:
-        self._seq += 1
-        episode = episode_from_event(event, identity, self._seq)
+        episode = episode_from_event(event, identity)
+        return None if episode is None else await self.add(identity.group_id(), episode)
+
+    async def observe_receipt(self, receipt: ActionReceipt, identity: BodyIdentity) -> dict[str, Any] | None:
+        episode = episode_from_receipt(receipt)
         return None if episode is None else await self.add(identity.group_id(), episode)
 
     async def close(self) -> None:

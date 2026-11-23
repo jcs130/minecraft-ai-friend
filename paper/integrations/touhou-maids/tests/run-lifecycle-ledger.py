@@ -7,10 +7,13 @@ def main():
     assert a.javac and a.java,'Use Java 21 or later'
     assert hashlib.sha256(a.gson.read_bytes()).hexdigest()=='4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593','Unexpected Gson dependency'
     root=Path(__file__).resolve().parents[1]
-    sources=[root/'hybrid-src/local/tlmcompat/hybrid/MaidLifeEpisodes.java',root/'tests/MaidLifeEpisodesFixture.java']
+    sources=[root/'hybrid-src/local/tlmcompat/hybrid/MaidLifeEpisodes.java',root/'hybrid-src/local/tlmcompat/hybrid/MaidLifecyclePersistence.java',
+             root/'tests/MaidLifeEpisodesFixture.java',root/'tests/MaidLifecyclePersistenceFixture.java']
     with tempfile.TemporaryDirectory(prefix='maid-life-synthetic-') as tmp:
         subprocess.run([a.javac,'--release','21','-encoding','UTF-8','-cp',str(a.gson.resolve()),'-d',tmp,*map(str,sources)],check=True)
         import os
         subprocess.run([a.java,'-cp',tmp+os.pathsep+str(a.gson.resolve()),'MaidLifeEpisodesFixture'],check=True)
+        subprocess.run([a.java,'-cp',tmp+os.pathsep+str(a.gson.resolve()),
+                        'local.tlmcompat.hybrid.MaidLifecyclePersistenceFixture'],check=True)
 
 if __name__=='__main__':main()

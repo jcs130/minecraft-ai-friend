@@ -14,6 +14,7 @@ import net.minecraft.world.entity.monster.Enemy;
 /** Per-body progression. Native jobs handle attacks; these modest class skills consume finite resources. */
 final class ResidentRpg {
     static final String KEY="tlm_resident_rpg";
+    private static final java.util.Set<java.util.UUID> reportedBackendErrors=new java.util.HashSet<>();
     static String title(String job) { return switch(job){case "knight"->"骑士";case "cleric"->"牧师";case "engineer"->"工程师";case "beastmaster"->"驯兽师";case "guardian"->"守护剑士";case "ranger"->"游侠";case "mage"->"法师";case "healer"->"行医者";case "artisan"->"工匠";default->"草药师";}; }
     static List<String> skills(String job) { return switch(job){case "guardian"->List.of("guard");case "ranger"->List.of("sprint");case "mage"->List.of("frost");case "healer","farmer"->List.of("mend");default->List.of("haste");}; }
     static CompoundTag data(EntityMaid maid) {
@@ -36,7 +37,12 @@ final class ResidentRpg {
     static void xp(EntityMaid maid,int amount) { if(ResidentVortex.selected()){ResidentVortex.xp(maid.getUUID(),amount);return;}var d=data(maid);d.putInt("xp",Math.min(1_000_000,d.getInt("xp")+amount)); }
     static void tick(EntityMaid maid) {
         if(ResidentVortex.selected()){
-            try{ResidentVortex.tick(maid,MaidAgentsMod.residents().role(maid.getUUID()).profession());}catch(RuntimeException unavailable){/* Read status reports the unavailable native backend; no legacy fallback. */}return;
+            try{ResidentVortex.tick(maid,MaidAgentsMod.residents().role(maid.getUUID()).profession());}
+            catch(RuntimeException unavailable){
+                if(reportedBackendErrors.add(maid.getUUID()))java.util.logging.Logger.getLogger("VortexRPG")
+                    .log(java.util.logging.Level.WARNING,"Resident RPG backend unavailable for "+maid.getUUID(),unavailable);
+            }
+            return;
         }
         var d=data(maid); long time=now(maid);
         if(time-d.getLong("regenerated")>=20) {d.putDouble("mana",Math.min(max(maid),d.getDouble("mana")+.25));d.putLong("regenerated",time);}

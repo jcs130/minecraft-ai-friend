@@ -6,7 +6,6 @@ operator-owned. Conversation, observations and recalled memories are untrusted d
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import math
 import re
@@ -25,9 +24,10 @@ from .conversation import COMPANION_SPEECH_POLICY, CONVERSATION_POLICY, WHALE_SP
 from .body import adventure, commission_craft
 from .journal import ActionJournal, work_key
 from .maid_companions import WALK_TIMEOUT, MaidCompanions, nearby_maid_listener, parse_choice, walk_available
-from .models import BodyEvent, Scope
+from .models import BodyEvent, Scope, utcnow
 from .resident_protocol import social_communication, speech_receipt
-from .runtime import HarnessRuntime, Intent, PlanContext, Step, step_support
+from .resident_trace import ResidentDecisionError, correlation_hash, validate_resident_decision
+from .runtime import HarnessRuntime, Intent, PlanContext, Step, intent_health, step_support
 from .social import stamped_contact, timestamp
 
 IDLE_GOAL = "Choose one useful activity grounded in the current scene; rest silently when none is needed."
@@ -37,6 +37,9 @@ DIALOGUE_GOAL = "Decide whether current dialogue is addressed to you and needs a
 NATIVE_DIALOGUE_TTL_MS = 120_000
 COMPANION_CHECK_IN_SECONDS = 180
 COMPANION_TRAVEL_BLOCKS = 16
+SELF_CHOSEN_WAIT = "自主选择在这里等候"  # Recorded when a rest had no addressed order behind it.
+REGISTERED_HOME_RANGE = 48
+JOURNEY_ANCHOR_RETRY_SECONDS = 600
 MAID_BOND_TONES = (
     "Friendly and practical, as companions just getting to know each other.",
     "Familiar and relaxed. Suggest a helpful next step when it fits.",
@@ -81,6 +84,7 @@ class NpcBodyProfile(BaseModel):
     autonomous_rendezvous: bool = False
     default_native_guard: bool = False
     activity_review_seconds: int | None = Field(default=None, ge=10, le=600)
+    expedition_wait_seconds: int | None = Field(default=None, ge=30, le=1800)
     adventure_advice: bool = False
 
 
@@ -105,6 +109,8 @@ class NpcRole(NpcCharacterProfile, NpcBodyProfile):
             raise ValueError("default_guard_requires_native_maid_capability")
         if self.activity_review_seconds is not None and self.body_kind != "maid":
             raise ValueError("activity_review_requires_native_maid_observations")
+        if self.expedition_wait_seconds is not None and (not self.default_native_guard or self.activity_review_seconds is None):
+            raise ValueError("expedition_wait_requires_reviewed_native_guard")
         if self.adventure_advice and (not self.default_native_guard or "body:chat" not in self.allowed_tools):
             raise ValueError("adventure_advice_requires_a_delegated_companion")
         if self.native_items and (self.body_kind != "numen" or "body:use_item" not in self.allowed_tools):
@@ -197,15 +203,21 @@ def addressed_dialogue(event: BodyEvent, body_id: str, aliases: tuple[str, ...] 
 def companion_check_in(role: NpcRole, context: PlanContext) -> tuple[str, tuple[float, float, float]] | None:
     native = current_native_state(context)
     follow, companion = native.get("follow"), native.get("companion")
-    distance = native.get("ownerDistance")
     snapshot = context.snapshot
+    expedition = (native.get("resident") or {}).get("expedition") or {}
+    if expedition.get("leaderId"):
+        ready = expedition.get("state") == "nearby" and expedition.get("leaderDimension") == getattr(snapshot, "dimension", None)
+        distance = expedition.get("distanceBlocks")
+    else:
+        ready = (isinstance(native.get("conversation"), dict) and isinstance(follow, dict)
+                 and follow.get("active") is True and follow.get("temporaryWait") is False
+                 and isinstance(companion, dict) and companion.get("state") == "following_ready")
+        distance = native.get("ownerDistance")
     if (not role.default_native_guard or "body:chat" not in role.allowed_tools or context.dialogue
             or context.capabilities is None or step_support(Step(tool="body:chat"), context.capabilities)
-            or not native or not isinstance(native.get("conversation"), dict) or not already_guarding(native)
+            or not ready or not already_guarding(native)
             or native.get("taskId") != "touhou_little_maid:idle" or native.get("canMove") is not True
             or any(native.get(flag) is not False for flag in ("passenger", "sitting", "homeMode"))
-            or not isinstance(follow, dict) or follow.get("active") is not True or follow.get("temporaryWait") is not False
-            or not isinstance(companion, dict) or companion.get("state") != "following_ready"
             or not isinstance(distance, (int, float)) or isinstance(distance, bool) or not 0 <= distance <= 8 or danger(snapshot)
             or snapshot is None or not snapshot.dimension or snapshot.position is None
             or not all(axis in snapshot.position and math.isfinite(snapshot.position[axis]) for axis in "xyz")):
@@ -240,15 +252,95 @@ def routine_catch(role: NpcRole, context: PlanContext) -> Step | None:
 
 def restore_default_guard(role: NpcRole, context: PlanContext) -> Step | None:
     native = current_native_state(context)
-    if role.activity_review_seconds is not None or not role.default_native_guard or native.get("nativeGuardDelegated") is not False:
+    if not role.default_native_guard or native.get("nativeGuardDelegated") is not False:
         return None
+    review = context.activity_review or {}
+    resident = native.get("resident") or {}
+    expedition = resident.get("expedition") or {}
+    leader_id = expedition.get("leaderId")
+    elapsed = review.get("elapsedSeconds")
+    wake_wait = (role.expedition_wait_seconds is not None and review.get("activity") == "waiting"
+                 and type(elapsed) is int and elapsed >= role.expedition_wait_seconds
+                 and native.get("sitting") is True)
+    finished_leader_walk = (role.expedition_wait_seconds is not None and review.get("activity") == "free"
+                            and leader_id and native.get("socialNavigationTargetUuid") == leader_id
+                            and native.get("socialWalkAvailable") is True)
     follow = native.get("follow")
-    if (native.get("taskId") != "touhou_little_maid:idle" or native.get("canMove") is not True
-            or any(native.get(flag) is not False for flag in ("passenger", "sitting", "homeMode"))
-            or not isinstance(follow, dict) or follow.get("temporaryWait") is not False):
+    if (native.get("taskId") != "touhou_little_maid:idle"
+            or native.get("passenger") is not False
+            or (native.get("homeMode") is not False and not finished_leader_walk)
+            or not isinstance(follow, dict)):
         return None
+    if not wake_wait and (native.get("canMove") is not True or native.get("sitting") is not False
+                          or follow.get("temporaryWait") is not False):
+        return None
+    if role.activity_review_seconds is not None:
+        # Residents that review their activity can resume a configured expedition
+        # when free. Do not turn an explicit wait, work, or uncertain trip into a new order.
+        if (expedition.get("state") != "not_delegated" or not expedition.get("leaderDimension")
+                or resident.get("sleeping") or resident.get("leased") or resident.get("thinking")
+                or (resident.get("combat") or {}).get("targetId")
+                or (wake_wait or finished_leader_walk) and danger(context.snapshot)):
+            return None
+        scene = activity_scene(context.snapshot)
+        if scene is None or scene[0] != ("waiting" if wake_wait else "free"):
+            return None
     step = Step(tool="body:native:guard")
     return step if context.capabilities is not None and not step_support(step, context.capabilities) else None
+
+
+def at_registered_home(snapshot, home) -> bool | None:
+    """None when the registered house cannot be compared with the current position."""
+    position = getattr(snapshot, "position", None)
+    if (not isinstance(home, dict) or not isinstance(home.get("dimension"), str) or not home["dimension"]
+            or not getattr(snapshot, "dimension", None) or not isinstance(position, dict)):
+        return None
+    here = [position.get(axis) for axis in "xyz"]
+    if any(type(value) not in (int, float) for value in here):
+        return None
+    if home["dimension"] != snapshot.dimension:
+        return False
+    points = [[point.get(axis) for axis in "xyz"] for point in (home.get(key) for key in ("work", "door", "bed"))
+              if isinstance(point, dict)]
+    points = [point for point in points if all(type(value) in (int, float) for value in point)]
+    if not points:
+        return None
+    return any(math.dist(here, point) <= REGISTERED_HOME_RANGE for point in points)
+
+
+def leave_journey_anchor(role: NpcRole, context: PlanContext) -> list[Step] | None:
+    """End an expired, unprompted rest on the temporary anchor left by a journey.
+
+    Arriving somewhere holds a resident on a native anchor that the body reports as home mode.
+    Neither native guard nor the expedition moves a body in that mode, so its own short rest
+    would otherwise never end. An ordered wait and a stay at the registered house are kept.
+    """
+    native = current_native_state(context)
+    review = context.activity_review or {}
+    resident = native.get("resident") or {}
+    expedition = resident.get("expedition") or {}
+    elapsed = review.get("elapsedSeconds")
+    if (not role.default_native_guard or role.expedition_wait_seconds is None or role.activity_review_seconds is None
+            or native.get("nativeGuardDelegated") is not False
+            or review.get("activity") != "waiting" or review.get("waitPurpose") != SELF_CHOSEN_WAIT
+            or type(elapsed) is not int or elapsed < role.expedition_wait_seconds
+            or native.get("sitting") is not True or native.get("homeMode") is not True
+            or native.get("taskId") != "touhou_little_maid:idle" or native.get("passenger") is not False
+            or not isinstance(native.get("follow"), dict) or resident.get("loaded") is not True
+            or expedition.get("state") != "not_delegated" or not expedition.get("leaderId")
+            or not expedition.get("leaderDimension")
+            or resident.get("sleeping") or resident.get("leased") or resident.get("thinking")
+            or (resident.get("combat") or {}).get("targetId") or danger(context.snapshot)
+            or at_registered_home(context.snapshot, resident.get("home")) is not False):
+        return None
+    scene = activity_scene(context.snapshot)
+    if scene is None or scene[0] != "waiting":
+        return None
+    steps = [Step(tool="body:follow"), Step(tool="body:native:guard")]
+    if context.capabilities is None or any(
+            step.tool not in role.allowed_tools or step_support(step, context.capabilities) for step in steps):
+        return None
+    return steps
 
 
 def surveyed_here(context: PlanContext) -> bool:
@@ -266,7 +358,7 @@ def surveyed_here(context: PlanContext) -> bool:
             and sample.get("origin") == [math.floor(snap.position[k]) for k in ("x", "y", "z")])
 
 
-def unnecessary_step(step: Step, context: PlanContext, native: dict[str, Any]) -> bool:
+def unnecessary_step(step: Step, context: PlanContext, native: dict[str, Any], role: NpcRole) -> bool:
     if step.tool == "body:native:survey" and not step.args:
         return surveyed_here(context)
     if not native:
@@ -280,8 +372,14 @@ def unnecessary_step(step: Step, context: PlanContext, native: dict[str, Any]) -
     if step.tool == "body:native:schedule":
         return set(step.args) == {"schedule"} and isinstance(native.get("schedule"), str) and step.args["schedule"] == native["schedule"]
     if step.tool == "body:native:task":
+        task = step.args.get("taskId")
+        same_task = set(step.args) == {"taskId"} and task == native.get("taskId")
+        expedition = (native.get("resident") or {}).get("expedition") or {}
+        if (same_task and task == "touhou_little_maid:idle" and role.expedition_wait_seconds is not None
+                and already_guarding(native) and expedition.get("leaderId")):
+            return True  # Setting the existing idle task would cancel native expedition guard.
         follow = native.get("follow")
-        return (set(step.args) == {"taskId"} and step.args["taskId"] == native.get("taskId")
+        return (same_task
                 and native.get("sitting") is False and not already_guarding(native)
                 and (follow is None or isinstance(follow, dict) and not follow.get("active")) and native.get("taskEnabled") is True)
     if step.tool == "body:follow":
@@ -334,7 +432,7 @@ def reviewed_steps(role: NpcRole, context: PlanContext, values: Any) -> list[Ste
                 step.args["text"] = text
         # The plan already received this sample. A mode write is necessary
         # again after an earlier step has actually changed the body.
-        if not body_changed and unnecessary_step(step, context, native):
+        if not body_changed and unnecessary_step(step, context, native, role):
             continue
         out.append(step)
         body_changed |= step.tool not in {"body:chat", "body:observe", "body:inventory"}
@@ -368,15 +466,17 @@ class ModelClient:
 
 
 class NpcPlanner:
-    def __init__(self, role: NpcRole, model: ModelClient, *, semaphore=None, fast=None, resident_turns=None):
+    def __init__(self, role: NpcRole, model: ModelClient, *, semaphore=None, role_lock=None, fast=None, resident_turns=None):
         self.role, self.model = role, model
         self.semaphore = semaphore or asyncio.Semaphore(2)
+        self.role_lock = role_lock or asyncio.Lock()
         self.last_route: dict[str, Any] = {}
         self.fast = fast
         self.resident_turns = resident_turns
         self.social_receipts = {}
         self.next_meal = 0.0
         self.next_catch = 0.0
+        self.next_anchor_leave = 0.0
         self.next_guard_review = 0.0
         self.next_companion_check_in = time.monotonic() + 25
         self.companion_anchor: tuple[str, tuple[float, float, float]] | None = None
@@ -391,8 +491,13 @@ class NpcPlanner:
                 return response, "desktop"
         if desktop_only:
             return None, "desktop"
-        async with self.semaphore:
-            return await self.model.request("/chat/completions", payload, timeout), self.role.provider
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        async with asyncio.timeout_at(deadline), self.role_lock, self.semaphore:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise TimeoutError("NPC model fallback timed out")
+            return await self.model.request("/chat/completions", payload, remaining), self.role.provider
 
     async def answer_dialogue(self, text: str, relationship: dict | None, *, public: bool) -> str:
         return (await self.prepare_dialogue(text, relationship, public=public))["reply"]
@@ -414,19 +519,29 @@ class NpcPlanner:
                        "这轮仅回复文字。返回只含 reply 的 JSON，最多 140 字。"},
                       {"role": "user", "content": json.dumps(facts, ensure_ascii=False)}]}
         response, provider = await self.decision("dialogue", request, 35)
-        answer = json.loads(response["choices"][0]["message"]["content"])
-        reply = answer.get("reply") if isinstance(answer, dict) else None
-        if (not isinstance(reply, str) or not 1 <= len(reply.strip()) <= 140
-                or not reply.isprintable() or "§" in reply):
-            raise ValueError("invalid_dialogue_reply")
+        turn_id = response.get("id") if provider == "desktop" else None
+        turn_hash = correlation_hash(turn_id) if isinstance(turn_id, str) and turn_id else None
+        with validate_resident_decision(turn_hash, "validate_dialogue", "dialogue"):
+            answer = json.loads(response["choices"][0]["message"]["content"])
+            reply = answer.get("reply") if isinstance(answer, dict) else None
+            if (not isinstance(reply, str) or not 1 <= len(reply.strip()) <= 140
+                    or not reply.isprintable() or "§" in reply):
+                raise ValueError("invalid_dialogue_reply")
         result = {"reply": (whale_speech(reply) or "我在，慢慢说。") if style else reply.strip()}
         if provider == "desktop" and "residentCommunication" in response:
             result["replyMode"] = response["residentCommunication"]["mode"]
         return result
 
     async def __call__(self, intent: Intent, context: PlanContext):
-        role = self.role
         intent.resident_turn_hash = None
+        try:
+            return await self._plan_decision(intent, context)
+        except ResidentDecisionError as error:
+            self.last_route = {"provider": "desktop", "turnHash": error.turn_hash}
+            raise
+
+    async def _plan_decision(self, intent: Intent, context: PlanContext):
+        role = self.role
         context.recheck_nearby_speech = False
         requested = intent.desktop_request_id if intent.goal == DESKTOP_GOAL else None
         if intent.goal == DESKTOP_GOAL and (not requested or not context.snapshot or context.snapshot.life_state != "alive" or danger(context.snapshot)):
@@ -437,10 +552,13 @@ class NpcPlanner:
         if addressed:
             self.next_companion_check_in = max(self.next_companion_check_in, now + COMPANION_CHECK_IN_SECONDS)
         check_in: str | None = None
-        social_walk = context.maid_companions is not None
+        social_walk = context.maid_companions is not None and context.maid_companions.get("selectionAvailable", True)
         following = social_walk and bool(context.maid_companions.get("selection"))
         roster = tuple(sorted(p["uuid"] for p in context.maid_companions["characters"])) if social_walk else ()
         review_company = social_walk and (roster != self.social_roster or now >= self.next_social_review)
+        activity = (context.activity_review or {}).get("activity")
+        available_for_routine = role.activity_review_seconds is None or activity in {"free", "guarding"}
+        keep_quiet_guard = role.activity_review_seconds is None and already_guarding(current_native_state(context))
         current_agenda = (context.agenda or {}).get("current")
         if intent.goal in (IDLE_GOAL, DANGER_GOAL) and now >= self.next_meal:
             meal = routine_meal(role, context)
@@ -448,11 +566,19 @@ class NpcPlanner:
                 self.next_meal = now + 90.0
                 self.last_route = {"layer": "native-policy", "reason": "ordinary_meal_needed"}
                 return [meal]
-        if intent.goal == IDLE_GOAL and not context.dialogue and role.activity_review_seconds is None:
+        if intent.goal == IDLE_GOAL and not context.dialogue and not following:
             restore = restore_default_guard(role, context)
-            if restore and not following and not current_agenda:
+            # For an opted-in expedition the observed free body, or a reviewed
+            # expired wait, can resume even if a previous agenda is still current.
+            if restore and (not current_agenda or role.expedition_wait_seconds is not None):
                 self.last_route = {"layer": "native-policy", "reason": "resume_configured_guard"}
                 return [restore]
+            if now >= self.next_anchor_leave and (leave := leave_journey_anchor(role, context)):
+                # A refused write leaves the body seated; do not repeat it on every review.
+                self.next_anchor_leave = now + JOURNEY_ANCHOR_RETRY_SECONDS
+                self.last_route = {"layer": "native-policy", "reason": "leave_expired_journey_anchor"}
+                return leave
+        if intent.goal == IDLE_GOAL and not context.dialogue and available_for_routine:
             if not following and not current_agenda and now >= self.next_catch and (catch := routine_catch(role, context)):
                 self.next_catch = now + 300.0
                 self.last_route = {"layer": "native-policy", "reason": "prepared_native_fishing"}
@@ -490,7 +616,7 @@ class NpcPlanner:
         elif self.resident_turns and quiet_turn:
             if not (near_partner or near_maid_listener) and "body:chat" in tools:
                 tools.remove("body:chat")
-            if role.activity_review_seconds is None and already_guarding(current_native_state(context)):
+            if keep_quiet_guard:
                 tools = [name for name in tools if name not in {"body:stay", "body:stop", "body:native:sit"}]
         schemas, native_catalogue = {}, []
         for action in caps.native_actions if caps else []:
@@ -502,7 +628,7 @@ class NpcPlanner:
                 key = "arguments_" + str(len(schemas))
                 schemas[key] = json.loads(encoded)
             native_catalogue.append({"name": action.name, "description": action.description, "schema": key})
-        if intent.goal == DANGER_GOAL and self.fast is not None and role.activity_review_seconds is None:
+        if intent.goal == DANGER_GOAL and self.fast is not None and available_for_routine:
             choices = reaction_choices(role, context)
             if len(choices) >= 2:
                 try:
@@ -595,11 +721,16 @@ class NpcPlanner:
             if adventure_query in tools:
                 guidance.append(
                     "Read current quests, combat jobs, ruins or the guild board. Locate characters by exact name/UUID. "
-                    "Read quest_status after accepting or turning in a quest.")
+                    "Read quest_status after accepting or turning in a quest. "
+                    "Villagers post optional local work on village_list. Read village_info with an exact card ID for its "
+                    "objective and issuer location. Check village_status for work you already took.")
             if survey in tools:
                 guidance.append("Survey the terrain and walk to a sampled walkTo position. Reuse a fresh survey.")
             if adventure_action in tools:
                 guidance.append(
+                    "Choose village_accept with a posted card ID if the job suits you. For a gather card, bring the materials "
+                    "to its issuer and use village_deliver with the same ID. Slay and reach count through normal play. "
+                    "Only a completed card proves the objective is finished. "
                     "Use prepare_armor for a missing slot and prepare_ammo for a bow or crossbow without arrows. "
                     "Use carried supplies first. With allowPurchase you can buy one ordinary iron piece for up to "
                     "20 RPG coins or 16 arrows for up to 3. Confirm collection and wear the armor. For meet_character use the UUID "
@@ -731,17 +862,24 @@ class NpcPlanner:
         if response is None:
             self.last_route = {"provider": "desktop", "reason": "desktop_request_unanswered"}
             return []
+        if provider == "desktop" and isinstance(turn_id := response.get("id"), str) and turn_id:
+            intent.resident_turn_hash = correlation_hash(turn_id)
         if social_walk:
             self.social_roster = roster
             self.next_social_review = now + 90
-        self.last_route = {"provider": provider, "model": role.model if provider != "desktop" else None, "responseId": response.get("id"),
+        self.last_route = {"provider": provider, "model": role.model if provider != "desktop" else None,
                            "seconds": round(time.monotonic() - started, 3)}
+        if provider == "desktop":
+            self.last_route["turnHash"] = intent.resident_turn_hash
+        else:
+            self.last_route["responseId"] = response.get("id")
         if check_in:
             self.last_route["reason"] = check_in
         if context.companion_adventure is not None:
             self.last_route["adventureState"] = context.companion_adventure["state"]
         text = response["choices"][0]["message"]["content"]
-        plan = json.loads(text)
+        with validate_resident_decision(intent.resident_turn_hash, "decode_plan"):
+            plan = json.loads(text)
         # Some JSON-mode providers use {} for an empty answer. It grants no
         # authority and is equivalent to an empty plan, not a transport failure.
         if plan == {}:
@@ -755,13 +893,16 @@ class NpcPlanner:
                 reads.update("body:native:" + action.name for action in caps.native_actions
                              if action.read_only and "body:native:" + action.name in tools
                              and isinstance(action.input_schema, dict) and not action.input_schema.get("required"))
-            choice = parse_choice(plan, context.maid_companions["characters"], read_echoes=reads)
+            with validate_resident_decision(intent.resident_turn_hash, "validate_companion_choice"):
+                choice = parse_choice(plan, context.maid_companions["characters"], read_echoes=reads)
             if choice is not None:
                 context.companion_choice = choice
                 return []
-        if not isinstance(plan, dict) or "steps" not in plan or set(plan) - ({"steps", "agenda"} if can_schedule or owner_planning or desktop_planning else {"steps"}):
-            raise ValueError("npc_plan_schema")
-        steps = reviewed_steps(role, context, plan["steps"])
+        with validate_resident_decision(intent.resident_turn_hash, "validate_plan"):
+            if not isinstance(plan, dict) or "steps" not in plan or set(plan) - ({"steps", "agenda"} if can_schedule or owner_planning or desktop_planning else {"steps"}):
+                raise ValueError("npc_plan_schema")
+        with validate_resident_decision(intent.resident_turn_hash, "validate_actions"):
+            steps = reviewed_steps(role, context, plan["steps"])
         delivery = response.get("residentCommunication", {}) if provider == "desktop" else {}
         if (source := delivery.get("sourceEventId")) and source in intent.source_events:
             intent.source_events = [source]
@@ -770,7 +911,8 @@ class NpcPlanner:
                 if context.agenda["current"] or context.agenda["upcoming"]:
                     context.proposed_agenda = []
             else:
-                context.proposed_agenda = schedule(plan["agenda"], time.time())
+                with validate_resident_decision(intent.resident_turn_hash, "validate_agenda"):
+                    context.proposed_agenda = schedule(plan["agenda"], time.time())
         if check_in:
             steps = [step for step in steps if step.tool == "body:chat"
                      and not repeats_companion_speech(step.args["text"], context.recent_companion_speech)][:1]
@@ -780,7 +922,7 @@ class NpcPlanner:
         elif quiet_turn:
             desktop_greeting = provider == "desktop" and near_maid_listener and not near_partner
             inactive = set() if near_partner or desktop_greeting else {"body:chat"}
-            if role.activity_review_seconds is None and already_guarding(current_native_state(context)):
+            if keep_quiet_guard:
                 inactive.update({"body:stay", "body:stop", "body:native:sit"})
             steps = [step for step in steps if step.tool not in inactive]
             context.recheck_nearby_speech = desktop_greeting
@@ -790,8 +932,6 @@ class NpcPlanner:
             self.last_route["attention"] = self.fast.last_attention
             if not allowed:
                 steps = [step for step in steps if step.tool != "body:chat"]
-        if delivery and isinstance(turn_id := response.get("id"), str) and turn_id:
-            intent.resident_turn_hash = hashlib.sha256(turn_id.encode()).hexdigest()[:12]
         return steps
 
 
@@ -936,6 +1076,8 @@ class FastSelector:
 
 class NpcHost:
     """Event-driven actor. Unknown writes pause this character across process restarts."""
+    READ_TIMEOUT_SECONDS = 10
+
     def __init__(self, role: NpcRole, body, planner, memory, journal: ActionJournal, *, social=None, social_graph=None,
                  companion_adventure=None):
         self.role, self.body, self.planner, self.memory, self.journal = role, body, planner, memory, journal
@@ -951,6 +1093,7 @@ class NpcHost:
         self.closed = False
         self.pausing = False
         self.next_plan = 0.0
+        self.next_ack = 0.0
         self.last_danger = False
         self.last_activity_scene = None
         self.desktop_request_id = None
@@ -959,6 +1102,61 @@ class NpcHost:
         self.next_outing_check = 0.0
         self.next_rendezvous_attempt: dict[str, float] = {}
         self.checked_party_event = None
+        self.last_loop_at = None
+        self.last_loop_monotonic = None
+        self.last_observation_at = None
+        self.last_plan_started_at = None
+        self.last_plan_finished_at = None
+        self.last_plan_outcome = None
+        self.last_receipt_query_at = None
+        self.last_receipt_settled_at = None
+        self.loop_error = None
+        self.pending_requests = []
+
+    def autonomy_status(self) -> dict:
+        """Progress, not just a live PID. Uses cached observations and never opens a closed journal."""
+        age = None if self.last_loop_monotonic is None else max(0.0, time.monotonic() - self.last_loop_monotonic)
+        active = self.runtime._active
+        paused = [intent for intent in self.runtime.intents.values() if intent.state == "paused"]
+        unknown = any(row["status"] == "unknown" for row in self.pending_requests)
+        if self.pausing:
+            state = "maintenance"
+        elif age is None:
+            state = "starting"
+        elif age > 30:
+            state = "loop_stalled"
+        elif unknown:
+            state = "waiting_for_original_receipt"
+        elif active is not None and active.state == "active":
+            state = "planning" if active.planning_status == "pending" else "executing"
+        elif self.pending_requests:
+            state = "reconciling_original_requests"
+        elif self.body.health().lifecycle != "ready":
+            state = "body_unavailable"
+        elif paused:
+            state = "waiting_for_safety_recovery" if all(intent.recoverable_pause for intent in paused) else "waiting_for_host"
+        else:
+            state = "idle"
+        return {"state": state, "loopAgeSeconds": None if age is None else round(age, 3),
+                "lastLoopAt": self.last_loop_at, "lastObservationAt": self.last_observation_at,
+                "lastPlanStartedAt": self.last_plan_started_at, "lastPlanFinishedAt": self.last_plan_finished_at,
+                "lastPlanOutcome": self.last_plan_outcome, "lastReceiptQueryAt": self.last_receipt_query_at,
+                "lastReceiptSettledAt": self.last_receipt_settled_at, "lastError": self.loop_error,
+                "pendingRequests": list(self.pending_requests),
+                "needsAttention": self.last_plan_outcome == "failed" or state in {
+                    "loop_stalled", "waiting_for_original_receipt", "body_unavailable", "waiting_for_host"}}
+
+    async def _observe(self):
+        try:
+            snapshot = await asyncio.wait_for(self.body.snapshot(), self.READ_TIMEOUT_SECONDS)
+        except Exception as error:
+            self.loop_error = "observation_unavailable:" + type(error).__name__
+            return None
+        if snapshot is not None and snapshot.life_state != "unknown":
+            self.last_observation_at = snapshot.sampled_at.isoformat()
+        if self.loop_error and self.loop_error.startswith("observation_unavailable:"):
+            self.loop_error = None
+        return snapshot
 
     def _can_rendezvous(self, caps):
         return bool(caps and caps.supports("native", "rendezvous") and "body:native:rendezvous" in self.role.allowed_tools)
@@ -1060,6 +1258,21 @@ class NpcHost:
         return notice, team, opening
 
     async def _plan(self, intent: Intent, context: PlanContext):
+        self.last_plan_started_at = utcnow().isoformat()
+        try:
+            steps = await self._prepare_plan(intent, context)
+            self.last_plan_outcome = "deferred" if steps is None else "completed"
+            return steps
+        except asyncio.CancelledError:
+            self.last_plan_outcome = "cancelled"
+            raise
+        except Exception:
+            self.last_plan_outcome = "failed"
+            raise
+        finally:
+            self.last_plan_finished_at = utcnow().isoformat()
+
+    async def _prepare_plan(self, intent: Intent, context: PlanContext):
         body_id = str(self.role.body_id)
         dialogue = [self.pending_dialogue[key] for key in intent.source_events if key in self.pending_dialogue]
         context.dialogue = dialogue
@@ -1072,12 +1285,16 @@ class NpcHost:
             context.agenda = self.journal.agenda(str(self.role.character_id), time.time())
         scene = None
         inbox_at_start = set(self.pending_dialogue)
-        if (self.companions and context.capabilities and context.capabilities.supports("move")
-                and social_walk_available(context.snapshot)):
-            candidates = self.companions.context(context.snapshot)
-            candidates["teleportAvailable"] = self._can_rendezvous(context.capabilities)
-            if candidates["characters"] or candidates["selection"] or candidates["lastTransfer"] or candidates["source"] == "skill_compass_unavailable":
-                context.maid_companions = candidates
+        if self.companions and context.capabilities and context.capabilities.supports("move"):
+            ready = social_walk_available(context.snapshot)
+            if ready or self.companions.last_transfer:
+                candidates = self.companions.context(context.snapshot)
+                candidates["selectionAvailable"] = ready
+                candidates["teleportAvailable"] = ready and self._can_rendezvous(context.capabilities)
+                if not ready:
+                    candidates["characters"] = []
+                if candidates["characters"] or candidates["selection"] or candidates["lastTransfer"] or candidates["source"] == "skill_compass_unavailable":
+                    context.maid_companions = candidates
         if self.role.activity_review_seconds is not None:
             intent.remember_wait_purpose = True
             scene = activity_scene(context.snapshot)
@@ -1102,9 +1319,11 @@ class NpcHost:
         if self.companion_adventure and context.snapshot and context.snapshot.life_state == "alive":
             direct = next((event for event in dialogue if addressed_dialogue(event, body_id, (self.role.name, self.role.id))), None)
             if direct or (intent.goal == IDLE_GOAL and companion_check_in(self.role, context)):
-                audience = "nearby_partner" if direct is None else (
-                    "addressed_partner" if direct.data.get("speakerId") == str(self.role.owner_id) else "public"
-                )
+                expedition = (current_native_state(context).get("resident") or {}).get("expedition") or {}
+                if direct is None:
+                    audience = "nearby_partner" if expedition.get("leaderId") in (None, str(self.role.owner_id)) else "public"
+                else:
+                    audience = "addressed_partner" if direct.data.get("speakerId") == str(self.role.owner_id) else "public"
                 context.companion_adventure = await self.companion_adventure.view(
                     audience=audience, dimension=context.snapshot.dimension, position=context.snapshot.position,
                     recent_speech=context.recent_companion_speech)
@@ -1131,6 +1350,8 @@ class NpcHost:
                 continue
             result = {"action": action.name or action.verb, "requestId": receipt.request_id,
                       "status": receipt.status, "terminal": receipt.terminal, "text": receipt.text[:450]}
+            if turn_hash := self.journal.resident_turn_hash(receipt.request_id):
+                result["turnHash"] = turn_hash
             data = receipt.data if isinstance(receipt.data, dict) else {}
             if action.verb == "native" and action.name in {adventure.SURVEY, adventure.ACT, adventure.QUERY}:
                 for key in ("survey", "adventure"):
@@ -1188,14 +1409,27 @@ class NpcHost:
                     or danger(latest) or not nearby_maid_listener(latest)):
                 steps = [step for step in steps if step.tool != "body:chat"]
         if context.companion_choice is not None:
+            choice = context.companion_choice
+            travel = choice.get("travel", "auto")
+            target = choice.get("targetUuid")
             latest = await self.body.snapshot()
             changed_inbox = any(k not in inbox_at_start and addressed_dialogue(e, body_id, (self.role.name, self.role.id))
                                 for k, e in self.pending_dialogue.items())
-            if self.pausing or changed_inbox or not social_walk_available(latest) or (scene and activity_scene(latest) != scene):
-                self.next_plan = 0
-                return []
-            choice = context.companion_choice
-            if not self.companions.choose(choice["mode"], choice.get("targetUuid"), latest, travel=choice.get("travel", "auto")):
+            refusal = None
+            if self.pausing:
+                refusal = "rendezvous_paused_for_maintenance"
+            elif changed_inbox:
+                refusal = "rendezvous_superseded_by_addressed_dialogue"
+            elif not social_walk_available(latest):
+                refusal = "rendezvous_body_unavailable"
+            elif scene and activity_scene(latest) != scene:
+                refusal = "rendezvous_scene_changed"
+            elif not self.companions.choose(choice["mode"], target, latest, travel=travel,
+                                            turn_hash=intent.resident_turn_hash):
+                refusal = "rendezvous_target_unavailable"
+            if refusal:
+                if travel == "teleport":
+                    self.companions.reject_transfer(target, refusal, turn_hash=intent.resident_turn_hash)
                 self.next_plan = 0
                 return []
             # The decision is a compass selection. Only raw planner steps go through activity review.
@@ -1235,12 +1469,13 @@ class NpcHost:
                 direct = next((e for e in dialogue if addressed_dialogue(e, body_id, (self.role.name, self.role.id))), None)
                 for step in steps:
                     if step.tool in wait_tools and not step.note:
-                        step.note = direct.text[:200] if direct else "自主选择在这里等候"
+                        step.note = direct.text[:200] if direct else SELF_CHOSEN_WAIT
                 # A renewed promise while already seated only changes the remembered reason.
                 if scene[0] == "waiting" and steps and steps[0].tool in wait_tools:
                     renewed_purpose = steps[0].note if direct else None
                     steps = steps[1:]
-            self.journal.reviewed_activity(body_id, *scene, time.time(), renewed_purpose)
+            self.journal.reviewed_activity(body_id, *scene, time.time(), renewed_purpose,
+                                           renew_wait=self.role.expedition_wait_seconds is not None)
         if context.proposed_agenda is not None and context.agenda is not None and not self.pausing:
             windows = context.agenda["upcoming"] or [context.agenda["current"]]
             previous_end = windows[-1]["endsAt"] if windows[-1] else None
@@ -1362,15 +1597,57 @@ class NpcHost:
 
     async def _watch_desktop(self, turns):
         while not self.closed and not self.pausing:
-            requested = await turns.check()
+            intent = next((i for i in reversed(self.runtime.intents.values()) if i.resident_turn_hash), None)
+            activity = None
+            if intent:
+                health = intent_health(intent, self.journal, str(self.role.body_id))
+                receipts = health.get("actionReceipts", [])
+                activity = {"turnHash": intent.resident_turn_hash, "planningStatus": intent.planning_status,
+                            "completedActions": sum(r["terminal"] and r["status"] == "completed" for r in receipts),
+                            "failedActions": sum(r["terminal"] and r["status"] != "completed" for r in receipts),
+                            "pendingActions": sum(not r["terminal"] for r in receipts)}
+                if intent.planning_error:
+                    activity["planningError"] = intent.planning_error
+                transfer = self.companions.last_transfer if self.companions else None
+                if transfer and transfer.get("turnHash") == intent.resident_turn_hash and transfer.get("stage") == "before_dispatch":
+                    activity["transferError"] = transfer["message"]
+            requested = await turns.check(activity)
             if requested != self.desktop_request_id:
                 self.desktop_request_id = requested
                 if requested:
                     self.wake.set()
             await asyncio.sleep(2)
 
+    def _settle_rendezvous(self, body_id: str):
+        trip = self.rendezvous_intent
+        if trip is None or trip.state in ("active", "queued"):
+            return
+        request_id = next((rid for rid, action in trip.action_receipts.items() if action["verb"] == "rendezvous"), None)
+        if request_id:
+            # Only the original journal entry can settle a dispatched trip.
+            receipt = self.journal.receipt(body_id, request_id)
+            if not receipt or not receipt.terminal:
+                return
+            self.companions.settle_transfer(trip.steps[0].args["targetUuid"], receipt, turn_hash=trip.resident_turn_hash)
+        elif trip.state in ("failed", "cancelled") or (trip.state == "paused" and trip.needs_host):
+            # Runtime authorization can stop a trip before the journal records a body action.
+            if trip.state == "cancelled":
+                reason = "rendezvous_cancelled_before_dispatch"
+            elif trip.reason == "Step not supported by this body: body:native:rendezvous":
+                reason = "rendezvous_skill_unavailable"
+            else:
+                reason = "rendezvous_dispatch_unavailable"
+            self.companions.fail_pending_transfer(reason)
+            if trip.state == "paused":
+                trip.state, trip.reason, trip.needs_host = "failed", reason, False
+        else:
+            return
+        self.rendezvous_intent = None
+
     async def _actor_loop(self, identity):
         while not self.closed:
+            self.last_loop_at = utcnow().isoformat()
+            self.last_loop_monotonic = time.monotonic()
             self.wake.clear()
             if self.pausing:
                 # Do not start another plan during maintenance. Wait for the
@@ -1380,34 +1657,41 @@ class NpcHost:
                 await asyncio.sleep(.5)
                 continue
             unresolved = self.journal.unresolved(identity.body_id)
+            self.pending_requests = [{"requestHash": correlation_hash(action.request_id), "verb": action.name or action.verb,
+                                      "status": receipt.status if (receipt := self.journal.receipt(identity.body_id, action.request_id)) else "dispatched"}
+                                     for action in unresolved]
+            recovery_snapshot = None
+            if not unresolved:
+                self._settle_rendezvous(identity.body_id)
+                if any(intent.state == "paused" and intent.recoverable_pause for intent in self.runtime.intents.values()):
+                    recovery_snapshot = await self._observe()
+                    if self.runtime.retire_recovered_pauses(recovery_snapshot):
+                        self.next_plan = 0.0  # A new plan, never the old interrupted steps.
             if unresolved:
                 for action in unresolved:
                     self.body.restore_request(action)
-                    receipt = await self.body.result(action.request_id)
-                    if receipt.terminal:
+                    try:
+                        receipt = await asyncio.wait_for(self.body.result(action.request_id), self.READ_TIMEOUT_SECONDS)
+                    except Exception as error:
+                        self.loop_error = "original_receipt_unavailable:" + type(error).__name__
+                        continue  # Preserve the durable request; a lost read is not proof of its outcome.
+                    self.last_receipt_query_at = utcnow().isoformat()
+                    if self.loop_error and self.loop_error.startswith("original_receipt_unavailable:"):
+                        self.loop_error = None
+                    if receipt.terminal and receipt.request_id == action.request_id:
                         self.journal.settle(identity.body_id, receipt)
+                        self.runtime.remember_receipt(receipt, identity)
+                        self.last_receipt_settled_at = utcnow().isoformat()
                 if not self.journal.unresolved(identity.body_id):
+                    self.pending_requests = []
                     for intent in self.runtime.intents.values():
                         if intent.state == "paused" and intent.needs_host:
-                            intent.state = "cancelled"
-                            intent.reason = "original_receipt_reconciled_replan_from_current_observation"
+                            self.runtime._transition(intent, "cancelled", "original_receipt_reconciled_replan_from_current_observation")
             elif self.body.health().lifecycle != "error" and not any(i.state in ("active", "queued", "paused") for i in self.runtime.intents.values()):
-                # The durable journal reconciles an interrupted trip under its original request ID.
-                trip = self.rendezvous_intent
-                if trip is not None and trip.receipts:
-                    original = trip.receipts[0]
-                    settled = original if original.terminal else self.journal.receipt(identity.body_id, original.request_id)
-                    if settled and settled.terminal:
-                        self.companions.settle_transfer(trip.steps[0].args["targetUuid"], settled)
-                        self.rendezvous_intent = None
                 # This read never preempts a running world action. Native guard runs
                 # every tick; the fast model chooses modes only when danger changes.
-                try:
-                    snapshot = await self.body.snapshot()
-                    threatened = danger(snapshot)
-                except Exception:
-                    snapshot = None
-                    threatened = False
+                snapshot = recovery_snapshot if recovery_snapshot is not None else await self._observe()
+                threatened = danger(snapshot)
                 activity_changed = False
                 if self.role.activity_review_seconds is not None:
                     scene = activity_scene(snapshot)
@@ -1432,12 +1716,20 @@ class NpcHost:
                         self.pending_dialogue.pop(event, None)
                     events = [event for event in events if event not in acknowledged]
                 if acknowledged and self.role.body_kind == "maid":
-                    ack_steps = self._ack_steps(acknowledged)
-                    if ack_steps:
-                        self.runtime.submit_intent("Acknowledge already handled dialogue without repeating speech.", agent=self.role.id,
-                                                   steps=[step.model_dump() for step in ack_steps])
+                    # Submission is not confirmation. Retain the original inbox event
+                    # through definite refusals; unresolved acks use the original-ID
+                    # reconciliation above, never a second dispatch or repeated speech.
                     for event in acknowledged:
-                        self.pending_dialogue.pop(event, None)
+                        if self.journal.acknowledged(identity.body_id, event):
+                            self.pending_dialogue.pop(event, None)
+                    if (snapshot is not None and snapshot.life_state == "alive"
+                            and 0 <= time.time() - snapshot.sampled_at.timestamp() <= 5
+                            and self.body.health().connected and self.body.health().lifecycle == "ready" and now >= self.next_ack):
+                        ack_steps = self._ack_steps(acknowledged)
+                        if ack_steps:
+                            self.runtime.submit_intent("Acknowledge already handled dialogue without repeating speech.", agent=self.role.id,
+                                                       steps=[step.model_dump() for step in ack_steps])
+                            self.next_ack = now + 5  # Ack-only bounded lifecycle-race backoff.
                 elif desktop_ready or activity_changed or threatened and not self.last_danger or now >= self.next_plan:
                     goal = DIALOGUE_GOAL if events else DANGER_GOAL if threatened else DESKTOP_GOAL if desktop_ready else IDLE_GOAL
                     intent = self.runtime.submit_intent(goal, agent=self.role.id)
@@ -1459,6 +1751,7 @@ class NpcHost:
                         trip = self.runtime.submit_intent("Keep up with the companion I selected.", agent=self.role.id,
                                                           steps=[move.model_dump()])
                         if move.tool == "body:native:rendezvous":
+                            trip.resident_turn_hash = self.companions.turn_hash
                             self.rendezvous_intent = trip
                 self.last_danger = threatened
             # Completed history is bounded in memory; durable receipts and memories remain on disk.

@@ -16,7 +16,7 @@ public final class MaidAgentsMod {
     /** Read-only host integration. Only explicitly configured resident UUIDs may receive land membership. */
     public static java.util.Map<java.util.UUID,String> residentIdentities(){
         var current=running;var out=new java.util.LinkedHashMap<java.util.UUID,String>();
-        if(current!=null&&current.residents()!=null)for(var id:current.residents().ids())out.put(id,current.residents().settings.name(id));
+        if(current!=null&&current.residents()!=null)for(var id:current.residents().ids())out.put(id,current.residents().name(id));
         return java.util.Map.copyOf(out);
     }
     public static java.util.Map<java.util.UUID,String> visibleResidentIdentities(){
@@ -28,10 +28,46 @@ public final class MaidAgentsMod {
         }
         return java.util.Map.copyOf(visible);
     }
+    /** Stock TLM installations have no native custody provider. */
+    private static final class Custody {
+        static final java.lang.invoke.MethodHandle held = resolve("heldForDriver");
+        static final java.lang.invoke.MethodHandle claim = resolve("claimingDriver");
+        static java.lang.invoke.MethodHandle resolve(String name) {
+            try {
+                Class<?> bridge = Class.forName("local.hosting.NativeCustodyFence", false, MaidAgentsMod.class.getClassLoader());
+                return java.lang.invoke.MethodHandles.publicLookup().findStatic(bridge, name,
+                    java.lang.invoke.MethodType.methodType(boolean.class, java.util.UUID.class));
+            } catch (ClassNotFoundException standalone) {
+                return null;
+            } catch (ReflectiveOperationException badBridge) {
+                throw new IllegalStateException("Native body custody interface unavailable", badBridge);
+            }
+        }
+    }
+    public static boolean custodyHeld(java.util.UUID id) {
+        return custodyState(Custody.held, id);
+    }
+    public static boolean custodyClaiming(java.util.UUID id) {
+        return custodyState(Custody.claim, id);
+    }
+    private static boolean custodyState(java.lang.invoke.MethodHandle query, java.util.UUID id) {
+        if (query == null) return false;
+        try { return (boolean) query.invokeExact(id); }
+        catch (Throwable failure) { throw new IllegalStateException("Cannot confirm native body custody", failure); }
+    }
     static MaidResidents residents(){return running==null?null:running.residents();}
+    public static boolean guideRegistrationReady(){return residents()!=null;}
+    public static void registerPlayerGuide(java.util.UUID id,java.util.UUID owner,String name){
+        var service=residents();
+        if(service==null)throw new IllegalStateException("guide_runtime_not_ready");
+        service.registerGuide(id,owner,name);
+        var body=service.body(id);
+        if(body!=null)ResidentRpg.tick(body);
+    }
+    static MaidCompanions companions(){return running==null?null:running.companions();}
     public static boolean hasExpeditionLeader(java.util.UUID id) {
         var residents = residents();
-        return residents != null && residents.expeditionDelegated(id);
+        return residents != null && residents.expeditionSuppressesNativeFollow(id);
     }
     static MaidAgent runningAgent(java.util.UUID id){return running==null?null:running.agent(id);}
     /** Transient action ownership, never a persisted NoAI/sitting change. */

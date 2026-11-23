@@ -2,6 +2,8 @@
 
 托管桐人通过 Numen 身体收取附近语音转写和文字。说话时，服务器用登记音色经 Simple Voice Chat 播放。语音桥以原身体、主人和可用收件箱的心跳维持在线状态，安静时也会续期。`/voice status Kirito` 可以查看托管连接。点名公开交谈的配音限于同场实际收到文字的玩家；`/npcsocial 桐人 tell <消息>` 的回复和配音只送给提问者。客户端语音设置仍决定是否播放音频。
 
+原版 `/tell <游戏名> <消息>` 向单个已登记的托管 Numen 角色发消息时，服务端沿用原版的收件人解析，并交给 `/npcsocial` 使用的私聊队列。两个入口共享禁言、忽略和会话回执，回复只发给原发送者。真人之间及多目标私聊继续使用原版投递。
+
 2026-11-18：三位统一 NPC 的双向语音已部署，QiandengVoice 0.1.8。肥鱼、桐人、结衣使用原身份接收附近麦克风转写，并通过已有 TTS/SVC 回答；NPC 之间传原台词，避免合成音频被重复识别。模型按共享注意策略判断是否回应。25项正式回读通过，真人设备听感仍待验；见[正式记录](../../docs/UNIFIED_NPC_VOICE_DEPLOYED_20261118.md)。下方带日期记录为各自发布时点。
 
 2026-11-10：新增[代理分块乱序定位与候选修复](../../docs/VOICE_PROXY_ORDERING_20261110.md)。固定Velocity真实TCP及原上传校验已复现首到sequence=1/期待0；最小修复在LoginGuard消息订阅的线程调度，保持严格分块校验。含原连接被动采集和有界拒绝诊断；尚未部署，不能据隔离结果关闭原可米历史事件或人耳验收。下文0.1.5上传失败收尾的旧候选状态已被[联合部署记录](../../docs/HUTAO_JOINT_DEPLOYED_20261110.md)覆盖。
@@ -85,7 +87,9 @@ Windows 常驻入口为 `service/media-supervisor.ps1`。`-Python` 必须指向�
 
 ## 原版村民的附近对话
 
-在 `npc-voices.json` 为需要说话的村民登记实体 UUID、`kind: "villager"` 和对应的 `residentId`，并选择已有 TTS 音色及距离。村民的稳定角色 ID 由村民委托插件写入原版实体的 `qiandeng-villager-quests:resident-id`，与身份档案逐字匹配。语音插件只接受有 AI 的已登记村民。
+在 `npc-voices.json` 为需要说话的村民登记实体 UUID、`kind: "villager"` 和对应的 `residentId`，并选择已有 TTS 音色及距离。村民的稳定角色 ID 由村民委托插件写入原版实体的 `qiandeng-villager-quests:resident-id`，与身份档案逐字匹配。普通村民需要开启原生 AI。
+
+固定柜台可使用 `"serviceCounter": "guild-receptionist"` 给公会原有接待员接入对话。AgentFriend 的 `guild-hall.receptionist-voice-uuid`、村民委托角色及语音档案均需登记同一个原实体 UUID，两个角色档案的 `residentId` 也需一致。AgentFriend 在主线程核对已加载的柜台位置及原 `agentfriend:guild_receptionist` 标记。原生 AI 关闭，右键继续打开公会菜单。普通村民和其他静止实体仍使用各自原有的接入规则。
 
 `qiandeng-villager-quests` 可在主线程调用 `bindVillagerNpcVoice(plugin, bodyUuid, inbox)`，每 1–2 秒续期。回调只需把事件 JSON 压入自己的有界队列。玩家在可见范围内点名或对着登记村民说话时，附近文字或 SVC 转写事件带 `eventId`、`speakerId`、`residentId`、`listenerId` 和世界。角色的记忆与模型由调用方维护。
 

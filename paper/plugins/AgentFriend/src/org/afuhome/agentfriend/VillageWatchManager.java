@@ -369,7 +369,7 @@ final class VillageWatchManager implements Listener {
 
     private void villagers(Player player) {
         List<Villager> nearby = new ArrayList<>(player.getWorld().getEntitiesByClass(Villager.class).stream()
-                .filter(v -> v.isValid() && v.isAdult() && v.getProfession() != Villager.Profession.NONE
+                .filter(v -> v.isValid() && player.canSee(v) && v.isAdult() && v.getProfession() != Villager.Profession.NONE
                         && v.getProfession() != Villager.Profession.NITWIT
                         && v.getLocation().distanceSquared(player.getLocation()) <= 96 * 96)
                 .toList());

@@ -7,6 +7,7 @@ from uuid import UUID
 import httpx
 
 from .resident_protocol import prepare_scene, translate_answer
+from .resident_trace import correlation_hash, trace_resident_turn, validate_resident_decision
 
 
 class ResidentTurnsClient:
@@ -21,9 +22,11 @@ class ResidentTurnsClient:
         self.token = Path(config["tokenFile"]).read_text(encoding="ascii").strip()
         self.http = http or httpx.AsyncClient(trust_env=False, follow_redirects=False)
 
-    async def check(self):
+    async def check(self, activity=None):
         try:
-            response = await self.http.post(self.endpoint + "/check", json={}, headers={"Authorization": "Bearer " + self.token}, timeout=4)
+            payload = {"activity": activity} if activity is not None else {}
+            response = await self.http.post(self.endpoint + "/check", json=payload,
+                                            headers={"Authorization": "Bearer " + self.token}, timeout=4)
             response.raise_for_status()
             data = response.json()
             request = data.get("requestId") if isinstance(data, dict) else None
@@ -50,7 +53,12 @@ class ResidentTurnsClient:
         except (httpx.HTTPError, ValueError):
             return None
         if isinstance(result, dict) and result.get("state") == "answered" and isinstance(result.get("answer"), dict):
-            answer, route = translate_answer(kind, payload["scene"], result["answer"])
+            turn_id = result.get("id")
+            turn_hash = correlation_hash(turn_id) if isinstance(turn_id, str) and turn_id else None
+            if turn_hash:
+                trace_resident_turn(turn_hash, "decision_received", decisionKind=kind)
+            with validate_resident_decision(turn_hash, "translate_answer", kind):
+                answer, route = translate_answer(kind, payload["scene"], result["answer"])
             return {"id": result.get("id"), **route, "choices": [{"message": {"content": json.dumps(answer, ensure_ascii=False)}}]}
         return None
 

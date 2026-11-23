@@ -13,7 +13,8 @@ from .effects import effect_view, projected_effect
 def runtime_error_code(error):
     """Only explicitly supported controller causes may escape exception text."""
     code = str(error).split(":", 1)[0]
-    return code if code in {"outcome_unknown", "context_budget_exceeded", "connection_lost"} else type(error).__name__
+    return code if code in {"outcome_unknown", "context_budget_exceeded", "connection_lost",
+                            "managed_device_expired", "managed_device_sdk_required", "managed_device_identity_unconfirmed"} else type(error).__name__
 
 
 def _bounded(value, size):

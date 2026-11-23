@@ -1,8 +1,8 @@
 [plugin]
 id = "neko_resident"
-name = "千灯纪居民"
-description = "让本机角色使用千灯纪的女仆或 Numen 身体，安排日程、行动、收发文字及回应游戏语音。"
-version = "0.3.1"
+name = "千灯纪"
+description = "登录官网后使用原游戏角色，连接车万女仆或 Numen 玩家身体。"
+version = "0.4.0"
 entry = "plugin.plugins.neko_resident:ResidentPlugin"
 
 [plugin.author]
@@ -21,7 +21,7 @@ enabled = true
 
 [[plugin.ui.panel]]
 id = "main"
-title = "连接千灯纪居民"
+title = "千灯纪"
 entry = "ui/panel.tsx"
 mode = "hosted-tsx"
 context = "resident_connection"

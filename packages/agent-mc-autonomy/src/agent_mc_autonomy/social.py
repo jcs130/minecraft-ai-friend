@@ -17,6 +17,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 
+from .game_voice import hearing_identity
+
 GUIDANCE = (
     "Companion conversation is optional. Use your own persona and continuing interests. "
     "You may initiate a short conversation about an actually observed discovery, danger, "
@@ -91,6 +93,12 @@ class SocialSettings:
 
 def _digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+
+
+def _event_key(event):
+    if voice := hearing_identity(event):
+        return _digest(["nearby-voice", *voice])
+    return _digest([event["run"], event["cursor"]])
 
 
 def _content(text):
@@ -181,7 +189,7 @@ class SocialInbox:
                 or not isinstance(event.get("run"), str) or not event["run"]
                 or type(event.get("cursor")) is not int or event["cursor"] < 0):
             return self.owns(event)  # Do not change a legacy adapter's input path.
-        key = _digest([event["run"], event["cursor"]])
+        key = _event_key(event)
         digest = _digest([name.casefold(), meta.get("channel"), _content(text)])
         reason = "received"
         if (event.get("contextDelivery") == "archive-only" or meta.get("staleEpoch")):
@@ -197,8 +205,7 @@ class SocialInbox:
         trigger = trigger.get("type") if isinstance(trigger, dict) else trigger
         if reason == "received" and trigger not in {"flush", "debounce", "preempt", "interrupt"}:
             reason = "ambient_only"
-        if (meta.get("identityEvidence") not in {"packet-sender", "player-list-format"}
-                or meta.get("senderUuid") != self.roster[name.casefold()]):
+        if not self.owns(event):
             reason = "identity_unverified"
         with self._db() as db:
             self._expire(db, now)
@@ -234,10 +241,12 @@ class SocialInbox:
     def owns(self, event):
         meta = event.get("meta") or {}
         name = meta.get("uname", event.get("senderKey", ""))
+        voice = hearing_identity(event)
         return (self.settings.enabled and event.get("type") in {"minecraft.chat", "chat"}
                 and isinstance(name, str) and name.casefold() in self.roster
                 and (name.casefold() == self.self_name.casefold() or meta.get("outgoing")
                      or meta.get("direction") == "outgoing"
+                     or (voice and voice[0] == self.roster[name.casefold()])
                      or (meta.get("identityEvidence") in {"packet-sender", "player-list-format"}
                          and meta.get("senderUuid") == self.roster[name.casefold()])))
 
@@ -329,7 +338,7 @@ class SocialInbox:
             changed = 0
             for event in events:
                 if isinstance(event.get("run"), str) and type(event.get("cursor")) is int:
-                    key = _digest([event["run"], event["cursor"]])
+                    key = _event_key(event)
                     changed += db.execute("UPDATE events SET state='unknown',model_request=? WHERE id=? AND state='pending'",
                                           (request_id, key)).rowcount
             if changed:
@@ -353,6 +362,8 @@ class SocialInbox:
                 {"run": e["run"], "cursor": e["cursor"], "at": e.get("ts"), "direction": "incoming",
                  "speaker": (e.get("meta") or {}).get("uname", e.get("senderKey")),
                  "channel": (e.get("meta") or {}).get("channel"),
+                 **({"speaker_uuid": voice[0], "utterance_id": voice[1], "transcript": True}
+                    if (voice := hearing_identity(e)) else {}),
                  "text": e["text"][:320], "attention": row["state"], "reason": row["reason"],
                  "untrusted_environment_data": True})
                 for index, row in enumerate(reversed(rows)) for e in [json.loads(row["payload"])]]

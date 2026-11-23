@@ -6,23 +6,40 @@ const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
 const denied = (status, reason) => Object.assign(new Error(reason), {status, reason});
 const idle = {state: 'local'};
 const idleExpiry = 12 * 3600_000;
+const desktopExpiry = 15 * 60_000;
 const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const codeFormat = /^[2-9A-HJ-NP-Z]{4}(?:-[2-9A-HJ-NP-Z]{4}){2}$/;
 const newCode = () => [...randomBytes(12)].map(b => alphabet[b % alphabet.length]).join('').match(/.{4}/g).join('-');
 const bindingKey = r => JSON.stringify([r.id,r.bodyId,r.characterId,r.bodyKind,r.ownerGameId]);
 const browserLoginExpiry = 300_000;
 const accountExpiry = 900_000;
+const planningStates = new Set(['pending','completed','deferred','rejected','unavailable']);
+const diagnosticPart = /^[a-zA-Z0-9_:-]{1,80}$/;
 
-function validateCommunication(turn, answer) {
-  if (!Object.hasOwn(answer, 'communication')) return;
-  const msg = answer.communication, channel = turn.scene.communication;
-  if (!channel || !msg || typeof msg !== 'object' || Object.keys(answer).length !== 1
-      || Object.keys(msg).some(key => !['mode','sourceEventId','text'].includes(key))
-      || typeof msg.text !== 'string' || !msg.text.trim() || [...msg.text.trim()].length > channel.maxTextChars
-      || /[\p{C}\p{Zl}\p{Zp}§]/u.test(msg.text)
-      || channel.outputs?.filter(o => o.mode === msg.mode && o.sourceEventId === msg.sourceEventId).length !== 1) {
-    throw denied(400, 'COMMUNICATION_UNAVAILABLE');
+function residentActivity(value, updatedAt) {
+  if (!value || typeof value.turnHash !== 'string' || !/^[0-9a-f]{12}$/.test(value.turnHash)
+      || !planningStates.has(value.planningStatus)) return null;
+  const {turnHash, planningStatus, completedActions, failedActions, pendingActions, planningError} = value;
+  if (![completedActions, failedActions, pendingActions].every(n => Number.isSafeInteger(n) && n >= 0 && n <= 32)) return null;
+  const activity = {turnHash, planningStatus, completedActions, failedActions, pendingActions, updatedAt};
+  if (typeof planningError?.step === 'string' && diagnosticPart.test(planningError.step)
+      && typeof planningError.code === 'string' && diagnosticPart.test(planningError.code)) {
+    activity.planningError = {step:planningError.step, code:planningError.code};
   }
+  if (typeof value.transferError === 'string' && /^rendezvous_[a-z_]{1,65}$/.test(value.transferError)) {
+    activity.transferError = value.transferError;
+  }
+  return activity;
+}
+
+function communicationAllowed(turn, answer) {
+  if (!Object.hasOwn(answer, 'communication')) return true;
+  const msg = answer.communication, channel = turn.scene.communication;
+  return channel && msg && typeof msg === 'object' && Object.keys(answer).length === 1
+    && Object.keys(msg).every(key => ['mode','sourceEventId','text'].includes(key))
+    && typeof msg.text === 'string' && msg.text.trim() && [...msg.text.trim()].length <= channel.maxTextChars
+    && !/[\p{C}\p{Zl}\p{Zp}§]/u.test(msg.text)
+    && channel.outputs?.filter(o => o.mode === msg.mode && o.sourceEventId === msg.sourceEventId).length === 1;
 }
 
 // One scoped desktop grant and at most one pending decision per original body.
@@ -40,6 +57,12 @@ export class ResidentTurns {
     store.db.exec(`CREATE TABLE IF NOT EXISTS resident_onboarding (
       owner TEXT NOT NULL, code_hash TEXT UNIQUE, code_until INTEGER, token_hash TEXT UNIQUE, token_until INTEGER, connected TEXT)`);
     store.db.exec('CREATE TABLE IF NOT EXISTS resident_grants (role TEXT PRIMARY KEY, body TEXT, character TEXT, kind TEXT, game_owner TEXT, owner TEXT, hash TEXT, until INTEGER)');
+    for (const column of ['desktop','instance']) {
+      if (!store.db.prepare('PRAGMA table_info(resident_grants)').all().some(row => row.name === column))
+        store.db.exec('ALTER TABLE resident_grants ADD COLUMN ' + column + ' TEXT');
+    }
+    if (!store.db.prepare('PRAGMA table_info(resident_grants)').all().some(row => row.name === 'last_seen'))
+      store.db.exec('ALTER TABLE resident_grants ADD COLUMN last_seen INTEGER');
     store.db.exec(`CREATE TABLE IF NOT EXISTS resident_births (
       role TEXT PRIMARY KEY, body TEXT UNIQUE NOT NULL, kind TEXT NOT NULL, game_owner TEXT NOT NULL,
       character TEXT UNIQUE NOT NULL, owner TEXT NOT NULL, request TEXT NOT NULL, name TEXT NOT NULL,
@@ -50,7 +73,9 @@ export class ResidentTurns {
         id TEXT PRIMARY KEY, secret_hash TEXT UNIQUE NOT NULL, code_hash TEXT NOT NULL,
         until INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, owner TEXT, token_until INTEGER);
       CREATE TABLE IF NOT EXISTS resident_play_grants (
-        secret_hash TEXT PRIMARY KEY, owner TEXT NOT NULL, until INTEGER NOT NULL, client_id TEXT)`);
+        secret_hash TEXT PRIMARY KEY, owner TEXT NOT NULL, until INTEGER NOT NULL, client_id TEXT);
+      CREATE TABLE IF NOT EXISTS resident_body_views (
+        login_id TEXT PRIMARY KEY, owner TEXT, token_hash TEXT UNIQUE, until INTEGER NOT NULL)`);
     const bodies = new Set(), keys = new Set(), characters = new Set();
     for (const raw of [...(config.residentTurns ?? []), ...(config.residentCreationSlots ?? []).map(s => ({...s, fresh: true}))]) {
       const r = {...raw};
@@ -73,9 +98,9 @@ export class ResidentTurns {
           || keys.has(r.workerHash) || bodies.has(r.bodyId) || r.characterId && characters.has(r.characterId) || this.roles.has(r.id)) {
         throw Error('Invalid resident turn binding');
       }
-      const saved = store.db.prepare('SELECT owner,hash,until FROM resident_grants WHERE role=? AND body=? AND character=? AND kind=? AND game_owner=? AND until>?')
+      const saved = store.db.prepare('SELECT owner,hash,until,desktop,instance,last_seen FROM resident_grants WHERE role=? AND body=? AND character=? AND kind=? AND game_owner=? AND until>?')
         .get(r.id, r.bodyId, r.characterId, r.bodyKind, r.ownerGameId, this.now());
-      this.roles.set(r.id, {...r, grant: saved ? {...saved, lastPoll: -Infinity} : null, pending: null});
+      this.roles.set(r.id, {...r, grant: saved ? {...saved, lastPoll:saved.last_seen ?? -Infinity} : null, pending: null});
       bodies.add(r.bodyId); keys.add(r.workerHash); characters.add(r.characterId);
     }
   }
@@ -112,14 +137,25 @@ export class ResidentTurns {
     r.wake = null;
     r.pending?.finish(idle);
   }
-  grant(r, owner, origin, token = 'rdt_' + randomBytes(32).toString('base64url'), accountTokenHash = null) {
+  desktopController(r) {
+    if (!this.valid(r)) return null;
+    if (r.grant.desktop && this.now() - r.grant.lastPoll >= 20_000) {
+      this.clear(r);
+      return null;
+    }
+    return r.grant;
+  }
+  grant(r, owner, origin, token = 'rdt_' + randomBytes(32).toString('base64url'), accountTokenHash = null, desktop = null) {
     if (!this.owns(owner, r) || r.fresh && !r.ready) throw denied(409, 'RESIDENT_NOT_READY');
-    const grant = {owner, hash: hash(token), until: this.now() + idleExpiry, lastPoll: -Infinity};
+    if (r.grant?.desktop && this.desktopController(r)) throw denied(409,'DESKTOP_BODY_BUSY');
+    const grant = {owner, hash:hash(token), until:this.now() + (desktop ? desktopExpiry : idleExpiry),
+      lastPoll:desktop ? this.now() : -Infinity, desktop:desktop?.id ?? null, instance:desktop?.instance ?? null};
+    grant.last_seen = desktop ? grant.lastPoll : null;
     const db = this.store.db;
     db.exec('BEGIN IMMEDIATE');
     try {
-      db.prepare('INSERT OR REPLACE INTO resident_grants VALUES(?,?,?,?,?,?,?,?)')
-        .run(r.id,r.bodyId,r.characterId,r.bodyKind,r.ownerGameId,owner,grant.hash,grant.until);
+      db.prepare('INSERT OR REPLACE INTO resident_grants(role,body,character,kind,game_owner,owner,hash,until,desktop,instance,last_seen) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
+        .run(r.id,r.bodyId,r.characterId,r.bodyKind,r.ownerGameId,owner,grant.hash,grant.until,grant.desktop,grant.instance,grant.last_seen);
       db.prepare('DELETE FROM resident_pair_codes WHERE role=?').run(r.id);
       if (accountTokenHash) {
         const result = db.prepare('UPDATE resident_onboarding SET connected=? WHERE token_hash=? AND owner=? AND connected IS NULL AND token_until>?')
@@ -177,7 +213,7 @@ export class ResidentTurns {
       .run(owner,hash(code),expiresAt);
     return {code,expiresAt};
   }
-  startBrowserLogin() {
+  startBrowserLogin({bodyRead = false} = {}) {
     const id = randomUUID();
     const secret = 'rba_' + randomBytes(32).toString('base64url');
     const code = String(randomInt(1_000_000)).padStart(6, '0');
@@ -186,9 +222,11 @@ export class ResidentTurns {
     db.prepare('DELETE FROM resident_browser_logins WHERE until<=?').run(this.now());
     db.prepare('INSERT INTO resident_browser_logins(id,secret_hash,code_hash,until) VALUES(?,?,?,?)')
       .run(id,hash(secret),hash(id + code),expiresAt);
+    db.prepare('DELETE FROM resident_body_views WHERE until<=?').run(this.now());
+    if (bodyRead === true) db.prepare('INSERT INTO resident_body_views(login_id,until) VALUES(?,?)').run(id,expiresAt);
     return {id,secret,code,expiresAt};
   }
-  approveBrowserLogin(owner, {id, code, player = false}) {
+  approveBrowserLogin(owner, {id, code, player = false, bodyRead = false}) {
     if (typeof id !== 'string' || !uuid.test(id) || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
       throw denied(400,'INVALID_BROWSER_LOGIN');
     }
@@ -209,6 +247,9 @@ export class ResidentTurns {
           db.prepare('INSERT INTO resident_play_grants(secret_hash,owner,until) VALUES(?,?,?)')
             .run(pending.secret_hash,owner,now + accountExpiry);
         }
+        if (changed.changes && bodyRead === true) {
+          db.prepare('UPDATE resident_body_views SET owner=?,until=? WHERE login_id=? AND until>?').run(owner,now + accountExpiry,id,now);
+        }
         db.exec('COMMIT');
       } catch (error) { db.exec('ROLLBACK'); throw error; }
     }
@@ -228,8 +269,21 @@ export class ResidentTurns {
       .run(pending.owner,hash(token),pending.token_until);
     const playerAuthorization = db.prepare('SELECT until FROM resident_play_grants WHERE secret_hash=? AND owner=? AND until>?')
       .get(pending.secret_hash,pending.owner,now)?.until;
+    const view = db.prepare('UPDATE resident_body_views SET token_hash=? WHERE login_id=? AND owner=? AND until>? RETURNING until')
+      .get(hash(token),pending.id,pending.owner,now);
     return {state:'authorized',onboardingToken:token,expiresAt:pending.token_until,
+      ...(view ? {bodyReadExpiresAt:view.until} : {}),
       ...(playerAuthorization ? {playerAuthorizationExpiresAt:playerAuthorization} : {})};
+  }
+  bodyViewOwner(req) {
+    if (req.method !== 'GET' || req.headers.origin || req.headers.cookie) throw denied(403,'PLUGIN_READ_ONLY');
+    const token = (req.headers.authorization || '').match(/^Bearer (rot_[A-Za-z0-9_-]{43})$/)?.[1];
+    const now = this.now();
+    const view = token && this.store.db.prepare(`SELECT v.owner FROM resident_body_views v
+      JOIN resident_onboarding o ON o.token_hash=v.token_hash AND o.owner=v.owner
+      WHERE v.token_hash=? AND v.until>? AND o.token_until>? AND o.connected IS NULL`).get(hash(token),now,now);
+    if (!view || !this.store.ownerById(view.owner)) throw denied(401,'BODY_VIEW_AUTHORIZATION_REQUIRED');
+    return {id:view.owner};
   }
   preparePlayer(req, input, prepare) {
     if (req.method !== 'POST' || req.headers.origin || req.headers.cookie) throw denied(403,'PLUGIN_REQUIRED');
@@ -257,7 +311,7 @@ export class ResidentTurns {
     const input = await jsonBody(req, op === 'create' ? 8192 : 512), db = this.store.db;
     if (op === 'browser-start') {
       if (req.headers.authorization) throw denied(403,'PLUGIN_REQUIRED');
-      return respond(res,201,this.startBrowserLogin());
+      return respond(res,201,this.startBrowserLogin(input));
     }
     if (op === 'browser-status') return respond(res,200,this.browserLoginStatus(req));
     if (op === 'pair') {
@@ -293,9 +347,11 @@ export class ResidentTurns {
     if (!value?.startsWith(worker ? 'rwt_' : 'rdt_') || !expected
         || !timingSafeEqual(Buffer.from(hash(value)), Buffer.from(expected))) throw denied(401, 'INVALID_RESIDENT_TOKEN');
     if (!worker && !this.valid(r)) throw denied(401, 'RESIDENT_GRANT_EXPIRED');
+    if (!worker && r.grant.desktop && !this.desktopAuthority?.(r.grant, req)) throw denied(401,'INVALID_RESIDENT_DEVICE');
   }
   valid(r) {
     if (r.grant && r.grant.until > this.now() && this.owns(r.grant.owner, r)
+        && (!r.grant.desktop || this.desktopAuthority?.(r.grant))
         && this.store.db.prepare('SELECT 1 FROM resident_grants WHERE role=? AND hash=?').get(r.id, r.grant.hash)) return true;
     this.clear(r);
     return false;
@@ -307,6 +363,12 @@ export class ResidentTurns {
     const worker = ['offer','check','activation'].includes(match[2]);
     try { this.authorize(r,req,worker); return (worker ? 'worker:' : 'desktop:') + r.id; }
     catch { return; }
+  }
+  operatorActivity() {
+    const freshAfter = this.now() - 20_000;
+    return [...this.roles.values()]
+      .filter(r => r.activity?.updatedAt > freshAfter)
+      .map(r => ({role:r.id, name:r.name, ...r.activity}));
   }
   async machine(req, res, pathname, jsonBody, respond) {
     const match = /^\/api\/v1\/resident-turns\/([a-z][a-z0-9_-]{1,31})\/(offer|poll|reply|begin|check|activation)$/.exec(pathname);
@@ -328,6 +390,7 @@ export class ResidentTurns {
       }
       result = {activation: born ? {characterId:born.character,name:born.name,persona:born.persona} : null};
     } else if (op === 'check') {
+      if (input?.activity !== undefined) r.activity = residentActivity(input.activity, this.now());
       result = {requestId: this.valid(r) && r.wake?.until > this.now() ? r.wake.id : null};
     } else if (op === 'begin') {
       r.grant.lastPoll = this.now();
@@ -335,16 +398,32 @@ export class ResidentTurns {
       result = {state:'requested',requestId:r.wake.id};
     } else if (op === 'poll') {
       r.grant.lastPoll = this.now();
-      if (r.grant.until - this.now() < idleExpiry - 300_000) {
-        r.grant.until = this.now() + idleExpiry;
+      if (r.grant.desktop && r.grant.lastPoll - r.grant.last_seen >= 5_000) {
+        r.grant.last_seen = r.grant.lastPoll;
+        this.store.db.prepare('UPDATE resident_grants SET last_seen=? WHERE role=? AND hash=?').run(r.grant.last_seen,r.id,r.grant.hash);
+      }
+      const expiry = r.grant.desktop ? desktopExpiry : idleExpiry;
+      if (r.grant.until - this.now() < expiry - 300_000) {
+        r.grant.until = this.now() + expiry;
         this.store.db.prepare('UPDATE resident_grants SET until=? WHERE role=? AND hash=?').run(r.grant.until, r.id, r.grant.hash);
       }
       result = {turn: r.pending?.turn ?? null};
     } else if (op === 'reply') {
-      if (!r.pending || r.pending.turn.id !== input.id || this.now() >= r.pending.turn.until) throw denied(409, 'STALE_TURN');
-      if (!input.answer || typeof input.answer !== 'object' || Array.isArray(input.answer)) throw denied(400, 'INVALID_DECISION');
-      validateCommunication(r.pending.turn,input.answer);
-      r.pending.finish({state: 'answered', id: input.id, answer: input.answer});
+      const pending = r.pending;
+      const id = input?.id;
+      const turn = pending?.turn;
+      let reason;
+      if (!turn || turn.id !== id || this.now() >= turn.until) reason = 'STALE_TURN';
+      else if (!input.answer || typeof input.answer !== 'object' || Array.isArray(input.answer)) reason = 'INVALID_DECISION';
+      else if (!communicationAllowed(turn,input.answer)) reason = 'COMMUNICATION_UNAVAILABLE';
+      if (!reason) pending.finish({state: 'answered', id, answer: input.answer});
+      if (typeof id === 'string' && uuid.test(id)) {
+        console.info(JSON.stringify({
+          event: 'resident_turn', stage: 'portal_reply', role: r.id, turnHash: hash(id).slice(0,12),
+          status: reason ? 'rejected' : 'accepted', ...(reason ? {reason} : {kind: turn.kind})
+        }));
+      }
+      if (reason) throw denied(reason === 'STALE_TURN' ? 409 : 400, reason);
       result = {accepted: true};
     } else {
       if (input.bodyId !== r.bodyId || input.characterId !== r.characterId || input.bodyKind !== r.bodyKind || input.ownerGameId !== r.ownerGameId

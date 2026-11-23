@@ -4,7 +4,6 @@ import { JSDOM } from 'jsdom';
 import { siteFixture } from './helpers.mjs';
 import { agentClients, getAgentClients } from '../src/agent-clients.mjs';
 import { skillAt,agentSkill } from '../src/agent-skill.mjs';
-import {createHash} from 'node:crypto';
 
 test('public discovery and fetch-only documentation share all adapter and parent links without credentials', async t => {
  const f=await siteFixture(t);
@@ -18,11 +17,12 @@ test('public discovery and fetch-only documentation share all adapter and parent
   const links=new Set([...dom.window.document.querySelectorAll('a[href]')].map(a=>a.href));
   for(const client of agentClients){assert.ok(links.has(client.source));if(client.framework)assert.ok(links.has(client.framework.url));if(client.releases)assert.ok(links.has(client.releases));}
   assert.ok(links.has(f.origin+'/downloads/agent-skill'));assert.ok(!html.includes('agent-mc-world 0.4.0'));
+  if (page === '/agent-api.html') {
+    assert.match(html, /单角色外观凭据时，使用 <code>--token-file/);
+    assert.doesNotMatch(html, /旧客户端把|旧分步工具继续兼容/);
+  }
   dom.window.close();
  }
- for(const release of [skillAt('/downloads/qiandengji-agent-1.0.0.zip'),skillAt('/downloads/qiandengji-agent-1.1.0.zip')]){
-  const response=await fetch(f.origin+release.url),bytes=Buffer.from(await response.arrayBuffer());
-  assert.equal(response.status,200);assert.equal(createHash('sha256').update(bytes).digest('hex'),release.sha256);
- }
+ assert.equal(skillAt('/downloads/agent-skill'), agentSkill);
  assert.equal(skillAt('/downloads/arbitrary.zip'),undefined);
 });

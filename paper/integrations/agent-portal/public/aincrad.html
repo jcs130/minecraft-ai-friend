@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>重返艾恩葛朗特·破晓攻略 · 千灯纪版本指南</title>
-  <meta name="description" content="10月30日现役玩法：Vortex六职业、基础技能、冒险委托、远程个人箱、试炼塔和限时遗迹。先看本人的状态，再踏上攻略之路。">
+  <meta name="description" content="千灯纪冒险指南：Vortex六职业、基础技能、冒险委托、远程个人箱、试炼塔和限时遗迹。先看本人的状态，再踏上攻略之路。">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/aincrad.css">
   <link rel="icon" href="/assets/lantern.svg" type="image/svg+xml">
@@ -15,19 +15,12 @@
   <p class="eyebrow">刀剑神域主题 · Minecraft 玩法适配</p>
   <h1>重返艾恩葛朗特<br><em>破晓攻略</em></h1>
   <p class="lead">选择职业、学习战技，与伙伴踏上攻略之路。</p>
-  <nav aria-label="攻略快捷入口"><a href="/#help">加入世界</a><a href="/#challenges">挑战战报</a><a href="/#live">网页观战</a><a href="#latest">最新更新</a></nav>
+  <nav aria-label="攻略快捷入口"><a href="/#help">加入世界</a><a href="/#challenges">挑战战报</a><a href="/#live">网页观战</a><a href="#dungeons">挑战规则</a></nav>
   <figure class="season-figure">
     <img class="season-art" src="/season-art/aincrad-dusk-20261030-960.webp" srcset="/season-art/aincrad-dusk-20261030-640.webp 640w, /season-art/aincrad-dusk-20261030-960.webp 960w, /season-art/aincrad-dusk-20261030-1440.webp 1440w" sizes="(max-width:960px) calc(100vw - 40px), 920px" width="1536" height="1024" fetchpriority="high" alt="可米与伙伴眺望灯火中的起始之城和浮空城 · AI场景概念图，并非地图实景">
     <figcaption>千灯纪 · 冒险季概念图。真实游戏画面见<a href="/#live">网页观战</a>与<a href="/#gallery">相机展廊</a>。</figcaption>
   </figure>
-  <section id="latest" class="season-latest" aria-labelledby="latest-title">
-    <p class="eyebrow"><time datetime="2026-10-30">2026 年 10 月 30 日</time> · 已在正式服生效</p>
-    <h2 id="latest-title">看清这一场，再继续挑战。</h2>
-    <p>遗迹现在明确显示本人是否参战、救援是否适用，以及本场剩余时间。常规场次限时30分钟，普通掉线继续计时；超时、退出或场次结束后，旧存档点和救援不再有效。存活者会留在原地，请及时撤离。</p>
-    <p>试炼塔与遗迹分别攻略。普通试炼每次新开从第1层开始，开场免费，清层后10秒自动下楼；旧通关记录不跳层。远程个人箱、任务放弃与自愿集结也已接入现有指引。</p>
-    <a href="#dungeons">先看挑战规则 ↓</a>
-  </section>
-  <aside class="notice">本季采用Vortex六职业、技能、天赋、战斗经验和任务体系。旧四职业与技能点归档，新职业由本人主动选择；背包、个人箱、副本成绩和已获证书保留。原版Java、Mineflayer、Numen与基岩版共用规则。后续楼层逐步建设。</aside>
+  <aside class="notice">本季采用Vortex六职业、技能、天赋、战斗经验和任务体系。在游戏内查看职业详情并选择自己的职业。原版Java、Mineflayer、Numen与基岩版共用规则。</aside>
   <h2>四步开始冒险</h2>
   <ol>
     <li><code>/mycli status</code> 看本人状态与下一步；<code>/mycli progress</code> 看任务、冒险者认证和考试。先核对世界，跨维度的相同坐标不代表在一起。</li>
@@ -52,12 +45,15 @@
   <h2>委托、认证与积分</h2>
   <p>初战可选 <code>qd_first_hunt</code>；城市巡访 <code>qd_city_scout</code>；制作装备 <code>qd_field_kit</code>。巡访会给维度、坐标和范围，实际制作不能用从箱子拿取代替。种植不是升级或进副本的前置。</p>
   <p><code>/mycli tasks status</code> 查实际缺项，达标后 <code>tasks claim &lt;ID&gt;</code> 主动交付。经验保存、金币入账后才确认；“奖励待核对”时联系服主，不重领。不继续的任务用 <code>tasks abandon &lt;ID&gt;</code>，放弃不发奖，再接会重新计数。超时先查状态，不重放操作。</p>
-  <p>旧公会探索单保留在 <code>/mycli guild status</code>、<code>guild verify</code>、<code>guild claim</code>；放弃用 <code>guild abandon</code>。不要把新旧任务的交付入口混用。</p>
+  <p>公会探索委托可用 <code>/mycli guild status</code>、<code>guild verify</code>、<code>guild claim</code>；放弃用 <code>guild abandon</code>。按委托类型选择交付入口。</p>
   <p>战斗等级来自Vortex经验，冒险者段位来自声望与认证，副本积分来自真实结算，分别记录。总览用 <code>/mycli progress</code>；<code>guild exam list</code> 查考试，<code>guild exam status</code> 看缺项，ready后 <code>guild exam submit</code> 交卷。已有证书保留，晋级需本人参加晋级考试。</p>
   <h2 id="dungeons">遗迹：逐室攻略，留意本场时限</h2>
   <p><code>/mycli dungeon list</code> 选当前可开地点，<code>dungeon info &lt;ID&gt;</code> 查难度、装备和组队建议。第一层 <code>aincrad_01</code> 建议战斗Lv.3、铁甲、盾与治疗，允许单人或组队。</p>
-  <p>开场或加入前必须穿齐头盔、胸甲、护腿、靴子，并携带可用战斗装备：剑斧、弓弩，或本人职业可用的法杖、圣典、图腾、工具包；不强制带剑。缺项会明确列出，不创建场次。先用 <code>/mycli guild shared</code> 查公共补给，亲自领取并穿戴。</p>
-  <p><code>/mycli dungeon travel aincrad_01</code> 到前哨，耗8魔力。到首室后主动 <code>dungeon start aincrad_01 normal</code>；原生队伍先用 <code>guild party</code> 建队、邀请、本人接受，全员在线、装备达标到首室后，由队长开场一次登记全队。临时加入按回执使用 <code>dungeon join aincrad_01</code>。</p>
+  <p>开场或加入前穿齐头盔、胸甲、护腿和靴子，随身带一件近战武器与另一件可用远程武器。远程可选有弹药的弓弩、可投掷的三叉戟或本职业的攻击法器。缺装备时可用 <code>/mycli guild shared</code> 查看共享补给。</p>
+  <p>先用 <code>/mycli dungeon info aincrad_01</code> 查看入口和当前场次。执行 <code>/mycli dungeon travel aincrad_01</code> 前往当前指引的入口，成功耗8魔力。到首室后由一人执行 <code>/mycli dungeon start aincrad_01 normal</code>；符合条件且装备达标的玩家和 Agent 自动同队。若自己还未登记，可用 <code>/mycli dungeon join aincrad_01</code> 查原因和确认选项。以状态页的实际参战名单为准。</p>
+  <h3>第一层 · 失联信标</h3>
+  <p>当遗迹菜单显示「失联信标」时，可以在东侧前哨选择暗道侦察或正面破门。西廊救援需要护送队员本人进入安全区。到南廊营地后可调整个人祝福，再上看台关闭两处封印，或走下层宝库迎战守卫。</p>
+  <p>Numen 和其他 Agent 可用 <code>/mycli dungeon status aincrad_01 --json</code> 查本场目标与可用选项。走到标记附近，再执行该选项返回的命令。只有状态显示 <code>rescue=safe</code> 才算护送成功。</p>
   <ul>
     <li><strong>每场都核对本人。</strong><code>/mycli dungeon status &lt;ID&gt;</code> 显示本人参战、救援与剩余时间。地点“有场次”可能是别的队伍，原生队伍也不等于已经参战。</li>
     <li><strong>有限续关。</strong>有效遗迹内，单人战败或全队倒下，前两次回到上个已清房间的存档点，第3次结束。成功队友救援不扣机会；断线或服务器重启不扣战败次数。</li>
@@ -66,21 +62,20 @@
     <li><strong>结束就撤离。</strong>超时、退出或本场结束后，救援和旧存档点失效；存活者留在原地，不会自动传送。<code>dungeon leave</code> 退出登记也不代传送，随后安全撤离。</li>
     <li><strong>沿原门和楼梯走。</strong>副本建筑不能凿墙绕过。Boss房间有队伍挑战时，其他队伍不能进入，观战除外。</li>
   </ul>
-  <p>清完规定房间后回首室，<code>dungeon claim &lt;ID&gt;</code> 领副本奖励。先接 <code>qd_floor_clear</code> 还可交付对应RPG任务。占用、关闭或故障先查状态，改选挑战或联系服主，不在墓穴入口空等。真正死亡也先读最终回执，重生后核对库存；服务器保留背包装备，金币与经验另查实际状态。</p>
+  <p>最后一室清完后，服务器按参战记录生成个人奖励。在当前位置用 <code>/mycli dungeon claim &lt;ID&gt;</code> 领取到个人箱。先接 <code>qd_floor_clear</code> 还可交付对应RPG任务。占用、关闭或故障先查状态，改选挑战或联系服主，不在墓穴入口空等。真正死亡也先读最终回执，重生后核对库存；服务器保留背包装备，金币与经验另查实际状态。</p>
   <h2>试炼塔：每次从第一层开始</h2>
-  <p>试炼塔是另一处地点，不要去遗迹找第2层。先 <code>/mycli arena status</code> 查下一步，<code>goto arena</code> 成功耗6魔力到主世界入口，按钮在 <code>(-596,92,-313)</code>。四甲与职业武器备齐，参与者到按钮12格内，由一人 <code>arena start</code>。</p>
-  <p><strong>开场免费，每次新开从第1层开始，历史通关不跳层。</strong>清层后10秒自动下楼，不另找下一层入口。已通关第6层者可另用 <code>arena rest</code>，支付8魔力到第7层驿站；它与普通start分开。用 <code>arena status</code> 核对真实参战名单和下一步，查询不会击杀敌人或推进任务。</p>
+  <p>试炼塔是另一处地点，不要去遗迹找第2层。先 <code>/mycli arena status</code> 查下一步，<code>goto arena</code> 成功耗6魔力到主世界入口，按钮在 <code>(-596,92,-313)</code>。备齐入场装备后，一起站到入口平台，由一人按按钮或执行 <code>arena start</code>。桥上和观战角色不计入集结。</p>
+  <p><strong>开场免费，每次新开从第1层开始，历史通关不跳层。</strong>清层后恢复生命与魔力、清除负面状态，10秒后自动下楼；全部通关后自动返回入口平台。已通关第6层者可另用 <code>arena rest</code>，支付8魔力到第7层驿站；它与普通start分开。用 <code>arena status</code> 核对真实参战名单和下一步，查询不会击杀敌人或推进任务。</p>
   <p><code>/mycli world events</code> 查自愿集结，公告不会代接任务或传送；没有公告也可自行组队挑战。<code>world list --page 1</code> 按页查现有玩法。成绩只按真实结算展示，抵达入口不算通关。</p>
   <h2>满包时，先存箱再继续</h2>
   <p><code>/mycli arena stash</code> 远程开个人奖励箱，共10页，成功开页耗2魔力；与普通背包、54格大背包分开。<code>arena rewards list</code> 查待入箱奖励，<code>arena stash list</code> 查已存物。</p>
   <p>Agent可直接存材料：先 <code>arena stash inventory</code> 查服务器背包槽，再 <code>arena stash putslot &lt;背包0–35槽&gt; &lt;1–64数量&gt;</code>，成功2魔力，无需GUI或跑回村。存后查 <code>arena stash list</code>；取物用 <code>arena stash page 1</code>。箱槽1–540与背包槽不同。大背包入口仍是 <code>/minepacks:backpack open</code>。存取要等实际库存、容器与光标确认，超时先查询。</p>
-  <p>装备回收先 <code>arena recycle list</code> 查报价，再按帮助卖出；不会自动扔物。<code>/mycli trade wallet</code> 查金币，任务、回收和商店共用同一余额；原版绿宝石是另一种物品。玩家交易委托从 <code>commission --help</code> 查询，拍卖暂不可用，不承诺未验收的交易功能。</p>
+  <p>装备回收先 <code>arena recycle list</code> 查报价，再按帮助卖出；不会自动扔物。<code>/mycli trade wallet</code> 查金币，任务、回收和商店共用同一余额；原版绿宝石是另一种物品。在游戏内商城查看当前商品、回收报价与玩家上架的物品。</p>
   <h2>公会、邻里与自己的形象</h2>
   <p><code>/warp aincrad</code> 去起始之城，<code>/warp village</code> 回村，各需6魔力；两地也有传送门。主城保留建筑保护，城内可放置，不能挖坏原建筑；城外可探索拆建，独立副本保护仍有效。</p>
   <p><code>/mycli world npcs</code> 查公会接待、职业导师和攻略情报员的真实世界与坐标，靠近交谈。台词与世界线由服主女神维护，聊天不能替代任务验收和发奖。普通聊天发给同世界48格内的人；<code>!内容</code> 是全服喊话，私聊用原版 <code>/msg 玩家 内容</code>。</p>
   <p>本人用 <code>/skins</code> 打开皮肤画廊，<code>/skin set &lt;皮肤名&gt;</code> 换肤；<code>/appearance list</code> 查模型与贴图，<code>/appearance set &lt;模型&gt; &lt;贴图&gt;</code> 选YSM。外观由本人选择，不强制换装。</p>
   <p>旅途中用女神相机拍照、写下日记。照片全量保存，由本人或管理员决定公开；公开作品会进入官网展廊，概念图不会冒充游戏照片。</p>
-  <p class="season-guide-version">本页对应已部署 AF 0.4.47.34-vortex / RPG桥 0.2.12。查询以服务器当前配置与本人的实际回执为准，客户端旧资料不能覆盖现场规则。</p>
   <nav aria-label="继续探索"><a href="/#home">世界首页</a><a href="/#challenges">挑战战报</a><a href="/#live">网页观战</a><a href="/#connections">Agent接入</a></nav>
 </main>
 </body>

@@ -17,6 +17,15 @@ public final class AdventureMenuModelTest {
             check(buttons.stream().noneMatch(b->b.action()==Action.COMMON_USE||b.action()==Action.TIDY_BAG_CONFIRM||b.action()==Action.TIDY_STASH_CONFIRM),"no immediate destructive action "+page);
         }
         check(category(Page.HOME).stream().allMatch(b->destination(b.action())!=null),"home only navigates");
+        var book=category(Page.BOOK);
+        check(book.stream().map(Button::slot).distinct().count()==book.size(),"destiny book menu uses unique controller buttons");
+        check(book.stream().anyMatch(b->b.action()==Action.SKILL_MENU),"destiny book reaches the existing profession skill menu");
+        check(book.stream().anyMatch(b->b.action()==Action.WHEEL_EDIT&&destination(b.action())==Page.WHEEL_EDIT),"destiny book opens slot selection without a command");
+        check(book.contains(staffSpellButton())&&staffSpellButton().action()==Action.SPELLBOOK_MENU,
+            "book and growth expose the same native staff spell picker");
+        check(destination(staffSpellButton().action())==null,"the native staff spell picker is dispatched as a gameplay menu");
+        check(book.stream().anyMatch(b->b.action()==Action.BOOK_READ),"destiny book still reaches its original pages");
+        check(book.stream().noneMatch(b->Set.of(Action.COMMON_USE,Action.WHEEL_CAST,Action.WHEEL_ASSIGN).contains(b.action())),"opening the destiny book never casts or changes a skill");
         check(parent(Page.COMMON_DETAIL)==Page.COMMON&&parent(Page.TIDY_STASH)==Page.STORAGE,"return to context");
         check(SIZE==36&&Arrays.stream(CONTENT).distinct().count()==14,"vanilla four-row grid");
         try{new View(Page.HOME,"","a","b",List.of(button(10,Action.HOME,"COMPASS","a"),button(10,Action.CLOSE,"BARRIER","b")));throw new AssertionError("duplicate accepted");}catch(IllegalArgumentException expected){checks++;}
@@ -28,7 +37,17 @@ public final class AdventureMenuModelTest {
         check(destination(Action.TRAVEL)==Page.TRAVEL,"travel is one navigation action, never a cast");
         check(destination(Action.WHEEL_EDIT)==Page.WHEEL_EDIT&&parent(Page.WHEEL_EDIT)==Page.WHEEL,"wheel settings return to casting wheel");
         check(parent(Page.WHEEL_PICK)==Page.WHEEL_EDIT&&destination(Action.WHEEL_ASSIGN)==null,"skill selection is a guarded preference write, not a page or cast");
+        check(destination(Action.COMMON_EQUIP)==null,"a skill-first shortcut carries the selected skill to its slot list");
         check(category(Page.TRAVEL).stream().anyMatch(b->b.action()==Action.COMMON_DETAIL&&b.payload().equals("home")),"home shows spell details first");
+        check(destination(Action.ONBOARDING)==Page.ONBOARDING,"the compass opens the shared welcome screen");
+        check(onboardingNext("register").payload().equals("register")&&onboardingNext("guide_start").payload().equals("guide_start"),
+                "registration and enrollment require separate clicks");
+        check(onboardingNext("catalog").action()==Action.COMMON&&onboardingNext("cast").action()==Action.COMMON_DETAIL,
+                "open the actual catalogue, show a spell before casting");
+        check(onboardingNext("guild_progress").action()==Action.CONTRACT_MENU&&onboardingNext("life_claim").payload().equals("life_claim"),
+                "resume existing commissions");
+        check(onboardingNext("complete").action()==Action.ADVENTURE&&onboardingNext("unknown")==null,
+                "completed and unknown states have no onboarding writes");
         UUID owner=UUID.randomUUID(),other=UUID.randomUUID();Ticket ticket=new Ticket(owner,1000);
         check(partyAction("create",true,false,null).equals("create"),"explicit own party creation");
         check(partyAction("create",false,false,null)==null,"unknown party state never creates");

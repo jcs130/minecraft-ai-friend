@@ -13,14 +13,14 @@ test('Aincrad release is readable without login or JavaScript and serves respons
   assert.equal(document.querySelectorAll('script[src="/site-shell.js"]').length, 1, 'navigation enhancement is optional; guide text remains server-rendered');
   assert.match(document.querySelector('h1').textContent, /重返艾恩葛朗特.*破晓攻略/);
   assert.match(document.body.textContent, /Vortex六职业/);
-  assert.match(document.body.textContent, /后续楼层逐步建设/);
+  assert.doesNotMatch(document.body.textContent, /旧四职业与技能点归档/);
   assert.match(document.body.textContent, /耗8魔力/);
   assert.match(document.body.textContent, /开页耗2魔力/);
   assert.match(document.body.textContent, /聊天不能替代任务验收和发奖/);
   for(const id of ['knight','mage','ranger','cleric','beastmaster','engineer'])assert.match(document.body.textContent,new RegExp(id));
   assert.match(document.body.textContent,/奖励待核对/);
-  assert.match(document.body.textContent,/必须穿齐头盔、胸甲、护腿、靴子/);
-  assert.match(document.body.textContent,/不强制带剑/);
+  assert.match(document.body.textContent,/穿齐头盔、胸甲、护腿和靴子/);
+  assert.match(document.body.textContent,/近战武器与另一件可用远程武器/);
   assert.equal(document.querySelectorAll('a[href^="/#"]').length >= 4, true);
   for (const element of document.querySelectorAll('link[rel="stylesheet"],img')) {
     const url = element.getAttribute('href') || element.getAttribute('src');
@@ -49,8 +49,11 @@ test('the public guide distinguishes current rescue, ended runs and ordinary tow
   const document = new JSDOM(await (await fetch(f.origin + '/aincrad.html')).text());
   t.after(() => document.window.close());
   const text = document.window.document.body.textContent;
-  assert.match(document.window.document.querySelector('#latest').textContent, /已在正式服生效/);
-  assert.match(text, /AF 0\.4\.47\.34-vortex/);
+  assert.match(text, /一起站到入口平台/);
+  assert.match(text, /装备达标的玩家和 Agent 自动同队/);
+  assert.match(text, /在当前位置用 .*领取到个人箱/);
+  assert.match(text, /全部通关后自动返回入口平台/);
+  assert.doesNotMatch(text, /AF 0\.4\.47\.34-vortex|2026 年 10 月 30 日|按钮12格/);
   assert.match(text, /常规限时30分钟/);
   assert.match(text, /普通断线期间继续计时/);
   assert.match(text, /第3次结束/);

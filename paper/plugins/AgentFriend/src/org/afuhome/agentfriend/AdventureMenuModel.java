@@ -9,14 +9,15 @@ final class AdventureMenuModel {
     static final int[] CONTENT={10,11,12,13,14,15,16,19,20,21,22,23,24,25};
     // The optional Controls mod draws these positions around a wheel and sends ordinary menu clicks.
     static final int[] WHEEL_CELLS={10,11,12,13,14,15,16,19};
-    enum Page { HOME,TRAVEL,GROWTH,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,COMMON_DETAIL,WHEEL,WHEEL_EDIT,WHEEL_PICK,CHARACTER,TIDY_BAG,TIDY_STASH,PARTY,PARTY_CONFIRM,HELP,ERROR }
+    enum Page { HOME,TRAVEL,TRAVEL_CONFIRM,GROWTH,BOOK,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,COMMON_DETAIL,WHEEL,WHEEL_EDIT,WHEEL_PICK,CHARACTER,TIDY_BAG,TIDY_STASH,PARTY,PARTY_CONFIRM,HELP,ONBOARDING,GUIDE_COMPANION,GUIDE_CLASS,GUIDE_SKILLS,ERROR }
     enum Action {
         NONE,CLOSE,BACK,HOME,TRAVEL,GROWTH,ADVENTURE,STORAGE,TRADE,SOCIAL,MEMORIES,COMMON,CHARACTER,HELP,
-        CLASS_MENU,SKILL_MENU,TALENT_MENU,QUEST_MENU,COMMON_DETAIL,COMMON_PAGE,COMMON_USE,WHEEL,WHEEL_PAGE,WHEEL_CAST,WHEEL_EDIT,WHEEL_SLOT,WHEEL_PICK_PAGE,WHEEL_ASSIGN,WHEEL_CLEAR,WHEEL_DEFAULTS,
-        TRAINING_MENU,CONQUEST_MENU,DUNGEON_MENU,GUILD_MENU,CONTRACT_MENU,PLACES_MENU,
+        BOOK_READ,CLASS_MENU,SKILL_MENU,SPELLBOOK_MENU,TALENT_MENU,QUEST_MENU,COMMON_DETAIL,COMMON_PAGE,COMMON_USE,COMMON_EQUIP,WHEEL,WHEEL_PAGE,WHEEL_CAST,WHEEL_EDIT,WHEEL_SLOT,WHEEL_PICK_PAGE,WHEEL_ASSIGN,WHEEL_CLEAR,WHEEL_DEFAULTS,
+        TRAINING_MENU,CONQUEST_MENU,DUNGEON_MENU,GUILD_MENU,CONTRACT_MENU,PLACES_MENU,TRAVEL_APPLY,
         BACKPACK,STASH,TIDY_BAG,TIDY_STASH,TIDY_BAG_CONFIRM,TIDY_STASH_CONFIRM,
         SHOP_MENU,RECYCLE_MENU,AUCTION_MENU,PARTY,PARTY_CONFIRM,PARTY_APPLY,PARTY_MENU,PLAYERS_MENU,WAYPOINTS_MENU,
-        PHOTO_MENU,ARCHIVE_MENU,SKIN_MENU,LEGACY_SHORTCUTS,ONBOARDING
+        PHOTO_MENU,ARCHIVE_MENU,SKIN_MENU,LEGACY_SHORTCUTS,ONBOARDING,ONBOARDING_NEXT,ONBOARDING_DETAILS,CHAT_RULES,
+        GUIDE_COMPANION,GUIDE_CLASS,GUIDE_SKILLS,GUIDE_CLASS_DETAIL,GUIDE_SKILL_DETAIL,GUIDE_ACTION
     }
     record Button(int slot,Action action,String payload,String icon,String title,List<String> lore) {
         Button {
@@ -38,10 +39,12 @@ final class AdventureMenuModel {
         case HOME->Page.HOME;case TRAVEL->Page.TRAVEL;case GROWTH->Page.GROWTH;case ADVENTURE->Page.ADVENTURE;case STORAGE->Page.STORAGE;
         case TRADE->Page.TRADE;case SOCIAL->Page.SOCIAL;case MEMORIES->Page.MEMORIES;case COMMON->Page.COMMON;
         case WHEEL->Page.WHEEL;case WHEEL_EDIT->Page.WHEEL_EDIT;case CHARACTER->Page.CHARACTER;case TIDY_BAG->Page.TIDY_BAG;case TIDY_STASH->Page.TIDY_STASH;case PARTY->Page.PARTY;case HELP->Page.HELP;
+        case ONBOARDING->Page.ONBOARDING;
+        case GUIDE_COMPANION->Page.GUIDE_COMPANION;case GUIDE_CLASS->Page.GUIDE_CLASS;case GUIDE_SKILLS->Page.GUIDE_SKILLS;
         default->null;
     };}
     static Page parent(Page page){return switch(page){
-        case COMMON,CHARACTER,WHEEL->Page.GROWTH;case WHEEL_EDIT->Page.WHEEL;case WHEEL_PICK->Page.WHEEL_EDIT;case COMMON_DETAIL->Page.COMMON;case TIDY_BAG,TIDY_STASH->Page.STORAGE;case PARTY_CONFIRM->Page.PARTY;case PARTY,HELP->Page.SOCIAL;default->Page.HOME;
+        case COMMON,CHARACTER,WHEEL->Page.GROWTH;case WHEEL_EDIT->Page.WHEEL;case WHEEL_PICK->Page.WHEEL_EDIT;case COMMON_DETAIL->Page.COMMON;case TIDY_BAG,TIDY_STASH->Page.STORAGE;case PARTY_CONFIRM->Page.PARTY;case PARTY,HELP->Page.SOCIAL;case GUIDE_CLASS,GUIDE_SKILLS->Page.GUIDE_COMPANION;default->Page.HOME;
     };}
     /** Revalidate an explicit choice against the current native invitation, never a cached roster. */
     static String partyAction(String token,boolean available,boolean inParty,String inviter){
@@ -70,10 +73,19 @@ final class AdventureMenuModel {
             button(16,Action.TALENT_MENU,"NETHER_STAR","天赋树","打开自己的天赋界面","先看条件，再确认分配"),
             button(20,Action.COMMON,"BLAZE_ROD","通用生存技能","归乡、治疗、闪现、跃空及留影特效","先看说明，再点击使用"),
             button(24,Action.LEGACY_SHORTCUTS,"COMPASS","常用快捷栏","常用地点与玩法入口"));
+        case BOOK->List.of(
+            button(10,Action.CHARACTER,"PLAYER_HEAD","查看角色状态","职业、经验、学习点、生命与魔力"),
+            button(12,Action.SKILL_MENU,"ENCHANTED_BOOK","查看与学习职业技能","等级、学习点和职业要求以技能书为准"),
+            button(14,Action.COMMON,"BLAZE_ROD","浏览通用技能","可查看效果并选一个轮盘槽位"),
+            button(16,Action.WHEEL_EDIT,"REPEATER","选择快捷技能","选槽位，再选通用技能或已学职业技能"),
+            button(19,Action.CLASS_MENU,"IRON_CHESTPLATE","选择职业","先查看各职业，确认后才会选职"),
+            button(20,Action.WHEEL,"END_CRYSTAL","打开施法轮盘","需要瞄准时，先在游戏中瞄准再潜行使用罗盘"),
+            staffSpellButton(),
+            button(24,Action.BOOK_READ,"WRITTEN_BOOK","翻阅命格书","查看原有旅途、成长和副本说明"));
         case ADVENTURE->List.of(
             button(10,Action.TRAINING_MENU,"WOODEN_SWORD","村庄练习塔","练技能、协作与生存","每次新开从第一层开始"),
             button(12,Action.CONQUEST_MENU,"IRON_SWORD","艾恩葛朗特攻略","查看正式楼层、准备条件与入口","与村庄练习塔分别结算"),
-            button(14,Action.DUNGEON_MENU,"MAP","主题遗迹","查看不同遗迹的难度和路线","到首室开始；遗迹内自动同队"),
+            button(14,Action.DUNGEON_MENU,"MAP","遗迹地下城","查看路线、战备、难度与专属秘宝","传送后按入口石钮；同处可一起挑战"),
             button(16,Action.QUEST_MENU,"WRITABLE_BOOK","RPG任务 · 5个接取名额","侧栏5/5表示接取名额已满，不是目标进度","查看每项目标；完成、放弃后名额才能释放"),
             button(20,Action.CONTRACT_MENU,"LECTERN","公会委托","探索、讨伐、制作与工程委托","不要求先种田"),
             button(24,Action.GUILD_MENU,"GOLD_NUGGET","冒险者公会","查看声望、晋级与考试","职业等级与公会段位分别查看"));
@@ -100,6 +112,30 @@ final class AdventureMenuModel {
             button(22,Action.PLACES_MENU,"COMPASS","旅行地点","公共地标、私人地点与探索入口"));
         default->List.of();
     };}
+    static Button staffSpellButton(){
+        return button(22,Action.SPELLBOOK_MENU,"BOOK","选择法杖右键法术","打开原生法术书，选择已学法术",
+                "学徒法杖：攻击键放基础飞弹，使用键放准备好的法术");
+    }
+    static Button onboardingNext(String step) {
+        return switch (step) {
+            case "register" -> new Button(22, Action.ONBOARDING_NEXT, step, "NAME_TAG", "登记为冒险者",
+                    List.of("免费登记，之后可自选委托。"));
+            case "guide_start" -> new Button(22, Action.ONBOARDING_NEXT, step, "WRITABLE_BOOK", "报名新手实习",
+                    List.of("练习看技能、施法和交付委托。"));
+            case "catalog" -> button(22, Action.COMMON, "BOOK", "打开技能图鉴", "查看效果、魔力和操作方式。");
+            case "cast" -> new Button(22, Action.COMMON_DETAIL, "fireworks", "FIREWORK_ROCKET", "练习烟花术",
+                    List.of("先看技能说明，再按「使用一次」。"));
+            case "route_choose", "life_accept" -> new Button(22, Action.ONBOARDING_NEXT, step, "FILLED_MAP", "挑选第一张委托",
+                    List.of("可选探索、讨伐、制作或其他路线。"));
+            case "guild_progress" -> button(22, Action.CONTRACT_MENU, "LECTERN", "查看在途公会委托",
+                    "核对当前目标，达标后在原委托页交付。");
+            case "life_progress", "life_claim" -> new Button(22, Action.ONBOARDING_NEXT, step, "EMERALD", "查看在途生活委托",
+                    List.of("查看自己的委托进度和交付入口。"));
+            case "complete" -> button(22, Action.ADVENTURE, "FILLED_MAP", "挑选下一次冒险",
+                    "从委托、村庄练习塔或遗迹继续。");
+            default -> null;
+        };
+    }
     /** Bound CJK tooltips by display columns, rather than cutting a surrogate pair. */
     static List<String> lines(String text,int columns,int maximum){
         if(columns<4||maximum<1)throw new IllegalArgumentException("invalid_text_budget");

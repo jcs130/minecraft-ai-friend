@@ -587,7 +587,8 @@ class NumenBody(BaseBody):
                 acts["equip"] = ActionSupport(native="lua numen.gear.hold/wear", args=["item", "hand"],
                                                notes="Existing item ID; hand is main|off|head|chest|legs|feet."
                                                + (" Use auto for the native wardrobe to choose a wearable slot." if hosted else ""))
-            acts["move"] = ActionSupport(native="lua " + dialect["move"].split("(")[0], args=["x", "y", "z"], async_=not native)
+            acts["move"] = ActionSupport(native="lua " + dialect["move"].split("(")[0], args=["x", "y", "z"],
+                                         async_=not native or hasattr(self.port, "start_walk"))
             acts["stop"] = ActionSupport(native="lua " + ("numen.task.stop" if dialect["stop"] == STOP_LUA else dialect["stop"]),
                                          notes="lands between programs: Numen runs one program per companion" if native else
                                          "halt used by numen-hosting on handoff")
@@ -799,7 +800,11 @@ class NumenBody(BaseBody):
         elif verb == "move":
             x, y, z = xyz(args)
             code = LUA_DIALECTS[getattr(self.port, "dialect", "numen-paper")]["move"].format(x=lua_num(x), y=lua_num(y), z=lua_num(z))
-            mapped = await self.port.call("lua", {"code": code}, request_id)
+            start_walk = getattr(self.port, "start_walk", None)
+            if start_walk:
+                mapped = await start_walk("return " + code, request_id)
+            else:
+                mapped = await self.port.call("lua", {"code": code}, request_id)
         elif verb == "attack":
             target = obj(args, "target", str, required=False, default="hostile")
             radius = obj(args, "radius", (int, float), required=False, default=16)

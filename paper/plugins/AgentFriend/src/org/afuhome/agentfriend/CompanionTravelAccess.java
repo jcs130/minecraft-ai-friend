@@ -1,13 +1,49 @@
 package org.afuhome.agentfriend;
 
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.function.Predicate;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 /** Read-only game checks used by the native companion bridge. */
 public final class CompanionTravelAccess {
     private CompanionTravelAccess() { }
+    public static Map<String,ItemStack> companionKeepsakes(String name) {
+        if (Bukkit.isPrimaryThread()
+                && Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin
+                && plugin.isEnabled()) return plugin.companionKeepsakes(name);
+        return Map.of();
+    }
+
+    record HeadCount(int players, int maids) {
+        int total() { return players+maids; }
+    }
+
+    static HeadCount countPresent(Location center, double radius, double height, Set<UUID> party,
+                                  Set<UUID> present, Predicate<Location> bounds) {
+        var bridge = Bukkit.getPluginManager().getPlugin("QiandengjiMaidBridge");
+        if (party.isEmpty() || bridge == null || !bridge.isEnabled() || center.getWorld() == null)
+            return new HeadCount(present.size(),0);
+        try {
+            var registered = bridge.getClass().getMethod("dungeonParticipant", Entity.class, Set.class);
+            var maids = new HashSet<UUID>();
+            for (Entity body : center.getWorld().getNearbyEntities(center, radius, height, radius,
+                    entity -> !(entity instanceof Player) && bounds.test(entity.getLocation()))) {
+                if (Boolean.TRUE.equals(registered.invoke(bridge,body,party))) maids.add(body.getUniqueId());
+            }
+            // Resident CLI may already have enrolled this same body as a projected Player.
+            int projected = (int) maids.stream().filter(present::contains).count();
+            return new HeadCount(present.size()-projected,maids.size());
+        } catch (ReflectiveOperationException | LinkageError unavailable) {
+            return new HeadCount(present.size(),0);
+        }
+    }
     public static Location companionRescueTarget(Player partner, org.bukkit.entity.LivingEntity companion) {
         if(!Bukkit.isPrimaryThread()||!(Bukkit.getPluginManager().getPlugin("AgentFriend") instanceof AgentFriendPlugin plugin)
                 ||!plugin.isEnabled()||plugin.trialRescue()==null)return null;

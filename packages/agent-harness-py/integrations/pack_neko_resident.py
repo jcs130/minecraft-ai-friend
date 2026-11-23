@@ -15,7 +15,7 @@ def package(sdk, source, destination):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         staged = root / "neko_resident"
-        for filename in ("__init__.py", "connection.py", "plugin.toml", "pyproject.toml", "ui/panel.tsx"):
+        for filename in ("__init__.py", "connection.py", "desktop.py", "plugin.toml", "pyproject.toml", "ui/panel.tsx"):
             file = staged / filename
             file.parent.mkdir(parents=True, exist_ok=True)
             file.write_text((source / filename).read_text(encoding="utf-8-sig"), encoding="utf-8", newline="\n")

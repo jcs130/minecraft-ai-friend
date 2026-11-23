@@ -49,6 +49,10 @@ import {NekoAuth,NEKO_CALLBACK} from './neko-auth.mjs';
 import {NekoPluginLinks} from './neko-plugin-links.mjs';
 import { MaidConnections, maidConnectionRoute } from './maid-connections.mjs';
 import {hostingRoutes} from './hosting-routes.mjs';
+import {characterBodyRoutes} from './character-body-routes.mjs';
+import {PlayerCompanions} from './player-companions.mjs';
+import {characterDeviceRoutes} from './character-device-routes.mjs';
+import {DesktopDevices} from './desktop-devices.mjs';
 import {ResidentTurns} from './resident-turns.mjs';
 import { WorldMap } from './world-map.mjs';
 
@@ -98,6 +102,7 @@ export function createPortal(config, options = {}) {
   const cloud = config.sourceMode === 'cloud' ? new CloudSource(config, store) : null;
   const game = options.game || (cloud ? new CloudGame(config, store, cloud) : new GameData(config, store.salt));
   const hostedAgents=options.hostedAgents??options.hostedAgentsFactory?.({config,store,game})??null;
+  const characterDevices=characterDeviceRoutes({provider:hostedAgents?.characterDevices,publicOrigin:config.publicOrigin});
   const world = options.world || (cloud ? new CloudWorld(config, game, store, cloud) : new WorldCatalog(config, game, store));
   const challenges = cloud ? new CloudChallenges(store,game) : new SavedChallenges(config,game,store);
   const live = new Live(config, store);
@@ -120,6 +125,7 @@ export function createPortal(config, options = {}) {
   })() : Promise.resolve(null);
   nativeReady.catch(() => {}); // main awaits ready before listening; fixture routes still fail closed.
   const gallery = new Gallery(store, cloud);
+  const playerCompanions = new PlayerCompanions(store, options.now ?? Date.now);
   const photoObjects=options.sceneObjects??createSceneObjectStorage(config.sceneStorage);
   const photoScenes=new PhotoScenes(store,gallery,photoObjects);
   const galleryMedia=new GalleryMedia(gallery,photoObjects);
@@ -188,6 +194,8 @@ export function createPortal(config, options = {}) {
       nekoAuth:nekoAuth.capabilities(session?.owner_id?store.ownerById(session.owner_id):null) };
   }
   const residentTurns = new ResidentTurns(config, store);
+  const desktopDevices = new DesktopDevices({store, residents:residentTurns, publicOrigin:config.publicOrigin,
+    provider:options.characterBodies ?? hostedAgents?.characterBodies});
   function auth(req, scopes = []) {
     const bearer = req.headers.authorization;
     if (bearer) {
@@ -285,6 +293,8 @@ export function createPortal(config, options = {}) {
       if (req.portalOrigin.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
       const url = new URL(req.url, req.portalOrigin.origin);
       const pathname = url.pathname;
+      if (await characterDevices.machine({req,res,pathname,jsonBody,respond,rate,
+        peer:digest(rateAddress(req,config))})) return;
       if (pathname.startsWith('/watch/') && await (await nativeReady)?.http(req, res)) return;
       if (['/join','/join.html','/downloads.html'].includes(pathname)) {
         if (!['GET', 'HEAD'].includes(req.method)) throw fail(405, 'METHOD_NOT_ALLOWED', '请打开接入网页');
@@ -336,6 +346,8 @@ export function createPortal(config, options = {}) {
         const principal = residentTurns.pollingPrincipal(req,pathname);
         rate(principal ? 'resident:' + principal : 'api:' + digest(rateAddress(req, config)), 300, 60000);
       }
+      if (await desktopDevices.route({req,res,pathname,jsonBody,respond,rate,browserAuth,csrf,
+        peer:digest(rateAddress(req,config))})) return;
       if (await maidConnectionRoute({ req, res, pathname, connections: maidConnections,
         browserAuth, csrf, jsonBody, respond, rate,
         address: () => digest(rateAddress(req, config)) })) return;
@@ -489,6 +501,13 @@ export function createPortal(config, options = {}) {
         cloud.authorize(req); rate('challenge-sync',12,60000);
         return respond(res,200,await challenges.accept(await jsonBody(req,config.cloudSync.maxBytes)));
       }
+      if (req.method === 'POST' && pathname === '/api/v1/internal/player-companions') {
+        if (!cloud) throw fail(404,'NOT_FOUND','未开放此接口');
+        if (req.headers.origin || req.headers.cookie) throw fail(403,'SYNC_CLIENT_REQUIRED','伙伴状态仅由游戏端提供');
+        cloud.authorize(req);
+        rate('companion-sync', 30, 60000);
+        return respond(res,200,playerCompanions.poll(await jsonBody(req,256*1024)));
+      }
       const sceneUpload=/^\/api\/v1\/internal\/photo-scenes\/([a-f0-9-]{36})$/.exec(pathname);
       const sceneAssetUpload=/^\/api\/v1\/internal\/photo-scenes\/([a-f0-9-]{36})\/assets\/([a-f0-9]{64})$/.exec(pathname);
       if(sceneAssetUpload&&req.method==='POST'){
@@ -540,6 +559,60 @@ export function createPortal(config, options = {}) {
         rate('write:' + digest(rateAddress(req, config)), 80, 60000);
       }
       if (req.method === 'OPTIONS') { res.writeHead(405); return res.end(); }
+      if (pathname === '/api/v1/player-companions' && req.method === 'GET') {
+        res.setHeader('Cache-Control','private, no-store');
+        return respond(res,200,{companions:playerCompanions.list(browserAuth(req).owner)});
+      }
+      const partnerRoute=/^\/api\/v1\/player-companions\/([a-f0-9-]{36})(?:\/(photos|diaries)(?:\/([a-f0-9-]{36}))?)?$/.exec(pathname);
+      if(partnerRoute){
+        res.setHeader('Cache-Control','private, no-store');
+        const {owner}=browserAuth(req), [,player,collection,id]=partnerRoute;
+        if(req.method==='PUT'&&!collection){
+          rate('companion-preferences:'+owner.id,12,60000);
+          return respond(res,200,playerCompanions.update(owner,player,await jsonBody(req,8192)));
+        }
+        const row=playerCompanions.row(owner,player);
+        const context={admin:false,uuids:new Set([row.body_uuid])};
+        if(req.method==='GET'&&collection==='photos'){
+          if(id){
+            if(url.searchParams.get('size')==='thumb'){
+              const media=await galleryMedia.read(id,'thumbnail',context,req.headers['if-none-match']);
+              const headers={'Cache-Control':'private, no-store','Vary':'Cookie'};
+              if(media.bytes)headers['Content-Type']=media.type;
+              if(media.url)headers.Location=media.url;
+              res.writeHead(media.status,headers);
+              return res.end(media.bytes);
+            }
+            const original=gallery.image(id,context);
+            res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'private, no-store','Vary':'Cookie'});
+            return res.end(original.bytes);
+          }
+          const result=gallery.managed(context,{page:Number(url.searchParams.get('page')||1)});
+          result.photos=result.photos.map(photo=>{
+            const original=photo.imageReady?`/api/v1/player-companions/${player}/photos/${photo.id}`:null;
+            return {...photo,imageUrl:original,thumbnailUrl:original?original+'?size=thumb':null};
+          });
+          return respond(res,200,result);
+        }
+        if(req.method==='GET'&&collection==='diaries'&&!id)
+          return respond(res,200,archives.list({authorId:row.body_uuid,kind:'book',page:Number(url.searchParams.get('page')||1)}));
+        throw fail(405,'METHOD_NOT_ALLOWED','请使用伙伴页面的相应按钮。');
+      }
+      if (await characterBodyRoutes({req,res,pathname,browserAuth,respond,jsonBody,residents:residentTurns,
+        provider:options.characterBodies ?? hostedAgents?.characterBodies,
+        characterDevices,
+        characterHistory:options.characterHistory,
+        async ownedPlayers(owner) {
+          const owned = new Set(store.ownedUuids(owner.id));
+          if (!owned.size) return [];
+          return (await game.roster()).filter(row => owned.has(row.playerUuid)
+            && !row.historical && !row.reserved && !row.isReserved && !row.identityConflict)
+            .map(row => ({
+              // The original verified player UUID is the own-role principal.
+              characterId:row.playerUuid, ownerGameId:row.playerUuid, name:row.name,
+              owns:() => store.ownedUuids(owner.id).includes(row.playerUuid),
+            }));
+        }})) return;
       if (pathname === '/api/v1/resident-onboarding/browser-approve' && req.method === 'POST') {
         rate('resident-browser-approve:'+digest(rateAddress(req,config)),24,60000);
       }
@@ -956,7 +1029,7 @@ export function createPortal(config, options = {}) {
         store.audit(owner.id, 'credential.revoke', revokeCredential[1]); return respond(res, 200, { ok: true });
       }
       if(req.method==='GET' && pathname==='/api/v1/admin/npcs') {
-        browserAuth(req,true);return respond(res,200,npcAdmin.state());
+        browserAuth(req,true);return respond(res,200,{...npcAdmin.state(), residentActivity:residentTurns.operatorActivity()});
       }
       const npcProfileRoute=/^\/api\/v1\/admin\/npcs\/([a-f0-9-]{36})$/.exec(pathname);
       if(req.method==='PUT' && npcProfileRoute) {
@@ -1038,6 +1111,10 @@ export function createPortal(config, options = {}) {
       try {
         const real = await fs.realpath(filePath);
         if (!real.startsWith(path.resolve(config.publicDir) + path.sep)) throw new Error();
+        // Only the current Skill metadata uses the static download directory.
+        // Reviewed package and Skill binary routes have already been handled.
+        const directory = path.relative(config.publicDir, real).split(path.sep)[0];
+        if (directory.toLowerCase() === 'downloads' && pathname !== agentSkill.url.replace(/\.zip$/, '.json')) throw new Error();
         file = await fs.readFile(real);
       } catch { throw fail(404, 'NOT_FOUND', '未找到此页面'); }
       res.setHeader('Cache-Control', /\.(png|jpg|webp|svg|ico)$/.test(filePath) ? 'public, max-age=3600' : 'no-cache');

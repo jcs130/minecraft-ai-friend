@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from .models import BodySnapshot
+from .resident_trace import trace_resident_turn
 from .runtime import Step
 
 Point = tuple[float, float, float]
@@ -175,6 +176,7 @@ class MaidCompanions:
         self.remote_sent = False
         self.release_requested: str | None = None
         self.last_transfer: dict | None = None
+        self.turn_hash: str | None = None
         self.missing_since: float | None = None
         self.blocked_until: dict[str, float] = {}
 
@@ -182,8 +184,13 @@ class MaidCompanions:
     def active(self) -> bool:
         return self.target is not None
 
+    @property
+    def pending_transfer(self) -> bool:
+        return self.active and self.travel == "teleport" and not self.remote_sent
+
     def _clear(self, status: str):
         self.target = None
+        self.turn_hash = None
         self.remote_sent = False
         self.status = status
         self.last_goal = self.last_origin = None
@@ -201,7 +208,10 @@ class MaidCompanions:
             return
         if snapshot is not None and (snapshot.life_state == "dead"
                                      or "characterDirectory" not in (snapshot.raw or {}) and snapshot.dimension and snapshot.dimension != self.dimension):
-            self._clear("target_lost")
+            if self.pending_transfer:
+                self.fail_pending_transfer("rendezvous_target_unavailable")
+            else:
+                self._clear("target_lost")
             return
         player = visible.get(self.target)
         if player is None:
@@ -210,7 +220,10 @@ class MaidCompanions:
                 self.missing_since = now
             self.status = "out_of_sight"
             if now - self.missing_since >= LOST_GRACE:
-                self._clear("target_lost")
+                if self.pending_transfer:
+                    self.fail_pending_transfer("rendezvous_target_unavailable")
+                else:
+                    self._clear("target_lost")
             return
         self.missing_since = None
         if player.distance is not None and player.distance <= ARRIVAL_RANGE:
@@ -225,7 +238,7 @@ class MaidCompanions:
                     self.last_goal = self.last_origin = None
                     self.attempts = 0
         elif self.status != "alongside" or player.distance is None or player.distance > FOLLOW_AGAIN_RANGE:
-            self.status = "tracking"
+            self.status = "check_original_rendezvous_receipt" if self.remote_sent else "tracking"
 
     def context(self, snapshot: BodySnapshot | None) -> dict:
         visible = _players(snapshot)
@@ -247,7 +260,8 @@ class MaidCompanions:
             "lastTransfer": self.last_transfer,
         }
 
-    def choose(self, mode: str, target_uuid: str | None, snapshot: BodySnapshot | None, *, travel: str = "auto") -> bool:
+    def choose(self, mode: str, target_uuid: str | None, snapshot: BodySnapshot | None, *,
+               travel: str = "auto", turn_hash: str | None = None) -> bool:
         if mode == "stop" and target_uuid is None:
             self._clear("stopped")
             return True
@@ -262,11 +276,23 @@ class MaidCompanions:
         elif self.mode != mode:
             self.status = "tracking"
         self.travel = travel
+        self.turn_hash = turn_hash
         self.target, self.name, self.dimension, self.mode = target_uuid, player.name, snapshot.dimension, mode
         self._observe(snapshot, visible)
         return True
 
-    def settle_transfer(self, target, receipt):
+    def reject_transfer(self, target, reason, *, turn_hash: str | None = None):
+        self.last_transfer = {"targetUuid": target, "status": "rejected", "message": reason,
+                              "stage": "before_dispatch"}
+        if turn_hash:
+            self.last_transfer["turnHash"] = turn_hash
+            trace_resident_turn(turn_hash, "rendezvous_refused", step="before_dispatch", errorCode=reason)
+
+    def fail_pending_transfer(self, reason):
+        self.reject_transfer(self.target, reason, turn_hash=self.turn_hash)
+        self._clear(reason)
+
+    def settle_transfer(self, target, receipt, *, turn_hash: str | None = None):
         if not receipt.terminal:
             return
         envelope = receipt.data if isinstance(receipt.data, dict) else {}
@@ -276,6 +302,8 @@ class MaidCompanions:
         reason = observation.get("reason") if isinstance(observation, dict) else None
         self.last_transfer = {"targetUuid": target, "requestId": receipt.request_id,
                               "status": receipt.status, "message": (reason if isinstance(reason, str) else receipt.text)[:300]}
+        if turn_hash:
+            self.last_transfer["turnHash"] = turn_hash
         if self.target != target:
             return
         if receipt.status != "completed":
@@ -290,8 +318,10 @@ class MaidCompanions:
             self._alongside()
 
     def next_step(self, snapshot: BodySnapshot | None, *, busy: bool = False, can_teleport: bool = False) -> Step | None:
-        """Only emit a new walk when the host has no competing or uncertain body action."""
+        """Generate one action from a fresh observation when the host can act."""
         if snapshot is None or not -1 <= time.time() - snapshot.sampled_at.timestamp() <= 5:
+            if self.pending_transfer:
+                self.fail_pending_transfer("rendezvous_observation_unavailable")
             return None
         raw = snapshot.raw if isinstance(snapshot.raw, dict) else {}
         tagged = "socialNavigationTargetUuid" in raw
@@ -303,18 +333,26 @@ class MaidCompanions:
         self._observe(snapshot, visible)
         if held != self.release_requested or held == self.target:
             self.release_requested = None
-        if held and held != self.target and not busy and self.release_requested != held:
+        ready = not busy and walk_available(snapshot)
+        # The cast already replaces the previous native navigation anchor on arrival.
+        # Do not spend the only ready planning turn releasing it before an explicit spell.
+        direct_cast = self.pending_transfer and ready and self.target in visible
+        if held and held != self.target and not busy and self.release_requested != held and not direct_cast:
             self.release_requested = held
             return Step(tool="body:native:release_rendezvous", args={"targetUuid": held})
         register = (tagged and self.mode == "follow" and self.status == "alongside" and held != self.target
                     and self.target != raw.get("ownerId"))
-        if busy or (self.status != "tracking" and not register) or self.target not in visible or not walk_available(snapshot):
+        if not ready:
+            if self.pending_transfer:
+                self.fail_pending_transfer("rendezvous_body_unavailable")
+            return None
+        if (self.status != "tracking" and not register) or self.target not in visible:
             return None
         now = self.clock()
         player = visible[self.target]
         origin = _point(snapshot.position)
         elapsed = now - self.last_walk
-        if elapsed < STEP_INTERVAL:
+        if elapsed < STEP_INTERVAL and not direct_cast:
             return None
         remote = player.distance is None or player.distance > WALK_RANGE
         if not remote and self.last_goal is not None and math.dist(self.last_goal, player.position) > 4:
@@ -328,9 +366,10 @@ class MaidCompanions:
                 self.status = "check_original_rendezvous_receipt"
                 return None
             if not can_teleport or "characterDirectory" not in snapshot.raw:
-                self._clear("rendezvous_skill_unavailable")
+                self.fail_pending_transfer("rendezvous_skill_unavailable")
                 return None
             self.remote_sent = True
+            self.status = "check_original_rendezvous_receipt"
             self.last_walk = now
             return Step(tool="body:native:rendezvous", args={"targetUuid": player.uuid})
         if player.distance is None:

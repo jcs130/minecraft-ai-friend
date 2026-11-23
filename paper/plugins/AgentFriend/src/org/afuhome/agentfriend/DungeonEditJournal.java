@@ -103,11 +103,21 @@ final class DungeonEditJournal {
     }
 
     boolean capture(String id, BlockState state) {
+        return capture(id, state, LIMIT);
+    }
+
+    boolean hasRoom(String id, Location at, int limit) {
+        Domain d = domain(id);
+        return d.recorded.size() < limit || d.recorded.contains(
+                new Cell(at.getWorld().getUID(), at.getBlockX(), at.getBlockY(), at.getBlockZ()));
+    }
+
+    boolean capture(String id, BlockState state, int limit) {
         Domain d = domain(id);
         if (!ready(id) || !state.isPlaced()) return false;
         Cell cell = new Cell(state.getWorld().getUID(), state.getX(), state.getY(), state.getZ());
         if (d.recorded.contains(cell)) return true;
-        if (d.recorded.size() >= LIMIT) return false;
+        if (d.recorded.size() >= Math.min(LIMIT, limit)) return false;
         int now = Bukkit.getCurrentTick();
         if (captureTick != now) { captureTick = now; writesThisTick = 0; }
         if (++writesThisTick > PER_TICK) return false;

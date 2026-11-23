@@ -271,10 +271,10 @@ index 8ceb71520..34cdeee71 100644
          loop.halt(HaltReason.DISCONNECT);
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/HostedBootstrap.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/HostedBootstrap.java
 new file mode 100644
-index 000000000..7c12cdaa4
+index 000000000..712581378
 --- /dev/null
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/brain/HostedBootstrap.java
-@@ -0,0 +1,114 @@
+@@ -0,0 +1,161 @@
 +package com.dwinovo.numen.api.brain;
 +
 +import com.dwinovo.numen.api.entity.*;
@@ -300,6 +300,43 @@ index 000000000..7c12cdaa4
 +/** Loopback provisioning for website-verified offline roles. All requests need
 + * the operator's HMAC; model tokens cannot provision bodies or mint tokens. */
 +public final class HostedBootstrap {
++    public interface PlayerWitness {
++        void start(MinecraftServer server, com.google.gson.JsonArray roles);
++        JsonObject inspect(MinecraftServer server, JsonObject request);
++        boolean protects(UUID uuid, UUID owner, String name);
++    }
++    private static PlayerWitness playerWitness;
++    public static void setPlayerWitness(PlayerWitness witness) { playerWitness = witness; }
++    public static boolean protectsPlayerLogin(net.minecraft.server.level.ServerPlayer current) {
++        if (playerWitness == null || !(current instanceof NumenPlayer body)) return false;
++        var entry = CompanionRegistry.get(body.server).find(body.getUUID());
++        return entry != null && entry.hosted() && playerWitness.protects(body.getUUID(),entry.owner(),body.getGameProfile().getName());
++    }
++    /** The world-owned fence survives a Node/portal restart. Check before registry or native join effects. */
++    public static boolean admitsPlayerCustody(MinecraftServer server,com.mojang.authlib.GameProfile profile,UUID owner) {
++        Object players=server.getPlayerList();
++        try {
++            return Boolean.TRUE.equals(players.getClass().getMethod("qdj\u0024admitsNumen",
++                    com.mojang.authlib.GameProfile.class,UUID.class).invoke(players,profile,owner));
++        } catch (NoSuchMethodException noCustodyEdition) {
++            return true;
++        } catch (ReflectiveOperationException | LinkageError unavailable) {
++            return false;
++        }
++    }
++    public static boolean acceptsPlayerActions(NumenPlayer body) {
++        if (body == null || body.getServer() == null) return false;
++        Object players=body.getServer().getPlayerList();
++        try {
++            return Boolean.TRUE.equals(players.getClass().getMethod("qdj$acceptsNumenGameplay",
++                    net.minecraft.server.level.ServerPlayer.class).invoke(players,body));
++        } catch (NoSuchMethodException noCustodyEdition) {
++            return true;
++        } catch (ReflectiveOperationException | LinkageError unavailable) {
++            return false;
++        }
++    }
++
 +    private static HttpServer http;
 +    private static ExecutorService executor;
 +    private static final Map<UUID,McpTokens.Issued> TOKENS = new HashMap<>();
@@ -313,6 +350,10 @@ index 000000000..7c12cdaa4
 +            var settings=Homes.of(server).server().file("hosted-bootstrap.json");
 +            if (!Files.exists(settings)) return;
 +            var config=JsonParser.parseString(Files.readString(settings)).getAsJsonObject();
++            if (config.has("playerWitnessRoles") && !config.getAsJsonArray("playerWitnessRoles").isEmpty()) {
++                if (playerWitness == null) throw new IllegalStateException("Player witness is unavailable on this platform");
++                playerWitness.start(server, config.getAsJsonArray("playerWitnessRoles"));
++            }
 +            int port=config.get("port").getAsInt(),mcpPort=config.get("mcpPort").getAsInt();
 +            if(port<1024||port>65535||mcpPort<1024||mcpPort>65535||port==mcpPort)throw new IllegalArgumentException();
 +            var mode=McpMode.instance();
@@ -353,8 +394,14 @@ index 000000000..7c12cdaa4
 +        var result=new CompletableFuture<JsonObject>();server.execute(()->{
 +            try {
 +                String op=request.get("op").getAsString(),name=request.get("name").getAsString();
++                if (op.equals("arm_player_witness") || op.equals("player_state")) {
++                    if (playerWitness == null) throw new IllegalStateException();
++                    result.complete(playerWitness.inspect(server, request)); return;
++                }
 +                UUID uuid=UUID.fromString(request.get("roleUuid").getAsString()),owner=UUID.fromString(request.get("ownerUuid").getAsString());
 +                if(!name.matches("[A-Za-z0-9_]{1,16}")||uuid.equals(owner)||!Set.of("admit","session").contains(op))throw new IllegalArgumentException();
++                if(op.equals("admit") && !admitsPlayerCustody(server,new com.mojang.authlib.GameProfile(uuid,name),owner))
++                    throw new IllegalStateException();
 +                var registry=CompanionRegistry.get(server);var entry=registry.find(uuid);
 +                if(entry!=null&&(!entry.hosted()||!entry.owner().equals(owner)||!entry.name().equals(name)))throw new IllegalStateException();
 +                if(op.equals("session")) {
@@ -620,6 +667,23 @@ index cff945562..69cfb3840 100644
          Visits.start();
          for (UUID companion : registry.all()) {
              try {
+diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionFactory.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionFactory.java
+index 8382f3580..0c158757f 100644
+--- a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionFactory.java
++++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionFactory.java
+@@ -81,7 +81,11 @@ public final class CompanionFactory {
+             body[0] = new NumenPlayer(server, level, profile, ClientInformation.createDefault());
+             connection[0] = new FakeConnection();
+             Services.admission().admit(body[0], connection[0], verdict);
+-        }, stillWanted, () -> {
++        }, () -> stillWanted.getAsBoolean()
++                && com.dwinovo.numen.api.brain.HostedBootstrap.admitsPlayerCustody(server,profile,ownerUuid)
++                && (!HostedBodyControls.managed(server, companionUuid)
++                || (server.getPlayerList().getPlayer(companionUuid) == null
++                    && server.getPlayerList().getPlayerByName(name) == null)), () -> {
+             join(server, body[0], connection[0], profile, ownerUuid, pos);
+             body[0].fakeClient().arrived();
+             return body[0];
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRegistry.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRegistry.java
 index a7e83177c..fd3a24af9 100644
 --- a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/CompanionRegistry.java
@@ -709,10 +773,10 @@ index 18d18c7ad..2f0ee4aee 100644
                  NumenPlayer body = NumenPlayer.findByUuid(server, e.getKey());
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedActionReceipts.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedActionReceipts.java
 new file mode 100644
-index 000000000..4ec851863
+index 000000000..830f9b475
 --- /dev/null
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedActionReceipts.java
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,106 @@
 +package com.dwinovo.numen.api.entity;
 +
 +import com.dwinovo.numen.api.store.Atomic;
@@ -731,7 +795,8 @@ index 000000000..4ec851863
 +public final class HostedActionReceipts implements AutoCloseable {
 +    private final Path root;
 +    private final ExecutorService io=Executors.newSingleThreadExecutor(r->{var t=new Thread(r,"numen-hosted-receipts");t.setDaemon(true);return t;});
-+    private final Map<String,CompletableFuture<JsonObject>> active=new HashMap<>();
++    private record Active(CompletableFuture<JsonObject> result, boolean speech) {}
++    private final Map<Path,Active> active=new HashMap<>();
 +    /** 扫描旧回执只在每具身体首次访问时做，常驻运行不能每个动作重读全部历史。 */
 +    private final Map<UUID,Set<String>> unresolved=new HashMap<>();
 +    public HostedActionReceipts(Path root) { this.root=root; }
@@ -773,21 +838,29 @@ index 000000000..4ec851863
 +    }
 +    public CompletableFuture<JsonObject> call(UUID body,String id,JsonObject args,Supplier<CompletableFuture<JsonObject>> action){
 +        var result=new CompletableFuture<JsonObject>();
++        // The endpoint builds this signature from the validated tool name.
++        // Only say uses the separate lane; Lua and chat-like game commands remain serialized.
++        boolean speech="say".equals(args.has("tool") ? args.get("tool").getAsString() : null);
 +        io.execute(()->{
 +            try{
-+                Path file=path(body,id);String key=file.toString(),signature=digest(canonical(args).toString());
++                Path file=path(body,id);String signature=digest(canonical(args).toString());
 +                if(Files.exists(file)){
 +                    var saved=read(file);
 +                    if(!signature.equals(saved.get("signature").getAsString()))throw new IllegalStateException("request ID was already used with different arguments");
-+                    var running=active.get(key);
-+                    if(running!=null)running.whenComplete((r,e)->{if(e!=null)result.completeExceptionally(e);else result.complete(r.deepCopy());});
++                    var running=active.get(file);
++                    if(running!=null)running.result().whenComplete((r,e)->{if(e!=null)result.completeExceptionally(e);else result.complete(r.deepCopy());});
 +                    else result.complete(persistedResult(saved));
 +                    return;
 +                }
 +                var pending=unresolved(body,file.getParent());
-+                if(!pending.isEmpty())throw new IllegalStateException("an earlier action is unresolved; query its original receipt");
++                if(!pending.isEmpty()){
++                    // A live, acknowledged reservation on this server can run beside one speech.
++                    // Anything with an unknown outcome after a crash still fences both lanes.
++                    var running=pending.size()==1 ? active.get(path(body,pending.iterator().next())) : null;
++                    if(!speech||running==null||running.speech())throw new IllegalStateException("an earlier action is unresolved; query its original receipt");
++                }
 +                var saved=new JsonObject();saved.addProperty("id",id);saved.addProperty("state","pending");saved.addProperty("signature",signature);
-+                write(file,saved);pending.add(id);active.put(key,result);
++                write(file,saved);pending.add(id);active.put(file,new Active(result,speech));
 +                CompletableFuture<JsonObject> execution;
 +                try{execution=action.get();}catch(Throwable error){execution=CompletableFuture.failedFuture(error);}
 +                execution.whenComplete((value,error)->{
@@ -799,7 +872,7 @@ index 000000000..4ec851863
 +                        write(file,saved);
 +                        if(!Set.of("pending","unknown").contains(finalValue.get("state").getAsString()))pending.remove(id);
 +                        result.complete(finalValue);
-+                    }catch(Throwable failure){result.completeExceptionally(failure);}finally{active.remove(key);}
++                    }catch(Throwable failure){result.completeExceptionally(failure);}finally{active.remove(file);}
 +                  });}catch(RejectedExecutionException stopping){result.completeExceptionally(stopping);}
 +                });
 +            }catch(Throwable error){result.completeExceptionally(error);}
@@ -812,10 +885,10 @@ index 000000000..4ec851863
 +}
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedBodyControls.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedBodyControls.java
 new file mode 100644
-index 000000000..2b6aee337
+index 000000000..120a9397a
 --- /dev/null
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/entity/HostedBodyControls.java
-@@ -0,0 +1,147 @@
+@@ -0,0 +1,155 @@
 +package com.dwinovo.numen.api.entity;
 +
 +import com.dwinovo.numen.api.agent.inbox.EventTypes;
@@ -856,7 +929,8 @@ index 000000000..2b6aee337
 +        String startedAt, lastProblem;
 +        @Override public String name() { return "hosted input"; }
 +        @Override public TaskState tick(NumenPlayer body) {
-+            if (lease.releaseInput(System.currentTimeMillis()) || body.level().getGameTime()>=inputTickUntil || frame == null) {
++            if (!com.dwinovo.numen.api.brain.HostedBootstrap.acceptsPlayerActions(body) ||
++                    lease.releaseInput(System.currentTimeMillis()) || body.level().getGameTime()>=inputTickUntil || frame == null) {
 +                release(body); return TaskState.RUNNING;
 +            }
 +            body.look().turn(frame.yaw(),frame.pitch());
@@ -894,6 +968,7 @@ index 000000000..2b6aee337
 +    /** A saved hosted body starts paused after a server restart. */
 +    public static boolean driving(MinecraftServer server,UUID uuid,boolean ordinaryExternal) {
 +        if (!managed(server,uuid)) return ordinaryExternal;
++        if (!com.dwinovo.numen.api.brain.HostedBootstrap.acceptsPlayerActions(NumenPlayer.findByUuid(server,uuid))) return true;
 +        Seat seat=SEATS.get(uuid);return seat==null || seat.lease.holdsNativeLoop(System.currentTimeMillis());
 +    }
 +    public static HostedControlLease.State begin(NumenPlayer body,UUID expectedOwner,String expectedName,
@@ -921,12 +996,18 @@ index 000000000..2b6aee337
 +    }
 +    public static void heartbeat(NumenPlayer body,HostedControlLease.Fence fence) { seat(body).lease.heartbeat(fence,System.currentTimeMillis()); }
 +    public static void input(NumenPlayer body,HostedControlLease.Fence fence,String controller,Frame frame) {
++        requireGameplay(body);
 +        Seat seat=seat(body);seat.lease.input(fence,controller,frame.sequence(),System.currentTimeMillis());seat.frame=frame;
 +        // Also bound simulated movement if the server runs accelerated ticks.
 +        // Network loss must never hold a key beyond ten game ticks or 500 ms.
 +        seat.inputTickUntil=body.level().getGameTime()+10;
 +    }
-+    public static void requireHarness(NumenPlayer body,HostedControlLease.Fence fence) { seat(body).lease.requireHarness(fence,System.currentTimeMillis()); }
++    public static void requireHarness(NumenPlayer body,HostedControlLease.Fence fence) { requireGameplay(body); requireHarnessLease(body,fence); }
++    public static void requireHarnessLease(NumenPlayer body,HostedControlLease.Fence fence) { seat(body).lease.requireHarness(fence,System.currentTimeMillis()); }
++    public static void requireGameplay(NumenPlayer body) {
++        if (!com.dwinovo.numen.api.brain.HostedBootstrap.acceptsPlayerActions(body))
++            throw new IllegalStateException("original body control handoff is not committed");
++    }
 +    private static Seat seat(NumenPlayer body) {
 +        Seat seat=SEATS.get(body.getUUID());if (seat==null) throw new IllegalStateException("hosted body has no active control lease");return seat;
 +    }
@@ -1272,10 +1353,10 @@ index 000000000..0d9cadcfa
 +}
 diff --git a/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBodyEndpoint.java b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBodyEndpoint.java
 new file mode 100644
-index 000000000..b1543ca3b
+index 000000000..ec23b7fc8
 --- /dev/null
 +++ b/numen-api/common/src/main/java/com/dwinovo/numen/api/mcp/server/HostedBodyEndpoint.java
-@@ -0,0 +1,204 @@
+@@ -0,0 +1,208 @@
 +package com.dwinovo.numen.api.mcp.server;
 +
 +import com.dwinovo.numen.api.entity.*;
@@ -1370,7 +1451,10 @@ index 000000000..b1543ca3b
 +            return null;
 +        }).thenCompose(ignored->settled(uuid,args,System.nanoTime()+TimeUnit.SECONDS.toNanos(8)));
 +        if(op.equals("call"))return game(()->{
-+            HostedBodyControls.requireHarness(body(uuid,args),fence(args));return null;
++            var target=body(uuid,args);
++            if (string(args,"tool").equals("guide")) HostedBodyControls.requireHarnessLease(target,fence(args));
++            else HostedBodyControls.requireHarness(target,fence(args));
++            return null;
 +        }).thenCompose(ignored->{
 +            String id=string(args,"id"),tool=string(args,"tool");
 +            if(!List.of("lua","skill","todo","memory","guide","say").contains(tool))return CompletableFuture.failedFuture(new IllegalArgumentException("query hosted_body catalog for supported tools"));
@@ -1425,7 +1509,7 @@ index 000000000..b1543ca3b
 +                    out.addProperty("workPending", HostedBattlefield.workPending(body));
 +                }
 +                case "battlefield" -> {
-+                    HostedBodyControls.requireHarness(body, fence(args));
++                    HostedBodyControls.requireHarnessLease(body, fence(args));
 +                    out.add("battlefield", HostedBattlefield.sample(body));
 +                }
 +                case "observe" -> {
@@ -1467,8 +1551,9 @@ index 000000000..b1543ca3b
 +    private CompletableFuture<JsonObject> execute(UUID uuid,JsonObject request,String id,String tool,JsonObject args){
 +        CompletableFuture<String> execution;
 +        if(tool.equals("guide")||tool.equals("say"))execution=game(()->{
-+            HostedBodyControls.requireHarness(body(uuid,request),fence(request));var loop=CompanionLoops.get(uuid).orElseThrow();
-+            if(tool.equals("guide"))return loop.systemPrompt();
++            var target=body(uuid,request);var loop=CompanionLoops.get(uuid).orElseThrow();
++            if(tool.equals("guide")) { HostedBodyControls.requireHarnessLease(target,fence(request)); return loop.systemPrompt(); }
++            HostedBodyControls.requireHarness(target,fence(request));
 +            String text=string(args,"text");if(text.isBlank()||text.length()>2000)throw new IllegalArgumentException("speech must contain 1-2000 characters");loop.externalSay(text);return ToolOutcome.success("Speech dispatched; it is not evidence of a reply.");
 +        });
 +        else execution=hands.invokeFenced(uuid,tool,args.toString(),ignored->{},fence(request),id);
@@ -1727,10 +1812,10 @@ index 6e4b8bf86..2ee87e66b 100644
  }
 diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/HostedActionReceiptsTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/HostedActionReceiptsTest.java
 new file mode 100644
-index 000000000..57d545d9a
+index 000000000..6ade33b16
 --- /dev/null
 +++ b/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/HostedActionReceiptsTest.java
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,81 @@
 +package com.dwinovo.numen.api.entity;
 +
 +import com.google.gson.*;
@@ -1778,7 +1863,38 @@ index 000000000..57d545d9a
 +        try(var journal=new HostedActionReceipts(directory)){
 +            assertEquals("unknown",journal.call(body,"request-unknown",args,()->{calls.incrementAndGet();return CompletableFuture.completedFuture(result("request-unknown"));}).get(5,TimeUnit.SECONDS).get("state").getAsString());
 +            assertThrows(ExecutionException.class,()->journal.call(body,"request-new",args,()->CompletableFuture.completedFuture(result("request-new"))).get(5,TimeUnit.SECONDS));
++            var speech=JsonParser.parseString("{\"tool\":\"say\"}").getAsJsonObject();
++            assertThrows(ExecutionException.class,()->journal.call(body,"request-say",speech,()->{
++                calls.incrementAndGet();return CompletableFuture.completedFuture(result("request-say"));
++            }).get(5,TimeUnit.SECONDS));
 +        }assertEquals(1,calls.get());
++    }
++
++    @Test void activeWalkAndOneSpeechMayOverlapWithoutAdmittingAnotherWrite()throws Exception {
++        var lua=JsonParser.parseString("{\"tool\":\"lua\",\"args\":{\"code\":\"numen.move.walk({x=10,y=64,z=0})\"}}").getAsJsonObject();
++        var speech=JsonParser.parseString("{\"tool\":\"say\",\"args\":{\"text\":\"Looking for stairs.\"}}").getAsJsonObject();
++        var audible=new CountDownLatch(1);
++        var walkResult=new CompletableFuture<JsonObject>();
++        var speechResult=new CompletableFuture<JsonObject>();
++        var calls=new AtomicInteger();
++        try(var journal=new HostedActionReceipts(directory)){
++            var walk=journal.call(body,"request-walk",lua,()->{calls.incrementAndGet();return walkResult;});
++            var say=journal.call(body,"request-speech",speech,()->{
++                calls.incrementAndGet();audible.countDown();return speechResult;
++            });
++            assertTrue(audible.await(5,TimeUnit.SECONDS));
++            var duplicate=journal.call(body,"request-speech",speech,()->{calls.incrementAndGet();return speechResult;});
++            assertThrows(ExecutionException.class,()->journal.call(body,"another-speech",speech,
++                ()->CompletableFuture.completedFuture(result("another-speech"))).get(5,TimeUnit.SECONDS));
++            assertThrows(ExecutionException.class,()->journal.call(body,"another-lua",lua,
++                ()->CompletableFuture.completedFuture(result("another-lua"))).get(5,TimeUnit.SECONDS));
++            speechResult.complete(result("request-speech"));
++            assertEquals(say.get(5,TimeUnit.SECONDS),duplicate.get(5,TimeUnit.SECONDS));
++            assertFalse(walk.isDone());
++            walkResult.complete(result("request-walk"));
++            assertEquals(walk.get(5,TimeUnit.SECONDS),journal.result(body,"request-walk").get(5,TimeUnit.SECONDS));
++            assertEquals(2,calls.get());
++        }
 +    }
 +}
 diff --git a/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/HostedControlLeaseTest.java b/numen-api/common/src/test/java/com/dwinovo/numen/api/entity/HostedControlLeaseTest.java
@@ -1893,6 +2009,208 @@ index bc5675217..b0122a6d0 100644
      @Test
      void aBrainSeesTheControlToolsThenHerToolBookSortedByName() throws Exception {
          List<McpHost.ToolInfo> tools = host.tools(BRAIN);
+diff --git a/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java b/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java
+index ccfba220b..7cf799abb 100644
+--- a/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java
++++ b/numen-api/paper/src/main/java/com/dwinovo/numen/api/NumenApiPlugin.java
+@@ -18,6 +18,7 @@ public final class NumenApiPlugin extends JavaPlugin {
+     @Override
+     public void onEnable() {
+         NumenNetwork.register();
++        com.dwinovo.numen.api.brain.HostedBootstrap.setPlayerWitness(new PaperPlayerWitness(this));
+         PaperPermissions.declare();
+ 
+         getServer().getPluginManager().registerEvents(new PaperEvents(), this);
+diff --git a/numen-api/paper/src/main/java/com/dwinovo/numen/api/PaperPlayerWitness.java b/numen-api/paper/src/main/java/com/dwinovo/numen/api/PaperPlayerWitness.java
+new file mode 100644
+index 000000000..30f767a82
+--- /dev/null
++++ b/numen-api/paper/src/main/java/com/dwinovo/numen/api/PaperPlayerWitness.java
+@@ -0,0 +1,184 @@
++package com.dwinovo.numen.api;
++
++import com.dwinovo.numen.api.brain.HostedBootstrap;
++import com.google.gson.JsonArray;
++import com.google.gson.JsonObject;
++import net.minecraft.nbt.NbtAccounter;
++import net.minecraft.nbt.NbtIo;
++import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.world.level.storage.LevelResource;
++import org.bukkit.NamespacedKey;
++import org.bukkit.craftbukkit.entity.CraftPlayer;
++import org.bukkit.entity.Player;
++import org.bukkit.event.EventHandler;
++import org.bukkit.event.EventPriority;
++import org.bukkit.event.Listener;
++import org.bukkit.event.player.PlayerJoinEvent;
++import org.bukkit.event.player.PlayerQuitEvent;
++import org.bukkit.persistence.PersistentDataType;
++import org.bukkit.plugin.java.JavaPlugin;
++
++import java.nio.charset.StandardCharsets;
++import java.lang.ref.WeakReference;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.security.MessageDigest;
++import java.security.SecureRandom;
++import java.util.HashMap;
++import java.util.HexFormat;
++import java.util.Map;
++import java.util.UUID;
++
++/** Every mutation of witness state runs on the game thread. Reading the completed player file runs off-thread. */
++final class PaperPlayerWitness implements HostedBootstrap.PlayerWitness, Listener {
++    private static final String CHANNEL = "qiandengji:handoff";
++    private static final NamespacedKey SAVE_MARK = new NamespacedKey("qiandengji", "handoff_save");
++    private static final SecureRandom RANDOM = new SecureRandom();
++    private static final long LIFETIME = 120_000_000_000L;
++    private record Role(String characterId, UUID uuid, UUID owner, String name) {}
++    private record Request(Role role, String id, String expect, long generation) {}
++    private static final class Probe {
++        final Request request;
++        final String nonce;
++        final long started = System.nanoTime();
++        WeakReference<ServerPlayer> original;
++        boolean witnessed, quit, superseded, saved;
++        Probe(Request request, ServerPlayer original) {
++            this.request = request;
++            this.original = original == null ? null : new WeakReference<>(original);
++            byte[] nonce = new byte[32];
++            RANDOM.nextBytes(nonce);
++            this.nonce = HexFormat.of().formatHex(nonce);
++        }
++        boolean valid() { return !superseded && System.nanoTime() - started < LIFETIME; }
++        boolean finished() { return saved || (request.expect.equals("client") && witnessed); }
++        String digest() {
++            String canonical = String.join("\n", request.role.characterId, request.role.uuid.toString(),
++                    request.role.owner.toString(), request.id, request.expect, String.valueOf(request.generation), nonce);
++            try {
++                return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8)));
++            } catch (java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
++        }
++    }
++    private final JavaPlugin plugin;
++    private final Map<UUID, Role> roles = new HashMap<>();
++    private final Map<UUID, Probe> probes = new HashMap<>();
++    private boolean loginFence;
++    PaperPlayerWitness(JavaPlugin plugin) { this.plugin = plugin; }
++
++    @Override public void start(MinecraftServer server, JsonArray allowed) {
++        for (Class<?> type = server.getPlayerList().getClass(); type != null; type = type.getSuperclass()) {
++            if (java.util.Arrays.stream(type.getInterfaces()).anyMatch(i -> i.getName().equals("local.hosting.HostedPlayerLoginFence"))) {
++                loginFence = true; break;
++            }
++        }
++        for (var row : allowed) {
++            var r = row.getAsJsonObject();
++            var role = new Role(id(r,"characterId"), UUID.fromString(r.get("roleUuid").getAsString()),
++                    UUID.fromString(r.get("ownerUuid").getAsString()), r.get("name").getAsString());
++            if (!role.name.matches("[A-Za-z0-9_]{1,16}") || role.uuid.equals(role.owner)
++                    || roles.putIfAbsent(role.uuid,role) != null) throw new IllegalArgumentException("Invalid player witness binding");
++        }
++        plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin,CHANNEL,(channel,player,data) -> witness(server,player,data));
++        plugin.getServer().getPluginManager().registerEvents(this,plugin);
++    }
++    @Override public boolean protects(UUID uuid, UUID owner, String name) {
++        Role role = roles.get(uuid);
++        return role != null && role.owner.equals(owner) && role.name.equals(name);
++    }
++    private static String id(JsonObject r,String field) {
++        String value = r.get(field).getAsString();
++        if (!value.matches("[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}")) throw new IllegalArgumentException();
++        return value;
++    }
++    private static ServerPlayer handle(Player player) { return ((CraftPlayer)player).getHandle(); }
++    private static boolean ordinary(ServerPlayer player) {
++        return player != null && player.getClass() == ServerPlayer.class;
++    }
++    @Override public JsonObject inspect(MinecraftServer server, JsonObject r) {
++        UUID uuid = UUID.fromString(r.get("roleUuid").getAsString());
++        Role role = roles.get(uuid);
++        if (!loginFence || role == null || !role.characterId.equals(r.get("characterId").getAsString())
++                || !role.name.equals(r.get("name").getAsString()) || !role.owner.equals(UUID.fromString(r.get("ownerUuid").getAsString()))) {
++            throw new IllegalArgumentException();
++        }
++        String expect = r.get("expect").getAsString();
++        long generation = r.get("generation").getAsBigDecimal().longValueExact();
++        if ((!expect.equals("client") && !expect.equals("saved")) || generation < 1 || generation > 9_007_199_254_740_991L) {
++            throw new IllegalArgumentException();
++        }
++        Request request = new Request(role,id(r,"requestId"),expect,generation);
++        ServerPlayer online = server.getPlayerList().getPlayer(uuid);
++        Probe probe = probes.get(uuid);
++        var reply = new JsonObject();
++        reply.addProperty("uuid",uuid.toString()); reply.addProperty("roleUuid",uuid.toString());
++        reply.addProperty("characterId",role.characterId); reply.addProperty("requestId",request.id);
++        reply.addProperty("generation",generation); reply.addProperty("expect",expect);
++        if (r.get("op").getAsString().equals("arm_player_witness")) {
++            if (probe != null && probe.request.equals(request)) {
++                if (!probe.valid()) throw new IllegalStateException("Original player witness expired");
++            } else {
++                if (probe != null && probe.valid() && !probe.finished()) throw new IllegalStateException("Original witness is pending");
++                if (expect.equals("saved") ? !ordinary(online) || !online.getGameProfile().getName().equals(role.name)
++                        : online != null || server.getPlayerList().getPlayerByName(role.name) != null) throw new IllegalStateException();
++                probe = new Probe(request,online);
++                probes.put(uuid,probe);
++            }
++            reply.addProperty("channel",CHANNEL); reply.addProperty("nonce",probe.nonce);
++        }
++        boolean matching = probe != null && probe.valid() && request.equals(probe.request);
++        boolean live = matching && ordinary(online) && probe.original != null && online == probe.original.get()
++                && probe.witnessed && !probe.quit;
++        reply.addProperty("online",online != null);
++        reply.addProperty("kind",live ? "mineflayer" : online == null ? "offline" : ordinary(online) ? "ordinary" : "other");
++        reply.addProperty("witnessed",live || (matching && probe.quit && probe.witnessed));
++        reply.addProperty("saved",matching && expect.equals("saved") && online == null && probe.saved);
++        return reply;
++    }
++    private void witness(MinecraftServer server,Player player,byte[] message) {
++        Probe probe = probes.get(player.getUniqueId());
++        if (probe == null || !probe.valid() || probe.quit || message.length != 64) return;
++        ServerPlayer physical = handle(player);
++        if (!ordinary(physical) || server.getPlayerList().getPlayer(player.getUniqueId()) != physical
++                || !probe.request.role.name.equals(physical.getGameProfile().getName())
++                || (probe.original != null && physical != probe.original.get())
++                || !MessageDigest.isEqual(message,probe.nonce.getBytes(StandardCharsets.US_ASCII))) return;
++        probe.original = new WeakReference<>(physical);
++        probe.witnessed = true;
++    }
++    @EventHandler(priority=EventPriority.MONITOR)
++    public void joined(PlayerJoinEvent event) {
++        Probe probe = probes.get(event.getPlayer().getUniqueId());
++        if (probe == null) return;
++        var physical = handle(event.getPlayer());
++        if (probe.quit || (probe.original != null && physical != probe.original.get())) probe.superseded = true;
++        else if (probe.original == null && ordinary(physical)) probe.original = new WeakReference<>(physical);
++    }
++    @EventHandler(priority=EventPriority.MONITOR)
++    public void leaving(PlayerQuitEvent event) {
++        Player player = event.getPlayer();
++        UUID uuid = player.getUniqueId();
++        Probe probe = probes.get(uuid);
++        if (probe == null || !probe.valid() || probe.original == null || probe.original.get() != handle(player)) return;
++        probe.quit = true;
++        if (!probe.witnessed || !probe.request.expect.equals("saved")) return;
++        String digest = probe.digest();
++        // The normal logout save follows PlayerQuitEvent. No earlier autosave can contain this ticket's mark.
++        player.getPersistentDataContainer().set(SAVE_MARK,PersistentDataType.STRING,digest);
++        Path file = handle(player).server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid+".dat");
++        plugin.getServer().getScheduler().runTask(plugin,() -> plugin.getServer().getScheduler().runTaskAsynchronously(plugin,() -> {
++            boolean matches = false;
++            try {
++                if (Files.isRegularFile(file)) {
++                    var tag = NbtIo.readCompressed(file,NbtAccounter.create(32L*1024*1024));
++                    matches = tag.hasUUID("UUID") && uuid.equals(tag.getUUID("UUID"))
++                            && digest.equals(tag.getCompound("BukkitValues").getString(SAVE_MARK.toString()));
++                }
++            } catch (java.io.IOException | RuntimeException unavailable) { /* No disk proof. */ }
++            if (matches) plugin.getServer().getScheduler().runTask(plugin,() -> {
++                if (probes.get(uuid) == probe && probe.valid() && plugin.getServer().getPlayer(uuid) == null) probe.saved = true;
++            });
++        }));
++    }
++}
 diff --git a/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperBodyAdmission.java b/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperBodyAdmission.java
 index b19fc8645..67ac71ff2 100644
 --- a/numen-api/paper/src/main/java/com/dwinovo/numen/api/platform/PaperBodyAdmission.java

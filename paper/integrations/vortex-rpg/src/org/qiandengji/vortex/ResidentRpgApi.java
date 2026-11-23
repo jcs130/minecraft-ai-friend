@@ -2,6 +2,7 @@ package org.qiandengji.vortex;
 
 import com.google.gson.*;
 import io.vortexcore.VortexCorePlugin;
+import io.vortexcore.persistence.model.PlayerSnapshot;
 import io.vortexcore.rpg.ResidentActors;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -12,9 +13,14 @@ import org.bukkit.entity.*;
 final class ResidentRpgApi {
     private final VortexCorePlugin vortex;
     private final VortexBridge bridge;
-    private final Set<UUID> loading=new HashSet<>(),ready=new HashSet<>();
+    private final Set<UUID> loaded=new HashSet<>(),ready=new HashSet<>();
+    private final Map<UUID,CompletableFuture<PlayerSnapshot>> reads=new HashMap<>();
     private final Map<UUID,CompletableFuture<?>> writes=new HashMap<>();
-    ResidentRpgApi(VortexCorePlugin vortex,VortexBridge bridge){this.vortex=vortex;this.bridge=bridge;}
+    private final Set<UUID> reportedBootFailures=new HashSet<>();
+    private final ResidentSwordArts swordArts;
+    ResidentRpgApi(VortexCorePlugin vortex,VortexBridge bridge,ResidentSwordArts swordArts) {
+        this.vortex=vortex; this.bridge=bridge; this.swordArts=swordArts;
+    }
     private Player actor(UUID id){
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main_thread_required");
         try{var af=Bukkit.getPluginManager().getPlugin("AgentFriend");return (Player)af.getClass().getClassLoader()
@@ -22,10 +28,28 @@ final class ResidentRpgApi {
         }catch(ReflectiveOperationException e){throw new IllegalStateException("resident_identity_unavailable",e);}
     }
     void tick(UUID id,String requested){
+        if(ready.contains(id))return;
+        try{load(id,requested);}
+        catch(RuntimeException failure){
+            if(reportedBootFailures.add(id))vortex.getLogger().log(java.util.logging.Level.WARNING,
+                "Resident RPG profile could not be initialized for "+id,failure);
+        }
+    }
+    private void load(UUID id,String requested){
         var p=actor(id);if(p==null||!p.isOnline())return;
         var profiles=vortex.playerProfileService();
-        if(loading.add(id)){profiles.onPlayerJoin(new org.bukkit.event.player.PlayerJoinEvent(p,(String)null));return;}
-        if(profiles.qiandengjiLoading(id)||ready.contains(id))return;
+        if(!loaded.contains(id)){
+            // A native resident never enters the real player-join lifecycle.
+            // Apply the original repository snapshot on the game thread once.
+            var read=reads.computeIfAbsent(id,key->vortex.playerDataRepository().loadPlayer(key));
+            if(!read.isDone()||read.isCompletedExceptionally()||read.isCancelled())return;
+            var saved=read.join();
+            var profile=profiles.profile(p);
+            profile.applySnapshot(saved==null?PlayerSnapshot.create(id):saved);
+            loaded.add(id);
+            reads.remove(id);
+            vortex.classSkillService().applyLiveAttributes(p,profile);
+        }
         var profile=profiles.profile(id).orElseThrow();
         var pending=writes.get(id);if(pending!=null){if(!pending.isDone()||pending.isCompletedExceptionally())return;writes.remove(id);}
         String selected=vortex.classSkillService().selectedClassDefinition(profile).map(c->c.id()).orElse("");
@@ -34,14 +58,33 @@ final class ResidentRpgApi {
             writes.put(id,vortex.classSkillService().chooseClass(p,profile,requested).thenCompose(v->profiles.qiandengjiSave(p)));return;
         }
         // A saved class is authoritative. A changed config never resets it or grants another starting kit.
-        ResidentActors.register(p);vortex.qiandengjiMana().refillFull(id);ready.add(id);
+        ResidentActors.register(p);vortex.qiandengjiMana().refillFull(id);swordArts.restore(p,profile);ready.add(id);
+    }
+    boolean usesSwords(UUID id) {
+        return ready.contains(id) && vortex.playerProfileService().profile(id).filter(swordArts::isSwordsman).isPresent();
     }
     String state(UUID id){
-        if(!ready.contains(id))return new Gson().toJson(Map.of("available",false,"backend","vortex","reason",writes.containsKey(id)&&writes.get(id).isCompletedExceptionally()?"profile_save_unconfirmed":"profile_loading","abilities",List.of(),"skills",List.of()));
+        if(!ready.contains(id)){
+            String reason=reads.containsKey(id)&&reads.get(id).isCompletedExceptionally()?"profile_read_unconfirmed"
+                :writes.containsKey(id)&&writes.get(id).isCompletedExceptionally()?"profile_save_unconfirmed"
+                :reportedBootFailures.contains(id)?"profile_initialization_failed":"profile_loading";
+            return new Gson().toJson(Map.of("available",false,"backend","vortex","reason",reason,"abilities",List.of(),"skills",List.of()));
+        }
         var value=JsonParser.parseString(bridge.selfState(actor(id))).getAsJsonObject();
         value.addProperty("profession",value.get("combat").getAsString());value.addProperty("title",value.get("className").getAsString());value.addProperty("progressionSystem","VortexRPG");
-        value.add("skills",new Gson().toJsonTree(bridge.availableSpells(actor(id),vortex.playerProfileService().profile(id).orElseThrow())));
+        var profile=vortex.playerProfileService().profile(id).orElseThrow();
+        value.add("skills",new Gson().toJsonTree(bridge.availableSpells(actor(id),profile)));
+        if(usesSwords(id)&&vortex.classSkillService().unlockedSkillIds(profile).contains("dual_blades"))
+            value.addProperty("specialization","dual_blades");
+        var unlocked=vortex.classSkillService().unlockedSkillIds(profile);
+        value.add("learnable",new Gson().toJsonTree(vortex.classSkillService().skillsFor(profile).stream()
+            .filter(skill->!unlocked.contains(skill.id())).limit(64)
+            .map(skill->Map.of("id",skill.id(),"name",skill.displayName(),"level",skill.requiredLevel(),"cost",skill.cost())).toList()));
         return value.toString();
+    }
+    String swordReflex(UUID id, UUID targetId) {
+        if (!usesSwords(id)) return "";
+        return swordArts.reflex(actor(id), vortex.playerProfileService().profile(id).orElseThrow(), targetId);
     }
     String reflex(UUID id,boolean fighting){
         if(!ready.contains(id))return "";var p=actor(id);var state=vortex.playerProfileService().profile(id).orElseThrow();

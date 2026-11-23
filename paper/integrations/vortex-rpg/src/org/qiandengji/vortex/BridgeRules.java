@@ -63,5 +63,5 @@ public final class BridgeRules {
     public static <T> List<T> page(List<T> rows,Request r){int pages=pages(rows.size());if(r.page()>pages)throw invalid("页码范围 1–"+pages,"/mycli tasks "+r.action());return rows.subList((r.page()-1)*PAGE_SIZE,Math.min(r.page()*PAGE_SIZE,rows.size()));}
     public static Map<String,Object> pagination(int total,Request r){var out=new LinkedHashMap<String,Object>();out.put("page",r.page());out.put("pages",pages(total));out.put("total",total);if(r.page()<pages(total))out.put("nextCommand","/mycli "+publicGroup(r.group())+" "+r.action()+" --page "+(r.page()+1)+(r.json()?" --json":""));return out;}
     public static String nextPage(int total,Request r){return r.page()<pages(total)?"；下一页："+pagination(total,r).get("nextCommand"):"";}
-    public static String className(String id){return switch(id){case "none",""->"未选择职业";case "knight"->"骑士（坦克）";case "mage"->"法师";case "ranger"->"游侠";case "cleric"->"牧师";case "beastmaster"->"驯兽师";case "engineer"->"工程师";default->id;};}
+    public static String className(String id){return switch(id){case "none",""->"未选择职业";case "knight"->"骑士（坦克）";case "mage"->"法师";case "ranger"->"游侠";case "cleric"->"牧师";case "beastmaster"->"驯兽师";case "engineer"->"工程师";case "swordsman"->"剑士";default->id;};}
 }

@@ -36,6 +36,12 @@ final class TrialSharedSupplies implements Listener {
         if(category(at)>=0)return true;
         return at.getWorld()==world()&&at.getBlockX()==X&&at.getBlockY()==Y+1&&Arrays.stream(Z).anyMatch(z->z==at.getBlockZ());
     }
+    boolean publicStorage(Block block){
+        Location at=block.getLocation();
+        if(block.getType()==Material.CHEST)return category(at)>=0&&ready();
+        return block.getType()==Material.FURNACE&&at.getWorld()==world()
+                &&at.getBlockX()==-585&&at.getBlockY()==Y&&at.getBlockZ()==-313;
+    }
     void admin(CommandSender sender,String action){
         if(!Set.of("preview","install","audit").contains(action)){sender.sendMessage("mycli admin trialsupplies preview|install|audit");return;}
         World world=world();if(world==null){sender.sendMessage("MC_TRIAL_SHARED ok=false reason=world_unavailable");return;}

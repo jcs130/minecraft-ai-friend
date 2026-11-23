@@ -24,7 +24,7 @@ public class BedrockVisualRuleQa {
  void apply(WireEntity entity,State state){entity.applied=state.modelId();}
  void apply(WireEntity entity,State state,boolean immediate){entity.applied=state.modelId();}
  SPAWN
- static class EntityType<T>{String name;EntityType(String s){name=s;}static EntityType<?> VILLAGER=new EntityType<>("villager"),ALLAY=new EntityType<>("allay"),VEX=new EntityType<>("vex"),SMALL_FIREBALL=new EntityType<>("small_fireball"),SNOWBALL=new EntityType<>("snowball");}
+ static class EntityType<T>{String name;EntityType(String s){name=s;}static EntityType<?> VILLAGER=new EntityType<>("villager"),ALLAY=new EntityType<>("allay"),VEX=new EntityType<>("vex"),SMALL_FIREBALL=new EntityType<>("small_fireball"),SNOWBALL=new EntityType<>("snowball"),ARMOR_STAND=new EntityType<>("armor_stand");}
  static class Entity{String kind;Entity(String k){kind=k;}} static class LivingEntity extends Entity{LivingEntity(String k){super(k);}}
  static class ServerPlayer{boolean bedrock;ServerPlayer(boolean value){bedrock=value;}}
  static String kind(Entity e){return e.kind;}static boolean bedrock(ServerPlayer p){return p!=null&&p.bedrock;}
@@ -45,6 +45,8 @@ public class BedrockVisualRuleQa {
   MaidVisualRegistry.states.put(maid,new State(maid,"tlm:native",false,.6f,1.5f));q.models.put("tlm:native",new Object());e=new ServerSpawnEntityEvent(maid,c,"minecraft:allay");q.spawn(e);check(e.d.equals(q.definition),"original native maid mapping retained");
   check(type(new LivingEntity("maid"),new ServerPlayer(true))==EntityType.ALLAY,"Bedrock wire default must be allay");check(type(new LivingEntity("maid"),new ServerPlayer(false))==EntityType.ALLAY,"Java wire default allay");check(type(new LivingEntity("maid"),null)==EntityType.ALLAY,"observer allay");
   check(type(new LivingEntity("fairy"),null)==EntityType.VEX,"hostile fairy unchanged");check(type(new Entity("danmaku"),null)==EntityType.SMALL_FIREBALL,"projectile unchanged");
+  check(type(new Entity("tombstone"),null)==EntityType.ARMOR_STAND,"a grave is a standing marker, not a projectile that clients discard");check(type(new Entity("tombstone"),new ServerPlayer(true))==EntityType.ARMOR_STAND,"Bedrock grave marker");
+  check(type(new Entity("chair"),null)==EntityType.SNOWBALL,"other non-living mod entities unchanged");check(type(new LivingEntity("other"),null)==EntityType.VILLAGER,"other living mod entities unchanged");
   String unicode=local.tlmcompat.numen.MaidVisualKey.ysm("大肥鱼/公开.zip","月光");check(unicode.startsWith("ysm:")&&!unicode.contains("\\t")&&!unicode.contains("\\n"),"safe unicode selection key");check(!key.equals(local.tlmcompat.numen.MaidVisualKey.ysm("qd_dafeiyu","moon")),"textures stay distinct");check(local.tlmcompat.numen.MaidVisualKey.ysm(null,"a").isEmpty(),"invalid model stays unmapped");
   System.out.println(n+" production-method Bedrock visual checks passed");
  }

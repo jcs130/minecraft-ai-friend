@@ -73,9 +73,32 @@ for (const kind of ['maid', 'numen']) {
       await extension.tools()[0].handler({id: delivered.id, answer}, {});
     }});
     try {
+      const receipts = [];
+      const info = console.info;
+      const logger = t.mock.method(console, 'info', line => {
+        const receipt = JSON.parse(line);
+        if (receipt.event === 'resident_turn') receipts.push(receipt);
+        else info(line);
+      });
       await post(base, 'poll', session.token);
       assert.deepEqual((await post(base, 'offer', key, plan(role))).data, {state: 'answered', id: delivered.id, answer});
       assert.equal((await post(base, 'reply', session.token, {id: delivered.id, answer})).status, 409);
+      assert.equal((await post(base, 'reply', session.token, {})).status, 409);
+      const trace = {event: 'resident_turn', stage: 'portal_reply', role: role.id,
+                     turnHash: createHash('sha256').update(delivered.id).digest('hex').slice(0,12)};
+      assert.deepEqual(receipts, [
+        {...trace, status: 'accepted', kind: 'plan'},
+        {...trace, status: 'rejected', reason: 'STALE_TURN'}
+      ]);
+      logger.mock.restore();
+      const activity = {turnHash:trace.turnHash, planningStatus:'completed', completedActions:0, failedActions:0, pendingActions:0};
+      assert.equal((await post(base, 'check', session.token, {activity})).status,401);
+      assert.equal((await post(base, 'check', key, {activity:{...activity, answer:'private'}})).status,200);
+      assert.equal((await fetch(f.origin + '/api/v1/admin/npcs')).status,401);
+      const {data:adminState} = await f.admin.request('/admin/npcs');
+      assert.deepEqual(adminState.residentActivity.map(({updatedAt, ...row}) => row), [
+        {role:role.id, name:role.name, ...activity}
+      ]);
     } finally { await extension.stop(); }
     const pending = post(base, 'offer', key, plan(role));
     let old;

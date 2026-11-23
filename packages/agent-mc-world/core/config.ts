@@ -30,7 +30,7 @@ export const MINECRAFT_DEFAULTS = {
   autoReconnect: true,
   /** Maximum gap between server keepalive packets; not an action retry budget. */
   keepAliveTimeoutMs: 60_000,
-  proximityVoice: { enabled:false, audioProducerUrl:'', outputMode:'game-only' as const },
+  proximityVoice: { enabled:false, audioProducerUrl:'', speechSource:'artifact' as const, outputMode:'game-only' as const },
   simpleVoiceChat: { enabled:false, officialJar:'', javaPath:'', compatibilityVersion:20 },
   chatDuplicateWindowMs: 120_000,
   /** Honest mining throttle (budgets per rolling minute / 10 min, gaps, rest, warning back-off). */
@@ -555,6 +555,7 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.simpleVoiceChat.enabled': {type:'boolean',title:'原生 Simple Voice Chat',description:'在已认证连接上使用原生 SVC 客户端发声，不是 mc_voice/mcagent:voice。默认关闭。sent 不表示听见。'},
       'worlds.minecraft.simpleVoiceChat.officialJar': {type:'string',title:'官方 SVC jar',description:'用于 48kHz 20ms VOIP Concentus 编解码的官方 Simple Voice Chat jar 路径。不是 TTS 凭据。'},
       'worlds.minecraft.proximityVoice.audioProducerUrl': {type:'string',title:'演出音频服务',description:'显式配置的音频产物服务地址。音色与 TTS 由演出扩展维护。'},
+      'worlds.minecraft.proximityVoice.speechSource': {type:'string',enum:['artifact','server'],title:'游戏语音生成',description:'artifact 使用音频产物服务；server 由游戏服务器合成，仅限游戏附近语音。'},
       'worlds.minecraft.proximityVoice.outputMode': {type:'string',enum:['game-only','live-and-game'],title:'游戏语音输出',description:'game-only 仅游戏；live-and-game 同一音频也进入直播队列。观众解说始终不转发游戏。','x-hot':true},
       'worlds.minecraft.movementPace.enabled': { type: 'boolean', title: '寻路/转身按真人节奏', 'x-hot': true,
         description: '限制转身速度、连续自动走路时长、段与段之间的停顿，以及单段最远距离。只放慢，不伪装输入。默认开启；详见 docs/human-pace-limits.md。' },

@@ -18,7 +18,8 @@ import org.bukkit.plugin.Plugin;
  * entity UUID. Citizens IDs and coordinates remain available for existing configurations.
  */
 final class Villagers {
-    record Spot(String id, String name, String npcId, UUID entityUuid, Location fallback, double areaRadius, String persona) {}
+    record Spot(String id, String name, String npcId, UUID entityUuid, Location fallback, double areaRadius, String persona,
+                String serviceCounter) {}
 
     private final VillagerQuestsPlugin plugin;
     private Map<String, Spot> spots = Map.of();
@@ -64,14 +65,31 @@ final class Villagers {
     boolean citizens() { return citizens; }
 
     Spot spot(String id) { return spots.get(id); }
+    Spot nativeSpot(UUID uuid) {
+        String id = nativeIds.get(uuid);
+        return id == null ? null : spots.get(id);
+    }
 
     Map<String, Spot> all() { return spots; }
+
+    static boolean trialMerchant(String service) {
+        return "trial-platform-manager".equals(service);
+    }
+
+    Location trialServicePost(Spot spot) {
+        Object result = serviceCall("trialResidentServicePost", spot, UUID.class, spot.entityUuid());
+        return result instanceof Location post ? post : null;
+    }
+
+    boolean restoreTrialService(Spot spot, Villager body) {
+        return Boolean.TRUE.equals(serviceCall("restoreTrialResidentServiceBody", spot, Villager.class, body));
+    }
 
     /** Native villagers have a current location only while their bound entity is loaded and active. */
     Location location(String id) {
         Spot s = spots.get(id);
         if (s == null) return null;
-        if (s.entityUuid() != null) return liveVillagerLocation(Bukkit.getEntity(s.entityUuid()));
+        if (s.entityUuid() != null) return liveVillagerLocation(s, Bukkit.getEntity(s.entityUuid()));
         if (citizens && s.npcId() != null) {
             try {
                 Object npc = getById.invoke(registry.invoke(null), Integer.parseInt(s.npcId()));
@@ -91,7 +109,10 @@ final class Villagers {
     /** Matches the clicked entity to a registered native UUID or an existing Citizens NPC ID. */
     String villagerOf(Entity entity) {
         String nativeId = nativeIds.get(entity.getUniqueId());
-        if (nativeId != null) return liveVillagerLocation(entity) != null ? nativeId : null;
+        if (nativeId != null) {
+            Spot spot = spots.get(nativeId);
+            return spot.serviceCounter() == null && liveVillagerLocation(spot, entity) != null ? nativeId : null;
+        }
         if (!citizens) return null;
         try {
             Object reg = registry.invoke(null);
@@ -104,11 +125,27 @@ final class Villagers {
         return null;
     }
 
-    private static Location liveVillagerLocation(Entity entity) {
-        if (!(entity instanceof Villager v) || v.isDead() || !v.isValid() || !v.hasAI() || v.hasMetadata("NPC")) return null;
+    private static Location liveVillagerLocation(Spot spot, Entity entity) {
+        if (!(entity instanceof Villager v) || v.isDead() || !v.isValid() || v.hasMetadata("NPC")) return null;
+        if (spot.serviceCounter() == null ? !v.hasAI() : !managedService(spot, v)) return null;
         Location at = v.getLocation();
         World world = at.getWorld();
         return world != null && world.isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4) ? at : null;
+    }
+
+    private static boolean managedService(Spot spot, Villager villager) {
+        String method = trialMerchant(spot.serviceCounter()) ? "isTrialPlatformVoiceServiceBody" : "isManagedVoiceServiceBody";
+        return Boolean.TRUE.equals(serviceCall(method, spot, UUID.class, villager.getUniqueId()));
+    }
+
+    private static Object serviceCall(String method, Spot spot, Class<?> type, Object argument) {
+        Plugin service = Bukkit.getPluginManager().getPlugin("AgentFriend");
+        if (service == null || !service.isEnabled()) return null;
+        try {
+            return service.getClass().getMethod(method, String.class, type).invoke(service, spot.serviceCounter(), argument);
+        } catch (ReflectiveOperationException | LinkageError unavailable) {
+            return null;
+        }
     }
 
     /** Sends a line to players near the villager. {@code text} must already be cleaned or come from a template. */

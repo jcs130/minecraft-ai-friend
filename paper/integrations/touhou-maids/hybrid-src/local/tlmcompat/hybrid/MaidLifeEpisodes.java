@@ -14,7 +14,13 @@ public final class MaidLifeEpisodes {
     private final Set<String> pendingEvents=new HashSet<>();
     public MaidLifeEpisodes(JsonObject root){this.root=root;}
     public boolean dirty(){return dirty;}
-    public void saved(){dirty=false;pendingEvents.clear();}
+    public record Save(JsonObject data, Set<String> events) {}
+    public Save snapshot(){return new Save(root.deepCopy(),Set.copyOf(pendingEvents));}
+    public void saved(Save written){
+        pendingEvents.removeAll(written.events());
+        dirty=!root.equals(written.data());
+    }
+    public void saved(){saved(snapshot());}
     public boolean durable(String event){return !pendingEvents.contains(event);}
     private static long time(JsonObject value,String key){
         try{return value.get(key).getAsLong();}catch(Exception ignored){return 0;}

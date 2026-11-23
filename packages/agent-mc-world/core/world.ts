@@ -7055,6 +7055,14 @@ export class MinecraftWorld implements World {
         status: accepted ? 'accepted' : 'rejected', from: bot.entity?.position ?? null, target });
     } catch { /* Read-only presentation cannot change task admission or execution. */ }
   }
+  /** Send a host witness on this exact live connection. The native recipient verifies and consumes the nonce. */
+  sendHandoffWitness(playerUuid:string,channel:string,nonce:string):void {
+    const bot=this.bridge?.bot;
+    if (!bot || !this.connectionReadiness().ready || bot.player?.uuid!==playerUuid || bot._client.state!=='play' ||
+        !/^[a-z0-9_.-]{1,64}:[a-z0-9_./-]{1,96}$/.test(channel) || channel.startsWith('minecraft:') ||
+        !/^[A-Za-z0-9_-]{32,64}$/.test(nonce)) throw Error('Original Minecraft connection cannot send the witness');
+    bot._client.write('custom_payload',{channel,data:Buffer.from(nonce,'ascii')});
+  }
   /** Read-only activity from an explicit host adapter; renderer validates and redacts it. */
   publishAgentActivity(value: unknown): void {
     const record = normalizeAgentActivity(value); if (!record) return;

@@ -1,5 +1,7 @@
 arena-built: false
 last-run: 0
+# Set both entrance role IDs to their surveyed original Villager UUIDs to opt in. Restart to bind.
+trial-platform-residents: {}
 legacy-task-npcs:
   # At startup, retire only AgentFriend's own tagged RPG storyline and life-guild task bodies.
   # Story notes remain available at their original locations. Life contracts stay on the board.
@@ -22,6 +24,12 @@ nametags:
   - 66f280bd-71f9-37a7-b0a4-f352a8c624c5 # Naruto
   - 9ad939f0-c56e-3b7b-ba68-e359b67af0c5 # corti
 dungeon-enemy-moves:
+  enabled: false
+dungeon-encounters:
+  # Opt in after validating this map's layout. Requires dungeon-enemy-moves.enabled.
+  void-citadel: false
+crypt-temporary:
+  # Set the world UUID, reserved boxes and materials after surveying the crypt interior.
   enabled: false
 coach:
   adventure-enabled: true

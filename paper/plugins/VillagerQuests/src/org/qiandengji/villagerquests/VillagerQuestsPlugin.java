@@ -61,6 +61,7 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
 
     Board board;
     Villagers villagers;
+    VillagerLives lives;
     Rewards rewards;
     private VillagerDialogue dialogue;
     TaskCards taskCards;
@@ -91,6 +92,46 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
     private Map<String, String> heroNames = Map.of();
     private ConfigurationSection triggerConfig;
 
+    /** Game-thread preflight for an explicitly bound original villager in a body handoff. */
+    public boolean nativeBodyAvailable(String issuer, UUID original, boolean requireLiving) {
+        if (!Bukkit.isPrimaryThread() || closing || !isEnabled() || villagers == null || board == null) return false;
+        var spot = villagers.spot(issuer);
+        if (spot == null || spot.serviceCounter() != null || !original.equals(spot.entityUuid()) || authoring.contains(issuer) ||
+                (lives != null && lives.blocksHandoff(issuer)) ||
+                board.openCount(issuer) != 0 || (dialogue != null && dialogue.busy(original))) return false;
+        if (!requireLiving) return true;
+        var entity = Bukkit.getEntity(original);
+        return entity instanceof org.bukkit.entity.Villager trader && trader.getTrader() == null &&
+                issuer.equals(villagers.villagerOf(entity));
+    }
+
+    /** Server-internal query for an original player's already accepted commissions. */
+    public String originalRoleCommissions(UUID originalPlayerUuid) {
+        if (!Bukkit.isPrimaryThread() || closing || !isEnabled() || board == null || originalPlayerUuid == null)
+            throw new IllegalStateException("Original role commissions unavailable");
+        long now = System.currentTimeMillis();
+        var result = new JsonObject();
+        var entries = new JsonArray();
+        var active = board.activeFor(originalPlayerUuid.toString()).stream()
+                .sorted(java.util.Comparator.comparingLong((Board.Quest quest) -> quest.deadlineAt)
+                        .thenComparing(quest -> quest.id)).toList();
+        for (var quest : active.stream().limit(16).toList()) {
+            var entry = new JsonObject();
+            entry.addProperty("id", quest.id);
+            entry.addProperty("issuer", quest.commission.issuer());
+            entry.addProperty("type", quest.commission.type().name());
+            entry.addProperty("target", quest.commission.target());
+            entry.addProperty("quantity", quest.commission.quantity());
+            entry.addProperty("progress", quest.progress);
+            entry.addProperty("deadlineAt", quest.deadlineAt);
+            entry.addProperty("status", quest.deadlineAt <= now ? "expired" : "accepted");
+            entries.add(entry);
+        }
+        result.addProperty("acceptedRecords", active.size());
+        result.add("entries", entries);
+        return result.toString();
+    }
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
@@ -106,6 +147,7 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
             return t;
         });
         villagers = new Villagers(this);
+        lives = new VillagerLives(this);
         dialogue = new VillagerDialogue(this);
         rewards = new Rewards(this);
         statePath = getDataFolder().toPath().resolve("state.json");
@@ -167,8 +209,20 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
                     if (!entityUuid.toString().equals(entityId) || npcId != null || !nativeVillagers.add(entityUuid))
                         throw new IllegalArgumentException("villagers." + id + ".entityUuid must be a unique canonical UUID and replace npcId");
                 }
+                String counter = v.getString("serviceCounter");
+                if (v.contains("serviceCounter") && (!("guild-receptionist".equals(counter) || Villagers.trialMerchant(counter)) || entityUuid == null
+                        || !policy.villagers.get(id).types().isEmpty() || v.contains("triggers"))) {
+                    throw new IllegalArgumentException("villagers." + id + ".serviceCounter requires a native UUID and no commissions");
+                }
                 spots.put(id, new Villagers.Spot(id, policy.villagers.get(id).name(), npcId, entityUuid, fallback,
-                        v.getDouble("areaRadius", 32), v.getString("persona", "")));
+                        v.getDouble("areaRadius", 32), v.getString("persona", ""), counter));
+            }
+            Map<String, NativeVillageHomes.Home> homes = NativeVillageHomes.load(cfg.getConfigurationSection("households"));
+            for (String id : homes.keySet()) {
+                Villagers.Spot spot = spots.get(id);
+                if (spot == null || spot.entityUuid() == null || spot.serviceCounter() != null && !Villagers.trialMerchant(spot.serviceCounter())) {
+                    throw new IllegalArgumentException("households." + id + " requires a registered native villager");
+                }
             }
             Map<String, String> heroes = new LinkedHashMap<>();
             ConfigurationSection hb = cfg.getConfigurationSection("heroes.bodies");
@@ -185,6 +239,7 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
             heroNames = Map.copyOf(heroes);
             if (board == null) board = new Board(policy, heroes.keySet()); else board.reconfigure(policy, heroes.keySet());
             villagers.configure(spots);
+            lives.configure(homes);
             heroesEnabled = cfg.getBoolean("heroes.enabled", false);
             handoffGraceMs = Math.max(0, cfg.getLong("heroes.handoffAfterMinutes", 10)) * 60_000L;
             speakHeroOffered = cfg.getBoolean("heroes.speakBridgeOffered", false);
@@ -302,8 +357,9 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
 
     // ---- main loop (main thread) ---------------------------------------------------------------------
     private void tick() {
-        dialogue.heartbeat();
         long now = System.currentTimeMillis();
+        lives.tick(now);
+        dialogue.heartbeat();
         for (Board.Quest q : board.expire(now)) {
             say(q.commission.issuer(), Templates.expired(name(q.commission.issuer())));
             taskCards.closed(q);
@@ -403,9 +459,10 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
 
     /** Evaluates one villager's rules; {@code force} (admin) skips the random chance. Returns a status for the admin. */
     String trigger(String id, ConfigurationSection t, boolean force) {
+        Villagers.Spot spot = villagers.spot(id);
+        if (spot != null && spot.serviceCounter() != null) return "no_commissions";
         Location at = villagers.location(id);
         if (at == null || at.getWorld() == null) return "no_location";
-        Villagers.Spot spot = villagers.spot(id);
         ConfigurationSection raid = t == null ? null : t.getConfigurationSection("nightRaid");
         if (raid != null && raid.getBoolean("enabled", true)) {
             long time = at.getWorld().getTime();

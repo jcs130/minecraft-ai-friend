@@ -9,6 +9,29 @@ import {HostedConversations} from '../src/conversations.mjs';
 import {hostingServer} from '../src/http.mjs';
 import {portalHostingAuthority} from '../src/portal-authority.mjs';
 import {hostedPortalClient} from '../src/portal-client.mjs';
+
+test('body handoffs explicitly opt in and send only scoped fields to the same loopback service', async () => {
+  const serviceKey=randomBytes(32);
+  const endpoint='http://127.0.0.1:19084/v1/hosting';
+  assert.equal(hostedPortalClient({endpoint,serviceKey}).characterBodies,null);
+  const sent=[];
+  const client=hostedPortalClient({endpoint,serviceKey,characterBodies:true,fetcher:async (url,options)=>{
+    assert.equal(url.href,'http://127.0.0.1:19084/v1/character-bodies');
+    assert.equal(options.redirect,'error');
+    assert.equal(options.headers.authorization,'Bearer '+serviceKey.toString('base64url'));
+    assert.equal(options.headers.cookie,undefined);
+    sent.push(JSON.parse(options.body));
+    return Response.json({});
+  }});
+  const auth={ownerId:'trusted-owner'}, characterId='test-character', requestId='test-ticket';
+  await client.characterBodies.current(characterId,auth);
+  await client.characterBodies.switchBody({characterId,requestId,targetKind:'maid',expectedGeneration:3,ownerId:'untrusted'},auth);
+  await client.characterBodies.lookup({characterId,requestId},auth);
+  assert.deepEqual(sent,[
+    {op:'current',characterId,...auth}, {op:'switch',characterId,requestId,targetKind:'maid',expectedGeneration:3,...auth},
+    {op:'lookup',characterId,requestId,...auth}
+  ]);
+});
 import {PROTOCOL} from '../src/protocol.mjs';
 
 test('website authority and real HTTP transport keep owner keys private and viewer dialogue separate',async t=>{

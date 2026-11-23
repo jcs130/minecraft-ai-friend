@@ -32,21 +32,86 @@ describe('canonical proximity protocol',()=>{
    b.on('write',(_name:string,p:any)=>{if(p.channel!=='mcagent:voice')return;if(p.data[0]===2)frames++;else {const r=JSON.parse(p.data.subarray(1));if(r.op==='begin')receipt(b,id,'playing');}});
    expect((await voice.upload(wav(),{requestId:id})).state).toBe('playing');expect(frames).toBe(0);voice.close();
  });
+ it('aborts say before send or while waiting for the server',async()=>{
+   const b=bot(),voice=attachProximityVoice(b),id=randomUUID(),controller=new AbortController();
+   const ops:string[]=[];b.on('write',(_name:string,p:any)=>{if(p.channel==='mcagent:voice')ops.push(JSON.parse(p.data.subarray(1)).op);});
+   const pending=voice.say('hello',{requestId:id,signal:controller.signal});
+   controller.abort();
+   expect(await pending).toMatchObject({requestId:id,state:'unknown',reason:'VOICE_CANCELLED_QUERY_SAME_REQUEST_DO_NOT_REPLAY'});
+   expect((await voice.say('hello',{signal:controller.signal})).state).toBe('unknown');
+   expect(ops).toEqual(['say']);voice.close();
+ });
  it('does not replay after timeout or disconnect',async()=>{const b=bot(),voice=attachProximityVoice(b,{timeoutMs:8});let sent=0;b.on('write',()=>sent++);
    expect((await voice.say('你好')).state).toBe('unknown');expect(sent).toBe(1);const pending=voice.say('再见');b.emit('end');expect((await pending).state).toBe('unknown');expect(sent).toBe(2);
  });
 });
-function laneFixture(options:{file?:string;url?:string;live?:boolean;caption?:boolean}={}){
- const b=bot(),changes:GameVoiceReceipt[]=[],heard:any[]=[],ops:string[]=[],parts:Buffer[]=[],texts:any[]=[];let valid=true,world='minecraft:town',revision=1,auto=0;
+function laneFixture(options:{file?:string;url?:string;live?:boolean;caption?:boolean;speechSource?:'artifact'|'server';holdSpeech?:boolean}={}){
+ const b=bot(),changes:GameVoiceReceipt[]=[],heard:any[]=[],ops:string[]=[],parts:Buffer[]=[],texts:any[]=[],outgoing:Record<string,unknown>[]=[];let valid=true,world='minecraft:town',revision=1,auto=0;
  const context=():ProximityVoiceContext=>{const key=world,rev=revision;return{bot:b,generation:'test-account-1',world:{key,revision:rev,source:'vanilla-login',observedAt:new Date().toISOString()},stillCurrent:()=>valid&&world===key&&revision===rev,disableAutoSpeech:()=>{auto++;},
    ...(options.caption?{sendNearbyText:(text:string,requestId:string)=>{const row={protocol:'agent-mc/chat-delivery/v1' as const,id:randomUUID(),status:'sent' as const,sentAt:new Date().toISOString(),channel:'public' as const,text,voiceRequestId:requestId,boundary:'client-transport' as const,recipientRead:'unknown' as const};texts.push(row);return row;}}:{})};};
  b.on('write',(_name:string,p:any)=>{if(p.channel!=='mcagent:voice')return;if(p.data[0]===2){parts.push(p.data.subarray(21));return;}
-   const r=JSON.parse(p.data.subarray(1));ops.push(r.op);if(r.op==='begin')receipt(b,r.requestId,'uploading');if(r.op==='finish')receipt(b,r.requestId,'sent');if(r.op==='status')receipt(b,r.requestId,'sent');});
- const lane=new ProximityVoiceLane({config:()=>({enabled:true,audioProducerUrl:options.url??'',outputMode:options.live?'live-and-game':'game-only'}),context:()=>valid?context():null,
+   const r=JSON.parse(p.data.subarray(1));ops.push(r.op);outgoing.push(r);
+   if(r.op==='begin')receipt(b,r.requestId,'uploading');
+   if(r.op==='finish'||r.op==='status'||r.op==='say'&&!options.holdSpeech)receipt(b,r.requestId,'sent');});
+ const lane=new ProximityVoiceLane({config:()=>({enabled:true,audioProducerUrl:options.url??'',speechSource:options.speechSource,outputMode:options.live?'live-and-game':'game-only'}),context:()=>valid?context():null,
    blob:()=>({bytes:wav(),mime:'audio/wav'}),hearing:(row,w)=>heard.push({row,world:w}),changed:r=>changes.push(r),file:options.file,timeoutMs:30});
- return{lane,b,changes,heard,ops,parts,texts,setValid:(value:boolean)=>{valid=value;},setWorld:(value:string)=>{world=value;revision++;},getAuto:()=>auto};
+ return{lane,b,changes,heard,ops,parts,texts,outgoing,setValid:(value:boolean)=>{valid=value;},setWorld:(value:string)=>{world=value;revision++;},getAuto:()=>auto};
 }
 describe('independent game voice lane',()=>{
+ it('sends one server-selected utterance without WAV production and keeps a durable receipt',async()=>{
+   const file=join(await mkdtemp(join(tmpdir(),'server-voice-')),'ledger.json');
+   const f=laneFixture({file,speechSource:'server',caption:true,url:'unused by server speech'});
+   const args={action:'speak',text:'\u4e00\u8d77\u53bb\u516c\u4f1a\u5427',requestId:randomUUID()};
+   try{
+     expect(JSON.parse((await f.lane.call({})).text).speechSource).toBe('server');
+     expect((await f.lane.call(args)).failed).toBeUndefined();
+     await eventually(()=>f.changes.some(r=>r.game.state==='sent'&&r.nearbyText?.state==='sent'));
+     expect(f.outgoing.filter(r=>r.op==='say')).toEqual([{op:'say',text:args.text,requestId:args.requestId}]);
+     expect(f.ops).not.toContain('begin');expect(f.parts).toHaveLength(0);
+     expect(f.texts).toMatchObject([{text:args.text,voiceRequestId:args.requestId}]);
+     expect(f.changes.at(-1)).toMatchObject({speechSource:'server',generationComplete:null,recipientHeard:'unknown',
+       game:{state:'sent'},nearbyText:{state:'sent'},broadcast:{requested:false,state:'not-requested'},
+       timings:{serverRequestedAt:expect.any(String)}});
+     expect((await f.lane.call({...args,text:'changed'})).text).toContain('VOICE_REQUEST_ID_REUSED_WITH_DIFFERENT_CONTENT');
+     await f.lane.call(args);expect(f.ops.filter(op=>op==='say')).toHaveLength(1);
+   }finally{await f.lane.stop();}
+   const next=laneFixture({file});
+   try{
+     expect((await next.lane.call(args)).data).toMatchObject({game:{state:'sent'},speechSource:'server'});
+     expect(next.ops).not.toContain('say');expect(next.ops).not.toContain('begin');
+   }finally{await next.lane.stop();}
+ });
+ it('rejects overlong UTF-16 lines, commands and server-to-live routing before any speech or text effect',async()=>{
+   const f=laneFixture({speechSource:'server',caption:true}),live=laneFixture({speechSource:'server',live:true,caption:true});
+   try{
+     expect((await f.lane.call({action:'speak',text:'\u{1f98a}'.repeat(101)})).text).toContain('VOICE_TEXT_MAX_200');
+     expect((await f.lane.call({action:'speak',text:' /spawn'})).text).toContain('VOICE_TEXT_NOT_A_COMMAND');
+     expect((await live.lane.call({action:'speak',text:'hello'})).text).toContain('VOICE_SERVER_SPEECH_GAME_ONLY');
+     expect(f.ops).not.toContain('say');expect(live.ops).not.toContain('say');
+     expect(f.texts).toHaveLength(0);expect(live.texts).toHaveLength(0);
+     expect((await f.lane.call({action:'speak',text:'\u{1f98a}'.repeat(100)})).failed).toBeUndefined();
+     await eventually(()=>f.changes.some(r=>r.game.state==='sent'));
+   }finally{await f.lane.stop();await live.lane.stop();}
+ });
+ it('continues to accept manual WAV uploads on the server speech setting',async()=>{
+   const f=laneFixture({speechSource:'server'});
+   try{
+     expect((await f.lane.call({action:'upload',audio_handle:'audio:wave'})).failed).toBeUndefined();
+     await eventually(()=>f.changes.some(r=>r.game.state==='sent'));
+     expect(Buffer.concat(f.parts)).toEqual(wav());expect(f.ops).not.toContain('say');
+   }finally{await f.lane.stop();}
+ });
+ it('keeps an in-flight server say unknown after a world change and never replays it',async()=>{
+   const f=laneFixture({speechSource:'server',holdSpeech:true});
+   const args={action:'speak',text:'hello',requestId:randomUUID()};
+   try{
+     await f.lane.call(args);expect(f.ops.filter(op=>op==='say')).toHaveLength(1);
+     f.setWorld('minecraft:another');f.lane.sync();
+     await eventually(()=>f.changes.some(r=>r.game.state==='unknown'));
+     expect((await f.lane.call(args)).data).toMatchObject({game:{state:'unknown'},recipientHeard:'unknown'});
+     expect(f.ops.filter(op=>op==='say')).toHaveLength(1);
+   }finally{await f.lane.stop();}
+ });
  it('exposes measured overlong synthesis as a non-retryable repairable failure, keeping delivered text separate',async()=>{
    let synthesis=0;const server=createServer(async(req,res)=>{synthesis++;for await(const _ of req){}
      res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({error:'do not copy provider internals',diagnostic:{protocol:'voice-artifact-error/v1',code:'VOICE_AUDIO_DURATION_EXCEEDED',retryable:false,durationMs:38080.7256,maxDurationMs:30000,secret:'do not copy'}}));});

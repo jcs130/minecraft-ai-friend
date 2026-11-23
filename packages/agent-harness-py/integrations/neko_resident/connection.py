@@ -9,11 +9,13 @@ import time
 import webbrowser
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 from uuid import UUID, uuid4
 
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
+
+from .desktop import DesktopDevice, DeviceVault
 
 
 PORTAL = "https://mc.kangqiang.site"
@@ -25,8 +27,8 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def request_json(url, payload=None, token=None, *, timeout=8):
-    headers = {"Content-Type": "application/json"}
+def request_json(url, payload=None, token=None, *, timeout=8, extra_headers=None):
+    headers = {"Content-Type": "application/json", **(extra_headers or {})}
     if token:
         headers["Authorization"] = "Bearer " + token
     request = Request(url, data=json.dumps(payload).encode() if payload is not None else None, headers=headers)
@@ -76,6 +78,144 @@ class ConnectionPanel:
     catalog = None
     waiting = None
     draft = None
+    body_view = None
+    body_receipt = None
+    desktop = None
+    device_state = None
+    device_prefs = None
+    play_request = None
+
+    async def prepare_device(self):
+        self.desktop = DesktopDevice(self.portal, DeviceVault(self.data_path("desktop-device.lock"),self.portal),request_json)
+        self.device_state = None
+        self.play_request = None
+        try:
+            self.device_prefs = await asyncio.to_thread(self.desktop.settings)
+        except (ImportError, OSError, RuntimeError, ValueError):
+            self.device_prefs = {}
+
+    async def read_device(self):
+        try:
+            if not self.device_prefs.get("refreshToken"):
+                self.device_state = {"status":"reauthorize"} if self.device_prefs.get("character") else None
+                return False
+            state = await asyncio.to_thread(self.desktop.authorized,"status",{})
+            if state["character"]["characterId"] != self.device_prefs.get("character"):
+                raise ValueError("desktop_character_changed")
+            if self.device_prefs.get("modeCharacter") == state["character"]["characterId"]:
+                state["preferredMode"] = self.device_prefs.get("mode")
+            self.device_state = state
+            return True
+        except HTTPError as exc:
+            if exc.code == 401:
+                self.device_prefs = await asyncio.to_thread(self.desktop.settings)
+                self.device_state = {"status":"reauthorize"}
+            else:
+                self.device_state = {"status":"unavailable"}
+        except (OSError, ValueError, KeyError, TypeError):
+            self.device_state = {"status":"unavailable"}
+        return False
+
+    async def stop_device_play(self):
+        request, self.play_request = self.play_request, None
+        await self.detach()
+        if request:
+            await asyncio.to_thread(self.desktop.authorized,"stop",{"requestId":request})
+
+    @ui.action(id="desktop_device", label="千灯纪设备授权与游玩", refresh_context=True)
+    @plugin_entry(id="desktop_device", name="千灯纪设备授权与游玩", input_schema={
+        "type":"object", "properties":{"op":{"type":"string","enum":["login","cross-device","complete","refresh","start","stop","unlink","manage","recovery"]},
+        "uiToken":SECRET, "localRole":{"type":"string","maxLength":128},"mode":{"type":"string","maxLength":16}},
+        "required":["op","uiToken"],"additionalProperties":False})
+    async def desktop_device(self, op, uiToken, localRole="", mode="", **_):
+        if not self._from_panel(uiToken):
+            return Err("请从千灯纪面板操作。")
+        if self.pair_lock.locked() and op == "complete":
+            return Ok({"pending":True})
+        async with self.pair_lock:
+            try:
+                if op in ("login","cross-device"):
+                    url = await self.desktop.start(op == "cross-device")
+                    if not await asyncio.to_thread(webbrowser.open,url):
+                        return Err("请在系统浏览器打开 " + url)
+                    return Ok({"opened":True})
+                if op in ("manage","recovery"):
+                    view = "/desktop-connect.html" if op == "manage" else "/resident-connect.html?flow=bodies"
+                    if op == "recovery" and self.device_prefs.get("character"):
+                        query = {"character":self.device_prefs["character"]}
+                        if mode and mode in (self.device_state or {}).get("modes", []) and not self.session:
+                            query["targetKind"] = mode
+                            await asyncio.to_thread(self.desktop.remember_role, None, mode)
+                            self.device_prefs = await asyncio.to_thread(self.desktop.settings)
+                        view += "&" + urlencode(query)
+                    await asyncio.to_thread(webbrowser.open,self.portal + view)
+                    return Ok({"opened":True})
+                if op == "complete":
+                    if not await self.desktop.complete():
+                        return Ok({"pending":True})
+                    await self.detach()
+                    self.play_request = None
+                    self._clear_authorization()
+                    self.device_prefs = await asyncio.to_thread(self.desktop.settings)
+                    await self.read_device()
+                    return Ok({"authorized":True})
+                if op == "refresh":
+                    await self.read_device()
+                    return Ok({"updated":True})
+                if op == "stop":
+                    await self.stop_device_play()
+                    await self.read_device()
+                    return Ok({"stopped":True})
+                if op == "unlink":
+                    await self.stop_device_play()
+                    await asyncio.to_thread(self.desktop.authorized,"unlink",{})
+                    await asyncio.to_thread(self.desktop.erase)
+                    self.device_prefs = await asyncio.to_thread(self.desktop.settings)
+                    self.device_state = {"status":"reauthorize"}
+                    return Ok({"revoked":True})
+                if op != "start" or self.session:
+                    return Err("请先停止现有游玩。")
+                if not await self.read_device() or not self.device_state.get("canStart"):
+                    return Err("当前身体无法启动。请刷新状态或处理原控制端。")
+                current = self.device_state["character"]
+                if mode != current.get("bodyKind"):
+                    return Err("请在官网确认身体切换并核对原回执。")
+                role = await self._resolve_role(localRole or self.device_prefs.get("localRole",""))
+                if not role:
+                    return Err("请选择接收游戏消息的本机角色。")
+                request = self.play_request or str(uuid4())
+                self.play_request = request
+                record = await asyncio.to_thread(self.desktop.settings)
+                reply = await asyncio.to_thread(self.desktop.authorized,"start",{"requestId":request,"mode":mode})
+                session = read_session(reply,self.portal)
+                if any(session["resident"].get(k) != current.get(k) for k in ("characterId","bodyId","bodyKind","id")):
+                    raise ValueError("desktop_character_changed")
+                session["deviceHeaders"] = self.desktop.headers(record)
+                await asyncio.to_thread(request_json,session["endpoint"] + "/begin",{},session["token"],
+                                        extra_headers=session["deviceHeaders"])
+                await asyncio.to_thread(self.desktop.remember_role,role,mode)
+                self.device_prefs = await asyncio.to_thread(self.desktop.settings)
+                self.role, self.session = role,session
+                await self._on_command_loop_start()
+                await self.read_device()
+                return Ok({"started":True,"characterId":current["characterId"]})
+            except HTTPError as exc:
+                if op == "complete" and exc.code in (400,401,404):
+                    self.desktop.close_login()
+                if exc.code == 401:
+                    await self.detach()
+                    self.play_request = None
+                    self.device_prefs = await asyncio.to_thread(self.desktop.settings)
+                    self.device_state = {"status":"reauthorize"}
+                    return Err("设备授权已失效，请重新登录千灯纪。")
+                if exc.code == 409:
+                    await self.read_device()
+                    return Err("身体已有控制端，请查看状态和恢复入口。")
+                return Err("授权或游玩请求未完成，可以刷新状态后重试。")
+            except (ImportError, RuntimeError):
+                return Err("系统私有凭据存储不可用。")
+            except (OSError, ValueError, KeyError, TypeError):
+                return Err("连接未确认，请刷新原角色状态。")
 
     @staticmethod
     def local_origin():
@@ -91,6 +231,53 @@ class ConnectionPanel:
 
     def _clear_authorization(self):
         self.authorization = self.catalog = self.waiting = self.draft = None
+        self.body_view = self.body_receipt = None
+
+    def _body_readable(self):
+        until = self.authorization.get("bodyReadExpiresAt") if self._authorized() else None
+        if type(until) in (int, float) and until > time.time() * 1000:
+            return True
+        self.body_view = self.body_receipt = None
+        return False
+
+    @ui.action(id="read_character_body", label="查看身体状态和原回执")
+    @plugin_entry(id="read_character_body", name="查看身体状态和原回执", input_schema={
+        "type": "object", "properties": {"op": {"type": "string", "enum": ["list", "receipt"]},
+            "characterId": {"type": "string"}, "requestId": {"type": "string"}, "uiToken": SECRET},
+        "required": ["op", "uiToken"], "additionalProperties": False})
+    async def read_character_body(self, op, uiToken, characterId="", requestId="", **_):
+        if not self._from_panel(uiToken) or op not in ("list", "receipt"):
+            return Err("请从居民面板查看角色身体。")
+        async with self.pair_lock:
+            if not self._body_readable():
+                return Err("本次授权未开放身体查询。可以打开官网查看。")
+            url = self.portal + "/api/v1/character-bodies"
+            if op == "receipt":
+                known = {r["characterId"] for r in (self.body_view or {}).get("characters", [])}
+                if (not isinstance(characterId, str) or characterId not in known or not isinstance(requestId, str)
+                        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", requestId)):
+                    return Err("请选择列表中的角色并填写原请求编号。")
+                url += f"/{characterId}/switch/{requestId}"
+            self.body_receipt = None
+            try:
+                data = await asyncio.to_thread(request_json, url, None, self.authorization["onboardingToken"])
+                if not self._body_readable():
+                    return Err("本次授权已结束，请重新打开官网。")
+                if op == "list":
+                    rows = [{k: row[k] for k in ("characterId", "name", "activeKind", "status", "pendingRequestId")}
+                            for row in data["characters"]]
+                    if any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", row["characterId"]) for row in rows):
+                        raise ValueError("invalid_character")
+                    self.body_view = {"available": data["available"] is True, "characters": rows}
+                else:
+                    if data["characterId"] != characterId or data["requestId"] != requestId:
+                        raise ValueError("receipt_mismatch")
+                    self.body_receipt = {k: data[k] for k in ("characterId", "requestId", "status", "activeKind", "targetKind")}
+                return Ok({"updated": True})
+            except (OSError, ValueError, TypeError, KeyError):
+                if op == "list":
+                    self.body_view = None
+                return Err("未能核对身体状态或原回执。可以打开官网查看。")
 
     def _authorized(self):
         if self.authorization and self.authorization["expiresAt"] > time.time() * 1000:
@@ -103,22 +290,35 @@ class ConnectionPanel:
 
     @ui.context(id="resident_connection", title="千灯纪居民")
     async def connection_context(self):
+        if self.device_state is None and self.device_prefs and self.device_prefs.get("character"):
+            if self.device_prefs.get("refreshToken"):
+                async with self.pair_lock:
+                    if self.device_state is None:
+                        await self.read_device()
+            else:
+                self.device_state = {"status":"reauthorize"}
         resident = (self.session or {}).get("resident", {})
         names, current = await asyncio.to_thread(self.local_characters)
         return {"role": self.role or getattr(self._host_ctx, "current_lanlan", "") or current,
                 "localRoles": names, "authorized": self._authorized(), "catalog": self.catalog or {},
+                "bodyReadable": self._body_readable(), "bodyView": self.body_view, "bodyReceipt": self.body_receipt,
                 "waiting": self.waiting[0]["name"] if self.waiting else None,
                 "resident": resident.get("name", ""), "connected": self.session is not None,
-                "browserCode": self.browser_login["code"] if self.browser_login else None, "uiToken": self.panel_token}
+                "browserCode": self.browser_login["code"] if self.browser_login else None, "uiToken": self.panel_token,
+                "deviceState":self.device_state,"devicePlay":bool(self.session and self.session.get("deviceHeaders")),
+                "deviceLogin":bool(self.desktop and self.desktop.login),
+                "deviceCode":self.desktop.login["crossCode"] if self.desktop and self.desktop.login else None,
+                "deviceUrl":self.desktop.login["url"] if self.desktop and self.desktop.login and self.desktop.login["crossCode"] else None}
 
     @ui.action(id="open_resident_website", label="打开角色管理或授权页")
     @plugin_entry(id="open_resident_website", name="打开角色管理或授权页", input_schema={
-        "type": "object", "properties": {"page": {"type": "string", "enum": ["authorize", "characters"]}, "uiToken": SECRET},
+        "type": "object", "properties": {"page": {"type": "string", "enum": ["authorize", "characters", "bodies"]}, "uiToken": SECRET},
         "required": ["page", "uiToken"], "additionalProperties": False})
     async def open_resident_website(self, page, uiToken, **_):
-        if not self._from_panel(uiToken) or page not in ("authorize", "characters"):
+        if not self._from_panel(uiToken) or page not in ("authorize", "characters", "bodies"):
             return Err("请从千灯纪居民面板打开。")
-        url = self.portal + "/resident-connect.html?flow=authorize" if page == "authorize" else self.local_origin() + "/character_card_manager"
+        url = (self.local_origin() + "/character_card_manager" if page == "characters"
+               else self.portal + "/resident-connect.html?flow=" + page)
         if not await asyncio.to_thread(webbrowser.open, url):
             return Err("请在浏览器打开 " + url)
         return Ok({"opened": True})
@@ -139,14 +339,14 @@ class ConnectionPanel:
                 api = self.portal + "/api/v1/resident-onboarding/"
                 if op == "start":
                     if not self.browser_login:
-                        pending = await asyncio.to_thread(request_json, api + "browser-start", {})
+                        pending = await asyncio.to_thread(request_json, api + "browser-start", {"bodyRead": True})
                         if (str(UUID(pending["id"])) != pending["id"]
                                 or not re.fullmatch(r"rba_[A-Za-z0-9_-]{43}", pending["secret"])
                                 or not re.fullmatch(r"[0-9]{6}", pending["code"])
                                 or not pending["expiresAt"] > time.time() * 1000):
                             raise ValueError("invalid_browser_login")
                         self.browser_login = pending
-                    url = self.portal + "/resident-connect.html?flow=browser#" + self.browser_login["id"]
+                    url = self.portal + "/resident-connect.html?flow=browser&bodyRead=1#" + self.browser_login["id"]
                     if not await asyncio.to_thread(webbrowser.open, url):
                         return Err("请在浏览器打开 " + url)
                     return Ok({"opened": True})

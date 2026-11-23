@@ -65,7 +65,7 @@ export function attachProximityVoice(bot,{onHearing,onResult,isAuthenticated,see
     for(const [requestId,wait]of pending){clearTimeout(wait.timer);wait.resolve({requestId,state:'unknown',reason:'VOICE_CONNECTION_ENDED_DO_NOT_REPLAY'});}pending.clear();if(attached.get(bot)?.close===close)attached.delete(bot);
   };
   const voice={
-    say(text,{requestId=randomUUID(),voice}={}){if(typeof text!=='string'||!text.trim()||text.length>200)throw Error('VOICE_TEXT_MAX_200');return exchange({op:'say',requestId,text,...(voice?{voice}:{})});},
+    say(text,{requestId=randomUUID(),voice,signal}={}){if(typeof text!=='string'||!text.trim()||text.length>200)throw Error('VOICE_TEXT_MAX_200');return exchange({op:'say',requestId,text,...(voice?{voice}:{})},undefined,signal);},
     status(requestId){return exchange({op:'status',requestId},()=>true);},
     async upload(wav,{requestId=randomUUID(),signal}={}){
       if(uploading)throw Error('VOICE_UPLOAD_ALREADY_PENDING');inspectVoiceWav(wav);uploading=true;

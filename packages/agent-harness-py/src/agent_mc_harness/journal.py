@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .body.adventure import PARTY_OPENING
 from .models import ActionReceipt, BodyAction
+from .resident_trace import correlation_hash, trace_resident_turn
 
 
 def work_key(action: BodyAction) -> tuple | None:
@@ -38,6 +39,8 @@ class ActionJournal:
         self.db.execute("CREATE TABLE IF NOT EXISTS work_sources (body TEXT, event TEXT, request TEXT, PRIMARY KEY(body,event,request))")
         self.db.execute("CREATE TABLE IF NOT EXISTS npc_contacts (body TEXT, kind TEXT, request TEXT, at REAL, PRIMARY KEY(body,kind))")
         self.db.execute("CREATE TABLE IF NOT EXISTS npc_resident_speech (request TEXT PRIMARY KEY, turn_hash TEXT NOT NULL)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS npc_resident_actions (request TEXT PRIMARY KEY, turn_hash TEXT NOT NULL)")
+        self.db.execute("CREATE INDEX IF NOT EXISTS npc_resident_actions_turn ON npc_resident_actions(turn_hash)")
         self.db.execute("CREATE TABLE IF NOT EXISTS npc_activity (body TEXT PRIMARY KEY, mode TEXT NOT NULL, "
                         "since REAL NOT NULL, cue TEXT, reviewed REAL, purpose TEXT)")
         self.db.execute("CREATE TABLE IF NOT EXISTS npc_wait_notes (request TEXT PRIMARY KEY, note TEXT NOT NULL)")
@@ -73,6 +76,8 @@ class ActionJournal:
         with self.db:
             self.db.execute("INSERT INTO dispatch VALUES (?,?,?,NULL)",
                             (action.request_id, body, action.model_dump_json()))
+            if resident_turn_hash:
+                self.db.execute("INSERT INTO npc_resident_actions VALUES (?,?)", (action.request_id, resident_turn_hash))
             if note and (action.verb in {"stay", "stop"} or action.verb == "native" and action.name == "sit"):
                 self.db.execute("INSERT INTO npc_wait_notes VALUES (?,?)", (action.request_id, note[:200]))
             contact = "speech" if action.verb == "chat" else (
@@ -128,8 +133,8 @@ class ActionJournal:
 
     def settle(self, body: str, receipt: ActionReceipt) -> None:
         with self.db:
-            row = self.db.execute("SELECT body FROM dispatch WHERE id=?", (receipt.request_id,)).fetchone()
-            if row != (body,):
+            row = self.db.execute("SELECT body,receipt FROM dispatch WHERE id=?", (receipt.request_id,)).fetchone()
+            if not row or row[0] != body:
                 raise ValueError("receipt_body_mismatch")
             self.db.execute("UPDATE dispatch SET receipt=? WHERE id=?", (receipt.model_dump_json(), receipt.request_id))
             if receipt.terminal:
@@ -146,6 +151,11 @@ class ActionJournal:
                     self.db.execute("DELETE FROM npc_wait_notes WHERE request=?", (receipt.request_id,))
             if receipt.terminal and isinstance(receipt.data, dict) and receipt.data.get("partyWriteSent") is False:
                 self.db.execute("DELETE FROM npc_contacts WHERE body=? AND request=?", (body, receipt.request_id))
+        if turn_hash := self.resident_turn_hash(receipt.request_id):
+            prior = json.loads(row[1]) if row[1] else {}
+            if (prior.get("status"), prior.get("terminal")) != (receipt.status, receipt.terminal):
+                trace_resident_turn(turn_hash, "action_terminal" if receipt.terminal else "action_result",
+                                    requestHash=correlation_hash(receipt.request_id), status=receipt.status, terminal=receipt.terminal)
 
     def observe_activity(self, body: str, mode: str, cue: str, now: float) -> tuple[float, float | None, str | None, bool]:
         """Return this observed episode's start, last review, known wait purpose and any change of scene."""
@@ -161,10 +171,13 @@ class ActionJournal:
                                 (cue, changed, body))
         return row[1], None if changed else row[3], row[4], changed
 
-    def reviewed_activity(self, body: str, mode: str, cue: str, now: float, renewed_purpose: str | None = None) -> None:
+    def reviewed_activity(self, body: str, mode: str, cue: str, now: float, renewed_purpose: str | None = None,
+                          *, renew_wait: bool = False) -> None:
         with self.db:
-            self.db.execute("UPDATE npc_activity SET reviewed=?, purpose=COALESCE(?,purpose) WHERE body=? AND mode=? AND cue=?",
-                            (now, renewed_purpose, body, mode, cue))
+            self.db.execute("UPDATE npc_activity SET reviewed=?, purpose=COALESCE(?,purpose), "
+                            "since=CASE WHEN ? THEN ? ELSE since END WHERE body=? AND mode=? AND cue=?",
+                            (now, renewed_purpose, renew_wait and mode == "waiting" and renewed_purpose is not None,
+                             now, body, mode, cue))
 
     def unresolved(self, body: str) -> list[BodyAction]:
         rows = self.db.execute("SELECT action,receipt FROM dispatch WHERE body=?", (body,)).fetchall()
@@ -178,6 +191,10 @@ class ActionJournal:
     def speech_turn_hash(self, request_id: str) -> str | None:
         row = self.db.execute("SELECT turn_hash FROM npc_resident_speech WHERE request=?", (request_id,)).fetchone()
         return row[0] if row else None
+
+    def resident_turn_hash(self, request_id: str) -> str | None:
+        row = self.db.execute("SELECT turn_hash FROM npc_resident_actions WHERE request=?", (request_id,)).fetchone()
+        return row[0] if row else self.speech_turn_hash(request_id)
 
     def recent(self, body: str, limit: int = 12) -> list[tuple[BodyAction, ActionReceipt]]:
         rows = self.db.execute(
