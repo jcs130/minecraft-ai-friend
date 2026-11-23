@@ -789,35 +789,49 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
             await gotoGoal(bot, goal, travelContext);
             return;
           } catch (error) {
-            // Only this owned path's explicit noPath result permits one fallback.
-            // Timeout, stalls, cancellation and external ownership are not that evidence.
-            if (!walk || fallbackUsed || call.walkOnly || !permitsTerrain || !(error instanceof SkillBlocked)
-              || error.code !== 'pathfinder-no-path') throw error;
+            if (!walk || fallbackUsed || call.walkOnly || !permitsTerrain || !(error instanceof SkillBlocked)) throw error;
+            const noPathError = error.code === 'pathfinder-no-path';
+            const provenTerrain = !noPathError
+              && (travelContext.probeRoutes?.(at, goal)?.some(p => (p.profile === 'style' || p.profile === 'dig') && p.status === 'complete') ?? false);
+            if (!noPathError && !provenTerrain) throw error;
             checkAbort(ctx);
             walk = false;
             fallbackUsed = true;
-            evidence = 'execution-no-path';
+            evidence = noPathError ? 'execution-no-path' : 'configured-route-proven';
           } finally { release?.(); }
         }
       };
       try {
         let legs = 0;
-        for (;;) {
-          const from = { x: bot.entity.position.x, y: bot.entity.position.y, z: bot.entity.position.z };
-          const leg = nextLongTravelLeg(from, target);
-          if (!leg) break;
-          if (++legs > 64) throw new SkillBlocked('长途分段超过 64 段仍未到目标附近，停止这条路线');
-          sceneTarget = { x: leg.x, y: Math.floor(from.y), z: leg.z };
-          await runLeg(sceneTarget, levelTravelGoal(leg.x, leg.z));
-          const moved = Math.hypot(bot.entity.position.x - from.x, bot.entity.position.z - from.z);
-          if (moved < 4) throw new SkillBlocked('长途这一段没有足够位移，停止原路线');
-          // A leg can settle before navigateWithCheckpoints polls pending work.
-          // Offer that completed boundary without reviving the released path.
-          await ctx.checkpoint?.(async() => {if(!surfacePauseReady(bot))await settleOnGround(bot, ctx, 1_500);});
-          checkAbort(ctx);
-        }
+        const runDirectionalLegs = async (legBlocks: number, directBlocks: number): Promise<void> => {
+          for (;;) {
+            const from = { x: bot.entity.position.x, y: bot.entity.position.y, z: bot.entity.position.z };
+            const leg = nextLongTravelLeg(from, target, legBlocks, directBlocks);
+            if (!leg) break;
+            if (++legs > 96) throw new SkillBlocked('长途分段超过 96 段仍未到目标附近，停止这条路线');
+            sceneTarget = { x: leg.x, y: Math.floor(from.y), z: leg.z };
+            await runLeg(sceneTarget, levelTravelGoal(leg.x, leg.z));
+            const moved = Math.hypot(bot.entity.position.x - from.x, bot.entity.position.z - from.z);
+            if (moved < 4) throw new SkillBlocked('长途这一段没有足够位移，停止原路线');
+            // A leg can settle before navigateWithCheckpoints polls pending work.
+            // Offer that completed boundary without reviving the released path.
+            await ctx.checkpoint?.(async() => {if(!surfacePauseReady(bot))await settleOnGround(bot, ctx, 1_500);});
+            checkAbort(ctx);
+          }
+        };
+        await runDirectionalLegs(48, 96);
         sceneTarget = target;
-        await runLeg(target, finalGoal, !call.groundY && !call.exact);
+        try {
+          await runLeg(target, finalGoal, !call.groundY && !call.exact);
+        } catch (err) {
+          const from = { x: bot.entity.position.x, z: bot.entity.position.z };
+          const rem = Math.hypot(target.x - from.x, target.z - from.z);
+          if (!(err instanceof SkillBlocked) || !Number.isFinite(rem) || rem <= 28) throw err;
+          checkAbort(ctx);
+          await runDirectionalLegs(24, 28);
+          sceneTarget = target;
+          await runLeg(target, finalGoal, !call.groundY && !call.exact);
+        }
       } catch (err) {
         // 长途失败只试算当前短段，避免再次用远处终点耗尽寻路预算。
         throw withRouteScene(
