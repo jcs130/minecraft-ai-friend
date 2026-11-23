@@ -2866,7 +2866,7 @@ final class SiteDungeonManager implements Listener {
         updateDesignedBosses(run);
         if(sameArena(run.site)){
             BossBar bar=campBars.computeIfAbsent(run.id,id->Bukkit.createBossBar(run.site.name,BarColor.PURPLE,BarStyle.SEGMENTED_6));
-            String title=run.site.name+" · 第"+(Math.min(run.stage,run.stages()-1)+1)+"/"+run.stages()+"波 · ";
+            String title=run.site.name+"〔"+run.mode.label+"〕 · 第"+(Math.min(run.stage,run.stages()-1)+1)+"/"+run.stages()+"波 · ";
             String suffix=run.phase.equals("fighting")?"剩余 "+run.mobs.size()+" 只":"下一波准备中";
             double progress=run.phase.equals("fighting")?Math.max(0,Math.min(1,run.mobs.size()/(double)Math.max(1,waveEnemies(run).size()))):1;
             if(run.stage==run.stages()-1&&run.phase.equals("fighting"))for(var entry:run.mobs.entrySet()){
@@ -2891,7 +2891,7 @@ final class SiteDungeonManager implements Listener {
         var max=boss.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH);
         double hp=boss.getHealth(),total=max==null?120:max.getValue();
         BossBar bar=campBars.computeIfAbsent(run.id,id->Bukkit.createBossBar("黑旗执斧头目",BarColor.RED,BarStyle.SOLID));
-        bar.setTitle("黑旗执斧头目 · "+(int)Math.ceil(hp)+"/"+(int)Math.ceil(total)+" · 营地敌人 "+run.mobs.size());
+        bar.setTitle("黑旗执斧头目〔"+run.mode.label+"〕 · "+(int)Math.ceil(hp)+"/"+(int)Math.ceil(total)+" · 营地敌人 "+run.mobs.size());
         bar.setProgress(Math.max(0,Math.min(1,hp/Math.max(1,total))));
         List<Player> here=ResidentCli.online().stream().filter(p->p.isOnline()&&!ResidentCli.isResident(p.getUniqueId())
                 &&p.getWorld().getName().equals(run.site.world)&&run.room().contains(p.getLocation())).toList();

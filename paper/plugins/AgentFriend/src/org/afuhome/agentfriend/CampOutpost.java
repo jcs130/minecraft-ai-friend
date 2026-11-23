@@ -32,7 +32,13 @@ final class CampOutpost {
             cells.add(new Cell(x+dx,y,z+dz,Material.STRIPPED_SPRUCE_LOG));
         for(int dx=-2;dx<=2;dx++)for(int dz=-1;dz<=1;dz++)
             cells.add(new Cell(x+dx,70,z+dz,dx==0?Material.BLACK_WOOL:Material.WHITE_WOOL));
+        for(int y=67;y<=68;y++){
+            for(int dx:new int[]{-2,2})cells.add(new Cell(x+dx,y,z,Material.SPRUCE_PLANKS));
+            for(int dx=-1;dx<=1;dx++)cells.add(new Cell(x+dx,y,z+1,Material.SPRUCE_PLANKS));
+        }
         cells.add(new Cell(x+1,67,z,Material.CRAFTING_TABLE));
+        cells.add(new Cell(x,69,z,Material.LANTERN));
+        cells.add(new Cell(x,71,z,Material.BLACK_BANNER));
         return List.copyOf(cells);
     }
     private void building(World world,String id,List<Cell> cells){
@@ -55,7 +61,12 @@ final class CampOutpost {
                 (maxX-minX+2)/2.0,2,(maxZ-minZ+2)/2.0,e->e instanceof org.bukkit.entity.LivingEntity).isEmpty())return;
         plugin.getConfig().set(ROOT+".building-before."+id,cells.stream().map(c->Map.of("point",List.of(c.x,c.y,c.z),"before",world.getBlockAt(c.x,c.y,c.z).getBlockData().getAsString(),"after",c.material.name())).toList());
         plugin.getConfig().set(path,"prepared");save();
-        for(Cell c:cells)world.getBlockAt(c.x,c.y,c.z).setType(c.material,false);
+        for(Cell c:cells){
+            Block block=world.getBlockAt(c.x,c.y,c.z);block.setType(c.material,false);
+            if(c.material==Material.LANTERN&&block.getBlockData() instanceof org.bukkit.block.data.type.Lantern lantern){
+                lantern.setHanging(true);block.setBlockData(lantern,false);
+            }
+        }
         world.save();
         plugin.getConfig().set(path,"applied");save();
     }
