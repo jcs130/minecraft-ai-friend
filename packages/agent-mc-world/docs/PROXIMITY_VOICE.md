@@ -58,3 +58,5 @@ voice.close();
 The low-level helper is dependency-free and also distributed as the standalone `paper/integrations/proximity-voice/client.mjs`. Run its `sync-client.mjs --check` to verify it matches this core. Callers are responsible for actual authentication, native world gating and shutdown; the World lane supplies those checks and a durable ledger.
 
 The current built-in transport is Mineflayer. Java clients must implement the same custom-payload protocol in their existing client/mod transport; absence of such a port is not parity. Humans need a compatible Simple Voice Chat client. Validate actual nearby/distant/cross-world hearing, reconnect dedup and microphone ASR with human listeners after loading. Offline packet/Opus delivery tests are not ear tests; do not create battles, drowning or another bot for acceptance.
+
+This protocol is **not** native Simple Voice Chat. Native SVC is `mc_svc`; see [SIMPLE_VOICE_CHAT.md](./SIMPLE_VOICE_CHAT.md).

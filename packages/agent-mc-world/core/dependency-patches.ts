@@ -18,6 +18,8 @@ const protocol774Data = JSON.stringify(createRequire(import.meta.url).resolve('m
 interface SourceEdit {
   find: string;
   replace: string;
+  alternatives?: readonly { find: string; replace: string }[];
+  skipIfMissing?: boolean;
 }
 
 interface SourcePatch {
@@ -54,6 +56,101 @@ const PATCHES: readonly SourcePatch[] = [
       replace: `team.update(
           packet.name,
           receivedTeamFlags(packet),`,
+    }],
+  },
+  {
+    pkg: 'prismarine-chunk', file: 'src/index.js', edits: [{
+      find: `    26.1: require('./pc/1.18/chunk')
+  },`,
+      replace: `    26.1: require('./pc/1.18/chunk'),
+    // 26.2 map_chunk / light / block_change schemas match 26.1; reuse the 1.18 world format.
+    26.2: require('./pc/1.18/chunk')
+  },`,
+    }],
+  },
+  {
+    pkg: 'prismarine-windows',
+    file: 'index.js',
+    edits: [{
+      find: `    if (registry.supportFeature('netherUpdateInventoryWindows')) {
+      windows['minecraft:smithing'] = { type: protocolId++, inventory: { start: 3, end: 38 }, slots: 39, craft: 2, requireConfirmation: true }
+    }`,
+      replace: `    if (registry.supportFeature('netherUpdateInventoryWindows')) {
+      // 1.20+ SmithingMenu has template/base/addition/result (4 container slots).
+      // 1.16-1.19 keep the historical 3 container slots. 26.2 uses the 1.20+ layout.
+      const smithing20 = typeof registry.version['>='] === 'function' && registry.version['>=']('1.20')
+      windows['minecraft:smithing'] = smithing20
+        ? { type: protocolId++, inventory: { start: 4, end: 39 }, slots: 40, craft: 3, requireConfirmation: true }
+        : { type: protocolId++, inventory: { start: 3, end: 38 }, slots: 39, craft: 2, requireConfirmation: true }
+    }`,
+    }, {
+      find: `    windows['minecraft:cartography'] = { type: protocolId++, inventory: { start: 3, end: 38 }, slots: 39, craft: 2, requireConfirmation: true }
+    windows['minecraft:stonecutter'] = { type: protocolId++, inventory: { start: 2, end: 37 }, slots: 38, craft: 1, requireConfirmation: true }`,
+      replace: `    windows['minecraft:cartography'] = { type: protocolId++, inventory: { start: 3, end: 38 }, slots: 39, craft: 2, requireConfirmation: true }
+    windows['minecraft:cartography_table'] = windows['minecraft:cartography']
+    windows['minecraft:stonecutter'] = { type: protocolId++, inventory: { start: 2, end: 37 }, slots: 38, craft: 1, requireConfirmation: true }`,
+    }, {
+      find: `    windows['minecraft:lectern'] = { type: protocolId++, inventory: { start: 1, end: 36 }, slots: 37, craft: -1, requireConfirmation: true }`,
+      replace: `    // Vanilla 26.2 lectern window_items length is 1 (the book). Player inventory is not appended.
+      // Older versions keep the historical 37-slot assumption until independently verified.
+      windows['minecraft:lectern'] = (registry.version?.minecraftVersion === '26.2' || registry.version?.version === 776)
+        ? { type: protocolId++, inventory: { start: 1, end: 0 }, slots: 1, craft: -1, requireConfirmation: true }
+        : { type: protocolId++, inventory: { start: 1, end: 36 }, slots: 37, craft: -1, requireConfirmation: true }`,
+    }],
+  },
+  {
+    // Java NBT strings are Modified UTF-8: characters outside the BMP (custom-font glyphs from
+    // CraftEngine/ItemsAdder resource packs, emoji) arrive as CESU-style surrogate triplets.
+    // Plain utf8 decoding turns each into U+FFFD ("������" in chat/item names on 橘乡).
+    pkg: 'prismarine-nbt', file: 'nbt.js', edits: [{
+      find: `  compiler.addTypesToCompile(JSON.parse(proto))
+}`,
+      replace: `  compiler.addTypesToCompile(JSON.parse(proto))
+  // After the JSON: addTypesToCompile replaces earlier native types.
+  if (type !== 'littleVarint') compiler.readCompiler.addTypes({ shortString: ['native', mutf8ShortString(type === 'little')] })
+}
+
+function mutf8ShortString (little) {
+  const { PartialReadError } = require('protodef').utils
+  return function readShortString (buffer, offset) {
+    if (offset + 2 > buffer.length) throw new PartialReadError()
+    const len = little ? buffer.readUInt16LE(offset) : buffer.readUInt16BE(offset)
+    const start = offset + 2
+    const end = start + len
+    if (end > buffer.length) throw new PartialReadError()
+    let modified = false
+    for (let i = start; i < end; i++) {
+      const b = buffer[i]
+      if (b === 0xED || (b === 0xC0 && buffer[i + 1] === 0x80)) { modified = true; break }
+    }
+    if (!modified) return { value: buffer.toString('utf8', start, end), size: len + 2 }
+    const units = []
+    for (let i = start; i < end;) {
+      const a = buffer[i]
+      if (a < 0x80) { units.push(a); i += 1 } else if ((a & 0xE0) === 0xC0 && i + 1 < end) {
+        units.push(((a & 0x1F) << 6) | (buffer[i + 1] & 0x3F)); i += 2
+      } else if ((a & 0xF0) === 0xE0 && i + 2 < end) {
+        units.push(((a & 0x0F) << 12) | ((buffer[i + 1] & 0x3F) << 6) | (buffer[i + 2] & 0x3F)); i += 3
+      } else if ((a & 0xF8) === 0xF0 && i + 3 < end) {
+        // Standard 4-byte UTF-8 is not produced by Java, but accept it rather than corrupt it.
+        const cp = ((a & 0x07) << 18) | ((buffer[i + 1] & 0x3F) << 12) | ((buffer[i + 2] & 0x3F) << 6) | (buffer[i + 3] & 0x3F)
+        const v = cp - 0x10000
+        units.push(0xD800 | (v >> 10), 0xDC00 | (v & 0x3FF)); i += 4
+      } else { units.push(0xFFFD); i += 1 }
+    }
+    let value = ''
+    for (let k = 0; k < units.length; k += 4096) value += String.fromCharCode.apply(null, units.slice(k, k + 4096))
+    return { value, size: len + 2 }
+  }
+}`,
+    }],
+  },
+  {
+    // Server chat plugins (e.g. guild/hover prefixes on 橘乡) nest player chat deeper than 8 levels;
+    // prismarine-chat then renders "[guild]name >" and silently drops the message body.
+    pkg: 'prismarine-chat', file: 'index.js', edits: [{
+      find: `const MAX_CHAT_DEPTH = 8`,
+      replace: `const MAX_CHAT_DEPTH = 64`,
     }],
   },
   {
@@ -312,6 +409,14 @@ const PATCHES: readonly SourcePatch[] = [
     if (packet.reason === 4 || packet.reason === 'win_game') {
       bot._client.write('client_command', bot.supportFeature('respawnIsPayload') ? { payload: 0 } : { actionId: 0 })
     }`,
+        alternatives: [{
+          find: `    if ((packet.reason === 4 || packet.reason === 'win_game') && packet.gameMode === 1) {
+      bot._client.write('client_command', { actionId: 'perform_respawn' })
+    }`,
+          replace: `    if (packet.reason === 4 || packet.reason === 'win_game') {
+      bot._client.write('client_command', { actionId: 'perform_respawn' })
+    }`,
+        }],
       },
     ],
   },
@@ -447,11 +552,17 @@ const PATCHES: readonly SourcePatch[] = [
     bot._deferredWrites = []
     const writeNow = bot._client.write.bind(bot._client)
     bot._writeNow = writeNow
+    // nmp writes configuration_acknowledged while still in play, then leaves play immediately; deferring that ack would drop it on the switch.
+    const isTransitionAck = (name) => name === 'configuration_acknowledged' || name === 'login_acknowledged'
     bot._client.write = (name, params) => {
-      if (bot._inClientTick || bot._client.state !== 'play' || doPhysicsTimer === null || bot._client.ended) return writeNow(name, params)
+      if (bot._inClientTick || bot._client.state !== 'play' || doPhysicsTimer === null || bot._client.ended || isTransitionAck(name)) return writeNow(name, params)
       bot._deferredWrites.push([name, params, name === 'pong' || name === 'keep_alive' || name === 'teleport_confirm' || name === 'chunk_batch_received' || !!bot._teleportReply])
     }
-    bot._client.on('state', (state) => { if (state !== 'play' && bot._deferredWrites.length) bot._deferredWrites.length = 0 })
+    bot._client.on('state', (state) => {
+      if (state === 'play' || !bot._deferredWrites.length) return
+      const queued = bot._deferredWrites.splice(0)
+      for (const item of queued) if (isTransitionAck(item[0])) { try { writeNow(item[0], item[1]) } catch (err) { bot.emit('deferredWriteError', err, item[0]) } }
+    })
   }
   let modernSprinting = false
   let sentSprinting = false
@@ -998,6 +1109,11 @@ const PATCHES: readonly SourcePatch[] = [
     file: 'index.js',
     edits: [
       {
+        find: `  return feature => features.some(({ name, versions }) => name === feature && versions.includes(mcData.version.majorVersion))`,
+        replace: `  const major = mcData.version.majorVersion === '26.2' ? '26.1' : mcData.version.majorVersion
+  return feature => features.some(({ name, versions }) => name === feature && versions.includes(major))`,
+      },
+      {
         // Server attributes drive vanilla movement (LivingEntity: step_height, gravity, jump_strength,
         // sneaking_speed); a modded server may change any of them. Defaults equal the old constants.
         find: `  physics.simulatePlayer = (entity, world) => {`,
@@ -1311,12 +1427,18 @@ const PATCHES: readonly SourcePatch[] = [
 ];
 
 /** 对一个文件的源码套用补丁;原文缺失或不唯一时抛错。 */
-function applySourcePatch(patch: SourcePatch, source: string): string {
+function applySourcePatch(patch: SourcePatch, source: string, filename = ''): string {
   let out = source;
-  for (const { find, replace } of patch.edits) {
+  const experimental = filename.replaceAll('\\', '/').includes('/vendor/experimental-26.2/');
+  for (const edit of patch.edits) {
+    let { find, replace } = edit;
+    const alt = edit.alternatives?.find((candidate) => out.indexOf(find) < 0 && out.includes(candidate.find));
+    if (alt) ({ find, replace } = alt);
     const at = out.indexOf(find);
     if (at < 0 || out.indexOf(find, at + 1) >= 0) {
-      throw new Error(`${patch.pkg}/${patch.file} 的补丁原文${at < 0 ? '找不到' : '不唯一'},依赖版本与补丁不符:\n${find}`);
+      if (at < 0 && (edit.skipIfMissing || experimental)) continue;
+      throw new Error(`${patch.pkg}/${patch.file} 的补丁原文${at < 0 ? '找不到' : '不唯一'},依赖版本与补丁不符:
+${find}`);
     }
     out = out.slice(0, at) + replace + out.slice(at + find.length);
   }
@@ -1325,7 +1447,11 @@ function applySourcePatch(patch: SourcePatch, source: string): string {
 
 function patchFor(filename: string): SourcePatch | undefined {
   const path = filename.replaceAll('\\', '/');
-  return PATCHES.find((p) => path.endsWith(`/node_modules/${p.pkg}/${p.file}`));
+  return PATCHES.find((p) => {
+    if (path.endsWith(`/node_modules/${p.pkg}/${p.file}`)) return true;
+    const vendorPkg = p.pkg === 'minecraft-protocol' ? 'minecraft-protocol' : p.pkg;
+    return path.endsWith(`/vendor/experimental-26.2/${vendorPkg}/${p.file}`);
+  });
 }
 
 type Compile = (this: unknown, content: string, filename: string, ...rest: unknown[]) => unknown;
@@ -1341,7 +1467,7 @@ function installDependencyPatches(): void {
   const compile = proto._compile;
   proto._compile = function (this: unknown, content: string, filename: string, ...rest: unknown[]): unknown {
     const patch = patchFor(filename);
-    return compile.call(this, patch ? applySourcePatch(patch, content) : content, filename, ...rest);
+    return compile.call(this, patch ? applySourcePatch(patch, content, filename) : content, filename, ...rest);
   };
 }
 

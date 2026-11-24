@@ -66,7 +66,7 @@ to avoid writing a second book.
 ## Independent side effects and body ownership
 
 `ToolDef.bodyControl` declares whether the whole tool is `independent` of the
-physical body or requires `exclusive` body control. `mc_voice` and `mc_goal`
+physical body or requires `exclusive` body control. `mc_voice`, `mc_svc`, and `mc_goal`
 declare independence: speech still uses its own serialized upload lane and
 request-ID ledger; registering an intention never dispatches that intention.
 Independence is not read-only access or permission to execute.

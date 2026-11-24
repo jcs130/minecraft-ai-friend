@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "accounts": [
+    {
+      "server": "mc.tangerinecology.top:25565",
+      "username": "YOUR_ACCOUNT",
+      "command": "login",
+      "credentialEnv": "TANGERINECOLOGY_ACCOUNT_PASSWORD",
+      "timeoutMs": 90000,
+      "reauthenticateOnRevoked": false
+    }
+  ]
+}

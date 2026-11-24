@@ -15,7 +15,7 @@ import { enchantSuffix, narrateCursor, narrateInventory } from './terrain.ts';
 import { zhName } from './names.ts';
 import { PLAYER_SLOTS } from './precheck.ts';
 import { narrateInventorySync } from './inventory-window-sync.ts';
-import { itemCustomName } from './item-display.ts';
+import { itemCustomName, itemEvidenceFields, itemLoreText } from './item-display.ts';
 import { carriedItemVariant } from './carried-inventory.ts';
 import { readDurability, readEnchants, type ItemLike, type EnchantRegistry } from './item-facts.ts';
 
@@ -35,8 +35,11 @@ export function inventorySlotReadout(
     const variant = carriedItemVariant(it, displayName);
     return [{ windowSlot, inventorySlot, name: it.name, count: it.count,
       ...(variant ? {variant} : {}),
-      displayName: displayName ?? null, durability: readDurability(it),
-      enchantments: readEnchants(it, registry ?? undefined) }];
+      displayName: displayName ?? null,
+      ...(itemLoreText(it).length ? { lore: itemLoreText(it).slice(0, 12) } : {}),
+      durability: readDurability(it),
+      enchantments: readEnchants(it, registry ?? undefined),
+      ...itemEvidenceFields(it) }];
   });
   const emptyWindowSlots = Array.from({ length: 36 }, (_, i) => i + 9).filter(i => !slots[i] || slots[i]!.count <= 0);
   return { protocol: 'agent-mc/inventory-slots/v1', scope: 'self', slotSpace: 'player-window',

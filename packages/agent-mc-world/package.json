@@ -135,6 +135,10 @@
     "./proximity-voice": {
       "types": "./dist/types/src/proximity-voice.d.ts",
       "default": "./dist/runtime/src/proximity-voice.js"
+    },
+    "./simple-voice-chat": {
+      "types": "./dist/types/src/simple-voice-chat.d.ts",
+      "default": "./dist/runtime/src/simple-voice-chat.js"
     }
   },
   "files": [
@@ -178,6 +182,7 @@
     "scripts/verify-build.mjs",
     "scripts/package-skills.mjs",
     "vendor/native-types",
+    "vendor/experimental-26.2",
     "tsconfig.core.json",
     "examples",
     "tsconfig.json",
@@ -206,7 +211,11 @@
     "src/motor",
     "training",
     "src/learning",
-    "src/proximity-voice.ts"
+    "src/proximity-voice.ts",
+    "src/simple-voice-chat.ts",
+    "vendor/experimental-26.2/mineflayer/node_modules/minecraft-protocol",
+    "vendor/experimental-26.2/mineflayer/node_modules/minecraft-data",
+    "vendor/experimental-26.2/minecraft-protocol/node_modules/minecraft-data"
   ],
   "scripts": {
     "build": "node scripts/build.mjs && node scripts/build-types.mjs && node scripts/verify-build.mjs",

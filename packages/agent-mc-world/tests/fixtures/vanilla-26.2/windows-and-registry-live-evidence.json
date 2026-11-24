@@ -1,0 +1,95 @@
+{
+  "generatedAt": "2026-11-23",
+  "zone": "Asia/Shanghai",
+  "vanilla": {
+    "target": "127.0.0.1:25770 vanilla 26.2",
+    "generic_9x6": {
+      "inventoryType": 5,
+      "slotCount": 90,
+      "inventoryStart": 54,
+      "title": "container.chestDouble",
+      "occupied": [
+        {
+          "i": 0,
+          "count": 2
+        },
+        {
+          "i": 27,
+          "count": 3
+        }
+      ]
+    },
+    "lectern": {
+      "inventoryType": 17,
+      "slotCount": 1,
+      "inventoryStart": 1,
+      "inventoryEndExclusive": 1,
+      "title": "container.lectern",
+      "occupied": [
+        {
+          "i": 0,
+          "component": "written_book_content"
+        }
+      ]
+    },
+    "merchant": {
+      "inventoryType": 19,
+      "slotCount": 39,
+      "inventoryStart": 3,
+      "title": "Librarian",
+      "tradeCount": 1
+    },
+    "chatTypeId4": "minecraft:say_command",
+    "chatTypeCount": 7
+  },
+  "purpurViaVelocity": {
+    "target": "127.0.0.1:25577 velocity -> nanolimbo then send lobby=purpur-26.2-2633",
+    "limboChatTypeId4": "minecraft:say_command",
+    "limboChatTypeCount": 7,
+    "afterTransfer": {
+      "start_configuration": 1,
+      "chatTypeId4": "paper:raw",
+      "chatTypeId5": "minecraft:say_command",
+      "chatTypeCount": 8
+    },
+    "menus": {
+      "generic_9x1": {
+        "inventoryType": 0,
+        "slotCount": 45,
+        "inventoryStart": 9,
+        "occupied": [
+          0,
+          8
+        ]
+      },
+      "generic_9x2": {
+        "inventoryType": 1,
+        "slotCount": 54,
+        "inventoryStart": 18,
+        "occupied": [
+          0,
+          17
+        ]
+      },
+      "generic_9x4": {
+        "inventoryType": 3,
+        "slotCount": 72,
+        "inventoryStart": 36,
+        "occupied": [
+          0,
+          35
+        ]
+      },
+      "generic_9x5": {
+        "inventoryType": 4,
+        "slotCount": 81,
+        "inventoryStart": 45,
+        "occupied": [
+          0,
+          44
+        ]
+      }
+    },
+    "vanillaBlockBoundary": "generic_9x1/2/4/5 have no vanilla 26.2 block; verified only via Purpur Bukkit Inventory of N rows."
+  }
+}

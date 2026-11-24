@@ -1,5 +1,5 @@
 import { serverScreen, renderScreen, type ServerScreen } from './server-screens.ts';
-import { itemCustomName, itemLoreText } from './item-display.ts';
+import { itemCustomName, itemLoreText, itemEvidenceFields } from './item-display.ts';
 import { minecraftTextComponent } from './text-component.ts';
 import { serverWindows } from './orphan-windows.ts';
 
@@ -9,6 +9,9 @@ export interface WindowSlotReadout {
   count: number;
   name: string | null;
   lore: string[];
+  componentTypes?: string[];
+  customModelData?: unknown;
+  customDataKeys?: string[];
 }
 
 export interface WindowReadout {
@@ -45,7 +48,7 @@ export function readOpenWindow(bot: any, options: { loreLines?: number } = {}): 
     const item = win.slots?.[i] as SlotItem;
     if (!item || !item.name || item.name === 'air') continue;
     slots.push({ slot: i, id: item.name, count: item.count ?? 1, name: itemCustomName(item),
-      lore: itemLoreText(item).slice(0, loreLines) });
+      lore: itemLoreText(item).slice(0, loreLines), ...itemEvidenceFields(item, loreLines) });
   }
   return { schema: 'agent-mc/window-read/v1', open: true, state: 'tracked', windowId: win.id ?? null,
     title: minecraftTextComponent(win.title) || null, containerSlots: end, slots,
@@ -71,7 +74,12 @@ export function renderWindowReadout(r: WindowReadout, maxChars = 6000): string {
   if (filler) lines.push(`（${filler} 格无名玻璃板装饰已省略）`);
   for (const s of r.slots) {
     if (!s.name && !s.lore.length && /glass_pane$/.test(s.id)) continue;
-    const line = `#${s.slot} ${s.name ?? s.id}${s.name ? `（${s.id}` : '（'}×${s.count}）${s.lore.length ? '：' + s.lore.join(' / ') : ''}`;
+    const extra = [
+      s.customDataKeys?.length ? `custom_data键 ${s.customDataKeys.join(',')}` : '',
+      s.customModelData != null ? 'custom_model_data已收到' : '',
+      s.componentTypes?.length ? `组件 ${s.componentTypes.join(',')}` : '',
+    ].filter(Boolean).join('；');
+    const line = `#${s.slot} ${s.name ?? s.id}${s.name ? `（${s.id}` : '（'}×${s.count}）${s.lore.length ? '：' + s.lore.join(' / ') : ''}${extra ? '；' + extra : ''}`;
     if (used + line.length + 1 > maxChars) { lines.push(`…其余 ${r.slots.length - lines.length + 1} 格省略`); break; }
     lines.push(line); used += line.length + 1;
   }

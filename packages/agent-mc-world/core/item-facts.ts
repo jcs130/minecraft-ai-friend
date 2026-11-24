@@ -125,6 +125,29 @@ export function readMapId(item: ItemLike): number | null {
   return typeof raw === 'number' ? raw : null;
 }
 
+type InstrumentRegistry = { instruments?: Record<number, { name?: string }>; instrumentsByName?: Record<string, { name?: string }> };
+
+/** Goat-horn (and similar) instrument id from the live runtime registry. Unknown ids stay null. */
+export function readInstrument(item: ItemLike, registry?: InstrumentRegistry | null): string | null {
+  const data = componentData(item, 'instrument');
+  const id = instrumentId(data);
+  if (typeof id === 'string') return id.replace(/^minecraft:/, '');
+  if (typeof id === 'number') return registry?.instruments?.[id]?.name ?? null;
+  return null;
+}
+
+function instrumentId(data: unknown): string | number | null {
+  if (data == null) return null;
+  if (typeof data === 'number' || typeof data === 'string') return data;
+  if (typeof data !== 'object') return null;
+  const rec = data as Record<string, unknown>;
+  if (typeof rec.id === 'number' || typeof rec.id === 'string') return rec.id;
+  if (typeof rec.name === 'string') return rec.name;
+  if (typeof rec.resource === 'string') return rec.resource;
+  if (rec.instrument != null) return instrumentId(rec.instrument);
+  return null;
+}
+
 /**
  * 原版 1.20.6 药水注册表,下标即序号(服务端 --reports 的 registries.json 核对过)。
  * minecraft-data 不带这张表。long_/strong_ 念成基础名加「延长」「II」。

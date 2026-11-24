@@ -197,6 +197,25 @@ describe('mineflayer client tick like vanilla 26.1', () => {
     expect(names.indexOf('position')).toBeGreaterThan(names.indexOf('player_input'));
   });
 
+  it('sends configuration_acknowledged immediately so a play-to-configuration switch cannot drop it', () => {
+    // nmp enterConfigState writes the ack while still in play, then sets state to configuration.
+    // The 26.1+ deferred-write queue used to hold that ack and then discard the queue on the
+    // switch, so Velocity never continued the second configuration (lobby 30s read timeout).
+    const { bot, wire } = physicsRig();
+    bot._client.emit('position', { teleportId: 1, x: 0.5, y: 64, z: 0.5, dx: 0, dy: 0, dz: 0, yaw: 0, pitch: 0, flags: { yaw: true, pitch: true } });
+    vi.advanceTimersByTime(60);
+    wire.length = 0;
+    bot._client.write('configuration_acknowledged', {});
+    expect(wire.map(([n]) => n)).toEqual(['configuration_acknowledged']);
+    bot._client.write('position', { x: 0.5, y: 64, z: 0.5 });
+    expect(wire.map(([n]) => n)).toEqual(['configuration_acknowledged']);
+    bot._client.state = 'configuration';
+    bot._client.emit('state', 'configuration', 'play');
+    expect(wire.map(([n]) => n)).toEqual(['configuration_acknowledged']);
+    bot._client.write('settings', { locale: 'en_us', viewDistance: 10 });
+    expect(wire.map(([n]) => n)).toEqual(['configuration_acknowledged', 'settings']);
+  });
+
   it('keeps the standing flag through a teleport and sprints only with forward impulse', () => {
     const { bot, wire } = physicsRig();
     bot._client.emit('position', { teleportId: 1, x: 0.5, y: 64, z: 0.5, dx: 0, dy: 0, dz: 0, yaw: 0, pitch: 0, flags: { yaw: true, pitch: true } });

@@ -1,3 +1,4 @@
+import { healthSources } from './health-sources.ts';
 import { onConnectionEnd } from './connection-end.ts';
 /** Public, timestamped observations for agent-authored diving programs; no action policy. */
 import type { Bot } from 'mineflayer';
@@ -50,6 +51,7 @@ export function breathingReadout(bot: Bot, options: { attach?: boolean } = {}) {
     oxygenUpdatedAt: sensors.get(bot)?.oxygenAt ?? null,
     health: typeof bot.health === 'number' && Number.isFinite(bot.health) ? bot.health : null,
     healthUpdatedAt: sensors.get(bot)?.healthAt ?? null,
+    healthSources: healthSources(bot),
     observationId: sensors.get(bot)?.id ?? null, observationEpoch: sensors.get(bot)?.epoch ?? null,
     healthLoss: sensors.get(bot)?.healthLoss ?? null, healthRecovered: sensors.get(bot)?.healthRecovered ?? null,
     headWet, eyeHeight: head.eyeHeight, eyeHeightSource: head.eyeHeightSource, eyePosition: head.eyePosition,

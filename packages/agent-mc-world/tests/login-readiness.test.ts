@@ -280,4 +280,54 @@ describe('login readiness', () => {
     bot.emit('spawn');
     expect(bridge.connected).toBe(false);
   });
+
+  it('turns MaxAuth success into SDK online ready and records a player inventory snapshot', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'maxauth-ready-'));
+    const configFile = join(dir, 'accounts.json');
+    writeFileSync(configFile, JSON.stringify({ enabled: true, accounts: [{
+      server: 'mc.tangerinecology.top:25565', username: 'ag_cormy',
+      credentialEnv: 'AGENT_MC_MAXAUTH_FIXTURE', command: 'login', timeoutMs: 5000,
+      requestMarkers: ['[MaxAuth]', '请执行 /login', '请使用 /login'],
+      successMarkers: ['[MaxAuth]» 登录成功', '登录成功', '已成功登录', '已登录'],
+      failureMarkers: ['密码错误', '密码不正确', '错误的密码', 'Wrong password'],
+    }] }));
+    vi.stubEnv('AGENT_MC_MAXAUTH_FIXTURE', 'maxauth-fixture-pass');
+    const bot = Object.assign(new EventEmitter(), {
+      _client: Object.assign(new EventEmitter(), { state: 'play' }),
+      loadPlugin() {}, quit() {}, chat: vi.fn(),
+      entity: { position: { x: 0.5, y: 65, z: 0.5 } },
+      inventory: { slots: [null, { name: 'bread' }] },
+    });
+    vi.spyOn(mineflayer, 'createBot').mockReturnValue(bot as never);
+    const info = vi.fn();
+    const log = { info, warn() {}, error() {}, debug() {}, trace() {}, emit() {}, child() { return this; } };
+    const onSpawn = vi.fn();
+    const bridge = new Bridge({ host: 'mc.tangerinecology.top', port: 25565, username: 'ag_cormy', version: '1.21.1',
+      viewerPort: 0, loginConfigFile: () => configFile, log: log as never, onSpawn, onDisconnect() {} });
+    bridges.push(bridge); Object.assign(bridge, { installSpawnGear() {} });
+    try {
+      bridge.start();
+      bot._client.emit('state', 'play');
+      bot._client.emit('position', { x: 0.5, y: 65, z: 0.5 });
+      bot.emit('spawn');
+      expect(bridge.connected).toBe(false);
+      expect(bridge.connectionState).toMatchObject({ phase: 'connecting', ready: false });
+      expect(bridge.connectionState.serverLogin.stage).toBe('armed');
+      bot.emit('message', { toString: () => '[MaxAuth] » 请使用 /login <密码> 登录。' }, 'system');
+      await new Promise(r => setTimeout(r, 30));
+      expect(bot.chat).toHaveBeenCalledTimes(1);
+      expect(String(bot.chat.mock.calls[0][0]).startsWith('/login ')).toBe(true);
+      expect(JSON.stringify(info.mock.calls)).not.toContain('maxauth-fixture-pass');
+      expect(bridge.connected).toBe(false);
+      bot._client.emit('window_items', { windowId: 0, items: [{}, { name: 'bread' }], stateId: 1 });
+      expect(bridge.invSynced).toBe(true);
+      expect(bridge.connected).toBe(false);
+      bot.emit('message', { toString: () => '[MaxAuth] » 你已成功登录。' }, 'system');
+      expect(bridge.connectionState.serverLogin).toMatchObject({ stage: 'confirmed' });
+      expect(bridge.connected).toBe(true);
+      expect(bridge.connectionState).toMatchObject({ phase: 'online', ready: true });
+      expect(onSpawn).toHaveBeenCalledOnce();
+      expect(bridge.invSynced).toBe(true);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
 });

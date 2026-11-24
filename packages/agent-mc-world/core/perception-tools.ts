@@ -1,3 +1,4 @@
+import { entityNativeState } from './entity-native-state.ts';
 import type { ToolDef } from './support/host-contract.ts';
 import { entityAwareness, entityObservationScope } from './perception-sight.ts';
 import { classifyEntity } from './terrain.ts';
@@ -77,6 +78,7 @@ export class AttentionReader {
     return {sampledAt:now,mode:this.mode,source:'current-entity-observations',observation:entityObservationScope(bot),
       highlights:selected.map(({entity:e,observation,kind,distance,prediction})=>({id:e.id,entityId:e.id,
         ...(observation.visibility==='visible'?{
+          ...(entityId!==undefined&&e.type!=='player'?{nativeState:entityNativeState(bot,e)}:{}),
           ...(e.uuid?{uuid:e.uuid}:{}),...(entityCustomName(bot,e)?{customName:entityCustomName(bot,e)}:{}),
         }:{}),
         target:(e.type==='player'||e.name==='player'?e.username:e.name)??null,label:observedEntityLabel(bot,e,observation.visibility==='visible'),

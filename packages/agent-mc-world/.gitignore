@@ -12,3 +12,13 @@ scratch/
 private-mcyyy-viewer.json
 private-mcyyy-viewer-status.json
 private-mcyyy-*.json
+
+# Keep experimental 26.2 vendor shims packable despite node_modules/ ignores.
+!vendor/experimental-26.2/mineflayer/node_modules/
+!vendor/experimental-26.2/mineflayer/node_modules/minecraft-protocol/
+!vendor/experimental-26.2/mineflayer/node_modules/minecraft-protocol/**
+!vendor/experimental-26.2/mineflayer/node_modules/minecraft-data/
+!vendor/experimental-26.2/mineflayer/node_modules/minecraft-data/**
+!vendor/experimental-26.2/minecraft-protocol/node_modules/
+!vendor/experimental-26.2/minecraft-protocol/node_modules/minecraft-data/
+!vendor/experimental-26.2/minecraft-protocol/node_modules/minecraft-data/**

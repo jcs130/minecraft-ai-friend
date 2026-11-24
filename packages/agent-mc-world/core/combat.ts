@@ -1,3 +1,4 @@
+import { suppressSpeciesThreat, potentialCreeperOnly } from './entity-threat.ts';
 /**
  * 战斗模式 · 档 1(常驻夜间自保)。
  *
@@ -487,7 +488,7 @@ export class CombatSession {
     // or retreat when the same visible targets were outside melee pursuit.
     const range = Math.max(t.chaseMax + 4, Math.min(32, Math.max(0, t.decisionRange ?? 0)),
       this.rangedReady(bot) ? RANGED_ENTER_RANGE : 0);
-    return this.scan(bot, t, range).filter(f => f.visible && !NO_FIGHT.has(f.name)).map(f => f.id);
+    return this.scan(bot, t, range).filter(f => f.visible && !NO_FIGHT.has(f.name) && !potentialCreeperOnly(bot,f.ent,this.provoked.has(f.id))).map(f => f.id);
   }
 
   /** Tracking must use the same provocation, visibility and admission rules as react(). */
@@ -506,7 +507,7 @@ export class CombatSession {
     const bot = this.opts.getBot();
     if (!this.alive(bot) || (this.active && this.bodyEnded(bot)) || this.opts.envBusy()
       || this.opts.taskEscaping?.() || this.opts.taskFighting?.() || this.opts.taskEquipping?.()) return false;
-    return this.active || this.scan(bot, this.opts.tuning(), RETREAT_CLEAR_DIST).some(f => f.visible);
+    return this.active || this.scan(bot, this.opts.tuning(), RETREAT_CLEAR_DIST).some(f => f.visible && !potentialCreeperOnly(bot,f.ent,this.provoked.has(f.id)));
   }
 
   /** Reuses the combat body's existing lease, health gates and retreat controller. */
@@ -745,7 +746,7 @@ export class CombatSession {
     if (t.fight === 'armed' && !this.bestMeleeWeapon(bot) && !this.rangedReady(bot)) return;
     this.bot = bot;
     const foes = this.scan(bot, t);
-    const near = foes.find((f) => f.visible && f.reach <= t.engageRadius && !NO_FIGHT.has(f.name));
+    const near = foes.find((f) => f.visible && f.reach <= t.engageRadius && !NO_FIGHT.has(f.name) && !potentialCreeperOnly(bot,f.ent,this.provoked.has(f.id)));
     if (near) {
       if (near.name === 'piglin') this.provoked.add(near.id);
       this.engage(near.name, false);
@@ -993,6 +994,7 @@ export class CombatSession {
       if (this.deadIds.has(e.id)) continue;
       const name = e.name ?? '';
       const provoked = this.provoked.has(e.id);
+      if (suppressSpeciesThreat(bot, e, provoked)) continue;
       if (name === 'piglin') {
         if (!piglinIsHostile(bot, e, provoked)) continue;
       } else if (!HOSTILE.has(name) && !provoked) continue;
@@ -2389,7 +2391,7 @@ export class CombatSession {
     const p = bot.entity.position;
     const nearbyHostiles: Record<string, number> = {};
     for (const e of Object.values(bot.entities ?? {})) {
-      if (!e?.position || e.isValid === false || !HOSTILE.has(e.name ?? '')
+      if (!e?.position || e.isValid === false || suppressSpeciesThreat(bot, e, this.provoked.has(e.id)) || !HOSTILE.has(e.name ?? '')
         || Math.hypot(e.position.x - p.x, e.position.y - p.y, e.position.z - p.z) > 16) continue;
       nearbyHostiles[e.name!] = (nearbyHostiles[e.name!] ?? 0) + 1;
     }

@@ -1,0 +1,1832 @@
+{
+  "generatedAt": "2026-11-23",
+  "zone": "Asia/Shanghai",
+  "source": "vanilla 26.2 127.0.0.1:25770 official play packets and client movement traces; leftover = buffer length minus nmp metadata.size",
+  "coverageKinds": {
+    "staticCompare": "protocol schema review and windows.json menuId table",
+    "vanillaWire": "official leftover=0 parse of live packets",
+    "coreSemantics": "commandTreeFacts, viewerSoundPacket, trackMaps/mapStateOf/readMapId, entitySnapshot effects/effectParticles, runtime registry consumers",
+    "uncovered": "not every sound event, particle type, recipe display variant, or map icon type; not every stair shape/facing; component branch values not mathematically exhaustive"
+  },
+  "menus": {
+    "windowsJsonEntries": 26,
+    "protocolMenuIds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24
+    ],
+    "playerInventoryMenuId": -1,
+    "wording": "26 windows.json entries = 25 protocol menu ids (0-24) + player inventory menuId -1. Do not call the protocol menu count 26."
+  },
+  "commands": {
+    "packet": "declare_commands",
+    "bytes": 30249,
+    "leftover": 0,
+    "sha256": "d5d504dcab276042e32f31991ddd91a11d177dca8fa63b4f16f369138e8a946e",
+    "facts": {
+      "nodeCount": 2017,
+      "rootIndex": 0,
+      "rootLiteralCount": 90,
+      "rootLiterals": [
+        "advancement",
+        "attribute",
+        "ban",
+        "ban-ip",
+        "banlist",
+        "bossbar",
+        "clear",
+        "clone",
+        "damage",
+        "data",
+        "datapack",
+        "debug",
+        "defaultgamemode",
+        "deop",
+        "dialog",
+        "difficulty",
+        "effect",
+        "enchant",
+        "execute",
+        "experience",
+        "fetchprofile",
+        "fill",
+        "fillbiome",
+        "forceload",
+        "function",
+        "gamemode",
+        "gamerule",
+        "give",
+        "help",
+        "item",
+        "jfr",
+        "kick",
+        "kill",
+        "list",
+        "locate",
+        "loot",
+        "me",
+        "msg",
+        "op",
+        "pardon",
+        "pardon-ip",
+        "particle",
+        "perf",
+        "place",
+        "playsound",
+        "random",
+        "recipe",
+        "reload",
+        "return",
+        "ride",
+        "rotate",
+        "save-all",
+        "save-off",
+        "save-on",
+        "say",
+        "schedule",
+        "scoreboard",
+        "seed",
+        "setblock",
+        "setidletimeout",
+        "setworldspawn",
+        "spawnpoint",
+        "spectate",
+        "spreadplayers",
+        "stop",
+        "stopsound",
+        "stopwatch",
+        "summon",
+        "swing",
+        "tag",
+        "team",
+        "teammsg",
+        "teleport",
+        "tell",
+        "tellraw",
+        "test",
+        "tick",
+        "time",
+        "title",
+        "tm",
+        "tp",
+        "transfer",
+        "trigger",
+        "version",
+        "w",
+        "waypoint",
+        "weather",
+        "whitelist",
+        "worldborder",
+        "xp"
+      ],
+      "hasGive": true,
+      "hasParticle": true,
+      "hasPlaysound": true
+    }
+  },
+  "recipes": {
+    "declare_recipes": {
+      "recipeCount": 7,
+      "recipeNames": [
+        "minecraft:smithing_template",
+        "minecraft:campfire_input",
+        "minecraft:furnace_input",
+        "minecraft:smithing_addition",
+        "minecraft:smoker_input",
+        "minecraft:blast_furnace_input",
+        "minecraft:smithing_base"
+      ],
+      "itemCounts": [
+        {
+          "name": "minecraft:smithing_template",
+          "items": 19
+        },
+        {
+          "name": "minecraft:campfire_input",
+          "items": 9
+        },
+        {
+          "name": "minecraft:furnace_input",
+          "items": 156
+        },
+        {
+          "name": "minecraft:smithing_addition",
+          "items": 11
+        },
+        {
+          "name": "minecraft:smoker_input",
+          "items": 9
+        },
+        {
+          "name": "minecraft:blast_furnace_input",
+          "items": 62
+        },
+        {
+          "name": "minecraft:smithing_base",
+          "items": 37
+        }
+      ],
+      "stoneCutterCount": 319,
+      "keys": [
+        "recipes",
+        "stoneCutterRecipes"
+      ],
+      "bytes": 3362,
+      "leftover": 0,
+      "sha256": "2bea041c4b75b6925db5741bf8c2ab96dab26bec10f112b1e2c5da06f76514ba"
+    },
+    "recipe_book_add": {
+      "replace": true,
+      "entryCount": 64,
+      "categories": {
+        "crafting_misc": 46,
+        "crafting_equipment": 13,
+        "crafting_redstone": 4,
+        "crafting_building_blocks": 1
+      },
+      "displays": {
+        "crafting_shaped": 38,
+        "crafting_shapeless": 26
+      },
+      "sample": [
+        {
+          "displayId": 887,
+          "category": "crafting_misc",
+          "displayKeys": [
+            "type",
+            "data"
+          ]
+        },
+        {
+          "displayId": 151,
+          "category": "crafting_misc",
+          "displayKeys": [
+            "type",
+            "data"
+          ]
+        },
+        {
+          "displayId": 757,
+          "category": "crafting_misc",
+          "displayKeys": [
+            "type",
+            "data"
+          ]
+        }
+      ],
+      "bytes": 5660,
+      "leftover": 0,
+      "sha256": "f9544b577efdf7f0e484f97831685815cd259f1c4b44d0ee1a4d907e448a69ff"
+    },
+    "recipe_book_settings": {
+      "bytes": 9,
+      "leftover": 0,
+      "hex": "4c0000000000000000"
+    },
+    "limits": "26.2 declare_recipes carries 7 RecipePropertySet names plus 319 stonecutter recipes, not the 1.20.6 type+data catalog. recipe_book_add is the per-recipe display list observed here (64 entries in this offline creative world, not the full vanilla recipe catalog). Display types seen: crafting_shaped, crafting_shapeless. Other RecipeDisplay types (furnace, stonecutting, smithing, ...) were not in this book packet."
+  },
+  "sounds": {
+    "packet": "sound_effect",
+    "leftover": 0,
+    "samples": [
+      {
+        "label": "playsound-experience-orb-named-holder",
+        "hex": "7500266d696e6563726166743a656e746974792e657870657269656e63655f6f72622e7069636b757000000000096400000280000000043f8000003f8000009d23e80b650b6a0f",
+        "viewerName": "entity.experience_orb.pickup",
+        "position": {
+          "x": 300.5,
+          "y": 80,
+          "z": 0.5
+        },
+        "category": "master"
+      },
+      {
+        "label": "item-pickup-registry-id",
+        "hex": "759007070000096400000280fffffffc3e4ccccd3f2dfa52311a456d40cb6909",
+        "viewerName": "entity.item.pickup"
+      }
+    ],
+    "limits": "Two holder encodings observed: inline soundName and registry soundId. Not every sound event or category was played."
+  },
+  "particles": {
+    "packet": "world_particles",
+    "leftover": 0,
+    "sample": {
+      "label": "happy_villager",
+      "hex": "2f01004072c8000000000040544000000000003fe00000000000003e4ccccd3e4ccccd3e4ccccd000000000000000832",
+      "summary": {
+        "particleId": "happy_villager",
+        "x": 300.5,
+        "y": 81,
+        "z": 0.5,
+        "particle": {
+          "type": "happy_villager"
+        }
+      }
+    },
+    "limits": "One simple particle type (no extra data). Particles with options (dust, entity_effect, item, block, vibration, etc.) were not in this live packet."
+  },
+  "maps": {
+    "packet": "map",
+    "bytes": 16402,
+    "leftover": 0,
+    "sha256": "c088fbd8f00348abe82f3d06c6f60460280182121813a02f3aa86e0753cb1d27",
+    "summary": {
+      "itemDamage": 0,
+      "scale": 0,
+      "locked": false,
+      "columns": 128,
+      "rows": 128,
+      "icons": 1,
+      "dataLen": 16384
+    },
+    "core": {
+      "readMapId": 0,
+      "mapStateOf_0": {
+        "id": 0,
+        "scale": 0,
+        "colors": true,
+        "icons": 1
+      }
+    },
+    "limits": "One unlocked 128x128 map id 0 with 1 icon. Other map scale, locked, partial-column, and icon-type branches were not in this packet. Empty map_id-less filled_map does not yield a map packet."
+  },
+  "physics": {
+    "arena": "smooth_stone floor z=20, ladder at x=303 on west face of stone pillar x=304, full block wall x=310, oak stairs rising east at x=314-315, bottom slab at x=318",
+    "sampling": "50ms client position samples after /tp; not a tick-perfect official physics log",
+    "traces": [
+      {
+        "label": "ladder-jump-only",
+        "controls": {
+          "jump": true,
+          "forward": false,
+          "back": false,
+          "left": false,
+          "right": false,
+          "sneak": false,
+          "sprint": false
+        },
+        "n": 24,
+        "y0": 80.41999998688698,
+        "yMax": 83.12480003952994,
+        "yLast": 83.12480003952994,
+        "x0": 303.5,
+        "xLast": 303.5,
+        "first": {
+          "t": 0,
+          "x": 303.5,
+          "y": 80.41999998688698,
+          "z": 20.5,
+          "vx": 0,
+          "vy": 0.11760000228881837,
+          "vz": 0,
+          "onGround": false
+        },
+        "last": {
+          "t": 23,
+          "x": 303.5,
+          "y": 83.12480003952994,
+          "z": 20.5,
+          "vx": 0,
+          "vy": 0.11760000228881837,
+          "vz": 0,
+          "onGround": false
+        },
+        "trace": [
+          {
+            "t": 0,
+            "x": 303.5,
+            "y": 80.41999998688698,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 1,
+            "x": 303.5,
+            "y": 80.5375999891758,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 2,
+            "x": 303.5,
+            "y": 80.65519999146463,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 3,
+            "x": 303.5,
+            "y": 80.77279999375345,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 4,
+            "x": 303.5,
+            "y": 80.89039999604228,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 5,
+            "x": 303.5,
+            "y": 80.89039999604228,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 6,
+            "x": 303.5,
+            "y": 81.12560000061993,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 7,
+            "x": 303.5,
+            "y": 81.24320000290875,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 8,
+            "x": 303.5,
+            "y": 81.36080000519758,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 9,
+            "x": 303.5,
+            "y": 81.4784000074864,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 10,
+            "x": 303.5,
+            "y": 81.59600000977522,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 11,
+            "x": 303.5,
+            "y": 81.71360001206405,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 12,
+            "x": 303.5,
+            "y": 81.83120001435287,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 13,
+            "x": 303.5,
+            "y": 81.9488000166417,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 14,
+            "x": 303.5,
+            "y": 82.06640001893052,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 15,
+            "x": 303.5,
+            "y": 82.18400002121935,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 16,
+            "x": 303.5,
+            "y": 82.30160002350817,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 17,
+            "x": 303.5,
+            "y": 82.419200025797,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 18,
+            "x": 303.5,
+            "y": 82.53680002808582,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 19,
+            "x": 303.5,
+            "y": 82.65440003037465,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 20,
+            "x": 303.5,
+            "y": 82.77200003266347,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 21,
+            "x": 303.5,
+            "y": 82.8896000349523,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 22,
+            "x": 303.5,
+            "y": 83.00720003724112,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          },
+          {
+            "t": 23,
+            "x": 303.5,
+            "y": 83.12480003952994,
+            "z": 20.5,
+            "vy": 0.11760000228881837,
+            "onGround": false
+          }
+        ]
+      },
+      {
+        "label": "ladder-forward-no-jump",
+        "controls": {
+          "jump": false,
+          "forward": true,
+          "back": false,
+          "sneak": false,
+          "sprint": false
+        },
+        "n": 24,
+        "y0": 80,
+        "yMax": 80,
+        "yLast": 80,
+        "x0": 303.4019999600071,
+        "xLast": 298.7140221620017,
+        "first": {
+          "t": 0,
+          "x": 303.4019999600071,
+          "y": 80,
+          "z": 20.5,
+          "vx": -0.053508021836121904,
+          "vy": -0.0784000015258789,
+          "vz": 3.2764213835156683e-18,
+          "onGround": true
+        },
+        "last": {
+          "t": 23,
+          "x": 298.7140221620017,
+          "y": 80,
+          "z": 20.5,
+          "vx": -0.11785887956345276,
+          "vy": -0.0784000015258789,
+          "vz": 7.216783632314884e-18,
+          "onGround": true
+        },
+        "trace": [
+          {
+            "t": 0,
+            "x": 303.4019999600071,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 1,
+            "x": 303.25199996000714,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 2,
+            "x": 303.10199996000716,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 3,
+            "x": 302.9519999600072,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 4,
+            "x": 302.7720999200143,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 5,
+            "x": 302.57587445818524,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 6,
+            "x": 302.3707353160337,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 7,
+            "x": 302.16072930442607,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 8,
+            "x": 301.9480659820954,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 9,
+            "x": 301.73395176810993,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 10,
+            "x": 301.51904536728097,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 11,
+            "x": 301.3037064324355,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 12,
+            "x": 301.08813133401696,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 13,
+            "x": 300.87242729028753,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 14,
+            "x": 300.6566528424184,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 15,
+            "x": 300.44083995388894,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 16,
+            "x": 300.225006076759,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 17,
+            "x": 300.0091607398531,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 18,
+            "x": 299.7933091459096,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 19,
+            "x": 299.57745413562355,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 20,
+            "x": 299.3615972600145,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 21,
+            "x": 299.14573936593905,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 22,
+            "x": 298.9298809157809,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 23,
+            "x": 298.7140221620017,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          }
+        ]
+      },
+      {
+        "label": "ladder-neither",
+        "controls": {
+          "jump": false,
+          "forward": false
+        },
+        "n": 16,
+        "y0": 80,
+        "yMax": 80,
+        "yLast": 80,
+        "x0": 303.5,
+        "xLast": 303.5,
+        "first": {
+          "t": 0,
+          "x": 303.5,
+          "y": 80,
+          "z": 20.5,
+          "vx": 0,
+          "vy": -0.0784000015258789,
+          "vz": 0,
+          "onGround": true
+        },
+        "last": {
+          "t": 15,
+          "x": 303.5,
+          "y": 80,
+          "z": 20.5,
+          "vx": 0,
+          "vy": -0.0784000015258789,
+          "vz": 0,
+          "onGround": true
+        },
+        "trace": [
+          {
+            "t": 0,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 1,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 2,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 3,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 4,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 5,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 6,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 7,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 8,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 9,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 10,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 11,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 12,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 13,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 14,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 15,
+            "x": 303.5,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          }
+        ]
+      },
+      {
+        "label": "walk-into-full-block",
+        "controls": {
+          "forward": true,
+          "jump": false,
+          "sprint": false
+        },
+        "n": 24,
+        "y0": 80,
+        "yMax": 80,
+        "yLast": 80,
+        "x0": 308.5980000399929,
+        "xLast": 309.69999998807907,
+        "first": {
+          "t": 0,
+          "x": 308.5980000399929,
+          "y": 80,
+          "z": 20.5,
+          "vx": 0.053508021836121904,
+          "vy": -0.0784000015258789,
+          "vz": 3.2764213835156683e-18,
+          "onGround": true
+        },
+        "last": {
+          "t": 23,
+          "x": 309.69999998807907,
+          "y": 80,
+          "z": 20.5,
+          "vx": 0,
+          "vy": -0.0784000015258789,
+          "vz": 3.2764213835156683e-18,
+          "onGround": true
+        },
+        "trace": [
+          {
+            "t": 0,
+            "x": 308.5980000399929,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 1,
+            "x": 308.7495081018219,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 2,
+            "x": 308.9302315435734,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 3,
+            "x": 309.1269065827627,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 4,
+            "x": 309.3322911941529,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 5,
+            "x": 309.5424312319649,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 6,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 7,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 8,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 9,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 10,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 11,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 12,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 13,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 14,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 15,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 16,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 17,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 18,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 19,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 20,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 21,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 22,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 23,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          }
+        ]
+      },
+      {
+        "label": "walk-up-stairs",
+        "controls": {
+          "forward": true,
+          "jump": false,
+          "sprint": false
+        },
+        "n": 28,
+        "y0": 80,
+        "yMax": 82,
+        "yLast": 80.5,
+        "x0": 313.5980000399929,
+        "xLast": 318.98471552469607,
+        "first": {
+          "t": 0,
+          "x": 313.5980000399929,
+          "y": 80,
+          "z": 20.5,
+          "vx": 0.053508021836121904,
+          "vy": -0.0784000015258789,
+          "vz": 3.2764213835156683e-18,
+          "onGround": true
+        },
+        "last": {
+          "t": 27,
+          "x": 318.98471552469607,
+          "y": 80.5,
+          "z": 20.5,
+          "vx": 0.11877854444095585,
+          "vy": -0.0784000015258789,
+          "vz": 7.27308821284991e-18,
+          "onGround": true
+        },
+        "trace": [
+          {
+            "t": 0,
+            "x": 313.5980000399929,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 1,
+            "x": 313.7495081018219,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 2,
+            "x": 313.9302315435734,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 3,
+            "x": 314.1269065827627,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 4,
+            "x": 314.3322911941529,
+            "y": 81,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 5,
+            "x": 314.5424312319649,
+            "y": 81,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 6,
+            "x": 314.7551677326031,
+            "y": 81.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 7,
+            "x": 314.9693219019445,
+            "y": 81.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 8,
+            "x": 315.1842501183978,
+            "y": 81.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 9,
+            "x": 315.3996009645742,
+            "y": 82,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 10,
+            "x": 315.6151825665794,
+            "y": 82,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 11,
+            "x": 315.8308901612671,
+            "y": 82,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 12,
+            "x": 316.04666654795955,
+            "y": 82,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 13,
+            "x": 316.2624804950865,
+            "y": 82,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 14,
+            "x": 316.4783149502107,
+            "y": 82,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 15,
+            "x": 316.6941606027014,
+            "y": 81.92159999847412,
+            "z": 20.5,
+            "vy": -0.1552320045166016,
+            "onGround": false
+          },
+          {
+            "t": 16,
+            "x": 316.83161232896134,
+            "y": 81.76636799395752,
+            "z": 20.5,
+            "vy": -0.230527368912964,
+            "onGround": false
+          },
+          {
+            "t": 17,
+            "x": 316.97629339985787,
+            "y": 81.53584062504456,
+            "z": 20.5,
+            "vy": -0.30431682745754424,
+            "onGround": false
+          },
+          {
+            "t": 18,
+            "x": 317.1275531743737,
+            "y": 81.23152379758702,
+            "z": 20.5,
+            "vy": -0.37663049823865513,
+            "onGround": false
+          },
+          {
+            "t": 19,
+            "x": 317.2847995691831,
+            "y": 80.85489329934836,
+            "z": 20.5,
+            "vy": -0.44749789698341763,
+            "onGround": false
+          },
+          {
+            "t": 20,
+            "x": 317.4474937884597,
+            "y": 80.40739540236494,
+            "z": 20.5,
+            "vy": -0.5169479491049732,
+            "onGround": false
+          },
+          {
+            "t": 21,
+            "x": 317.6151455280014,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 22,
+            "x": 317.86570865097724,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 23,
+            "x": 318.10051615611496,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 24,
+            "x": 318.326721093913,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 25,
+            "x": 318.5482290299437,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 26,
+            "x": 318.76717240300934,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 27,
+            "x": 318.98471552469607,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          }
+        ]
+      },
+      {
+        "label": "walk-onto-slab",
+        "controls": {
+          "forward": true,
+          "jump": false
+        },
+        "n": 20,
+        "y0": 80,
+        "yMax": 80.5,
+        "yLast": 80,
+        "x0": 317.5980000399929,
+        "xLast": 320.69999998807907,
+        "first": {
+          "t": 0,
+          "x": 317.5980000399929,
+          "y": 80,
+          "z": 20.5,
+          "vx": 0.053508021836121904,
+          "vy": -0.0784000015258789,
+          "vz": 3.2764213835156683e-18,
+          "onGround": true
+        },
+        "last": {
+          "t": 19,
+          "x": 320.69999998807907,
+          "y": 80,
+          "z": 20.5,
+          "vx": 0,
+          "vy": -0.0784000015258789,
+          "vz": 3.2764213835156683e-18,
+          "onGround": true
+        },
+        "trace": [
+          {
+            "t": 0,
+            "x": 317.5980000399929,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 1,
+            "x": 317.7495081018219,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 2,
+            "x": 317.9302315435734,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 3,
+            "x": 318.1269065827627,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 4,
+            "x": 318.3322911941529,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 5,
+            "x": 318.5424312319649,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 6,
+            "x": 318.7551677326031,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 7,
+            "x": 318.9693219019445,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 8,
+            "x": 319.1842501183978,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 9,
+            "x": 319.3996009645742,
+            "y": 80.5,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 10,
+            "x": 319.6151825665794,
+            "y": 80.42159999847412,
+            "z": 20.5,
+            "vy": -0.1552320045166016,
+            "onGround": false
+          },
+          {
+            "t": 11,
+            "x": 319.75249012127426,
+            "y": 80.26636799395752,
+            "z": 20.5,
+            "vy": -0.230527368912964,
+            "onGround": false
+          },
+          {
+            "t": 12,
+            "x": 319.89703999604654,
+            "y": 80.03584062504456,
+            "z": 20.5,
+            "vy": -0.30431682745754424,
+            "onGround": false
+          },
+          {
+            "t": 13,
+            "x": 320.04818038208936,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 14,
+            "x": 320.2837181733812,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 15,
+            "x": 320.51032184741945,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 16,
+            "x": 320.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 17,
+            "x": 320.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 18,
+            "x": 320.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 19,
+            "x": 320.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          }
+        ]
+      },
+      {
+        "label": "jump-against-full-block",
+        "controls": {
+          "jump": true,
+          "forward": true
+        },
+        "n": 20,
+        "y0": 80.41999998688698,
+        "yMax": 81.25220334025373,
+        "yLast": 81.02442408821369,
+        "x0": 309.5980000399929,
+        "xLast": 309.69999998807907,
+        "first": {
+          "t": 0,
+          "x": 309.5980000399929,
+          "y": 80.41999998688698,
+          "z": 20.5,
+          "vx": 0.053508021836121904,
+          "vy": 0.33319999363422365,
+          "vz": 3.2764213835156683e-18,
+          "onGround": false
+        },
+        "last": {
+          "t": 19,
+          "x": 309.69999998807907,
+          "y": 81.02442408821369,
+          "z": 20.5,
+          "vx": 0,
+          "vy": -0.22768848754498797,
+          "vz": 1.0921400154796096e-18,
+          "onGround": false
+        },
+        "trace": [
+          {
+            "t": 0,
+            "x": 309.5980000399929,
+            "y": 80.41999998688698,
+            "z": 20.5,
+            "vy": 0.33319999363422365,
+            "onGround": false
+          },
+          {
+            "t": 1,
+            "x": 309.671108061829,
+            "y": 80.7531999805212,
+            "z": 20.5,
+            "vy": 0.24813599859094576,
+            "onGround": false
+          },
+          {
+            "t": 2,
+            "x": 309.69999998807907,
+            "y": 81.00133597911214,
+            "z": 20.5,
+            "vy": 0.16477328182606651,
+            "onGround": false
+          },
+          {
+            "t": 3,
+            "x": 309.69999998807907,
+            "y": 81.16610926093821,
+            "z": 20.5,
+            "vy": 0.08307781780646721,
+            "onGround": false
+          },
+          {
+            "t": 4,
+            "x": 309.69999998807907,
+            "y": 81.24918707874468,
+            "z": 20.5,
+            "vy": 0.0030162615090425808,
+            "onGround": false
+          },
+          {
+            "t": 5,
+            "x": 309.69999998807907,
+            "y": 81.25220334025373,
+            "z": 20.5,
+            "vy": -0.07544406518948656,
+            "onGround": false
+          },
+          {
+            "t": 6,
+            "x": 309.69999998807907,
+            "y": 81.17675927506424,
+            "z": 20.5,
+            "vy": -0.15233518685055708,
+            "onGround": false
+          },
+          {
+            "t": 7,
+            "x": 309.69999998807907,
+            "y": 81.02442408821369,
+            "z": 20.5,
+            "vy": -0.22768848754498797,
+            "onGround": false
+          },
+          {
+            "t": 8,
+            "x": 309.69999998807907,
+            "y": 80.79673560066871,
+            "z": 20.5,
+            "vy": -0.30153472366278034,
+            "onGround": false
+          },
+          {
+            "t": 9,
+            "x": 309.69999998807907,
+            "y": 80.49520087700593,
+            "z": 20.5,
+            "vy": -0.3739040364667221,
+            "onGround": false
+          },
+          {
+            "t": 10,
+            "x": 309.69999998807907,
+            "y": 80.1212968405392,
+            "z": 20.5,
+            "vy": -0.4448259643949201,
+            "onGround": false
+          },
+          {
+            "t": 11,
+            "x": 309.69999998807907,
+            "y": 80,
+            "z": 20.5,
+            "vy": -0.0784000015258789,
+            "onGround": true
+          },
+          {
+            "t": 12,
+            "x": 309.69999998807907,
+            "y": 80.41999998688698,
+            "z": 20.5,
+            "vy": 0.33319999363422365,
+            "onGround": false
+          },
+          {
+            "t": 13,
+            "x": 309.69999998807907,
+            "y": 80.7531999805212,
+            "z": 20.5,
+            "vy": 0.24813599859094576,
+            "onGround": false
+          },
+          {
+            "t": 14,
+            "x": 309.69999998807907,
+            "y": 81.00133597911214,
+            "z": 20.5,
+            "vy": 0.16477328182606651,
+            "onGround": false
+          },
+          {
+            "t": 15,
+            "x": 309.69999998807907,
+            "y": 81.16610926093821,
+            "z": 20.5,
+            "vy": 0.08307781780646721,
+            "onGround": false
+          },
+          {
+            "t": 16,
+            "x": 309.69999998807907,
+            "y": 81.24918707874468,
+            "z": 20.5,
+            "vy": 0.0030162615090425808,
+            "onGround": false
+          },
+          {
+            "t": 17,
+            "x": 309.69999998807907,
+            "y": 81.25220334025373,
+            "z": 20.5,
+            "vy": -0.07544406518948656,
+            "onGround": false
+          },
+          {
+            "t": 18,
+            "x": 309.69999998807907,
+            "y": 81.17675927506424,
+            "z": 20.5,
+            "vy": -0.15233518685055708,
+            "onGround": false
+          },
+          {
+            "t": 19,
+            "x": 309.69999998807907,
+            "y": 81.02442408821369,
+            "z": 20.5,
+            "vy": -0.22768848754498797,
+            "onGround": false
+          }
+        ]
+      }
+    ],
+    "observations": {
+      "climbUsingJump": "On the ladder, jump-only raised Y from ~80.42 to ~83.12 while X stayed 303.5. Forward without jump did not climb (Y stayed 80; X moved west off the ladder). No-input stayed put. Jump against a non-climbable full block peaked near 81.25 and X stopped at 309.7, unlike continuous ladder climb.",
+      "fullBlockCollision": "Walking east into the stone wall at x=310 stopped at x=309.69999998807907, consistent with player width 0.6 (310-0.3).",
+      "stairs": "Walking east from x=313.5, yMax reached 82 (two stair steps) then continued; this path also crossed the later slab and is not an isolated stair-only trial after x=316.",
+      "slab": "Walking onto the bottom slab reached yMax 80.5 then walked off back to y=80, xLast 320.7."
+    },
+    "limits": "climbUsingJump is supported by this vanilla ladder+jump trial. Stair/slab compare is live client movement, not an exhaustive collision-shape matrix (inner corners, top slabs, upside-down stairs, trapdoors, scaffolding not tried). Simulation vs prismarine-physics is a separate test using these traces as the oracle, with 50ms sampling tolerance."
+  }
+}

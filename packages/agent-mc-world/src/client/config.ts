@@ -1,3 +1,4 @@
+import { npcThreatAnchorsError } from '../../core/entity-threat.ts';
 import { fileURLToPath } from 'node:url';
 import { MINECRAFT_DEFAULTS, type MinecraftConfigSection } from '../../core/config.ts';
 import { protocolVersion } from './authentication.ts';
@@ -42,6 +43,8 @@ export const MINECRAFT_CLIENT_DEFAULTS: MinecraftClientConfig = {
 };
 export function assertMinecraftReady(cfg: MinecraftClientConfig): void {
   validateReferenceConfig(cfg.knowledge);
+  const npcPolicyError = npcThreatAnchorsError(cfg.perception?.npcThreatAnchors);
+  if (npcPolicyError) throw new Error(npcPolicyError);
   if (cfg.perception?.mineralVision !== undefined && typeof cfg.perception.mineralVision !== 'boolean')
     throw new Error('perception.mineralVision must be a boolean. Default false.');
   if (cfg.perception?.entityView !== undefined && !['surroundings', 'camera'].includes(cfg.perception.entityView))

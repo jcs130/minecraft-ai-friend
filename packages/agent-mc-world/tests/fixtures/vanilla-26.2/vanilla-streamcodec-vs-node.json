@@ -1,0 +1,3346 @@
+{
+  "source": "vanilla 26.2 server-26.2.jar DataComponentType.streamCodec bytes decoded by experimental 26.2 Node Slot parser",
+  "typeCount": 111,
+  "vanillaEncodedTypes": 111,
+  "nodeVerifiedTypes": 111,
+  "nodeFailedTypes": [],
+  "unverifiedTypes": [],
+  "types": [
+    {
+      "id": 0,
+      "name": "minecraft:custom_data",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 16,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "custom_data"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "name": "minecraft:max_stack_size",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "max_stack_size"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "max_stack_size"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "max_stack_size"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "minecraft:max_damage",
+      "vanillaEncodedSamples": 7,
+      "nodeConsumed": 7,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "netherite_sword",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "max_damage"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "warped_fungus_on_a_stick",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "max_damage"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_sword",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "max_damage"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_helmet",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "max_damage"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_leggings",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "max_damage"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "chainmail_helmet",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "max_damage"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "max_damage"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "minecraft:damage",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "netherite_sword",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "damage"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "minecraft:unbreakable",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "unit_instance",
+          "label": "Unit.INSTANCE",
+          "length": 0,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "unbreakable"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "minecraft:use_effects",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "use_effects"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "minecraft:custom_name",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 12,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "custom_name"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "minecraft:minimum_attack_charge",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "length": 4,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "minimum_attack_charge"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "minecraft:damage_type",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "damage_type"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "damage_type"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "name": "minecraft:item_name",
+      "vanillaEncodedSamples": 8,
+      "nodeConsumed": 8,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "length": 49,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_name"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "length": 53,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_name"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "length": 50,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_name"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "length": 46,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_name"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "length": 45,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_name"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "length": 47,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_name"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "length": 45,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_name"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "length": 45,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_name"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "name": "minecraft:item_model",
+      "vanillaEncodedSamples": 8,
+      "nodeConsumed": 8,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "length": 28,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_model"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_concrete_powder",
+          "length": 32,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_model"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "smooth_quartz_slab",
+          "length": 29,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_model"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "length": 26,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_model"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald_block",
+          "length": 24,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_model"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "length": 26,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_model"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "length": 24,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_model"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "spruce_button",
+          "length": 24,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "item_model"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "minecraft:lore",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "lore"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 7,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "lore"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 21,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "lore"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "name": "minecraft:rarity",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "rarity"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "rarity"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "structure_block",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "rarity"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "name": "minecraft:enchantments",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "enchantments"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 3,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "enchantments"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 5,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "enchantments"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "name": "minecraft:can_place_on",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "generic_json_probe",
+          "label": "{}",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "can_place_on"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "name": "minecraft:can_break",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "generic_json_probe",
+          "label": "{}",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "can_break"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "name": "minecraft:attribute_modifiers",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "attribute_modifiers"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "minecraft:custom_model_data",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 15,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "custom_model_data"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 4,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "custom_model_data"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "name": "minecraft:tooltip_display",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tooltip_display"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "name": "minecraft:repair_cost",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "repair_cost"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "repair_cost"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "repair_cost"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "name": "minecraft:creative_slot_lock",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "unit_instance",
+          "label": "Unit.INSTANCE",
+          "length": 0,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "creative_slot_lock"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "name": "minecraft:enchantment_glint_override",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "end_crystal",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "enchantment_glint_override"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "name": "minecraft:intangible_projectile",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "unit_instance",
+          "label": "Unit.INSTANCE",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "intangible_projectile"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "name": "minecraft:food",
+      "vanillaEncodedSamples": 8,
+      "nodeConsumed": 8,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "pufferfish",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "food"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "cooked_chicken",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "food"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "potato",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "food"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "cooked_rabbit",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "food"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "suspicious_stew",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "food"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "rotten_flesh",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "food"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "food"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "food"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "name": "minecraft:consumable",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "pufferfish",
+          "length": 39,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "consumable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "cooked_chicken",
+          "length": 9,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "consumable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "rotten_flesh",
+          "length": 23,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "consumable"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "name": "minecraft:use_remainder",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "suspicious_stew",
+          "length": 5,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "use_remainder"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "potion",
+          "length": 5,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "use_remainder"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "milk_bucket",
+          "length": 5,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "use_remainder"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "name": "minecraft:use_cooldown",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "wind_charge",
+          "length": 5,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "use_cooldown"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "ender_pearl",
+          "length": 5,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "use_cooldown"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "name": "minecraft:damage_resistant",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "vanilla_constructor",
+          "label": "net.minecraft.world.item.component.DamageResistant",
+          "length": 19,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "damage_resistant"
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "net.minecraft.world.item.component.DamageResistant",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "damage_resistant"
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "name": "minecraft:tool",
+      "vanillaEncodedSamples": 9,
+      "nodeConsumed": 9,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "netherite_sword",
+          "length": 89,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tool"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_hoe",
+          "length": 81,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tool"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "golden_pickaxe",
+          "length": 80,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tool"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_pickaxe",
+          "length": 82,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tool"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "stone_axe",
+          "length": 77,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tool"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "iron_axe",
+          "length": 76,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tool"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_axe",
+          "length": 78,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tool"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 7,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tool"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 16,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tool"
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "name": "minecraft:weapon",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "netherite_sword",
+          "length": 5,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "weapon"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_hoe",
+          "length": 5,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "weapon"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "stone_axe",
+          "length": 5,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "weapon"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "name": "minecraft:attack_range",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "length": 24,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "attack_range"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "name": "minecraft:enchantable",
+      "vanillaEncodedSamples": 5,
+      "nodeConsumed": 5,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "netherite_sword",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "enchantable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_sword",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "enchantable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_helmet",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "enchantable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "chainmail_helmet",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "enchantable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "golden_pickaxe",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "enchantable"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "name": "minecraft:equippable",
+      "vanillaEncodedSamples": 7,
+      "nodeConsumed": 7,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "iron_nautilus_armor",
+          "length": 61,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "equippable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "pink_carpet",
+          "length": 39,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "equippable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "green_harness",
+          "length": 66,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "equippable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "iron_horse_armor",
+          "length": 60,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "equippable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_helmet",
+          "length": 29,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "equippable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "player_head",
+          "length": 12,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "equippable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_horse_armor",
+          "length": 63,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "equippable"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "name": "minecraft:repairable",
+      "vanillaEncodedSamples": 6,
+      "nodeConsumed": 6,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "netherite_sword",
+          "length": 36,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "repairable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_sword",
+          "length": 34,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "repairable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_helmet",
+          "length": 32,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "repairable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "diamond_leggings",
+          "length": 33,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "repairable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "chainmail_helmet",
+          "length": 31,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "repairable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "golden_pickaxe",
+          "length": 31,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "repairable"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "name": "minecraft:glider",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "elytra",
+          "length": 0,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "glider"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "name": "minecraft:tooltip_style",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 16,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tooltip_style"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 18,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tooltip_style"
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "name": "minecraft:death_protection",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "totem_of_undying",
+          "length": 31,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "death_protection"
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "name": "minecraft:blocks_attacks",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "generic_json_probe",
+          "label": "{}",
+          "length": 37,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "blocks_attacks"
+        }
+      ]
+    },
+    {
+      "id": 38,
+      "name": "minecraft:piercing_weapon",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "length": 8,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "piercing_weapon"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "wooden_spear",
+          "length": 8,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "piercing_weapon"
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "name": "minecraft:kinetic_weapon",
+      "vanillaEncodedSamples": 7,
+      "nodeConsumed": 7,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "diamond_spear",
+          "length": 48,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "kinetic_weapon"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_spear",
+          "length": 48,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "kinetic_weapon"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "golden_spear",
+          "length": 48,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "kinetic_weapon"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_spear",
+          "length": 47,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "kinetic_weapon"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "iron_spear",
+          "length": 48,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "kinetic_weapon"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "wooden_spear",
+          "length": 48,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "kinetic_weapon"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "stone_spear",
+          "length": 48,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "kinetic_weapon"
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "name": "minecraft:swing_animation",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "swing_animation"
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "name": "minecraft:additional_trade_cost",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "vanilla_constructor",
+          "label": "java.lang.Integer",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "additional_trade_cost"
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "java.lang.Integer",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "additional_trade_cost"
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "java.lang.Integer",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "additional_trade_cost"
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "name": "minecraft:stored_enchantments",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "enchanted_book",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "stored_enchantments"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 3,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "stored_enchantments"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 5,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "stored_enchantments"
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "name": "minecraft:dye",
+      "vanillaEncodedSamples": 8,
+      "nodeConsumed": 8,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "green_dye",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "dye"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "light_blue_dye",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "dye"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "purple_dye",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "dye"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "black_dye",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "dye"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "blue_dye",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "dye"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "cyan_dye",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "dye"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "magenta_dye",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "dye"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "light_gray_dye",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "dye"
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "name": "minecraft:dyed_color",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 4,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "dyed_color"
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "name": "minecraft:map_color",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "filled_map",
+          "length": 4,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "map_color"
+        }
+      ]
+    },
+    {
+      "id": 46,
+      "name": "minecraft:map_id",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "map_id"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "map_id"
+        }
+      ]
+    },
+    {
+      "id": 47,
+      "name": "minecraft:map_decorations",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "filled_map",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "map_decorations"
+        }
+      ]
+    },
+    {
+      "id": 48,
+      "name": "minecraft:map_post_processing",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "vanilla_constructor",
+          "label": "net.minecraft.world.item.component.MapPostProcessing",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "map_post_processing"
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "net.minecraft.world.item.component.MapPostProcessing",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "map_post_processing"
+        }
+      ]
+    },
+    {
+      "id": 49,
+      "name": "minecraft:charged_projectiles",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "crossbow",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "charged_projectiles"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "charged_projectiles"
+        }
+      ]
+    },
+    {
+      "id": 50,
+      "name": "minecraft:bundle_contents",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "white_bundle",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "bundle_contents"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 5,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "bundle_contents"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 9,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "bundle_contents"
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "name": "minecraft:potion_contents",
+      "vanillaEncodedSamples": 4,
+      "nodeConsumed": 4,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "lingering_potion",
+          "length": 4,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "potion_contents"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 5,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "potion_contents"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 5,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "potion_contents"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 19,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "potion_contents"
+        }
+      ]
+    },
+    {
+      "id": 52,
+      "name": "minecraft:potion_duration_scale",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "lingering_potion",
+          "length": 4,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "potion_duration_scale"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "tipped_arrow",
+          "length": 4,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "potion_duration_scale"
+        }
+      ]
+    },
+    {
+      "id": 53,
+      "name": "minecraft:suspicious_stew_effects",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "suspicious_stew",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "suspicious_stew_effects"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 3,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "suspicious_stew_effects"
+        }
+      ]
+    },
+    {
+      "id": 54,
+      "name": "minecraft:writable_book_content",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "writable_book",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "writable_book_content"
+        }
+      ]
+    },
+    {
+      "id": 55,
+      "name": "minecraft:written_book_content",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 35,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "written_book_content"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 18,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "written_book_content"
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "name": "minecraft:trim",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "trim"
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "name": "minecraft:debug_stick_state",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "debug_stick",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "debug_stick_state"
+        }
+      ]
+    },
+    {
+      "id": 58,
+      "name": "minecraft:entity_data",
+      "vanillaEncodedSamples": 8,
+      "nodeConsumed": 8,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "tropical_fish_spawn_egg",
+          "length": 4,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "entity_data"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "zoglin_spawn_egg",
+          "length": 4,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "entity_data"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "hoglin_spawn_egg",
+          "length": 3,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "entity_data"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "sulfur_cube_spawn_egg",
+          "length": 4,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "entity_data"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "bee_spawn_egg",
+          "length": 3,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "entity_data"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "creeper_spawn_egg",
+          "length": 3,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "entity_data"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "ravager_spawn_egg",
+          "length": 3,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "entity_data"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "camel_husk_spawn_egg",
+          "length": 3,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "entity_data"
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "name": "minecraft:bucket_entity_data",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "sulfur_cube_bucket",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "bucket_entity_data"
+        }
+      ]
+    },
+    {
+      "id": 60,
+      "name": "minecraft:block_entity_data",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 3,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "block_entity_data"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 3,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "block_entity_data"
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "name": "minecraft:instrument",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "goat_horn",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "instrument"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "instrument"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 64,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "instrument"
+        }
+      ]
+    },
+    {
+      "id": 62,
+      "name": "minecraft:provides_trim_material",
+      "vanillaEncodedSamples": 9,
+      "nodeConsumed": 9,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "diamond",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "provides_trim_material"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "iron_ingot",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "provides_trim_material"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "amethyst_shard",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "provides_trim_material"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "redstone",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "provides_trim_material"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "gold_ingot",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "provides_trim_material"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "netherite_ingot",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "provides_trim_material"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "emerald",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "provides_trim_material"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "copper_ingot",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "provides_trim_material"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 95,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "provides_trim_material"
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "name": "minecraft:ominous_bottle_amplifier",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "ominous_bottle",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "ominous_bottle_amplifier"
+        }
+      ]
+    },
+    {
+      "id": 64,
+      "name": "minecraft:jukebox_playable",
+      "vanillaEncodedSamples": 8,
+      "nodeConsumed": 8,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_stal",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "jukebox_playable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_precipice",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "jukebox_playable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_relic",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "jukebox_playable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_blocks",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "jukebox_playable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_mall",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "jukebox_playable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_far",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "jukebox_playable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_otherside",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "jukebox_playable"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "music_disc_strad",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "jukebox_playable"
+        }
+      ]
+    },
+    {
+      "id": 65,
+      "name": "minecraft:provides_banner_patterns",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "vanilla_constructor",
+          "label": "net.minecraft.core.HolderSet$1",
+          "length": 31,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "provides_banner_patterns"
+        },
+        {
+          "origin": "vanilla_constructor",
+          "label": "net.minecraft.core.HolderSet$1",
+          "length": 32,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "provides_banner_patterns"
+        }
+      ]
+    },
+    {
+      "id": 66,
+      "name": "minecraft:recipes",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "knowledge_book",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "recipes"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 23,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "recipes"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 40,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "recipes"
+        }
+      ]
+    },
+    {
+      "id": 67,
+      "name": "minecraft:lodestone_tracker",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 30,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "lodestone_tracker"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "lodestone_tracker"
+        }
+      ]
+    },
+    {
+      "id": 68,
+      "name": "minecraft:firework_explosion",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 9,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "firework_explosion"
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "name": "minecraft:fireworks",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "firework_rocket",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "fireworks"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 11,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "fireworks"
+        }
+      ]
+    },
+    {
+      "id": 70,
+      "name": "minecraft:profile",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 14,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "profile"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 28,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "profile"
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "name": "minecraft:note_block_sound",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 29,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "note_block_sound"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 32,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "note_block_sound"
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "name": "minecraft:banner_patterns",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "yellow_banner",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "banner_patterns"
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "name": "minecraft:base_color",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "base_color"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "base_color"
+        }
+      ]
+    },
+    {
+      "id": 74,
+      "name": "minecraft:pot_decorations",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "length": 9,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "pot_decorations"
+        }
+      ]
+    },
+    {
+      "id": 75,
+      "name": "minecraft:container",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "decorated_pot",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "container"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 6,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "container"
+        }
+      ]
+    },
+    {
+      "id": 76,
+      "name": "minecraft:block_state",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "weathered_copper_golem_statue",
+          "length": 28,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "block_state"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "bee_nest",
+          "length": 15,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "block_state"
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "name": "minecraft:bees",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "bee_nest",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "bees"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 6,
+          "ok": false,
+          "leftover": null,
+          "decodedType": null,
+          "error": "Error: Read error for undefined : array size is abnormally large, not reading: 167772161"
+        }
+      ]
+    },
+    {
+      "id": 78,
+      "name": "minecraft:sulfur_cube_content",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "generic_json_probe",
+          "label": "\"minecraft:stone\"",
+          "length": 4,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "sulfur_cube_content"
+        }
+      ]
+    },
+    {
+      "id": 79,
+      "name": "minecraft:lock",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "lock"
+        }
+      ]
+    },
+    {
+      "id": 80,
+      "name": "minecraft:container_loot",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 48,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "container_loot"
+        }
+      ]
+    },
+    {
+      "id": 81,
+      "name": "minecraft:break_sound",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "warped_wart_block",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "break_sound"
+        }
+      ]
+    },
+    {
+      "id": 82,
+      "name": "minecraft:villager/variant",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "villager/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "villager/variant"
+        }
+      ]
+    },
+    {
+      "id": 83,
+      "name": "minecraft:wolf/variant",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "wolf/variant"
+        }
+      ]
+    },
+    {
+      "id": 84,
+      "name": "minecraft:wolf/sound_variant",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "wolf/sound_variant"
+        }
+      ]
+    },
+    {
+      "id": 85,
+      "name": "minecraft:wolf/collar",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "wolf/collar"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "wolf/collar"
+        }
+      ]
+    },
+    {
+      "id": 86,
+      "name": "minecraft:fox/variant",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "fox/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "fox/variant"
+        }
+      ]
+    },
+    {
+      "id": 87,
+      "name": "minecraft:salmon/size",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "salmon/size"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "salmon/size"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "salmon/size"
+        }
+      ]
+    },
+    {
+      "id": 88,
+      "name": "minecraft:parrot/variant",
+      "vanillaEncodedSamples": 5,
+      "nodeConsumed": 5,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "parrot/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "parrot/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "parrot/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "parrot/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "parrot/variant"
+        }
+      ]
+    },
+    {
+      "id": 89,
+      "name": "minecraft:tropical_fish/pattern",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tropical_fish/pattern"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tropical_fish/pattern"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 2,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tropical_fish/pattern"
+        }
+      ]
+    },
+    {
+      "id": 90,
+      "name": "minecraft:tropical_fish/base_color",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tropical_fish/base_color"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tropical_fish/base_color"
+        }
+      ]
+    },
+    {
+      "id": 91,
+      "name": "minecraft:tropical_fish/pattern_color",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tropical_fish/pattern_color"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "tropical_fish/pattern_color"
+        }
+      ]
+    },
+    {
+      "id": 92,
+      "name": "minecraft:mooshroom/variant",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "mooshroom/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "mooshroom/variant"
+        }
+      ]
+    },
+    {
+      "id": 93,
+      "name": "minecraft:rabbit/variant",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "rabbit/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "rabbit/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "rabbit/variant"
+        }
+      ]
+    },
+    {
+      "id": 94,
+      "name": "minecraft:pig/variant",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "pig/variant"
+        }
+      ]
+    },
+    {
+      "id": 95,
+      "name": "minecraft:pig/sound_variant",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "pig/sound_variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "pig/sound_variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "pig/sound_variant"
+        }
+      ]
+    },
+    {
+      "id": 96,
+      "name": "minecraft:cow/variant",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "cow/variant"
+        }
+      ]
+    },
+    {
+      "id": 97,
+      "name": "minecraft:cow/sound_variant",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "cow/sound_variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "cow/sound_variant"
+        }
+      ]
+    },
+    {
+      "id": 98,
+      "name": "minecraft:chicken/variant",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "item_default_report",
+          "label": "egg",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "chicken/variant"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "brown_egg",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "chicken/variant"
+        },
+        {
+          "origin": "item_default_report",
+          "label": "blue_egg",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "chicken/variant"
+        }
+      ]
+    },
+    {
+      "id": 99,
+      "name": "minecraft:chicken/sound_variant",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "chicken/sound_variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "chicken/sound_variant"
+        }
+      ]
+    },
+    {
+      "id": 100,
+      "name": "minecraft:zombie_nautilus/variant",
+      "vanillaEncodedSamples": 1,
+      "nodeConsumed": 1,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "zombie_nautilus/variant"
+        }
+      ]
+    },
+    {
+      "id": 101,
+      "name": "minecraft:frog/variant",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "frog/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "frog/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "frog/variant"
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "name": "minecraft:horse/variant",
+      "vanillaEncodedSamples": 7,
+      "nodeConsumed": 7,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "horse/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "horse/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "horse/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "horse/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "horse/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "horse/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "horse/variant"
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "name": "minecraft:painting/variant",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "painting/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "painting/variant"
+        }
+      ]
+    },
+    {
+      "id": 104,
+      "name": "minecraft:llama/variant",
+      "vanillaEncodedSamples": 4,
+      "nodeConsumed": 4,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "llama/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "llama/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "llama/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "llama/variant"
+        }
+      ]
+    },
+    {
+      "id": 105,
+      "name": "minecraft:axolotl/variant",
+      "vanillaEncodedSamples": 5,
+      "nodeConsumed": 5,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "axolotl/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "axolotl/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "axolotl/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "axolotl/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "axolotl/variant"
+        }
+      ]
+    },
+    {
+      "id": 106,
+      "name": "minecraft:cat/variant",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "cat/variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "cat/variant"
+        }
+      ]
+    },
+    {
+      "id": 107,
+      "name": "minecraft:cat/sound_variant",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "cat/sound_variant"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "cat/sound_variant"
+        }
+      ]
+    },
+    {
+      "id": 108,
+      "name": "minecraft:cat/collar",
+      "vanillaEncodedSamples": 2,
+      "nodeConsumed": 2,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "cat/collar"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "cat/collar"
+        }
+      ]
+    },
+    {
+      "id": 109,
+      "name": "minecraft:sheep/color",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "sheep/color"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "sheep/color"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "sheep/color"
+        }
+      ]
+    },
+    {
+      "id": 110,
+      "name": "minecraft:shulker/color",
+      "vanillaEncodedSamples": 3,
+      "nodeConsumed": 3,
+      "independentWireStatus": "vanilla_streamcodec_verified",
+      "samples": [
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "shulker/color"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "shulker/color"
+        },
+        {
+          "origin": "curated_json",
+          "label": "curated_json",
+          "length": 1,
+          "ok": true,
+          "leftover": 0,
+          "decodedType": "shulker/color"
+        }
+      ]
+    }
+  ]
+}

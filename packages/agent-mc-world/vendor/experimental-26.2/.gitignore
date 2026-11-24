@@ -1,0 +1,10 @@
+minecraft-protocol/node_modules/*
+!minecraft-protocol/node_modules/
+!minecraft-protocol/node_modules/minecraft-data/
+!minecraft-protocol/node_modules/minecraft-data/**
+mineflayer/node_modules/*
+!mineflayer/node_modules/
+!mineflayer/node_modules/minecraft-data/
+!mineflayer/node_modules/minecraft-data/**
+!mineflayer/node_modules/minecraft-protocol/
+!mineflayer/node_modules/minecraft-protocol/**

@@ -83,3 +83,78 @@ export function itemLoreText(item: {
   }
   return out;
 }
+
+const DISPLAY_COMPONENT_TYPES = new Set(['custom_name', 'item_name', 'lore', 'minecraft:custom_name', 'minecraft:item_name', 'minecraft:lore']);
+
+/** Component type names present on a stack, including unknown namespaces. Display text stays in name/lore. */
+export function itemComponentTypes(item: ComponentItem, limit = 64): string[] {
+  const types: string[] = [];
+  const seen = new Set<string>();
+  const add = (type: unknown) => {
+    if (typeof type !== 'string' || !type || seen.has(type) || types.length >= limit) return;
+    seen.add(type);
+    types.push(type.slice(0, 160));
+  };
+  if (item.componentMap) for (const key of item.componentMap.keys()) add(key);
+  if (item.components) for (const entry of item.components) add(entry.type);
+  return types;
+}
+
+function boundedValue(value: unknown, depth = 0): unknown {
+  if (depth > 6) return '[truncated]';
+  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'string') return value.slice(0, 120);
+  if (Array.isArray(value)) return value.slice(0, 16).map((entry) => boundedValue(entry, depth + 1));
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value).slice(0, 16)) out[key.slice(0, 64)] = boundedValue(entry, depth + 1);
+    return out;
+  }
+  return null;
+}
+
+/** Official custom_model_data payload when present; never invents a default. */
+export function itemCustomModelData(item: ComponentItem): unknown | null {
+  const data = componentData(item, 'custom_model_data');
+  return data == null ? null : boundedValue(unwrapNbt(data));
+}
+
+/** Keys only. Values may be large or private; presence is evidence, not a game rule. */
+export function itemCustomDataKeys(item: ComponentItem, limit = 32): string[] {
+  const data = unwrapNbt(componentData(item, 'custom_data'));
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    return Object.keys(data).slice(0, limit).map((key) => key.slice(0, 80));
+  }
+  return data == null ? [] : ['_present'];
+}
+
+export type ItemComponentEvidence = {
+  customName: string | null;
+  lore: string[];
+  componentTypes: string[];
+  extraComponentTypes: string[];
+  customModelData: unknown | null;
+  customDataKeys: string[];
+};
+
+export function itemComponentEvidence(item: Parameters<typeof itemCustomName>[0] & ComponentItem, loreLines = 32): ItemComponentEvidence {
+  const componentTypes = itemComponentTypes(item);
+  return {
+    customName: itemCustomName(item),
+    lore: itemLoreText(item).slice(0, loreLines),
+    componentTypes,
+    extraComponentTypes: componentTypes.filter((type) => !DISPLAY_COMPONENT_TYPES.has(type)),
+    customModelData: itemCustomModelData(item),
+    customDataKeys: itemCustomDataKeys(item),
+  };
+}
+
+/** Optional slot fields so vanilla-only stacks stay compact. */
+export function itemEvidenceFields(item: Parameters<typeof itemCustomName>[0] & ComponentItem, loreLines = 32) {
+  const ev = itemComponentEvidence(item, loreLines);
+  return {
+    ...(ev.extraComponentTypes.length ? { componentTypes: ev.extraComponentTypes } : {}),
+    ...(ev.customModelData != null ? { customModelData: ev.customModelData } : {}),
+    ...(ev.customDataKeys.length ? { customDataKeys: ev.customDataKeys } : {}),
+  };
+}

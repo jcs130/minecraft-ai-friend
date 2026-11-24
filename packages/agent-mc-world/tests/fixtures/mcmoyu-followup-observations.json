@@ -1,0 +1,267 @@
+{
+  "provenance": {
+    "server": "mcmoyu.top:25565",
+    "version": "1.21.11",
+    "protocol": 774,
+    "account": "ag_jojo",
+    "rawWire": false,
+    "kind": "Received decoded observations, no menu wire was received",
+    "source": "/tmp/mcmoyu-compat-followup/round1/evidence.jsonl",
+    "sessionStart": "2026-11-21T02:09:46.147Z",
+    "sessionEnd": "2026-11-21T02:10:03.706Z",
+    "replayEnvelope": "The tests reconstruct a login envelope from the observed native world key. That envelope is synthetic, not a captured login packet. Combat terrain/body and hurt calls are synthetic."
+  },
+  "player": {
+    "position": {
+      "x": -15.357273512088728,
+      "y": 36,
+      "z": 74.95104908468042
+    },
+    "health": 28,
+    "maxHealth": 28
+  },
+  "world": {
+    "schema": "agent-mc-world-identity/v1",
+    "key": "minecraft:zc",
+    "uuid": null,
+    "instanceId": null,
+    "dimensionType": "overworld",
+    "source": "vanilla-login",
+    "revision": 1,
+    "observedAt": "2026-11-21T02:09:59.399Z"
+  },
+  "entities": [
+    {
+      "id": 3999195,
+      "uuid": "8f10aa69-2288-4f2b-8e4f-10f00f82e528",
+      "type": "enderman",
+      "name": "材质包加载",
+      "position": {
+        "x": -22.4971,
+        "y": 36,
+        "z": 58.4788
+      },
+      "velocity": {
+        "x": 0,
+        "y": -0.0784000015258789,
+        "z": 0
+      },
+      "metadataKeys": [
+        "shared_flags",
+        "air_supply",
+        "custom_name",
+        "custom_name_visible",
+        "silent",
+        "no_gravity",
+        "pose",
+        "ticks_frozen",
+        "living_entity_flags",
+        "health",
+        "effect_particles",
+        "effect_ambience",
+        "arrow_count",
+        "stinger_count",
+        "sleeping_pos",
+        "mob_flags",
+        "carry_state",
+        "creepy",
+        "stared_at"
+      ],
+      "metadata": [
+        null,
+        null,
+        {
+          "type": "compound",
+          "value": {
+            "text": {
+              "type": "string",
+              "value": "材质包加载"
+            },
+            "color": {
+              "type": "string",
+              "value": "red"
+            }
+          }
+        },
+        null,
+        null,
+        null,
+        0,
+        null,
+        null,
+        40
+      ],
+      "suppressed": true
+    },
+    {
+      "id": 3999212,
+      "uuid": "5a91ad56-82e4-44d3-8fd2-d27a4843e2f7",
+      "type": "creeper",
+      "name": "近期更新内容",
+      "position": {
+        "x": -21.6231,
+        "y": 36,
+        "z": 69.5733
+      },
+      "velocity": {
+        "x": 0,
+        "y": -0.0784000015258789,
+        "z": 0
+      },
+      "metadataKeys": [
+        "shared_flags",
+        "air_supply",
+        "custom_name",
+        "custom_name_visible",
+        "silent",
+        "no_gravity",
+        "pose",
+        "ticks_frozen",
+        "living_entity_flags",
+        "health",
+        "effect_particles",
+        "effect_ambience",
+        "arrow_count",
+        "stinger_count",
+        "sleeping_pos",
+        "mob_flags",
+        "swell_dir",
+        "is_powered",
+        "is_ignited"
+      ],
+      "metadata": [
+        null,
+        null,
+        {
+          "type": "compound",
+          "value": {
+            "text": {
+              "type": "string",
+              "value": "近期更新内容"
+            },
+            "color": {
+              "type": "string",
+              "value": "red"
+            }
+          }
+        },
+        null,
+        null,
+        null,
+        0,
+        null,
+        null,
+        20
+      ],
+      "suppressed": false
+    }
+  ],
+  "explicitAnchor": {
+    "uuid": "5a91ad56-82e4-44d3-8fd2-d27a4843e2f7",
+    "type": "creeper",
+    "position": {
+      "x": -21.6231,
+      "y": 36,
+      "z": 69.5733
+    },
+    "radius": 0.35,
+    "server": "mcmoyu.top:25565",
+    "world": "minecraft:zc"
+  },
+  "suppressionAfterExplicitAnchor": [
+    {
+      "uuid": "8f10aa69-2288-4f2b-8e4f-10f00f82e528",
+      "suppressed": true
+    },
+    {
+      "uuid": "5a91ad56-82e4-44d3-8fd2-d27a4843e2f7",
+      "suppressed": true
+    }
+  ],
+  "healthSequence": [
+    {
+      "sequence": 1,
+      "actual": 40,
+      "max": 40,
+      "previous": null,
+      "decreased": false,
+      "armed": false,
+      "stop": false,
+      "damage": null
+    },
+    {
+      "sequence": 2,
+      "actual": 28,
+      "max": 28,
+      "previous": 40,
+      "decreased": true,
+      "armed": false,
+      "stop": false,
+      "damage": null
+    },
+    {
+      "sequence": 3,
+      "actual": 28,
+      "max": 28,
+      "previous": 28,
+      "decreased": false,
+      "armed": false,
+      "stop": false,
+      "damage": null
+    },
+    {
+      "sequence": 4,
+      "actual": 28,
+      "max": 28,
+      "previous": 28,
+      "decreased": false,
+      "armed": false,
+      "stop": false,
+      "damage": null
+    },
+    {
+      "sequence": 5,
+      "actual": 21,
+      "max": 28,
+      "previous": 28,
+      "decreased": true,
+      "armed": true,
+      "stop": true,
+      "damage": null
+    },
+    {
+      "sequence": 6,
+      "actual": 28,
+      "max": 28,
+      "previous": 21,
+      "decreased": false,
+      "armed": true,
+      "stop": false,
+      "damage": null
+    }
+  ],
+  "stop": {
+    "at": "2026-11-21T02:10:02.759Z",
+    "event": "stop",
+    "reason": "authoritative-health-decrease",
+    "lastHealth": {
+      "sequence": 5,
+      "actual": 21,
+      "max": 28,
+      "previous": 28,
+      "decreased": true,
+      "armed": true,
+      "stop": true,
+      "damage": null
+    },
+    "damage": null
+  },
+  "menu": {
+    "commandRequested": "/help",
+    "openWindowReceived": null,
+    "windowAtPostStopSample": null,
+    "rawItemPacketsCaptured": 0,
+    "menuReadPassed": false,
+    "limitation": "Window was sampled only after disconnect began. Null cannot prove the server never opened it; no open_window event trace was retained."
+  }
+}

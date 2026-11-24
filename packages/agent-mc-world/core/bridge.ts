@@ -5,6 +5,7 @@ import { declareDecodedChannels } from './decoded-channels.ts';
 import { installConfigurationPhaseGuard, configurationTransportReady } from './configuration-round.ts';
 import { installNativeBodyReadiness } from './body-readiness.ts';
 import { installRespawnWatchdog } from './respawn-watchdog.ts';
+import { installPlayerLoadedAck } from './player-loaded.ts';
 import { installPacketTrace } from './packet-trace.ts';
 import { installServerScreens } from './server-screens.ts';
 import { installWorldIdentity, readWorldIdentity } from './world-scope.ts';
@@ -19,6 +20,7 @@ function protectionWorld(bot: mineflayer.Bot): string {
  * 重连会替换 bot 实例，World 与执行器须通过 bridge.bot 取得当前实例。
  */
 import mineflayer from 'mineflayer';
+import { isJava26_2Version, loadExperimentalMineflayer, resolveJavaProtocolStack, skipsAutoProtocolProbe, type JavaProtocolStack } from './experimental-26.2.ts';
 import { isIP } from 'node:net';
 import pathfinderPkg, { pathfinder, Movements } from 'mineflayer-pathfinder';
 
@@ -59,9 +61,11 @@ import { installTreadWater } from './travel.ts';
 import { installBreathingReadings } from './breathing.ts';
 import { trackMaps } from './map-view.ts';
 import { trackDamageSources } from './damage-source.ts';
+import { installRuntimeRegistry } from './runtime-registry.ts';
 import { MinecraftAuthentication, protocolVersion } from '../src/client/authentication.ts';
 import { installServerLogin, serverLoginFailureText } from './server-login.mjs';
 import { resolveMinecraftConnectEndpoint } from './connect-endpoint.ts';
+import { endMinecraftBot } from './bot-end.ts';
 import net from 'node:net';
 import { installOrphanWindowClose } from './orphan-windows.ts';
 import { installSpawnMovementHold, type SpawnHold } from './spawn-hold.ts';
@@ -90,6 +94,8 @@ export interface BridgeOptions {
   fakeHost?: string;
   /** Retry public DNS when the system resolver returns a fake 198.18.0.0/15 address. Default true. */
   publicDnsFallback?: boolean;
+  /** When false, a dropped connection stays stopped until an explicit reconnect. Default true. */
+  autoReconnect?: boolean;
   keepAliveTimeoutMs?: number;
   viewDistance?: number;
   deathRespawnDelayMs?: number;
@@ -152,6 +158,8 @@ export interface BridgeOptions {
 }
 
 const RECONNECT_DELAYS_MS = [3_000, 10_000, 30_000, 60_000];
+/** Consecutive reconnects after a dropped attempt; further retries need an explicit start. */
+export const MAX_RECONNECT_ATTEMPTS = 5;
 
 const DIG_BACKOFF_TRIES = 3;
 
@@ -548,13 +556,7 @@ export class Bridge {
     this.viewer = null;
     this.lastError = null;
     this.failure = null;
-    if (bot) {
-      try {
-        bot.quit();
-      } catch {
-        /* 已断开 */
-      }
-    }
+    if (bot) endMinecraftBot(bot, 'bridge-stop');
     this.disposedThrough = Math.max(this.disposedThrough, this.generation);
     for (const gen of [...this.bags.keys()].sort((a, b) => b - a)) {
       await this.disposeGeneration(gen);
@@ -595,23 +597,35 @@ export class Bridge {
     if (protocolVersion(version) && setBlueprintMcVersion(version)) {
       log.info(`蓝图注册表版本已跟随连接版本:${version}(原默认 ${DEFAULT_BLUEPRINT_MC_VERSION})`);
     }
-    let bot: mineflayer.Bot;
-    try {
-      const handshakeHost = this.opts.fakeHost || (isIP(host) === 0 && host !== 'localhost' && host !== '127.0.0.1' && host !== '::1' ? host : undefined);
-      const publicDns = this.opts.publicDnsFallback !== false && isIP(host) === 0 && host !== 'localhost' && host !== '127.0.0.1' && host !== '::1' && !host.endsWith('.localhost');
-      bot = mineflayer.createBot({ host, port, username, version: protocolVersion(version) || undefined,
-        ...(handshakeHost ? { fakeHost: handshakeHost } : {}),
-        ...(publicDns ? { connect: makePublicDnsConnect(host, port, handshakeHost) } : {}),
-        ...(this.opts.authentication?.botOptions() ?? { auth: 'offline' as const }),
-        checkTimeoutInterval: this.opts.keepAliveTimeoutMs ?? 60_000,
-        ...(this.opts.viewDistance !== undefined ? { viewDistance: this.opts.viewDistance } : {}),
-        logErrors: false, respawn: false });
-    } catch (err) {
-      this.failure = errorFailure(err instanceof Error ? err : new Error(String(err)));
-      log.warn(`createBot 失败: ${this.failure}`);
-      this.scheduleReconnect(this.failure);
-      return;
-    }
+    const handshakeHost = this.opts.fakeHost || (isIP(host) === 0 && host !== 'localhost' && host !== '127.0.0.1' && host !== '::1' ? host : undefined);
+    const publicDns = this.opts.publicDnsFallback !== false && isIP(host) === 0 && host !== 'localhost' && host !== '127.0.0.1' && host !== '::1' && !host.endsWith('.localhost');
+    const skipProtocolProbe = skipsAutoProtocolProbe(host);
+    const botOptions = (stack: JavaProtocolStack) => ({
+      host, port, username,
+      version: stack.experimental ? stack.minecraftVersion : (protocolVersion(version) || undefined),
+      ...(handshakeHost ? { fakeHost: handshakeHost } : {}),
+      ...(publicDns ? { connect: makePublicDnsConnect(host, port, handshakeHost) } : {}),
+      ...(this.opts.authentication?.botOptions() ?? { auth: 'offline' as const }),
+      checkTimeoutInterval: this.opts.keepAliveTimeoutMs ?? 60_000,
+      ...(this.opts.viewDistance !== undefined ? { viewDistance: this.opts.viewDistance } : {}),
+      logErrors: false as const, respawn: false,
+    });
+    const beginCreatedBot = (stack: JavaProtocolStack): void => {
+      let bot: mineflayer.Bot;
+      try {
+        bot = stack.mineflayer.createBot(botOptions(stack));
+      } catch (err) {
+        this.failure = errorFailure(err instanceof Error ? err : new Error(String(err)));
+        log.warn(`createBot 失败: ${this.failure}`);
+        this.scheduleReconnect(this.failure);
+        return;
+      }
+      if (stack.experimental) {
+        log.info('minecraft 使用实验性 26.2 协议栈（非正式官方支持）');
+      }
+      attachCreatedBot(bot);
+    };
+    const attachCreatedBot = (bot: mineflayer.Bot): void => {
     this._bot = bot;
     this.bagFor(gen).register('packet-trace', installPacketTrace(bot._client as never));
     this.bagFor(gen).register('server-screens', installServerScreens(bot as never));
@@ -635,6 +649,8 @@ export class Bridge {
         `重生后身体仍未恢复(物理未更新;存活=${diag.isAlive},生命=${diag.health},区块已载入=${diag.chunkLoaded},服务端界面=${diag.serverWindow ?? '无'})。已按原版客户端做过一次重生/加载确认；不要反复发命令或断线，等待操作者处理。`);
     } }));
     this.bagFor(gen).register('configuration-phase-guard', installConfigurationPhaseGuard(bot));
+    this.bagFor(gen).register('player-loaded-ack', installPlayerLoadedAck(bot as never));
+    this.bagFor(gen).register('runtime-registry', installRuntimeRegistry(bot as never));
     bot._client.on('session', session => {
       if (this._bot === bot && this.generation === gen && !this.stopped) this.opts.authentication?.acceptProtocolSession(session);
     });
@@ -691,11 +707,11 @@ export class Bridge {
             // An explicit rejection, 2FA or invalid local configuration needs
             // attention; do not resubmit that credential on every reconnect.
             this.stopped = true;
-            bot.quit('服务器登录未通过，请检查账号配置后明确重连');
+            endMinecraftBot(bot, '服务器登录未通过，请检查账号配置后明确重连');
           } else {
             // No authoritative confirmation arrived. This is a transient
             // connection attempt, so onGone retains normal retry/backoff.
-            bot.quit(`${serverLoginFailureText(status.reason) ?? '服务器登录未就绪'}，将自动重连`);
+            endMinecraftBot(bot, `${serverLoginFailureText(status.reason) ?? '服务器登录未就绪'}，将自动重连`);
           }
         });
       } });
@@ -916,9 +932,13 @@ export class Bridge {
       heldPathAction = null;
       releaseProtectionWalk?.();
       releaseProtectionWalk = null;
-      const willReconnect = !this.stopped;
+      const willReconnect = !this.stopped && this.opts.autoReconnect !== false;
       this.opts.onDisconnect(reason, willReconnect, this.reconnectAttempt);
       if (willReconnect) this.scheduleReconnect(reason);
+      else if (!this.stopped && this.opts.autoReconnect === false) {
+        this.stopped = true;
+        log.warn(`minecraft 自动重连已关闭，不再重试: ${reason}`);
+      }
     };
     bot.once('end', (reason) => onGone(errorFailure(this.lastError, String(reason))));
     bot.once('kicked', (reason) => onGone(kickFailure(reason)));
@@ -930,6 +950,31 @@ export class Bridge {
       log.warn(`minecraft 连接错误: ${this.failure}`);
       this.noteConnectError(err);
     });
+    };
+
+    if (version === 'auto' && !skipProtocolProbe) {
+      void resolveJavaProtocolStack({
+        requestedVersion: version,
+        host,
+        port,
+        handshakeHost,
+        publicDnsFallback: publicDns,
+      }).then((stack) => {
+        if (this.stopped || this.generation !== gen || this.opts.shuttingDown?.()) return;
+        beginCreatedBot(stack);
+      }).catch((err: unknown) => {
+        if (this.stopped || this.generation !== gen) return;
+        this.failure = errorFailure(err instanceof Error ? err : new Error(String(err)));
+        log.warn(`协议栈解析失败: ${this.failure}`);
+        this.scheduleReconnect(this.failure);
+      });
+      return;
+    }
+    beginCreatedBot(
+      isJava26_2Version(version)
+        ? { kind: 'experimental-26.2', minecraftVersion: '26.2', protocol: 776, mineflayer: loadExperimentalMineflayer(), experimental: true }
+        : { kind: 'official', minecraftVersion: version, mineflayer, experimental: false },
+    );
   }
 
   /** 连续 ECONNREFUSED 达到阈值时告警，并延长重连间隔。其他错误重置计数。 */
@@ -1400,6 +1445,16 @@ export class Bridge {
 
   protected scheduleReconnect(reason: string): void {
     if (this.stopped || this.opts.shuttingDown?.() || this.reconnectTimer) return;
+    if (this.opts.autoReconnect === false) {
+      this.stopped = true;
+      this.opts.log.warn(`minecraft 自动重连已关闭，不再重试: ${reason}`);
+      return;
+    }
+    if (this.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+      this.stopped = true;
+      this.opts.log.warn(`minecraft 停止自动重连：已连续 ${this.reconnectAttempt} 次未建立可用连接，需要明确重连`);
+      return;
+    }
     const delay = this.refusedStreak >= REFUSED_ALARM_AT
       ? REFUSED_DELAY_MS
       : RECONNECT_DELAYS_MS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)];
