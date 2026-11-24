@@ -17,8 +17,7 @@ from uuid import uuid4
 from .._reuse import numen_controller
 from ..models import NativeAction
 from .native_tasks import HOSTED_STOP, NativeTasks, background_task, finished_task_details
-from .numen import PortResult, RawEvent, command_lua, _field
-
+from .numen import PortResult, RawEvent, _field, command_lua
 
 HEARTBEAT_INTERVAL_SECONDS = 2
 HEARTBEAT_RPC_SECONDS = 3
@@ -222,6 +221,10 @@ class HostedMcpPort:
         from httpx import TransportError
         if isinstance(error, (OSError, TransportError, BrokenResourceError, ClosedResourceError, EndOfStream)):
             return True
+        from mcp.shared.exceptions import MCPError
+        from mcp.types import CONNECTION_CLOSED, REQUEST_TIMEOUT
+        if isinstance(error, MCPError):
+            return error.code in {REQUEST_TIMEOUT, CONNECTION_CLOSED}
         # MCP 2 uses httpx2, whose transport exceptions are separate classes.
         try:
             from httpx2 import TransportError as NewTransportError
@@ -246,8 +249,18 @@ class HostedMcpPort:
         # The queue drain can take longer than a lease. Renew our deliberate
         # pause while it runs, but never race an epoch/mode change.
         async with self.transition_lock:
-            async with asyncio.timeout(HEARTBEAT_RPC_SECONDS):
-                status = await self.rpc("heartbeat")
+            try:
+                async with asyncio.timeout(HEARTBEAT_RPC_SECONDS):
+                    status = await self.rpc("heartbeat")
+            except Exception as error:
+                if self._provided_session is not None or not self._transient_facts_error(error):
+                    raise
+                # A damaged stream must not strand a live lease; this only renews the original fence.
+                async with asyncio.timeout(HEARTBEAT_RPC_SECONDS), self._mcp_session() as session:
+                    facts = await self._request(session, "facts")
+                    if self.closing or self.lost or not self._confirmed(facts, self.lease_mode):
+                        raise RuntimeError("CONTROL_CHANGED") from error
+                    status = await self._request(session, "heartbeat")
             if not self._confirmed(status, self.lease_mode):
                 raise RuntimeError("CONTROL_CHANGED")
 
@@ -340,6 +353,9 @@ class HostedMcpPort:
             if running:
                 return PortResult("accepted", text, value, running)
         if state in ("failed", "blocked", "cancelled"):
+            if "this turn was cut off" in text.lower():
+                text = "Native execution was interrupted; earlier steps may already have run. The goal is unconfirmed; do not replay this request."
+                value = {"id": request, "state": state, "reason": "native_execution_interrupted", "retryAllowed": False}
             return PortResult("rejected", text, value)
         if state == "unknown":
             return PortResult("unknown", text, value)

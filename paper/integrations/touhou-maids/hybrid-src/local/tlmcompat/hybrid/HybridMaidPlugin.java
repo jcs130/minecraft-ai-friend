@@ -327,6 +327,27 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         }
         var maid=guides.requireBody(actor);
         switch(action){
+            case "voices" -> {
+                requireNearby(actor,maid,8);
+                var catalog=cosmetics.read(actor,maid,"voices",null);
+                for(var entry:catalog.getAsJsonArray("voices")){
+                    var pack=entry.getAsJsonObject();
+                    String id=pack.get("id").getAsString();
+                    String voice=personal==null?null:personal.selectedVoice(id);
+                    pack.addProperty("chatVoiceAvailable",voice!=null);
+                    pack.addProperty("chineseChatVoice",personal!=null&&(personal.chineseFallback(id)||personal.chinesePacks().contains(id)));
+                    pack.addProperty("chineseFallback",personal!=null&&personal.chineseFallback(id));
+                    if(voice!=null)pack.addProperty("chatVoice",voice);
+                }
+                catalog.add("speech",nativeSpeechState(maid));
+                return catalog.toString();
+            }
+            case "voice-select" -> {
+                requireNearby(actor,maid,8);
+                cosmetics.validate(actor,maid,"voice",value);
+                cosmetics.apply(actor,maid,"voice",value);
+                actor.sendMessage("§a已切换伙伴声音包；新的聊天语音会跟随该声音包，已在播放的语音不会重放。");
+            }
             case "voice" -> {requireNearby(actor,maid,8);openCosmetics(actor,maid,true,0);}
             case "bag" -> {requireNearby(actor,maid,8);menus.open(actor,maid);}
             case "rename" -> guides.rename(actor,value);

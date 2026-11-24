@@ -80,6 +80,10 @@ public final class NpcDialoguePolicyTest {
         check(NpcDialoguePolicy.addressed(known,"结衣你要一起出门吗？").text().equals("你要一起出门吗？"));
         check(NpcDialoguePolicy.addressed(known,"我刚看见结衣")==null);
         check(NpcDialoguePolicy.addressed(known,"YuiSword 很好用")==null);
+        for(String mode:List.of("native","text","speech"))check(NpcDialoguePolicy.replyCaption("numen",mode));
+        check(!NpcDialoguePolicy.replyCaption("maid","speech"));
+        check(!NpcDialoguePolicy.replyCaption("villager","speech"));
+        check(NpcDialoguePolicy.replyCaption("maid","native"));
         var sword=new NpcDialoguePolicy.Profile(UUID.randomUUID(),b,"numen","Kirito","qa",24,List.of("桐人"));
         var spokenSword=new NpcDialoguePolicy.Profile(sword.id(),b,"numen","Kirito","qa",24,List.of("桐人"),List.of("同仁","同人"));
         var solo=List.of(spokenSword);

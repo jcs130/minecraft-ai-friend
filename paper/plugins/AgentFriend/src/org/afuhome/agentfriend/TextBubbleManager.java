@@ -227,7 +227,8 @@ final class TextBubbleManager implements Listener {
         if (!Bukkit.isPrimaryThread() || npc == null || recipient == null || raw == null
                 || id == null || !id.matches("[A-Za-z0-9_-]{1,48}")
                 || !(managed ? limits.enabled && limits.npcs : npcEnabled(id))
-                || npc instanceof Player || !npc.isValid() || npc.isDead() || npc.isInvisible()
+                || npc instanceof Player player && (!managed || hostedNpcOwner(player) == null)
+                || !npc.isValid() || npc.isDead() || npc.isInvisible()
                 || !recipient.isOnline() || plugin.isObserver(recipient) || recipient.isDead()
                 || recipient.getWorld() != npc.getWorld()) return false;
         refresh(recipient);
@@ -240,6 +241,17 @@ final class TextBubbleManager implements Listener {
                 Map.copyOf(audience), text, sequence.incrementAndGet(), System.nanoTime()));
         return true;
     }
+    static UUID hostedNpcOwner(Player body) {
+        if (Bukkit.getPlayer(body.getUniqueId()) != body) return null;
+        try {
+            Object handle = body.getClass().getMethod("getHandle").invoke(body);
+            if (!handle.getClass().getName().equals("com.dwinovo.numen.hosted.api.entity.NumenPlayer")) return null;
+            return (UUID) handle.getClass().getMethod("getOwnerUuid").invoke(handle);
+        } catch (ReflectiveOperationException | RuntimeException unavailable) {
+            return null;
+        }
+    }
+
     static String clean(String raw, int max) {
         StringBuilder out = new StringBuilder(); boolean format = false, gap = false; int count = 0;
         for (int i = 0; i < raw.length() && count < max;) {
@@ -314,7 +326,8 @@ final class TextBubbleManager implements Listener {
         }
         Entity entity = Bukkit.getEntity(key.speaker); Player owner = Bukkit.getPlayer(key.recipient);
         Session live = sessions.get(key.recipient); Long token = audience.get(key.recipient);
-        return entity instanceof LivingEntity living && !(entity instanceof Player) && entity.isValid()
+        return entity instanceof LivingEntity living
+                && (!(entity instanceof Player player) || hostedNpcOwner(player) != null) && entity.isValid()
                 && !living.isDead() && !living.isInvisible() && entity.getWorld().getUID().equals(session.world)
                 && owner != null && !owner.isDead() && !plugin.isObserver(owner) && live != null && token != null
                 && live.token == token && live.world.equals(session.world) ? entity : null;

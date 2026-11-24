@@ -133,7 +133,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             });
         }catch(Exception failure){getLogger().severe("Voice bridge not enabled: "+failure.getClass().getSimpleName()+"; check private backend configuration");Bukkit.getPluginManager().disablePlugin(this);}
     }
-    private void main(Runnable action){if(!stopping)Bukkit.getScheduler().runTask(this,action);}
+    private void main(Runnable action){if(!stopping&&isEnabled())Bukkit.getScheduler().runTask(this,action);}
     private void syncPresence(Player player){
         boolean client=bridgePeers.contains(player.getUniqueId()) && player.getListeningPluginChannels().contains(CHANNEL);
         boolean hosted=npcs!=null && npcs.hostedReady(player) && player.hasPermission("voicechat.listen");
@@ -213,12 +213,11 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         return presence.isConnected(player.getUniqueId());
     }
     private boolean currentAsrListener(UUID id,Capture capture){
-        Player target=Bukkit.getPlayer(id),speaker=Bukkit.getPlayer(capture.actor);
-        if(target==null||speaker==null||!target.isOnline()||target.isDead()||target.isInvisible()
-                ||target.getGameMode()==org.bukkit.GameMode.SPECTATOR||!target.canSee(speaker)
-                ||!target.getWorld().equals(speaker.getWorld()))return false;
-        double range=Math.min(capture.hearingRange,distanceCap);
-        return Double.isFinite(range)&&range>=0&&target.getLocation().distanceSquared(speaker.getLocation())<=range*range;
+        if(!capture.session.equals(sessions.get(capture.actor)))return false;
+        var profile=npcs==null?null:npcs.profile(id);
+        Entity target=profile==null?Bukkit.getPlayer(id):npcs.live(id);
+        return NpcConversations.hearsAsrListener(Bukkit.getPlayer(capture.actor),target,profile,
+            Math.min(capture.hearingRange,distanceCap));
     }
 
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
@@ -506,6 +505,17 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         npcs.nearbySpokenText(player,profile,request,text);
         submitText(player,request,text,profile.voice(),profile.range());
         return "{\"state\":\"submitted\",\"requestId\":\""+request+"\",\"actualHearingVerified\":false}";
+    }
+    void hostedNpcBubble(NpcDialoguePolicy.Profile profile,Player listener,String text){
+        if(!Bukkit.isPrimaryThread()||profile==null||!profile.kind().equals("numen")||profile.owner()==null)return;
+        var bubbles=Bukkit.getPluginManager().getPlugin("AgentFriend");
+        if(bubbles==null||!bubbles.isEnabled())return;
+        try{
+            bubbles.getClass().getMethod("hostedNpcSpeech",Plugin.class,UUID.class,UUID.class,Player.class,String.class)
+                .invoke(bubbles,this,profile.id(),profile.owner(),listener,text);
+        }catch(ReflectiveOperationException|RuntimeException unavailable){
+            getLogger().fine("Hosted NPC bubble unavailable: "+unavailable.getClass().getSimpleName());
+        }
     }
     boolean wantsCaptions(Player player){
         return profiles.getBoolean(player.getUniqueId()+".captions",getConfig().getBoolean("captions-default",true));
@@ -827,7 +837,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     private void error(Player p,String code){if(p!=null)p.sendMessage("[语音] "+(code==null?"VOICE_REQUEST_FAILED":code.replaceAll("[^A-Za-z0-9_]",""))+"。音色用 /voice voices；结果未知先查原请求，不重复发送。");}
     private static String hash(String value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));}catch(NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}}
     @Override public void onDisable(){
-        presence.close();stopping=true;closeCaptures();
+        stopping=true;presence.close();closeCaptures();
         for(var lane:lanes.values()){Job job=lane.current();if(job!=null){job.cancelled=true;if(job.frames!=null)job.frames.cancel();if(job.player!=null)job.player.stopPlaying();}}
         if(captureClock!=null)captureClock.shutdownNow();if(media!=null)media.shutdownNow();if(recognition!=null)recognition.shutdownNow();if(io!=null)io.shutdown();
     }

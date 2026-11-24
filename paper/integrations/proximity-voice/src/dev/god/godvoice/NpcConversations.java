@@ -230,10 +230,10 @@ final class NpcConversations implements Listener {
         var profile=address.profile();
         var body=live(profile.id());
         if(configured(player.getUniqueId())||!hears(player,body,profile)||!player.hasLineOfSight(body))return false;
-        if(profile.kind().equals("maid")&&profile.owner().equals(player.getUniqueId()))return false;
-        if(profile.kind().equals("maid")&&player.getLocation().distanceSquared(body.getLocation())>64)return false;
+        if(profile.kind().equals("maid")&&!profile.owner().equals(player.getUniqueId())
+                &&player.getLocation().distanceSquared(body.getLocation())>64)return false;
         if(closing(address.text()))return true;
-        if(profile.kind().equals("villager"))
+        if(profile.kind().equals("villager")||profile.kind().equals("maid"))
             return deliver(player,profile.id(),"addressed_"+input+"_"+profile.id(),address.text(),input.startsWith("voice_")?"voice":"chat",System.currentTimeMillis());
         if(!delivered.add(profile.id(),player.getUniqueId(),"natural_"+input,System.currentTimeMillis()))return true;
         return plugin.naturalNpcDialogue(profile,player,address.text(),scope,audience,input.startsWith("voice_")?"voice":"text");
@@ -272,8 +272,10 @@ final class NpcConversations implements Listener {
     void nearbySpokenText(Player source,NpcDialoguePolicy.Profile profile,UUID request,String text){
         for(Player listener:source.getWorld().getPlayers()){
             if(configured(listener.getUniqueId()) || !hears(listener,source,profile) || !plugin.wantsCaptions(listener))continue;
-            if(delivered.add(listener.getUniqueId(),source.getUniqueId(),"speech_"+request,System.currentTimeMillis()))
+            if(delivered.add(listener.getUniqueId(),source.getUniqueId(),"speech_"+request,System.currentTimeMillis())) {
                 listener.sendMessage("[附近] "+profile.display()+"："+text);
+                plugin.hostedNpcBubble(profile,listener,text);
+            }
         }
     }
     void nearbySpokenText(Entity source,NpcDialoguePolicy.Profile profile,UUID request,Map<UUID,Player> audience,String text){
@@ -302,6 +304,20 @@ final class NpcConversations implements Listener {
                 && listener.canSee(body) && listener.hasLineOfSight(body)
                 && NpcDialoguePolicy.nearby(listener.getUniqueId(), body.getUniqueId(), listener.getWorld().getUID(),
                     body.getWorld().getUID(), listener.getLocation().distanceSquared(body.getLocation()), profile.range());
+    }
+    static boolean hearsAsrListener(Player speaker,Entity target,NpcDialoguePolicy.Profile profile,double range){
+        if(speaker==null||!speaker.isOnline()||speaker.isDead()||speaker.isInvisible()
+                ||speaker.getGameMode()==GameMode.SPECTATOR||target==null||!target.isValid()
+                ||target.isDead()||target.isInvisible()||!target.getWorld().equals(speaker.getWorld()))return false;
+        if(profile==null){
+            if(!(target instanceof Player listener)||!listener.isOnline()||listener.getGameMode()==GameMode.SPECTATOR
+                    ||!listener.canSee(speaker))return false;
+        }else{
+            if(!profile.id().equals(target.getUniqueId())||!speaker.canSee(target)||!speaker.hasLineOfSight(target))return false;
+            range=Math.min(range,profile.range());
+            if(profile.kind().equals("maid")&&!speaker.getUniqueId().equals(profile.owner()))range=Math.min(range,8);
+        }
+        return Double.isFinite(range)&&range>0&&target.getLocation().distanceSquared(speaker.getLocation())<=range*range;
     }
     private boolean eligible(Entity source,Entity entity,NpcDialoguePolicy.Profile profile,String event,String channel){
         if(source==null||entity==null||profile==null||!source.isValid()||source.isDead()

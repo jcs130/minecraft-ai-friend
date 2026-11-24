@@ -717,6 +717,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 org.bukkit.NamespacedKey.fromString("qiandeng-villager-quests:resident-id"), org.bukkit.persistence.PersistentDataType.STRING);
         return residentId != null && residentId.equals(registered) && textBubbles.managedNpc(residentId, npc, player, text);
     }
+    public boolean hostedNpcSpeech(org.bukkit.plugin.Plugin caller, UUID bodyId, UUID ownerId, Player recipient, String text) {
+        if (!Bukkit.isPrimaryThread() || textBubbles == null || caller == null || !caller.isEnabled()
+                || Bukkit.getPluginManager().getPlugin("QiandengVoice") != caller) return false;
+        Player body = Bukkit.getPlayer(bodyId);
+        return body != null && ownerId != null && ownerId.equals(TextBubbleManager.hostedNpcOwner(body))
+                && textBubbles.managedNpc("hosted-numen", body, recipient, text);
+    }
+
     LifeGuildManager lifeGuild() { return lifeGuild; }
     TrialRescueManager trialRescue() { return trialRescue; }
     CombatRpg combatRpg() { return combatRpg; }

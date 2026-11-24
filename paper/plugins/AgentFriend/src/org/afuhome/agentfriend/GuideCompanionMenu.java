@@ -39,10 +39,32 @@ final class GuideCompanionMenu {
             summary+=" · Lv."+rpg.get("level").getAsInt()+" · "+(rpg.get("combat").getAsString().isBlank()?"未选职业":job);
         }
         if(page==Page.GUIDE_COMPANION){
+            if(detail.startsWith("voices:")){
+                if(!bool(state,"loaded"))return message(buttons,"原伙伴暂未加载，靠近后再选择声音。");
+                try{
+                    var catalog=invoke(player,"action","voices","");
+                    var voices=catalog.getAsJsonArray("voices");
+                    int pageIndex=Integer.parseInt(detail.substring(7));
+                    int start=pageIndex*CONTENT.length;
+                    for(int i=start;i<Math.min(voices.size(),start+CONTENT.length);i++){
+                        var voice=voices.get(i).getAsJsonObject();
+                        String id=voice.get("id").getAsString(),label=voice.get("name").getAsString();
+                        buttons.add(new Button(CONTENT[i-start],Action.GUIDE_ACTION,"voice-select:"+id,"NOTE_BLOCK",
+                            (bool(voice,"current")?"已选 · ":"")+label,
+                            List.of(!bool(voice,"chatVoiceAvailable")?"仅预录事件音，聊天音色未接入":
+                                bool(voice,"chineseFallback")?"原包音效保留，聊天使用中文音色":
+                                bool(voice,"chineseChatVoice")?"中文声音包与中文聊天音色":"原包克隆音色，语言未确认",
+                                "点击切换当前伙伴的声音包")));
+                    }
+                    if(pageIndex>0)buttons.add(action(28,"voices:"+(pageIndex-1),"ARROW","上一页"));
+                    if(start+CONTENT.length<voices.size())buttons.add(action(30,"voices:"+(pageIndex+1),"ARROW","下一页"));
+                    return message(buttons,summary+" · 声音选择\n中文聊天使用中文音色；非中文声音包保留原音效，聊天不硬用日语声线读中文。");
+                }catch(Exception unavailable){return message(buttons,"靠近你的伙伴后选择声音包。也可输入 /qdmaid guide voice。");}
+            }
             buttons.add(action(10,"recall","ENDER_PEARL","召回原伙伴"));
             if(bool(state,"loaded")){
                 buttons.add(action(12,"bag","CHEST","整理伙伴装备"));
-                buttons.add(action(14,"voice","NOTE_BLOCK","选择原生声音包"));
+                buttons.add(action(14,"voices:0","NOTE_BLOCK","聊天音色与声音包"));
                 buttons.add(action(16,"rename-help","NAME_TAG","更改名字"));
                 buttons.add(button(20,Action.GUIDE_CLASS,"IRON_SWORD","选择职业"));
                 buttons.add(button(24,Action.GUIDE_SKILLS,"ENCHANTED_BOOK","查看与学习技能"));
@@ -118,6 +140,10 @@ final class GuideCompanionMenu {
     }
 
     void perform(Player actor,String payload){
+        if(payload.startsWith("voices:")){
+            menus.open(actor,Page.GUIDE_COMPANION,payload);
+            return;
+        }
         if(payload.equals("rename-help")){
             actor.sendMessage("§b先在铁砧上给命名牌改名，再拿着它使用你的伙伴。也可输入 /qdmaid guide rename <新名字>。");
             return;
@@ -127,7 +153,8 @@ final class GuideCompanionMenu {
             var result=invoke(actor,"action",args[0],args.length==2?args[1]:"");
             if(result.has("requestId")&&args.length==2){
                 complete(actor,result.get("requestId").getAsString(),args[0].equals("choose")?Page.GUIDE_CLASS:Page.GUIDE_SKILLS,0);
-            }else if(args[0].equals("claim"))menus.open(actor,Page.GUIDE_COMPANION,"");
+            }else if(args[0].equals("voice-select"))menus.open(actor,Page.GUIDE_COMPANION,"voices:0");
+            else if(args[0].equals("claim"))menus.open(actor,Page.GUIDE_COMPANION,"");
         }catch(Exception error){
             Throwable cause=error instanceof InvocationTargetException?error.getCause():error;
             actor.sendMessage("§e伙伴 · "+(cause.getClass().getSimpleName().equals("CompatibilityException")

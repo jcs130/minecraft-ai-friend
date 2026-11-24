@@ -1,7 +1,9 @@
 import asyncio
 import json
 from types import SimpleNamespace
+
 import pytest
+
 from agent_mc_harness.body.hosted_mcp import HostedMcpPort
 
 BODY="10000000-0000-0000-0000-000000000011"
@@ -180,7 +182,8 @@ def test_lost_session_reads_the_original_blocked_move_without_taking_control(tmp
             p.next_receipt_probe[rid] = 0
             reply_id = rid
             result = await p.result(rid)
-            assert result.status == "rejected" and "nothing else ran" in result.text
+            assert result.status == "rejected" and "earlier steps may already have run" in result.text
+            assert "nothing else ran" not in result.text and result.data["retryAllowed"] is False
             assert (await p.result(rid)).status == "rejected" and len(fresh_calls) == 2
             assert fresh_calls[0]["boot"] == p.boot and fresh_calls[0]["epoch"] == p.epoch
             fresh_write = await p.call("lua", {"code": "walk()"}, "new-after-fence")

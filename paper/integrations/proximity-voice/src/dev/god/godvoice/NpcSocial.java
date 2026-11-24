@@ -346,14 +346,14 @@ final class NpcSocial {
             if (valid && currentVillager && (privateDialogue && !source.automatic() || residents.hears(source.player(), body, profile))) {
                 String line=(privateDialogue ? "[私聊] " : "[附近] ")
                     +profile.display()+"："+reply;
-                boolean caption=!mode.equals("speech");
-                if(caption)source.player().sendMessage(line);
+                boolean caption=NpcDialoguePolicy.replyCaption(profile.kind(),mode);
+                if(caption){source.player().sendMessage(line);plugin.hostedNpcBubble(profile,source.player(),reply);}
                 Map<UUID,Player> heard=new HashMap<>();
                 heard.put(source.player().getUniqueId(),source.player());
                 if(!privateDialogue) for (Player nearby : body.getWorld().getPlayers()) {
                     if (nearby!=source.player() && (source.audience()==null||source.audience().stream().anyMatch(captured->captured==nearby))
                             && residents.hears(nearby, body, profile)){
-                        if(caption)nearby.sendMessage(line);
+                        if(caption){nearby.sendMessage(line);plugin.hostedNpcBubble(profile,nearby,reply);}
                         heard.put(nearby.getUniqueId(),nearby);
                     }
                 }

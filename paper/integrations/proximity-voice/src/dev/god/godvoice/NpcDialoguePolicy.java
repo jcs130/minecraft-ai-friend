@@ -33,6 +33,9 @@ final class NpcDialoguePolicy {
         return Set.of("text","speech").contains(mode) && submitted.has("replyModes")
             && submitted.getAsJsonArray("replyModes").contains(value)?mode:null;
     }
+    static boolean replyCaption(String kind,String mode){
+        return !mode.equals("speech")||kind.equals("numen");
+    }
     private static final Pattern GROUP_END = Pattern.compile("[,，:：]");
 
     /** A leading list of registered names followed by a separate message. */

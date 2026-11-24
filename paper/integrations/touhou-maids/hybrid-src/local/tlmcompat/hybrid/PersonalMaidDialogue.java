@@ -7,10 +7,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /** A server policy for tamed bodies. Older installations can retain the single-body opt-in. */
-record PersonalMaidDialogue(UUID owner, UUID maid, Map<String,String> packs, Path nativeEncoder) {
+record PersonalMaidDialogue(UUID owner, UUID maid, Map<String,String> packs, Path nativeEncoder,
+                           Set<String> chinesePacks, String chineseVoice) {
     static final String SITE = "qiandengji_sound_pack";
 
     static PersonalMaidDialogue load(HybridMaidPlugin plugin) {
@@ -34,7 +36,7 @@ record PersonalMaidDialogue(UUID owner, UUID maid, Map<String,String> packs, Pat
         if (schema == 1) {
             return new PersonalMaidDialogue(UUID.fromString(row.get("ownerId").getAsString()),
                 UUID.fromString(row.get("maidId").getAsString()), Map.of(
-                packId(row.get("soundPackId").getAsString()), voiceId(row.get("voice").getAsString())), null);
+                packId(row.get("soundPackId").getAsString()), voiceId(row.get("voice").getAsString())), null, Set.of(), null);
         }
         if (schema != 2 || !"player_owned".equals(row.get("scope").getAsString()))
             throw new IllegalArgumentException("Unknown personal dialogue policy");
@@ -44,7 +46,15 @@ record PersonalMaidDialogue(UUID owner, UUID maid, Map<String,String> packs, Pat
         entries.entrySet().forEach(e -> packs.put(packId(e.getKey()), voiceId(e.getValue().getAsString())));
         Path encoder = Path.of(row.get("nativeEncoder").getAsString());
         if (!encoder.isAbsolute()) throw new IllegalArgumentException("Absolute audio encoder path required");
-        return new PersonalMaidDialogue(null, null, Map.copyOf(packs), encoder);
+        var chinese = new java.util.HashSet<String>();
+        if (row.has("chinesePacks")) {
+            for (var entry : row.getAsJsonArray("chinesePacks")) {
+                String pack = packId(entry.getAsString());
+                if (!packs.containsKey(pack) || !chinese.add(pack)) throw new IllegalArgumentException("Invalid Chinese sound pack");
+            }
+        }
+        String chineseVoice = row.has("chineseVoice") ? voiceId(row.get("chineseVoice").getAsString()) : null;
+        return new PersonalMaidDialogue(null, null, Map.copyOf(packs), encoder, Set.copyOf(chinese), chineseVoice);
     }
 
     private static String packId(String id) {
@@ -87,8 +97,17 @@ record PersonalMaidDialogue(UUID owner, UUID maid, Map<String,String> packs, Pat
     }
 
     String selectedVoice(EntityMaid body) {
-        String pack = body.getSoundPackId();
-        return pack == null ? null : packs.get(pack);
+        return selectedVoice(body.getSoundPackId());
+    }
+
+    String selectedVoice(String pack) {
+        String original = pack == null ? null : packs.get(pack);
+        if (original == null) return null;
+        return chineseFallback(pack) ? chineseVoice : original;
+    }
+
+    boolean chineseFallback(String pack) {
+        return chineseVoice != null && packs.containsKey(pack) && !chinesePacks.contains(pack);
     }
 
     JsonObject speechProfile(JsonObject transport, EntityMaid body, String voice) {
