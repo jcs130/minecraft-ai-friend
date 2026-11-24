@@ -123,6 +123,11 @@ def external_handoff(role, transport, *, now=None):
             and row.get("bodyId") == str(role.body_id) and row.get("ownerId") == str(role.native_owner_id))
 
 
+def villager_identity_already_bound(role, roles, bodies, residents):
+    return (role.id in bodies or any(active.body_id == role.body_id for active in roles)
+            or any(candidate.host.role.id == role.id for candidate in residents.values()))
+
+
 def adventure_source(settings):
     """Load the same trusted, local checkpoint reader used by Paper's activity exporter."""
     from yaml import YAMLError
@@ -501,8 +506,7 @@ async def serve(path: Path):
                             # Keep the original server persona; dynamic roster updates cannot replace it.
                             host.role.name = role.name
                             continue
-                        if (role_id in settings["bodies"] or any(active.body_id == role.body_id for active in roles)
-                                or any(candidate.role.id == role_id for candidate in residents.values())):
+                        if villager_identity_already_bound(role, roles, settings["bodies"], residents):
                             raise ValueError("villager_identity_already_bound")
                         settings["bodies"][role_id] = {
                             "endpoint": villager_endpoint, "tokenFile": villager_config["tokenFile"],
