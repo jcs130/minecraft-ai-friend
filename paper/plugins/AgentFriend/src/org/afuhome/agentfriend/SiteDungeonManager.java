@@ -11,6 +11,9 @@ import java.nio.file.*;
 import java.time.*;
 import java.util.*;
 import org.bukkit.*;
+import org.bukkit.boss.BarColor;
+import org.bukkit.boss.BarStyle;
+import org.bukkit.boss.BossBar;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.type.Slab;
 import org.bukkit.command.CommandSender;
@@ -43,6 +46,7 @@ final class SiteDungeonManager implements Listener {
     private static final Gson JSON=new Gson();
     private record BossSkill(EntityType type,String name,DungeonEnemyMoves.Move move) { }
     private static final Map<String,BossSkill> BOSS_SKILLS=Map.of(
+        BlackBannerCamp.SITE,new BossSkill(EntityType.VINDICATOR,"黑旗执斧头目",DungeonEnemyMoves.Move.GRAVE_CLEAVE),
         "undead_crypt",new BossSkill(EntityType.VINDICATOR,"亡骸守墓者",DungeonEnemyMoves.Move.GRAVE_CLEAVE),
         "frost_keep",new BossSkill(EntityType.STRAY,"寒霜守望者",DungeonEnemyMoves.Move.FROST_LINE),
         "ember_foundry",new BossSkill(EntityType.WITHER_SKELETON,"熔火监工",DungeonEnemyMoves.Move.FORGE_SWEEP));
@@ -106,6 +110,10 @@ final class SiteDungeonManager implements Listener {
         Menu(String site,boolean pendingReward){this(site,pendingReward,null,Map.of());}
         Menu(String site,boolean pendingReward,EntryOffer offer){this(site,pendingReward,offer,Map.of());}
     }
+    private final Set<UUID> campVisits=new HashSet<>();
+    private final Map<String,Set<UUID>> waveVisits=new HashMap<>();
+    private final Map<String,BossBar> campBars=new HashMap<>();
+    private final Map<UUID,Integer> designedPhases=new HashMap<>();
     private final Map<UUID,EntryOffer> entryOffers=new HashMap<>();
     private final Map<UUID,EntryPermit> entryPermits=new HashMap<>();
     private record BeaconLayout(Site site, Map<String, BeaconExpedition.Point> markers, BeaconExpedition.Point refuge) {}
@@ -115,6 +123,7 @@ final class SiteDungeonManager implements Listener {
         StorageUnavailable(Exception cause){super("data_unavailable",cause);}
     }
     private final AgentFriendPlugin plugin;
+    private final CampOutpost campOutpost;
     private Map<String,Site> sites=Map.of();
     private BeaconLayout beaconLayout;
     Set<String> configuredSiteIds(){return Set.copyOf(sites.keySet());}
@@ -225,6 +234,7 @@ final class SiteDungeonManager implements Listener {
     }
     private final Map<String,Run> runs=new LinkedHashMap<>();
     private final Map<Inventory,Menu> menus=new IdentityHashMap<>();
+    private final Map<UUID,Inventory> difficultyOffers=new HashMap<>();
     private final Map<UUID,Shot> shots=new HashMap<>();
     private final Set<String> blockedCheckpoints=new HashSet<>();
     private final Map<UUID,Long> lockHints=new HashMap<>();
@@ -313,16 +323,32 @@ final class SiteDungeonManager implements Listener {
                 out.put("nextCommand", "/mycli dungeon list");
             }
         }
+        if(wildCamp(s))campAdvice(p,s,run,out);
+        else if(sameArena(s)&&!(run!=null&&!run.fault.isEmpty())&&!(mine!=null&&mine!=run)&&!plugin.isDowned(p)&&!roomVisitor(p)){
+            out.put("encounterType","same_arena_waves");out.put("startPolicy","enter_choose_difficulty_once");out.put("requiresConfirmation",false);
+            out.put("wave",run==null?0:Math.min(run.stage+1,run.stages()));out.put("totalWaves",s.rooms.size());
+            out.put("remainingMobs",run==null?0:run.mobs.size());
+            out.put("nextAction",run==null?"进入首个战区，一次选择普通、冒险或末日开场；同一场地连续刷"+s.rooms.size()+"波，清完最后一波通关并掉落奖励。"
+                :run.phase.equals("returning")?"全部波次已清，正在生成通关掉落。"
+                :"留在同一战场，第"+(run.stage+1)+"/"+run.stages()+"波；"+(run.phase.equals("moving")?"下一波准备中，自动刷新。":"剩余 "+run.mobs.size()+"只，清完自动下一波。"));
+            out.put("nextCommand","/mycli dungeon status "+s.id);out.put("nextCommands",List.of("/mycli dungeon status "+s.id));
+            if(run!=null&&!run.room().contains(p.getLocation())){
+                Room area=run.room();out.put("state","outside_combat_area");out.put("reason","COMBAT_AREA_RETURN_REQUIRED");
+                out.put("nextAction","当前波尚未清完。已离开战区，走回 "+area.x+","+area.y+","+area.z+" 继续，不用重开或确认。");
+                out.put("target",List.of(area.x,area.y,area.z));
+            }
+        }
         out.put("difficulty",List.of(Map.of("id","normal","label","普通","stars",prep.stars(),"healthMultiplier",1.0,"damageMultiplier",1.0),Map.of("id","adventure","label","冒险","stars",Math.min(5,prep.stars()+1),"healthMultiplier",1.5,"damageMultiplier",1.25),Map.of("id","apocalypse","label","末日","stars",5,"healthMultiplier",2.1,"damageMultiplier",1.6)));
         return out;
     }
 
     SiteDungeonManager(AgentFriendPlugin plugin){
-        this.plugin=plugin;
+        this.plugin=plugin;this.campOutpost=new CampOutpost(plugin);
         if(!new File(plugin.getDataFolder(),"dungeons.yml").exists())plugin.saveResource("dungeons.yml",false);
         reload();plugin.getServer().getPluginManager().registerEvents(this,plugin);
         for(World world:Bukkit.getWorlds())for(Entity e:world.getEntities())if(owned(e)||e.getScoreboardTags().contains(SHOT_TAG)||isEscort(e))e.remove();
         restore();new DungeonIntegrity(plugin);Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
+        if(surveyedCamp()!=null)campOutpost.prepare();
     }
     private static void require(boolean yes,String reason){if(!yes)throw new IllegalArgumentException(reason);}
     private String day(){return LocalDate.now(ZoneId.of("Asia/Shanghai")).toString();}
@@ -521,17 +547,20 @@ final class SiteDungeonManager implements Listener {
     }
     private void returnToCheckpoint(Run r){
         if(r.retryLoading||runs.get(r.site.id)!=r||!r.phase.equals("retrying"))return;
-        Location point=checkpoint(r);World world=point.getWorld();if(world==null)throw new IllegalArgumentException("checkpoint_unavailable");
+        Location stored=checkpoint(r);World world=stored.getWorld();if(world==null)throw new IllegalArgumentException("checkpoint_unavailable");
+        Location point=sameArena(r.site)||wildCamp(r.site)?r.room().center(world):stored;
         r.retryLoading=true;
         ExistingChunkAccess.load(plugin,world,point.getBlockX()>>4,point.getBlockZ()>>4).whenComplete((chunk,error)->{if(!plugin.isEnabled())return;Bukkit.getScheduler().runTask(plugin,()->{
             r.retryLoading=false;if(runs.get(r.site.id)!=r||!r.phase.equals("retrying"))return;
             try{
             Location safe=null;
-            if(error==null)for(int dy:new int[]{0,1,-1})for(int dx=-2;dx<=2&&safe==null;dx++)for(int dz=-2;dz<=2;dz++){
+            if(error==null)for(int dy:new int[]{0,1,-1})for(int dx:new int[]{0,-1,1,-2,2})for(int dz:new int[]{0,-1,1,-2,2}){if(safe!=null)break;
                 Location candidate=point.clone().add(dx,dy,dz);
-                if(world.isChunkLoaded(candidate.getBlockX()>>4,candidate.getBlockZ()>>4)&&AgentFriendPlugin.safeLanding(candidate.getBlock())){safe=candidate;break;}
+                if(world.isChunkLoaded(candidate.getBlockX()>>4,candidate.getBlockZ()>>4)&&AgentFriendPlugin.safeLanding(candidate.getBlock())
+                    &&(!(sameArena(r.site)||wildCamp(r.site))||r.room().contains(candidate))){safe=candidate;break;}
             }
             if(safe==null){r.fault="checkpoint_unavailable";r.pausedAt=System.currentTimeMillis();r.pauseReason="runtime_error";persist();notice(r,"§c存档点暂不安全，场次已暂停、次数不再减少；不要拆建筑，联系服主检查后 /mycli dungeon resume。");return;}
+            if(sameArena(r.site)||wildCamp(r.site))r.checkpoint=safe.clone();
             r.retryReadyAt=System.currentTimeMillis()+10_000;persist();
             if(plugin.trialRescue()!=null)plugin.trialRescue().releaseTeam(rescueKey(r),safe);
             notice(r,r.stage>=r.stages()?"§a战斗已全部完成，已在最后存档点恢复；未扣机会，系统会按真实参战记录结算，无需返回首室。":"§e【存档点续关】本场第"+r.failures+"次战败，剩余"+(MAX_FAILURES-r.failures)+"次机会；已回第"+r.checkpointRoom+"室存档点，10秒后可继续当前段。已清房间保留，不必跑回主城；背包装备保留。");
@@ -552,7 +581,7 @@ final class SiteDungeonManager implements Listener {
     private boolean canSpawn(int count){
         return runs.values().stream().mapToInt(run->run.mobs.size()).sum()+count<=GLOBAL_MOBS;
     }
-    private boolean bossLocked(Run r){return r.stage==r.stages()-1&&Set.of("moving","fighting","retrying").contains(r.phase);}
+    private boolean bossLocked(Run r){return !wildCamp(r.site)&&!sameArena(r.site)&&r.stage==r.stages()-1&&Set.of("moving","fighting","retrying").contains(r.phase);}
     private boolean bossRoom(Run r,Location at){return at.getWorld()!=null&&at.getWorld().getName().equals(r.site.world)&&r.roomAt(r.stages()-1).contains(at);}
     private boolean roomVisitor(Player p){return plugin.isObserver(p)||p.getGameMode()==GameMode.SPECTATOR||p.getGameMode()==GameMode.CREATIVE&&plugin.trustedBlockEditor(p);}
     private java.util.stream.Stream<Player> bossIntruders(Run r){return ResidentCli.online().stream().filter(p->p.getWorld()==Bukkit.getWorld(r.site.world)).filter(p->!roomVisitor(p)&&!r.party.contains(p.getUniqueId())&&bossRoom(r,p.getLocation()));}
@@ -592,7 +621,7 @@ final class SiteDungeonManager implements Listener {
     }
     private boolean playing(Player p){return p!=null&&p.isOnline()&&!p.isDead()&&p.getGameMode()==GameMode.SURVIVAL;}
     private String entryProblem(Player p,Run r,Location at){
-        if(!playing(p)||roomVisitor(p)||plugin.isDowned(p))return "not_survival_or_observer";
+        if(!playing(p)||roomVisitor(p)||plugin.isDowned(p)||(wildCamp(r.site)||sameArena(r.site))&&ResidentCli.isResident(p.getUniqueId()))return "not_survival_or_observer";
         if(!r.site.contains(at)||atStation(r.site,at))return "walk_to_site";
         if(!r.attendance.containsKey(p.getUniqueId())&&belowEncounter(r.site,at))return "walk_to_station";
         Run other=own(p);DungeonManager trial=plugin.dungeon();
@@ -604,7 +633,7 @@ final class SiteDungeonManager implements Listener {
         if(!r.attendance.containsKey(p.getUniqueId())&&r.attendance.size()>=HISTORY_LIMIT)return "party_full";
         if(receipt(p.getUniqueId(),r.site.id)!=null)return "claim_previous_reward_first";
         try{conquestAdmission(p,r.site);}catch(IllegalArgumentException problem){return problem.getMessage();}
-        return r.attendance.containsKey(p.getUniqueId())||hasEntryPermit(p,r.site)||DungeonLoadout.missing(p).isEmpty()?"":"equipment_required";
+        return wildCamp(r.site)||sameArena(r.site)||r.attendance.containsKey(p.getUniqueId())||hasEntryPermit(p,r.site)||DungeonLoadout.missing(p).isEmpty()?"":"equipment_required";
     }
     /** The attendance map is the existing durable contribution history; party
      * contains only this encounter's current members. Leaving never erases work. */
@@ -702,10 +731,15 @@ final class SiteDungeonManager implements Listener {
     private void result(Player p,String action,String site,String reason){
         result(p,action,site,reason,Map.of());
     }
+    private static boolean pendingDifficultyChoice(String action,String reason,Map<String,?> detail){
+        return action.equals("start")&&reason.equals("choose_difficulty")
+            &&Boolean.TRUE.equals(detail.get("requiresChoice"))&&Boolean.FALSE.equals(detail.get("changed"));
+    }
     private void result(Player p,String action,String site,String reason,Map<String,?> detail){
         Map<String,Object> data=new LinkedHashMap<>();data.put("action",action);data.put("id",site);
         data.put("success",reason.equals("success"));data.put("reason",reason);
-        ActionFeedback.Advice advice=reason.equals("success")?null:ActionFeedback.advice("dungeon",reason,site);
+        // Selecting a difficulty is a pending choice, not a failed prerequisite or an opened run.
+        ActionFeedback.Advice advice=reason.equals("success")||pendingDifficultyChoice(action,reason,detail)?null:ActionFeedback.advice("dungeon",reason,site);
         if(advice!=null){
             data.put("errorMessage",advice.message());data.put("nextAction",advice.next());data.put("nextCommands",advice.commands());
             if(reason.equals("unknown_dungeon"))data.put("nextCommand",advice.commands().getFirst());
@@ -815,6 +849,7 @@ final class SiteDungeonManager implements Listener {
                 plugin.getConfig().getString(ROOT+".claimed."+id+"."+r.site.id));
     }
     private String rewardStatus(Run r,UUID id,String reason){
+        if(plugin.getConfig().getBoolean(ROOT+".on-site-issued."+r.id+"."+id,false))return "issued_on_site";
         String slot=siteRewardSlot(r,id,day());
         if(slot.equals("ready")||slot.equals("claimed"))return slot;
         if(!reason.equals("completed"))return "run_incomplete";
@@ -830,6 +865,11 @@ final class SiteDungeonManager implements Listener {
         data.put("lifecycle","ended");data.put("active",false);data.put("participant",false);data.put("rescueActive",false);data.put("exitPolicy","standing_stay_downed_recover");
         data.put("resets",r.resets);data.put("lastResetReason",r.lastResetReason);
         if(r.echo!=null)data.put("encounterTiming",r.echo.timing());
+        if(sameArena(r.site)){
+            data.put("combatDesignVersion",1);data.put("combatElapsedMs",activeMillis(r.started,r.faultPausedMillis,System.currentTimeMillis()));
+            data.put("waveEnemyCounts",r.site.rooms.stream().map(room->EncounterDesign.pressure(r.mode.id,0,room.enemies).size()).toList());
+            data.put("rewardDelivery","on_site_drop");
+        }
         if (r.beacon != null) {
             data.put("chapter", r.beacon.summary());
             data.put("exitPolicy", reason.equals("completed") ? "victory_return_to_briefing" : "standing_stay_downed_recover");
@@ -858,6 +898,12 @@ final class SiteDungeonManager implements Listener {
             next="本场已通关；今日奖励已领取，不会重复发奖，也无需返回首室。若正在考试，/mycli guild exam status 核对实操证明；仅 ready 时用 /mycli guild exam submit。";
             commands=List.of("/mycli guild exam status",info);
         }
+        if(BlackBannerCamp.SITE.equals(id)&&"completed".equals(data.get("reason")))
+            next=reward.equals("daily_limit")?"营地敌群已清。今日奖励已领取，本场不重复生成物品；宝箱原物品保留，可继续探索。"
+                :"营地敌群已清。新场次战利品在外哨实体宝箱里，直接开箱；无须救人或交任务。沿外哨原路离开，继续探索。";
+        if(Set.of("undead_crypt","creeping_crypt").contains(id)&&"completed".equals(data.get("reason")))
+            next=reward.equals("daily_limit")?"全部波次已清，挑战通关。今日奖励已领，本场不重复掉落；可原路离开继续探索。"
+                :"全部波次已清，挑战通关。新场次战利品掉落在本场战区，直接捡取；原路离开后继续探索。旧场次未领凭据仍按原领取方式保留。";
         data.put("nextAction",next);data.put("nextCommands",commands);
     }
     private void saveOutcome(UUID id,String site,Map<String,Object> data){
@@ -889,11 +935,45 @@ final class SiteDungeonManager implements Listener {
         p.sendMessage("§a下一步："+data.get("nextAction"));
     }
     private Site site(String id){Site s=sites.get(id);require(s!=null,"unknown_dungeon");return s;}
+    private static boolean wildCamp(Site site){return site!=null&&site.outdoor&&BlackBannerCamp.SITE.equals(site.id);}
+    /** Presentation/combat overlay only: keep the surveyed structure and protection definitions intact.
+     * Old two-room checkpoints restore unchanged; new encounters explicitly persist campEncounter=1. */
+    private static Site campArena(Site site){
+        if(!wildCamp(site)||site.rooms.size()!=2)return site;
+        Room first=site.rooms.getFirst(),last=site.rooms.getLast();
+        if(first.x!=-1077||first.y!=67||first.z!=-1117||last.x!=-1069||last.y!=67||last.z!=-1116)return site;
+        var enemies=new ArrayList<DungeonWaveCatalog.Enemy>();
+        for(int i=0;i<8;i++)enemies.add(new DungeonWaveCatalog.Enemy(EntityType.PILLAGER,28,"黑旗弩哨"));
+        for(int i=0;i<3;i++)enemies.add(new DungeonWaveCatalog.Enemy(EntityType.VINDICATOR,44,"黑旗突击兵"));
+        enemies.add(new DungeonWaveCatalog.Enemy(EntityType.VINDICATOR,120,"黑旗执斧头目","QD_Blackbanner_Warlord"));
+        Room arena=new Room("黑旗营地 · 敌群与首领",-1072,67,-1116,14,List.copyOf(enemies),List.of(),
+            "借营地建筑挡弩箭，清突击兵和头目；头目蓄力时绕侧后。清完标记敌人后，打开外哨战利品宝箱拿奖励，再继续探索。无须救村民。");
+        return new Site(site.id,site.name,site.expedition,arena.hint,site.icon,site.world,List.of(arena),
+            site.emeralds,site.bonus,site.bonusCount,site.entry,site.outdoor,site.conquestFloor,site.minimumLevel);
+    }
+    private static boolean cryptSite(Site site){return site!=null&&Set.of("undead_crypt","creeping_crypt").contains(site.id);}
+    private static boolean sameArena(Site site){
+        if(!cryptSite(site)||site.rooms.isEmpty())return false;
+        Room first=site.rooms.getFirst();
+        return site.rooms.stream().allMatch(room->room.x==first.x&&room.y==first.y&&room.z==first.z);
+    }
+    private static Site encounterArena(Site site){
+        if(!cryptSite(site))return campArena(site);
+        if(sameArena(site))return site;
+        Room first=site.rooms.getFirst();var waves=new ArrayList<Room>();
+        for(int i=0;i<site.rooms.size();i++){
+            Room original=site.rooms.get(i);
+            waves.add(new Room("第"+(i+1)+"波 · "+EncounterDesign.NAMES.get(Math.min(i,2)),first.x,first.y,first.z,first.radius,
+                EncounterDesign.enemies(site.id,i,original.enemies),List.of(),EncounterDesign.TACTICS.get(Math.min(i,2))));
+        }
+        return new Site(site.id,site.name,site.expedition,"进入首个战区选择一次难度，同场连续刷"+waves.size()+"波；清完全部波次通关并掉落奖励。",site.icon,
+            site.world,List.copyOf(waves),site.emeralds,site.bonus,site.bonusCount,site.entry,site.outdoor,site.conquestFloor,site.minimumLevel);
+    }
     private Site siteView(String id) {
         Run current = runs.get(id);
         if (current != null) return current.site;
         if (beaconLayout != null && id.equals(BeaconExpedition.SITE)) return beaconLayout.site;
-        return sites.get(id);
+        return encounterArena(sites.get(id));
     }
 
     private BeaconLayout readBeacon(Map<String, Site> definitions) throws Exception {
@@ -1107,11 +1187,23 @@ final class SiteDungeonManager implements Listener {
     void audit(CommandSender sender){
         sender.sendMessage("MC_AGENT_STATE_STORAGE "+JSON.toJson(DurableConfigStore.audit(plugin)));
         sender.sendMessage("MC_SITE_DUNGEON_AUDIT ready="+ready+" sites="+sites.size()+" activeRuns="+runs.size()+" trackedMobs="+runs.values().stream().mapToInt(r->r.mobs.size()).sum()+" globalMobLimit="+GLOBAL_MOBS+" trackedProjectiles="+shots.size()+" projectileLimit=128");
-        for(Site s:sites.values()){Run r=runs.get(s.id);sender.sendMessage("MC_SITE_DUNGEON_SITE id="+s.id+" rooms="+s.rooms.size()+" active="+(r!=null)+" stage="+(r==null?0:r.stage+1)+" phase="+(r==null?"idle":r.phase)+" party="+(r==null?0:r.party.size()));}
+        sender.sendMessage("MC_OUTDOOR_CAMP buildings="+campOutpost.buildings()+" chest="+campOutpost.chestPoint()+" freshEnemies=12 rescueRequired=false");
+        for(Site s:sites.values()){Run r=runs.get(s.id);sender.sendMessage("MC_SITE_DUNGEON_SITE id="+s.id+" rooms="+(r==null?campArena(s):r.site).rooms.size()+" active="+(r!=null)+" stage="+(r==null?0:r.stage+1)+" phase="+(r==null?"idle":r.phase)+" party="+(r==null?0:r.party.size()));}
         for(Run r:runs.values())for(UUID id:r.mobs.keySet()){Entity e=Bukkit.getEntity(id);if(e instanceof Mob m)sender.sendMessage("MC_SITE_DUNGEON_MOB site="+r.site.id+" id="+id+" type="+m.getType()+" health="+m.getHealth()+" target="+(m.getTarget()==null?"none":m.getTarget().getUniqueId())+" x="+m.getLocation().getBlockX()+" y="+m.getLocation().getBlockY()+" z="+m.getLocation().getBlockZ());}
+    }
+    private String[] localCampCommand(Player p,String[] raw){
+        if(raw.length<2||!Set.of("start","join","claim","info","menu").contains(raw[1]))return raw;
+        boolean difficulty=raw[1].equals("start")&&raw.length>2&&Set.of("normal","adventure","apocalypse").contains(raw[2]);
+        if(raw.length>2&&!raw[2].startsWith("--")&&!difficulty)return raw;
+        var local=sites.values().stream().map(SiteDungeonManager::encounterArena)
+            .filter(site->(wildCamp(site)||sameArena(site))&&site.contains(p.getLocation())&&site.rooms.getFirst().contains(p.getLocation())).toList();
+        if(local.size()!=1)return raw;
+        String[] resolved=new String[raw.length+1];System.arraycopy(raw,0,resolved,0,2);
+        resolved[2]=local.getFirst().id;System.arraycopy(raw,2,resolved,3,raw.length-2);return resolved;
     }
     void command(Player p,String[] raw){
         if(Arrays.stream(raw).anyMatch(word->word.equals("--help")||word.equals("-h"))){AgentCliCatalog.commandHelp(p,raw);return;}
+        raw=localCampCommand(p,raw);
         DungeonAdvice.Request request;
         try{request=DungeonAdvice.parse(raw);}catch(IllegalArgumentException e){
             String next=e instanceof DungeonAdvice.Usage usage?usage.nextCommand:"/mycli dungeon --help";
@@ -1136,7 +1228,7 @@ final class SiteDungeonManager implements Listener {
                 case "menu"->open(p,id);
                 case "info"->info(p,siteView(id));
                 case "travel"->travel(p,site(id));
-                case "start"->start(p,siteView(id),Mode.parse(args.length>3?args[3]:"normal"),confirmation);
+                case "start"->{Site scene=siteView(id);if(args.length<=3&&(wildCamp(scene)||sameArena(scene)))openDifficulty(p,scene);else start(p,scene,Mode.parse(args.length>3?args[3]:"normal"),confirmation);}
                 case "enter"->stationPassage(p,site(id),false,false,confirmation);
                 case "exit"->stationPassage(p,site(id),true);
                 case "join"->join(p,site(id),confirmation);
@@ -1162,7 +1254,7 @@ final class SiteDungeonManager implements Listener {
             else send(p,"MC_SITE_DUNGEON_ITEM",Map.of("id",s.id,"name",s.name,"rooms",s.rooms.size(),"active",runs.containsKey(s.id),"expedition",s.expedition));
         }
         Map<String,Object> summary=new LinkedHashMap<>();summary.put("total",sites.size());summary.put("page",page);summary.put("pages",Math.max(1,(sites.size()+6)/7));summary.put("partyLimit",PARTY_LIMIT);summary.put("parallelSites",true);
-        summary.put("startPolicy", "player_initiated");
+        summary.put("startPolicy", "auto_enter_camp_or_crypt_arena_other_sites_player_initiated");
         if(!jsonOutput.get())p.sendMessage("§7开放遗迹到首室可主动开场，无需等随机集结。先查 /mycli dungeon info 地点ID 核对路线与准入。");
         if(jsonOutput.get())summary.put("items",items);
         if(first+7<rows.size())summary.put("nextCommand","/mycli dungeon list --page "+(page+1));
@@ -1175,7 +1267,8 @@ final class SiteDungeonManager implements Listener {
         detail.put("hint",routeHint(s));
         detail.put("roomHints",s.rooms.stream().map(Room::hint).toList());
         var arrival=DungeonArrival.describe(entryWorld(s).getName(),entry(s),expedition==null?null:expedition.approachX(),expedition==null?null:expedition.approachZ());
-        if(approach(s)!=null){arrival.put("entranceScope","navigation_only");arrival.put("buildingProtected",true);arrival.put("startRequiresFirstRoom",true);}
+        if(approach(s)!=null){arrival.put("entranceScope","navigation_only");arrival.put("buildingProtected",true);arrival.put("startRequiresFirstRoom",!wildCamp(s));}
+        if(wildCamp(s)){arrival.put("instruction","进入营地一次选择普通、冒险或末日开打；清完12名敌人后打开外哨战利品宝箱拿奖励。不用报名或救人。");detail.put("rewardChest",campOutpost.chestPoint());}
         if(station(s)!=null){
             arrival.put("station",stationGuide(s));
             arrival.put("instruction",routeHint(s));
@@ -1185,6 +1278,7 @@ final class SiteDungeonManager implements Listener {
                 arrival.put("autoReturnSeconds",RETURN_DELAY_MS/1000);
             }
         }
+        if(sameArena(s)){arrival.put("instruction",s.hint);detail.put("hint",s.hint);detail.put("encounterType","same_arena_waves");}
         detail.put("arrival",arrival);
         var relic=DungeonRelics.at(s.id);
         if(relic!=null){
@@ -1202,7 +1296,7 @@ final class SiteDungeonManager implements Listener {
         send(p,"MC_SITE_DUNGEON_INFO",detail);
         if(!jsonOutput.get())p.sendMessage("[抵达] "+arrival.get("instruction"));
         if(echoAvailable(s)&&!jsonOutput.get())p.sendMessage("§d【回响城】前庭一波、卫所两波、末室投影和本体。普通躲紫色圆圈，冒险横移出光带；掉落一次/日，通关原地领到个人箱。");
-        if(!jsonOutput.get()&&relic!=null)
+        if(!jsonOutput.get()&&relic!=null&&!wildCamp(s)&&!sameArena(s))
             p.sendMessage("§6【入口】"+relic.x()+", "+relic.y()+", "+relic.z()+" 石钮 · "+relic.tactic()
                     +" §d秘宝："+relic.name()+"，首次登记终室参战并通关后可领。");
         if(verboseOutput.get()&&!jsonOutput.get())p.sendMessage("[路线] "+routeHint(s)+"；逐室清怪，通关后直接领取个人奖励。普通/冒险/末日的生命倍率为1/1.5/2.1，伤害倍率为1/1.25/1.6；进入遗迹自动同队，可中途加入和离开。");
@@ -1283,7 +1377,7 @@ final class SiteDungeonManager implements Listener {
             String blocked=roster.getFirst().blocker();
             require(!blocked.equals("请先领取这处遗迹的旧奖励"),"claim_previous_reward_first");
             require(blocked.isEmpty(),"already_in_activity_or_not_survival");
-            if(!reviewEntry(p,s,"enter","",roster,confirmation))return;
+            if(!wildCamp(s)&&!cryptSite(s)&&!reviewEntry(p,s,"enter","",roster,confirmation))return;
         }
         int cx=target.get(0)>>4,cz=target.get(2)>>4;
         require(w.isChunkGenerated(cx,cz),"entry_not_generated");
@@ -1403,6 +1497,7 @@ final class SiteDungeonManager implements Listener {
         ExistingChunkAccess.load(plugin,w,x>>4,z>>4).whenComplete((chunk,error)->Bukkit.getScheduler().runTask(plugin,()->format(json,verbose,()->{
             if(!p.isOnline())return;
             if(error!=null||chunk==null){result(p,"join",s.id,"entry_unavailable");return;}
+            if(runs.get(s.id)!=r||!r.fault.isEmpty()||r.phase.equals("returning")){result(p,"join",s.id,"not_participating");return;}
             if(!playing(p)||plugin.isDowned(p)||p.isInsideVehicle()||own(p)!=null||plugin.dungeonParticipant(p)
                     ||plugin.pvpParticipant(p)||p.getWorld()!=origin.getWorld()||p.getLocation().distanceSquared(origin)>2){
                 result(p,"join",s.id,"player_state_changed");return;}
@@ -1459,6 +1554,8 @@ final class SiteDungeonManager implements Listener {
         player.spawnParticle(Particle.HAPPY_VILLAGER,button,12,.25,.4,.25,.002);
     }
     private void start(Player p,Site s,Mode mode,String confirmation){
+        s=encounterArena(s);
+        if(wildCamp(s)||sameArena(s))require(!ResidentCli.isResident(p.getUniqueId()),"not_survival_or_observer");
         conquestAdmission(p,s);
         require(own(p)==null,"already_in_site_dungeon");
         require(playing(p)&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
@@ -1476,14 +1573,28 @@ final class SiteDungeonManager implements Listener {
         require(starter.blocker().isEmpty(),"already_in_activity_or_not_survival");
         var roster=List.of(starter);
         if(!starter.missing().isEmpty())p.sendMessage("§e[战备提示] 缺少 "+String.join("、",starter.missing())+"；仍可开场，注意补给。");
-        inviteMuster(s,p);
         Run r=new Run(s,mode,beaconLayout!=null&&s==beaconLayout.site?beaconLayout:null);r.altarTactics=s.id.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled();
+        if(wildCamp(s)||sameArena(s)){r.phase="moving";r.readyAt=r.started+4000;}
         r.enemyMoves=r.beacon==null&&BOSS_SKILLS.containsKey(s.id)&&plugin.dungeonEnemyMoves().enabled();
         if(echoAvailable(s))r.echo=new EchoCitadel.Progress();
         r.checkpoint=p.getLocation().clone();r.party.add(p.getUniqueId());r.attendance.put(p.getUniqueId(),0);runs.put(s.id,r);
         try{persist();}catch(RuntimeException failure){runs.remove(s.id);throw failure;}
-        roster.forEach(member->permit(s,member));entryPermits.remove(p.getUniqueId());
+        for(EntryMember member:roster)permit(s,member);entryPermits.remove(p.getUniqueId());
         reconcile(r);
+        for(Player member:present(r)){
+            Menu pending=menus.get(member.getOpenInventory().getTopInventory());
+            if(pending!=null&&pending.site.equals(s.id)&&pending.choices.values().stream().anyMatch(choice->choice.startsWith("difficulty:")))
+                member.closeInventory();
+        }
+        if(wildCamp(s)){
+            runResult(p,"start",s.id,r.id);
+            notice(r,"§c【野外敌群】黑旗营地12名敌人进入警戒！借建筑挡箭，清掉弩哨、突击兵和头目。清完直接打开战利品宝箱拿奖励，不用救人、报名或交任务。");
+            return;
+        }
+        if(sameArena(s)){
+            runResult(p,"start",s.id,r.id);notice(r,"§c【挑战开始】"+s.name+" · 第1/"+r.stages()+"波即将出现。留在同一战场，清完自动刷下一波；最后一波清完即通关，奖励直接掉落。");return;
+        }
+        inviteMuster(s,p);
         runResult(p,"start",s.id,r.id);tell(r,"§6"+s.name+"〔"+mode.label+"〕10秒后开始；遗迹内达标的玩家与Agent自动同队，目前"+r.party.size()+"人。中途可加入、离开，已参战的房间保留，通关奖励会给每位真实参战者生成凭据。致命伤害先倒地，队友靠近4格停留10秒救援，清室也可复活。单人或全队战败返回存档点，第三次战败才结束；时限30分钟，全员离场宽限5分钟，故障和断线不扣次数。无需建立或修改日常队伍。");
         if (r.beacon != null) tell(r, "集结后在当前房间选择祝福和路线。真人打开地下城菜单，Agent 查询 " + BeaconExpedition.STATUS + " --json。");
     }
@@ -1543,16 +1654,19 @@ final class SiteDungeonManager implements Listener {
         }
         fields.putAll(attendanceState(r,p.getUniqueId()));fields.put("attempt",r.attempt);fields.put("resets",r.resets);fields.put("pauseReason",r.pauseReason);fields.put("lastResetReason",r.lastResetReason);fields.put("lastResetAt",r.lastResetAt);
         fields.putAll(checkpointState(r));fields.put("bossRoomLocked",bossLocked(r));
+        if(sameArena(r.site)){fields.put("encounterType","same_arena_waves");fields.put("wave",Math.min(r.stage+1,r.stages()));fields.put("totalWaves",r.stages());}
+        if(wildCamp(r.site)){fields.put("encounterType","outdoor_boss");fields.put("rewardChest",campOutpost.chestPoint());fields.put("rescueRequired",false);}
         fields.put("faultPausedMillis",r.faultPausedMillis);fields.put("resumable",r.party.contains(p.getUniqueId())&&!r.fault.isEmpty());
         fields.put("storageRecovery",r.storageFault?"return_with_original_party":"none");
         fields.put("nextCommand",r.party.contains(p.getUniqueId())&&!r.fault.isEmpty()?"/mycli dungeon resume":"/mycli dungeon status "+r.site.id);
         List<String> pending=pendingSites(p.getUniqueId());fields.put("pendingRewards",pending);
         fields.put("pendingRewardDetails",pending.stream().map(s->pendingReward(p.getUniqueId(),s)).toList());
+        fields.put("insideCombatArea",target.contains(p.getLocation()));fields.put("downed",plugin.isDowned(p));
         fields.put("combatBounds",Map.of("world",r.site.world,"min",List.of(target.x+.5-target.radius-2,target.y-3,target.z+.5-target.radius-2),"max",List.of(target.x+.5+target.radius+2,target.y+3,target.z+.5+target.radius+2)));
         if(r.poison!=null&&companionCombatPosition(r,p,p.getLocation())){
             var hazard=r.poison.observation(System.currentTimeMillis());if(!hazard.isEmpty())fields.put("hazard",hazard);
         }
-        if((r.enemyMoves||r.echo!=null)&&companionCombatPosition(r,p,p.getLocation())){
+        if((r.enemyMoves||r.echo!=null||sameArena(r.site)||wildCamp(r.site))&&companionCombatPosition(r,p,p.getLocation())){
             var moves=plugin.dungeonEnemyMoves().hazards(p);if(!moves.isEmpty())fields.put("enemyMoves",moves);
         }
         if(r.echo!=null&&r.party.contains(p.getUniqueId())){
@@ -1949,7 +2063,21 @@ final class SiteDungeonManager implements Listener {
         if(gear!=null)p.sendMessage("§d已收录秘宝「"+relic.name()+"」。查看装备说明了解触发方式；遗迹菜单可查收藏与称号。");
         plugin.agentCoach().rememberAdventure(p, "遗迹攻略奖励已经领取");
     }
+    private void arenaBoundary(Run r,List<Player> players,long now){
+        if(!(sameArena(r.site)||wildCamp(r.site)))return;
+        Room room=r.room();World world=Bukkit.getWorld(r.site.world);if(world==null)return;
+        double edge=room.radius+2;var dust=new Particle.DustOptions(Color.fromRGB(160,200,255),.8f);
+        for(double d=-edge;d<=edge;d+=2)for(int side:new int[]{-1,1}){
+            world.spawnParticle(Particle.DUST,room.x+.5+d,room.y+.12,room.z+.5+side*edge,1,0,0,0,0,dust);
+            world.spawnParticle(Particle.DUST,room.x+.5+side*edge,room.y+.12,room.z+.5+d,1,0,0,0,0,dust);
+        }
+        for(Player p:players)if(!plugin.isDowned(p)&&!room.contains(p.getLocation())&&now-lockHints.getOrDefault(p.getUniqueId(),0L)>=5000){
+            lockHints.put(p.getUniqueId(),now);
+            p.sendMessage("§e【回到战区】本波未清。你已离开蓝白边界，走回 "+room.x+","+room.y+","+room.z+" 继续；不会替你清怪或跳波。");
+        }
+    }
     private void tick(){
+        tickOutdoorCamp();tickCryptWaves();
         long timestamp=System.currentTimeMillis();
         if(!scheduledReturns.isEmpty())try{updateReturns(timestamp);}
         catch(RuntimeException failure){plugin.getLogger().log(java.util.logging.Level.WARNING,"Ground return pending: storage unavailable",failure);}
@@ -1980,6 +2108,7 @@ final class SiteDungeonManager implements Listener {
             if(r.phase.equals("returning")){complete(r);continue;}
             long now=System.currentTimeMillis();if(activeMillis(r.started,r.faultPausedMillis,now)>TIMEOUT_MS){end(r,"time_limit");continue;}
             List<Player> present=present(r);
+            arenaBoundary(r,present,now);
             if(r.echo!=null)r.echo.sample(timestamp,r.phase,r.pausedAt==0&&!present.isEmpty());
             if(present.isEmpty() || present.stream().allMatch(plugin::isDowned)
                     && r.party.stream().anyMatch(id->ResidentCli.find(id)==null&&plugin.trialRescue()!=null&&!plugin.trialRescue().downed(id))){
@@ -1998,6 +2127,7 @@ final class SiteDungeonManager implements Listener {
                 if(now<r.retryReadyAt)continue;r.phase=r.stage>=r.stages()?"returning":"moving";persist();
             }
             if(r.phase.equals("moving")){
+                if((sameArena(r.site)||wildCamp(r.site))&&now<r.readyAt){updateCampBattle(r);continue;}
                 if (r.beacon != null && r.room().enemies.isEmpty()) {
                     tickBeaconObjective(r, present, now);
                     continue;
@@ -2007,11 +2137,12 @@ final class SiteDungeonManager implements Listener {
                     continue;
                 }
                 if(bossLocked(r)&&bossIntruders(r).findAny().isPresent()){for(Player member:present)lockHint(member,"Boss房间还有非本场队员，请其退出门外；未开始本段战斗、未扣次数。");continue;}
-                if(!canSpawn(r.echo==null?r.room().enemies.size():echoWave(r,0).enemies().size()))continue;
+                if(!canSpawn(r.echo==null?waveEnemies(r).size():echoWave(r,0).enemies().size()))continue;
                 spawn(r);continue;
             }
             if(!r.phase.equals("fighting"))continue;
             observeRoom(r);
+            updateCampBattle(r);
             if(r.invalid){end(r,"missing_or_unloaded_enemy_retry_required");continue;}
             for(UUID id:new ArrayList<>(r.mobs.keySet())){
                 Entity e=Bukkit.getEntity(id);if(!(e instanceof Mob mob)||!e.isValid()||mob.isDead()){r.invalid=true;continue;}
@@ -2047,14 +2178,18 @@ final class SiteDungeonManager implements Listener {
                 Player anchor=present.stream().filter(p->r.room().contains(p.getLocation())&&AgentFriendPlugin.safeLanding(p.getLocation().getBlock())).findFirst().orElse(null);
                 if(anchor!=null){r.checkpoint=anchor.getLocation().clone();r.checkpointRoom=r.stage+1;}
                 var clearedRoom = r.room();
-                String roomName=clearedRoom.name;clean(r);r.stage++;r.attempt=0;r.phase=r.stage==r.stages()?"returning":"moving";persist();
+                String roomName=clearedRoom.name;clean(r);r.stage++;r.attempt=0;r.phase=r.stage==r.stages()?"returning":"moving";
+                if(sameArena(r.site))r.readyAt=now+6000;
+                persist();
                 roomCheckpointCommitted=true;
                 if(plugin.trialRescue()!=null)plugin.trialRescue().reviveTeam(rescueKey(r),"room_cleared");
                 DungeonRecovery.apply(plugin, present(r).stream()
                     .filter(p -> credited.contains(p.getUniqueId()) && clearedRoom.contains(p.getLocation())).toList(), r.site.id, r.stage);
                 if(plugin.lifeChallenges()!=null)plugin.lifeChallenges().roomCleared(challengeContext,challengePresent);
                 for(UUID id:r.party){Player p=ResidentCli.find(id);if(p!=null)p.sendMessage((credited.contains(id)?"§a":"§e")+"【"+label(r.site)+"·参战登记】"+roomName+"："+(credited.contains(id)?"已记录本段参战":"本段尚无参战记录")+"；累计 "+r.attendance.getOrDefault(id,0)+"/"+r.stages()+"。中途离开仍保留已经完成的登记。");}
-                notice(r,"§a战斗室已清理；"+(r.phase.equals("returning")?"全场通关，正在为所有真实参战者登记奖励，无须返回首室。":"步行前往下一室："+r.room().name+" "+r.room().x+","+r.room().y+","+r.room().z));
+                if(wildCamp(r.site))notice(r,"§a营地标记敌人已清掉！正在把战利品放进外哨宝箱 "+campOutpost.chestPoint()+"，无须救人或交任务。");
+                else if(sameArena(r.site))notice(r,r.phase.equals("returning")?"§6【全部波次已清】正在生成本场战利品掉落。":"§a【第"+r.stage+"波已清】留在当前战场，第"+(r.stage+1)+"/"+r.stages()+"波将在6秒后出现。");
+                else notice(r,"§a战斗室已清理；"+(r.phase.equals("returning")?"全场通关，正在为所有真实参战者登记奖励，无须返回首室。":"步行前往下一室："+r.room().name+" "+r.room().x+","+r.room().y+","+r.room().z));
                 if(!r.phase.equals("returning")){
                     Room next=r.room();
                     for(Player player:present)if(player.isOnline()){
@@ -2166,13 +2301,15 @@ final class SiteDungeonManager implements Listener {
                 p.spawnParticle(Particle.DUST,mark,4,.25,.07,.25,0,new Particle.DustOptions(org.bukkit.Color.FUCHSIA,1.2f));
         }
     }
+    private List<DungeonWaveCatalog.Enemy> waveEnemies(Run r){return sameArena(r.site)?EncounterDesign.pressure(r.mode.id,r.stage,r.room().enemies):r.room().enemies;}
     private void spawn(Run r){
         Room room=r.room();
         var wave=r.echo==null?null:echoWave(r,r.echo.wave);
-        var enemies=wave==null?room.enemies:wave.enemies();
+        var enemies=wave==null?waveEnemies(r):wave.enemies();
         List<Location> spots=safeSpots(r);
         require(spots.size()>=enemies.size(),room.spawnPoints.isEmpty()?"room_blocked_clear_floor_and_retry":"camp_spawn_points_obstructed");
         Collections.shuffle(spots);
+        if(sameArena(r.site)||wildCamp(r.site))spots=new ArrayList<>(EncounterDesign.spread(spots,enemies.size()));
         if(wave!=null&&wave.sideFlank()){
             var order=new ArrayList<Location>();
             spots.stream().min(Comparator.comparingDouble(Location::getX)).ifPresent(order::add);
@@ -2186,11 +2323,20 @@ final class SiteDungeonManager implements Listener {
                 var spec=enemies.get(i);Location at=spots.get(i);Chunk chunk=at.getChunk();if(r.held.add(chunk))chunk.addPluginChunkTicket(plugin);
                 Mob mob=spec.spawn(at,r.mode!=Mode.NORMAL||r.site.conquestFloor>0);
                 r.mobs.put(mob.getUniqueId(),spec);
-                mob.addScoreboardTag(TAG);mob.addScoreboardTag("afu_site_"+r.site.id);spec.equip(mob,r.mode.health*(1+Math.max(0,r.party.size()-1)*.2));
+                mob.addScoreboardTag(TAG);mob.addScoreboardTag("afu_site_"+r.site.id);spec.equip(mob,r.mode.health*(1+(sameArena(r.site)||wildCamp(r.site)?Math.min(4,Math.max(0,r.party.size()-1)):Math.max(0,r.party.size()-1))*.2));
                 String enemyName=spec.name().isEmpty()?(mob.getCustomName()==null?mob.getType().name():ChatColor.stripColor(mob.getCustomName())):spec.name();
                 mob.setCustomName("§c"+r.site.name+" · "+enemyName);mob.setCustomNameVisible(true);
                 r.mobs.put(mob.getUniqueId(),spec);
                 if(wave!=null&&wave.move()!=null)registerBossMove(r,room,mob,wave.move());
+                if(sameArena(r.site)){
+                    mob.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME,at.clone().add(0,.6,0),18,.2,.6,.2,.03);
+                    if(spec.name().equals("寒骨射手"))registerBossMove(r,room,mob,DungeonEnemyMoves.Move.CRYPT_BARRAGE);
+                    if(spec.name().equals("毒雾祭司"))registerBossMove(r,room,mob,DungeonEnemyMoves.Move.CRYPT_MIASMA);
+                    if(r.stage==r.stages()-1&&spec.health()>=100){
+                        designedPhases.put(mob.getUniqueId(),0);
+                        registerBossMove(r,room,mob,mob.getType()==EntityType.WITCH?DungeonEnemyMoves.Move.CRYPT_MIASMA:DungeonEnemyMoves.Move.GRAVE_CLEAVE);
+                    }
+                }
                 if(r.enemyMoves&&r.stage==r.stages()-1){
                     var boss=BOSS_SKILLS.get(r.site.id);
                     if(boss!=null&&boss.type()==spec.type()&&boss.name().equals(spec.name()))
@@ -2204,8 +2350,10 @@ final class SiteDungeonManager implements Listener {
             if(!r.phase.equals("fighting"))r.attempt++;
             r.phase="fighting";r.invalid=false;
             if(r.echo!=null)r.echo.spawn(r.stage);
-            observeRoom(r);persist();
-            if(wave==null)notice(r,"§c"+room.name+"："+enemies.size()+"个标记敌人（本室第"+r.attempt+"次出怪）。在室内参战、实际命中或援助队友会记录；不要求最后一刻留在室内。");
+            observeRoom(r);persist();updateCampBattle(r);
+            if(sameArena(r.site))Bukkit.getWorld(r.site.world).playSound(room.center(Bukkit.getWorld(r.site.world)),Sound.ENTITY_EVOKER_PREPARE_SUMMON,.8f,.8f);
+            if(sameArena(r.site))notice(r,"§c【第"+(r.stage+1)+"/"+r.stages()+"波开战】"+enemies.size()+"只标记敌人。清完本波自动进入下一波，不用换房间；最后一波清完即通关掉落奖励。");
+            else if(wave==null)notice(r,"§c"+room.name+"："+enemies.size()+"个标记敌人（本室第"+r.attempt+"次出怪）。在室内参战、实际命中或援助队友会记录；不要求最后一刻留在室内。");
             else notice(r,"§d【"+room.name+" "+(r.echo.wave+1)+"/"+EchoCitadel.waves(r.stage)+"】"+wave.name()+" · "+enemies.size()+"名敌人。"+wave.tactic());
         }catch(RuntimeException e){clean(r);r.phase="moving";throw e;}
     }
@@ -2287,7 +2435,70 @@ final class SiteDungeonManager implements Listener {
             && room.getKey() != BeaconExpedition.CAMP && room.getValue().contains(id));
     }
 
+    private void completeCamp(Run r){
+        // New outdoor encounters use one real shared chest batch per original run. Old receipts and
+        // old two-room checkpoints still use the original settlement path below.
+        String plan=ROOT+".on-site-plans."+r.id;
+        if(!plugin.getConfig().contains(plan)){
+            var recipients=r.attendance.keySet().stream().filter(id->rewardEligible(r,id)&&siteRewardSlot(r,id,day()).equals("eligible")).map(UUID::toString).toList();
+            var relic=DungeonRelics.at(r.site.id);
+            var rare=r.attendance.keySet().stream().filter(id->rewardEligible(r,id)&&r.roomAttendance.getOrDefault(r.stages()-1,Set.of()).contains(id)
+                &&relic!=null&&!relicClaimed(id,r.site.id)&&receipt(id,r.site.id)==null).map(UUID::toString).toList();
+            atomic(()->plugin.getConfig().createSection(plan,Map.of("day",day(),"recipients",recipients,"relicRecipients",rare)));
+        }
+        String rewardDay=plugin.getConfig().getString(plan+".day");
+        var recipients=plugin.getConfig().getStringList(plan+".recipients").stream().map(UUID::fromString).toList();
+        var relicRecipients=plugin.getConfig().getStringList(plan+".relicRecipients").stream().map(UUID::fromString).toList();
+        require(rewardDay!=null&&rewardDay.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}"),"data_unavailable");
+        require(recipients.stream().allMatch(r.attendance::containsKey)&&relicRecipients.stream().allMatch(r.attendance::containsKey),"reward_plan_invalid");
+        var loot=new ArrayList<ItemStack>();
+        for(UUID id:recipients){
+            loot.add(new ItemStack(Material.EMERALD,r.site.emeralds*r.mode.reward));
+            if(wildCamp(r.site)){
+                loot.add(new ItemStack(Material.ARROW,32*r.mode.reward));loot.add(new ItemStack(Material.COOKED_BEEF,8));loot.add(new ItemStack(Material.IRON_INGOT,4));
+            }else{
+                loot.add(new ItemStack(r.site.bonus,r.site.bonusCount*r.mode.reward));loot.add(new ItemStack(Material.BREAD,4));
+            }
+        }
+        var relic=DungeonRelics.at(r.site.id);
+        for(UUID id:relicRecipients)if(relic!=null)loot.add(DungeonRelics.create(relic,r.mode.ordinal(),java.util.concurrent.ThreadLocalRandom.current()));
+        Location dropAt=r.room().center(Bukkit.getWorld(r.site.world));
+        if(sameArena(r.site)){
+            if(!AgentFriendPlugin.safeLanding(dropAt.getBlock())){
+                var spots=safeSpots(r);require(!spots.isEmpty(),"arena_reward_drop_unavailable");dropAt=spots.getFirst();
+            }
+            campOutpost.drop(r.id,dropAt.clone().add(0,.5,0),loot);
+        }else campOutpost.publish(r.id,loot);
+        atomic(()->{
+            for(UUID id:recipients){
+                plugin.getConfig().set(ROOT+".claimed."+id+"."+r.site.id,rewardDay);
+                plugin.getConfig().set(ROOT+".on-site-issued."+r.id+"."+id,true);
+            }
+            for(UUID id:relicRecipients){plugin.getConfig().set(relicPath(id,r.site.id),r.id);plugin.getConfig().set(ROOT+".on-site-issued."+r.id+"."+id,true);}
+            for(UUID id:r.attendance.keySet())if(rewardEligible(r,id)){
+                Player p=ResidentCli.find(id);if(p!=null)plugin.taskMarket().worldAction(p,GuildManager.Goal.SITE_CLEAR,r.site.id,"site:"+r.id,r.started,false);
+            }
+        });
+        for(UUID id:r.attendance.keySet())if(rewardEligible(r,id)){
+            Player p=ResidentCli.find(id);if(p==null)continue;
+            plugin.nativeSiteCompleted(p,r.site.id,r.id);
+            if(plugin.nativeRpgSelected()&&plugin.skillAssessments()!=null&&missingRooms(r,id).isEmpty()&&unverifiedRooms(r).isEmpty())
+                plugin.skillAssessments().siteCompleted(p,r.site.id,r.id,r.started);
+            if(loot.isEmpty()){
+                p.sendTitle("§6通关","§f全部敌人已清，今日奖励不重复发放",5,80,20);
+                p.sendMessage("§6【通关】全部敌人已清。今日奖励已领取，本场不再重复生成物品；现场剩余战利品保持原样，可继续探索。");
+            }else if(sameArena(r.site)){
+                p.sendTitle("§6通关","§f"+r.stages()+"波敌人已全部清掉，战利品已掉落",5,80,20);
+                p.sendMessage("§6【通关】"+r.site.name+"全部"+r.stages()+"波已清。战利品掉落在 "+dropAt.getBlockX()+","+dropAt.getBlockY()+","+dropAt.getBlockZ()+"，直接捡取；原路离开后可继续探索。无须交任务或找下一间房。");
+            }else p.sendMessage("§6营地12名敌人已清，战利品已放入外哨宝箱 "+campOutpost.chestPoint()+"。直接开箱拿走；无须救人或交任务，接着继续探索。");
+        }
+        for(Player viewer:ResidentCli.online())if(!r.party.contains(viewer.getUniqueId())&&!ResidentCli.isResident(viewer.getUniqueId())
+                &&viewer.getWorld().getName().equals(r.site.world)&&r.room().contains(viewer.getLocation()))
+            viewer.sendTitle("§6战区通关","§f全部敌人已清，参战者可收取本场战利品",5,80,20);
+        end(r,"completed");
+    }
     private void complete(Run r){
+        if(wildCamp(r.site)&&r.site.rooms.size()==1||sameArena(r.site)){completeCamp(r);return;}
         // A contribution belongs to its real UUID, even after departure or
         // disconnect. Snapshot once; receipt creation remains atomic/idempotent.
         var newlyEligible=new ArrayList<Player>();
@@ -2323,7 +2534,9 @@ final class SiteDungeonManager implements Listener {
             if(participant!=null&&grantCircle)newlyEligible.add(participant);
             Player p=participant;if(p!=null&&(grantLoot||grantRelic)){
                 applyCompletion(p,r.site.id,receipt(id,r.site.id));
-                p.sendMessage("§6"+r.site.name+"已通关。罗盘 → 遗迹地下城 → "+r.site.name+" → 领取奖励。"
+                p.sendMessage(wildCamp(r.site)
+                    ?"§6这份旧版营地场次已结算，原奖励凭据保留。可用 /mycli dungeon claim 领取。新的野外敌群战利品会直接放进现场宝箱。"
+                    :"§6"+r.site.name+"已通关。罗盘 → 遗迹地下城 → "+r.site.name+" → 领取奖励。"
                         +(grantRelic?" §d本次发现秘宝「"+relic.name()+"」。":""));
             }
         }
@@ -2346,6 +2559,7 @@ final class SiteDungeonManager implements Listener {
     }
     private void clearShots(Run r){for(var entry:new ArrayList<>(shots.entrySet()))if(entry.getValue().run==r){Entity e=Bukkit.getEntity(entry.getKey());if(e!=null)e.remove();shots.remove(entry.getKey());}}
     private void clean(Run r) {
+        BossBar campBar=campBars.remove(r.id);if(campBar!=null)campBar.removeAll();
         r.poison=null;
         if(r.echo!=null)r.echo.resetRoom();
         for (var entry : new ArrayList<>(shots.entrySet())) if (entry.getValue().run == r) {
@@ -2354,6 +2568,7 @@ final class SiteDungeonManager implements Listener {
             shots.remove(entry.getKey());
         }
         for (UUID id : r.mobs.keySet()) {
+            designedPhases.remove(id);
             Entity entity = Bukkit.getEntity(id);
             if (entity != null) entity.remove();
         }
@@ -2453,6 +2668,8 @@ final class SiteDungeonManager implements Listener {
                 saved.put("declined",r.declined.stream().map(UUID::toString).toList());
                 if(r.altarTactics)saved.put("altarTactics",true);
                 if(r.enemyMoves)saved.put("enemyMoves",true);
+                if(wildCamp(r.site)&&r.site.rooms.size()==1)saved.put("campEncounter",1);
+                if(sameArena(r.site))saved.put("arenaWaves",1);
                 if(r.echo!=null){saved.put("echoEncounter",EchoCitadel.VERSION);saved.put("echoTiming",r.echo.timing());}
                 if (r.beacon != null) {
                     saved.put("chapterVersion", BeaconExpedition.VERSION);
@@ -2486,6 +2703,14 @@ final class SiteDungeonManager implements Listener {
         List<Run> expired=new ArrayList<>();
         for(String id:saved.getKeys(false))try{
             Site site=site(id);var c=saved.getConfigurationSection(id);
+            if(c.contains("campEncounter")){
+                require(wildCamp(site)&&c.getInt("campEncounter")==1,"camp_checkpoint_incompatible");
+                site=campArena(site);require(site.rooms.size()==1,"camp_checkpoint_geometry_changed");
+            }
+            if(c.contains("arenaWaves")){
+                require(cryptSite(site)&&c.getInt("arenaWaves")==1,"arena_checkpoint_incompatible");
+                site=encounterArena(site);require(sameArena(site),"arena_checkpoint_geometry_changed");
+            }
             BeaconLayout layout = null;
             if (c.contains("chapterVersion") || c.contains("chapterProgress") || c.contains("chapterLayout")) {
                 require(id.equals(BeaconExpedition.SITE) && beaconLayout != null
@@ -2594,7 +2819,7 @@ final class SiteDungeonManager implements Listener {
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void launch(ProjectileLaunchEvent e){Run r=owner(actor(e.getEntity()));if(r==null)return;if(shots.size()>=128){e.setCancelled(true);return;}e.getEntity().addScoreboardTag(SHOT_TAG);shots.put(e.getEntity().getUniqueId(),new Shot(r,System.currentTimeMillis()+15_000));}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void splash(PotionSplashEvent e){Run r=owner(e.getPotion());if(r==null)r=owner(actor(e.getPotion()));if(r!=null)for(LivingEntity l:e.getAffectedEntities())if(!validParticipant(r,l))e.setIntensity(l,0);}
-    @EventHandler public void death(EntityDeathEvent e){Run r=owner(e.getEntity());if(r!=null||isEscort(e.getEntity())){if(r!=null)r.mobs.remove(e.getEntity().getUniqueId());e.getDrops().clear();e.setDroppedExp(0);}}
+    @EventHandler public void death(EntityDeathEvent e){Run r=owner(e.getEntity());if(r!=null||isEscort(e.getEntity())){if(r!=null){r.mobs.remove(e.getEntity().getUniqueId());designedPhases.remove(e.getEntity().getUniqueId());}e.getDrops().clear();e.setDroppedExp(0);}}
     @EventHandler public void load(EntitiesLoadEvent e){
         for(Entity entity:e.getEntities()){
             boolean untrackedEscort = isEscort(entity) && runs.values().stream().noneMatch(r -> entity.getUniqueId().equals(r.escort));
@@ -2604,6 +2829,132 @@ final class SiteDungeonManager implements Listener {
     @EventHandler public void rejoin(PlayerJoinEvent e){Run r=own(e.getPlayer());if(r!=null)e.getPlayer().sendMessage("§e地下城进度保留，剩余机会 "+(MAX_FAILURES-r.failures)+"/3；dungeon status 查本场。断线不扣次数，倒地续关会自动回存档点；主动离场仍须5分钟内回场。");Bukkit.getScheduler().runTaskLater(plugin,()->{clearLoginIntruder(e.getPlayer());restoreReturn(e.getPlayer());},5L);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnNatural(SpawnerSpawnEvent e){if(runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)public void spawnWild(CreatureSpawnEvent e){if(e.getSpawnReason()==CreatureSpawnEvent.SpawnReason.NATURAL&&runs.values().stream().anyMatch(r->r.site.contains(e.getLocation())))e.setCancelled(true);}
+    private boolean campVictory(Site camp){
+        if(camp==null)return false;
+        Run current=runs.get(camp.id);
+        boolean cleared=current!=null?current.stage>=current.stages()&&current.fault.isEmpty()&&!current.invalid
+            :"completed".equals(plugin.getConfig().getString(ROOT+".last-outcomes."+camp.id+".reason"))
+                &&plugin.getConfig().getInt(ROOT+".last-outcomes."+camp.id+".clearedRooms")>0;
+        if(!cleared)return false;
+        World world=Bukkit.getWorld(camp.world);if(world==null)return false;
+        Room arena=campArena(camp).rooms.getFirst();
+        return world.getNearbyEntities(arena.center(world),12,4,12).stream()
+            .noneMatch(entity->entity instanceof Raider&&entity.isValid()&&!entity.isDead());
+    }
+    private void campAdvice(Player p,Site camp,Run run,Map<String,Object> out){
+        out.put("encounterType","outdoor_boss");out.put("startPolicy","enter_choose_difficulty_once");
+        out.put("equipmentPolicy","warning_only");out.put("requiresConfirmation",false);
+        out.put("rewardChest",campOutpost.chestPoint());out.put("rescueRequired",false);
+        if(run!=null&&!run.fault.isEmpty()||own(p)!=null&&own(p)!=run||plugin.isDowned(p)||roomVisitor(p))return;
+        String state=run!=null?"fighting":campVictory(camp)?"loot":"approach";
+        String next=run!=null?"清掉黑旗头目、突击兵与弩哨，利用营地建筑挡箭。剩余 "+run.mobs.size()+" 名标记敌人。清完直接开战利品宝箱，不用救人或交任务。"
+            :state.equals("loot")?"营地已清。直接打开外哨战利品宝箱拿奖励；原路出营，继续探索其他野外据点。"
+            :"进入营地选一次难度开打：8名弩哨、3名突击兵和1名头目。清完怪物 → 打开战利品宝箱 → 继续探索。不用报名、确认令牌或救村民。";
+        out.put("state",state);out.put("reason","OUTDOOR_CAMP_"+state.toUpperCase(Locale.ROOT));out.put("nextAction",next);
+        out.put("target",state.equals("loot")?campOutpost.chestPoint():List.of(-1069,67,-1116));
+        out.put("nextCommand","/mycli dungeon status illager_camp");out.put("nextCommands",List.of("/mycli dungeon status illager_camp"));
+    }
+    private void campInteraction(Player p,Site camp){
+        if(!playing(p)||roomVisitor(p)||ResidentCli.isResident(p.getUniqueId())||plugin.isDowned(p))return;
+        if(receipt(p.getUniqueId(),camp.id)!=null){command(p,new String[]{"dungeon","claim",camp.id});return;}
+        if(campVictory(camp)&&System.currentTimeMillis()-plugin.getConfig().getLong(ROOT+".last-outcomes."+camp.id+".endedAt",0)<120_000){
+            p.sendMessage("§a营地敌群已清。直接打开外哨战利品宝箱 "+campOutpost.chestPoint()+" 拿奖励，再继续探索。");status(p,camp.id);return;
+        }
+        Run current=runs.get(camp.id);
+        if(current!=null){
+            if(!current.party.contains(p.getUniqueId()))command(p,new String[]{"dungeon","join",camp.id});
+            else status(p,camp.id);
+            return;
+        }
+        command(p,new String[]{"dungeon","start",camp.id});
+    }
+    /** One new automatic encounter per physical visit, not a periodic replay while standing at camp. */
+    private void tickOutdoorCamp(){
+        Site camp=campArena(surveyedCamp());if(!ready||camp==null)return;
+        campVisits.removeIf(id->{Player p=ResidentCli.find(id);return !playing(p)||roomVisitor(p)
+            ||ResidentCli.isResident(id)||!camp.rooms.getFirst().contains(p.getLocation())||!camp.contains(p.getLocation());});
+        for(Player p:ResidentCli.online()){
+            if(!playing(p)||roomVisitor(p)||ResidentCli.isResident(p.getUniqueId())||plugin.isDowned(p)
+                ||!atFirstRoom(camp,p.getLocation())||campVisits.contains(p.getUniqueId()))continue;
+            campOutpost.ensure();
+            if(runs.containsKey(camp.id)){campVisits.add(p.getUniqueId());continue;}
+            if(!musterAdmission(camp,p).isEmpty()||plugin.dungeonEdits().failed("site-"+camp.id)
+                ||plugin.dungeonEdits().dirty("site-"+camp.id)
+                ||System.currentTimeMillis()-plugin.getConfig().getLong(ROOT+".cooldowns."+camp.id,0)<120_000)continue;
+            campVisits.add(p.getUniqueId());
+            campInteraction(p,camp);
+        }
+    }
+    private void tickCryptWaves(){
+        if(!ready)return;
+        for(Site definition:sites.values()){
+            if(!cryptSite(definition))continue;
+            Site arena=encounterArena(definition);Set<UUID> visited=waveVisits.computeIfAbsent(arena.id,id->new HashSet<>());
+            visited.removeIf(id->{Player p=ResidentCli.find(id);return !playing(p)||roomVisitor(p)
+                ||ResidentCli.isResident(id)||!atFirstRoom(arena,p.getLocation());});
+            for(Player p:ResidentCli.online()){
+                if(!playing(p)||roomVisitor(p)||ResidentCli.isResident(p.getUniqueId())||plugin.isDowned(p)
+                    ||visited.contains(p.getUniqueId())||!atFirstRoom(arena,p.getLocation()))continue;
+                if(runs.containsKey(arena.id)){visited.add(p.getUniqueId());continue;}
+                if(!musterAdmission(arena,p).isEmpty()||plugin.dungeonEdits().dirty("site-"+arena.id)
+                    ||System.currentTimeMillis()-plugin.getConfig().getLong(ROOT+".cooldowns."+arena.id,0)<120_000)continue;
+                visited.add(p.getUniqueId());openDifficulty(p,arena);
+            }
+        }
+    }
+    private void updateDesignedBosses(Run run){
+        if(!(sameArena(run.site)||wildCamp(run.site))||!run.phase.equals("fighting")||!plugin.dungeonEnemyMoves().enabled())return;
+        for(var entry:run.mobs.entrySet()){
+            if(entry.getValue().health()<100||run.stage!=run.stages()-1||!(Bukkit.getEntity(entry.getKey()) instanceof Mob boss))continue;
+            var max=boss.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH);if(max==null||boss.isDead())continue;
+            int phase=EncounterDesign.phase(run.mode.id,boss.getHealth()/Math.max(1,max.getValue()));
+            if(phase<=designedPhases.getOrDefault(boss.getUniqueId(),0))continue;
+            designedPhases.put(boss.getUniqueId(),phase);
+            var move=phase==2?DungeonEnemyMoves.Move.ECHO_NOVA:boss.getType()==EntityType.WITCH?DungeonEnemyMoves.Move.ECHO_BEAM
+                :run.mode==Mode.NORMAL?DungeonEnemyMoves.Move.FORGE_SWEEP:DungeonEnemyMoves.Move.FROST_LINE;
+            Room room=run.room();var scope=new DungeonEnemyMoves.Scope(
+                ()->runs.get(run.site.id)==run&&run.phase.equals("fighting")&&run.fault.isEmpty()&&run.pausedAt==0&&run.mobs.containsKey(boss.getUniqueId()),
+                ()->present(run).stream().filter(p->room.contains(p.getLocation())).toList(),room::contains);
+            plugin.dungeonEnemyMoves().changeMove(boss,move,scope);
+            notice(run,"§d【首领破封 · "+(phase+1)+"阶段】"+move.name+"："+move.response+"。别站桩，预警结束后抓反击窗口。");
+        }
+    }
+    private void updateCampBattle(Run run){
+        updateDesignedBosses(run);
+        if(sameArena(run.site)){
+            BossBar bar=campBars.computeIfAbsent(run.id,id->Bukkit.createBossBar(run.site.name,BarColor.PURPLE,BarStyle.SEGMENTED_6));
+            String title=run.site.name+"〔"+run.mode.label+"〕 · 第"+(Math.min(run.stage,run.stages()-1)+1)+"/"+run.stages()+"波 · ";
+            String suffix=run.phase.equals("fighting")?"剩余 "+run.mobs.size()+" 只":"下一波准备中";
+            double progress=run.phase.equals("fighting")?Math.max(0,Math.min(1,run.mobs.size()/(double)Math.max(1,waveEnemies(run).size()))):1;
+            if(run.stage==run.stages()-1&&run.phase.equals("fighting"))for(var entry:run.mobs.entrySet()){
+                if(entry.getValue().health()<100||!(Bukkit.getEntity(entry.getKey()) instanceof Mob boss)||boss.isDead())continue;
+                var max=boss.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH);if(max==null)continue;
+                suffix+=" · 首领 "+(int)Math.ceil(boss.getHealth())+"/"+(int)Math.ceil(max.getValue())+" · "+(designedPhases.getOrDefault(boss.getUniqueId(),0)+1)+"阶段";
+                progress=Math.max(0,Math.min(1,boss.getHealth()/Math.max(1,max.getValue())));break;
+            }
+            bar.setTitle(title+suffix);bar.setProgress(progress);
+            List<Player> here=ResidentCli.online().stream().filter(p->p.isOnline()&&!ResidentCli.isResident(p.getUniqueId())
+                &&p.getWorld().getName().equals(run.site.world)&&run.room().contains(p.getLocation())).toList();
+            for(Player viewer:new ArrayList<>(bar.getPlayers()))if(!here.contains(viewer))bar.removePlayer(viewer);
+            for(Player p:here)if(!bar.getPlayers().contains(p))bar.addPlayer(p);
+            return;
+        }
+        if(!wildCamp(run.site))return;
+        Mob boss=null;
+        for(var entry:run.mobs.entrySet())if("黑旗执斧头目".equals(entry.getValue().name())&&Bukkit.getEntity(entry.getKey()) instanceof Mob mob){boss=mob;break;}
+        if(boss==null||boss.isDead()){
+            BossBar old=campBars.remove(run.id);if(old!=null)old.removeAll();return;
+        }
+        var max=boss.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH);
+        double hp=boss.getHealth(),total=max==null?120:max.getValue();
+        BossBar bar=campBars.computeIfAbsent(run.id,id->Bukkit.createBossBar("黑旗执斧头目",BarColor.RED,BarStyle.SOLID));
+        bar.setTitle("黑旗执斧头目〔"+run.mode.label+"〕 · "+(int)Math.ceil(hp)+"/"+(int)Math.ceil(total)+" · 营地敌人 "+run.mobs.size());
+        bar.setProgress(Math.max(0,Math.min(1,hp/Math.max(1,total))));
+        List<Player> here=ResidentCli.online().stream().filter(p->p.isOnline()&&!ResidentCli.isResident(p.getUniqueId())
+                &&p.getWorld().getName().equals(run.site.world)&&run.room().contains(p.getLocation())).toList();
+        for(Player viewer:new ArrayList<>(bar.getPlayers()))if(!here.contains(viewer))bar.removePlayer(viewer);
+        for(Player p:here)if(!bar.getPlayers().contains(p))bar.addPlayer(p);
+    }
     private Site surveyedCamp() {
         Site camp = sites.get(BlackBannerCamp.SITE);
         if (camp == null || !camp.outdoor || !camp.world.equals("world") || camp.rooms.size() != 2) return null;
@@ -2615,7 +2966,7 @@ final class SiteDungeonManager implements Listener {
     boolean openCampMarker(Player player, String target) {
         Site camp = surveyedCamp();
         if (camp == null || !BlackBannerCamp.MARKER.equals(target) || !camp.contains(player.getLocation())) return false;
-        open(player, camp.id);
+        campInteraction(player,campArena(camp));
         return true;
     }
 
@@ -2644,29 +2995,92 @@ final class SiteDungeonManager implements Listener {
         var player=event.getPlayer();
         for(Site s:sites.values()){
             var station=station(s);
-            if(station==null)continue;
-            if(block.getWorld()==entryWorld(s)&&station.button().equals(List.of(block.getX(),block.getY(),block.getZ()))){
+            if(station!=null&&block.getWorld()==entryWorld(s)&&station.button().equals(List.of(block.getX(),block.getY(),block.getZ()))){
                 event.setCancelled(true);
                 command(player,new String[]{"dungeon","enter",s.id});
                 return;
             }
             var relic=DungeonRelics.at(s.id);
             if(relic!=null&&block.getWorld().getName().equals(s.world)&&relic.x()==block.getX()&&relic.y()==block.getY()&&relic.z()==block.getZ()
-                    &&playing(player)&&atFirstRoom(s,player.getLocation())){
-                event.setCancelled(true);open(player,s.id);return;
+                    &&playing(player)&&atFirstRoom(campArena(s),player.getLocation())){
+                event.setCancelled(true);
+                if(wildCamp(s))campInteraction(player,campArena(s));
+                else if(cryptSite(s))command(player,new String[]{"dungeon","start",s.id});
+                else open(player,s.id);
+                return;
             }
         }
     }
 
     private boolean campGuardCleared(Player player, int room) {
-        UUID id = player.getUniqueId();
-        Run current = runs.get(BlackBannerCamp.SITE);
-        if (current != null) return current.roomAttendance.getOrDefault(room, Set.of()).contains(id);
-        Map<String,Object> last = lastOutcome(id, BlackBannerCamp.SITE);
-        return "completed".equals(last.get("reason")) && last.get("attendance") instanceof Number cleared
-                && cleared.intValue() >= 2;
+        // Rescue is shared by the actual cleared camp, not locked to the killer's personal attendance.
+        return campVictory(surveyedCamp());
     }
 
+    private static boolean difficultyPoseStable(Location before,Location after){
+        double dx=after.getX()-before.getX(),dy=after.getY()-before.getY(),dz=after.getZ()-before.getZ();
+        return before.getWorld()==after.getWorld()&&dx*dx+dy*dy+dz*dz<=.01;
+    }
+    /** Wait before the single initial popup; never reopen a menu closed by movement.
+     * Physical-container movement/range rules are deliberately left unchanged. */
+    private final class DifficultyPopup extends org.bukkit.scheduler.BukkitRunnable {
+        final Player player;final Site site;final Inventory inventory,initialTop;final World world;
+        final boolean startedInside;final long expires=System.currentTimeMillis()+30_000;
+        Location previous;
+        DifficultyPopup(Player player,Site site,Inventory inventory){
+            this.player=player;this.site=site;this.inventory=inventory;
+            previous=player.getLocation().clone();world=player.getWorld();startedInside=atFirstRoom(site,previous);
+            initialTop=player.getOpenInventory().getTopInventory();
+        }
+        @Override public void run(){
+            Inventory top=player.getOpenInventory().getTopInventory();
+            if(!plugin.isEnabled()||!playing(player)||roomVisitor(player)||plugin.isDowned(player)
+                ||ResidentCli.isResident(player.getUniqueId())||player.getWorld()!=world
+                ||own(player)!=null||plugin.dungeonParticipant(player)||plugin.pvpParticipant(player)
+                ||runs.containsKey(site.id)||System.currentTimeMillis()>expires
+                ||difficultyOffers.get(player.getUniqueId())!=inventory||!menus.containsKey(inventory)
+                ||startedInside&&!atFirstRoom(site,player.getLocation())
+                ||top.getType()!=InventoryType.CRAFTING&&top!=initialTop){
+                difficultyOffers.remove(player.getUniqueId(),inventory);menus.remove(inventory);cancel();return;
+            }
+            Location current=player.getLocation();boolean settled=difficultyPoseStable(previous,current);
+            previous=current.clone();if(!settled)return;
+            cancel();player.openInventory(inventory);
+        }
+    }
+    private void openDifficulty(Player p,Site site){
+        require(playing(p)&&!roomVisitor(p)&&!plugin.isDowned(p)&&!ResidentCli.isResident(p.getUniqueId()),"not_survival_or_observer");
+        require(own(p)==null&&!plugin.dungeonParticipant(p)&&!plugin.pvpParticipant(p),"already_in_activity_or_not_survival");
+        require(!runs.containsKey(site.id),"site_busy");
+        Inventory inv=Bukkit.createInventory(null,27,"选择难度 · "+site.name);
+        var choices=new LinkedHashMap<Integer,String>();
+        var options=new ArrayList<Map<String,Object>>();
+        for(Mode mode:Mode.values()){
+            int slot=mode==Mode.NORMAL?11:mode==Mode.ADVENTURE?13:15;
+            Material icon=mode==Mode.NORMAL?Material.IRON_SWORD:mode==Mode.ADVENTURE?Material.DIAMOND_SWORD:Material.NETHERITE_SWORD;
+            List<Integer> waves=site.rooms.stream().map(room->sameArena(site)?EncounterDesign.pressure(mode.id,0,room.enemies).size():room.enemies.size()).toList();
+            String tactic=mode==Mode.NORMAL?"推荐铁装、盾和补给。读预警，利用读条后的反击窗口。"
+                :mode==Mode.ADVENTURE?"额外侧翼精英，首领半血换招。推荐钻石装和远程武器。"
+                :"双侧翼压力，首领残血震荡。推荐高阶装备、药水和同伴。";
+            inv.setItem(slot,icon(icon,"§6"+mode.label+" · 一键开场","波次敌数 "+waves,
+                "血量 ×"+mode.health+"；伤害 ×"+mode.damage+"；奖励 ×"+mode.reward,tactic));
+            choices.put(slot,"difficulty:"+mode.id);
+            options.add(Map.of("id",mode.id,"label",mode.label,"waveEnemies",waves,"healthMultiplier",mode.health,
+                "damageMultiplier",mode.damage,"rewardMultiplier",mode.reward,"tactic",tactic,
+                "command","/mycli dungeon start "+site.id+" "+mode.id));
+        }
+        inv.setItem(4,icon(Material.BOOK,"§e先选难度，再开始战斗","只选一次，无须报名或确认令牌。","同场刷波，HUD显示波次和剩余敌人，全部清完才算通关。"));
+        Inventory previous=difficultyOffers.get(p.getUniqueId());Menu pending=previous==null?null:menus.get(previous);
+        if(pending==null||!pending.site.equals(site.id)){
+            menus.put(inv,new Menu(site.id,receipt(p.getUniqueId(),site.id)!=null,null,Map.copyOf(choices)));
+            difficultyOffers.put(p.getUniqueId(),inv);
+            new DifficultyPopup(p,site,inv).runTaskTimer(plugin,2L,2L);
+        }
+        result(p,"start",site.id,"choose_difficulty",Map.of("changed",false,"requiresChoice",true,"requiresConfirmation",false,
+            "errorMessage","尚未开场。点击普通、冒险或末日，一次选择直接开始。","difficultyOptions",options,
+            "lifecycle","awaiting_difficulty","nextAction","停步后会弹出难度选择；点击一次普通、冒险或末日。选定前本场尚未开启。",
+            "nextCommands",options.stream().map(option->option.get("command")).toList()));
+    }
     private void openEntryReview(Player p,EntryOffer offer){
         Inventory inv=Bukkit.createInventory(null,54,"遗迹集结 · 确认入场");
         inv.setItem(4,icon(Material.BOOK,"§e确认前核对名单","缺装备可确认后入场；其他入场限制继续生效。"));
@@ -2740,9 +3154,10 @@ final class SiteDungeonManager implements Listener {
             }
         }
         if (!id.isEmpty() && id.equals(BlackBannerCamp.SITE) && surveyedCamp() != null) {
-            inv.setItem(24, icon(Material.DARK_OAK_FENCE, "§e救援牢笼",
-                    "在外哨用这张菜单开始清剿，倒数结束后刷第一批守卫。",
-                    BlackBannerCamp.RESCUE_HINT, "打完后回来使用入口路牌，可领取本场奖励。"));
+            inv.setItem(12,icon(Material.CROSSBOW,"§c野外营地 · 直接接战","走入营地自动警戒，不用报名、倒数或分室。","一片战场内击败头目与弩哨，随后救人领奖。"));
+            inv.setItem(13,icon(Material.DIAMOND_SWORD,"§6冒险 · 精英营地","更强敌人、原生精英技能；奖励二倍。"));
+            inv.setItem(14,icon(Material.NETHERITE_SWORD,"§5末日 · 重装营地","更高血量与伤害，首领残血换招；奖励三倍。"));
+            inv.setItem(24, icon(Material.CHEST,"§6现场战利品宝箱","清完12名敌人后，直接打开外哨宝箱拿奖励。","不需要救人、交任务或反复确认。"));
         }
         if(id.equals(AltarPoison.SITE)&&plugin.nativeRpg().healingCircleEnabled()){
             var circle=plugin.nativeRpg().state(p).getAsJsonObject("healingCircle");
@@ -2802,7 +3217,11 @@ final class SiteDungeonManager implements Listener {
                 return;
             }
             if(menu.choices.containsKey(slot)) {
-                command(p,new String[]{"dungeon","choose",menu.choices.get(slot)});
+                String choice=menu.choices.get(slot);
+                if(choice.startsWith("difficulty:")){
+                    p.closeInventory();command(p,new String[]{"dungeon","start",menu.site,choice.substring("difficulty:".length())});return;
+                }
+                command(p,new String[]{"dungeon","choose",choice});
                 open(p,menu.site);
                 return;
             }
@@ -2832,5 +3251,7 @@ final class SiteDungeonManager implements Listener {
         });
     }
     @EventHandler public void drag(InventoryDragEvent e){if(menus.containsKey(e.getView().getTopInventory()))e.setCancelled(true);}
-    @EventHandler public void close(InventoryCloseEvent e){menus.remove(e.getInventory());}
+    @EventHandler public void close(InventoryCloseEvent e){
+        menus.remove(e.getInventory());difficultyOffers.remove(e.getPlayer().getUniqueId(),e.getInventory());
+    }
 }

@@ -24,6 +24,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
@@ -32,6 +33,8 @@ import org.bukkit.util.Vector;
 /** Encounter-owned moves that use vanilla telegraphs and the original damage event. */
 final class DungeonEnemyMoves implements Listener {
     enum Move {
+        CRYPT_BARRAGE("crypt_barrage", "寒骨齐射", "横移离开蓝色射线", 32, 24, 180, 8, 1, 4, Color.AQUA),
+        CRYPT_MIASMA("crypt_miasma", "毒雾仪式", "撤出绿色预警圈，读条后反击", 44, 32, 220, 3.2, 0, 5, Color.LIME),
         GRAVE_CLEAVE("grave_cleave", "封印重劈", "从侧面或背后绕开扇形", 34, 22, 240, 4.5, 55, 6, Color.ORANGE),
         FORGE_SWEEP("forge_sweep", "炉卫横扫", "绕到监工身后或退到橙色弧线外", 40, 26, 260, 5, 65, 7, Color.fromRGB(255, 100, 35)),
         FROST_LINE("frost_line", "霜痕直劈", "横移出霜线", 28, 18, 220, 5.5, .8, 4, Color.AQUA),
@@ -65,17 +68,21 @@ final class DungeonEnemyMoves implements Listener {
 
         String shape() {
             return switch (this) {
-                case ECHO_NOVA -> "circle";
-                case FROST_LINE, ECHO_BEAM -> "line";
+                case ECHO_NOVA, CRYPT_MIASMA -> "circle";
+                case FROST_LINE, ECHO_BEAM, CRYPT_BARRAGE -> "line";
                 default -> "arc";
             };
         }
 
+        boolean blocksNativeProjectile(boolean casting) {
+            return casting && (this == CRYPT_BARRAGE || this == CRYPT_MIASMA);
+        }
+
         boolean covers(double forward, double side, double height) {
             if (Math.abs(height) > 1.75) return false;
-            if (this == ECHO_NOVA) return forward * forward + side * side <= reach * reach;
+            if (shape().equals("circle")) return forward * forward + side * side <= reach * reach;
             if (forward < 0 || forward > reach) return false;
-            if (this == FROST_LINE || this == ECHO_BEAM) return Math.abs(side) <= spread;
+            if (shape().equals("line")) return Math.abs(side) <= spread;
             return forward * forward + side * side <= reach * reach
                 && Math.abs(side) <= forward * Math.tan(Math.toRadians(spread));
         }
@@ -125,6 +132,11 @@ final class DungeonEnemyMoves implements Listener {
         if (task == null) task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 2L, 2L);
     }
 
+    void changeMove(Mob mob,Move move,Scope scope){
+        Actor previous=actors.remove(mob.getUniqueId());if(previous!=null)reset(previous);
+        register(mob,move,scope);
+        Actor next=actors.get(mob.getUniqueId());if(next!=null)next.next=tick+2; // Keep the full windup, not a second idle delay at the phase break.
+    }
     void shutdown() {
         actors.values().forEach(this::reset);
         actors.clear();
@@ -137,6 +149,16 @@ final class DungeonEnemyMoves implements Listener {
         if (actor != null && actor.origin != null && !actor.resolving && actor.scope.active().getAsBoolean()) {
             event.setCancelled(true);
         }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void authoredProjectile(ProjectileLaunchEvent event) {
+        if (!enabled() || !(event.getEntity().getShooter() instanceof Mob shooter)) return;
+        Actor actor = actors.get(shooter.getUniqueId());
+        // Only the two new authored ranged enemies pause their ordinary shots.
+        // Already flying projectiles, scripted strikes and legacy encounters remain unchanged.
+        if (actor != null && actor.scope.active().getAsBoolean()
+                && actor.move.blocksNativeProjectile(actor.origin != null)) event.setCancelled(true);
     }
 
     List<Map<String, Object>> hazards(Player viewer) {
@@ -158,7 +180,7 @@ final class DungeonEnemyMoves implements Listener {
                 Map.entry("shape", move.shape()),
                 Map.entry("reach", move.reach),
                 Map.entry(switch(move.shape()){case "line" -> "halfWidth"; case "circle" -> "radius"; default -> "halfAngleDegrees";},
-                    move == Move.ECHO_NOVA ? move.reach : move.spread),
+                    move.shape().equals("circle") ? move.reach : move.spread),
                 Map.entry("response", move.response)));
         }
         return List.copyOf(out);
@@ -309,14 +331,14 @@ final class DungeonEnemyMoves implements Listener {
 
     private void outline(Actor actor) {
         Move move = actor.move;
-        if (move == Move.ECHO_NOVA) {
+        if (move.shape().equals("circle")) {
             for (int i = 0; i < 20; i++) {
                 double angle = i * Math.PI / 10;
                 mark(actor, at(actor, move.reach * Math.cos(angle), move.reach * Math.sin(angle), .18));
             }
             return;
         }
-        if (move == Move.FROST_LINE || move == Move.ECHO_BEAM) {
+        if (move.shape().equals("line")) {
             for (int i = 1; i <= 7; i++) {
                 double ahead = move.reach * i / 7;
                 mark(actor, at(actor, ahead, -move.spread, .18));

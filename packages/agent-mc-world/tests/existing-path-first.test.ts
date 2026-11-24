@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import type { SkillCall } from '../core/skills.ts';
-import type { RouteProbe } from '../core/skill-context.ts';
+import { SkillBlocked, type RouteProbe } from '../core/skill-context.ts';
 import type { TaskReport } from '../core/executor.ts';
 import { preferExistingRoute, walkOnlyPath } from '../core/travel.ts';
 import { methodHarness } from './method-harness.ts';
@@ -144,6 +144,28 @@ it('degrades a medium-range rough-terrain timeout into 24-block directional XZ s
     expect(r.calls.map(c => c.goal.x)).toEqual([60, 24, 48, 60]);
     expect(r.reports[0].kind).toBe('done');
   } finally { r.close(); }
+});
+
+it.each([false, true])('never retries a relocated original request through terrain or directional fallback with walkOnly=%s', async strict => {
+  for (const distance of [12, 60]) {
+    const r = rig([route(), { ...route('complete', { place: 2 }), profile: 'style' }]);
+    try {
+      r.run(async () => {
+        r.bot.pathfinder.goal = null;
+        throw new SkillBlocked('服务器变更了位置，旧路径已失效', [], 'local', 'navigation-location-changed');
+      });
+      r.exec.submitDetailed([{ skill: 'goto', at: [distance, 64, 0], walkOnly: strict }]);
+      await finish(r);
+      expect(r.calls).toHaveLength(1);
+      expect(r.calls.map(call => call.dig)).toEqual([false]);
+      expect(r.reports[0]).toMatchObject({ kind: 'blocked', steps: [{ outcome: 'fail', decision: {
+        status: 'blocked', reason: 'navigation-location-changed', retryable: false,
+      } }] });
+      expect(r.bot.pathfinder.goal).toBeNull();
+      expect(r.movements.canDig).toBe(true);
+      expect(r.movements.scafoldingBlocks).toBe(r.scaffold);
+    } finally { r.close(); }
+  }
 });
 
 it('preserves another no-dig lease instead of treating fallback as permission to override it', async () => {

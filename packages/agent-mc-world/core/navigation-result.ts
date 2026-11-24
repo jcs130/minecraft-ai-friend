@@ -19,7 +19,9 @@ export function awaitPathGoal(bot: Bot, goal: goals.Goal): Promise<void> {
       bot.removeListener('goal_reached', reached);
       bot.removeListener('goal_updated', changed);
       bot.removeListener('path_stop', stopped);
-      setTimeout(() => error ? reject(error) : resolve(), 0);
+      // Listener cleanup stays synchronous; Promise settlement follows this event stack
+      // without relying on a separate zero-delay timer being serviced.
+      void Promise.resolve().then(() => error ? reject(error) : resolve());
     };
     const failure = (name: string, message: string): void => {
       const error = new Error(message); error.name = name; finish(error);

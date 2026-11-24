@@ -238,8 +238,8 @@ final class AgentCliCatalog {
         add(specs,"dungeon.travel","adventure","teleport","/mycli dungeon travel <ID>","前往已勘察的入口或外围；沿建筑道路深入首室","8魔力、基础传送资格；不能在试炼/PvP/另一地下城内使用","沿用 MC_TRAVEL 成功回执；抵达入口不计完成");
         add(specs,"dungeon.enter","adventure","teleport","/mycli dungeon enter <ID> [--confirm <编号>]","使用地面入口，与同平台同伴抵达首室","靠近入口石钮；免费。缺装先提示，确认后仍可进入；其他活动限制照常","MC_SITE_DUNGEON_RESULT；需确认时查看 equipmentWarnings，再使用本次 nextCommand");
         add(specs,"dungeon.exit","adventure","teleport","/mycli dungeon exit <ID>","从首室返回地面入口","先结束或离开本场，再站到首室；免费","MC_SITE_DUNGEON_RESULT 返回实际落点");
-        add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse] [--confirm <编号>]","一人在首室开场，遗迹内合资格的队友自动同队","缺装备可以确认后开场；遵守模式、职业等级和活动限制，不要求日常组队","MC_SITE_DUNGEON_RESULT；需确认时用当次 nextCommand；真实参战者通关后有个人奖励凭据");
-        add(specs,"dungeon.join","adventure","write","/mycli dungeon join <ID> [--confirm <编号>]","确认加入当前挑战；正常抵达可自动加入","同地点；缺装可确认，仍须满足其他准入条件；可中途加入","MC_SITE_DUNGEON_RESULT；已参战记录离场后保留，不修改日常队伍");
+        add(specs,"dungeon.start","adventure","write","/mycli dungeon start <ID> [normal|adventure|apocalypse]","营地或墓穴内可省略ID；选一次普通、冒险或末日直接开场","不指定难度时显示三档选择；缺装备只提示，不需确认令牌；其他活动和职业限制仍生效","MC_SITE_DUNGEON_RESULT；choose_difficulty给difficultyOptions。墓穴同场连续波次，全部清完通关掉落；营地清敌后开现场宝箱，旧场次凭据保持");
+        add(specs,"dungeon.join","adventure","write","/mycli dungeon join <ID>","自愿加入当前挑战；不在场内时直接传到集结区","营地或墓穴内可省略ID；无确认令牌，缺装只提示；必须满足生存、无其他活动和安全落点等条件","MC_SITE_DUNGEON_RESULT；已参战记录离场后保留，不修改日常队伍");
         add(specs,"dungeon.leave","adventure","write","/mycli dungeon leave","退出当前在场参战，留在原地并保留贡献","倒地先等待救援；退出期间不自动加入，离开遗迹再回来即可续接","MC_SITE_DUNGEON_RESULT；同伴通关后，真实参与者仍有待领奖凭据");
         add(specs,"dungeon.resume","adventure","write","/mycli dungeon resume","在存储或房间出怪问题解决后续接本人暂停的场次；已保存房间不重刷","须为该队成员；不加cast、不传副本ID；先查dungeon status，失败不发奖","MC_SITE_DUNGEON_RESULT；status 的 fault 说明暂停原因");
         add(specs,"dungeon.claim","adventure","item","/mycli dungeon claim [ID]","把通关参战奖励结算到个人奖励箱","每处上海日期每日奖励一次；队列满保留凭据，可重试；无需回首室","MC_SITE_DUNGEON_RESULT success/reason；结算与去重在同一原子配置写入");
