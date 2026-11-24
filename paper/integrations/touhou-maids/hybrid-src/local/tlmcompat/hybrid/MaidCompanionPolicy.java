@@ -3,6 +3,14 @@ package local.tlmcompat.hybrid;
 /** Native task selection only; no model loop, movement, damage or inventory mutation. */
 final class MaidCompanionPolicy {
     enum Action { HOLD, DEFEND, RESTORE }
+    static String guideState(boolean loaded, boolean following, boolean nativeFollowActive,
+                             String nativeFollowState, boolean idleAvailable) {
+        if (!loaded) return "maid_unavailable";
+        if (!nativeFollowActive) return nativeFollowState == null || nativeFollowState.isBlank()
+                ? "follow_unavailable" : nativeFollowState;
+        if (!idleAvailable) return "paused_by_owner_or_world";
+        return following ? "following_ready" : "idle";
+    }
     static boolean hostileCandidate(boolean attackingCompanion,boolean hostile,boolean neutral,boolean allied,boolean active,boolean visible,boolean inRange,boolean nativeAllowed){
         return active&&!allied&&visible&&inRange&&nativeAllowed&&(attackingCompanion||hostile&&!neutral);
     }

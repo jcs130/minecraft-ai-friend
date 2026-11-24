@@ -6,7 +6,37 @@ public final class MaidCompanionPolicyFixture {
     static boolean allow(MaidConversationWindow window,UUID actor,UUID maid,UUID world,Object session,String text,long now){
         return window.admit(actor,maid,world,session,text,true,now).allowed();
     }
+    static void guideReadiness(){
+        for(String state:List.of("awaiting_native_tick","within_follow_distance","walk_requested",
+                "native_safe_recovery","no_safe_landing")){
+            check("following_ready".equals(MaidCompanionPolicy.guideState(true,true,true,state,true)),
+                    "recorded guide follow with native idle availability: "+state);
+            check("idle".equals(MaidCompanionPolicy.guideState(true,false,true,state,true)),
+                    "native idle alone does not invent a body follow action: "+state);
+            // The bridge also checks owner identity, body/workshop busy, inventory and vehicle state.
+            for(boolean following:List.of(false,true))
+                check("paused_by_owner_or_world".equals(MaidCompanionPolicy.guideState(true,following,true,state,false)),
+                        "bridge physical availability vetoes an active native sample: "+state);
+        }
+        for(String state:List.of("sitting","home_mode","riding_boat","movement_paused",
+                "native_work_or_combat","native_breathing","owner_unavailable","different_dimension",
+                "follow_profile_invalid","maid_unavailable")){
+            for(boolean following:List.of(false,true))for(boolean available:List.of(false,true))
+                check(state.equals(MaidCompanionPolicy.guideState(true,following,false,state,available)),
+                        "native pause preserved, never ready: "+state);
+        }
+        for(boolean following:List.of(false,true))for(boolean active:List.of(false,true))
+            for(boolean available:List.of(false,true)){
+                check("maid_unavailable".equals(MaidCompanionPolicy.guideState(false,following,active,
+                        "awaiting_native_tick",available)),"unloaded/dead guide cannot be ready");
+            }
+        check("follow_unavailable".equals(MaidCompanionPolicy.guideState(true,true,false,null,true)),
+                "missing native follow observation fails closed");
+        check("follow_unavailable".equals(MaidCompanionPolicy.guideState(true,true,false,"",true)),
+                "empty native follow observation fails closed");
+    }
     public static void main(String[] args){
+        guideReadiness();
         var D=MaidCompanionPolicy.Action.DEFEND;var H=MaidCompanionPolicy.Action.HOLD;var R=MaidCompanionPolicy.Action.RESTORE;
         check(MaidCompanionPolicy.choose(true,false,true,false,true,true,0)==D,"armed threat");
         check(MaidCompanionPolicy.choose(true,false,true,false,true,false,0)==H,"no hostile no attack");

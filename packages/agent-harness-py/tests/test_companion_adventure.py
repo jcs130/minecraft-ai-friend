@@ -6,6 +6,9 @@ from uuid import UUID
 
 import httpx
 import yaml
+from simbody import SimBody
+from test_npc_native_continuity import maid_context
+from test_server_npc import role
 
 from agent_mc_harness.companion_adventure import CompanionAdventure
 from agent_mc_harness.journal import ActionJournal
@@ -13,9 +16,6 @@ from agent_mc_harness.models import ActionSupport, BodyEvent
 from agent_mc_harness.npc import DIALOGUE_GOAL, IDLE_GOAL, ModelClient, NpcHost, NpcPlanner
 from agent_mc_harness.npc_service import adventure_source
 from agent_mc_harness.runtime import Intent
-from simbody import SimBody
-from test_npc_native_continuity import maid_context
-from test_server_npc import role
 
 OWNER = UUID("00000000-0000-4000-8000-000000000001")
 OTHER = "00000000-0000-4000-8000-000000000002"
@@ -154,10 +154,15 @@ def test_quiet_delegation_keeps_thought_for_useful_occasion_and_only_allows_spee
             planner.next_companion_check_in = 0
             assert (await planner(intent, context))[0].tool == "body:chat"
             assert requests[0]["companionOpportunity"] == "activity_ended"
-            assert await planner(intent, context) == [] and len(requests) == 1
+            assert planner.companion_anchor is None
+            # This is a synthetic delivered-caption receipt, not a claim about a game client.
+            intent.action_receipts["synthetic-caption"] = {"verb": "chat", "status": "completed", "terminal": True}
+            intent.state = "completed"
+            context.communication_receipts = [{"requestId": "synthetic-caption", "status": "completed", "captionRecipients": 1}]
+            assert await planner(Intent(id="next-idle", agent=actor.id, goal=IDLE_GOAL), context) == [] and len(requests) == 1
             context.snapshot.position["x"] += 20
-            planner.next_companion_check_in = 0
-            assert await planner(intent, context) == [] and len(requests) == 2
+            planner.next_companion_check_in = planner.next_companion_attempt = 0
+            assert await planner(Intent(id="travel-idle", agent=actor.id, goal=IDLE_GOAL), context) == [] and len(requests) == 2
             assert requests[-1]["companionOpportunity"] == "settled_after_travel"
         finally:
             await client.close()

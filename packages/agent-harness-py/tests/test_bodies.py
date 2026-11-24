@@ -103,11 +103,12 @@ def test_maid_commands_validated_by_the_real_maid_port(tmp_path: Path, monkeypat
         async with make("maid", tmp_path, monkeypatch) as (body, bridge):
             await body.spawn()
             assert body.identity().name == "肥鱼"  # type: ignore[union-attr]
-            await body.act(BodyAction(verb="follow", request_id="req-follow-0001"))
-            await body.act(BodyAction(verb="chat", args={"text": "跟我来"}, request_id="req-speak-0001"))
+            assert (await body.act(BodyAction(verb="follow", request_id="req-follow-0001"))).status == "completed"
+            assert (await body.act(BodyAction(verb="chat", args={"text": "跟我来"}, request_id="req-speak-0001"))).status == "completed"
             inventory = (await body.snapshot()).inventory
             assert inventory is not None and inventory["slots"] == [] and inventory["availableSlots"] == 6
             assert any("follow" in c for c in bridge.maid_commands) and any("speak" in c or "say" in c for c in bridge.maid_commands)
+            assert any("跟我来" in c for c in bridge.maid_commands), "Real JS command output must round-trip Chinese as UTF-8"
             recall = await body.act(BodyAction(verb="recall", request_id="req-recall-001"))
             assert recall.status == "accepted" and not recall.terminal
             final = await body.result("req-recall-001")
