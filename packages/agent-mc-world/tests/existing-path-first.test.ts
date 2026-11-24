@@ -120,6 +120,32 @@ it('selects each actual long-travel leg from its new start instead of probing th
   } finally { r.close(); }
 });
 
+it('falls back to configured dig/scaffold after walk timeout only when style/dig proves a complete route', async () => {
+  const r = rig([route('timeout'), { ...route('complete', { steps: 10, place: 2 }), profile: 'style' }]);
+  try {
+    r.run(async goal => {
+      if (r.calls.length === 1) { r.bot.pathfinder.goal = null; throw Object.assign(new Error('Timeout'), { name: 'Timeout' }); }
+      r.bot.entity.position.set(goal.x + .5, goal.y, goal.z + .5);
+    });
+    r.exec.submitDetailed([{ skill: 'goto', at: [12, 64, 0] }]); await finish(r);
+    expect(r.calls.map(c => c.dig)).toEqual([false, true]);
+    expect(r.reports[0].kind).toBe('done');
+  } finally { r.close(); }
+});
+
+it('degrades a medium-range rough-terrain timeout into 24-block directional XZ segments', async () => {
+  const r = rig([route('timeout')]);
+  try {
+    r.run(async goal => {
+      if (r.calls.length === 1) { r.bot.pathfinder.goal = null; throw Object.assign(new Error('Timeout'), { name: 'Timeout' }); }
+      r.bot.entity.position.set(goal.x + .5, goal.y ?? 64, goal.z + .5);
+    });
+    r.exec.submitDetailed([{ skill: 'goto', at: [60, 64, 0] }]); await finish(r);
+    expect(r.calls.map(c => c.goal.x)).toEqual([60, 24, 48, 60]);
+    expect(r.reports[0].kind).toBe('done');
+  } finally { r.close(); }
+});
+
 it('preserves another no-dig lease instead of treating fallback as permission to override it', async () => {
   const r = rig(null), release = walkOnlyPath(r.bot as never);
   try {
