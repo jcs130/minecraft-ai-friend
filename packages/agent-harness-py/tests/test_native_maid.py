@@ -159,6 +159,64 @@ def old_cast_receipt(args, observation):
             "observation": {"spellId": args["spellId"], **observation}}
 
 
+def test_native_default_inbox_poll_is_fast_without_speeding_up_receipts(run):
+    async def go():
+        server = NativeServer()
+        server.actions.append("inbox")
+        http = httpx.AsyncClient(transport=httpx.MockTransport(server))
+        bridge = NativeMaidBridge(ENDPOINT, TOKEN, owner_id=OWNER, maid_id=MAID,
+                                  controller_id=CONTROLLER, http=http)
+        body = MaidBody(bridge, scope=SCOPE, owner_id=OWNER, maid_id=MAID)
+        observed = asyncio.Event()
+        events = []
+
+        def receive(event):
+            if event.kind == "dialogue":
+                events.append(event)
+                observed.set()
+
+        unsubscribe = body.subscribe(receive)
+        try:
+            await body.spawn()
+            assert body.poll_seconds == 0.5
+            assert body.result_poll_seconds == 3.0 and body.context_poll_seconds == 10.0
+            server.messages.append({"eventId": "qa-fast-inbox-original", "senderUuid": OTHER,
+                                    "senderName": "Visitor", "text": "你好", "receivedAt": datetime.now(UTC).isoformat()})
+            started = asyncio.get_running_loop().time()
+            await asyncio.wait_for(observed.wait(), 1.5)
+            assert asyncio.get_running_loop().time() - started < 1.5
+            assert len(events) == 1 and events[0].data["eventId"] == "qa-fast-inbox-original"
+            assert events[0].data["speakerId"] == OTHER and events[0].data["trusted"] is False
+            assert 0 <= body.health().extra["lastInboxDelayMs"] < 1500
+            assert body.health().extra["inboxPollSeconds"] == 0.5
+            assert await body.poll_once() == 0
+            assert server.writes == []
+        finally:
+            unsubscribe()
+            await body.destroy()
+            await http.aclose()
+
+    run(go())
+
+
+def test_legacy_remote_default_poll_and_explicit_native_poll_are_preserved(run):
+    legacy = MaidBody(object(), scope=SCOPE, owner_id=OWNER, maid_id=MAID)
+    assert legacy.poll_seconds == 3.0
+    async def go():
+        server = NativeServer()
+        body = make(server)
+        remote = MaidApiBridge(API_ENDPOINT, TOKEN, owner_id=OWNER, maid_id=MAID, controller_id=CONTROLLER,
+                               http=httpx.AsyncClient(transport=httpx.MockTransport(server)))
+        try:
+            assert body.poll_seconds == 0 and body.result_poll_seconds == 0 and body.context_poll_seconds == 0
+            remote_body = MaidBody(remote, scope=SCOPE, owner_id=OWNER, maid_id=MAID)
+            assert remote_body.poll_seconds == 3.0
+        finally:
+            await body.bridge.http.aclose()
+            await remote.http.aclose()
+    run(go())
+
+
 def test_native_inbox_distinguishes_legacy_addressed_chat_from_overheard_voice(run):
     async def scenario():
         server = NativeServer()

@@ -517,6 +517,7 @@ class NpcPlanner:
         self.semaphore = semaphore or asyncio.Semaphore(2)
         self.role_lock = role_lock or asyncio.Lock()
         self.last_route: dict[str, Any] = {}
+        self.last_decision_timings: dict[str, dict[str, Any]] = {}
         self.fast = fast
         self.resident_turns = resident_turns
         self.social_receipts = {}
@@ -575,19 +576,44 @@ class NpcPlanner:
                 self.pending_companion_result = None
 
     async def decision(self, kind, payload, timeout, *, desktop_only=False):
-        if self.resident_turns:
-            response = await self.resident_turns.offer(kind, payload["messages"])
-            if response is not None:
-                return response, "desktop"
-        if desktop_only:
-            return None, "desktop"
-        loop = asyncio.get_running_loop()
-        deadline = loop.time() + timeout
-        async with asyncio.timeout_at(deadline), self.role_lock, self.semaphore:
-            remaining = deadline - loop.time()
-            if remaining <= 0:
-                raise TimeoutError("NPC model fallback timed out")
-            return await self.model.request("/chat/completions", payload, remaining), self.role.provider
+        started = time.monotonic()
+        timing = {"kind": kind, "startedAt": utcnow().isoformat(), "desktopMs": 0.0,
+                  "queueMs": None, "modelMs": None, "answerReceived": False}
+        self.last_decision_timings[kind] = timing
+        try:
+            if self.resident_turns:
+                offered = time.monotonic()
+                try:
+                    response = await self.resident_turns.offer(kind, payload["messages"])
+                finally:
+                    timing["desktopMs"] = round((time.monotonic() - offered) * 1000, 1)
+                if response is not None:
+                    timing["answerReceived"] = True
+                    return response, "desktop"
+            if desktop_only:
+                return None, "desktop"
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + timeout
+            queued = time.monotonic()
+            model_started = None
+            try:
+                async with asyncio.timeout_at(deadline), self.role_lock, self.semaphore:
+                    model_started = time.monotonic()
+                    timing["queueMs"] = round((model_started - queued) * 1000, 1)
+                    remaining = deadline - loop.time()
+                    if remaining <= 0:
+                        raise TimeoutError("NPC model fallback timed out")
+                    response = await self.model.request("/chat/completions", payload, remaining)
+                    timing["answerReceived"] = True
+                    return response, self.role.provider
+            finally:
+                if model_started is None:
+                    timing["queueMs"] = round((time.monotonic() - queued) * 1000, 1)
+                else:
+                    timing["modelMs"] = round((time.monotonic() - model_started) * 1000, 1)
+        finally:
+            timing["totalMs"] = round((time.monotonic() - started) * 1000, 1)
+            timing["finishedAt"] = utcnow().isoformat()
 
     async def answer_dialogue(self, text: str, relationship: dict | None, *, public: bool) -> str:
         return (await self.prepare_dialogue(text, relationship, public=public))["reply"]
@@ -1278,7 +1304,12 @@ class NpcHost:
                 "lastPlanStartedAt": self.last_plan_started_at, "lastPlanFinishedAt": self.last_plan_finished_at,
                 "lastPlanOutcome": self.last_plan_outcome, "lastReceiptQueryAt": self.last_receipt_query_at,
                 "lastReceiptSettledAt": self.last_receipt_settled_at, "lastError": self.loop_error,
-                "pendingRequests": list(self.pending_requests),
+                "pendingRequests": list(self.pending_requests), "pendingDialogueCount": len(self.pending_dialogue),
+                "oldestDialogueAgeSeconds": (round(max(0.0, time.time() - min(event.at.timestamp()
+                                                for event in self.pending_dialogue.values())), 3)
+                                              if self.pending_dialogue else None),
+                "decisionTimings": ({kind: dict(timing) for kind, timing in self.planner.last_decision_timings.items()}
+                                    if isinstance(self.planner, NpcPlanner) else None),
                 "needsAttention": self.last_plan_outcome == "failed" or state in {
                     "loop_stalled", "waiting_for_original_receipt", "body_unavailable", "waiting_for_host"}}
 

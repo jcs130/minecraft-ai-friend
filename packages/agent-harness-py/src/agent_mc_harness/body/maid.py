@@ -20,10 +20,22 @@ import copy
 import json
 import math
 import re
+import time
 from collections import OrderedDict
+from datetime import datetime
 from typing import Any
 
-from ..bridges import MAID_READS, ControlChanged, EventCursor, MaidRequestRejected, NativeMaidBridge, ToolBridge, json_text, maid_read_only
+from ..bridges import (
+    MAID_READS,
+    ControlChanged,
+    EventCursor,
+    MaidApiBridge,
+    MaidRequestRejected,
+    NativeMaidBridge,
+    ToolBridge,
+    json_text,
+    maid_read_only,
+)
 from ..models import (
     ActionReceipt,
     ActionStatus,
@@ -165,7 +177,7 @@ class MaidBody(BaseBody):
     kind = "maid"
 
     def __init__(self, bridge: ToolBridge, *, scope: Scope, owner_id: str, maid_id: str | None = None, server_id: str | None = None,
-                 world_key: str | None = None, open_bridge: bool = True, poll_seconds: float = 3.0, result_poll_seconds: float = 3.0,
+                 world_key: str | None = None, open_bridge: bool = True, poll_seconds: float | None = None, result_poll_seconds: float = 3.0,
                  context_poll_seconds: float = 10.0) -> None:
         super().__init__()
         if not UUID.match(owner_id):
@@ -179,7 +191,10 @@ class MaidBody(BaseBody):
             if self.owner_id != bridge.owner_id or self.maid_id != bridge.maid_id:
                 raise ValueError("native bridge and body identities must match")
         self.server_id, self.world_key, self.open_bridge = server_id, world_key, open_bridge
+        if poll_seconds is None:
+            poll_seconds = 0.5 if self._native and not isinstance(bridge, MaidApiBridge) else 3.0
         self.poll_seconds, self.result_poll_seconds, self.context_poll_seconds = poll_seconds, result_poll_seconds, context_poll_seconds
+        self.last_inbox_delay_ms: float | None = None
         self.cursor = EventCursor(bridge)
         self._identity: BodyIdentity | None = None
         self._schema: dict[str, Any] = {}
@@ -626,6 +641,15 @@ class MaidBody(BaseBody):
             rows: list[Any] = next((data[k] for k in ("events", "items", "pending", "messages") if isinstance(data.get(k), list)), [])
             for row in rows:
                 if isinstance(row, dict) and row.get("eventId") and self._fresh("inbox:" + str(row["eventId"])):
+                    received_at = row.get("receivedAt")
+                    if isinstance(received_at, str):
+                        try:
+                            received_at = datetime.fromisoformat(received_at).timestamp() * 1000
+                        except ValueError:
+                            received_at = None
+                    self.last_inbox_delay_ms = (round(max(0.0, time.time() * 1000 - received_at), 1)
+                                               if type(received_at) in (int, float) and math.isfinite(received_at)
+                                               else None)
                     context = self._context.get("raw") or {}
                     speaker = row.get("senderUuid") or row.get("speakerId")
                     prefix = "qdvoice:" + str(speaker) + ":"
@@ -694,7 +718,8 @@ class MaidBody(BaseBody):
 
     def health(self):
         h = super().health()
-        h.extra = {"maidId": self.maid_id, "lifeState": self._life, "workshop": self.workshop}
+        h.extra = {"maidId": self.maid_id, "lifeState": self._life, "workshop": self.workshop,
+                   "inboxPollSeconds": self.poll_seconds, "lastInboxDelayMs": self.last_inbox_delay_ms}
         return h
 
 

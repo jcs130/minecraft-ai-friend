@@ -2,9 +2,9 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
+from test_server_npc import role
 
 from agent_mc_harness.npc import NpcPlanner
-from test_server_npc import role
 
 
 def test_dialogue_does_not_take_a_second_slot_from_another_role():
@@ -43,6 +43,72 @@ def test_dialogue_does_not_take_a_second_slot_from_another_role():
     asyncio.run(run())
 
 
+def test_decision_timing_separates_queue_from_model_and_contains_no_dialogue_text():
+    async def run():
+        shared = asyncio.Semaphore(1)
+        await shared.acquire()
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def request(route, payload, timeout):
+            entered.set()
+            await release.wait()
+            return {"reply": "private-test-line"}
+
+        planner = NpcPlanner(role(), SimpleNamespace(request=request), semaphore=shared)
+        pending = asyncio.create_task(planner.decision("dialogue", {"text": "private-test-line"}, 2))
+        try:
+            await asyncio.sleep(0.04)
+            assert not entered.is_set()
+            shared.release()
+            await asyncio.wait_for(entered.wait(), 1)
+            await asyncio.sleep(0.04)
+            release.set()
+            assert await pending == ({"reply": "private-test-line"}, "tokenplan")
+            timing = planner.last_decision_timings["dialogue"]
+            assert timing["answerReceived"] is True and timing["kind"] == "dialogue"
+            assert timing["queueMs"] >= 30 and timing["modelMs"] >= 30
+            assert timing["totalMs"] >= timing["queueMs"] + timing["modelMs"] - 1
+            assert "private-test-line" not in str(timing)
+        finally:
+            release.set()
+            if shared.locked() and not entered.is_set():
+                shared.release()
+            await asyncio.gather(pending, return_exceptions=True)
+    asyncio.run(run())
+
+
+def test_overlapping_plan_and_dialogue_keep_separate_timing_records():
+    async def run():
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def request(route, payload, timeout):
+            if payload == "plan":
+                entered.set()
+                await release.wait()
+            return payload
+
+        planner = NpcPlanner(role(), SimpleNamespace(request=request))
+        plan = asyncio.create_task(planner.decision("plan", "plan", 2))
+        await asyncio.wait_for(entered.wait(), 1)
+        dialogue = asyncio.create_task(planner.decision("dialogue", "dialogue", 2))
+        try:
+            await asyncio.sleep(0.04)
+            assert set(planner.last_decision_timings) == {"plan", "dialogue"}
+            assert planner.last_decision_timings["plan"]["answerReceived"] is False
+            release.set()
+            assert await plan == ("plan", "tokenplan")
+            assert await dialogue == ("dialogue", "tokenplan")
+            assert all(row["answerReceived"] for row in planner.last_decision_timings.values())
+            assert planner.last_decision_timings["dialogue"]["queueMs"] >= 30
+            assert planner.last_decision_timings["plan"]["modelMs"] >= 30
+        finally:
+            release.set()
+            await asyncio.gather(plan, dialogue, return_exceptions=True)
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize("occupied", ["role", "shared", "http"])
 def test_timeout_includes_the_whole_fallback_and_releases_capacity(occupied):
     async def run():
@@ -71,6 +137,10 @@ def test_timeout_includes_the_whole_fallback_and_releases_capacity(occupied):
             with pytest.raises(TimeoutError):
                 await timed
             assert ("timed" in calls) == (occupied == "http")
+            timing = planner.last_decision_timings["dialogue"]
+            assert timing["answerReceived"] is False and timing["totalMs"] >= 30
+            assert (timing["modelMs"] is not None) == (occupied == "http")
+            assert timing["queueMs"] is not None
         finally:
             timed.cancel()
             await asyncio.gather(timed, return_exceptions=True)
