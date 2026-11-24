@@ -103,7 +103,8 @@ final class VillagerDialogue {
             }
             if (bind == null || speak == null) return;
             for (Villagers.Spot spot : plugin.villagers.all().values()) {
-                if (spot.entityUuid() == null || plugin.villagers.location(spot.id()) == null) continue;
+                if (spot.entityUuid() == null || plugin.bodyPort() != null && plugin.bodyPort().controls(spot.entityUuid())
+                        || plugin.villagers.location(spot.id()) == null) continue;
                 if (!(Bukkit.getEntity(spot.entityUuid()) instanceof Villager v)) continue;
                 if (!spot.id().equals(v.getPersistentDataContainer().get(key, PersistentDataType.STRING)))
                     v.getPersistentDataContainer().set(key, PersistentDataType.STRING, spot.id());
@@ -121,7 +122,8 @@ final class VillagerDialogue {
         StoryAuthor backend = author;
         VillagerHarnessClient runtime = harness;
         if (!Bukkit.isPrimaryThread() || closed || (backend == null && runtime == null)
-                || respondingBody != null || now < nextAt || payload == null || payload.length() > 8192) return false;
+                || respondingBody != null || now < nextAt || payload == null || payload.length() > 8192
+                || plugin.bodyPort() != null && plugin.bodyPort().controls(spot.entityUuid())) return false;
         Heard heard;
         try {
             var data = JsonParser.parseString(payload).getAsJsonObject();
@@ -225,6 +227,7 @@ final class VillagerDialogue {
     }
 
     private void deliver(Villagers.Spot spot, Heard event, Player p, String answer) {
+        if (plugin.bodyPort() != null && plugin.bodyPort().controls(spot.entityUuid())) return;
         long now = System.currentTimeMillis();
         boolean direct = event.contact().direct();
         boolean current = now - event.at() < TURN_MS && Bukkit.getPlayer(event.contact().speaker()) == p && canTalk(spot, p, direct);

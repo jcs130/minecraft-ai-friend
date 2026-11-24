@@ -215,17 +215,30 @@ final class TextBubbleManager implements Listener {
     }
     /** Call only at the real dialogue delivery site on the main thread. Never broadcasts private answers. */
     void npc(String id, LivingEntity npc, Player recipient, String raw) {
-        if (!Bukkit.isPrimaryThread() || !npcEnabled(id) || npc instanceof Player || !npc.isValid()
-                || npc.isDead() || npc.isInvisible() || !recipient.isOnline() || plugin.isObserver(recipient)
-                || recipient.isDead() || recipient.getWorld() != npc.getWorld()) return;
+        enqueueNpc(id, npc, recipient, raw, false);
+    }
+
+    /** Restricted entry for a server-registered native villager; identity is checked by the caller plugin. */
+    boolean managedNpc(String id, LivingEntity npc, Player recipient, String raw) {
+        return enqueueNpc(id, npc, recipient, raw, true);
+    }
+
+    private boolean enqueueNpc(String id, LivingEntity npc, Player recipient, String raw, boolean managed) {
+        if (!Bukkit.isPrimaryThread() || npc == null || recipient == null || raw == null
+                || id == null || !id.matches("[A-Za-z0-9_-]{1,48}")
+                || !(managed ? limits.enabled && limits.npcs : npcEnabled(id))
+                || npc instanceof Player || !npc.isValid() || npc.isDead() || npc.isInvisible()
+                || !recipient.isOnline() || plugin.isObserver(recipient) || recipient.isDead()
+                || recipient.getWorld() != npc.getWorld()) return false;
         refresh(recipient);
         String text = clean(raw, limits.characters);
-        if (text.isEmpty()) return;
+        if (text.isEmpty()) return false;
         Session owner = sessions.get(recipient.getUniqueId());
         Map<UUID, Long> audience = new HashMap<>(); audience.put(recipient.getUniqueId(), owner.token);
         for (Player eye : plugin.attachedEyes(recipient)) { refresh(eye); audience.put(eye.getUniqueId(), sessions.get(eye.getUniqueId()).token); }
         enqueue(new Speech(new Key(npc.getUniqueId(), recipient.getUniqueId()), new Session(npc.getWorld().getUID(),0,true),
                 Map.copyOf(audience), text, sequence.incrementAndGet(), System.nanoTime()));
+        return true;
     }
     static String clean(String raw, int max) {
         StringBuilder out = new StringBuilder(); boolean format = false, gap = false; int count = 0;

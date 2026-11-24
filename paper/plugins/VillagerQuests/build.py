@@ -10,7 +10,7 @@ Citizens and the DeepSeek plugin are reached by reflection, so they are not need
 from pathlib import Path
 import argparse, hashlib, json, os, subprocess, zipfile
 
-VERSION = '0.1.4'
+VERSION = '0.1.5'
 p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 src_group = p.add_mutually_exclusive_group(required=True)
 src_group.add_argument('--server', type=Path)
@@ -62,15 +62,19 @@ rules = run('rules', [java, '-ea', args_file('rules.args', ['-cp', os.pathsep.jo
 assert 'passed=true' in rules, rules
 run('memory-wire', [java, '-ea', args_file('memory-wire.args', ['-cp', os.pathsep.join([str(tests), test_cp]),
     'org.qiandengji.villagerquests.VillagerHarnessMemoryContractTest'])])
+body_protocol = run('body-protocol', [java, '-ea', args_file('body-protocol.args', ['-cp', os.pathsep.join([str(tests), test_cp]),
+    'org.qiandengji.villagerquests.VillagerBodyProtocolTest'])])
+assert 'passed=true' in body_protocol, body_protocol
 
 jar = a.output / f'qiandeng-villager-quests-{VERSION}.jar'
 with zipfile.ZipFile(jar, 'x', zipfile.ZIP_DEFLATED) as z:
     for file in sorted(classes.rglob('*.class')):
         z.write(file, file.relative_to(classes).as_posix())
-    for res in ('plugin.yml', 'config.yml'):
+    for res in ('plugin.yml', 'config.yml', 'villager-body-port.json'):
         z.write(here / 'resources' / res, res)
 report = {'productionChanged': False, 'version': VERSION, 'rules': rules.strip().splitlines()[-1],
+          'bodyProtocol': body_protocol.strip().splitlines()[-1],
           'jar': {'path': str(jar), 'sha256': digest(jar)},
           'sources': {str(f.relative_to(repo)).replace('\\', '/'): digest(f) for f in sources}}
 (a.output / 'build.json').write_text(json.dumps(report, indent=2, ensure_ascii=False) + '\n', encoding='utf8')
-print(json.dumps({k: report[k] for k in ('version', 'rules', 'jar')}, ensure_ascii=False))
+print(json.dumps({k: report[k] for k in ('version', 'rules', 'bodyProtocol', 'jar')}, ensure_ascii=False))

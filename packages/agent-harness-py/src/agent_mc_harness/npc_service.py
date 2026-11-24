@@ -19,7 +19,8 @@ import httpx
 from .body.hosted_mcp import HostedMcpPort
 from .body.maid import MaidBody
 from .body.numen import NumenBody
-from .bridges import NativeMaidBridge
+from .body.villager import VillagerBody
+from .bridges import NativeMaidBridge, NativeVillagerBridge
 from .companion_adventure import CompanionAdventure
 from .guide_roles import GUIDE_PERSONA, parse_guide_roster
 from .journal import ActionJournal
@@ -37,6 +38,7 @@ from .resident_turns import ResidentTurnsClient
 from .runtime import intent_health
 from .social import SocialWorld, publish_json, read_json
 from .status_file import StatusFile
+from .villager_roles import parse_villager_roster, villager_resident_id
 
 
 @dataclass
@@ -197,6 +199,28 @@ async def serve(path: Path):
     guide_ids = set()
     guide_client = None
     guide_portal = None
+    villager_config = settings.get("villagerBodies")
+    villager_online: dict[str, dict] | None = None
+    villager_ids = set()
+    villager_client = None
+    if villager_config:
+        villager_endpoint = villager_config["endpoint"]
+        endpoint = urlsplit(villager_endpoint)
+        if ((endpoint.scheme, endpoint.hostname, endpoint.path) != ("http", "127.0.0.1", "/villager-body")
+                or not endpoint.port or endpoint.query or endpoint.fragment or endpoint.username is not None
+                or endpoint.password is not None):
+            raise ValueError("villager_roster_requires_loopback_body_port")
+        if villager_config.get("provider", "tokenplan") not in provider:
+            raise ValueError("villager_provider_unavailable")
+        interval = villager_config.get("intervalSeconds", 90)
+        if type(interval) is not int or not 10 <= interval <= 600:
+            raise ValueError("villager_interval_invalid")
+        villager_secret = await asyncio.to_thread(Path(villager_config["tokenFile"]).read_text, encoding="utf-8-sig")
+        villager_secret = villager_secret.strip()
+        if not villager_secret or "\n" in villager_secret or "\r" in villager_secret:
+            raise ValueError("villager_transport_token_required")
+        villager_client = httpx.AsyncClient(timeout=5, trust_env=False, follow_redirects=False,
+                                            headers={"Authorization": "Bearer " + villager_secret})
     if guide_config:
         guide_endpoint = guide_config["endpoint"]
         endpoint = urlsplit(guide_endpoint)
@@ -220,6 +244,9 @@ async def serve(path: Path):
     def handoff(role):
         if role.id in guide_ids:
             return role.id not in guide_online
+        if role.id in villager_ids:
+            # A transient roster failure cannot release a live server generation.
+            return role.id not in villager_online if villager_online is not None else False
         return external_handoff(role, settings["bodies"][role.id])
 
     async def start_local(host, delay=0, returning=False):
@@ -318,6 +345,11 @@ async def serve(path: Path):
             bridge = NativeMaidBridge(transport["endpoint"], Path(transport["tokenFile"]).read_text().strip(),
                                       owner_id=native_owner, maid_id=str(role.body_id), controller_id=controller)
             body = MaidBody(bridge, scope=scope, owner_id=native_owner, maid_id=str(role.body_id), server_id=settings["serverId"])
+        elif role.body_kind == "villager":
+            bridge = NativeVillagerBridge(transport["endpoint"], Path(transport["tokenFile"]).read_text(encoding="utf-8-sig").strip(),
+                                          resident_id=transport["residentId"], body_id=str(role.body_id), controller_id=controller)
+            body = VillagerBody(bridge, scope=scope, resident_id=transport["residentId"], body_id=str(role.body_id),
+                                controller_id=controller, server_id=settings["serverId"])
         else:
             if settings.get("residentCreationSlots", {}).get(role.id, {}).get("numenAdmission"):
                 transport = {**transport, "tokenFile": state / role.id / "numen" / "hosted.token"}
@@ -340,6 +372,8 @@ async def serve(path: Path):
         nonlocal social
         if any(r.id == role.id for r in roles):
             raise ValueError("resident_slot_duplicate_host")
+        if role.body_kind == "villager" and any(active.body_id == role.body_id for active in roles):
+            raise ValueError("villager_identity_already_bound")
         host = build(role)
         roles.append(role)
         if role.id in turns:
@@ -384,6 +418,7 @@ async def serve(path: Path):
             slot_tasks[slot_id] = asyncio.create_task(activate(template, registry, turns[slot_id], attach, current_body),
                                                       name="resident-birth-" + slot_id)
         next_guides = 0.0
+        next_villagers = 0.0
         profiles = {}
         while True:
             pausing = maintenance()
@@ -447,6 +482,43 @@ async def serve(path: Path):
                 except (ValueError, TypeError, KeyError, OSError, sqlite3.Error, httpx.HTTPError) as failure:
                     guide_online = {}
                     status["guideDiscovery"] = {"state": "unavailable", "reason": type(failure).__name__}
+            if villager_client and not pausing and time.monotonic() >= next_villagers:
+                next_villagers = time.monotonic() + max(10, min(30, villager_config.get("intervalSeconds", 90)))
+                try:
+                    response = await villager_client.post(villager_endpoint, json={"operation": "roster"})
+                    response.raise_for_status()
+                    online, controllers = parse_villager_roster(response.json(), settings["serverId"], villager_config)
+                    previous = villager_online or {}
+                    for role_id, role in online.items():
+                        controller = controllers[role_id]
+                        old = previous.get(role_id)
+                        if old is not None and old["bodyId"] != str(role.body_id):
+                            raise ValueError("villager_identity_changed")
+                        if role_id in villager_ids:
+                            host = residents[role_id].host
+                            if host.role.body_id != role.body_id or settings["bodies"][role_id].get("controllerId") != controller:
+                                raise ValueError("villager_identity_changed")
+                            # Keep the original server persona; dynamic roster updates cannot replace it.
+                            host.role.name = role.name
+                            continue
+                        if (role_id in settings["bodies"] or any(active.body_id == role.body_id for active in roles)
+                                or any(candidate.role.id == role_id for candidate in residents.values())):
+                            raise ValueError("villager_identity_already_bound")
+                        settings["bodies"][role_id] = {
+                            "endpoint": villager_endpoint, "tokenFile": villager_config["tokenFile"],
+                            "residentId": villager_resident_id(role_id), "controllerId": controller,
+                        }
+                        try:
+                            attach(role, player_guide=True)
+                        except Exception:
+                            settings["bodies"].pop(role_id, None)
+                            raise
+                        villager_ids.add(role_id)
+                    villager_online = {role_id: {"bodyId": str(role.body_id)} for role_id, role in online.items()}
+                    status["villagerDiscovery"] = {"state": "ready", "online": len(online)}
+                except (ValueError, TypeError, KeyError, OSError, sqlite3.Error, httpx.HTTPError) as failure:
+                    # Unknown roster state is not proof that an original controller vanished.
+                    status["villagerDiscovery"] = {"state": "unavailable", "reason": type(failure).__name__}
             if slot_tasks:
                 status["creationSlots"] = {key: ("waiting" if not task.done() else
                     "failed:" + type(task.exception()).__name__ if task.exception() else "bound")
@@ -535,6 +607,8 @@ async def serve(path: Path):
             await client.close()
         if guide_client:
             await guide_client.aclose()
+        if villager_client:
+            await villager_client.aclose()
         if guide_portal:
             await guide_portal.aclose()
         if registry:

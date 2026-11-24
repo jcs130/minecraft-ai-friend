@@ -19,16 +19,34 @@ final class NativeVillagerWalk {
 
     NativeVillagerWalk(Logger logger) { this.logger = logger; }
 
-    void move(Villager body, Location at) {
-        if (unavailable) return;
+    /** Returns false unless the native brain actually accepted the target. */
+    boolean move(Villager body, Location at) {
+        if (unavailable) return false;
         try {
             if (handle == null) connect(body);
             Object brain = getBrain.invoke(handle.invoke(body));
             Object point = blockPos.newInstance(at.getBlockX(), at.getBlockY(), at.getBlockZ());
             setMemory.invoke(brain, walkType, walkTarget.newInstance(point, 0.6f, 1));
+            return true;
         } catch (ReflectiveOperationException | LinkageError failure) {
             unavailable = true;
             logger.warning("Trial entrance residents cannot issue native walk targets on this server: " + failure.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    /** Clears only the controller walk while it owns the body; vanilla AI itself stays enabled. */
+    boolean clear(Villager body) {
+        if (unavailable) return false;
+        try {
+            if (handle == null) connect(body);
+            Object brain = getBrain.invoke(handle.invoke(body));
+            setMemory.invoke(brain, walkType, (Object) null);
+            return true;
+        } catch (ReflectiveOperationException | LinkageError failure) {
+            unavailable = true;
+            logger.warning("Villager walk memory could not be cleared: " + failure.getClass().getSimpleName());
+            return false;
         }
     }
 

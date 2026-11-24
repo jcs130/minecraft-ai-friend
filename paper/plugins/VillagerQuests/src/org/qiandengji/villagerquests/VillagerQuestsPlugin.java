@@ -64,6 +64,7 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
     VillagerLives lives;
     Rewards rewards;
     private VillagerDialogue dialogue;
+    private VillagerBodyPort bodyPort;
     TaskCards taskCards;
     Listeners listeners;
     QuestCommand questCommand;
@@ -71,7 +72,7 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
     private StoryAuthor author;
     private ExecutorService io;
     private ExecutorService storyIo;
-    private volatile boolean closing;
+    volatile boolean closing;
     private Path statePath;
     private long outboxOffset;
     private boolean dirty, outboxBusy;
@@ -135,6 +136,8 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        if (!getDataFolder().toPath().resolve("villager-body-port.json").toFile().exists())
+            saveResource("villager-body-port.json", false);
         closing = false;
         io = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "VillagerQuests-io");
@@ -148,6 +151,7 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
         });
         villagers = new Villagers(this);
         lives = new VillagerLives(this);
+        bodyPort = new VillagerBodyPort(this);
         dialogue = new VillagerDialogue(this);
         rewards = new Rewards(this);
         statePath = getDataFolder().toPath().resolve("state.json");
@@ -173,6 +177,7 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         closing = true;
+        if (bodyPort != null) bodyPort.close();
         if (dialogue != null) dialogue.close();
         if (storyIo != null) storyIo.shutdownNow();
         if (board != null) {
@@ -258,10 +263,12 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
             rewards.configure(cfg.getConfigurationSection("rewards"));
             dialogue.configure(cfg.getConfigurationSection("dialogue"));
             taskCards = TaskCards.detect(this);
+            bodyPort.reload();
             getLogger().info("Loaded " + policy.villagers.size() + " villagers, " + heroes.size() + " hero bodies; story author: "
                     + (author == null ? "templates only" : author.name()) + "; spool: " + spool.root);
             return true;
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | IOException e) {
+            if (bodyPort != null) bodyPort.close();
             getLogger().log(Level.SEVERE, "Bad configuration: " + e.getMessage(), e);
             return false;
         }
@@ -359,6 +366,7 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
     private void tick() {
         long now = System.currentTimeMillis();
         lives.tick(now);
+        if (bodyPort != null) bodyPort.tick(now);
         dialogue.heartbeat();
         for (Board.Quest q : board.expire(now)) {
             say(q.commission.issuer(), Templates.expired(name(q.commission.issuer())));
@@ -592,6 +600,8 @@ public final class VillagerQuestsPlugin extends JavaPlugin {
             try { spool.appendSignal(signal); } catch (IOException ex) { getLogger().log(Level.WARNING, "signal write failed for " + e.id(), ex); }
         });
     }
+
+    VillagerBodyPort bodyPort() { return bodyPort; }
 
     Spool spool() { return spool; }
 

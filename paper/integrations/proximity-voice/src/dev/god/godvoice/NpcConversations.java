@@ -9,6 +9,7 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.*;
 import org.bukkit.entity.*;
 import org.bukkit.event.*;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.inventory.EquipmentSlot;
@@ -41,9 +42,12 @@ final class NpcConversations implements Listener {
     private record PendingInput(Entity source,Entity recipient,NpcDialoguePolicy.Profile profile,UUID world,
                                 String event,String text,String channel,long occurredAt,long expiresAt) {}
     private final Map<String,PendingInput> pendingInputs=new LinkedHashMap<>();
+    private final Map<String,Long> recentChatRoutes=new LinkedHashMap<>();
     private final Map<UUID,long[]> inputCounts=new HashMap<>(); // accepted, expired, uncertain; no transcript in diagnostics
     private final Map<UUID,String> lastInputState=new HashMap<>();
     private final Map<UUID,Long> lastInputAt=new HashMap<>();
+    private int modernChatEvents,legacyChatEvents,routedChatEvents,rejectedChatEvents,addressedVillagerRoutes,
+            dialogueEligibilityRejections,dialogueDeliveryAttempts,inboxBindingRejections;
     private static final Set<String> CLOSINGS=Set.of("好","好的","嗯","嗯嗯","收到","明白了","知道了","谢谢","谢谢你","辛苦了","再见","拜拜","回头聊");
     private long lastWarning;
     NpcConversations(PaperVoicePlugin plugin,Path file)throws Exception {
@@ -260,12 +264,44 @@ final class NpcConversations implements Listener {
         NpcDialoguePolicy.text(text);String event="npc_"+NpcDialoguePolicy.speechId(actor,operation);
         for(UUID target:profiles.keySet())deliver(source,target,event,text,"npc_chat",occurredAt);
     }
+    static String nearbyFingerprint(String voice,String text){
+        try{return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(
+                ("villager-nearby-tts\0"+voice+"\0"+text).getBytes(java.nio.charset.StandardCharsets.UTF_8)));}
+        catch(java.security.NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}
+    }
     void nearbySpokenText(Player source,NpcDialoguePolicy.Profile profile,UUID request,String text){
         for(Player listener:source.getWorld().getPlayers()){
             if(configured(listener.getUniqueId()) || !hears(listener,source,profile) || !plugin.wantsCaptions(listener))continue;
             if(delivered.add(listener.getUniqueId(),source.getUniqueId(),"speech_"+request,System.currentTimeMillis()))
                 listener.sendMessage("[附近] "+profile.display()+"："+text);
         }
+    }
+    void nearbySpokenText(Entity source,NpcDialoguePolicy.Profile profile,UUID request,Map<UUID,Player> audience,String text){
+        long now=System.currentTimeMillis();
+        for(Player listener:audience.values()){
+            if(plugin.wantsCaptions(listener)&&delivered.add(listener.getUniqueId(),source.getUniqueId(),
+                    "speech_"+request,now))
+                listener.sendMessage("[附近] "+profile.display()+"："+text);
+        }
+    }
+    /** Reuse the original live/profile/hosting, hearing and visibility policy for a fixed nearby set. */
+    Map<UUID,Player> nearbyAudience(Entity body,NpcDialoguePolicy.Profile profile){
+        if(body==null||profile==null||!profile.kind().equals("villager")||profile.residentId()==null
+                ||!hostedReady(body))return Map.of();
+        Map<UUID,Player> audience=new LinkedHashMap<>();
+        for(Player listener:body.getWorld().getPlayers()){
+            if(configured(listener.getUniqueId())||!hearsNearbyListener(listener,body,profile))continue;
+            audience.put(listener.getUniqueId(),listener);
+        }
+        return Map.copyOf(audience);
+    }
+    static boolean hearsNearbyListener(Player listener,Entity body,NpcDialoguePolicy.Profile profile){
+        return body != null && profile != null && listener.isOnline() && !listener.isDead() && !listener.isInvisible()
+                && listener.getGameMode() != GameMode.SPECTATOR && listener.getWorld() != null
+                && listener.getWorld().equals(body.getWorld()) && body.getWorld() != null
+                && listener.canSee(body) && listener.hasLineOfSight(body)
+                && NpcDialoguePolicy.nearby(listener.getUniqueId(), body.getUniqueId(), listener.getWorld().getUID(),
+                    body.getWorld().getUID(), listener.getLocation().distanceSquared(body.getLocation()), profile.range());
     }
     private boolean eligible(Entity source,Entity entity,NpcDialoguePolicy.Profile profile,String event,String channel){
         if(source==null||entity==null||profile==null||!source.isValid()||source.isDead()
@@ -283,7 +319,7 @@ final class NpcConversations implements Listener {
     private boolean deliver(Entity source,UUID target,String event,String text,String channel,long occurredAt){
         var profile=profiles.get(target);Entity entity=live(target);
         long now=System.currentTimeMillis();
-        if(occurredAt>now||now-occurredAt>120_000||!eligible(source,entity,profile,event,channel))return false;
+        if(occurredAt>now||now-occurredAt>120_000||!eligible(source,entity,profile,event,channel)){dialogueEligibilityRejections++;return false;}
         try{NpcDialoguePolicy.text(text);}catch(IllegalArgumentException invalid){return false;}
         String key=target+"/"+source.getUniqueId()+"/"+event;
         if(pendingInputs.containsKey(key))return true; // handled by the same queued input, not a second route
@@ -306,6 +342,7 @@ final class NpcConversations implements Listener {
             pendingInputs.remove(key);recordInput(target,"expired_or_original_listener_changed",input.occurredAt(),1);return;
         }
         String id="qdvoice:"+input.source().getUniqueId()+":"+input.event();
+        dialogueDeliveryAttempts++;
         var result=delivered.deliver(target,input.source().getUniqueId(),input.event(),now,
                 ()->deliverBound(input.profile(),input.recipient(),input.source(),id,input.text(),input.channel(),input.occurredAt(),false));
         switch(result){
@@ -342,6 +379,10 @@ final class NpcConversations implements Listener {
         var row=new JsonObject();row.addProperty("acceptedInputs",counts[0]);row.addProperty("expiredInputs",counts[1]);
         row.addProperty("uncertainInputs",counts[2]);row.addProperty("pendingInputs",pendingInputs.values().stream().filter(v->v.profile().id().equals(id)).count());
         row.addProperty("lastInputState",lastInputState.getOrDefault(id,"not_observed"));
+        row.addProperty("modernChatEvents",modernChatEvents);row.addProperty("legacyChatEvents",legacyChatEvents);
+        row.addProperty("routedChatEvents",routedChatEvents);row.addProperty("rejectedChatEvents",rejectedChatEvents);
+        row.addProperty("addressedVillagerRoutes",addressedVillagerRoutes);row.addProperty("dialogueEligibilityRejections",dialogueEligibilityRejections);
+        row.addProperty("dialogueDeliveryAttempts",dialogueDeliveryAttempts);row.addProperty("inboxBindingRejections",inboxBindingRejections);
         if(lastInputAt.containsKey(id))row.addProperty("lastInputOccurredAt",lastInputAt.get(id));
         row.addProperty("countsScope","current_server_process");row.addProperty("actualHearingVerified",false);return row;
     }
@@ -371,7 +412,7 @@ final class NpcConversations implements Listener {
                         .invoke(bridge,target,profile.owner(),source.getUniqueId(),source.getName(),text,id));
                 }
             }else{
-                var binding=hosted.get(target);if(!hostedReady(entity))return false;
+                var binding=hosted.get(target);if(!hostedReady(entity)){inboxBindingRejections++;return false;}
                 if(profile.residentId()!=null){
                     payload.addProperty("residentId",profile.residentId());
                     payload.addProperty("world",entity.getWorld().getKey().toString());
@@ -393,20 +434,46 @@ final class NpcConversations implements Listener {
         catch(RuntimeException uncertain){warn();throw uncertain;}
     }
     private void warn(){long now=System.nanoTime();if(now-lastWarning>30_000_000_000L){lastWarning=now;plugin.getLogger().warning("NPC dialogue could not be delivered; no action or automatic replay was attempted");}}
+    private boolean claimChatRoute(UUID actor,String text,long now){
+        recentChatRoutes.entrySet().removeIf(entry->now-entry.getValue()>2_000);
+        String key=actor+"\0"+text;
+        Long prior=recentChatRoutes.get(key);
+        if(prior!=null&&now-prior<=2_000)return false;
+        recentChatRoutes.put(key,now);
+        while(recentChatRoutes.size()>256)recentChatRoutes.remove(recentChatRoutes.keySet().iterator().next());
+        return true;
+    }
+    private void routeChat(Player actor,String original,String text,Set<UUID> recipients,UUID input,long at){
+        if(Bukkit.getPlayer(actor.getUniqueId())!=actor||actor.isDead()||actor.isInvisible()||actor.getGameMode()==GameMode.SPECTATOR){rejectedChatEvents++;return;}
+        routedChatEvents++;
+        var address=address(actor,text,true);
+        boolean addressedVillager=address!=null&&address.profile().kind().equals("villager")
+                &&hears(actor,live(address.profile().id()),address.profile())&&actor.hasLineOfSight(live(address.profile().id()));
+        if(addressedVillager)addressedVillagerRoutes++;
+        if(!local(actor,original)&&!addressedVillager&&NpcDialoguePolicy.group(profiles.values(),text)==null){rejectedChatEvents++;return;}
+        if (groupChat(actor, text, recipients, input, "chat", at)) return;
+        if(address!=null&&(address.profile().kind().equals("maid")||natural(actor,address,"public",recipients,"chat_"+input)))return;
+        // Maids already receive their native local-chat path; do not duplicate it.
+        for(var p:profiles.values())if(p.kind().equals("numen")&&recipients.contains(p.id()))deliver(actor,p.id(),"chat_"+input,text,"chat",at);
+    }
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
     public void chat(AsyncChatEvent event){
+        modernChatEvents++;
         Player actor=event.getPlayer();String original=PlainTextComponentSerializer.plainText().serialize(event.originalMessage());
         String text=PlainTextComponentSerializer.plainText().serialize(event.message());Set<UUID> recipients=new HashSet<>();
         for(var viewer:event.viewers())if(viewer instanceof Player p)recipients.add(p.getUniqueId());
         UUID input=UUID.randomUUID();long at=System.currentTimeMillis();
-        Bukkit.getScheduler().runTask(plugin,()->{
-            if(Bukkit.getPlayer(actor.getUniqueId())!=actor||actor.isDead()||actor.isInvisible()||actor.getGameMode()==GameMode.SPECTATOR||!local(actor,original))return;
-            if (groupChat(actor, text, recipients, input, "chat", at)) return;
-            var address=address(actor,text,true);
-            if(address!=null&&(address.profile().kind().equals("maid")||natural(actor,address,"public",recipients,"chat_"+input)))return;
-            // Maids already receive their native local-chat path; do not duplicate it.
-            for(var p:profiles.values())if(p.kind().equals("numen")&&recipients.contains(p.id()))deliver(actor,p.id(),"chat_"+input,text,"chat",at);
-        });
+        if(!claimChatRoute(actor.getUniqueId(),text,at))return;
+        Bukkit.getScheduler().runTask(plugin,()->routeChat(actor,original,text,recipients,input,at));
+    }
+    /** Youer/hybrid bridges may expose only the legacy event; explicit villager addressing still gets one route. */
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
+    public void legacyChat(AsyncPlayerChatEvent event){
+        legacyChatEvents++;
+        Player actor=event.getPlayer();String text=event.getMessage();
+        UUID input=UUID.randomUUID();long at=System.currentTimeMillis();
+        if(!claimChatRoute(actor.getUniqueId(),text,at))return;
+        Bukkit.getScheduler().runTask(plugin,()->routeChat(actor,text,text,Set.of(),input,at));
     }
     static boolean privateMessageAllowed(Player speaker, Entity recipient, Plugin essentials) {
         Player player = recipient instanceof Player target ? target : null;

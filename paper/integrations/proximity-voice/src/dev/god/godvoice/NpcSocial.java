@@ -259,6 +259,28 @@ final class NpcSocial {
         return deliver(profile,request,submitted,answer,result);
     }
 
+    /** Record a reply already delivered by the managed villager bridge; never send a second caption or audio job. */
+    boolean managedVillagerReply(UUID body,UUID speaker,UUID request,String reply,int captionRecipients,String speechRequestId) throws IOException {
+        var profile=residents.profile(body);var source=pending.get(request);
+        if(profile==null||profile.residentId()==null||source==null
+                ||!source.player().getUniqueId().equals(speaker))return false;
+        Path folder=directory(body),result=folder.resolve(request+"-result.json"),sending=folder.resolve(request+"-sending.json");
+        var submitted=read(folder.resolve(request+"-request.json"));
+        if(!request.toString().equals(value(submitted,"id"))||!speaker.toString().equals(value(submitted,"speakerId"))
+                ||!body.toString().equals(value(submitted,"maidId"))||!"private".equals(value(submitted,"channel"))
+                ||!"accepted".equals(value(submitted,"status"))||Files.exists(result))return false;
+        try{Files.createFile(sending);}catch(java.nio.file.FileAlreadyExistsException duplicate){return false;}
+        pending.remove(request);
+        submitted.addProperty("status","answered");submitted.addProperty("reply",reply);
+        submitted.addProperty("completedAt",System.currentTimeMillis());submitted.addProperty("replyMode","native");
+        submitted.addProperty("captionRecipients",Math.max(0,captionRecipients));submitted.addProperty("hearingVerified",false);
+        if(speechRequestId!=null&&!speechRequestId.isBlank())submitted.addProperty("speechRequestId",speechRequestId);
+        write(result,submitted);Files.deleteIfExists(sending);
+        if(speechRequestId!=null&&!speechRequestId.isBlank()&&audio.size()<256)
+            audio.put(request,new AudioResult(profile,request,speechRequestId,result,System.currentTimeMillis()));
+        return true;
+    }
+
     private void poll() {
         if (!polling.compareAndSet(false, true)) return;
         try {
