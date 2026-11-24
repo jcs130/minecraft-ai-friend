@@ -3,25 +3,26 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from collections import defaultdict
-from dataclasses import dataclass
 import importlib.util
 import json
 import os
-from pathlib import Path
 import sqlite3
 import time
+from collections import defaultdict
+from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import UUID, uuid5
+
 import httpx
 
+from .body.hosted_mcp import HostedMcpPort
 from .body.maid import MaidBody
 from .body.numen import NumenBody
-from .body.hosted_mcp import HostedMcpPort
 from .bridges import NativeMaidBridge
 from .companion_adventure import CompanionAdventure
-from .journal import ActionJournal
 from .guide_roles import GUIDE_PERSONA, parse_guide_roster
+from .journal import ActionJournal
 from .memory.companion import CompanionRecall
 from .memory.local import LocalMemory
 from .memory.remote import RemoteGraphMemory
@@ -29,10 +30,10 @@ from .memory.router import MemoryRouter
 from .memory.social_graph import SocialGraph
 from .npc import FastSelector, ModelClient, NpcHost, NpcPlanner, load_roles
 from .numen_connection import can_reopen, run_with_connection
-from .resident_turns import ResidentTurnsClient
-from .resident_slots import BirthRegistry, activate, slot_templates
 from .resident_numen import admit_numen
 from .resident_protocol import social_receipt
+from .resident_slots import BirthRegistry, activate, slot_templates
+from .resident_turns import ResidentTurnsClient
 from .runtime import intent_health
 from .social import SocialWorld, publish_json, read_json
 from .status_file import StatusFile
@@ -63,9 +64,12 @@ class ResidentRun:
         if external and self.host.role.body_kind == "numen":
             try:
                 await self.host.body.port.wait_voluntary_release()
-            except TimeoutError:
+            except Exception as error:
                 # A surviving external controller may hold its lease for hours.
-                # Only retry the read of its vacancy, not local shutdown or an action.
+                # MCP transports can surface a timeout inside an ExceptionGroup;
+                # retry only that read-only vacancy probe, never local shutdown or an action.
+                if not isinstance(error, TimeoutError) and not HostedMcpPort._transient_facts_error(error):
+                    raise
                 self.vacancy_retry_at = time.monotonic() + 15
                 raise
 

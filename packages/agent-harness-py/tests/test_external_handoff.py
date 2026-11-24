@@ -4,11 +4,11 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-
-from agent_mc_harness.npc_service import ResidentRun, external_handoff
 from test_hosted_mcp import port
 from test_hosted_stop import LeaseSession
 from test_server_npc import role as npc_role
+
+from agent_mc_harness.npc_service import ResidentRun, external_handoff
 
 
 @pytest.mark.parametrize("kind", ("maid", "numen"))
@@ -120,7 +120,8 @@ def test_first_start_with_active_handoff_only_observes_lease(tmp_path, monkeypat
     run(check())
 
 
-def test_external_vacancy_timeout_keeps_probing_without_reclosing_the_host(run):
+@pytest.mark.parametrize("failure", [TimeoutError(), ExceptionGroup("MCP transport", [OSError("connection reset")])])
+def test_external_vacancy_transport_failure_keeps_probing_without_reclosing_the_host(run, failure):
     async def check():
         calls = []
         available = False
@@ -131,20 +132,20 @@ def test_external_vacancy_timeout_keeps_probing_without_reclosing_the_host(run):
         async def wait_for_release():
             calls.append("read native vacancy")
             if not available:
-                raise TimeoutError
+                raise failure
 
         host = SimpleNamespace(role=SimpleNamespace(id="kirito", body_kind="numen"), close=close,
                                body=SimpleNamespace(port=SimpleNamespace(wait_voluntary_release=wait_for_release)))
         resident = ResidentRun(host, None)
         resident.close_in_background(external=True)
-        with pytest.raises(TimeoutError):
+        with pytest.raises(type(failure)):
             await resident.closing
         initial = resident.closing
-        assert not resident.released
+        assert not resident.released and resident.vacancy_retry_at is not None
         resident.retry_external_vacancy(resident.vacancy_retry_at - 1)
         assert resident.closing is initial
         resident.retry_external_vacancy(resident.vacancy_retry_at)
-        with pytest.raises(TimeoutError):
+        with pytest.raises(type(failure)):
             await resident.closing
         assert not resident.released
         available = True
@@ -152,6 +153,32 @@ def test_external_vacancy_timeout_keeps_probing_without_reclosing_the_host(run):
         await resident.closing
         assert resident.closing.exception() is None and resident.vacancy_retry_at is None
         assert calls == ["close local driver", "read native vacancy", "read native vacancy", "read native vacancy"]
+
+    run(check())
+
+
+def test_external_vacancy_nontransport_failure_is_not_retried(run):
+    async def check():
+        calls = []
+        failure = ExceptionGroup("invalid native receipt", [ValueError("identity mismatch")])
+
+        async def close():
+            calls.append("close local driver")
+
+        async def wait_for_release():
+            calls.append("read native vacancy")
+            raise failure
+
+        host = SimpleNamespace(role=SimpleNamespace(id="kirito", body_kind="numen"), close=close,
+                               body=SimpleNamespace(port=SimpleNamespace(wait_voluntary_release=wait_for_release)))
+        resident = ResidentRun(host, None)
+        resident.close_in_background(external=True)
+        with pytest.raises(ExceptionGroup) as caught:
+            await resident.closing
+        assert caught.value is failure
+        assert resident.vacancy_retry_at is None and not resident.released
+        resident.retry_external_vacancy(float("inf"))
+        assert resident.closing.done() and calls == ["close local driver", "read native vacancy"]
 
     run(check())
 
