@@ -648,8 +648,8 @@ class MaidBody(BaseBody):
                         except ValueError:
                             received_at = None
                     self.last_inbox_delay_ms = (round(max(0.0, time.time() * 1000 - received_at), 1)
-                                               if type(received_at) in (int, float) and math.isfinite(received_at)
-                                               else None)
+                                               if isinstance(received_at, (int, float)) and not isinstance(received_at, bool)
+                                               and math.isfinite(received_at) else None)
                     context = self._context.get("raw") or {}
                     speaker = row.get("senderUuid") or row.get("speakerId")
                     prefix = "qdvoice:" + str(speaker) + ":"
