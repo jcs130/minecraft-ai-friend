@@ -709,6 +709,14 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     void npcSpeech(String id, org.bukkit.entity.LivingEntity npc, Player player, String text) {
         if (textBubbles != null) textBubbles.npc(id, npc, player, text);
     }
+
+    /** Public, recipient-scoped bubble entry for the registered native villager body bridge. */
+    public boolean managedNpcSpeech(String residentId, org.bukkit.entity.LivingEntity npc, Player player, String text) {
+        if (!Bukkit.isPrimaryThread() || textBubbles == null || !(npc instanceof org.bukkit.entity.Villager villager)) return false;
+        String registered = villager.getPersistentDataContainer().get(
+                org.bukkit.NamespacedKey.fromString("qiandeng-villager-quests:resident-id"), org.bukkit.persistence.PersistentDataType.STRING);
+        return residentId != null && residentId.equals(registered) && textBubbles.managedNpc(residentId, npc, player, text);
+    }
     LifeGuildManager lifeGuild() { return lifeGuild; }
     TrialRescueManager trialRescue() { return trialRescue; }
     CombatRpg combatRpg() { return combatRpg; }

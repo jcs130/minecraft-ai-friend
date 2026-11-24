@@ -186,7 +186,10 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         Job active=lane.current();if(active!=null){active.cancelled=true;active.cancelReason=reason;if(active.frames!=null)active.frames.cancel();if(active.player!=null)active.player.stopPlaying();else finish(active,"cancelled",reason);}
     }
     private Entity source(Job job){
-        if(job.villager==null)return job.session.equals(sessions.get(job.actor))?Bukkit.getPlayer(job.actor):null;
+        if(job.villager==null){
+            if(job.session==null)return npcs.live(job.actor);
+            return job.session.equals(sessions.get(job.actor))?Bukkit.getPlayer(job.actor):null;
+        }
         return npcs.villagerListener(job.actor,job.villager.listener(),job.villager.event())==null?null:npcs.live(job.actor);
     }
     private boolean live(Job job){return !stopping&&!job.cancelled&&source(job)!=null;}
@@ -199,6 +202,23 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         var connection=current.getConnectionOf(id);
         return connection!=null&&connection.isInstalled()&&connection.isConnected()&&!connection.isDisabled()
             &&connection.getPlayer().getPlayer()==player?connection:null;
+    }
+    boolean connectedVoice(Player player){
+        if(!player.isOnline()||!player.hasPermission("voicechat.listen"))return false;
+        VoicechatServerApi current=api;
+        if(current==null||Bukkit.getPlayer(player.getUniqueId())!=player)return false;
+        var connection=current.getConnectionOf(player.getUniqueId());
+        if(connection!=null&&connection.isInstalled()&&connection.isConnected()&&!connection.isDisabled()
+                &&connection.getPlayer().getPlayer()==player)return true;
+        return presence.isConnected(player.getUniqueId());
+    }
+    private boolean currentAsrListener(UUID id,Capture capture){
+        Player target=Bukkit.getPlayer(id),speaker=Bukkit.getPlayer(capture.actor);
+        if(target==null||speaker==null||!target.isOnline()||target.isDead()||target.isInvisible()
+                ||target.getGameMode()==org.bukkit.GameMode.SPECTATOR||!target.canSee(speaker)
+                ||!target.getWorld().equals(speaker.getWorld()))return false;
+        double range=Math.min(capture.hearingRange,distanceCap);
+        return Double.isFinite(range)&&range>=0&&target.getLocation().distanceSquared(speaker.getLocation())<=range*range;
     }
 
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
@@ -387,14 +407,66 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     public boolean bindVillagerNpcVoice(Plugin caller,UUID actor,java.util.function.Function<String,Boolean> inbox){
         return villagerBridge(caller)&&npcs.bindVillager(actor,inbox);
     }
+    /** One shared nearby audience for managed text, bubbles and SVC; no player identity is inferred. */
+    public String nearbyVillagerAudience(Plugin caller,UUID actor){
+        if(!villagerBridge(caller))throw new IllegalArgumentException("VILLAGER_VOICE_BRIDGE_REQUIRED");
+        var profile=npcs.profile(actor);
+        if(profile==null||!profile.kind().equals("villager")||profile.residentId()==null)
+            throw new IllegalArgumentException("VILLAGER_VOICE_IDENTITY_MISMATCH");
+        Entity body=npcs.live(actor);
+        if(body==null||!npcs.hostedReady(body))throw new IllegalArgumentException("VILLAGER_VOICE_BODY_UNAVAILABLE");
+        JsonObject result=new JsonObject();JsonArray players=new JsonArray();
+        for(UUID listener:npcs.nearbyAudience(body,profile).keySet())players.add(listener.toString());
+        result.add("players",players);result.addProperty("actualHearingVerified",false);return result.toString();
+    }
     /** Speak only to the player who addressed this body in the original, still current turn. */
     public String speakVillagerReply(Plugin caller,UUID actor,UUID listener,String heardEventId,String text){
+        return speakVillagerReply(caller,actor,listener,heardEventId,text,false);
+    }
+    /** Managed villagers preserve the original private/nearby scope instead of downgrading private replies. */
+    public String speakVillagerReply(Plugin caller,UUID actor,UUID listener,String heardEventId,String text,boolean direct){
         if(!villagerBridge(caller))throw new IllegalArgumentException("VILLAGER_VOICE_BRIDGE_REQUIRED");
-        return submitVillagerSpeech(actor,listener,heardEventId,text,false);
+        return submitVillagerSpeech(actor,listener,heardEventId,text,direct);
     }
     public boolean finishVillagerPrivateReply(Plugin caller,UUID actor,UUID listener,String event,String text) throws java.io.IOException {
         if(!villagerBridge(caller)||social==null)return false;
         return social.finishVillager(actor,listener,UUID.fromString(event),text);
+    }
+    /** Close the original private-input lane after the managed bridge has already delivered its one reply. */
+    public boolean recordManagedVillagerReply(Plugin caller,UUID actor,UUID listener,String event,String text,
+                                               int captionRecipients,String speechRequestId) throws java.io.IOException {
+        if(!villagerBridge(caller)||social==null||npcs.villagerListener(actor,listener,event)==null)return false;
+        return social.managedVillagerReply(actor,listener,UUID.fromString(event),text,Math.max(0,captionRecipients),speechRequestId);
+    }
+    /** Speak from a controlled villager to the currently eligible nearby listeners, never the whole server. */
+    public String speakVillagerNearby(Plugin caller,UUID actor,String operation,String text,long occurredAt){
+        if(!villagerBridge(caller))throw new IllegalArgumentException("VILLAGER_VOICE_BRIDGE_REQUIRED");
+        var profile=npcs.profile(actor);
+        if(profile==null||!profile.kind().equals("villager")||profile.residentId()==null)
+            throw new IllegalArgumentException("VILLAGER_VOICE_IDENTITY_MISMATCH");
+        Entity body=npcs.live(actor);
+        if(body==null||!npcs.hostedReady(body))
+            throw new IllegalArgumentException("VILLAGER_VOICE_BODY_UNAVAILABLE");
+        NpcDialoguePolicy.text(text);
+        if(text.length()>200)throw new IllegalArgumentException("TEXT_REQUIRED_MAX_200");
+        UUID request=NpcDialoguePolicy.speechId(actor,operation);
+        String fingerprint=NpcConversations.nearbyFingerprint(profile.voice(),text);
+        var old=ledger.get(actor,request);
+        if(old!=null){
+            if(!old.fingerprint().equals(fingerprint))throw new IllegalArgumentException("REQUEST_ID_REUSED");
+            return npcSpeechStatus(actor,operation);
+        }
+        if(!NpcDialoguePolicy.fresh(occurredAt,System.currentTimeMillis()))
+            return "{\"state\":\"skipped\",\"reason\":\"stale_speech\",\"actualHearingVerified\":false}";
+        Map<UUID,Player> nearby=npcs.nearbyAudience(body,profile);
+        Map<UUID,Player> audience=new java.util.LinkedHashMap<>();
+        for(var entry:nearby.entrySet())if(connectedVoice(entry.getValue()))audience.put(entry.getKey(),entry.getValue());
+        if(audience.isEmpty())return "{\"state\":\"skipped\",\"reason\":\"no_connected_listener\",\"actualHearingVerified\":false}";
+        npcs.said(actor,operation,text,occurredAt);
+        // VillagerQuests owns the one text caption and recipient-scoped bubble for this operation.
+        // This API owns only SVC audio, so voice-connected players never receive duplicate captions.
+        submit(new Job(actor,null,request,fingerprint,text,profile.voice(),null,null,Map.copyOf(audience),profile.range(),null));
+        return "{\"state\":\"submitted\",\"requestId\":\""+request+"\",\"actualHearingVerified\":false}";
     }
     private String submitVillagerSpeech(UUID actor,UUID listener,String heardEventId,String text,boolean direct){
         var profile=npcs.profile(actor);
@@ -614,7 +686,7 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     }
     private void terminal(Job job,String state,String reason){
         VoiceDelivery.Summary delivery=job.delivery==null?null:job.delivery.summary();
-        io.execute(()->{try{ledger.transition(job.actor,job.request,job.fingerprint,state,reason,delivery);main(()->{if(job.villager==null&&job.recipient==null&&job.session.equals(sessions.get(job.actor)))reply(Bukkit.getPlayer(job.actor),job.request,state,reason);});}catch(IOException failure){main(()->error(Bukkit.getPlayer(job.actor),"VOICE_RESULT_UNKNOWN_DO_NOT_REPLAY"));}});
+        io.execute(()->{try{ledger.transition(job.actor,job.request,job.fingerprint,state,reason,delivery);main(()->{if(job.session!=null&&job.villager==null&&job.recipient==null&&job.session.equals(sessions.get(job.actor)))reply(Bukkit.getPlayer(job.actor),job.request,state,reason);});}catch(IOException failure){main(()->error(Bukkit.getPlayer(job.actor),"VOICE_RESULT_UNKNOWN_DO_NOT_REPLAY"));}});
     }
     private byte[] request(String method,String route,byte[] body,Map<String,String> headers)throws Exception{
         var builder=HttpRequest.newBuilder(URI.create(backend+route)).timeout(Duration.ofSeconds(route.equals("/v1/tts")?100:30)).header("Authorization","Bearer "+token);
@@ -676,7 +748,8 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
             try{
                 JsonObject result=jsonRequest("POST","/v1/asr",wav(pcm),Map.of("Content-Type","audio/wav","X-Actor",capture.actor.toString(),"X-Request-Id",capture.request.toString()));
                 String text=result.get("text").getAsString().replaceAll("[\\p{Cntrl}§]"," ").strip();if(text.isEmpty())return;
-                main(()->{Set<UUID> audience=VoiceAudience.deliverable(listeners,world,snapshot);for(UUID id:audience){Player target=Bukkit.getPlayer(id);if(target==null)continue;
+                main(()->{Set<UUID> audience=new java.util.HashSet<>();for(UUID id:VoiceAudience.deliverable(listeners,world,snapshot))if(currentAsrListener(id,capture))audience.add(id);
+                    for(UUID id:audience){Player target=Bukkit.getPlayer(id);if(target==null)continue;
                     JsonObject row=new JsonObject();row.addProperty("type","nearby_voice");row.addProperty("speaker",capture.name);row.addProperty("speakerUuid",capture.actor.toString());row.addProperty("utteranceId",capture.request.toString());row.addProperty("text",text);
                     // System text, not Player.chat(): ASR must not run commands,
                     // become a global shout or trigger chat-to-TTS a second time.

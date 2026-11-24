@@ -42,6 +42,7 @@ DANGER_GOAL = "React to a fresh danger observation."
 DESKTOP_GOAL = "Your desktop character requested a fresh observation. Decide what to say or do through this body."
 DIALOGUE_GOAL = "Decide whether current dialogue is addressed to you and needs a reply; listening silently is valid. Continue useful activity."
 NATIVE_DIALOGUE_TTL_MS = 120_000
+UUID_STRING = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\Z")
 COMPANION_CHECK_IN_SECONDS = 180
 COMPANION_TRAVEL_BLOCKS = 16
 SELF_CHOSEN_WAIT = "自主选择在这里等候"  # Recorded when a rest had no addressed order behind it.
@@ -81,7 +82,7 @@ class NpcBodyProfile(BaseModel):
     """The active body's identity and reviewed capabilities."""
 
     model_config = ConfigDict(extra="forbid")
-    body_kind: Literal["maid", "numen"]
+    body_kind: Literal["maid", "numen", "villager"]
     body_id: UUID
     body_owner_id: UUID | None = None
     allowed_tools: list[str] = Field(min_length=1, max_length=32)
@@ -127,6 +128,9 @@ class NpcRole(NpcCharacterProfile, NpcBodyProfile):
         if self.autonomous_rendezvous and (not self.adventure_partner or
                 not {"body:native:adventure_query", "body:native:adventure_action"}.issubset(self.allowed_tools)):
             raise ValueError("rendezvous_requires_native_party_and_a_configured_partner")
+        if self.body_kind == "villager" and (len(self.allowed_tools) != 4
+                or set(self.allowed_tools) != {"body:observe", "body:chat", "body:move", "body:stop"}):
+            raise ValueError("villager_requires_the_bounded_body_catalogue")
         return self
 
 
@@ -194,6 +198,11 @@ def addressed_dialogue(event: BodyEvent, body_id: str, aliases: tuple[str, ...] 
     if (event.kind == "dialogue" and event.body_kind == "maid" and data.get("maidId") == body_id
             and data.get("deliveryScope") == "addressed" and data.get("recipientId") == body_id):
         return True
+    if (event.kind == "dialogue" and event.body_kind == "villager" and data.get("bodyId") == body_id
+            and data.get("listenerId") == body_id and isinstance(data.get("residentId"), str)
+            and (data.get("deliveryScope") in {"addressed", "private"}
+                 or isinstance(event_id, str) and event_id.startswith("addressed_") and event_id.endswith("_" + body_id))):
+        return True
     # Nearby relay events already bind the actual speaker and listener.
     # A name at the start gives the planner a recipient, never action authority.
     speaker = data.get("speakerId")
@@ -201,10 +210,12 @@ def addressed_dialogue(event: BodyEvent, body_id: str, aliases: tuple[str, ...] 
     named_event = (channel in ("chat", "voice") and re.fullmatch(
         re.escape(f"qdvoice:{speaker}:{channel}_") + ("(?:group|direct)" if channel == "voice" else "group")
         + r"_[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}_" + re.escape(body_id), event_id) is not None)
+    named_addressed = (isinstance(speaker, str) and event_id.startswith(f"qdvoice:{speaker}:addressed_")
+                       and event_id.endswith("_" + body_id))
     return (event.kind in {"chat", "dialogue"} and data.get("listenerId") == body_id
             and data.get("deliveryScope") == "nearby" and data.get("channel") in {"npc_chat", "chat", "public", "voice"}
             and isinstance(speaker, str) and speaker != body_id
-            and event_id.startswith(f"qdvoice:{speaker}:") and (named_event or names_listener(event.text, aliases)))
+            and event_id.startswith(f"qdvoice:{speaker}:") and (named_event or named_addressed or names_listener(event.text, aliases)))
 
 
 def quiet_native_guard(context: PlanContext) -> bool:
@@ -433,7 +444,8 @@ def reviewed_steps(role: NpcRole, context: PlanContext, values: Any) -> list[Ste
         step = Step.model_validate(value)
         if step.tool not in role.allowed_tools or step_support(step, context.capabilities):
             raise ValueError("action_not_in_current_body_catalogue")
-        if any(key in step.args for key in ("maidId", "ownerId", "companion", "roleUuid", "requestId", "generation")):
+        if any(key in step.args for key in ("maidId", "ownerId", "companion", "roleUuid", "requestId", "generation",
+                                             "residentId", "bodyId", "controllerId")):
             raise ValueError("model_cannot_change_body_or_request_identity")
         if role.body_kind == "maid" and step.tool == "body:follow" and step.args:
             raise ValueError("body_follow_means_owner_use_companion_with_a_name_or_uuid_from_the_skill_compass")
@@ -698,10 +710,13 @@ class NpcPlanner:
                                               or role.default_native_guard and quiet_native_guard(context))
                               and role.body_kind == "maid" and not context.nearby_speech_on_cooldown
                               and nearby_maid_listener(context.snapshot) and not danger(context.snapshot))
+        near_villager_listener = (quiet_turn and role.body_kind == "villager"
+                                  and not context.nearby_speech_on_cooldown
+                                  and nearby_maid_listener(context.snapshot) and not danger(context.snapshot))
         if check_in:
             tools = ["body:chat"]
-        elif self.resident_turns and quiet_turn:
-            if not (near_partner or near_maid_listener) and "body:chat" in tools:
+        elif quiet_turn and (self.resident_turns is not None or role.body_kind == "villager"):
+            if not (near_partner or near_maid_listener or near_villager_listener) and "body:chat" in tools:
                 tools.remove("body:chat")
             if keep_quiet_guard:
                 tools = [name for name in tools if name not in {"body:stay", "body:stop", "body:native:sit"}]
@@ -996,6 +1011,18 @@ class NpcPlanner:
                 raise ValueError("npc_plan_schema")
         with validate_resident_decision(intent.resident_turn_hash, "validate_actions"):
             steps = reviewed_steps(role, context, plan["steps"])
+        if role.body_kind == "villager" and context.dialogue and any(step.tool == "body:chat" for step in steps):
+            source = addressed[-1] if addressed else context.dialogue[-1]
+            event_id, speaker = source.data.get("eventId"), source.data.get("speakerId")
+            if (source.body_kind == "villager" and source.data.get("listenerId") == str(role.body_id)
+                    and isinstance(event_id, str) and event_id
+                    and isinstance(speaker, str) and UUID_STRING.fullmatch(speaker)):
+                for step in steps:
+                    if step.tool == "body:chat":
+                        step.args.update(eventId=event_id, listenerId=speaker)
+            else:
+                # A reply with no exact original target must never silently become public proactive speech.
+                steps = [step for step in steps if step.tool != "body:chat"]
         delivery = response.get("residentCommunication", {}) if provider == "desktop" else {}
         if (source := delivery.get("sourceEventId")) and source in intent.source_events:
             intent.source_events = [source]
@@ -1018,12 +1045,12 @@ class NpcPlanner:
                 self.pending_companion_result = ((result_note["requestId"], result_note["status"])
                                                  if check_in == "action_result" else None)
         elif quiet_turn:
-            nearby_greeting = near_maid_listener and not near_partner
+            nearby_greeting = (near_maid_listener or near_villager_listener) and not near_partner
             inactive = set() if near_partner or nearby_greeting else {"body:chat"}
             if keep_quiet_guard:
                 inactive.update({"body:stay", "body:stop", "body:native:sit"})
             steps = [step for step in steps if step.tool not in inactive]
-            if role.default_native_guard:
+            if role.default_native_guard or role.body_kind == "villager":
                 previous = [*context.recent_companion_speech, *self.attempted_companion_speech]
                 steps = [step for step in steps if step.tool != "body:chat"
                          or not repeats_companion_speech(step.args["text"], previous)]
@@ -1036,7 +1063,7 @@ class NpcPlanner:
             self.last_route["attention"] = self.fast.last_attention
             if not allowed:
                 steps = [step for step in steps if step.tool != "body:chat"]
-        if quiet_turn and not check_in and role.default_native_guard:
+        if quiet_turn and not check_in and (role.default_native_guard or role.body_kind == "villager"):
             for step in steps:
                 if step.tool == "body:chat" and step.args["text"] not in self.attempted_companion_speech:
                     # Optional speech can choose a fresh subject, never retry the same line as a new effect.
@@ -1279,14 +1306,15 @@ class NpcHost:
                 and not self.journal.acknowledged(str(self.role.body_id), key)]
 
     def _expire_dialogue(self, body_id: str, events: list[str]) -> None:
-        if self.role.body_kind != "maid":
+        if self.role.body_kind not in {"maid", "villager"}:
             return
         cutoff = int(time.time() * 1000) - NATIVE_DIALOGUE_TTL_MS
         expired = []
         for key in events:
             data = self.pending_dialogue[key].data
-            received = timestamp(data.get("receivedAt"))
-            if (data.get("serverAttributed") is True and data.get("maidId") == body_id and received is not None
+            received = timestamp(data.get("occurredAt") if self.role.body_kind == "villager" else data.get("receivedAt"))
+            scoped = (data.get("bodyId") == body_id if self.role.body_kind == "villager" else data.get("maidId") == body_id)
+            if (data.get("serverAttributed") is True and scoped and received is not None
                     and received < cutoff and not self.journal.handled(body_id, key)):
                 expired.append(key)
         if expired:
@@ -1387,7 +1415,7 @@ class NpcHost:
         context.dialogue = dialogue
         context.proposed_agenda = None
         context.personal_craft_stage = None
-        if self.role.body_kind == "maid" and intent.goal == IDLE_GOAL and not dialogue:
+        if self.role.body_kind in {"maid", "villager"} and intent.goal == IDLE_GOAL and not dialogue:
             context.nearby_speech_on_cooldown = self.journal.contacted_recently(body_id, "speech", COMPANION_CHECK_IN_SECONDS)
         inbox_at_start = set(self.pending_dialogue)
         if self.role.agenda_enabled and context.snapshot and context.snapshot.life_state == "alive":
@@ -1423,7 +1451,7 @@ class NpcHost:
                 directory = self.companions.context(context.snapshot)
                 if directory["source"] == "skill_compass":
                     context.activity_review["compassWhileWaiting"] = directory["characters"]
-        if self.role.default_native_guard:
+        if self.role.default_native_guard or self.role.body_kind == "villager":
             context.recent_companion_speech = self.journal.recent_companion_speech(body_id)
         if self.companion_adventure and context.snapshot and context.snapshot.life_state == "alive":
             direct = next((event for event in dialogue if addressed_dialogue(event, body_id, (self.role.name, self.role.id))), None)
@@ -1690,6 +1718,12 @@ class NpcHost:
             return  # Private replies use the identity-bound mailbox, never nearby body:chat.
         if event.kind in ("dialogue", "whisper", "chat") and event.data.get("speakerId") != str(self.role.body_id):
             key = str(event.data.get("eventId") or event.request_id or event.at.isoformat())
+            if self.role.body_kind == "villager":
+                occurred = timestamp(event.data.get("occurredAt"))
+                if (occurred is None or not -30_000 <= time.time() * 1000 - occurred <= NATIVE_DIALOGUE_TTL_MS
+                        or not UUID_STRING.fullmatch(str(event.data.get("speakerId") or ""))
+                        or event.data.get("bodyId") != str(self.role.body_id)):
+                    return  # Stale, unattributed or cross-resident dialogue cannot become a reply target.
             self.pending_dialogue[key] = event
             self.next_plan = 0.0
             while len(self.pending_dialogue) > 32:
@@ -1835,8 +1869,8 @@ class NpcHost:
                 self._expire_dialogue(identity.body_id, events)
                 acknowledged = [event for event in events if self.journal.handled(identity.body_id, event)]
                 desktop_ready = bool(self.desktop_request_id and snapshot and snapshot.life_state == "alive" and not threatened)
-                if self.role.body_kind == "numen":
-                    # Numen's durable event poll has no separate inbox ack RPC.
+                if self.role.body_kind in {"numen", "villager"}:
+                    # These native inboxes are cursor-consumed and have no separate ack RPC.
                     # Completed speech or deliberate listening consumes this input.
                     for event in acknowledged:
                         self.pending_dialogue.pop(event, None)

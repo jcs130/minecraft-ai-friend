@@ -64,6 +64,16 @@ final class Villagers {
 
     boolean citizens() { return citizens; }
 
+    /** A native Bukkit villager can still be registered as a Citizens NPC; check the registry, not metadata alone. */
+    boolean isCitizensBody(Entity entity) {
+        if (!citizens || entity == null) return false;
+        try {
+            return Boolean.TRUE.equals(isNpc.invoke(registry.invoke(null), entity));
+        } catch (ReflectiveOperationException | RuntimeException unavailable) {
+            return true; // fail closed if an enabled Citizens registry cannot be checked
+        }
+    }
+
     Spot spot(String id) { return spots.get(id); }
     Spot nativeSpot(UUID uuid) {
         String id = nativeIds.get(uuid);
@@ -125,8 +135,8 @@ final class Villagers {
         return null;
     }
 
-    private static Location liveVillagerLocation(Spot spot, Entity entity) {
-        if (!(entity instanceof Villager v) || v.isDead() || !v.isValid() || v.hasMetadata("NPC")) return null;
+    private Location liveVillagerLocation(Spot spot, Entity entity) {
+        if (!(entity instanceof Villager v) || v.isDead() || !v.isValid() || v.hasMetadata("NPC") || isCitizensBody(v)) return null;
         if (spot.serviceCounter() == null ? !v.hasAI() : !managedService(spot, v)) return null;
         Location at = v.getLocation();
         World world = at.getWorld();

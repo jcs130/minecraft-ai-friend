@@ -149,7 +149,7 @@ final class VillagerLives {
     }
 
     private void bindLive(NativeVillageHomes.Home home, Villagers.Spot spot, Record row, Villager villager, long now) {
-        if (villager.hasMetadata("NPC")) return;
+        if (villager.hasMetadata("NPC") || plugin.bodyPort() != null && plugin.bodyPort().controls(villager.getUniqueId())) return;
         boolean service = Villagers.trialMerchant(spot.serviceCounter());
         Location post = service ? plugin.villagers.trialServicePost(spot) : null;
         if (service && post == null) return;

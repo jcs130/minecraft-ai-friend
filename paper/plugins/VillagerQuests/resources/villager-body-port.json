@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "enabled": false,
+  "port": 19123,
+  "tokenFile": "villager-body.token",
+  "bindings": []
+}
