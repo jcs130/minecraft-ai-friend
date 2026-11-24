@@ -61,6 +61,8 @@ jobs:
           node --check paper/plugins/AgentFriend/tests/verified-travel-stage.mjs
           node --check paper/plugins/AgentFriend/tests/travel-markers-stage.mjs
           node --check paper/integrations/touhou-maids/tests/maid-scene-stage.mjs
+      - name: Check recipe guide offline source-safety contracts
+        run: python -m unittest discover -s paper/integrations/touhou-maids/tests -p test_recipebook_guide.py -v
       - name: Check optional maid adapter without connecting
         run: |
           node --test paper/integrations/touhou-maids/tests/maid-port.test.mjs
@@ -220,6 +222,10 @@ jobs:
         run: python paper/plugins/AgentFriend/tests/run_muster_roster_tests.py --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/muster-roster-tests"
       - name: Dungeon muster simplify voluntary-join regression
         run: python paper/plugins/AgentFriend/tests/run_muster_simplify_tests.py --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/muster-simplify-tests"
+      - name: Outdoor camp and same-arena crypt offline regression
+        run: python paper/plugins/AgentFriend/tests/run_outdoor_camp_tests.py --jdk "$JAVA_HOME" --output "$RUNNER_TEMP/outdoor-camp-tests"
+      - name: Authored encounter difficulty and telegraph regression
+        run: python paper/plugins/AgentFriend/tests/run_encounter_design_tests.py --jdk "$JAVA_HOME" --candidate "$RUNNER_TEMP/plugin-build/AgentFriend-classes" --server "$RUNNER_TEMP/paper-inputs" --output "$RUNNER_TEMP/encounter-design-tests"
       - name: Independent bounded recycle quotes
         run: python paper/plugins/AgentFriend/tests/run_recycle_quotes.py --jdk "$JAVA_HOME"
       - name: Exact maid identity and Bedrock allay fallback

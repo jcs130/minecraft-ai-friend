@@ -768,7 +768,8 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
             // digging/support. Its static rejection must not hide a complete
             // route under the caller's already configured movement abilities.
             // An incomplete search alone still never grants a terrain fallback.
-            if (!walk || fallbackUsed || call.walkOnly || !permitsTerrain || !(error instanceof SkillBlocked)) throw error;
+            if (!walk || fallbackUsed || call.walkOnly || !permitsTerrain || !(error instanceof SkillBlocked)
+              || error.code === 'navigation-location-changed') throw error;
             const configured = travelContext.probeRoutes?.(at, goal);
             if (!configured?.some(p => p.profile === 'style' && p.status === 'complete')) throw error;
             checkAbort(ctx);
@@ -789,7 +790,8 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
             await gotoGoal(bot, goal, travelContext);
             return;
           } catch (error) {
-            if (!walk || fallbackUsed || call.walkOnly || !permitsTerrain || !(error instanceof SkillBlocked)) throw error;
+            if (!walk || fallbackUsed || call.walkOnly || !permitsTerrain || !(error instanceof SkillBlocked)
+              || error.code === 'navigation-location-changed') throw error;
             const noPathError = error.code === 'pathfinder-no-path';
             const provenTerrain = !noPathError
               && (travelContext.probeRoutes?.(at, goal)?.some(p => (p.profile === 'style' || p.profile === 'dig') && p.status === 'complete') ?? false);
@@ -826,7 +828,9 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
         } catch (err) {
           const from = { x: bot.entity.position.x, z: bot.entity.position.z };
           const rem = Math.hypot(target.x - from.x, target.z - from.z);
-          if (!(err instanceof SkillBlocked) || !Number.isFinite(rem) || rem <= 28) throw err;
+          // Native relocation invalidates this original request, not just its current leg.
+          if (!(err instanceof SkillBlocked) || err.code === 'navigation-location-changed'
+            || !Number.isFinite(rem) || rem <= 28) throw err;
           checkAbort(ctx);
           await runDirectionalLegs(24, 28);
           sceneTarget = target;

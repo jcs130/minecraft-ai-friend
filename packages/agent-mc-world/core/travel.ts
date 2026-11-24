@@ -725,9 +725,26 @@ export async function gotoGoal(bot: Bot, goal: InstanceType<typeof goals.Goal>, 
 /** Offer pending work a grounded pause without detaching the original goto's cleanup. */
 async function navigateWithCheckpoints(bot: Bot, goal: InstanceType<typeof goals.Goal>, ctx: SkillContext): Promise<void> {
   if (!ctx.checkpoint) return bot.pathfinder.goto(goal);
+  const boundarySequence = navigationBoundaryFailureOf(bot)?.sequence ?? 0;
+  let pauseFailure: string | null = null;
+  const requireContinuity = (): void => {
+    const boundary = navigationBoundaryFailureOf(bot);
+    const reason = boundary && boundary.sequence > boundarySequence && boundary.goal === goal
+      ? boundary.reason : pauseFailure;
+    if (reason) {
+      const owner = goalOwnerOf(bot);
+      if (bot.pathfinder.goal === goal && owner?.kind === 'task' && owner.goal === goal)
+        dropGoal(bot, 'task', '位置变更后禁止恢复原路径', ctx.diag);
+      throw new SkillBlocked(reason, [], 'local', 'navigation-location-changed');
+    }
+  };
   for (;;) {
+    requireContinuity();
     const state = { settled: false, failed: false, error: undefined as unknown };
-    const navigation = Promise.resolve().then(() => bot.pathfinder.goto(goal)).then(
+    const navigation = Promise.resolve().then(() => {
+      requireContinuity();
+      return bot.pathfinder.goto(goal);
+    }).then(
       () => { state.settled = true; },
       error => { state.settled = true; state.failed = true; state.error = error; },
     );
@@ -735,23 +752,53 @@ async function navigateWithCheckpoints(bot: Bot, goal: InstanceType<typeof goals
     while (!state.settled) {
       await Promise.race([navigation, sleep(200)]);
       checkAbort(ctx);
+      requireContinuity();
       if (state.settled) break;
-      await ctx.checkpoint(async () => {
-        const owner = goalOwnerOf(bot);
-        if (bot.pathfinder.goal !== goal || owner?.kind !== 'task') throw new Aborted('寻路目标已由其他动作接管');
-        stopped = true;
-        dropGoal(bot, 'task', '安全检查点暂停寻路', ctx.diag);
-        // setGoal(null) may reject goto asynchronously. Its result must settle
-        // before a meal or another path can acquire the body.
-        await surfacePause(bot,ctx,async()=>{
-          await navigation;
-          if(!surfacePauseReady(bot))await settleOnGround(bot, ctx, 1_500);
+      let detachPause = () => {};
+      try {
+        await ctx.checkpoint(async () => {
+          requireContinuity();
+          const owner = goalOwnerOf(bot);
+          if (bot.pathfinder.goal !== goal || owner?.kind !== 'task') throw new Aborted('寻路目标已由其他动作接管');
+          stopped = true;
+          // The global boundary guard cannot attribute a packet while goal is null.
+          // Retain native relocation evidence only for this original checkpoint pause.
+          const client = bot._client;
+          let before: Vec3 | null = null;
+          const capture = () => { before = bot.entity.position.clone(); };
+          const applied = () => {
+            if (before && before.distanceTo(bot.entity.position) >= 8)
+              pauseFailure = '安全检查点暂停期间服务器变更了位置，旧路径已失效；先核实落点与原目标再决定如何继续。';
+            before = null;
+          };
+          const respawn = () => {
+            before = null;
+            pauseFailure = '安全检查点暂停期间收到服务器重生或世界切换包，旧路径已失效；先核实当前世界和落点再决定如何继续。';
+          };
+          client?.prependListener('position', capture);
+          client?.on('position', applied);
+          client?.on('respawn', respawn);
+          detachPause = () => {
+            client?.off('position', capture);
+            client?.off('position', applied);
+            client?.off('respawn', respawn);
+          };
+          dropGoal(bot, 'task', '安全检查点暂停寻路', ctx.diag);
+          // setGoal(null) may reject goto asynchronously. Its result must settle
+          // before a meal or another path can acquire the body.
+          await surfacePause(bot,ctx,async()=>{
+            await navigation;
+            if(!surfacePauseReady(bot))await settleOnGround(bot, ctx, 1_500);
+          });
         });
-      });
+      } finally {
+        detachPause();
+      }
       if (stopped) break;
     }
     if (stopped) {
       checkAbort(ctx); // A successful yield exits through the executor's saved continuation.
+      requireContinuity(); // A relocation is never a deferred checkpoint or permission to revive this goal.
       if (bot.pathfinder.goal || goalOwnerKind(bot)) throw new Aborted('检查点收尾期间寻路已被接管');
       // If fresh state invalidated the handoff, continue this original goal.
       noteGoalOwner(bot, goal, 'task', '检查点暂缓后继续寻路', ctx.diag);
@@ -887,6 +934,8 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
   } catch (err) {
     // 中止时目标可能已归抢占方；此处不撤目标，撤销由 abortTask/pump 负责。
     if (ctx.aborted()) throw new Aborted(ctx.abortedBy?.() ?? null);
+    // The checkpoint-local boundary already revoked only its owned goal.
+    if (err instanceof SkillBlocked && err.code === 'navigation-location-changed') throw err;
     const searchFailed = (noPath || (err as Error).name === 'NoPath')
       && bot.pathfinder.goal === goal && goalOwnerOf(bot)?.goal === goal;
     // A native relocation already cleared the old route. Its delayed rejection
