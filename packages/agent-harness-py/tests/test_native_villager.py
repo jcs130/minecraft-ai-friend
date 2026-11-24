@@ -14,6 +14,7 @@ from agent_mc_harness import BodyAction, Scope
 from agent_mc_harness.body.villager import VillagerBody
 from agent_mc_harness.bridges import ControlChanged, NativeVillagerBridge, VillagerRequestRejected
 from agent_mc_harness.npc import NpcHost, NpcRole, addressed_dialogue
+from agent_mc_harness.npc_service import villager_identity_already_bound
 from agent_mc_harness.villager_roles import VILLAGER_TOOLS, parse_villager_roster, villager_resident_id
 
 RESIDENT = "qinghe"
@@ -534,6 +535,13 @@ def test_terminal_speech_refreshes_original_voice_status_without_replay(run):
         finally:
             await body.destroy()
     run(scenario())
+
+
+def test_villager_discovery_checks_existing_resident_host_role():
+    role = SimpleNamespace(id="villager_existing", body_id=BODY)
+    resident = SimpleNamespace(host=SimpleNamespace(role=role))
+    assert villager_identity_already_bound(role, [], {}, {"existing": resident})
+    assert not villager_identity_already_bound(SimpleNamespace(id="villager_new", body_id=str(uuid4())), [], {}, {"existing": resident})
 
 
 def test_villager_profile_keeps_maid_numen_guards_and_four_tool_limit():
