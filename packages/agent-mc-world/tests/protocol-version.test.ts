@@ -42,10 +42,14 @@ it('negotiates experimental Java 26.2 against a real loopback protocol server', 
       const [client] = await login;
       expect(client.username).toBe('VersionFixture26_2'); expect(bot.version).toBe('26.2'); expect(errors).toEqual([]);
     } finally {
+      // Wait for the bot to fully end before uninstalling the 26.2 data resolution, otherwise
+      // packets still in flight are parsed against a null registry (unhandled supportFeature error).
+      const botEnded = once(bot as unknown as NodeJS.EventEmitter, 'end').catch(() => undefined);
       const end = (bot as { quit?: () => void; end?: () => void }).quit ?? (bot as { end?: () => void }).end;
       end?.call(bot);
       for (const client of Object.values(server.clients) as Array<{ end(reason: string): void }>) client.end('Fixture complete');
       const closed = once(server, 'close'); server.close(); await closed;
+      await Promise.race([botEnded, new Promise(resolve => setTimeout(resolve, 5_000))]);
     }
   } finally {
     uninstallExperimentalMinecraftDataResolution();
