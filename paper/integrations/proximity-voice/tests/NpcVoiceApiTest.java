@@ -148,6 +148,24 @@ public final class NpcVoiceApiTest {
             state[index]=prior;
         }
         nearbyCheck(!empty.containsValue(nearby));
+        Entity maid=(Entity)Proxy.newProxyInstance(NpcVoiceApiTest.class.getClassLoader(),new Class<?>[]{Entity.class},(o,m,a)->switch(m.getName()){
+            case "getUniqueId"->source;case "getWorld"->world;case "getLocation"->new Location(world,16,64,0);
+            case "isValid"->true;case "isDead","isInvisible"->false;
+            default->throw new AssertionError(m.getName());});
+        var ownerProfile=new NpcDialoguePolicy.Profile(source,target,"maid","QA Maid","qa",24,List.of());
+        var visitorProfile=new NpcDialoguePolicy.Profile(source,UUID.randomUUID(),"maid","QA Maid","qa",24,List.of());
+        nearbyCheck(NpcConversations.hearsAsrListener(nearby,maid,ownerProfile,24));
+        nearbyCheck(!NpcConversations.hearsAsrListener(nearby,maid,visitorProfile,24));
+        nearbyCheck(!NpcConversations.hearsAsrListener(nearby,maid,ownerProfile,8));
+        nearbyCheck(!NpcConversations.hearsAsrListener(nearby,maid,null,24));
+        nearbyCheck(!NpcConversations.hearsAsrListener(nearby,maid,ownerProfile,Double.NaN));
+        nearbyCheck(!NpcConversations.hearsAsrListener(nearby,maid,ownerProfile,0));
+        nearbyCheck(!NpcConversations.hearsAsrListener(nearby,maid,profile,24));
+        for(int index=0;index<state.length;index++){
+            boolean prior=state[index];state[index]=!prior;
+            nearbyCheck(!NpcConversations.hearsAsrListener(nearby,maid,ownerProfile,24));
+            state[index]=prior;
+        }
     }
 
     public static void main(String[] args)throws Exception{

@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from mcp.shared.exceptions import MCPError
+from mcp.types import CONNECTION_CLOSED, REQUEST_TIMEOUT
 from test_hosted_mcp import port
 from test_hosted_stop import LeaseSession
 from test_server_npc import role as npc_role
@@ -120,7 +122,9 @@ def test_first_start_with_active_handoff_only_observes_lease(tmp_path, monkeypat
     run(check())
 
 
-@pytest.mark.parametrize("failure", [TimeoutError(), ExceptionGroup("MCP transport", [OSError("connection reset")])])
+@pytest.mark.parametrize("failure", [TimeoutError(), ExceptionGroup("MCP transport", [OSError("connection reset")]),
+    ExceptionGroup("MCP timeout", [MCPError(code=REQUEST_TIMEOUT, message="read timed out")]),
+    ExceptionGroup("MCP connection", [MCPError(code=CONNECTION_CLOSED, message="connection closed")])])
 def test_external_vacancy_transport_failure_keeps_probing_without_reclosing_the_host(run, failure):
     async def check():
         calls = []

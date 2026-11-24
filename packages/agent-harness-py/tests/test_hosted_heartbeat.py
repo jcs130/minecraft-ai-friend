@@ -1,12 +1,13 @@
 import asyncio
 import json
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import httpx
 import pytest
+from test_hosted_mcp import BODY, Session, port
 
 from agent_mc_harness.body import hosted_mcp
-from test_hosted_mcp import BODY, Session, port
 
 
 def faster_heartbeat(monkeypatch):
@@ -102,10 +103,73 @@ def test_persistent_miss_or_fence_change_remains_fail_closed(tmp_path, monkeypat
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("state", ["same_fence", "different_epoch", "paused", "unsettled", "expired"])
+def test_heartbeat_uses_fresh_transport_without_acquiring_or_replaying(tmp_path, monkeypatch, state):
+    async def run():
+        class BrokenStream(Session):
+            async def call_tool(self, tool, args):
+                if args["op"] == "heartbeat":
+                    raise httpx.ReadError("original stream stalled")
+                return await super().call_tool(tool, args)
+
+        original = BrokenStream()
+        body = port(tmp_path, original)
+        fresh_calls = []
+        try:
+            await body.open()
+            body.heartbeat.cancel()
+            await asyncio.gather(body.heartbeat, return_exceptions=True)
+            body._provided_session = None
+
+            async def read(tool, args):
+                fresh_calls.append(args)
+                assert args["op"] in {"facts", "heartbeat"}
+                if args["op"] == "heartbeat" and state == "expired":
+                    return SimpleNamespace(isError=True, structuredContent={})
+                return SimpleNamespace(isError=False, structuredContent={
+                    "roleUuid": BODY, "epoch": body.epoch + (state == "different_epoch"),
+                    "mode": "paused" if state == "paused" else "harness", "fenced": state != "unsettled",
+                })
+
+            @asynccontextmanager
+            async def fresh():
+                yield SimpleNamespace(call_tool=read)
+
+            monkeypatch.setattr(body, "_mcp_session", fresh)
+            epoch, generation = body.epoch, body.boot
+            if state == "same_fence":
+                await body._heartbeat_once()
+                assert [row["op"] for row in fresh_calls] == ["facts", "heartbeat"]
+                assert not body.lost
+            else:
+                with pytest.raises(RuntimeError):
+                    await body._heartbeat_once()
+                assert [row["op"] for row in fresh_calls] == (["facts", "heartbeat"] if state == "expired" else ["facts"])
+            assert all(row["epoch"] == epoch and row["boot"] == generation for row in fresh_calls)
+            assert not any(row["op"] == "call" for row in original.calls)
+            assert sum(row["op"] == "attach" for row in original.calls) == 1
+        finally:
+            await body.close()
+
+    asyncio.run(run())
+
+
 def test_mcp2_transport_error_is_transient():
     httpx2 = pytest.importorskip("httpx2")
     assert hosted_mcp.HostedMcpPort._transient_facts_error(httpx2.ReadError("read interrupted"))
     assert not hosted_mcp.HostedMcpPort._transient_facts_error(RuntimeError("CONTROL_CHANGED"))
+
+
+def test_mcp2_typed_connection_errors_are_transient_but_native_denials_are_not():
+    from mcp.shared.exceptions import MCPError
+    from mcp.types import CONNECTION_CLOSED, INVALID_PARAMS, REQUEST_TIMEOUT
+
+    for code in (REQUEST_TIMEOUT, CONNECTION_CLOSED):
+        error = MCPError(code=code, message="synthetic transport failure")
+        assert hosted_mcp.HostedMcpPort._transient_facts_error(error)
+        assert hosted_mcp.HostedMcpPort._transient_facts_error(ExceptionGroup("connection", [error]))
+        assert not hosted_mcp.HostedMcpPort._transient_facts_error(ExceptionGroup("mixed", [error, ValueError("identity")]))
+    assert not hosted_mcp.HostedMcpPort._transient_facts_error(MCPError(code=INVALID_PARAMS, message="invalid identity"))
 
 
 def test_uncertain_action_exposes_transport_type_and_never_resends(tmp_path):
