@@ -6,7 +6,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { installNavigationBoundaryGuard, navigationBoundaryFailureOf } from '../core/navigation-boundary.ts';
 import { installPartialBlockStartRepair } from '../core/pathfinder-start.ts';
 import { installWorldIdentity } from '../core/world-scope.ts';
-import { gotoGoalOnce, setOwnedGoal } from '../core/travel.ts';
+import { goalOwnerOf, gotoGoalOnce, setOwnedGoal } from '../core/travel.ts';
+import type { SkillContext } from '../core/skill-context.ts';
 import { methodHarness } from './method-harness.ts';
 import type { TaskReport } from '../core/executor.ts';
 
@@ -72,6 +73,78 @@ it('reports a boundary promptly and leaves a replacement goal owned by another a
   expect(await result).toMatchObject({ code: 'navigation-location-changed' });
   expect(r.bot.pathfinder.goal).toBe(next);
   expect((await result).message).not.toMatch(/跳跃范围|零推进|不可达$/);
+});
+
+function pausedRoute(x = 30) {
+  const r = rig(), goal = new pathfinderPkg.goals.GoalBlock(x, 64, 0);
+  const goto = vi.spyOn(r.bot.pathfinder, 'goto');
+  const beforeListeners = ['position', 'respawn'].map(event => r.bot._client.listenerCount(event));
+  let resume!: () => void, paused = false;
+  const handoff = new Promise<void>(resolve => { resume = resolve; });
+  const ctx: Pick<SkillContext, 'aborted' | 'checkpoint'> = {
+    aborted: () => false,
+    checkpoint: async settle => {
+      if (paused) return;
+      await settle?.();
+      paused = true;
+      await handoff; // A deferred handoff returns to the original navigation loop.
+    },
+  };
+  const result = gotoGoalOnce(r.bot, goal, ctx as SkillContext).catch(error => error);
+  return { ...r, goal, goto, result, resume, beforeListeners, paused: () => paused };
+}
+
+it('never revives an old goal after a native relocation during a deferred checkpoint pause', async () => {
+  const r = pausedRoute();
+  await vi.advanceTimersByTimeAsync(300);
+  expect(r.paused()).toBe(true);
+  expect(r.bot.pathfinder.goal).toBeNull();
+  expect(r.bot.getControlState('forward')).toBe(false);
+  const from = r.bot.entity.position.clone();
+  r.position(100.5, 64, 100.5);
+  r.position(from.x, from.y, from.z); // Returning to the same feet cannot restore the old route.
+  r.resume();
+  await vi.advanceTimersByTimeAsync(300);
+  expect(r.goto).toHaveBeenCalledTimes(1);
+  expect(await r.result).toMatchObject({ code: 'navigation-location-changed' });
+  expect(['position', 'respawn'].map(event => r.bot._client.listenerCount(event))).toEqual(r.beforeListeners);
+  expect(r.bot.pathfinder.goal).toBeNull();
+  expect(r.bot.getControlState('forward')).toBe(false);
+});
+
+it.each(['task', 'combat'] as const)('preserves a replacement %s goal after relocation during checkpoint cleanup', async owner => {
+  const r = pausedRoute();
+  await vi.advanceTimersByTimeAsync(300);
+  expect(r.paused()).toBe(true);
+  expect(r.bot.pathfinder.goal).toBeNull();
+  if (owner === 'task') r.position(100.5, 64, 100.5);
+  else r.bot._client.emit('respawn', { worldState: { name: 'minecraft:another-world' } } as never);
+  const next = new pathfinderPkg.goals.GoalBlock(110, 64, 100);
+  setOwnedGoal(r.bot, next, owner, 'replacement during deferred checkpoint');
+  r.resume();
+  await vi.advanceTimersByTimeAsync(300);
+  expect(await r.result).toMatchObject({ code: 'navigation-location-changed' });
+  expect(r.goto).toHaveBeenCalledTimes(1);
+  expect(r.bot.pathfinder.goal).toBe(next);
+  expect(goalOwnerOf(r.bot)).toMatchObject({ kind: owner, goal: next });
+  expect(['position', 'respawn'].map(event => r.bot._client.listenerCount(event))).toEqual(r.beforeListeners);
+});
+
+it('still completes the same legitimate goal after a deferred checkpoint pause without relocation', async () => {
+  const r = pausedRoute(5);
+  await vi.advanceTimersByTimeAsync(300);
+  expect(r.paused()).toBe(true);
+  expect(r.bot.pathfinder.goal).toBeNull();
+  r.position(.2, 0, 0, true); // A native small correction still permits the deferred handoff.
+  r.resume();
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(await r.result).toBeUndefined();
+  expect(r.goto).toHaveBeenCalledTimes(2);
+  expect(r.goto.mock.calls.every(([goal]) => goal === r.goal)).toBe(true);
+  expect(['position', 'respawn'].map(event => r.bot._client.listenerCount(event))).toEqual(r.beforeListeners);
+  expect(r.bot.entity.position.floored()).toEqual(new Vec3(5, 64, 0));
+  expect(r.bot.pathfinder.goal).toBeNull();
+  expect(r.bot.getControlState('forward')).toBe(false);
 });
 
 it('preserves the relocation reason in the executor terminal instead of retrying with terrain changes', async () => {
