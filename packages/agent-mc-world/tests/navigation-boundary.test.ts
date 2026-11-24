@@ -77,13 +77,18 @@ it('reports a boundary promptly and leaves a replacement goal owned by another a
 it('preserves the relocation reason in the executor terminal instead of retrying with terrain changes', async () => {
   const r = rig(), reports: TaskReport[] = [];
   Object.assign((r.h.exec as any).opts, { report: (report: TaskReport) => reports.push(report), fleeHealth: () => 0 });
+  const terminalEvents = ['goal_reached', 'goal_updated', 'path_stop'] as const;
+  const beforeListeners = terminalEvents.map(event => r.bot.listenerCount(event));
   expect(r.h.exec.submitDetailed([{ skill: 'goto', at: [30, 64, 0], walkOnly: true }]).accepted).toBe(true);
-  // The fixture must first own an in-flight route; fixed startup timing can
-  // relocate before asynchronous executor preparation finishes on a busy runner.
-  for (let elapsed = 0; !r.bot.pathfinder.isMoving() && elapsed < 3000; elapsed += 50) {
+  // An executable path prefix alone does not prove the goto Promise has armed
+  // its terminal listeners. Relocate only during the actual awaited route.
+  const awaitedRoute = () => r.bot.pathfinder.isMoving()
+    && terminalEvents.every((event, i) => r.bot.listenerCount(event) > beforeListeners[i]);
+  for (let elapsed = 0; !awaitedRoute() && elapsed < 3000; elapsed += 50) {
     await vi.advanceTimersByTimeAsync(50);
   }
-  expect(r.bot.pathfinder.isMoving()).toBe(true);
+  expect(awaitedRoute(), JSON.stringify({ beforeListeners,
+    currentListeners: terminalEvents.map(event => r.bot.listenerCount(event)), moving: r.bot.pathfinder.isMoving() })).toBe(true);
   r.position(20, 0, 100, true); // Relative packet must be interpreted by native physics.
   // Safety is synchronous; the executor report follows asynchronous goto/checkpoint cleanup.
   expect(r.bot.pathfinder.goal).toBeNull();
@@ -91,6 +96,15 @@ it('preserves the relocation reason in the executor terminal instead of retrying
   expect(r.bot.getControlState('forward')).toBe(false);
   for (let elapsed = 0; reports.length === 0 && elapsed < 3000; elapsed += 50) {
     await vi.advanceTimersByTimeAsync(50);
+  }
+  if (reports.length === 0) {
+    const boundary = navigationBoundaryFailureOf(r.bot);
+    console.error('NAVIGATION_TERMINAL_FIXTURE_DIAGNOSTIC', JSON.stringify({
+      queue: r.h.exec.status(),
+      listeners: Object.fromEntries(terminalEvents.map(event => [event, r.bot.listenerCount(event)])),
+      boundary: boundary ? { sequence: boundary.sequence, kind: boundary.kind, goalType: boundary.goal.constructor.name } : null,
+      position: r.bot.entity.position, onGround: r.bot.entity.onGround, forward: r.bot.getControlState('forward'),
+    }));
   }
   expect(reports).toHaveLength(1);
   expect(reports[0]).toMatchObject({ kind: 'blocked', steps: [{ outcome: 'fail', decision: {
