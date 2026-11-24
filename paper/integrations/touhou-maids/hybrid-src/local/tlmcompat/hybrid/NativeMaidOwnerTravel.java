@@ -348,10 +348,11 @@ final class NativeMaidOwnerTravel implements Listener {
         if(!plugin.nativeTravelAllowed(id) || local.qdj.maids.brain.ResidentBodyAccess.managesCompanionMovement(id))return null;
         EntityMaid maid = HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
         boolean personal = plugin.personalTravel(id);
+        boolean guide = ownerId.equals(plugin.guideOwner(id));
         if (maid == null || !ownerId.equals(maid.getOwnerUUID()) || !source.equals(maid.getBukkitEntity().getWorld())
-                || (!personal && !plugin.sharedDialogueEnabled(maid)) || !maid.isAlive() || maid.isRemoved() || maid.isNoAi()
+                || (!personal && !guide && !plugin.sharedDialogueEnabled(maid)) || !maid.isAlive() || maid.isRemoved() || maid.isNoAi()
                 || maid.isSleeping()) return null;
-        if (personal && (maid.isPassenger() || maid.isVehicle() || plugin.editingMaidInventory(maid)
+        if ((personal || guide) && (maid.isPassenger() || maid.isVehicle() || plugin.editingMaidInventory(maid)
                 || plugin.workshops().busy(id))) return null;
         boolean idle = maid.getTask().getUid().toString().equals("touhou_little_maid:idle");
         // Model-selected short waiting is still companionship, not permanent stationing.
@@ -360,7 +361,7 @@ final class NativeMaidOwnerTravel implements Listener {
         boolean temporaryWait = idle && MaidCompanionActions.waiting(maid)
                 && maid.isMaidInSittingPose() && maid.isHomeModeEnable() && !maid.isPassenger() && !maid.isVehicle();
         if (!temporaryWait && (maid.isMaidInSittingPose() || maid.isHomeModeEnable() || !maid.canBrainMoving())) return null;
-        return idleOrAutoDefending(maid) || (personal && maid.getTask() instanceof IAttackTask) ? maid : null;
+        return idleOrAutoDefending(maid) || ((personal || guide) && maid.getTask() instanceof IAttackTask) ? maid : null;
     }
 
     private static boolean idleOrAutoDefending(EntityMaid maid) {

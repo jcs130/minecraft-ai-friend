@@ -153,7 +153,7 @@ class MaidOracle:
             raise RuntimeError("node not found")
         port = repo_root() / "paper" / "integrations" / "touhou-maids" / "agent" / "maid-port.mjs"
         self.proc = subprocess.Popen([node, str(Path(__file__).with_name("maid_oracle.mjs")), str(port)], stdin=subprocess.PIPE,
-                                     stdout=subprocess.PIPE, text=True)
+                                     stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="strict")
         assert self.proc.stdout is not None
         self.tool = json.loads(self.proc.stdout.readline())
 

@@ -19,9 +19,16 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .agenda import schedule
-from .companion_adventure import mentions_activity
-from .conversation import COMPANION_SPEECH_POLICY, CONVERSATION_POLICY, WHALE_SPEECH_POLICY, names_listener, repeats_companion_speech, whale_speech
 from .body import adventure, commission_craft
+from .companion_adventure import mentions_activity
+from .conversation import (
+    COMPANION_SPEECH_POLICY,
+    CONVERSATION_POLICY,
+    WHALE_SPEECH_POLICY,
+    names_listener,
+    repeats_companion_speech,
+    whale_speech,
+)
 from .journal import ActionJournal, work_key
 from .maid_companions import WALK_TIMEOUT, MaidCompanions, nearby_maid_listener, parse_choice, walk_available
 from .models import BodyEvent, Scope, utcnow
@@ -200,6 +207,14 @@ def addressed_dialogue(event: BodyEvent, body_id: str, aliases: tuple[str, ...] 
             and event_id.startswith(f"qdvoice:{speaker}:") and (named_event or names_listener(event.text, aliases)))
 
 
+def quiet_native_guard(context: PlanContext) -> bool:
+    native = current_native_state(context)
+    return (already_guarding(native) and native.get("taskId") == "touhou_little_maid:idle"
+            and native.get("canMove") is True
+            and all(native.get(flag) is False for flag in ("passenger", "sitting", "homeMode"))
+            and not danger(context.snapshot))
+
+
 def companion_check_in(role: NpcRole, context: PlanContext) -> tuple[str, tuple[float, float, float]] | None:
     native = current_native_state(context)
     follow, companion = native.get("follow"), native.get("companion")
@@ -209,9 +224,16 @@ def companion_check_in(role: NpcRole, context: PlanContext) -> tuple[str, tuple[
         ready = expedition.get("state") == "nearby" and expedition.get("leaderDimension") == getattr(snapshot, "dimension", None)
         distance = expedition.get("distanceBlocks")
     else:
-        ready = (isinstance(native.get("conversation"), dict) and isinstance(follow, dict)
-                 and follow.get("active") is True and follow.get("temporaryWait") is False
-                 and isinstance(companion, dict) and companion.get("state") == "following_ready")
+        guide = native.get("guideCompanion")
+        guide_ready = (isinstance(guide, dict) and guide.get("source") == "native_player_guide"
+                       and guide.get("ownerId") == str(role.native_owner_id)
+                       and guide.get("maidId") == str(role.body_id)
+                       and guide.get("ready") is True and guide.get("following") is True
+                       and guide.get("guardDelegated") is True)
+        original_ready = (isinstance(native.get("conversation"), dict) and isinstance(companion, dict)
+                          and companion.get("state") == "following_ready")
+        ready = (isinstance(follow, dict) and follow.get("active") is True
+                 and follow.get("temporaryWait") is False and (guide_ready or original_ready))
         distance = native.get("ownerDistance")
     if (not role.default_native_guard or "body:chat" not in role.allowed_tools or context.dialogue
             or context.capabilities is None or step_support(Step(tool="body:chat"), context.capabilities)
@@ -223,6 +245,18 @@ def companion_check_in(role: NpcRole, context: PlanContext) -> tuple[str, tuple[
             or not all(axis in snapshot.position and math.isfinite(snapshot.position[axis]) for axis in "xyz")):
         return None
     return snapshot.dimension, (snapshot.position["x"], snapshot.position["y"], snapshot.position["z"])
+
+
+def recent_companion_result(context: PlanContext, reported: list[tuple[str, str]]) -> dict[str, Any] | None:
+    for row in context.body_results:
+        key = (row.get("requestId"), row.get("status"))
+        observed = timestamp(row.get("observedAt"))
+        if (row.get("action") in {"move", "walk", "equip", "cast", "craft", "make", "fish"}
+                and row.get("terminal") is True and row.get("status") in {"completed", "failed"}
+                and isinstance(key[0], str) and key not in reported
+                and observed is not None and 0 <= time.time() * 1000 - observed <= 15 * 60_000):
+            return row
+    return None
 
 
 def routine_meal(role: NpcRole, context: PlanContext) -> Step | None:
@@ -479,10 +513,54 @@ class NpcPlanner:
         self.next_anchor_leave = 0.0
         self.next_guard_review = 0.0
         self.next_companion_check_in = time.monotonic() + 25
+        self.next_companion_attempt = 0.0
         self.companion_anchor: tuple[str, tuple[float, float, float]] | None = None
         self.last_adventure_ending = 0
+        self.pending_companion_check_in: tuple[Intent, tuple[str, tuple[float, float, float]], int, str] | None = None
+        self.attempted_companion_speech: list[str] = []
+        self.reported_companion_results: list[tuple[str, str]] = []
+        self.pending_companion_result: tuple[str, str] | None = None
         self.social_roster = ()
         self.next_social_review = 0.0
+
+    def _settle_companion_check_in(self, context: PlanContext, now: float) -> None:
+        pending = self.pending_companion_check_in
+        if pending is None:
+            return
+        intent, position, ending, text = pending
+        requests = intent.action_receipts
+        if not requests:
+            if intent.state in {"completed", "failed", "cancelled"}:
+                self.pending_companion_check_in = None  # No body dispatch; the opportunity was not consumed.
+                self.pending_companion_result = None
+            return
+        delivered = any(row.get("requestId") in requests and row.get("status") == "completed"
+                        and requests[row["requestId"]].get("verb") == "chat"
+                        and requests[row["requestId"]].get("status") == "completed"
+                        and requests[row["requestId"]].get("terminal") is True
+                        and type(row.get("captionRecipients")) is int and row["captionRecipients"] > 0
+                        for row in context.communication_receipts)
+        if delivered:
+            self.companion_anchor = position
+            self.last_adventure_ending = max(self.last_adventure_ending, ending)
+            self.next_companion_check_in = now + COMPANION_CHECK_IN_SECONDS
+            self.attempted_companion_speech = [line for line in self.attempted_companion_speech if line != text]
+            if self.pending_companion_result is not None:
+                self.reported_companion_results = [*self.reported_companion_results, self.pending_companion_result][-16:]
+            self.pending_companion_check_in = None
+            self.pending_companion_result = None
+        else:
+            if text not in self.attempted_companion_speech:
+                self.attempted_companion_speech = [*self.attempted_companion_speech, text][-8:]
+            zero_recipients = any(row.get("requestId") in requests and row.get("status") == "completed"
+                                  and type(row.get("captionRecipients")) is int and row["captionRecipients"] == 0
+                                  for row in context.communication_receipts)
+            failed = all(row.get("terminal") is True and row.get("status") == "failed" for row in requests.values())
+            if failed or zero_recipients:
+                # A terminal failure or zero-recipient caption is not a delivered check-in.
+                # Missing/mismatched evidence remains pending until the original receipt is queried.
+                self.pending_companion_check_in = None
+                self.pending_companion_result = None
 
     async def decision(self, kind, payload, timeout, *, desktop_only=False):
         if self.resident_turns:
@@ -548,6 +626,7 @@ class NpcPlanner:
             return []
         caps = context.capabilities
         now = time.monotonic()
+        self._settle_companion_check_in(context, now)
         addressed = [event for event in context.dialogue if addressed_dialogue(event, str(role.body_id), (role.name, role.id))]
         if addressed:
             self.next_companion_check_in = max(self.next_companion_check_in, now + COMPANION_CHECK_IN_SECONDS)
@@ -578,8 +657,10 @@ class NpcPlanner:
                 self.next_anchor_leave = now + JOURNEY_ANCHOR_RETRY_SECONDS
                 self.last_route = {"layer": "native-policy", "reason": "leave_expired_journey_anchor"}
                 return leave
+        result_note = (recent_companion_result(context, self.reported_companion_results)
+                       if companion_check_in(role, context) is not None else None)
         if intent.goal == IDLE_GOAL and not context.dialogue and available_for_routine:
-            if not following and not current_agenda and now >= self.next_catch and (catch := routine_catch(role, context)):
+            if not result_note and not following and not current_agenda and now >= self.next_catch and (catch := routine_catch(role, context)):
                 self.next_catch = now + 300.0
                 self.last_route = {"layer": "native-policy", "reason": "prepared_native_fishing"}
                 return [catch]
@@ -588,11 +669,14 @@ class NpcPlanner:
                 fresh_ending = self.last_adventure_ending < ending and 0 <= time.time() * 1000 - ending <= 15 * 60_000
                 anchor = self.companion_anchor
                 moved = anchor is None or anchor[0] != position[0] or math.dist(anchor[1], position[1]) >= COMPANION_TRAVEL_BLOCKS
-                if not current_agenda and now >= self.next_companion_check_in and (moved or fresh_ending):
-                    check_in = "activity_ended" if fresh_ending else "near_partner" if anchor is None else "settled_after_travel"
-                    self.companion_anchor = position
-                    self.last_adventure_ending = max(self.last_adventure_ending, ending)
-                    self.next_companion_check_in = now + COMPANION_CHECK_IN_SECONDS
+                if ((not current_agenda or result_note is not None) and self.pending_companion_check_in is None
+                        and not context.nearby_speech_on_cooldown
+                        and now >= max(self.next_companion_check_in, self.next_companion_attempt)
+                        and (moved or fresh_ending or result_note is not None)):
+                    check_in = ("action_result" if result_note is not None else "activity_ended" if fresh_ending
+                                else "near_partner" if anchor is None else "settled_after_travel")
+                    # Reserve only this inference attempt. Actual caption receipt commits the anchor and cooldown.
+                    self.next_companion_attempt = now + min(role.interval_seconds, COMPANION_CHECK_IN_SECONDS)
                 elif context.companion_adventure is not None and not review_company:
                     if context.agenda is None or now < self.next_guard_review:
                         self.last_route = {"layer": "native-policy", "reason": "guard_continuing",
@@ -604,13 +688,16 @@ class NpcPlanner:
                         delay = min(delay, max(0, upcoming[0]["startsAt"] - time.time()))
                     self.next_guard_review = now + delay
         tools = [tool for tool in role.allowed_tools if tool not in {"body:native:rendezvous", "body:native:release_rendezvous"} and not step_support(Step(tool=tool), caps)]
+        if not role.native_tasks and "body:native:task" in tools:
+            tools.remove("body:native:task")  # An empty reviewed task list grants no executable task.
         if intent.goal == IDLE_GOAL and "body:native:survey" in tools and surveyed_here(context):
             tools.remove("body:native:survey")
         quiet_turn = intent.goal == IDLE_GOAL and not context.dialogue and not (context.party_context or {}).get("message")
         near_partner = quiet_turn and adventure.partner_nearby(role.adventure_partner, context)
-        near_maid_listener = (quiet_turn and self.resident_turns is not None and role.body_kind == "maid"
-                              and not context.nearby_speech_on_cooldown and nearby_maid_listener(context.snapshot)
-                              and not danger(context.snapshot))
+        near_maid_listener = (quiet_turn and (self.resident_turns is not None
+                                              or role.default_native_guard and quiet_native_guard(context))
+                              and role.body_kind == "maid" and not context.nearby_speech_on_cooldown
+                              and nearby_maid_listener(context.snapshot) and not danger(context.snapshot))
         if check_in:
             tools = ["body:chat"]
         elif self.resident_turns and quiet_turn:
@@ -700,13 +787,19 @@ class NpcPlanner:
             facts["goal"] = ("You are beside your companion in a quiet moment. Speak briefly about one fresh change or observation. "
                              "A small reaction is welcome if it follows from the scene. Use recentCompanionSpeech to choose a different "
                              "subject. Prefer silence to another readiness check, mana update or invitation with the same meaning.")
+            if check_in == "action_result":
+                facts["companionActionResult"] = result_note
+                facts["goal"] = ("Give one short, useful Chinese explanation of companionActionResult, from its original observed "
+                                 "phase and outcome only. A mode or movement leg is not mission completion. A failed action did not "
+                                 "succeed. Do not retry it, invent effects, expose request IDs, cancel the agenda or propose another outing.")
         companion_style = (role.default_native_guard and isinstance(native_context, dict)
-                           and isinstance(native_context.get("conversation"), dict))
+                           and (isinstance(native_context.get("conversation"), dict)
+                                or isinstance(native_context.get("guideCompanion"), dict)))
         if companion_style:
             facts["recentCompanionSpeech"] = context.recent_companion_speech
         if context.companion_adventure is not None:
             facts["companionAdventure"] = context.companion_adventure
-            if check_in:
+            if check_in and check_in != "action_result":
                 # The unsolicited turn needs the current activity and safe choices, not the whole directory.
                 facts["companionAdventure"] = {key: value for key, value in context.companion_adventure.items() if key != "dungeons"}
                 facts["goal"] = ("Share one fresh, scene-appropriate idea with your nearby partner. "
@@ -914,24 +1007,40 @@ class NpcPlanner:
                 with validate_resident_decision(intent.resident_turn_hash, "validate_agenda"):
                     context.proposed_agenda = schedule(plan["agenda"], time.time())
         if check_in:
+            previous = [*context.recent_companion_speech, *self.attempted_companion_speech]
             steps = [step for step in steps if step.tool == "body:chat"
-                     and not repeats_companion_speech(step.args["text"], context.recent_companion_speech)][:1]
-            if context.companion_adventure and not context.companion_adventure["activeWithPartner"]:
+                     and not repeats_companion_speech(step.args["text"], previous)][:1]
+            if check_in != "action_result" and context.companion_adventure and not context.companion_adventure["activeWithPartner"]:
                 names = {choice["name"] for choice in context.companion_adventure["choices"]}
                 steps = [step for step in steps if any(mentions_activity(name, step.args["text"]) for name in names)]
+            if steps:
+                self.pending_companion_check_in = (intent, position, ending, steps[0].args["text"])
+                self.pending_companion_result = ((result_note["requestId"], result_note["status"])
+                                                 if check_in == "action_result" else None)
         elif quiet_turn:
-            desktop_greeting = provider == "desktop" and near_maid_listener and not near_partner
-            inactive = set() if near_partner or desktop_greeting else {"body:chat"}
+            nearby_greeting = near_maid_listener and not near_partner
+            inactive = set() if near_partner or nearby_greeting else {"body:chat"}
             if keep_quiet_guard:
                 inactive.update({"body:stay", "body:stop", "body:native:sit"})
             steps = [step for step in steps if step.tool not in inactive]
-            context.recheck_nearby_speech = desktop_greeting
+            if role.default_native_guard:
+                previous = [*context.recent_companion_speech, *self.attempted_companion_speech]
+                steps = [step for step in steps if step.tool != "body:chat"
+                         or not repeats_companion_speech(step.args["text"], previous)]
+            context.recheck_nearby_speech = nearby_greeting
+        if check_in and steps:
+            context.recheck_nearby_speech = True
         speech = [step.args["text"] for step in steps if step.tool == "body:chat"]
         if speech and context.dialogue and not addressed and self.fast is not None:
             allowed = await self.fast.allow_reply(role, context, speech)
             self.last_route["attention"] = self.fast.last_attention
             if not allowed:
                 steps = [step for step in steps if step.tool != "body:chat"]
+        if quiet_turn and not check_in and role.default_native_guard:
+            for step in steps:
+                if step.tool == "body:chat" and step.args["text"] not in self.attempted_companion_speech:
+                    # Optional speech can choose a fresh subject, never retry the same line as a new effect.
+                    self.attempted_companion_speech = [*self.attempted_companion_speech, step.args["text"]][-8:]
         return steps
 
 
@@ -1368,6 +1477,8 @@ class NpcHost:
             reply = data.get("reply", data)
             if isinstance(reply, dict) and isinstance(reply.get("data"), dict):
                 evidence = reply["data"]
+                if timestamp(evidence.get("observedAt")) is not None:
+                    result["observedAt"] = evidence["observedAt"]
                 result["native"] = {key: evidence[key] for key in ("status", "goalCompleted", "observation", "workshops") if key in evidence}
                 if (receipt.terminal and receipt.status == "failed" and receipt.text == "path_blocked"
                         and "destination" in result and (observed := timestamp(evidence.get("observedAt")))):
@@ -1378,6 +1489,14 @@ class NpcHost:
                 result["observedItemUse"] = data["itemUse"]
             results.append(result)
         context.body_results = results[:6]
+        pending_check_in = self.planner.pending_companion_check_in if isinstance(self.planner, NpcPlanner) else None
+        if pending_check_in is not None:
+            for request_id in pending_check_in[0].action_receipts:
+                original = self.journal.receipt(body_id, request_id)
+                if original is not None and original.verb == "chat":
+                    # Reconcile that exact dispatch even if it fell outside the recent-four window.
+                    rows = [row for row in context.communication_receipts if row.get("requestId") != request_id]
+                    context.communication_receipts = [speech_receipt(original), *rows][:4]
         notice = team = opening = None
         if intent.goal == IDLE_GOAL and not dialogue:
             if self.role.adventure_partner:
@@ -1405,8 +1524,15 @@ class NpcHost:
             latest = await self.body.snapshot()
             new_order = any(k not in inbox_at_start and addressed_dialogue(e, body_id, (self.role.name, self.role.id))
                             for k, e in self.pending_dialogue.items())
+            pending_check_in = self.planner.pending_companion_check_in if isinstance(self.planner, NpcPlanner) else None
+            companion_turn = pending_check_in is not None and pending_check_in[0] is intent
+            latest_context = context.model_copy(update={"snapshot": latest})
+            audience_ready = (companion_check_in(self.role, latest_context) is not None
+                              if companion_turn else nearby_maid_listener(latest))
+            if not companion_turn and isinstance(self.planner, NpcPlanner) and self.planner.resident_turns is None and self.role.default_native_guard:
+                audience_ready = audience_ready and quiet_native_guard(latest_context)
             if (self.pausing or new_order or latest.dimension != context.snapshot.dimension
-                    or danger(latest) or not nearby_maid_listener(latest)):
+                    or danger(latest) or not audience_ready):
                 steps = [step for step in steps if step.tool != "body:chat"]
         if context.companion_choice is not None:
             choice = context.companion_choice

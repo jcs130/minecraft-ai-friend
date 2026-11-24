@@ -204,8 +204,10 @@ final class NativeMaidBodyActions {
                 case "stop","stay","sit"->{cancel(id,"stopped");stop(maid);maid.setInSittingPose(true);follows.remove(id);observed.addProperty("meaning","mode setting; native movement stopped");}
                 case "follow"->{restore(maid);MaidCompanionActions.follow(maid);follows.add(id);observed.addProperty("meaning","follow mode set; arrival requires observation; offline owner cannot be followed");}
                 case "guard"->{restore(maid);maid.setInSittingPose(false);guards.add(id);
-                    if(local.qdj.maids.brain.ResidentBodyAccess.external(id))local.qdj.maids.brain.ResidentBodyAccess.externalGuard(id,true);
-                    else{MaidCompanionActions.follow(maid);follows.add(id);}
+                    if(local.qdj.maids.brain.ResidentBodyAccess.external(id)){
+                        local.qdj.maids.brain.ResidentBodyAccess.externalGuard(id,true);
+                        if(owner.equals(plugin.guideOwner(id))){MaidCompanionActions.follow(maid);follows.add(id);}
+                    }else{MaidCompanionActions.follow(maid);follows.add(id);}
                     observed.addProperty("meaning","native defensive execution enabled; dialogue remains with the unified controller; hits require observation");}
                 case "fish"->{
                     maid.getPersistentData().putString(FISH_REQUEST,request);
@@ -265,6 +267,24 @@ final class NativeMaidBodyActions {
             if(plugin.unifiedBody(id))data.addProperty("inferenceOwner","unified_npc_host");
             var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
             data.addProperty("socialWalkAvailable", maid != null && socialWalkAvailable(maid));
+            if(owner.equals(plugin.guideOwner(id))){
+                // Observe this player's bound guide without widening the original shared-dialogue brain.
+                var guide=new JsonObject();
+                guide.addProperty("source","native_player_guide");
+                guide.addProperty("ownerId",owner.toString());guide.addProperty("maidId",id.toString());
+                guide.addProperty("following",following(id));guide.addProperty("guardDelegated",guarding(id));
+                var follow=data.getAsJsonObject("follow");
+                boolean available=maid!=null && owner.equals(maid.getOwnerUUID()) && !maid.isRemoved()
+                        && !maid.isSleeping() && !maid.isMaidInSittingPose() && !maid.isHomeModeEnable()
+                        && !maid.isPassenger() && !maid.isVehicle() && !maid.isNoAi() && maid.canBrainMoving()
+                        && MaidCompanionActions.IDLE.equals(maid.getTask().getUid().toString()) && maid.getTarget()==null
+                        && !busy(id) && !plugin.workshops().busy(id) && !plugin.editingMaidInventory(maid);
+                String state=MaidCompanionPolicy.guideState(data.get("loaded").getAsBoolean(),following(id),
+                        follow!=null && follow.has("active") && follow.get("active").getAsBoolean(),
+                        follow!=null && follow.has("state") ? follow.get("state").getAsString() : null,available);
+                guide.addProperty("state",state);guide.addProperty("ready","following_ready".equals(state));
+                data.add("guideCompanion",guide);
+            }
             if(maid!=null){
                 UUID selected = selectedCompanion(maid);
                 data.addProperty("socialNavigationTargetUuid", selected == null ? "" : selected.toString());
@@ -524,7 +544,22 @@ final class NativeMaidBodyActions {
         if (maid.fishing != null && maid.fishing.getMaidOwner() == maid) maid.fishing.discard();
         MaidCompanionActions.follow(maid);
     }
-    private void resumeGuard(EntityMaid maid){var id=maid.getUUID();resumeGuards.remove(id);if(!control.active(id)||!maid.isAlive())return;guards.add(id);if(local.qdj.maids.brain.ResidentBodyAccess.external(id))local.qdj.maids.brain.ResidentBodyAccess.externalGuard(id,true);else{MaidCompanionActions.follow(maid);follows.add(id);}}
+    private void resumeGuard(EntityMaid maid){
+        var id=maid.getUUID();resumeGuards.remove(id);
+        if(!control.active(id)||!maid.isAlive())return;
+        guards.add(id);
+        if(local.qdj.maids.brain.ResidentBodyAccess.external(id)){
+            local.qdj.maids.brain.ResidentBodyAccess.externalGuard(id,true);
+            var owner=maid.getOwnerUUID();
+            if(owner!=null && owner.equals(plugin.guideOwner(id)) && !maid.isRemoved() && !maid.isSleeping()
+                    && !maid.isNoAi() && !maid.isPassenger() && !maid.isVehicle()
+                    && !maid.isMaidInSittingPose() && !maid.isHomeModeEnable() && maid.canBrainMoving()
+                    && MaidCompanionActions.IDLE.equals(maid.getTask().getUid().toString()) && maid.getTarget()==null
+                    && !busy(id) && !plugin.workshops().busy(id) && !plugin.editingMaidInventory(maid)){
+                MaidCompanionActions.follow(maid);follows.add(id);
+            }
+        }else{MaidCompanionActions.follow(maid);follows.add(id);}
+    }
     void cancel(UUID id,String reason)throws Exception {var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));companions.remove(id);guards.remove(id);resumeGuards.remove(id);if(fishing.containsKey(id))finishFishing(maid,id,"cancelled",reason,null,false);if(maid!=null)plugin.nativeQuiesce(maid);if(walks.containsKey(id))finishWalk(id,maid,"cancelled",reason,false);else if(maid!=null){stop(maid);restore(maid);}follows.remove(id);}
     private void finishWalk(UUID id,EntityMaid maid,String status,String reason,boolean arrived)throws Exception {
         var walk=walks.remove(id);var observed=new JsonObject();observed.addProperty("reason",reason);observed.addProperty("arrived",arrived);

@@ -10,7 +10,16 @@ from agent_mc_harness.body.maid import workshop_completed
 from agent_mc_harness.body.numen import PortResult, measured_attack, measured_inventory, measured_item_use, measured_meal
 from agent_mc_harness.conversation import repeats_companion_speech
 from agent_mc_harness.journal import ActionJournal
-from agent_mc_harness.models import ActionReceipt, ActionSupport, BodyAction, BodyEvent, BodySnapshot, Capabilities, LifecycleCaps, NativeAction
+from agent_mc_harness.models import (
+    ActionReceipt,
+    ActionSupport,
+    BodyAction,
+    BodyEvent,
+    BodySnapshot,
+    Capabilities,
+    LifecycleCaps,
+    NativeAction,
+)
 from agent_mc_harness.npc import IDLE_GOAL, MAID_BOND_TONES, ModelClient, NpcPlanner, NpcRole, owner_bond, routine_catch, routine_meal
 from agent_mc_harness.runtime import Intent, PlanContext
 
@@ -72,23 +81,35 @@ def test_companion_can_speak_when_settled_near_owner_without_repeating_every_idl
         client = ModelClient("http://127.0.0.1:4000/v1", "test", http=httpx.AsyncClient(transport=httpx.MockTransport(answer)))
         planner = NpcPlanner(op, client)
         planner.next_companion_check_in = 0
-        idle = Intent(id="qa-idle", agent="fixture", goal=IDLE_GOAL)
+        turns = []
+        async def plan():
+            turn = Intent(id=f"qa-idle-{len(turns)}", agent="fixture", goal=IDLE_GOAL)
+            turns.append(turn)
+            return await planner(turn, context)
+        def delivered(turn, request):
+            # Synthetic exact request receipt: the plan alone cannot consume this opportunity.
+            turn.action_receipts[request] = {"verb": "chat", "status": "completed", "terminal": True}
+            turn.state = "completed"
+            context.communication_receipts = [{"requestId": request, "status": "completed", "captionRecipients": 1}]
         try:
-            assert [step.tool for step in await planner(idle, context)] == ["body:chat"]
+            assert [step.tool for step in await plan()] == ["body:chat"]
+            assert planner.companion_anchor is None
+            delivered(turns[-1], "synthetic-caption-1")
             context.recent_companion_speech = ["等你准备好，我们再出发！"]
             context.snapshot.position["x"] += 16
-            assert await planner(idle, context) == []  # Different position still respects the global interval.
-            planner.next_companion_check_in = 0
+            assert await plan() == []  # Different position still respects the delivered-speech interval.
+            planner.next_companion_check_in = planner.next_companion_attempt = 0
             raw["companion"]["state"] = "native_defence"
-            assert await planner(idle, context) == []
+            assert await plan() == []
             raw["companion"]["state"] = "following_ready"
-            assert await planner(idle, context) == []
+            assert await plan() == []
             context.snapshot.position["x"] += 16
             context.recent_companion_speech = ["魔力快见底了，我先歇一下。"]
-            planner.next_companion_check_in = 0
-            assert [step.tool for step in await planner(idle, context)] == ["body:chat"]
-            planner.next_companion_check_in = 0
-            assert await planner(idle, context) == []
+            planner.next_companion_check_in = planner.next_companion_attempt = 0
+            assert [step.tool for step in await plan()] == ["body:chat"]
+            delivered(turns[-1], "synthetic-caption-2")
+            planner.next_companion_check_in = planner.next_companion_attempt = 0
+            assert await plan() == []
             assert opportunities == ["near_partner", None, None, "settled_after_travel", "settled_after_travel", None]
         finally:
             await client.close()
