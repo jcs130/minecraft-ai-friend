@@ -32,7 +32,7 @@ final class NativeLegacyPoints {
             result.addProperty("nextCommand", "/mycli profession list");
             return CompletableFuture.completedFuture(result);
         }
-        String marker = state.metadata().get(LegacyPointMigration.RECEIPT_KEY);
+        String marker = state.metadata().get(LegacyPointMigration.RECEIPT_FIELD);
         if (marker != null && !marker.equals(source.receipt())) return done(source, "receipt_payload_mismatch", true);
         var result = new CompletableFuture<JsonObject>();
         var flight = new Flight(source, result);
@@ -47,13 +47,13 @@ final class NativeLegacyPoints {
                 if (balance < 0) throw new IllegalArgumentException("invalid_native_points");
                 int credited = Math.addExact(balance, source.amount());
                 update = Map.of("rpg.skill_points", Integer.toString(credited),
-                    LegacyPointMigration.RECEIPT_KEY, source.receipt());
+                    LegacyPointMigration.RECEIPT_FIELD, source.receipt());
             }
             // On a live unknown save OR after a cold load, only save/reconcile the SAME receipt.
             // Never call grant again; never assume a matching balance or an in-memory marker is durable.
             profiles.qiandengjiSaveMetadata(player, state, update).whenComplete((saved, error) -> {
                 boolean verified = error == null && saved != null && actor.equals(saved.playerId())
-                    && source.receipt().equals(saved.metadata().get(LegacyPointMigration.RECEIPT_KEY));
+                    && source.receipt().equals(saved.metadata().get(LegacyPointMigration.RECEIPT_FIELD));
                 result.complete(source.result(verified ? "native_snapshot_confirmed" : "target_save_unknown", verified, false));
             });
         } catch (ArithmeticException error) { result.complete(source.result("integer_overflow", false, true)); }

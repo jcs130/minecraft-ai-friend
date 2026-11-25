@@ -13,7 +13,7 @@ import java.util.function.Function;
 /** Typed source-store handoff. No balance store and no legacy earned/spent/skill/level edits. */
 public final class LegacyPointMigration {
     public static final String VERSION = "legacy-points-v1";
-    public static final String RECEIPT_KEY = "qdj.legacy_points.v1.receipt";
+    public static final String RECEIPT_FIELD = "qdj.legacy_points.v1.receipt";
     private LegacyPointMigration() {}
 
     /** sourceHash: SHA-256 of the frozen legacy profile, EXCLUDING migration intent/receipt fields. */

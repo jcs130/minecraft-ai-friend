@@ -14,11 +14,11 @@ function snapshot(entities: WorldSnapshot['entities']): WorldSnapshot {
 
 function companionEntity(overrides: Partial<WorldSnapshot['entities'][number]> = {}): WorldSnapshot['entities'][number] {
   return {
-    entityId: 509, uuid: 'af86ae0c-c524-467b-a28c-8da5af88d45e', customName: '肥鱼', name: 'maid', kind: 'animal',
+    entityId: 509, uuid: '00000000-0000-4000-8000-000000000509', customName: '肥鱼', name: 'maid', kind: 'animal',
     distance: 3, direction: 'south', dy: 0, visible: true,
     observation: { source: 'line-of-sight', visibility: 'visible', lineOfSight: true },
     note: '服务端角色身份=maid，归属本人，entityId=509，名字「肥鱼」',
-    companion: { key: 'af86ae0c-c524-467b-a28c-8da5af88d45e', label: '肥鱼' },
+    companion: { key: '00000000-0000-4000-8000-000000000509', label: '肥鱼' },
     ...overrides,
   };
 }
@@ -38,7 +38,7 @@ describe('stable companion presence', () => {
 
   it('recognizes only the current player as the semantic owner', () => {
     const identity: EntityIdentity = {
-      uuid: 'af86ae0c-c524-467b-a28c-8da5af88d45e', kind: 'maid', name: '肥鱼', label: '肥鱼',
+      uuid: '00000000-0000-4000-8000-000000000509', kind: 'maid', name: '肥鱼', label: '肥鱼',
       source: 'fixture', observedAt: '2026-11-25T01:00:00.000Z', ownerUuid: '11111111-1111-4111-8111-111111111111',
     };
     expect(entityIdentityOwnedBySelf({ player: { uuid: '11111111-1111-4111-8111-111111111111' } }, identity)).toBe(true);
@@ -72,7 +72,7 @@ describe('stable companion presence', () => {
   it('recognizes the producer ownership note when the extracted companion field is absent', () => {
     const life = narrateWorldSegments(snapshot([companionEntity({
       companion: undefined,
-      identity: { uuid: 'af86ae0c-c524-467b-a28c-8da5af88d45e', kind: 'maid', name: '肥鱼', label: '肥鱼',
+      identity: { uuid: '00000000-0000-4000-8000-000000000509', kind: 'maid', name: '肥鱼', label: '肥鱼',
         source: 'fixture', observedAt: '2026-11-25T01:00:00.000Z', ownerUuid: '11111111-1111-4111-8111-111111111111' },
       note: '服务端角色身份=maid，归属本人，entityId=524，名字「肥鱼」',
     })])).find(segment => segment.key === 'life');

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import zipfile
 
 
 def main():
@@ -57,18 +58,23 @@ def main():
         if not configured:
             raise ValueError("JAVA_HOME or --jdk required for two-track runners")
         home = Path(configured)
-    gson = next((inputs / "libraries").rglob("gson-*.jar"), None)
+    gson = None
+    for candidate in sorted((inputs / "libraries").rglob("gson-*.jar")):
+        with zipfile.ZipFile(candidate) as archive:
+            if "com/google/gson/JsonObject.class" in archive.namelist():
+                gson = candidate
+                break
     if gson is None:
-        raise ValueError("Prepared Gson dependency missing")
+        raise ValueError("Prepared real Gson dependency missing; gson-io is not the Gson API")
     subprocess.run([sys.executable, str(root / "run_exam_two_track_tests.py"), "--jdk", str(home),
                     "--classpath-file", str(cpfile), "--gson", str(gson), "--output", str(output / "exam-tests-ci")], check=True)
     subprocess.run([sys.executable, str(root / "run_life_two_track_tests.py"), "--jdk", str(home),
                     "--classpath", str(cpfile), "--baseline-classes", str(classes), "--output", str(output / "life-tests-ci")], check=True)
     integration = root.parents[2] / "integrations/vortex-rpg"
-    subprocess.run([tool("javac"), "--release", "21", "-encoding", "UTF-8", "-cp", str(gson), "-d", str(output),
+    subprocess.run([tool("javac"), "--release", "21", "-encoding", "UTF-8", "-cp", classpath, "-d", str(output),
                     str(integration / "src/org/qiandengji/vortex/LegacyPointMigration.java"),
                     str(integration / "tests/LegacyTransferProtocolTest.java")], check=True)
-    subprocess.run([tool("java"), "-cp", str(output) + os.pathsep + str(gson),
+    subprocess.run([tool("java"), "-cp", str(output) + os.pathsep + classpath,
                     "org.qiandengji.vortex.LegacyTransferProtocolTest"], check=True)
 
 

@@ -165,7 +165,7 @@ public final class PointMigrationTest {
         f.state.putMetadata("rpg.skill_points", Integer.toString(Integer.MAX_VALUE));
         var out = f.migrate(f.source(1, 0)).join();
         check(!confirmed(out) && out.get("reason").getAsString().equals("integer_overflow"), "addition overflow rejected");
-        check(f.repository.captures.isEmpty() && !f.state.metadata().containsKey(LegacyPointMigration.RECEIPT_KEY), "overflow writes nothing");
+        check(f.repository.captures.isEmpty() && !f.state.metadata().containsKey(LegacyPointMigration.RECEIPT_FIELD), "overflow writes nothing");
         for (String invalid : List.of("-1", "garbled", "2147483648")) {
             var invalidFixture = new Fixture(); invalidFixture.state.putMetadata("rpg.skill_points", invalid);
             check(!confirmed(invalidFixture.migrate(invalidFixture.source(1, 0)).join()) && invalidFixture.repository.captures.isEmpty(), "native parse error not zero fallback");
@@ -198,7 +198,7 @@ public final class PointMigrationTest {
         check(future == f.migrate(source) && f.repository.captures.size() == 1, "same actor duplicated transfer shares flight");
         check(f.migrate(f.source(15, 3)).join().get("status").getAsString().equals("rejected"), "different payload same ID rejects in flight");
         var snapshot = f.repository.captures.getFirst();
-        check(source.receipt().equals(snapshot.metadata().get(LegacyPointMigration.RECEIPT_KEY)) && snapshot.metadata().get("rpg.skill_points").equals("16"), "receipt and credit same native snapshot");
+        check(source.receipt().equals(snapshot.metadata().get(LegacyPointMigration.RECEIPT_FIELD)) && snapshot.metadata().get("rpg.skill_points").equals("16"), "receipt and credit same native snapshot");
         check(snapshot.metadata().get("historic").equals("keep") && snapshot.experience() == 900 && snapshot.level() == 7, "unrelated history XP/level preserved");
         f.repository.unknown(0); check(!confirmed(future.join()), "failed future never fake confirmed");
         var retry = f.migrate(source); check(f.balance() == 16 && f.repository.captures.size() == 2 && !retry.isDone(), "unknown reconciles marker only; no replay grant");
@@ -217,9 +217,9 @@ public final class PointMigrationTest {
         var migration = f.migrate(source);
         check(f.repository.captures.size() == 1 && f.balance() == 16, "migration batch queues behind pre-credit autosave");
         var worker = new Thread(() -> f.repository.confirm(0)); worker.start(); worker.join(); earlier.join();
-        check(f.balance() == 16 && source.receipt().equals(f.state.metadata().get(LegacyPointMigration.RECEIPT_KEY)), "earlier snapshot ack cannot erase new credit/receipt");
+        check(f.balance() == 16 && source.receipt().equals(f.state.metadata().get(LegacyPointMigration.RECEIPT_FIELD)), "earlier snapshot ack cannot erase new credit/receipt");
         var target = f.repository.captures.get(1);
-        check(target.metadata().get("rpg.skill_points").equals("16") && source.receipt().equals(target.metadata().get(LegacyPointMigration.RECEIPT_KEY)), "delayed target snapshot still atomic credit/receipt");
+        check(target.metadata().get("rpg.skill_points").equals("16") && source.receipt().equals(target.metadata().get(LegacyPointMigration.RECEIPT_FIELD)), "delayed target snapshot still atomic credit/receipt");
         f.repository.confirm(1); check(confirmed(migration.join()), "queued batch confirmed only after own durable save");
         var stale = new UnifiedPlayer(f.actor, "synthetic-stale");
         boolean rejected = false;
@@ -248,7 +248,7 @@ public final class PointMigrationTest {
         var queued = f.repository.captures.get(1);
         check(queued.level() == level && queued.experience() == xp && queued.metadata().get("rpg.skill_points").equals(Integer.toString(remaining)), "queued immutable owned snapshot contains concurrent learned/XP state");
         check(!queued.metadata().containsKey("later_unsaved") && queued.revision() == 1, "capture not IO-thread read; revision rebased after prior ack");
-        check(source.receipt().equals(queued.metadata().get(LegacyPointMigration.RECEIPT_KEY)), "native learning preserves receipt");
+        check(source.receipt().equals(queued.metadata().get(LegacyPointMigration.RECEIPT_FIELD)), "native learning preserves receipt");
         f.repository.confirm(1); later.join(); check(f.state.snapshotRevision() == 2, "native revision monotonic");
         f.state.qiandengjiSavedRevision(1); check(f.state.snapshotRevision() == 2, "stale ack cannot lower revision");
         var fromWorker = new CompletableFuture<CompletableFuture<PlayerSnapshot>>();

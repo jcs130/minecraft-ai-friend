@@ -66,14 +66,14 @@ public final class PointMigrationDiskTest {
             var result = new NativeLegacyPoints().migrate(player, source, profiles, skills).join();
             check(result.get("confirmed").getAsBoolean(), "real repository future confirms actual atomic write");
             String file = Files.readString(directory.resolve(actor + ".json"));
-            check(file.contains(LegacyPointMigration.RECEIPT_KEY) && file.contains("rpg.skill_points"), "native JSON includes receipt and credit together");
+            check(file.contains(LegacyPointMigration.RECEIPT_FIELD) && file.contains("rpg.skill_points"), "native JSON includes receipt and credit together");
             check(state.metadata().get("rpg.skill_points").equals("16"), "actual 1:1 credited native points");
             state.putMetadata("rpg.skill_points", "12"); state.grantExperience(10000, curve);
             int level = state.level(); long xp = state.experience();
             profiles.qiandengjiSave(player).join();
             check(state.level() == level && state.experience() == xp && state.metadata().get("rpg.skill_points").equals("12"), "actual save ack preserves later spend/XP");
             persisted = repository.loadPlayer(actor).join();
-            check(source.receipt().equals(persisted.metadata().get(LegacyPointMigration.RECEIPT_KEY)), "learning/spend retains durable migration receipt");
+            check(source.receipt().equals(persisted.metadata().get(LegacyPointMigration.RECEIPT_FIELD)), "learning/spend retains durable migration receipt");
         }
         // A fresh real repository and UnifiedPlayer: no in-memory flight or cache can infer success.
         try (var repository = new PlayerDataRepository(log, directory, Duration.ofMinutes(1))) {
