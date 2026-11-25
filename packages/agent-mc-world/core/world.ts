@@ -12,6 +12,7 @@ import { operationInventory } from './operation-experience.ts';
 import { TrajectoryScoreError } from './jitrl-trajectory.ts';
 import { withFactState } from './fact-state.ts';
 import { readWorldIdentity, worldScopedRealm } from './world-scope.ts';
+import { installServerChatPolicy } from './server-profiles.ts';
 import { fatalDamageText, observeMobDeaths, ownKillCredit } from './mob-death.ts';
 import { identityObservations } from './identity-observation.ts';
 import {ProximityVoiceLane, PROXIMITY_VOICE_TOOL} from './proximity-voice-lane.ts';
@@ -8119,6 +8120,15 @@ export class MinecraftWorld implements World {
     });
 
     observeStatusEffects(bot);
+    // Per-server conduct rules from the selected server profile. Extensions (body guards)
+    // read them from the bot instead of a deployment file; chat/command pacing applies here.
+    const serverSafety = this.cfg.serverSafety ?? null;
+    Object.assign(bot, {
+      cortiServer: this.cfg.activeServer ?? null,
+      cortiServerSafety: serverSafety,
+      cortiWorldKey: () => readWorldIdentity(bot).key,
+    });
+    installServerChatPolicy(bot, serverSafety);
     this.attachExtension(bot);
     this.hookMessageEvents(bot);
     const detachBook = installOpenBookObserver(bot, (book) => {
