@@ -1,4 +1,5 @@
 /** 主进程中的 Minecraft World 代理。游戏连接、执行器和客户端管理在引擎子进程；此处转发工具、事件、控制台及存储请求，并每秒推送配置。 */
+import { applyServerProfile } from './server-profiles.ts';
 import { fork, type ChildProcess } from 'node:child_process';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { emitLogNote, logChildStdio } from './support/runtime.mjs';
@@ -103,16 +104,21 @@ export class MinecraftWorldProxy implements World {
 
   constructor(private readonly opts: MinecraftWorldOptions) {}
 
+  /** The world section with the selected server profile applied (falls back to the raw section). */
+  private effectiveCfg(): MinecraftWorldOptions['cfg'] {
+    try { return applyServerProfile(this.opts.cfg); } catch { return this.opts.cfg; }
+  }
+
   /**
    * 前缀从子进程持有的落盘文件读取探索摘要与常驻规则，并从 server.properties 读取世界身份。
    * 快照锚点由子进程设置。
    */
   envPromptVars(): Record<string, string> {
     return {
-      'minecraft.version': this.opts.cfg.version,
+      'minecraft.version': this.effectiveCfg().version,
       'minecraft.world': worldEnvLine(worldIdentityOf(
         this.opts.cfg.local.serverDir,
-        `${this.opts.cfg.host}:${this.opts.cfg.port}`,
+        `${this.effectiveCfg().host}:${this.effectiveCfg().port}`,
       )),
       'minecraft.explored': renderExploredLedger(loadExplored(this.storageFileOf('minecraft-explored'))),
       'minecraft.policy': renderPolicyEnv(loadPolicy(this.storageFileOf('minecraft-policy'))),

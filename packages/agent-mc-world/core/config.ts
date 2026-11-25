@@ -246,6 +246,22 @@ export interface MinecraftConfigSection {
   publicDnsFallback?: boolean;
   /** Automatic reconnect after a dropped connection. Default true. */
   autoReconnect?: boolean;
+  /** Operator-pinned IPs dialed first; the handshake keeps `host` (or `fakeHost`). */
+  connectAddresses?: string[];
+  /** JSON DNS-over-HTTPS resolver base URLs used when the system resolver returns a fake address. */
+  dohResolvers?: string[];
+  /** Per-address TCP connect timeout in milliseconds, default 8000. */
+  connectTimeoutMs?: number;
+  /** Consecutive failed reconnects before automatic reconnect stops; default 5. */
+  maxReconnectAttempts?: number;
+  /** Selected entry of `servers`; AGENT_MC_SERVER overrides it for one start. Switching needs a world restart. */
+  server?: string;
+  /** Named server profiles (connection, account rules, safety rules); see server-profiles.ts. No secrets. */
+  servers?: Record<string, import('./server-profiles.ts').MinecraftServerProfile>;
+  /** Set by applyServerProfile: the profile actually in use. */
+  activeServer?: string;
+  /** Set by applyServerProfile: the selected profile's conduct rules (bot.cortiServerSafety for extensions). */
+  serverSafety?: import('./server-profiles.ts').ServerSafetyRules;
   /** Keepalive packet timeout in milliseconds, default 60 seconds. */
   keepAliveTimeoutMs?: number;
   /** Requested server chunk radius, 2..32; omitted preserves Mineflayer's default. Not a visibility/security boundary. */
@@ -365,6 +381,8 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.javaClient.viewerMode': { type: 'string', enum: ['auto', 'data', 'framebuffer'], title: '网页画面来源', 'x-hot': false, description: 'auto 按当前客户端能力选择，网页打开才采样；data 使用真实游戏数据，framebuffer 使用配置的原生截图页。显式指定的模式不自动回退。' },
       'worlds.minecraft.javaClient.leaseMs': { type: 'integer', title: '控制权租期', minimum: 1000, maximum: 30000, 'x-hot': false,
         description: '宿主须显式续租，过期释放游戏按键；单位毫秒。' },
+      'worlds.minecraft.server': { type: 'string', title: '服务器配置档', 'x-hot': false,
+        description: '选择 servers 里的一个服务器（地址、版本、账号规则、安全规则一起切换）；保存后重启 World 才生效。留空使用下面的单一地址。' },
       'worlds.minecraft.host': { type: 'string', title: '服务器地址', 'x-hot': false },
       'worlds.minecraft.port': { type: 'integer', title: '端口', minimum: 1, maximum: 65535, 'x-hot': false },
       'worlds.minecraft.username': { type: 'string', title: '账号标识 / 离线游戏名', 'x-hot': false,

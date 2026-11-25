@@ -1,3 +1,4 @@
+import { minecraftTextComponent } from './nbt-text.mjs';
 /** Protocol 766 TextDisplay. Interpret metadata with the connection's exact registry. */
 const integer = (n, min, max) => Number.isInteger(n) && n >= min && n <= max;
 const vector = (v, fallback) => v===undefined ? fallback : v && ['x','y','z'].every(k => Number.isFinite(v[k]) && Math.abs(v[k]) <= 64)
@@ -23,9 +24,16 @@ export function textDisplayRuns(input) {
     if (typeof value==='string') { length += [...value].length; if(length>512)throw Error('text_budget'); if(value)runs.push({text:value,color}); return; }
     if (Array.isArray(value)) { for(const v of value)visit(v,color,depth+1);return; }
     if (!value || typeof value!=='object') throw Error('component_type');
-    if (['translate','selector','score','nbt','keybind'].some(k=>Object.hasOwn(value,k))
-        || value.obfuscated || value.bold || value.italic || value.underlined || value.strikethrough
+    // Style flags render as plain glyphs (no faux bold/italic yet); translate/keybind/score resolve
+    // to their plain text with the connection language table. selector/nbt need server state.
+    if (['selector','nbt'].some(k=>Object.hasOwn(value,k))
         || value.font && value.font!=='minecraft:default') throw Error('component_unsupported');
+    if (['translate','keybind','score'].some(k=>Object.hasOwn(value,k))) {
+      if(value.color!==undefined){color=colors[value.color] ?? (/^#[0-9a-f]{6}$/i.test(value.color)?value.color:color);}
+      visit(minecraftTextComponent({...value,extra:undefined},{trim:false,limit:512}),color,depth+1);
+      if(value.extra!==undefined){if(!Array.isArray(value.extra))throw Error('component_extra');for(const v of value.extra)visit(v,color,depth+1);}
+      return;
+    }
     if (value.color!==undefined) {
       color=colors[value.color] ?? (/^#[0-9a-f]{6}$/i.test(value.color)?value.color:null);
       if(!color)throw Error('component_color');

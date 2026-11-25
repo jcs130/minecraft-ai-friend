@@ -35,6 +35,18 @@ import { PlacementRetryDeferred } from './placement-miss-state.ts';
 const { goals } = pathfinderPkg;
 
 /**
+ * a deployment body guard (deployment-structure-safety.mjs, safety profile)
+ * refuses placements by throwing `LOCAL_*: reason` BEFORE any packet is sent. Those must reach the
+ * agent as a local refusal, never be swallowed as "the server did not accept it".
+ */
+export function localGuardRefusal(error: unknown): SkillBlocked | null {
+  if (error instanceof SkillBlocked) return error;
+  const message = error instanceof Error ? error.message : '';
+  if (!/^LOCAL_[A-Z_]+:/.test(message)) return null;
+  return new SkillBlocked(`本地保护拒绝(没有向服务端发包，不是服务端拒绝): ${message}`, [], 'local', 'protection-denied');
+}
+
+/**
  * 放置验收按「目标方块由这份材料放出」匹配。
  * 材料选择仍走精确 ID；落地方块再经 registry 映回物品，收住 torch→wall_torch 等原版形态转换。
  */
@@ -94,6 +106,8 @@ export async function jumpPlaceBelow(bot: Bot, ctx: SkillContext, material?: str
     } catch (err) {
       if (err instanceof Aborted || err instanceof SkillBlocked) throw err;
       if (err instanceof PlacementRetryDeferred) throw new SkillBlocked(err.message, [], 'local', err.code);
+      const refusal = localGuardRefusal(err);
+      if (refusal) throw refusal;
       /* 时机不对就再跳一次 */
     } finally {
       bot.setControlState('jump', false);
@@ -183,6 +197,8 @@ async function tryPlaceIntoCell(
         attempted = true;
       } catch (error) {
         // Keep the existing face/cell iteration while retaining a local no-send reason for build.
+        const refusal = localGuardRefusal(error);
+        if (refusal) throw refusal;
         if (error instanceof PlacementRetryDeferred) deferred = error;
         else attempted = true;
         // 服务端已明确拒绝或暂不能确认目标格，换面不会改变该格的保护判决。

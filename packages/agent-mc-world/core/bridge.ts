@@ -64,7 +64,7 @@ import { trackDamageSources } from './damage-source.ts';
 import { installRuntimeRegistry } from './runtime-registry.ts';
 import { MinecraftAuthentication, protocolVersion } from '../src/client/authentication.ts';
 import { installServerLogin, serverLoginFailureText } from './server-login.mjs';
-import { resolveMinecraftConnectEndpoint } from './connect-endpoint.ts';
+import { resolveMinecraftConnectCandidates } from './connect-endpoint.ts';
 import { endMinecraftBot } from './bot-end.ts';
 import net from 'node:net';
 import { installOrphanWindowClose } from './orphan-windows.ts';
@@ -75,10 +75,39 @@ import { installMountedLook } from '../src/mounted-look.ts';
 import { errorFailure, kickFailure } from './link.ts';
 
 
-function makePublicDnsConnect(host: string, port: number, handshakeHost?: string) {
+/**
+ * Dial the configured name through the candidate list (pinned, system, public,
+ * DoH) with a bounded per-address timeout; the handshake keeps the configured
+ * hostname. A pre-connected socket is handed to minecraft-protocol, which then
+ * needs the `connect` event re-emitted to send its handshake.
+ */
+function makePublicDnsConnect(host: string, port: number, handshakeHost?: string,
+  dial: { pinnedAddresses?: readonly string[]; dohResolvers?: readonly string[]; connectTimeoutMs?: number; log?: Logger } = {}) {
   return (client: { setSocket(socket: import('node:net').Socket): void; emit(event: string, ...args: unknown[]): void }) => {
-    void resolveMinecraftConnectEndpoint({ host, port, handshakeHost, publicDnsFallback: true }).then((endpoint) => {
-      client.setSocket(net.connect(endpoint.port, endpoint.host));
+    const timeoutMs = Math.min(Math.max(dial.connectTimeoutMs ?? 8000, 1000), 60000);
+    void resolveMinecraftConnectCandidates({ host, port, handshakeHost, publicDnsFallback: true,
+      pinnedAddresses: dial.pinnedAddresses, dohResolvers: dial.dohResolvers }).then(async ({ candidates }) => {
+      let lastError: unknown = null;
+      for (const candidate of candidates) {
+        const socket = net.connect(candidate.port, candidate.host);
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => reject(Object.assign(new Error(`connect ETIMEDOUT ${candidate.host}:${candidate.port}`), { code: 'ETIMEDOUT' })), timeoutMs);
+            socket.once('connect', () => { clearTimeout(timer); resolve(); });
+            socket.once('error', (err) => { clearTimeout(timer); reject(err); });
+          });
+        } catch (err) {
+          lastError = err; socket.destroy();
+          dial.log?.warn(`minecraft 候选地址不可达 ${candidate.host}:${candidate.port}(${candidate.source}): ${err instanceof Error ? err.message : String(err)}`);
+          continue;
+        }
+        socket.removeAllListeners('error');
+        dial.log?.info(`minecraft 已连上 ${candidate.host}:${candidate.port}(${candidate.source})，握手主机 ${handshakeHost ?? host}`);
+        client.setSocket(socket);
+        client.emit('connect');
+        return;
+      }
+      throw lastError ?? new Error(`no reachable address for ${host}:${port}`);
     }).catch((err: unknown) => {
       client.emit('error', err);
     });
@@ -96,6 +125,14 @@ export interface BridgeOptions {
   publicDnsFallback?: boolean;
   /** When false, a dropped connection stays stopped until an explicit reconnect. Default true. */
   autoReconnect?: boolean;
+  /** Operator-pinned IPs dialed first (handshake keeps the configured hostname). */
+  connectAddresses?: string[];
+  /** JSON DoH resolver base URLs used when the system resolver returns a fake address. */
+  dohResolvers?: string[];
+  /** Per-address TCP connect timeout, default 8000 ms. */
+  connectTimeoutMs?: number;
+  /** Consecutive failed reconnects before stopping; default MAX_RECONNECT_ATTEMPTS. */
+  maxReconnectAttempts?: number;
   keepAliveTimeoutMs?: number;
   viewDistance?: number;
   deathRespawnDelayMs?: number;
@@ -604,7 +641,7 @@ export class Bridge {
       host, port, username,
       version: stack.experimental ? stack.minecraftVersion : (protocolVersion(version) || undefined),
       ...(handshakeHost ? { fakeHost: handshakeHost } : {}),
-      ...(publicDns ? { connect: makePublicDnsConnect(host, port, handshakeHost) } : {}),
+      ...(publicDns ? { connect: makePublicDnsConnect(host, port, handshakeHost, { pinnedAddresses: this.opts.connectAddresses, dohResolvers: this.opts.dohResolvers, connectTimeoutMs: this.opts.connectTimeoutMs, log: this.opts.log }) } : {}),
       ...(this.opts.authentication?.botOptions() ?? { auth: 'offline' as const }),
       checkTimeoutInterval: this.opts.keepAliveTimeoutMs ?? 60_000,
       ...(this.opts.viewDistance !== undefined ? { viewDistance: this.opts.viewDistance } : {}),
@@ -1450,7 +1487,9 @@ export class Bridge {
       this.opts.log.warn(`minecraft 自动重连已关闭，不再重试: ${reason}`);
       return;
     }
-    if (this.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+    const maxAttempts = Number.isInteger(this.opts.maxReconnectAttempts) && (this.opts.maxReconnectAttempts as number) > 0
+      ? Math.min(this.opts.maxReconnectAttempts as number, 1000) : MAX_RECONNECT_ATTEMPTS;
+    if (this.reconnectAttempt >= maxAttempts) {
       this.stopped = true;
       this.opts.log.warn(`minecraft 停止自动重连：已连续 ${this.reconnectAttempt} 次未建立可用连接，需要明确重连`);
       return;
