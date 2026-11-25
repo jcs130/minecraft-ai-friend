@@ -60,6 +60,17 @@ it('does not turn an old pinned route into a ban on a new request', () => {
   } finally { r.exec.shutdown(); }
 });
 
+it('annotates exhausted no-path/no-support retries without hard-banning a fresh admission', () => {
+  const r = rig();
+  try {
+    Object.assign(r.exec, { spatialFailures: [{ at: Date.now(), count: 4, dimension: 'overworld',
+      from: { x:.5,y:64,z:.5 }, target: { x:8,y:64,z:0 }, why: '走不过去:找不到可行路线' }] });
+    const result = r.exec.submitDetailed([{ skill: 'goto', at: [8,64,0] }], 'append');
+    expect(result.accepted).toBe(true);
+    expect(result.receipt).toContain('不要对同一路线反复提交');
+  } finally { r.exec.shutdown(); }
+});
+
 it('orders previously failed containers after alternatives without excluding them', () => {
   const r = rig();
   try {

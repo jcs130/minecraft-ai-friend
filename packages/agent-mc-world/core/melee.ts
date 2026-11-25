@@ -1,4 +1,4 @@
-import { suppressSpeciesThreat } from './entity-threat.ts';
+import { suppressSpeciesThreat, creeperFuseActive } from './entity-threat.ts';
 /**
  * 动手那几下:挑兵器、够不够得着、挥击与冷却、远程接管的判据,以及附近敌对生物的读数。
  *
@@ -144,7 +144,12 @@ export async function hopCrit(bot: Bot): Promise<void> {
 
 export function pressMelee(bot: Bot, entity: { position: { distanceTo(o: unknown): number }; name?: string }, strafeLeft: boolean | null): void {
   const d = entity.position.distanceTo(bot.entity.position);
-  if (entity.name === 'creeper' && d < 3) {
+  // Match combat CREEPER_SAFE (3.6) when fuse is lit; keep the old 3-block
+  // back-off for an unlit creeper so spacing still allows a melee window.
+  const creeperBack = entity.name === 'creeper' && (
+    creeperFuseActive(bot, entity) ? d < 3.6 : d < 3
+  );
+  if (creeperBack) {
     bot.setControlState('forward', false);
     bot.setControlState('back', true);
     bot.setControlState('sprint', false);
