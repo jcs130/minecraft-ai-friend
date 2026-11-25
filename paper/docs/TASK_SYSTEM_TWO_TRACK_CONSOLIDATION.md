@@ -67,3 +67,44 @@
 - `/mycli journal` 两组（公会 / 技能）一屏看清本人全部进度与下一步。
 - 钓鱼一次只涨一个等级（fishing），不再同时涨 angler。
 - 升段位只需看声望一个数是否达标（证书作为条件另列）。
+
+## 七、体系 B 内部：技能插件盘点与统一（扛枪 2026-11-25 追问"有多少技能插件，是不是也要统一"）
+
+### 7.1 实证盘点：六个插件、四层结构
+
+| # | 插件 | 版本 | 实际角色 | 玩家可见入口 |
+| --- | --- | --- | --- | --- |
+| 1 | AgentFriend | 0.4.47.59 | 基础技能封装层（`/mycli cast`）；同时残留旧技能体系 7 个 yml | `/mycli skills list common` |
+| 2 | MagicSpells | 4.0-Beta-15 | **基础技能的底层引擎**（不是独立第三套）：`spells-regular` 3 法术（blink/heal/food）+ `spells-agentfriend` 9 法术（selfheal + 8 个 conjure 固定配方）+ `spells-command` 11 个管理类 spell；全部 always-granted，费用由 AgentFriend 从 AuraSkills 魔力代扣 | `/cast list`（**第二个列表入口**） |
+| 3 | AuraSkills | 2.4.0 | 11 项熟练度 + 每项多个被动 abilities + mana abilities；**全服唯一魔力池**（统一扣费入口，已是对的） | `/mycli skills list passive` |
+| 4 | VortexRPG | 1.2.2-alpha-qd29 | 六职业技能（spells.yml 10 法术：余烬长枪/守望绽放/星界汇聚/幸运步/坚守/奥术飞弹/猎手印记/愈合/野性召唤/机巧锁击）+ 天赋 + 职业等级 | `/mycli profession` |
+| 5 | QiandengjiRpg | 0.2.20 | Vortex ↔ AgentFriend 的桥 | — |
+| 6 | QiandengjiSmartBlink | 0.1.0 | 自定义闪现法术类（MagicSpells 扩展） | — |
+
+另：AgentFriend 目录下旧体系文件 7 个仍在磁盘——`skills.yml` / `skill-points.yml`（23 项旧职业技能：sword_*、guardian_*、scout_*、healer_*、mage_*、tank_taunt、三机动）、`professions.yml`（旧四职业 warrior/mage/priest/tank）、`spell-mastery.yml`（19 名玩家的旧法术掌握数据）、`skill-unlocks.yml`、`skill-visuals.yml`、`skill-assessments.yml`。10-29 起已归档停止写入，但文件与数据都还在。
+
+### 7.2 乱在哪（五处实证）
+
+1. **两套引擎一个命令**：`/mycli cast` 同时派发 MagicSpells 基础技与 Vortex 职业技，玩家分不清哪个是基础哪个是职业。
+2. **同一技能两个名字两个列表**：`/cast list` 显示 MagicSpells 内部名（blink/heal/conjure_bread…），`/mycli skills list` 显示中文 ID（闪现/圣愈/造物…）——同一个技能两套称呼。
+3. **三个技能入口**：`skills list common`（基础）/ `skills list passive`（AuraSkills 被动）/ `profession`（Vortex）——查"我会什么"要跑三条命令。
+4. **旧体系残留占位**：23 项旧职业技能定义、旧四职业、19 玩家旧数据仍在磁盘与命名空间里。
+5. **两套"花点"**：旧 `skill-points`（23 项）与 Vortex 学习点并存。
+
+### 7.3 统一方案：技能也收敛成两条线（即体系 B 的内部结构）
+
+- **① 基础技能线（人人可用）**：AgentFriend 封装 + MagicSpells 引擎 + AuraSkills 被动/熟练度。对外只保留 **一个入口 `/mycli skills`**（common 与 passive 合并展示）；MagicSpells 退居纯引擎，`/cast list|help` 对普通玩家收口（防双列表），`/cast teach|scroll|spellbook|tome` 维持 op-only（**待验证**：LuckPerms 为 H2 库，权限查询命令异步超时未能实证，按 MagicSpells 默认权限模型判断 teach/forget 为 op-only）。
+- **② 职业技能线（Vortex）**：对外只保留 **一个入口 `/mycli profession`**（职业等级 / 职业技能 / 天赋 / 学习点一体展示）。
+- **命名统一**：同一技能只一个名字——以 `/mycli cast` 的中文 ID 为准，MagicSpells 内部名不出现在玩家可见处。
+- **旧体系退役（代码层）**：7 个旧 yml 由开发线移归档并去掉读取逻辑；旧 skill-points 退役，统一 Vortex 学习点（与 §四 映射表一致）。
+
+### 7.4 落地分层
+
+- **配置层（运营可做，待开发线确认无副作用后执行）**：MagicSpells `spells-command.yml` 的 `list`/`help` 两个 spell-class 改为非 always-granted 或 `enabled: false`——需先确认 AgentFriend 的 `/mycli skills list` 不依赖它们。
+- **代码层（开发线）**：`/mycli skills` 合并 common + passive；`/mycli profession` 一体化展示；旧 7 个 yml 退役；`/mycli cast` 回执标注"基础技 / 职业技"归属。
+
+### 7.5 验收
+
+- 玩家查技能只跑一条命令（`/mycli skills` 基础线、`/mycli profession` 职业线）。
+- 同一技能在所有入口只有一个名字。
+- 磁盘上不再有已归档的旧技能定义文件（移入归档目录，不删数据）。
