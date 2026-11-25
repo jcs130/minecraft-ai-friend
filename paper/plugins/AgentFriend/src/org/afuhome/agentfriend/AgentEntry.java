@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 /** Private, bounded, read-only discovery and progress. Does not dispatch actions. */
 final class AgentEntry {
     private final AgentFriendPlugin plugin;
+    private final TaskJournal journal;
     private final List<String> rules;
     AgentEntry(AgentFriendPlugin plugin) {
         this.plugin=plugin;
@@ -20,7 +21,9 @@ final class AgentEntry {
         if(candidate.isEmpty()||candidate.size()>16||candidate.stream().anyMatch(s->s.isBlank()||s.length()>240||s.contains("\n")))
             throw new IllegalArgumentException("agent-guide.yml: rules must contain 1..16 short lines");
         rules=List.copyOf(candidate);
+        journal=new TaskJournal(plugin);
     }
+    void journal(Player p,String[] args) { journal.command(p,args); }
     private static boolean flag(JsonObject o,String key){return o.has(key)&&o.get(key).getAsBoolean();}
     private static String label(String status){return switch(status){case "none"->"未接单";case "active"->"进行中";case "ready_to_submit"->"待交付";case "needs_verification"->"待主动验收";default->"需核对数据";};}
     private static JsonArray commands(String... values){JsonArray a=new JsonArray();for(String value:values)a.add(value);return a;}
@@ -38,9 +41,9 @@ final class AgentEntry {
         if(plugin.nativeRpg().selected()){var current=plugin.nativeRpg().mana(p);self.addProperty("manaLoaded",current.isJsonObject());if(current.isJsonObject()){self.add("mana",current.getAsJsonObject().get("current"));self.add("maxMana",current.getAsJsonObject().get("max"));}}
         self.addProperty("adventurerRank",plugin.guild().adventurerRankName(p));out.add("self",self);
         out.addProperty("rulesCommand","/mycli rules");out.addProperty("stateCommand","/mycli status");
-        out.addProperty("capabilitiesCommand","/mycli capabilities");out.addProperty("progressCommand","/mycli progress");
+        out.addProperty("capabilitiesCommand","/mycli capabilities");out.addProperty("progressCommand","/mycli journal");
         out.addProperty("helpCommand","/mycli --help");
-        out.addProperty("routesCommand","/mycli tasks list");
+        out.addProperty("routesCommand","/mycli guild board");
         if(plugin.worldLife()!=null&&plugin.worldLife().story()!=null){out.addProperty("storyCommand","/mycli world story status");out.addProperty("storyMenuCommand","/mycli world story menu");}
         out.addProperty("nextCommand",onboarding.has("nextCommand")?onboarding.get("nextCommand").getAsString():"/mycli rules");
         out.addProperty("nextAdvice",onboarding.has("message")?onboarding.get("message").getAsString():"这是观战账号；在对应生存角色的连接上进行任务和存取。");

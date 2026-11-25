@@ -157,7 +157,14 @@ final class GuildManager implements Listener {
     }
 
     private String base(UUID id) { return "guild-players." + id; }
-    String activeId(Player p) { return plugin.getConfig().getString(base(p.getUniqueId()) + ".active.id", ""); }
+    private String adventureId(Player p) { return plugin.getConfig().getString(base(p.getUniqueId()) + ".active.id", ""); }
+    String activeId(Player p) {
+        String id = adventureId(p);
+        return !id.isEmpty() || plugin.lifeGuild() == null ? id : plugin.lifeGuild().activeId(p);
+    }
+    // Agent A: shelter-start may coexist with current Life; check this raw guild-only slot, not unified hasActiveContract.
+    boolean hasAdventureContract(Player p) { return !adventureId(p).isEmpty(); } // Life cannot hide an old/expired slot.
+    private boolean lifeActive(Player p) { return adventureId(p).isEmpty() && plugin.lifeGuild() != null && plugin.lifeGuild().hasActiveContract(p); }
     private boolean expiredDaily(String id) {
         return id.startsWith("db_") && plugin.dailyBoard()!=null && plugin.dailyBoard().card(id)==null;
     }
@@ -172,7 +179,7 @@ final class GuildManager implements Listener {
         com.google.gson.JsonObject out = new com.google.gson.JsonObject();
         out.addProperty("joined", member(p));
         out.addProperty("completed", plugin.getConfig().getInt(base(p.getUniqueId()) + ".completed", 0));
-        out.addProperty("activeId", plugin.getConfig().getString(base(p.getUniqueId()) + ".active.id", ""));
+        out.addProperty("activeId", activeId(p));
         return out;
     }
     /** Progress already written by the existing player ledger, without live eligibility checks. */
@@ -196,12 +203,11 @@ final class GuildManager implements Listener {
         // Never call active()/status() here: old expired daily contracts may be
         // released by those legacy paths. A progress query must retain the slot.
         var out=onboardingState(p);String id=out.get("activeId").getAsString();
-        var assessments=plugin.skillAssessments();
-        if(member(p)&&assessments!=null&&assessments.rankPointLedgerReady()){
-            int grade=assessments.readGrade(p);
-            out.addProperty("pointsFromGrade",grade);
-            out.addProperty("rankPoints",rankPoints(p,grade));
-            out.addProperty("rankPointsTarget",grade<GuildRankPoints.LAST_GRADE?GuildRankPoints.target(grade+1):0);
+        out.addProperty("fame", fame(p)); out.addProperty("progressAxis", "fame"); out.addProperty("queryOnly", true);
+        if (lifeActive(p)) {
+            var life = plugin.lifeGuild().taskState(p);
+            life.addProperty("joined", member(p)); life.addProperty("completed", plugin.getConfig().getInt(base(p.getUniqueId()) + ".completed"));
+            life.addProperty("fame", fame(p)); life.addProperty("progressAxis", "fame"); return life;
         }
         out.addProperty("kind","adventure");out.addProperty("title","冒险者公会委托");
         out.addProperty("status",id.isEmpty()?"none":"active");
@@ -223,8 +229,6 @@ final class GuildManager implements Listener {
             if(saved!=null)try{quest=plugin.dailyBoard().savedCard(saved).contract();}catch(IllegalArgumentException ignored){ }
         } else for(Contract candidate:CONTRACTS)if(candidate.id().equals(id)){quest=candidate;break;}
         if(quest==null){out.addProperty("status","unavailable");missing.add("在途定义缺失或已过期；本查询保留原任务，联系服主核对");return out;}
-        var pointOffer=rankPointPreview(p,quest);
-        if(pointOffer!=null)out.add("rankPointPreview",rankPointReceipt(pointOffer));
         int current=plugin.getConfig().getInt(base(p.getUniqueId())+".active.progress",0);
         if(quest.goal()==Goal.DONATE){Material material=Material.matchMaterial(quest.siteId()==null?"":quest.siteId());current=material==null?0:Math.min(quest.target(),countPlainStorage(p,material));}
         boolean verify=EngineeringSites.GOALS.contains(quest.goal());
@@ -277,6 +281,18 @@ final class GuildManager implements Listener {
     }
     private int fame(Player p) { return plugin.getConfig().getInt(base(p.getUniqueId()) + ".fame", 0); }
     int reputation(Player p) {return fame(p);}
+    /** Same config transaction as Life rewards/receipt. No save, rank-point write, XP or extra payment. */
+    void stageLifeCompletion(Player player, String id, int gain) {
+        if (gain <= 0 || plugin.lifeGuild() == null || !plugin.lifeGuild().contractId(id)) throw new IllegalArgumentException("life_completion_invalid");
+        String path = base(player.getUniqueId()); var config = plugin.getConfig();
+        // Freeze grandfathered native/guild rank before lifetime fame changes. Do not rewrite academy identity.
+        if (!config.contains(path + ".rituals.certified")) config.set(path + ".rituals.certified", readLegacyRank(player));
+        if (!config.contains(path + ".joined")) config.set(path + ".joined", today());
+        config.set(path + ".fame", Math.addExact(fame(player), gain));
+        config.set(path + ".completed", Math.addExact(config.getInt(path + ".completed"), 1));
+        config.set(path + ".daily." + id, today());
+        config.set(path + ".everDone." + id, today());
+    }
     int rankPoints(Player player, int fromGrade) {
         if (fromGrade < 0 || fromGrade >= GuildRankPoints.LAST_GRADE) return 0;
         String path = base(player.getUniqueId());
@@ -301,25 +317,15 @@ final class GuildManager implements Listener {
         return ids;
     }
 
+    @Deprecated
     GuildRankPoints.Award rankPointPreview(Player player, Contract quest) {
-        var assessments = plugin.skillAssessments();
-        if (assessments == null || !assessments.rankPointLedgerReady() || !member(player)) return null;
-        int grade = assessments.readGrade(player);
-        String path = base(player.getUniqueId()) + ".rankPoints";
-        var config = plugin.getConfig();
-        int uses = config.getInt(path + ".fromGrade", -1) == grade
-                ? config.getInt(path + ".templates." + GuildRankPoints.template(quest.id())) : 0;
-        boolean deliveryOnly = quest.goal() == Goal.DONATE;
-        if (plugin.taskMarket()!=null && plugin.taskMarket().isMarket(quest.id())) {
-            var task=plugin.taskMarket().find(player,quest.id());
-            if (task!=null) deliveryOnly=task.steps().stream().allMatch(step->step.goal()==Goal.DONATE);
-        }
-        return GuildRankPoints.preview(grade, rankPoints(player, grade), uses, quest.fame(), deliveryOnly);
+        // Nullable ABI retained for old callers (including TaskRoutes); retired offers have no second currency.
+        // Archival computations remain in GuildRankPoints, with their historical pure-rule tests unchanged.
+        return null;
     }
 
     String rankPointHint(Player player, Contract quest) {
-        var award = rankPointPreview(player, quest);
-        return award == null ? "" : " · 整单晋级分 +" + award.gain() + "（" + award.tier() + "，" + award.explanation() + "）";
+        return ""; // ABI retained; no runtime UI advertises archival scoring.
     }
 
     static com.google.gson.JsonObject rankPointReceipt(GuildRankPoints.Award award) {
@@ -337,13 +343,7 @@ final class GuildManager implements Listener {
     }
 
     private void recordRankPoints(Player player, Contract quest, GuildRankPoints.Award award) {
-        if (award == null || award.fromGrade() == GuildRankPoints.LAST_GRADE) return;
-        String path = base(player.getUniqueId()) + ".rankPoints";
-        var config = plugin.getConfig();
-        if (config.getInt(path + ".fromGrade", -1) != award.fromGrade()) config.set(path, null);
-        config.set(path + ".fromGrade", award.fromGrade());
-        config.set(path + ".points", award.after());
-        config.set(path + ".templates." + GuildRankPoints.template(quest.id()), Math.min(2, award.priorUses() + 1));
+        // Retired runtime writer. Preserve old score/templates verbatim; never convert them into fame.
     }
     int legacyRank(Player p) {return Math.min(rankIndex(fame(p)),certified(p));}
     int readLegacyRank(Player p) {
@@ -501,6 +501,7 @@ final class GuildManager implements Listener {
             case "commission", "commissions", "玩家委托" -> plugin.playerContracts().command(player,java.util.Arrays.copyOfRange(args,1,args.length));
             case "assessment", "能力记录" -> plugin.taskMarket().assessment(player);
             case "verify", "验收" -> {
+                if (lifeActive(player)) { plugin.lifeGuild().verify(player); break; }
                 Contract quest = active(player);
                 if (quest == null || !plugin.taskMarket().isMarket(quest.id()))
                     player.sendMessage(ChatColor.YELLOW + "先接取任务市场委托；常驻任务直接 guild status 查看进度。");
@@ -542,10 +543,6 @@ final class GuildManager implements Listener {
         plugin.getConfig().set(path + ".joined", today());
         plugin.getConfig().set(path + ".fame", 0);
         plugin.getConfig().set(path + ".completed", 0);
-        if (plugin.skillAssessments() != null && plugin.skillAssessments().promotionsEnabled()) {
-            plugin.getConfig().set(path + ".rankPoints.fromGrade", 0);
-            plugin.getConfig().set(path + ".rankPoints.points", 0);
-        }
         plugin.saveConfig();
         player.sendMessage(ChatColor.GOLD + "欢迎加入千灯纪冒险者公会！当前等级：青铜。输入 /mycli guild board 看任务。");
         plugin.getLogger().info("Guild joined: player=" + player.getUniqueId());
@@ -562,6 +559,11 @@ final class GuildManager implements Listener {
                     + " · " + TaskGuidance.step(quest.goal(),quest.description()) + " · 声望+" + quest.fame()
                     + " / 绿宝石×" + quest.emeralds() + rankPointHint(player,quest)
                     + " [" + (doneToday(player, quest) ? "今日已完成" : examBlocks(player, quest.id()) ? "不适合本场考试" : "可接") + "]");
+        }
+        if (plugin.lifeGuild() != null) {
+            player.sendMessage(ChatColor.GOLD + "【冒险者公会 · 生活委托】");
+            for (var q : plugin.lifeGuild().catalog()) player.sendMessage(ChatColor.YELLOW + q.id() + " " + q.title()
+                    + " · " + q.description() + " · 公会声望+" + q.fame() + " [" + acceptanceReason(player, q.id()) + "]");
         }
         player.sendMessage(ChatColor.GOLD + "【冒险者公会 · 常驻委托】");
         int[] focus = todayFocus();
@@ -583,7 +585,9 @@ final class GuildManager implements Listener {
 
     private void status(Player player) {
         if (!member(player)) {
-            player.sendMessage(ChatColor.YELLOW + "尚未加入冒险者公会；/mycli guild join 注册，接单也会自动注册。"); return;
+            player.sendMessage(ChatColor.YELLOW + "尚未加入冒险者公会；/mycli guild join 注册，接单也会自动注册。");
+            if (lifeActive(player)) plugin.lifeGuild().command(player, new String[]{"life", "status"});
+            return;
         }
         int fame = fame(player), fameRank = rankIndex(fame), rank = effectiveRank(player);
         int completed = plugin.getConfig().getInt(base(player.getUniqueId()) + ".completed", 0);
@@ -596,13 +600,11 @@ final class GuildManager implements Listener {
         } else next.append("；已达最高认证");
         if(plugin.skillAssessments()!=null&&plugin.skillAssessments().promotionsEnabled()){
             next.setLength(0);
-            int grade=plugin.skillAssessments().readGrade(player);
-            if(plugin.skillAssessments().rankPointLedgerReady()&&grade<GuildRankPoints.LAST_GRADE)
-                next.append("；本阶晋级分 ").append(rankPoints(player,grade)).append("/").append(GuildRankPoints.target(grade+1));
             next.append("；/mycli guild exam promotion 查看本阶进度。小段达标后确认晋升，跨大段需通过实操");
         }
         player.sendMessage(ChatColor.GOLD + "冒险者认证：" + adventurerRankName(player) + " · 声望 " + fame
                 + " · 已完成 " + completed + " 单" + next);
+        if (lifeActive(player)) { plugin.lifeGuild().command(player, new String[]{"life", "status"}); return; }
         Contract quest = active(player);
         player.sendMessage(quest == null ? ChatColor.GRAY + "当前没有在办的委托。"
                 : ChatColor.AQUA + "正在进行：" + quest.title() + " [" + progress(player) + "/"
@@ -632,7 +634,9 @@ final class GuildManager implements Listener {
 
     /** Shared discovery/preflight gate. It neither accepts a task nor spends inventory. */
     private String acceptanceReason(Player player,String id) {
+        if (plugin.lifeGuild() != null && plugin.lifeGuild().contractId(id)) return plugin.lifeGuild().acceptanceReason(player, id);
         if(RetiredActivities.retired(id))return "retired";
+        if (plugin.lifeGuild() != null && plugin.lifeGuild().hasActiveContract(player)) return "another_contract_active";
         if(examBlocks(player,id))return "exam_contract_incompatible";
         Contract quest=contract(id);if(quest==null)return "task_not_found";
         if(player.getGameMode()==GameMode.SPECTATOR)return "requires_survival";
@@ -656,6 +660,7 @@ final class GuildManager implements Listener {
         for(var task:plugin.taskMarket().offers()){var q=plugin.taskMarket().offered(task.id());if(q!=null)all.put(q.id(),q);}
         for(var card:plugin.dailyBoard().cards())all.putIfAbsent(card.id(),card.contract());
         for(var q:CONTRACTS)if(availableToday(player,q))all.putIfAbsent(q.id(),q);
+        if (plugin.lifeGuild() != null) for (var q : plugin.lifeGuild().catalog()) all.putIfAbsent(q.id(), q);
         int size=12,offset=(page-1)*size;var rows=new com.google.gson.JsonArray();int index=0;
         for(var q:all.values()){
             if(index++<offset)continue;if(rows.size()==size)break;
@@ -663,8 +668,8 @@ final class GuildManager implements Listener {
             item.addProperty("id",q.id());item.addProperty("title",q.title());item.addProperty("condition",TaskGuidance.step(q.goal(),q.description()));
             item.addProperty("goal",q.goal().name().toLowerCase(Locale.ROOT));item.addProperty("target",q.target());
             item.addProperty("fame",q.fame());item.addProperty("emeralds",q.emeralds());item.addProperty("minRank",q.minRank());
-            var pointOffer=rankPointPreview(player,q);
-            if(pointOffer!=null)item.add("rankPointPreview",rankPointReceipt(pointOffer));
+            item.addProperty("track", "guild");
+            item.addProperty("source", plugin.lifeGuild() != null && plugin.lifeGuild().contractId(q.id()) ? "life" : "adventure");
             item.addProperty("state",state);item.addProperty("canAccept",state.equals("available"));
             item.addProperty("acceptCommand","guild accept "+q.id());rows.add(item);
         }
@@ -679,6 +684,9 @@ final class GuildManager implements Listener {
         out.addProperty("autoContinue",false);return out;
     }
     private void accept(Player player, String id) {
+        if (plugin.lifeGuild() != null && plugin.lifeGuild().contractId(id)) {
+            plugin.lifeGuild().command(player, new String[]{"life", "accept", id}); return;
+        }
         releaseExpiredDaily(player);
         String state=acceptanceReason(player,id);
         if(!state.equals("available")) {
@@ -1160,7 +1168,7 @@ final class GuildManager implements Listener {
 
     private void checkCertify(Player player) {
         if(plugin.skillAssessments()!=null&&plugin.skillAssessments().promotionsEnabled()) {
-            player.sendMessage("§6声望已增长。查看 /mycli guild exam promotion 核对声望、本阶晋级分和履历；小段达标后确认晋升，跨大段再报名实操。");return;
+            player.sendMessage("§6声望已增长。查看 /mycli guild exam promotion 核对声望、证书和履历；小段达标后确认晋升，跨大段再报名实操。");return;
         }
         int fameRank = rankIndex(fame(player));
         int certifiedNow = certified(player);
@@ -1251,6 +1259,7 @@ final class GuildManager implements Listener {
     }
 
     private void abandon(Player player) {
+        if (lifeActive(player)) { plugin.lifeGuild().command(player, new String[]{"life", "abandon"}); return; }
         if(releaseExpiredDaily(player))return;
         Contract quest = active(player);
         if (quest == null) { player.sendMessage(ChatColor.YELLOW + "当前没有可放弃的任务；/mycli guild status 核对，想接单请 guild board 查看开放清单。"); return; }
@@ -1264,6 +1273,10 @@ final class GuildManager implements Listener {
 
     private void claim(Player player) { claim(player,()->{}); }
     private void claim(Player player,Runnable finished) {
+        if (lifeActive(player)) {
+            try { plugin.lifeGuild().command(player, new String[]{"life", "claim"}); } finally { finished.run(); }
+            return;
+        }
         Contract quest = active(player);
         if (quest != null && plugin.taskMarket().isMarket(quest.id())) {
             plugin.taskMarket().verify(player, quest, ready -> { try{if (ready) claimVerified(player);}finally{finished.run();} });
@@ -1272,9 +1285,21 @@ final class GuildManager implements Listener {
         try{claimVerified(player);}finally{finished.run();}
     }
 
+    private static String canonicalAction(String action) {
+        return switch (action.toLowerCase(Locale.ROOT)) {
+            case "list", "看板" -> "board";
+            case "register", "注册" -> "join";
+            case "rank", "状态", "等级" -> "status";
+            case "接单" -> "accept";
+            case "验收" -> "verify";
+            case "放弃" -> "abandon";
+            case "交付", "领取" -> "claim";
+            default -> action.toLowerCase(Locale.ROOT);
+        };
+    }
     /** Native bodies use the same contract/progress/reward records, never their owner's profile. */
     void residentCommand(Player player,String[] args,java.util.function.Consumer<com.google.gson.JsonObject> finish) {
-        String action=args.length>1?args[1]:"status";
+        String action = canonicalAction(args.length > 1 ? args[1] : "status");
         if(action.equals("board")){finish.accept(residentBoard(player,args.length>2?Integer.parseInt(args[2]):1));return;}
         String preflight=action.equals("accept")&&args.length==3?acceptanceReason(player,args[2]):"guild_conditions_not_met";
         var before=progressState(player);int fameBefore=reputation(player);
@@ -1297,18 +1322,11 @@ final class GuildManager implements Listener {
             result.addProperty("actorId",player.getUniqueId().toString());result.add("before",before);result.add("after",after);
             result.addProperty("fameBefore",fameBefore);result.addProperty("fame",reputation(player));
             result.addProperty("goalCompleted",action.equals("claim")&&after.get("completed").getAsInt()>before.get("completed").getAsInt());
-            if (result.get("goalCompleted").getAsBoolean() && before.has("rankPointPreview") && after.has("rankPoints")
-                    && before.get("pointsFromGrade").equals(after.get("pointsFromGrade"))) {
-                var actual=before.getAsJsonObject("rankPointPreview").deepCopy();
-                int points=after.get("rankPoints").getAsInt();
-                actual.addProperty("pointsAfter",points);
-                actual.addProperty("pointsEarned", points - before.get("rankPoints").getAsInt());
-                result.add("rankPointSettlement",actual);
-            }
             finish.accept(result);
         };
         if(action.equals("claim")){claim(player,done);return;}
         if(action.equals("verify")){
+            if (lifeActive(player)) { verified[0] = plugin.lifeGuild().verify(player); done.run(); return; }
             Contract quest=active(player);
             if(quest!=null&&plugin.taskMarket().isMarket(quest.id())){plugin.taskMarket().verify(player,quest,ready->{verified[0]=ready;done.run();});return;}
         }
@@ -1317,10 +1335,6 @@ final class GuildManager implements Listener {
 
     private void claimVerified(Player player) {
         var assessments = plugin.skillAssessments();
-        if (assessments != null && assessments.promotionsEnabled() && !assessments.rankPointLedgerReady()) {
-            player.sendMessage(ChatColor.YELLOW + "晋级档案暂时无法读取，委托和物品已保留，请稍后交付。");
-            return;
-        }
         if(releaseExpiredDaily(player))return;
         Contract quest = active(player);
         if (quest == null) { player.sendMessage(ChatColor.YELLOW + "当前没有可交付的任务；/mycli guild status 核对在途记录，没有任务时先 guild board 选单再 accept。"); return; }
@@ -1396,8 +1410,6 @@ final class GuildManager implements Listener {
         int dims = diversityBonus(player, quest.dim());
         int gain = dims >= 3 ? quest.fame() + (int) Math.ceil(quest.fame() * 0.2) : quest.fame();
         int nextFame = fame(player) + gain;
-        var rankAward = rankPointPreview(player, quest);
-        recordRankPoints(player,quest,rankAward);
         plugin.getConfig().set(path + ".fame", nextFame);
         plugin.getConfig().set(path + ".completed", plugin.getConfig().getInt(path + ".completed", 0) + 1);
         String completedDate = dynamic == null ? today() : dynamic.date();
@@ -1412,10 +1424,6 @@ final class GuildManager implements Listener {
         player.sendMessage(ChatColor.GREEN + "委托交付成功！声望 +" + gain
                 + (dims >= 3 ? "（含三维度 +20% 加成，今日已集 " + dims + " 个维度）" : "")
                 + "，绿宝石 ×" + emeraldGain + "及额外奖励已存入个人试炼箱。");
-        if (rankAward != null) {
-            player.sendMessage(ChatColor.AQUA + "晋级分 +" + rankAward.gain() + "（" + rankAward.explanation() + "）"
-                    + (rankAward.target() > 0 ? " · 本阶 " + rankAward.after() + "/" + rankAward.target() : ""));
-        }
         if (finishedTask != null && java.util.Set.of("exploration", "combat").contains(finishedTask.route()))
             plugin.agentCoach().rememberAdventure(player, "这趟公会委托已经交付");
         if (dynamic != null) player.sendMessage(ChatColor.GREEN + dynamic.beneficiary()
@@ -1471,6 +1479,21 @@ final class GuildManager implements Listener {
     private static final NamespacedKey TASK_BUTTON = new NamespacedKey("agentfriend", "task_button");
 
     ItemStack taskButton(Player p, String id) {
+        if (plugin.lifeGuild() != null && plugin.lifeGuild().contractId(id)) {
+            var state = plugin.lifeGuild().taskState(p);
+            if (!id.equals(state.get("activeId").getAsString())) {
+                String reason = acceptanceReason(p, id);
+                if (!reason.equals("available")) return icon(Material.GRAY_DYE, "§7当前不可接取", reason);
+                var offer = plugin.lifeGuild().catalog().stream().filter(q -> q.id().equals(id)).findFirst().orElse(null);
+                return offer == null ? icon(Material.GRAY_DYE, "§7委托已撤下")
+                        : markTaskButton(icon(Material.LIME_DYE, "§a接取生活委托", offer.title(), "公会声望 +" + offer.fame()), "accept|" + id);
+            }
+            boolean ready = state.get("ready").getAsBoolean();
+            String run = plugin.getConfig().getString("life-guild." + p.getUniqueId() + ".active.runId", "legacy");
+            return markTaskButton(icon(ready ? Material.EMERALD : Material.BOOK, ready ? "§a交付生活委托" : "§e生活委托 · 验收刷新",
+                    state.get("title").getAsString(), state.get("progress").getAsInt() + "/" + state.get("target").getAsInt(), "奖励与公会声望同次结算"),
+                    (ready ? "claim" : "refresh") + "|" + id + "|" + run);
+        }
         String activeId = activeId(p);
         if (expiredDaily(activeId)) {
             if (id.equals(activeId)) return icon(Material.GRAY_DYE, "§7每日委托已过期", "可从看板直接选择新委托");
@@ -1508,8 +1531,6 @@ final class GuildManager implements Listener {
         String condition = state.get("condition").getAsString();
         String reward = ready ? (stage == stages ? "奖励存入个人奖励箱" : "继续下一阶段")
                 : state.has("advice") ? state.get("advice").getAsString() : "达成后回到这里交付";
-        if (state.has("rankPointPreview") && stage == stages)
-            reward += " · 晋级分 +" + state.getAsJsonObject("rankPointPreview").get("pointsEarned").getAsInt();
         String stepToken = plugin.taskMarket().stepToken(p);
         if (market == null) stepToken = plugin.getConfig().getString(base(p.getUniqueId()) + ".active.accepted", "");
         ItemStack button = icon(ready || needsCheck ? Material.EMERALD : Material.BOOK, title,
@@ -1575,8 +1596,9 @@ final class GuildManager implements Listener {
                     "声望 +" + quest.fame() + " / 绿宝石 ×" + quest.emeralds() + rankPointHint(player,quest), state}));
         }
         Contract quest = active(player);
-        inventory.setItem(48, icon(Material.BARRIER, "§c放弃当前委托", quest == null ? "没有在办的任务"
-                : "放弃「" + quest.title() + "」；进度清零"));
+        inventory.setItem(48, icon(Material.BARRIER, "§c放弃当前委托", lifeActive(player)
+                ? "放弃「" + plugin.lifeGuild().taskState(player).get("title").getAsString() + "」；进度清零"
+                : quest == null ? "没有在办的任务" : "放弃「" + quest.title() + "」；进度清零"));
         inventory.setItem(49, taskButton(player, activeId(player)));
         inventory.setItem(50, icon(Material.CHEST, "§6个人奖励箱", "左键第1页；右键选择10页540格；远程2魔力"));
         inventory.setItem(51, icon(Material.IRON_SWORD, "§c前往地下城", "前往试炼塔入口"));
@@ -1611,10 +1633,11 @@ final class GuildManager implements Listener {
         if (!member(player)) return "§6冒险者公会§r\n\n尚未注册。\n\n在技能罗盘打开公会看板，或输入 /mycli guild join 加入。";
         int reputation = fame(player), rank = effectiveRank(player);
         Contract quest = active(player);
+        String current = lifeActive(player) ? plugin.lifeGuild().taskState(player).get("title").getAsString()
+                : quest == null ? "无" : quest.title() + " " + progress(player) + "/" + quest.target();
         return "§6冒险者公会§r\n\n等级：" + adventurerRankName(player) + "\n声望：" + reputation
                 + "\n完成：" + plugin.getConfig().getInt(base(player.getUniqueId()) + ".completed", 0)
-                + " 单（六维考核制）\n\n当前任务：" + (quest == null ? "无"
-                : quest.title() + " " + progress(player) + "/" + quest.target())
+                + " 单（六维考核制）\n\n当前任务：" + current
                 + "\n\n看板每日轮换；完成 3 个不同\n维度，当日声望 +20%。";
     }
 }

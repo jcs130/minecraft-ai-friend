@@ -3,6 +3,8 @@ import argparse
 import os
 from pathlib import Path
 import subprocess
+import sys
+import zipfile
 
 
 def main():
@@ -26,7 +28,7 @@ def main():
              "AgentCliRecoveryTest", "GuildAdventureGuideTest", "GuildRankPointsTest", "GuildPromotionLedgerTest",
              "AdventureChoiceTest", "AtomicConfigFileTest",
              "DurableConfigFilesTest", "EconomyPresentationTest", "StashGuidanceCatalogTest", "DungeonEnchantmentsTest",
-             "WeaponSkillRollsTest", "EchoCitadelTest", "CryptBuildingRulesTest"]
+             "WeaponSkillRollsTest", "EchoCitadelTest", "CryptBuildingRulesTest", "TaskJournalModelTest", "LegacyPointSourcePolicyTest"]
     suffix = ".exe" if os.name == "nt" else ""
     tool = lambda name: str(args.jdk / "bin" / (name + suffix)) if args.jdk else name
     version = subprocess.run([tool("javac"), "-version"], capture_output=True, text=True, check=True)
@@ -47,6 +49,33 @@ def main():
                                  "org.afuhome.agentfriend." + name, str(root.parent / "resources")])
         if result.returncode:
             raise SystemExit("CLI contract failed: " + name + " (exit " + str(result.returncode) + ")")
+    # New workflow regressions are execution tests, not grep guards or skipped checks.
+    cpfile = output / "current-classpath.txt"
+    cpfile.write_text(classpath, encoding="utf-8")
+    home = args.jdk or Path(tool("javac")).resolve().parents[1]
+    if args.jdk is None:
+        configured = os.environ.get("JAVA_HOME")
+        if not configured:
+            raise ValueError("JAVA_HOME or --jdk required for two-track runners")
+        home = Path(configured)
+    gson = None
+    for candidate in sorted((inputs / "libraries").rglob("gson-*.jar")):
+        with zipfile.ZipFile(candidate) as archive:
+            if "com/google/gson/JsonObject.class" in archive.namelist():
+                gson = candidate
+                break
+    if gson is None:
+        raise ValueError("Prepared real Gson dependency missing; gson-io is not the Gson API")
+    subprocess.run([sys.executable, str(root / "run_exam_two_track_tests.py"), "--jdk", str(home),
+                    "--classpath-file", str(cpfile), "--gson", str(gson), "--output", str(output / "exam-tests-ci")], check=True)
+    subprocess.run([sys.executable, str(root / "run_life_two_track_tests.py"), "--jdk", str(home),
+                    "--classpath", str(cpfile), "--baseline-classes", str(classes), "--output", str(output / "life-tests-ci")], check=True)
+    integration = root.parents[2] / "integrations/vortex-rpg"
+    subprocess.run([tool("javac"), "--release", "21", "-encoding", "UTF-8", "-cp", classpath, "-d", str(output),
+                    str(integration / "src/org/qiandengji/vortex/LegacyPointMigration.java"),
+                    str(integration / "tests/LegacyTransferProtocolTest.java")], check=True)
+    subprocess.run([tool("java"), "-cp", str(output) + os.pathsep + classpath,
+                    "org.qiandengji.vortex.LegacyTransferProtocolTest"], check=True)
 
 
 if __name__ == "__main__":

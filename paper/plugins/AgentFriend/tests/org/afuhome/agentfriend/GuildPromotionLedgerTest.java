@@ -26,9 +26,9 @@ public final class GuildPromotionLedgerTest {
         var small=new AssessmentCatalog.Grade(13,180,List.of(List.of("original_cert")),List.of("original_topic"),"old exam");
         var smallJson=AssessmentCatalog.JSON.toJsonTree(SkillAssessments.displayedGrade(small)).getAsJsonObject();
         check(smallJson.keySet().equals(Set.of("index","fame","prerequisites","fresh","description")),"small divisions retain legacy JSON keys");
-        check(smallJson.get("index").getAsInt()==13&&smallJson.get("fame").getAsInt()==0,"minor rank and no fame barrier");
-        check(smallJson.getAsJsonArray("prerequisites").isEmpty()&&smallJson.getAsJsonArray("fresh").isEmpty(),"no mandatory certificates or practical on minor rank");
-        check(smallJson.get("description").getAsString().contains("54")&&small.fresh().equals(List.of("original_topic")),"accurate point target; optional practice definition intact");
+        check(smallJson.get("index").getAsInt()==13&&smallJson.get("fame").getAsInt()==small.fame(),"minor rank uses its configured fame threshold");
+        check(smallJson.getAsJsonArray("prerequisites").size()==small.prerequisites().size()&&smallJson.getAsJsonArray("fresh").size()==small.fresh().size(),"configured certificate conditions and optional practical topics are retained");
+        check(smallJson.get("description").getAsString().equals(small.description())&&small.fresh().equals(List.of("original_topic")),"original definition retained; no independent point target invented");
         var major=new AssessmentCatalog.Grade(12,160,small.prerequisites(),small.fresh(),"major practical");
         check(SkillAssessments.displayedGrade(major).equals(major),"major ranks retain exact existing requirements and field types");
         Path dir=Files.createTempDirectory("guild-promotion-");
@@ -48,7 +48,7 @@ public final class GuildPromotionLedgerTest {
             Files.delete(temp);
             check(promote(ledger,3,4),"one transition from a legacy major rank");
             JsonObject recovered=academy(new ProfessionLedger(file).data());
-            check(recovered.get("grade").getAsInt()==4&&recovered.get("rankPointsStarted").getAsBoolean(),"grade and spent legacy credit survive reopening together");
+            check(recovered.get("grade").getAsInt()==4&&recovered.get("rankPointsStarted").getAsBoolean()&&recovered.get("progressionPolicy").getAsString().equals("fame_v1"),"grade and retired-scoring tombstone survive reopening with the fame-only policy");
             check(recovered.getAsJsonObject("certificates").size()==1&&recovered.getAsJsonObject("certificates").has("native_clear"),"existing certificate retained without issuing a new one");
             String after=Files.readString(file);
             check(!promote(ledger,3,4)&&Files.readString(file).equals(after),"stale request cannot grant another step");

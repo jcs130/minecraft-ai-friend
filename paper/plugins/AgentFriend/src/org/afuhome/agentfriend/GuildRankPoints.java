@@ -3,7 +3,7 @@ package org.afuhome.agentfriend;
 import java.util.Collection;
 import java.util.regex.Pattern;
 
-/** Per-division progress from completed guild contracts. Lifetime fame remains independent. */
+/** Archival scoring rules/ABI only. Runtime growth is retired; fame is the sole guild progress. */
 final class GuildRankPoints {
     private static final int[] TARGETS = {0, 4, 8, 12, 14, 18, 22, 24, 28, 32, 36, 40, 48, 54, 60, 68, 76, 84};
     private static final int[] BASE = {4, 6, 9, 12};

@@ -90,8 +90,8 @@ final class AgentCommunication {
         out.addProperty("stableGuidance", true); out.addProperty("language", "zh-CN");
         out.addProperty("message", "先查status，按需用<命令> --help学习用法。动作后核对真实结果；超时或断线结果未知，先查询，勿自动重放。");
         out.addProperty("helpCommand", "/mycli --help");
-        out.addProperty("stateCommand", "/mycli status"); out.addProperty("tasksCommand", "/mycli progress all 1");
-        out.addProperty("skillCommand", "/mycli skills status <ID>"); out.addProperty("skillsCommand", "/mycli skills status");
+        out.addProperty("stateCommand", "/mycli status"); out.addProperty("tasksCommand", "/mycli journal");
+        out.addProperty("skillCommand", "/mycli skills status <ID>"); out.addProperty("skillsCommand", "/mycli skills");
         out.addProperty("rulesCommand", "/mycli rules"); out.addProperty("capabilitiesCommand", "/mycli capabilities");
         out.addProperty("detailCommand", "/mycli coach guide"); out.addProperty("authCommand", "/authstatus");
         out.addProperty("backpackCommand","/minepacks:backpack open");
@@ -140,16 +140,20 @@ final class AgentCommunication {
             out.add("mainStage", next.get("step")); out.add("mainlineGraduated", next.get("completed"));
             out.add("nextCommand", next.get("nextCommand"));
         } else { out.addProperty("mainStage", "observer"); out.addProperty("nextCommand", "/mycli intro"); }
-        out.addProperty("progressCommand", "/mycli progress all 1");
-        out.addProperty("routesCommand", "/mycli tasks list");
+        out.addProperty("progressCommand", "/mycli journal");
+        out.addProperty("routesCommand", "/mycli guild board");
         out.addProperty("storyCommand", "/mycli world story status");
-        out.addProperty("skillsCommand", "/mycli skills status"); out.addProperty("inventoryCommand", "/mycli inventory status");
+        out.addProperty("skillsCommand", "/mycli skills"); out.addProperty("inventoryCommand", "/mycli inventory status");
         out.addProperty("fullCommand", "/mycli status full");
         out.addProperty("downed", plugin.isDowned(p)); out.addProperty("inDungeon", plugin.dungeonParticipant(p));
         out.addProperty("inPvp", plugin.pvpParticipant(p));
         JsonObject challenge=plugin.lifeChallenges().activeSummary(p);if(challenge!=null)out.add("challenge",challenge);
         if(!jsonOnly) AgentCliText.state(out).forEach(p::sendMessage);
         if(jsonOnly)send(p, "MC_STATUS", out);
+    }
+    void taskTransition(Player p,String source,String id,String state,String nextCommand) {
+        JsonObject out=TaskTransition.confirmed(p.getUniqueId(),source,id,state,nextCommand);
+        stamp(p,out);send(p,"MC_TASK_STATE",out);
     }
     void reminder(Player p, JsonObject state, String type) {
         p.sendMessage("§b[提示] " + state.get("title").getAsString() + "。命令：" + state.get("nextCommand").getAsString());
@@ -221,6 +225,7 @@ final class AgentCommunication {
         }
     }
     void jsonCommand(Player p,String[] raw) {
+        if(TaskJournal.matches(raw)){plugin.agentEntry().journal(p,raw);return;}
         if (raw.length == 3 && raw[0].equalsIgnoreCase("world") && raw[1].equalsIgnoreCase("board")) { plugin.worldLife().command(p, raw); return; }
         if (raw.length == 3 && raw[0].equalsIgnoreCase("coach") && Set.of("next", "guide").contains(raw[1])) { plugin.agentCoach().command(p, raw); return; }
         if(raw.length>=2&&raw[0].equalsIgnoreCase("world")&&raw[1].equalsIgnoreCase("story")){plugin.worldLife().command(p,raw);return;}

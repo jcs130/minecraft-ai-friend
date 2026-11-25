@@ -51,12 +51,31 @@ final class StarterHouseInspection {
             public boolean placed(Pos p) {Material m=placed.get(p);return m!=null && world.isChunkLoaded(p.x()>>4,p.z()>>4) && world.getBlockAt(p.x(),p.y(),p.z()).getType()==m;}
         };
         Result best=StarterHouseValidator.inspect(grid,null);int scanned=0;
+        boolean unknown=false;
         for(Map.Entry<Pos,Material> entry:placed.entrySet()) if(entry.getValue().name().endsWith("_BED")) {
             Pos seed=entry.getKey();if(Math.abs(seed.x()-player.getLocation().getBlockX())>24 || Math.abs(seed.z()-player.getLocation().getBlockZ())>24 || Math.abs(seed.y()-player.getLocation().getBlockY())>12)continue;
-            if(grid.kind(seed)!=Kind.BED)continue;
+            Kind kind=grid.kind(seed);unknown|=kind==Kind.UNKNOWN;
+            if(kind==Kind.BED_HEAD) {
+                Block b=world.getBlockAt(seed.x(),seed.y(),seed.z());Bed bed=(Bed)b.getBlockData();
+                Block foot=b.getRelative(bed.getFacing().getOppositeFace());seed=new Pos(foot.getX(),foot.getY(),foot.getZ());
+            }else if(kind!=Kind.BED)continue;
             Result r=StarterHouseValidator.inspect(grid,seed);if(r.ready())return r;if(r.progress()>best.progress())best=r;
+            unknown|=r.reason().equals("nearby_chunk_not_loaded");
             if(++scanned>=4)break;
         }
+        // Inspect a nearby existing bed too: structural checks are facts, while
+        // construction remains bound exclusively to the supplied actor's records.
+        if(scanned==0) {
+            Location at=player.getLocation();
+            search: for(int y=-3;y<=3;y++)for(int x=-6;x<=6;x++)for(int z=-6;z<=6;z++) {
+                Pos seed=new Pos(at.getBlockX()+x,at.getBlockY()+y,at.getBlockZ()+z);
+                Kind kind=grid.kind(seed);unknown|=kind==Kind.UNKNOWN;
+                if(kind!=Kind.BED)continue;
+                Result r=StarterHouseValidator.inspect(grid,seed);if(r.ready())return r;if(r.progress()>best.progress())best=r;
+                unknown|=r.reason().equals("nearby_chunk_not_loaded");if(++scanned>=4)break search;
+            }
+        }
+        if(unknown&&!best.ready())return new Result(best.floor(),best.walls(),best.roof(),best.window(),best.door(),best.bed(),best.construction(),best.interior(),best.newBlocks(),best.structuralBlocks(),"nearby_chunk_not_loaded");
         return best;
     }
     static JsonObject json(Result r) {
@@ -64,13 +83,22 @@ final class StarterHouseInspection {
         out.addProperty("interiorCells",r.interior());out.addProperty("newStructuralBlocks",r.newBlocks());out.addProperty("structuralBlocks",r.structuralBlocks());
         JsonObject c=new JsonObject();String[] ids={"floor","walls","roof","window","door","bed","construction"};
         boolean[] flags={r.floor(),r.walls(),r.roof(),r.window(),r.door(),r.bed(),r.construction()};
-        for(int i=0;i<ids.length;i++)c.addProperty(ids[i],flags[i]);out.add("checks",c);
+        JsonArray missing=new JsonArray();
+        for(int i=0;i<ids.length;i++){c.addProperty(ids[i],flags[i]);if(!flags[i])missing.add(ids[i]);}out.add("checks",c);
+        boolean known=!Set.of("nearby_chunk_not_loaded","housing_storage_unavailable").contains(r.reason());
+        if(!known)missing.add("structure_unknown");
+        out.addProperty("available",known);out.add("missingProofs",missing);
         out.addProperty("nextAction",hint(r));return out;
+    }
+    static String examHint(Result r) {
+        if(r.ready())return "房屋七项现场通过；保持结构完整，/mycli guild exam submit 一次交卷，无需另接建屋委托。";
+        return hint(r).replace("接单后","开考后").replace("/mycli life status","/mycli guild exam status").replace("再 life status","再 guild exam status");
     }
     static String hint(Result r) {return switch(r.reason()) {
         case "ready"->"房屋七项通过；保持结构完整，用 /mycli life claim 交付。";
         case "place_complete_bed","complete_bed"->"在你接单后建的小屋内亲手放一张完整床，站到24格内再 /mycli life status 验房。";
         case "nearby_chunk_not_loaded"->"靠近房屋让相关区块加载，再 /mycli life status；不要拆已有建筑。";
+        case "housing_storage_unavailable"->"施工记录保存未确认，先核对原存储回执或联系服主；不要拆房、重复施工或交付。";
         case "room_open_or_over_225_cells","close_two_block_high_walls"->"补齐两格高墙体、门的上下半和玻璃窗，不能留通向室外的缺口；单间室内不超过225格，再 life status。";
         case "need_3x3_supported_room"->"至少留3×3室内地面，两格通行净空；地板用完整实心方块，床周围留走路位置，再 life status。";
         case "cover_every_room_column"->"把全部室内上方盖住，屋顶在室内地面上方2至8格；木板、玻璃、台阶或楼梯屋顶均可，再 life status。";
