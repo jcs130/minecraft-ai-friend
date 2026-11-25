@@ -155,23 +155,123 @@ public final class ExamMethodBodyFixture {
         };}
     }
     static final class FakePlayer implements InvocationHandler {
-        final UUID id=UUID.randomUUID();
+        final UUID id;
         final FakeWorld world;
         final Player player=proxy(Player.class,this);
         final List<String> messages=new ArrayList<>();
         final List<JsonObject> outputs=new ArrayList<>();
+        final List<byte[]> pluginPayloads=new ArrayList<>();
+        final List<String> pluginChannels=new ArrayList<>();
         Location at;
         boolean ground=true,flying;
-        FakePlayer(FakeWorld world){this.world=world;at=new Location(world.world,0,64,0);world.set(0,63,0,Material.STONE);}
+        FakePlayer(FakeWorld world){this(world,UUID.randomUUID());}
+        FakePlayer(FakeWorld world,UUID id){this.world=world;this.id=id;at=new Location(world.world,0,64,0);world.set(0,63,0,Material.STONE);}
         JsonObject last(){return outputs.getLast();}
         public Object invoke(Object proxy,Method m,Object[] args){return switch(m.getName()){
             case "getUniqueId"->id;case "getWorld"->world.world;case "getLocation"->at.clone();case "getGameMode"->GameMode.SURVIVAL;
             case "isOnGround"->ground;case "isFlying"->flying;case "isOnline"->true;
             case "getName"->"synthetic_exam_actor";case "equals"->proxy==args[0];case "hashCode"->System.identityHashCode(proxy);
-            case "sendMessage"->{if(args!=null)for(Object value:args)if(value instanceof String s){messages.add(s);int brace=s.indexOf(" {");if(brace>=0)outputs.add(JsonParser.parseString(s.substring(brace+1)).getAsJsonObject());}yield null;}
-            case "sendPluginMessage"->null;
+            case "sendMessage"->{if(args!=null)for(Object value:args)if(value instanceof String s){messages.add(s);int brace=s.indexOf(" {");if(brace>=0){check(s.length()<=3800,"chat prefix+JSON exceeded budget: "+s.length());outputs.add(JsonParser.parseString(s.substring(brace+1)).getAsJsonObject());}}yield null;}
+            case "sendPluginMessage"->{pluginChannels.add((String)args[1]);pluginPayloads.add(((byte[])args[2]).clone());yield null;}
             default->defaults(m.getReturnType());
         };}
+    }
+    static int chatPassed,chatFailed;
+    static void chatTest(String name,Runnable work){try{work.run();chatPassed++;System.out.println("PASS "+name);}catch(Throwable t){chatFailed++;System.out.println("FAIL "+name+": "+t);t.printStackTrace(System.out);}}
+    static JsonObject projection(Env e,JsonObject source){return (JsonObject)e.call("chatProjection",source);}
+    static JsonObject full(Env e){return JsonParser.parseString(new String(e.actor.pluginPayloads.getLast(),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();}
+    static void bounded(JsonObject chat){check(("MC_GUILD_CERTIFICATES "+chat).length()<=3800,"longest prefix overflow");check(JsonParser.parseString(chat.toString()).equals(chat),"chat is not valid JSON");}
+    static void sameFacts(JsonObject source,JsonObject chat){
+        for(String key:List.of("scope","subjectUuid","schemaVersion","runId","state","reason","startedAt","expiresAt","canSubmit","missingProofs","houseChecks","result","nextAction","nextCommand"))
+            if(source.has(key))check(source.get(key).equals(chat.get(key)),"lost/changed top-level fact: "+key);
+        check(chat.getAsJsonObject("houseChecks").keySet().equals(Set.of("floor","walls","roof","window","door","bed","construction")),"seven house checks lost");
+    }
+    static void untouchedProjection(Env e,JsonObject source){JsonObject before=source.deepCopy(),chat=projection(e,source);bounded(chat);check(source.equals(before),"projection mutated full source");}
+    static void payload(Env e,JsonObject source){
+        JsonObject before=source.deepCopy();int count=e.actor.pluginPayloads.size();e.call("send",e.p,"MC_GUILD_EXAM",source);
+        check(source.equals(before),"enveloped full source changed");
+        check(e.actor.pluginPayloads.size()==count+1&&e.actor.pluginChannels.getLast().equals("mcagent:exam"),"full receipt channel missing");
+        check(Arrays.equals(e.actor.pluginPayloads.getLast(),source.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)),"plugin UTF8 payload not byte-identical");
+        check(full(e).equals(before),"plugin object differs from original source");
+    }
+    public static void main(String[] args)throws Exception {
+        AssessmentCatalog catalog=AssessmentCatalog.load(new File(args[0]));Path output=Path.of(args[1]);
+        Env e=new Env(catalog,output,"chat-projection");
+        chatTest("short JSON keeps exact old ABI and source independence",()->{
+            JsonObject shortJson=JsonParser.parseString("{\"available\":false,\"state\":\"interrupted\",\"reason\":\"data_unavailable\",\"scope\":\"self\",\"extra\":{\"text\":\"中文\\n\\\"\\\\𐐀\"},\"guide\":{\"current\":{\"unknown\":true}}}").getAsJsonObject();
+            JsonObject before=shortJson.deepCopy(),chat=projection(e,shortJson);bounded(chat);check(chat.equals(before),"short ABI degraded");
+            chat.getAsJsonObject("extra").addProperty("text","changed");check(shortJson.equals(before),"copy aliases source");
+        });
+        e.start("shelter_basic");JsonObject status=full(e);
+        chatTest("actual show status removes embedded guide before original seven-check facts",()->{
+            check(status.toString().length()>4082,"real method status did not reproduce oversized JSON");
+            untouchedProjection(e,status);JsonObject chat=projection(e,status);sameFacts(status,chat);
+            check(!chat.has("guide")&&!chat.has("compactTransport")&&chat.get("guideCommand").getAsString().equals("/mycli guild exam guide"),"status guide projection/continuation wrong");
+            payload(e,status);
+        });
+        chatTest("long standalone guide keeps every full step and executable command",()->{
+            e.call("guideReply",e.p,true);JsonObject source=full(e),g=source.getAsJsonObject("guide");
+            JsonArray original=g.getAsJsonArray("steps").deepCopy();JsonObject redundancy=g.getAsJsonObject("current");
+            redundancy.addProperty("redundantDefinition",status.get("requirements").toString().repeat(12));
+            check(source.toString().length()>3800,"long guide fixture did not trigger projection");
+            untouchedProjection(e,source);JsonObject chat=projection(e,source),projected=chat.getAsJsonObject("guide");
+            check(projected.get("steps").equals(original),"guide lost full steps/instructions");
+            check(!projected.has("current")&&!projected.has("result"),"duplicate guide current/result retained");
+            for(JsonElement row:projected.getAsJsonArray("steps"))check(row.getAsJsonObject().get("command").getAsString().matches("/mycli [a-z0-9_ ]+"),"non-executable guide step");
+        });
+        chatTest("extreme escaped Unicode definition drops expansion not current domain facts",()->{
+            JsonObject source=status.deepCopy();source.getAsJsonObject("requirements").addProperty("description","中文𐐀\"\\\n".repeat(20000));
+            untouchedProjection(e,source);JsonObject chat=projection(e,source);sameFacts(source,chat);check(!chat.has("compactTransport"),"definition alone forced minimal fallback");
+        });
+        chatTest("extreme nested facts use explicit safe bounded fallback without forged success",()->{
+            JsonObject source=status.deepCopy(),deep=new JsonObject(),cursor=deep;
+            for(int i=0;i<2048;i++){JsonObject next=new JsonObject();cursor.add("nested",next);cursor=next;}
+            cursor.addProperty("leaf","retained");source.add("result",deep);source.add("houseChecks",deep);source.addProperty("nextAction","\\\"中文𐐀\n".repeat(20000));
+            source.addProperty("available",false);source.addProperty("canSubmit",false);source.addProperty("state","interrupted");source.addProperty("reason","data_unavailable");source.addProperty("phase","unknown");
+            JsonObject chat=projection(e,source);bounded(chat);check(chat.get("compactTransport").getAsBoolean()&&chat.get("readOnly").getAsBoolean(),"fallback not explicit/read-only");
+            for(String key:List.of("runId","startedAt","expiresAt","nextCommand","state","reason","available","canSubmit","phase"))check(source.get(key).equals(chat.get(key)),"fallback changed bounded fact "+key);
+            check(!chat.has("result")&&!chat.has("houseChecks")&&!chat.has("nextAction"),"unsafe nested/long fields survived");
+            check(chat.get("queryCommand").getAsString().equals("/mycli guild exam status --json")&&chat.get("menuCommand").getAsString().equals("/mycli guild exam menu"),"read-only continuation missing");
+            check(source.get("result")==deep&&source.get("houseChecks")==deep&&cursor.get("leaf").getAsString().equals("retained"),"deep source mutated");
+        });
+        chatTest("extreme standalone guide explicitly falls back rather than slicing steps JSON",()->{
+            JsonObject source=status.deepCopy();source.addProperty("type","guide");source.getAsJsonObject("guide").getAsJsonArray("steps").get(0).getAsJsonObject().addProperty("instruction","\\\"𐐀".repeat(20000));
+            source.add("result",new JsonPrimitive("large".repeat(20000)));untouchedProjection(e,source);
+            check(projection(e,source).get("compactTransport").getAsBoolean(),"oversized guide fallback absent");
+        });
+        chatTest("full plugin receipt retains original 24000 UTF8 byte boundary",()->{
+            JsonObject source=new JsonObject();source.addProperty("schemaVersion",1);source.addProperty("subjectUuid",e.actor.id.toString());source.addProperty("scope","self");source.addProperty("text","中文𐐀");source.addProperty("padding","");
+            int base=source.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length;source.addProperty("padding","x".repeat(24000-base));payload(e,source);
+            int count=e.actor.pluginPayloads.size();source.addProperty("padding",source.get("padding").getAsString()+"x");e.call("send",e.p,"MC_GUILD_CERTIFICATES",source);
+            check(e.actor.pluginPayloads.size()==count,"over-limit full plugin receipt behavior changed");bounded(e.actor.last());
+        });
+        if(args.length>2) {
+            JsonObject input=JsonParser.parseString(Files.readString(Path.of(args[2]))).getAsJsonObject();
+            chatTest("original QA 4096 chat reconstructed from frozen run and actual guide; facts/payload unchanged",()->{
+                JsonObject source=input.getAsJsonObject("historicalHead").deepCopy(),active=input.getAsJsonObject("active");
+                Object run=e.call("decode",active);JsonObject g=(JsonObject)e.call("guide",e.p,run);
+                // Historical inspection truth comes from the original event, not an emulated clock.
+                JsonObject current=g.getAsJsonObject("current");
+                for(String key:new ArrayList<>(current.keySet()))if(source.has(key)){current.add(key,source.get(key).deepCopy());g.add(key,source.get(key).deepCopy());}
+                JsonObject build=g.getAsJsonArray("steps").get(1).getAsJsonObject();build.add("instruction",source.get("nextAction").deepCopy());build.add("command",source.get("nextCommand").deepCopy());
+                source.add("guide",g);source.addProperty("guideCommand","/mycli guild exam guide");
+                String truncated=input.get("truncatedChat").getAsString(),complete="MC_GUILD_EXAM "+source;
+                check(complete.startsWith(truncated),"same-source reconstruction differs from original 4096-byte-cut chat prefix");
+                check(complete.length()>4096&&source.get("runId").equals(active.get("runId")),"original large source/run missing");
+                boolean failedParse=false;try{JsonParser.parseString(truncated.substring("MC_GUILD_EXAM ".length()));}catch(JsonParseException expected){failedParse=true;}check(failedParse,"original truncation did not reproduce parse failure");
+                untouchedProjection(e,source);JsonObject chat=projection(e,source);sameFacts(source,chat);
+                check(source.get("startedAt").equals(active.get("startedAt"))&&source.get("expiresAt").equals(active.get("expiresAt")),"original run window changed");
+                check(!chat.has("compactTransport")&&!chat.has("guide"),"real QA lost facts to minimal fallback");
+                // The real send envelope is the QA subject; capture full payload through a player proxy.
+                FakePlayer qa=new FakePlayer(e.world,UUID.fromString(input.get("subjectUuid").getAsString()));
+                JsonObject before=source.deepCopy();e.call("send",qa.player,"MC_GUILD_EXAM",source);
+                check(source.equals(before)&&Arrays.equals(qa.pluginPayloads.getLast(),before.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)),"QA full plugin source changed");
+                check(JsonParser.parseString(new String(qa.pluginPayloads.getLast(),java.nio.charset.StandardCharsets.UTF_8)).equals(before),"QA full plugin payload object mismatch");
+                try{Files.writeString(output.resolve("qa-full-status.json"),source.toString());Files.writeString(output.resolve("qa-chat-projected.json"),chat.toString());}catch(IOException ex){throw new RuntimeException(ex);}
+                System.out.println("QA CHAT originalChars="+complete.length()+" truncatedChars="+truncated.length()+" projectedChars="+("MC_GUILD_EXAM "+chat).length()+" fullUtf8Bytes="+qa.pluginPayloads.getLast().length+" checks="+chat.get("houseChecks")+" runId="+chat.get("runId"));
+            });
+        }
+        System.out.println("RESULT passed="+chatPassed+" failed="+chatFailed);if(chatFailed>0)System.exit(1);
     }
     @SuppressWarnings("unchecked") static <T>T proxy(Class<T> type,InvocationHandler h){return (T)Proxy.newProxyInstance(type.getClassLoader(),new Class<?>[]{type},h);}
     static Object defaults(Class<?> type){

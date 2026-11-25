@@ -81,6 +81,7 @@ SIGNATURES = (
     "private void contractGuidance(Player p, AssessmentCatalog.Definition d, JsonObject out)",
     "void show(Player p)", "private void show(Player p, boolean machine)", "void jsonQuery(Player p,String[] args)",
     "private void info(Player p,AssessmentCatalog.Definition d,boolean machine)",
+    "static JsonObject chatProjection(JsonObject source)", "private static boolean chatFits(JsonElement value)",
     "private void send(Player p,String prefix,JsonObject out)",
     "private void reply(Player p,String reason,AssessmentCatalog.Definition d)", "void certificates(Player p)",
     "private static String gradeLabel(int grade)", "static void advanceGrade(JsonObject academy,int expectedGrade,int target)",
@@ -100,7 +101,11 @@ def main():
     parser.add_argument("--classpath-file", type=Path, required=True)
     parser.add_argument("--gson", type=Path, required=True)
     parser.add_argument("--source-root", type=Path, help="AgentFriend root; defaults to this runner's parent")
+    parser.add_argument("--qa-active-ledger", type=Path, help="Read-only isolated QA adventure-certificates.json")
+    parser.add_argument("--qa-events", type=Path, help="Same QA run's original truncated chat events.jsonl")
     args = parser.parse_args()
+    if bool(args.qa_active_ledger) != bool(args.qa_events):
+        parser.error("--qa-active-ledger and --qa-events must be supplied together")
     root = (args.source_root or Path(__file__).resolve().parents[1]).resolve()
     output = args.output.resolve()
     if not output.name.startswith("exam-tests-") or output == root or root in output.parents:
@@ -108,6 +113,38 @@ def main():
     if not output.parent.is_dir():
         raise ValueError("Output parent must already exist")
     output.mkdir(exist_ok=False)
+    qa_fixture, qa_evidence = None, None
+    if args.qa_active_ledger:
+        ledger_path, events_path = args.qa_active_ledger.resolve(), args.qa_events.resolve()
+        lab = ledger_path.parents[2]
+        marker = json.loads((lab / "lab-marker.json").read_text(encoding="utf-8-sig"))
+        if marker.get("marker") != "TASK_TWO_TRACK_20261125_ISOLATED_NO_PRODUCTION" or lab not in events_path.parents:
+            raise ValueError("Both QA inputs must belong to the marked isolated lab")
+        whitelist = json.loads((lab / "whitelist.json").read_text(encoding="utf-8-sig"))
+        ledger_data = json.loads(ledger_path.read_text(encoding="utf-8-sig"))
+        events = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        prefix = "MC_GUILD_EXAM "
+        for event in events:
+            text = event.get("text", "")
+            if event.get("kind") != "player-message" or not text.startswith(prefix) or len(text) != 4096:
+                continue
+            head = json.loads(text[len(prefix):text.index(',"guide":')] + "}")
+            subject = head["subjectUuid"]
+            if not any(p["uuid"] == subject and p["name"] == event["player"] for p in whitelist):
+                raise ValueError("Truncated event does not belong to a whitelisted QA actor")
+            active = ledger_data["players"][subject]["academy"]["active"]
+            if active["runId"] != head["runId"] or any(active[k] != head[k] for k in ("startedAt", "expiresAt")):
+                raise ValueError("Frozen active and original event are not the same run/window")
+            qa_fixture = output / "qa-chat-input.json"
+            qa_fixture.write_text(json.dumps({"subjectUuid": subject, "active": active, "historicalHead": head,
+                                              "truncatedChat": text}, ensure_ascii=False), encoding="utf-8")
+            qa_evidence = {"ledger": str(ledger_path), "events": str(events_path), "runId": head["runId"],
+                           "ledgerSha256": hashlib.sha256(ledger_path.read_bytes()).hexdigest(),
+                           "eventsSha256": hashlib.sha256(events_path.read_bytes()).hexdigest(),
+                           "reconstruction": "original pre-guide JSON + frozen QA definition + actual guide method steps; historical snapshot fields restored from original chat (no clock rewrite)"}
+            break
+        if qa_fixture is None:
+            raise ValueError("Expected original 4096-character QA exam event missing")
     src = root / "src/org/afuhome/agentfriend"
     tests = Path(__file__).resolve().parent / "org/afuhome/agentfriend"
     exams = (src / "SkillAssessments.java").read_text(encoding="utf-8")
@@ -144,6 +181,7 @@ def main():
                                        "DurableConfigStore stub (no production config writes)"],
                 "uncovered": ["live server events/physical placement timing", "real config persist failure/invalidation (life agent)",
                               "full GUI clicks/Bedrock/Web", "native skill lease provider/payment/cooldown", "real sampling scheduler loop"]}
+    manifest["qaChatEvidence"] = qa_evidence
     (output / "method-manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     paths = [str(args.gson)] + args.classpath_file.read_text(encoding="utf-8").strip().split(";")
     cp = os.pathsep.join(dict.fromkeys(paths))
@@ -161,9 +199,15 @@ def main():
         print(compile_result.stdout + compile_result.stderr)
         return compile_result.returncode
     results = []
-    for name in ["ExamLifecyclePolicyTest", "SkillTrajectoryRecoveryTest", "SkillTrajectoryTest", "StarterHouseValidatorTest"]:
+    for name in ["ExamLifecyclePolicyTest", "SkillTrajectoryRecoveryTest", "SkillTrajectoryTest", "StarterHouseValidatorTest", "ExamMethodBodyFixture"]:
         command = [tool("java"), "-Dfile.encoding=UTF-8", "-Duser.language=en", "-cp", str(output) + os.pathsep + cp, "org.afuhome.agentfriend." + name,
                    str(root / "resources"), str(output)]
+        if name == "ExamMethodBodyFixture" and qa_fixture:
+            command.append(str(qa_fixture))
+        # Copied isolated dependencies can exceed Windows' command-line limit.
+        java_args = output / (name + ".args")
+        java_args.write_text("\n".join('"' + word.replace("\\", "/") + '"' for word in command[1:]), encoding="utf-8")
+        command = [tool("java"), "@" + str(java_args)]
         run = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace")
         text = run.stdout + run.stderr
         (output / (name + ".log")).write_text(text, encoding="utf-8")

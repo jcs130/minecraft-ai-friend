@@ -780,9 +780,86 @@ final class SkillAssessments implements Listener {
         if(same&&!out.has("nextCommand"))out.addProperty("nextCommand","/mycli guild exam status");send(p,"MC_GUILD_EXAM",out);
         if(!machine)p.sendMessage("§b"+d.title()+"："+description(d)+"；限时"+d.timeout()+"秒。下一步："+out.get("nextCommand").getAsString());
     }
+    /** Chat is a read-only projection, not the full mcagent:exam receipt. */
+    static JsonObject chatProjection(JsonObject source) {
+        if(chatFits(source))return source.deepCopy();
+        boolean guideReply=source.has("type")&&new JsonPrimitive("guide").equals(source.get("type"));
+        JsonObject projected=new JsonObject();
+        source.entrySet().forEach(e->{if(!Set.of("guide","current").contains(e.getKey()))projected.add(e.getKey(),e.getValue());});
+        JsonElement guide=source.get("guide");
+        if(guide!=null) {
+            if(guideReply&&guide.isJsonObject()) {
+                JsonObject steps=new JsonObject();
+                guide.getAsJsonObject().entrySet().forEach(e->{if(!Set.of("current","result").contains(e.getKey()))steps.add(e.getKey(),e.getValue());});
+                projected.add("guide",steps);
+            }
+            if(!projected.has("guideCommand"))projected.addProperty("guideCommand","/mycli guild exam guide");
+        }
+        if(chatFits(projected))return projected.deepCopy();
+        // Remove definition/measurement/UI expansion only after redundant guide copies.
+        // Keep current domain facts at top level, including all seven live house checks.
+        String[] facts={"type","scope","subjectUuid","schema","schemaVersion","examId","runId","state","reason",
+                "startedAt","expiresAt","canSubmit","missingProofs","houseChecks","result","nextAction","nextCommand",
+                "guideCommand","available","ok","phase","purpose","persistedState","proofRetained","houseReason"};
+        JsonObject core=new JsonObject();
+        for(String key:facts)if(projected.has(key))core.add(key,projected.get(key));
+        if(guideReply&&projected.has("guide")) {
+            JsonObject steps=new JsonObject(),g=projected.getAsJsonObject("guide");
+            for(String key:List.of("title","currentCommand","nextCommand","steps"))if(g.has(key))steps.add(key,g.get(key));
+            core.add("guide",steps);
+        }
+        if(chatFits(core))return core.deepCopy();
+        // Pathological definitions/strings/nesting: omit whole fields, never slice JSON
+        // or manufacture availability/completion. Bounded commands continue read-only queries.
+        JsonObject compact=new JsonObject();compact.addProperty("compactTransport",true);compact.addProperty("readOnly",true);
+        compact.addProperty("transportReason","chat_size_limit");
+        compact.addProperty("queryCommand","/mycli guild exam status --json");
+        compact.addProperty("menuCommand","/mycli guild exam menu");
+        compact.addProperty("guideCommand","/mycli guild exam guide");
+        for(String key:facts) {
+            JsonElement value=source.get(key);if(value==null||key.equals("guideCommand"))continue;
+            // Scalar identity/state/commands must not hide arbitrarily large nested data.
+            if(!Set.of("missingProofs","houseChecks","result").contains(key)&&!value.isJsonPrimitive()&&!value.isJsonNull())continue;
+            if(!chatFits(value))continue;
+            compact.add(key,value);
+            if(!chatFits(compact))compact.remove(key);
+        }
+        return compact.deepCopy();
+    }
+    /** Iterative, bounded size/depth check before any recursive Gson copy/serialization. */
+    private static boolean chatFits(JsonElement value) {
+        // Reserve 24 characters for every prefix emitted here, including certificates.
+        final int budget=3776;
+        Deque<Map.Entry<JsonElement,Integer>> pending=new ArrayDeque<>();
+        pending.push(new AbstractMap.SimpleImmutableEntry<>(value,0));int length=0,nodes=0;
+        while(!pending.isEmpty()) {
+            var item=pending.pop();JsonElement e=item.getKey();int depth=item.getValue();
+            if(depth>64||++nodes>budget)return false;
+            if(e==null||e.isJsonNull())length+=4;
+            else if(e.isJsonPrimitive()) {
+                if(e.getAsString().length()>budget)return false;
+                length+=e.toString().length();
+            } else if(e.isJsonObject()) {
+                JsonObject object=e.getAsJsonObject();length+=2+Math.max(0,object.size()-1);
+                if(length+object.size()+pending.size()>budget)return false;
+                for(var field:object.entrySet()) {
+                    if(field.getKey().length()>budget)return false;
+                    length+=new JsonPrimitive(field.getKey()).toString().length()+1;
+                    if(length>budget)return false;
+                    pending.push(new AbstractMap.SimpleImmutableEntry<>(field.getValue(),depth+1));
+                }
+            } else {
+                JsonArray array=e.getAsJsonArray();length+=2+Math.max(0,array.size()-1);
+                if(length+array.size()+pending.size()>budget)return false;
+                for(JsonElement child:array)pending.push(new AbstractMap.SimpleImmutableEntry<>(child,depth+1));
+            }
+            if(length>budget)return false;
+        }
+        return true;
+    }
     private void send(Player p,String prefix,JsonObject out) {
         out.addProperty("schemaVersion",1);out.addProperty("subjectUuid",p.getUniqueId().toString());out.addProperty("scope","self");
-        p.sendMessage(prefix+" "+out);byte[] bytes=out.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);if(bytes.length<=24000)p.sendPluginMessage(plugin,CHANNEL,bytes);
+        p.sendMessage(prefix+" "+chatProjection(out));byte[] bytes=out.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);if(bytes.length<=24000)p.sendPluginMessage(plugin,CHANNEL,bytes);
     }
     private void reply(Player p,String reason,AssessmentCatalog.Definition d) {
         JsonObject out=new JsonObject();out.addProperty("type","error");out.addProperty("ok",false);out.addProperty("reason",reason);
