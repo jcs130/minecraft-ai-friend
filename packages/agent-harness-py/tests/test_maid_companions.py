@@ -116,15 +116,24 @@ def loop():
     return MaidCompanions(clock=lambda: now[0]), now
 
 
-@pytest.mark.parametrize("snapshot", [
-    scene(player(dimension=NETHER)), scene(player(x=25)), scene(player(), life="unloaded"),
-    scene(player(), life="dead"), scene(player(), age=60), scene(player(), age=-15),
-    scene(player(x=float("inf"))), scene(player(x=float("nan"))), scene(player(x=True)),
-    scene(player(uid="Alice")), scene(player(name="")), scene({"uuid": ALICE}),
-    BodySnapshot(life_state="alive", position=pos(0), dimension=OVERWORLD, raw={"chat": player()}),
-    None
+@pytest.mark.parametrize("make_snapshot", [
+    lambda: scene(player(dimension=NETHER)),
+    lambda: scene(player(x=25)),
+    lambda: scene(player(), life="unloaded"),
+    lambda: scene(player(), life="dead"),
+    lambda: scene(player(), age=60),
+    lambda: scene(player(), age=-15),
+    lambda: scene(player(x=float("inf"))),
+    lambda: scene(player(x=float("nan"))),
+    lambda: scene(player(x=True)),
+    lambda: scene(player(uid="Alice")),
+    lambda: scene(player(name="")),
+    lambda: scene({"uuid": ALICE}),
+    lambda: BodySnapshot(life_state="alive", position=pos(0), dimension=OVERWORLD, raw={"chat": player()}),
+    lambda: None,
 ])
-def test_never_select_from_unusable_or_invented_evidence(loop, snapshot):
+def test_never_select_from_unusable_or_invented_evidence(loop, make_snapshot):
+    snapshot = make_snapshot()
     tracking, _ = loop
     assert tracking.context(snapshot)["characters"] == []
     assert not tracking.choose("follow", ALICE, snapshot)

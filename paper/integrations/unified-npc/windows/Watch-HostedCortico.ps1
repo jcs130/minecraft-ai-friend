@@ -35,8 +35,16 @@ function Get-RecoveryDecision($State) {
     if ($State.CliCount -eq 1) {
         if (!$State.CliVerified) { return 'unverified_process' }
         if ($State.Listener -ne 'owned' -or !$State.WorldActive) { return 'waiting_for_world' }
-        if ($State.NativeConnected) { return 'waiting_for_native_release' }
         if ($State.Marker -eq 'foreign') { return 'waiting_for_existing_handoff' }
+        if ($State.NativeConnected) {
+            # The resident supervisor drains this role only while a lease is
+            # present. Renew the former holder's expired lease so both sides
+            # can finish their existing voluntary handoff.
+            if ($State.Marker -ceq 'owned' -and $State.MarkerExpired -and $State.WorldRecovering) {
+                return 'native_release_requested'
+            }
+            return 'waiting_for_native_release'
+        }
         return 'adopted'
     }
     if ($State.Listener -ne 'absent') { return 'unverified_process' }
@@ -120,6 +128,7 @@ function Invoke-RecoveryTick($Cfg) {
             Where-Object LocalPort -eq ([int]$Cfg.port))
         $kind = 'absent'
         $worldActive = $false
+        $worldRecovering = $false
         if ($listeners.Count) {
             $kind = 'foreign'
             if ($listeners.Count -eq 1 -and $listeners[0].LocalAddress -ceq '127.0.0.1' -and $verified) {
@@ -128,7 +137,11 @@ function Invoke-RecoveryTick($Cfg) {
                     $kind = 'owned'
                     try {
                         $worlds = Invoke-RestMethod -Uri ("http://127.0.0.1:" + [int]$Cfg.port + '/api/worlds') -TimeoutSec 4 -MaximumRedirection 0
-                        $worldActive = @( $worlds.worlds | Where-Object { $_.id -ceq $Cfg.world -and $_.status -ceq 'active' } ).Count -eq 1
+                        $activeWorlds = @($worlds.worlds | Where-Object { $_.id -ceq $Cfg.world -and $_.status -ceq 'active' })
+                        $worldActive = $activeWorlds.Count -eq 1
+                        $worldRecovering = $worldActive -and @($activeWorlds[0].lamps | Where-Object {
+                            $_.label -ceq 'Numen' -and $_.state -ceq 'loading'
+                        }).Count -eq 1
                     } catch { $worldActive = $false }
                 }
             }
@@ -136,6 +149,7 @@ function Invoke-RecoveryTick($Cfg) {
         $markerState = 'missing'
         $prior = $null
         $owned = $false
+        $expired = $false
         $stamp = if ($cli) { ([datetime]$cli.CreationDate).ToUniversalTime().ToString('o') }
         if (Test-Path -LiteralPath $marker) {
             if ((Get-Item -LiteralPath $marker).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) { throw 'Invalid coordination file' }
@@ -145,16 +159,16 @@ function Invoke-RecoveryTick($Cfg) {
             $recordedStart = if ($m.startedUtc) { ([datetimeoffset]$m.startedUtc).UtcDateTime.ToString('o') }
             $owned = $sameRole -and $m.controller -ceq 'hosted-cortico-watchdog/v1' -and $launch -and
                 $m.processId -eq $launch.corticoPid -and $recordedStart -and (!$cli -or $recordedStart -ceq $stamp)
-            $markerState = if ($owned) { 'owned' } elseif ($sameRole -and $m.until -is [ValueType] -and
-                [double]$m.until -lt $now.ToUnixTimeSeconds()-5) { 'expired' } else { 'foreign' }
+            $expired = $sameRole -and $m.until -is [ValueType] -and [double]$m.until -lt $now.ToUnixTimeSeconds()-5
+            $markerState = if ($owned) { 'owned' } elseif ($expired) { 'expired' } else { 'foreign' }
         }
         $state = Get-RecoveryDecision @{
             GameReady=$gameReady; RoleReady=$roleReady; Unknown=$role[0].unknownRequests
             CliCount=$candidates.Count; CliVerified=$verified; Listener=$kind; WorldActive=$worldActive
             NativeConnected=$role[0].health.connected; NativeAvailable=($role[0].controlMode -ceq 'available_for_external_controller')
-            Marker=$markerState; PreviousAdoption=$owned
+            Marker=$markerState; MarkerExpired=$expired; PreviousAdoption=$owned; WorldRecovering=$worldRecovering
         }
-        if ($state -ceq 'adopted') {
+        if ($state -cin @('adopted', 'native_release_requested')) {
             $until = $now.ToUnixTimeSeconds()+150
             $text = [ordered]@{ bodyId=$seat.bodyId; ownerId=$seat.ownerId; until=$until
                 controller='hosted-cortico-watchdog/v1'; processId=$cli.ProcessId; startedUtc=$stamp } | ConvertTo-Json -Compress
