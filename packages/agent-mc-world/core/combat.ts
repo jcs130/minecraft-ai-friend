@@ -735,7 +735,8 @@ export class CombatSession {
     // entity table. Starting a fight with no visible target just holds the body
     // for three seconds, then resumes the task into the next hit indefinitely.
     const attacker = bot?.entities[attackerId];
-    if (bot && (!attacker?.isValid || !attacker.position || !canSeeEntity(bot, attacker))) {
+    if (!bot || !attacker?.isValid || !attacker.position || !canSeeEntity(bot, attacker)) {
+      if (!bot) return false;
       this.bot = bot;
       this.provoked.add(attackerId);
       this.opts.suspendTasks(`战斗:被看不见的${zhEntity(name)}打了,撤退`);
@@ -744,12 +745,11 @@ export class CombatSession {
       this.beginRetreat('flee');
       return true;
     }
+    // bot + attacker narrowed: visible, valid, positioned attacker for flat range.
     this.provoked.add(attackerId);
-    const flat = bot.entity?.position && attacker.position
-      ? Math.hypot(
-        attacker.position.x - bot.entity.position.x,
-        attacker.position.z - bot.entity.position.z,
-      )
+    const origin = bot.entity?.position;
+    const flat = origin
+      ? Math.hypot(attacker.position.x - origin.x, attacker.position.z - origin.z)
       : undefined;
     return this.engage(name, true, 'fighting', flat);
   }
