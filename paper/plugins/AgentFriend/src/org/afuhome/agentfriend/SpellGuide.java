@@ -106,6 +106,17 @@ final class SpellGuide {
     static List<Entry> entries() {
         List<Entry> entries = new ArrayList<>(SPELLS);
         var plugin = org.bukkit.Bukkit.getPluginManager().getPlugin("AgentFriend");
+        // Retired class skills stay hidden once Vortex owns classes; their yml definitions
+        // remain on disk because the ledger still loads them (see TASK_SYSTEM_TWO_TRACK_CONSOLIDATION.md).
+        if (plugin instanceof AgentFriendPlugin friend && friend.professions() != null
+                && !friend.nativeRpg().selected())
+            friend.professions().skills().stream().map(ProfessionCatalog.Skill::guide).forEach(entries::add);
+        return List.copyOf(entries);
+    }
+    /** Unfiltered view: lookup paths (find/status/detail) must still resolve retired ids to avoid NPEs. */
+    private static List<Entry> allEntries() {
+        List<Entry> entries = new ArrayList<>(SPELLS);
+        var plugin = org.bukkit.Bukkit.getPluginManager().getPlugin("AgentFriend");
         if (plugin instanceof AgentFriendPlugin friend && friend.professions() != null)
             friend.professions().skills().stream().map(ProfessionCatalog.Skill::guide).forEach(entries::add);
         return List.copyOf(entries);
@@ -117,7 +128,7 @@ final class SpellGuide {
         if (id.startsWith("prospect ")) id = "prospect";
         if (id.startsWith("give ")) id = "give";
         for (Entry entry : SPELLS) if (entry.id().equals(id)) return entry;
-        for (Entry entry : entries()) if (entry.id().equals(id)) return entry;
+        for (Entry entry : allEntries()) if (entry.id().equals(id)) return entry;
         return null;
     }
     static String costLine(String raw) {
@@ -144,7 +155,7 @@ final class SpellGuide {
             if (args.length >= 3) {
                 String value = args[2].toLowerCase(Locale.ROOT);
                 if (value.matches("[+-]?\\d+")) {
-                    if (args.length != 3) { error(player, "INVALID_ARGUMENT", "页码前请先写分类，如 list priest 1"); return; }
+                    if (args.length != 3) { error(player, "INVALID_ARGUMENT", "页码前请先写分类，如 list common 1"); return; }
                     try { page = Integer.parseInt(value); }
                     catch (NumberFormatException invalid) { error(player, "INVALID_PAGE", "页码超出范围"); return; }
                 } else filter = value;
@@ -156,7 +167,7 @@ final class SpellGuide {
         }
         if (args.length < 3 || !(args[1].equalsIgnoreCase("explain")
                 || args[1].equalsIgnoreCase("info") || args[1].equalsIgnoreCase("describe"))) {
-            error(player, "INVALID_ARGUMENT", "用法：/mycli skills list [all|common|profession|warrior|tank|mage|priest] [页码] 或 explain <技能ID>");
+            error(player, "INVALID_ARGUMENT", "用法：/mycli skills list [all|common|profession] [页码] 或 explain <技能ID>；职业与天赋见 /mycli profession");
             return;
         }
         detail(player, String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
@@ -167,11 +178,20 @@ final class SpellGuide {
     private static Map<String, String> professions() {
         Map<String, String> roles = new LinkedHashMap<>();
         var plugin = org.bukkit.Bukkit.getPluginManager().getPlugin("AgentFriend");
-        if (plugin instanceof AgentFriendPlugin friend && friend.professions() != null)
+        if (plugin instanceof AgentFriendPlugin friend && friend.professions() != null
+                && !friend.nativeRpg().selected())
             friend.professions().skills().forEach(skill -> roles.put(skill.id(), skill.role()));
         return roles;
     }
     static void discoveryHint(Player player) {
+        var plugin = org.bukkit.Bukkit.getPluginManager().getPlugin("AgentFriend");
+        boolean vortex = plugin instanceof AgentFriendPlugin friend && friend.nativeRpg().selected();
+        if (vortex) {
+            player.sendMessage(ChatColor.AQUA + "[系统·技能目录] 当前基础" + SPELLS.size()
+                    + "项；职业、技能与天赋由 Vortex 提供：/mycli profession 查看与学习。技能有多页，请读 pages/MC_SPELL_NEXT。");
+            player.sendMessage(ChatColor.GRAY + "用 /mycli skills info <ID> 查各级效果、点数和解锁条件；看到技能不等于已经学会。组队倒地救援是副本规则，靠近4格10秒或清场自动复活，无需学习/施法。");
+            return;
+        }
         int count = professions().size();
         player.sendMessage(ChatColor.AQUA + "[系统·技能目录] 当前基础" + SPELLS.size() + "项、职业" + count
                 + "项；/mycli skills list profession 查看职业技艺，list warrior|tank|mage|priest 按战士、坦克、法师、牧师查询。技能有多页，请读 pages/MC_SPELL_NEXT。");
@@ -180,7 +200,7 @@ final class SpellGuide {
     private static void list(Player player, String filter, int page) {
         List<Entry> all = entries(); Map<String, String> roles = professions();
         if (!List.of("all", "common", "profession").contains(filter) && !roles.containsValue(filter)) {
-            error(player, "UNKNOWN_FILTER", "分类：all、common、profession、warrior、tank、mage、priest"); return;
+            error(player, "UNKNOWN_FILTER", "分类：all、common、profession；职业与天赋见 /mycli profession"); return;
         }
         List<Entry> SPELLS = all.stream().filter(entry -> filter.equals("all")
                 || filter.equals("common") && !roles.containsKey(entry.id())
