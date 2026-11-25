@@ -943,10 +943,11 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             state.addProperty("message", "正在加载原女仆，请按原请求查询。");
             receipts.finish(id, operation, "pending", state);
             loadingRecalls.put(id, operation);
-            var world = destination.getWorld();
+            // Owner may change dimension while the maid chunk loads; completion re-reads the
+            // live world instead of pinning the one captured at request time.
             NativeMaidLocation.whenTracked(this, List.of(id),
-                () -> Bukkit.getPlayer(owner) == actor && world.equals(actor.getWorld()),
-                () -> completeLoadedRecall(actor, id, operation, world, tickets));
+                () -> Bukkit.getPlayer(owner) == actor,
+                () -> completeLoadedRecall(actor, id, operation, tickets));
             return receipts.read(id, operation);
         } catch (Exception error) {
             loadingRecalls.remove(id, operation);
@@ -975,12 +976,15 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         return receipts.finish(id, request, status, result);
     }
 
-    private void completeLoadedRecall(Player actor, UUID id, String operation, World world, List<Chunk> tickets) {
+    private void completeLoadedRecall(Player actor, UUID id, String operation, List<Chunk> tickets) {
         boolean attempted = false;
         try {
             try {
-                if (Bukkit.getPlayer(actor.getUniqueId()) != actor || !world.equals(actor.getWorld()) || nativeExclusive(id)) {
-                    throw new CompatibilityException("actor_unavailable", "召回期间连接、维度或控制权已变，请查原请求。");
+                // Only require the owner to still be the same connected player; the landing
+                // below is derived from the owner's CURRENT world, so a dimension change during
+                // the chunk load no longer rejects the recall.
+                if (Bukkit.getPlayer(actor.getUniqueId()) != actor || nativeExclusive(id)) {
+                    throw new CompatibilityException("actor_unavailable", "召回期间连接或控制权已变，请查原请求。");
                 }
                 var body = ownedLoaded(actor, id);
                 var landing = ownerTravel.recallLanding(actor);
