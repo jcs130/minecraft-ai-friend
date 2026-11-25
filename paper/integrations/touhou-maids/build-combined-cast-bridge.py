@@ -1,6 +1,6 @@
 """Build the combined cast-recovery delta over the pinned deployed bridge.
 
-Baseline is the deployed 0.1.64-lifecycle-async JAR (sha256 f2418668...). This candidate carries two
+Baseline is the deployed 0.1.72-guide-voice-menu JAR (sha256 b1f7aa1f...). This candidate carries two
 reviewed fixes that share one release window:
   * Yui external pre-dispatch settlement (MaidBodyControl, NativeMaidBodyActions) — 0.1.65 review.
   * Feiyu legacy cast failure observability/provability (NativeMaidMagicSupport,
@@ -13,8 +13,8 @@ Only the explicitly listed classes are recompiled; every other baseline entry is
 import argparse,hashlib,os,subprocess,tempfile,zipfile
 from pathlib import Path
 
-BASE_SHA256='f24186685b88b748eb10564a961b906ccc5e07fe935ba5d8488b031d81551bd7'
-VERSION='0.1.70-maid-protect'
+BASE_SHA256='b1f7aa1fd39f5ff35358e819945d378c71c2395036e6bd084bfa6fe5dc826c94'
+VERSION='0.1.72-guide-voice-menu'
 CLASSES=('MaidBodyControl','NativeMaidBodyActions','HybridMaidPlugin','NativeMaidCompanionSupport','NativeMaidMagicSupport','LegacyCastFailure','NativeMaidVoices','NpcVoiceEnvelopeStore','NativeMaidAgentSupport','MaidPlayerDamage')
 
 def main():
