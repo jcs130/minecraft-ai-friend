@@ -990,7 +990,7 @@ function Backup-Server {
         # Resident MCP drivers keep a Windows byte-range lock until they exit.
         # The PID lease is rebuilt at startup and is not restorable state.
         & robocopy.exe $opsDir $opsCopy /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP `
-            /XD (Join-Path $opsDir 'repairs') /XF '*.log' '*.jsonl' 'manage-server.lock' 'controller.lock' 'session.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'paper-core-upgrade.pending.json' 'runtime-relocation.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' "/UNILOG:$opsCopyLog" | Out-Null
+            /XD (Join-Path $opsDir 'repairs') /XF '*.log' '*.jsonl' 'manage-server.lock' 'maintenance-flow.lock' 'controller.lock' 'session.lock' 'auto-start.paused' 'bedrock-health.json' 'goddess-bridge.control.json' 'repair-no-rcon.requested' 'last-backup.txt' 'agentfriend-deploy.pending.json' 'cortieye-deploy.pending.json' 'geyser-deploy.pending.json' 'server-settings.pending.json' 'content-plugins.pending.json' 'paper-core-upgrade.pending.json' 'runtime-relocation.pending.json' 'agent-lan-gateway.reload.requested' 'jvm-diagnostics.requested' 'auraskills-cache-fix.requested.json' "/UNILOG:$opsCopyLog" | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Ops backup failed with exit code $LASTEXITCODE. Details: $opsCopyLog. Incomplete backup: $dest" }
         if (Test-Path -LiteralPath $voiceScript -PathType Leaf) {
             $voiceBackup = Join-Path $opsCopy $voiceRenewal
