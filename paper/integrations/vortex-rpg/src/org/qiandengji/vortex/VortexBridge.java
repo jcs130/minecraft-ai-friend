@@ -260,6 +260,100 @@ public final class VortexBridge extends JavaPlugin {
 
     // Narrow public ABI consumed by AgentFriend without importing native classes.
     // No full metadata, raw profile or credentials are exposed to clients.
+    private final ProfessionOverview professionView = new ProfessionOverview();
+    private final NativeLegacyPoints legacyPoints = new NativeLegacyPoints();
+    private record QuestRead(CompletableFuture<JsonObject> future,long requested) {}
+    private final Map<UUID,QuestRead> questReads=new HashMap<>();
+    /** Own native quests only. Database reads may be pending; never block the game thread or start/claim a quest. */
+    public JsonObject taskOverview(Player p) {
+        JsonObject out=new JsonObject();out.addProperty("queryOnly",true);out.addProperty("available",false);out.add("items",new JsonArray());
+        if(!Bukkit.isPrimaryThread()||p==null||!p.isOnline()||vortex==null||quests==null){out.addProperty("reason","native_tasks_unavailable");return out;}
+        UUID actor=p.getUniqueId();var profiles=vortex.playerProfileService();
+        var profile=profiles.qiandengjiLoading(actor)?Optional.<UnifiedPlayer>empty():profiles.profile(actor);
+        if(profile.isEmpty()){out.addProperty("reason","original_profile_loading");return out;}
+        int level=profile.get().level();long now=System.currentTimeMillis();
+        questReads.keySet().removeIf(id->Bukkit.getPlayer(id)==null);QuestRead read=questReads.get(actor);
+        if(read==null||read.future().isDone()&&now-read.requested()>=1000) {
+            CompletableFuture<JsonObject> query=quests.questData(actor).thenApply(data->{
+                if(data==null||!actor.equals(data.playerId()))throw new IllegalStateException("quest_actor_mismatch");
+                JsonObject result=new JsonObject();result.addProperty("queryOnly",true);result.addProperty("available",true);
+                result.addProperty("observedAt",System.currentTimeMillis());result.addProperty("sourceRevision",data.revision());
+                JsonArray rows=new JsonArray();
+                for(var progress:data.quests().values().stream().filter(q->q.state()==QuestState.ACTIVE).sorted(Comparator.comparing(QuestProgress::questId)).limit(64).toList()) {
+                    var definition=quests.registry().find(progress.questId());JsonObject row=new JsonObject();row.addProperty("id",progress.questId());
+                    if(definition.isEmpty()){row.addProperty("available",false);row.addProperty("title",progress.questId());row.addProperty("state","unavailable");row.addProperty("nextCommand","/mycli tasks status");}
+                    else {var q=definition.get();row.addProperty("title",q.name());row.addProperty("available",true);row.addProperty("state",progress.allObjectivesComplete()?"ready":"active");
+                        row.addProperty("nextAction",QuestText.progress(q,progress));row.addProperty("nextCommand",QuestText.nextCommand(q,data,level));
+                        if(progress.startedAt()!=null)row.addProperty("startedAt",progress.startedAt().toEpochMilli());}
+                    rows.add(row);
+                }
+                result.add("items",rows);return result;
+            });
+            read=new QuestRead(query,now);questReads.put(actor,read);
+        }
+        var query=read.future();
+        if(!query.isDone()){out.addProperty("reason","native_tasks_loading");return out;}
+        if(query.isCompletedExceptionally()||query.isCancelled()){out.addProperty("reason","native_tasks_unavailable");return out;}
+        JsonObject cached=query.getNow(null);if(cached==null)return out;
+        JsonObject result=cached.deepCopy();int awaiting=quests.qiandengjiPendingRewards(actor);
+        if(awaiting>0){JsonObject pending=new JsonObject();pending.addProperty("id","pending_rewards");pending.addProperty("title","职业任务奖励待对账");pending.addProperty("available",false);pending.addProperty("state","unavailable");pending.addProperty("reason","original_rewards_pending");pending.addProperty("nextAction","有 "+awaiting+" 笔原奖励待核对，不重复领取；查询原回执或联系服主");pending.addProperty("nextCommand","/mycli tasks status");result.getAsJsonArray("items").add(pending);}
+        return result;
+    }
+
+    /** Read-only; default/summary/status consumers must render this same projection. */
+    public JsonObject professionOverview(Player p) {
+        return professionView.read(vortex, p);
+    }
+
+    /** Stable private handoff ID; not a UUID/account-list export. */
+    public String legacyPointsTransferId(Player p, String sourceHash) {
+        if (p == null || sourceHash == null || !sourceHash.matches("[0-9a-f]{64}"))
+            throw new IllegalArgumentException("original_actor_and_source_sha256_required");
+        return LegacyPointMigration.transferId(p.getUniqueId(), sourceHash);
+    }
+
+    /** Caller MUST first durably freeze the source snapshot+intent (see LegacyPointMigration.SourceStore).
+     * Confirm only the source receipt after confirmed=true. Never edit earned/spent/levels/old skills.
+     * Explicit migrate/login/profile-ready only; no query handler may call this method.
+     * Same transfer after an unknown result reconciles the native receipt, never replays a grant. */
+    public CompletableFuture<JsonObject> migrateLegacyPoints(Player p, int earned, int spent,
+            String sourceHash, String transferId) {
+        try {
+            var source = new LegacyPointMigration.Source(p.getUniqueId(), earned, spent, sourceHash, transferId);
+            if (vortex == null) return CompletableFuture.completedFuture(source.result("native_unavailable", false, false));
+            return legacyPoints.migrate(p, source, vortex.playerProfileService(), vortex.classSkillService());
+        } catch (IllegalArgumentException | NullPointerException invalid) {
+            var result = new JsonObject();
+            result.addProperty("confirmed", false); result.addProperty("pending", false);
+            result.addProperty("status", "rejected"); result.addProperty("reason", "invalid_actor_or_transfer_payload");
+            return CompletableFuture.completedFuture(result);
+        }
+    }
+
+    private void professionSummary(Player p, BridgeRules.Request request) {
+        JsonObject data = professionOverview(p);
+        if (request.json()) p.sendMessage("MC_RPG " + data);
+        else p.sendMessage("[RPG] " + ProfessionOverview.text(data));
+    }
+
+    private static String[] professionQueryAliases(String[] raw) {
+        var words = new ArrayList<String>();
+        for (String word : raw) if (!word.startsWith("-")) words.add(word.toLowerCase(Locale.ROOT));
+        if (!words.isEmpty() && words.getFirst().equals("rpg")) words.removeFirst();
+        if (words.equals(List.of("skills", "list", "profession"))) {
+            var aliased = new ArrayList<String>(); aliased.add("profession"); aliased.add("status");
+            for (String word : raw) if (word.startsWith("-")) aliased.add(word);
+            return aliased.toArray(String[]::new);
+        }
+        if (words.size() == 2 && Set.of("class", "profession", "职业").contains(words.getFirst())
+                && words.get(1).equals("summary")) {
+            String[] aliased = raw.clone();
+            for (int i = 0; i < aliased.length; i++) if (aliased[i].equalsIgnoreCase("summary")) aliased[i] = "status";
+            return aliased;
+        }
+        return raw;
+    }
+
     public String selfState(Player p){
         if(!Bukkit.isPrimaryThread())throw new IllegalStateException("main thread required");
         var state=profile(p);String id=vortex.classSkillService().selectedClassDefinition(state).map(c->c.id()).orElse("");
@@ -436,10 +530,11 @@ public final class VortexBridge extends JavaPlugin {
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] raw){
         if(!(sender instanceof Player p)){sender.sendMessage("此入口只操作本人角色。");return true;}
         BridgeRules.Request r;
-        try{r=BridgeRules.parse(raw);}catch(IllegalArgumentException e){if(Arrays.asList(raw).contains("--json"))p.sendMessage("MC_RPG "+gson.toJson(Map.of("success",false,"reason","invalid_argument","changed",false,"message",e.getMessage(),"nextCommand",e instanceof BridgeRules.InvalidArgument invalid?invalid.nextCommand():"/mycli --help")));else p.sendMessage("[RPG] "+e.getMessage());return true;}
+        try{r=BridgeRules.parse(professionQueryAliases(raw));}catch(IllegalArgumentException e){if(Arrays.asList(raw).contains("--json"))p.sendMessage("MC_RPG "+gson.toJson(Map.of("success",false,"reason","invalid_argument","changed",false,"message",e.getMessage(),"nextCommand",e instanceof BridgeRules.InvalidArgument invalid?invalid.nextCommand():"/mycli --help")));else p.sendMessage("[RPG] "+e.getMessage());return true;}
         try{
             if(r.help()){help(p,r);return true;}
             if(!getConfig().getString("backend","preview").equals("vortex")&&!getConfig().getStringList("allowed-worlds").contains(p.getWorld().getName()))throw new IllegalArgumentException("当前世界未开放Vortex预览。");
+            if(r.group().equals("class")&&r.action().equals("status")){noArgs(r);professionSummary(p,r);return true;}
             var state=profile(p);
             if(swordCommand(p,state,r)||skillFailure(p,state,r))return true;
             switch(r.group()){
@@ -515,7 +610,7 @@ public final class VortexBridge extends JavaPlugin {
     }
     private void classes(Player p,UnifiedPlayer state,BridgeRules.Request r){
         switch(r.action()){
-            case "status"->{noArgs(r);String id=vortex.classSkillService().selectedClassDefinition(state).map(c->c.id()).orElse("none");emit(p,r,Map.of("class",id,"queryOnly",true),id.equals("none")?"尚未选职。下一步：/mycli profession list":BridgeRules.className(id)+"；技能：/mycli skills status");}
+            case "status"->{noArgs(r);professionSummary(p,r);}
             case "menu"->{noArgs(r);vortex.classSkillService().openClassMenu(p,state);if(r.json())emit(p,r,Map.of("requestedMenu","profession","selectionConfirmed",false,"nextCommand","/mycli profession status"),"已请求打开职业菜单；尚未选择。");}
             case "list"->{noArgs(r);var definitions=ClassInfoView.definitions(vortex);var ids=vortex.classSkillService().registeredClassIds();emit(p,r,Map.of("classes",ids,"queryOnly",true,"catalogVersion",vortex.getDescription().getVersion()+":"+ClassInfoView.revision(definitions),"details",definitions.stream().map(d->Map.of("id",d.get("id"),"name",d.get("name"),"description",d.get("description"),"detailsCommand","/mycli profession info "+d.get("id"))).toList()),String.join("；",definitions.stream().map(d->d.get("id")+" "+d.get("name")+"："+d.get("description")).toList())+"。按需查询属性、装备和成长：/mycli profession info <ID>");}
             case "info"->{String id=BridgeRules.id(r);var v=ClassInfoView.info(vortex,p,state,id,getConfig().getStringList("profession-notes."+id),getCommand("qdrpg")!=null&&getCommand("qdrpg").testPermissionSilent(p));emit(p,r,v.data(),v.text());}
@@ -592,7 +687,7 @@ public final class VortexBridge extends JavaPlugin {
     }
     private void skills(Player p,UnifiedPlayer state,BridgeRules.Request r){
         if(Set.of("explain","status").contains(r.action())&&r.arguments().size()==1){skills(p,state,new BridgeRules.Request(r.group(),"info",r.arguments(),r.json(),r.help()));return;}
-        if(r.action().equals("list")&&r.arguments().equals(List.of("common"))){emit(p,r,Map.of("common",SkillTransition.COMMON,"queryOnly",true),"生存：selfheal圣愈、food饱食、night夜视、feather羽落；战斗：starbolt星芒箭、frostnova霜环（控制与灭火）；移动：home归乡、blink闪现、travel传送点、team队友增援、support支援、leap跃空；探索与留影：prospect探矿、give造物、fireworks烟花、starlight星尘。无需选职或学习；耗魔与冷却查 /mycli skills info <ID>。职业技能、学习点与天赋另在 /mycli skills list。");return;}
+        if(r.action().equals("list")&&r.arguments().equals(List.of("common"))){emit(p,r,Map.of("common",SkillTransition.COMMON,"queryOnly",true),"生存：selfheal圣愈、food饱食、night夜视、feather羽落；战斗：starbolt星芒箭、frostnova霜环（控制与灭火）；移动：home归乡、blink闪现、travel传送点、support支援、leap跃空；探索与留影：prospect探矿、give造物、fireworks烟花。无需选职或学习；耗魔与冷却查 /mycli skills info <ID>。个人职业、技能、学习点与独立天赋点统一查询 /mycli profession。");return;}
         switch(r.action()){
             case "tree"->{noArgs(r);var tree=vortex.classSkillService().selectedClass(state).flatMap(c->vortex.qiandengjiTalents().registry().find(c)).orElseThrow(()->new IllegalArgumentException("先选择职业；/mycli profession list"));
                 async(p,r,vortex.qiandengjiTalents().talentData(p.getUniqueId()).thenApply(data->Map.<String,Object>of("talentPoints",data.talentPoints(),"allocated",data.allocatedNodes(),"nodes",tree.nodes(),"summary","天赋点 "+data.talentPoints()+"；"+String.join("、",tree.nodes().values().stream().map(n->n.id()+" "+n.displayName()+"("+n.cost()+"点)").toList())+"。查看条件：/mycli skills info <ID>")),"天赋资料暂不可用");}
@@ -699,7 +794,7 @@ public final class VortexBridge extends JavaPlugin {
         emit(p,r,Map.of("opened",true,"currency","emerald","purchaseConfirmed",false),"已打开原版交易窗口；尚未购买。按窗口报价交易，库存确认后再继续。");
     }
     private void town(Player p,BridgeRules.Request r){var facilities=city.getConfigurationSection("facilities");if(r.action().equals("list")){noArgs(r);var ids=facilities.getKeys(false);emit(p,r,Map.of("state","surveyed_not_operating","world","aincrad","facilities",ids),"起始之城："+String.join("、",ids.stream().map(id->facilities.getString(id+".name")).toList())+"。建筑已勘察，设施未开业；详情：/mycli waypoint info <ID>");return;}if(!r.action().equals("info"))throw new IllegalArgumentException("town 仅 list/info，查询不会传送或建造。");String id=BridgeRules.id(r);var c=facilities.getConfigurationSection(id);if(c==null)throw new IllegalArgumentException("未知设施");emit(p,r,Map.of("id",id,"world","aincrad","entrance",c.getIntegerList("entrance"),"function",c.getString("function"),"state","surveyed_not_operating"),c.getString("name")+"；aincrad入口 "+c.getIntegerList("entrance")+"；用途："+c.getString("function")+"。尚未开业，不会自动接任务。");}
-    private void help(Player p,BridgeRules.Request r){String text=switch(r.group()){case "class"->"profession list/info <ID>/choose <ID>/menu：查询只读；choose选择一次并授予原生初始装备。";case "skills"->"skills list/info <ID>/learn <ID>/prepare <法术ID>/tree/menu：learn花学习点或天赋点，详情会注明；被动不能cast。施放：/mycli cast <法术ID>";case "quests"->"tasks list/info <ID>/status/accept <ID>/claim <ID>/abandon <ID>：放弃会使重新接取时重新计数，未领取奖励不发放、已获奖励保留；不会退出副本或回城。旧公会委托：/mycli guild status；放弃旧单：/mycli guild abandon。";case "shop"->"shop list/info <ID>/open <ID>：预览商店用绿宝石；打开不购买。正式交易沿用 /mycli trade --help。";default->"先查 /mycli status。RPG：profession、skills、cast、tasks；按需 /mycli <分组> --help。考试与声望：/mycli progress；副本：/mycli dungeon list。个人箱：/mycli arena stash；公共补给：/mycli guild shared。默认短文本，可选 --json。";};emit(p,r,Map.of("help",text,"queryOnly",true),text);}
+    private void help(Player p,BridgeRules.Request r){String text=switch(r.group()){case "class"->"profession [summary|status] [--json]：本人职业等级/经验、技能、学习点和独立天赋点的只读总览；list/info <ID>/choose <ID>/menu 保持。查询不选职、不学习、不兑换；choose选择一次并授予原生初始装备。";case "skills"->"skills list/info <ID>/learn <ID>/prepare <法术ID>/tree/menu：learn花学习点或天赋点，详情会注明；被动不能cast。施放：/mycli cast <法术ID>";case "quests"->"tasks list/info <ID>/status/accept <ID>/claim <ID>/abandon <ID>：放弃会使重新接取时重新计数，未领取奖励不发放、已获奖励保留；不会退出副本或回城。旧公会委托：/mycli guild status；放弃旧单：/mycli guild abandon。";case "shop"->"shop list/info <ID>/open <ID>：预览商店用绿宝石；打开不购买。正式交易沿用 /mycli trade --help。";default->"先查 /mycli status。RPG：profession、skills、cast、tasks；按需 /mycli <分组> --help。考试与声望：/mycli progress；副本：/mycli dungeon list。个人箱：/mycli arena stash；公共补给：/mycli guild shared。默认短文本，可选 --json。";};emit(p,r,Map.of("help",text,"queryOnly",true),text);}
     private static void noArgs(BridgeRules.Request r){if(!r.arguments().isEmpty())throw new IllegalArgumentException("此查询无额外参数");}
     private void write(Player p,BridgeRules.Request r,java.util.function.Supplier<CompletableFuture<Void>> operation,boolean save,String success){
         if(!io.vortexcore.combat.PlayerStateGate.allowed(p))throw new IllegalStateException("当前状态不能执行；请先等待救援或使用对应生存角色。查询：/mycli status");

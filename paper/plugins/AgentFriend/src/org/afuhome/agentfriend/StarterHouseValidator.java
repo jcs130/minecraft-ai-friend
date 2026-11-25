@@ -9,7 +9,7 @@ final class StarterHouseValidator {
     interface Grid { Kind kind(Pos p); boolean placed(Pos p); }
     record Result(boolean floor, boolean walls, boolean roof, boolean window, boolean door, boolean bed,
                   boolean construction, int interior, int newBlocks, int structuralBlocks, String reason) {
-        boolean ready() { return floor && walls && roof && window && door && bed && construction; }
+        boolean ready() { return reason.equals("ready") && floor && walls && roof && window && door && bed && construction; }
         int progress() { return (floor?1:0)+(walls?1:0)+(roof?1:0)+(window?1:0)+(door?1:0)+(bed?1:0)+(construction?1:0); }
     }
     private static final int[][] SIDES={{1,0},{-1,0},{0,1},{0,-1}};

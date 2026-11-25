@@ -354,6 +354,25 @@ final class SiteDungeonManager implements Listener {
     private String day(){return LocalDate.now(ZoneId.of("Asia/Shanghai")).toString();}
     private Run own(Entity p){return runs.values().stream().filter(r->r.party.contains(p.getUniqueId())).findFirst().orElse(null);}
     boolean isParticipant(Player p){return own(p)!=null;}
+    /** Read-only own run, paused checkpoint and original pending reward slots for the task centre. */
+    List<JsonObject> journalRows(Player p) {
+        List<JsonObject> rows=new ArrayList<>();Run mine=own(p);
+        if(mine!=null) {
+            JsonObject row=JSON.toJsonTree(advice(p,mine.site.id)).getAsJsonObject();
+            row.addProperty("id",mine.site.id);row.addProperty("title",mine.site.name);row.addProperty("kind","run");
+            row.addProperty("runId",mine.id);row.addProperty("startedAt",mine.started);
+            row.addProperty("state","active");row.addProperty("phase",mine.pausedAt>0||!mine.fault.isEmpty()?"paused":mine.phase);
+            row.addProperty("stage",Math.min(mine.stage+1,mine.stages()));row.addProperty("stages",mine.stages());
+            rows.add(row);
+        }
+        for(String id:pendingSites(p.getUniqueId())) {
+            JsonObject row=JSON.toJsonTree(pendingReward(p.getUniqueId(),id)).getAsJsonObject();
+            row.addProperty("id",id);row.addProperty("title",sites.containsKey(id)?sites.get(id).name+" · 待领奖":"原遗迹奖励 "+id);
+            row.addProperty("kind","reward");row.addProperty("state","ready");row.addProperty("nextAction","原待领回执仍在，直接领取；不用重新开场或重打");
+            row.addProperty("nextCommand","/mycli dungeon claim "+id);rows.add(row);
+        }
+        return rows;
+    }
     String reinforcementProblem(Player actor,LivingEntity target,Location landing){
         Run targetRun=own(target),actorRun=own(actor);
         if(actorRun!=null&&actorRun!=targetRun)return "[team_leave_dungeon] 你仍在另一处遗迹；先 /mycli dungeon leave 正常离场，再支援。";

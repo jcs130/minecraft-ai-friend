@@ -1,6 +1,6 @@
 # 任务体系两体系收敛方案（Two-Track Consolidation）
 
-> 状态：方案待评估 · 提出人：扛枪（"任务体系需要收敛到两个体系，一个是公会委托等级，一个是个人职业技能等级"，2026-11-25）· 起草：史提西亚（运营线）
+> 状态：按代码逐项实施，旧资产保留；部署与联机验收独立于文档状态 · 提出人：扛枪（"任务体系需要收敛到两个体系，一个是公会委托等级，一个是个人职业技能等级"，2026-11-25）· 起草：史提西亚（运营线）
 > 关联：[TASK_SYSTEM_GOVERNANCE.md](TASK_SYSTEM_GOVERNANCE.md)（问题清单与分层治理）· PR #435（考试文案修复）
 > 运营侧不动代码不重启；本文件为架构收敛方案，交开发线评估。
 
@@ -30,13 +30,13 @@
 ### 体系 A：公会委托等级
 - **一句话**：做委托 → 升冒险者段位。
 - **唯一进度**：冒险者段位（18 阶）。
-- **计量收敛**：声望为唯一主轴；晋级分并入声望（或明确为声望的派生显示，不再单独要求）；能力证书 = 晋级门槛（条件，不是进度轴）。
+- **计量收敛**：声望为唯一主轴，使用 `adventurer-grades.yml` 原十八阶阈值；不再增长或要求独立晋级分。旧晋级分只保留历史，不能加进声望造成同一旧交付双计。能力证书为晋级条件，不是额外进度轴；小段也遵循配置证书条件，大段保留原履历与新实操门槛。
 - **内容**：全部委托类型（静态/动态/市场/探索/近郊/副本委托）+ 考试（作为晋级门槛）。
 
 ### 体系 B：个人职业技能等级
 - **一句话**：练技能 → 升技能等级。
 - **进度**：职业技能（Vortex 六职业等级 + 技能等级 + 天赋）+ 基础技能（AuraSkills 11 项）+ 生活技能（life-guild 收敛后）。
-- **计量收敛**：`angler`→`fishing`、`farmer`→`farming` 合并进 AuraSkills；`gourmet/builder/author/trader/tinkerer` 保留为生活技能等级（无 AuraSkills 对应，是体系 B 的独有技能线）；技能点统一用 Vortex 学习点，旧 skill-points 退役。
+- **计量收敛**：`angler`→`fishing`、`farmer`→`farming` 合并进 AuraSkills；`gourmet/builder/author/trader/tinkerer` 保留为生活技能等级（无 AuraSkills 对应，是体系 B 的独有技能线）；技能点统一用 Vortex 学习点，旧 skill-points 消费冻结；服主已明确选择未花余额按1:1迁移，原已花点/技能历史保留，信用与迁移回执原子保存，未知结果按原编号对账。
 
 ## 四、映射表：现有每个系统归哪里
 
@@ -46,7 +46,7 @@
 | 副本（dungeon 15 处） | A 的委托目标地 | conquest 类委托与考试的目标 |
 | skill-assessments 考试 | A 的晋级门槛 | 证书 = 段位条件 |
 | fame | A 主轴 | 保留为唯一进度 |
-| rankPoints | A | 并入声望或标为派生 |
+| rankPoints | A | 停止独立写入与门槛，旧值归档；不转换成声望 |
 | Vortex 六职业 | B 主轴 | 保留 |
 | AuraSkills 11 项 | B | 保留为基础技能等级 |
 | life-guild `angler`/`farmer` | B | 合并到 AuraSkills `fishing`/`farming` |
@@ -59,7 +59,7 @@
 
 - **文案层（运营线，配置热加载）**：`agent-guide.yml` 术语表改为两体系口径；`/mycli intro`/`rules` 的任务段按"公会等级 / 技能等级"两组重写；动态看板描述统一"交付委托 → 涨声望"。
 - **代码层（开发线）**：晋级分并入声望（单账本）；`angler`/`farmer` 与 AuraSkills 合并（单统计源）；`/mycli journal` 按"公会 / 技能"两组展示全部进行中事项；旧 skill-points 退役迁移到 Vortex 学习点。
-- **过渡期**：两套账本并存时，对外只显示合并后口径（声望），晋级分隐藏为内部量。
+- **过渡期**：原积分、旧生活声望、旧技能记录均保留档案，但不得继续独立消费或构成隐藏晋级门槛；不能只改显示名称掩盖双账本。钓农只投影真实AuraSkills等级，不补发历史XP；其余五类保留原熟练度和阈值。
 
 ## 六、验收标准
 
@@ -76,7 +76,7 @@
 | --- | --- | --- | --- | --- |
 | 1 | AgentFriend | 0.4.47.59 | 基础技能封装层（`/mycli cast`）；`skills.yml` 内含 23 条已停止成长的旧职业技艺定义 | `/mycli skills list common` |
 | 2 | MagicSpells | 4.0-Beta-15 | **基础技能的底层引擎**（不是独立第三套）：`spells-regular` 3 法术（blink/heal/food）+ `spells-agentfriend` 9 法术（selfheal + 8 个 conjure 固定配方）+ `spells-command` 11 个管理类 spell；全部 always-granted，费用由 AgentFriend 从 AuraSkills 魔力代扣 | `/cast list`（**第二个列表入口**） |
-| 3 | AuraSkills | 2.4.0 | 11 项熟练度 + 每项多个被动 abilities + mana abilities；**全服唯一魔力池**（统一扣费入口，已是对的） | `/mycli skills list passive` |
+| 3 | AuraSkills | 2.4.0 | 11 项熟练度 + 每项多个被动 abilities + mana abilities；基础行动经验与被动的统计源；现役魔力已由Vortex统一，不能按旧提案改回AuraSkills | `/mycli skills list passive` |
 | 4 | VortexRPG | 1.2.2-alpha-qd29 | 六职业技能（spells.yml 10 法术：余烬长枪/守望绽放/星界汇聚/幸运步/坚守/奥术飞弹/猎手印记/愈合/野性召唤/机巧锁击）+ 天赋 + 职业等级 | `/mycli profession` |
 | 5 | QiandengjiRpg | 0.2.20 | Vortex ↔ AgentFriend 的桥 | — |
 | 6 | QiandengjiSmartBlink | 0.1.0 | 自定义闪现法术类（MagicSpells 扩展） | — |

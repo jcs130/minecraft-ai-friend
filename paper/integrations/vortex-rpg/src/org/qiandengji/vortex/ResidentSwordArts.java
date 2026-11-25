@@ -5,7 +5,6 @@ import io.vortexcore.combat.PlayerStateGate;
 import io.vortexcore.integration.protection.ProtectionAction;
 import io.vortexcore.player.UnifiedPlayer;
 import io.vortexcore.rpg.ResidentActors;
-import io.vortexcore.rpg.SwordsmanSkills;
 import java.util.*;
 import org.bukkit.Bukkit;
 import org.bukkit.Particle;
@@ -16,10 +15,11 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
-import static io.vortexcore.rpg.SwordsmanSkills.*;
-
-/** Resident CLI arts use the original Vortex profile, mana manager and spellbook clock. */
+/** Optional resident sword candidate. It is unavailable unless the real native SDK supplies
+ * both its registered class and its public cooldown API; no placeholder SDK is required. */
 final class ResidentSwordArts {
+    private static final String CLASS_ID="swordsman",SWORD_STEP="sword_step",HORIZONTAL="horizontal_square",
+            DUAL_BLADES="dual_blades",STARBURST="starburst_stream";
     private static final String COOLDOWN = "qiandengji.swordsman.ready.";
     private static final String MANA_AFTER = "qiandengji.swordsman.manaAfter";
     private static final List<Art> ARTS = List.of(
@@ -32,11 +32,16 @@ final class ResidentSwordArts {
 
     private final VortexCorePlugin vortex;
     private final VortexBridge bridge;
+    private final java.lang.reflect.Method deadlineApi;
     private final Map<UUID, Cast> active = new HashMap<>();
 
     ResidentSwordArts(VortexCorePlugin vortex, VortexBridge bridge) {
         this.vortex = vortex;
         this.bridge = bridge;
+        java.lang.reflect.Method api=null;
+        try {api=vortex.spellbookService().getClass().getMethod("qiandengjiSetSwordDeadline",UUID.class,String.class,long.class);}
+        catch(NoSuchMethodException unavailable){/* A not-yet-deployed candidate must not break the shipping adapter. */}
+        deadlineApi=api;
     }
 
     static Art find(String id) {
@@ -44,14 +49,15 @@ final class ResidentSwordArts {
     }
 
     boolean isSwordsman(UnifiedPlayer profile) {
-        return vortex.classSkillService().selectedClassDefinition(profile)
+        return deadlineApi!=null&&vortex.classSkillService().classProfile(CLASS_ID).isPresent()
+                &&vortex.classSkillService().selectedClassDefinition(profile)
                 .map(c -> CLASS_ID.equals(c.id())).orElse(false);
     }
 
     private boolean learned(UnifiedPlayer profile, Art art) {
         return isSwordsman(profile) && profile.level() >= art.level()
                 && vortex.classSkillService().availableSpellIds(profile).contains(art.id())
-                && (!art.dual() || SwordsmanSkills.prerequisites(vortex.classSkillService(), profile));
+                && (!art.dual() || vortex.classSkillService().unlockedSkillIds(profile).containsAll(Set.of(HORIZONTAL,DUAL_BLADES)));
     }
 
     List<Map<String, Object>> abilities(Player actor, UnifiedPlayer profile) {
@@ -105,7 +111,9 @@ final class ResidentSwordArts {
     }
 
     private void deadline(UUID id, Art art, long when) {
-        vortex.spellbookService().qiandengjiSetSwordDeadline(id, art.id(), when);
+        if(deadlineApi==null)throw new IllegalStateException("resident_sword_native_sdk_unavailable");
+        try{deadlineApi.invoke(vortex.spellbookService(),id,art.id(),when);}
+        catch(ReflectiveOperationException unavailable){throw new IllegalStateException("resident_sword_native_sdk_unavailable",unavailable);}
     }
 
     void restore(Player actor, UnifiedPlayer profile) {

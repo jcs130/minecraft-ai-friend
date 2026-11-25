@@ -41,6 +41,23 @@ final class PlayerContracts implements Listener {
     private ConfigurationSection jobs(){return plugin.getConfig().getConfigurationSection(ROOT+".jobs");}
     private ConfigurationSection job(String id){return id!=null&&id.matches("pc_[a-f0-9]{12}")?plugin.getConfig().getConfigurationSection(ROOT+".jobs."+id):null;}
     private String active(Player p){return plugin.getConfig().getString(ROOT+".active."+p.getUniqueId(),"");}
+    /** Only this actor's unfinished contracts; no settlement, wallet read or history mutation. */
+    List<JsonObject> journalRows(Player p) {
+        List<JsonObject> result=new ArrayList<>();
+        if(jobs()==null)return result;
+        for(String id:jobs().getKeys(false)) {
+            var c=job(id);if(c==null||!live(c)||!(own(p,c)||taken(p,c)))continue;
+            JsonObject row=new JsonObject();row.addProperty("id",id);row.addProperty("title",c.getString("title",id));
+            row.addProperty("state",c.getString("state","unknown"));row.addProperty("isRunner",taken(p,c));
+            row.addProperty("progress",c.getInt("progress"));row.addProperty("target",c.getInt("count"));
+            row.addProperty("nextCommand","/mycli guild commission info "+id);
+            row.addProperty("nextAction",taken(p,c)?"按原委托要求实地完成，验收后交付；当前查询不扣物或转账":"本人发布的托管委托，等待接单者实际交付");
+            row.addProperty("readOnly",true);if(c.contains("acceptedAt"))row.addProperty("acceptedAt",c.getLong("acceptedAt"));
+            if(c.getString("state","").equals("settling")){row.addProperty("state","unavailable");row.addProperty("reason","original_settlement_pending");row.addProperty("nextAction","原交付尚未对账，不得重发；核对原记录或联系服主");}
+            result.add(row);
+        }
+        return result;
+    }
     private double balance(UUID id){if(plugin.nativeRpg().selected())return plugin.nativeRpg().goldBalance(id);String path=WALLET+id;require(!plugin.getConfig().contains(path)||plugin.getConfig().isInt(path),"invalid_wallet");int value=plugin.getConfig().getInt(path,0);require(value>=0&&value<=1000000000,"invalid_wallet");return value;}
     private void funded(Player p,String request,long delta,Runnable change){
         if(!plugin.nativeRpg().selected()){atomic(change);return;}
@@ -59,6 +76,8 @@ final class PlayerContracts implements Listener {
     private void result(Player p,String action,String id,String reason){
         JsonObject j=new JsonObject();j.addProperty("action",action);j.addProperty("id",id);
         j.addProperty("success",reason.equals("success"));j.addProperty("reason",reason);
+        if(reason.equals("success")&&Set.of("accept","claim").contains(action))
+            plugin.communication().taskTransition(p,"commission",id,action.equals("claim")?"complete":"active","/mycli journal");
         ActionFeedback.Advice advice=reason.equals("success")?null:ActionFeedback.advice("commission",reason,id);
         if(advice!=null)advice.add(j);send(p,"MC_COMMISSION_RESULT",j);
         if(advice!=null)advice.send(p);else p.sendMessage("§a玩家委托操作完成。");
@@ -71,10 +90,11 @@ final class PlayerContracts implements Listener {
             validateLedger();
             change.run();byte[] bytes=plugin.getConfig().saveToString().getBytes(StandardCharsets.UTF_8);
             require(bytes.length<=16*1024*1024,"state_capacity");
-            try(FileChannel out=FileChannel.open(temp,StandardOpenOption.CREATE,StandardOpenOption.TRUNCATE_EXISTING,StandardOpenOption.WRITE)){ByteBuffer b=ByteBuffer.wrap(bytes);while(b.hasRemaining())out.write(b);out.force(true);}
-            Files.move(temp,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
+            // All contract, reward and shared construction facts use the same revision writer.
+            DurableConfigStore.persist(plugin);
         } catch(Exception e) {
-            try{plugin.getConfig().loadFromString(before);}catch(Exception broken){throw new IllegalStateException("state_restore_failed",broken);}
+            if(!Boolean.TRUE.equals(DurableConfigStore.audit(plugin).get("commitUnknown")))
+                try{plugin.getConfig().loadFromString(before);}catch(Exception broken){throw new IllegalStateException("state_restore_failed",broken);}
             if(e instanceof IllegalArgumentException argument)throw argument;
             plugin.getLogger().warning("Player contract durable write failed: "+e.getClass().getSimpleName());
             throw new IllegalArgumentException("data_unavailable");

@@ -261,6 +261,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     private SpellMastery spellMastery;
     private ProfessionManager professions;
     private NativeRpg nativeRpg;
+    private LegacyPointTransfers legacyPointTransfers;
     private AgentCliRecoveryService cliRecovery;
     AgentCliRecoveryService cliRecovery(){return cliRecovery;}
     private NpcEntityReadiness npcEntityReadiness;
@@ -274,6 +275,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         if(cliRecovery!=null)cliRecovery.reject(player,args,"UNKNOWN_SKILL","该技能ID不在当前Vortex配置中，请核对相近用法");
     }
     NativeRpg nativeRpg(){return nativeRpg;}
+    LegacyPointTransfers legacyPointTransfers(){return legacyPointTransfers;}
     DungeonEnemyMoves dungeonEnemyMoves(){return dungeonEnemyMoves;}
     void inventoryBatch(Player p,String[] args){inventoryFeedback.command(p,args);}
     InventoryTidy inventoryTidy(){return inventoryFeedback.tidy();}
@@ -515,6 +517,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         getServer().getPluginManager().registerEvents(dungeonBuildPolicy, this);
         cliRecovery = new AgentCliRecoveryService(this);
         new WorldLifeActions(this);
+        legacyPointTransfers = new LegacyPointTransfers(this);
+        legacyPointTransfers.start();
         soulboundGear = new SoulboundGear(this);
         getServer().getPluginManager().registerEvents(soulboundGear, this);
         dungeonGearAura = new DungeonGearAura(this);
@@ -547,6 +551,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public void onDisable() {
+        if (legacyPointTransfers != null) legacyPointTransfers.shutdown();
         if (shieldRunes != null) shieldRunes.stop();
         if (dungeonEnemyMoves != null) dungeonEnemyMoves.shutdown();
         if(npcEntityReadiness!=null)npcEntityReadiness.close();
@@ -1139,6 +1144,10 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (sender instanceof Player player && TaskJournal.matches(args)) {
+            agentEntry.journal(player,args);
+            return true;
+        }
         if (sender instanceof Player player && PersonalStashOverview.matchesCommand(args)) {
             if (java.util.Arrays.stream(args).anyMatch(s -> s.equals("--help") || s.equals("-h"))) {
                 AgentCliCatalog.commandHelp(player, args);

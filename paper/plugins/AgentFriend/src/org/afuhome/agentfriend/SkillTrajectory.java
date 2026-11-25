@@ -11,14 +11,56 @@ final class SkillTrajectory {
     private long groundedAt;
     private int checkpoint, samples, gaps, landedJumps;
     private double horizontal, backwards, ascent, descent, largestTurn, jumpStartY, jumpApex, startY, peakY;
-    private boolean jumpActive, ready;
+    private boolean jumpActive, ready, originKnown;
+    private JsonObject verified=new JsonObject();
     SkillTrajectory(AssessmentCatalog.Definition definition) {this.definition=definition;}
+    SkillTrajectory copy() {
+        SkillTrajectory t=new SkillTrajectory(definition);
+        t.previous=previous;t.lastDx=lastDx;t.lastDz=lastDz;t.groundedAt=groundedAt;
+        t.checkpoint=checkpoint;t.samples=samples;t.gaps=gaps;t.landedJumps=landedJumps;
+        t.horizontal=horizontal;t.backwards=backwards;t.ascent=ascent;t.descent=descent;t.largestTurn=largestTurn;
+        t.jumpStartY=jumpStartY;t.jumpApex=jumpApex;t.startY=startY;t.peakY=peakY;
+        t.jumpActive=jumpActive;t.ready=ready;t.originKnown=originKnown;t.verified=verified.deepCopy();return t;
+    }
+    static SkillTrajectory restore(AssessmentCatalog.Definition definition,JsonObject saved) {
+        SkillTrajectory t=new SkillTrajectory(definition);
+        if(saved.has("verifiedCheckpoint")){t.verified=saved.getAsJsonObject("verifiedCheckpoint").deepCopy();t.restoreVerified();}
+        else { // Old releases stored only checkpoint totals, not a witnessed in-flight segment.
+            t.checkpoint=Math.min(definition.course().checkpoints().size(),integer(saved,"checkpoints"));
+            t.landedJumps=Math.min(t.checkpoint,integer(saved,"landedJumps"));t.verified=t.checkpointMetrics();
+        }
+        return t;
+    }
+    void suspend() {
+        restoreVerified();previous=null;lastDx=lastDz=0;groundedAt=0;jumpActive=false;ready=false;
+    }
+    boolean resumeAt(AssessmentCatalog.Point point,boolean grounded) {
+        if(!definition.course().contains(point))return false;
+        if(grounded&&point.distance(definition.course().start())<=definition.radius()+1)return true;
+        return checkpoint>0&&point.distance(definition.course().checkpoints().get(checkpoint-1))<=definition.radius()
+                &&(definition.primitive().equals("flight_route")||grounded);
+    }
+    private JsonObject checkpointMetrics() {
+        JsonObject o=new JsonObject();o.addProperty("checkpoints",checkpoint);o.addProperty("landedJumps",landedJumps);
+        o.addProperty("horizontalDistance",horizontal);o.addProperty("backwardsDistance",backwards);
+        o.addProperty("ascent",ascent);o.addProperty("descent",descent);o.addProperty("turnDegrees",largestTurn);
+        o.addProperty("startY",startY);o.addProperty("peakY",peakY);o.addProperty("originKnown",originKnown);return o;
+    }
+    private void restoreVerified() {
+        checkpoint=integer(verified,"checkpoints");landedJumps=integer(verified,"landedJumps");
+        horizontal=number(verified,"horizontalDistance");backwards=number(verified,"backwardsDistance");
+        ascent=number(verified,"ascent");descent=number(verified,"descent");largestTurn=number(verified,"turnDegrees");
+        startY=number(verified,"startY");peakY=number(verified,"peakY");jumpStartY=jumpApex=0;
+        originKnown=verified.has("originKnown")?verified.get("originKnown").getAsBoolean():verified.has("startY");
+    }
+    private static double number(JsonObject o,String key){return o.has(key)?o.get(key).getAsDouble():0;}
+    private static int integer(JsonObject o,String key){return o.has(key)?o.get(key).getAsInt():0;}
     void jump(double y) {jumpActive=true;jumpStartY=y;jumpApex=y;groundedAt=0;previous=null;lastDx=lastDz=0;}
     String accept(Sample current, boolean powered, boolean landingGrace) {
         if(ready)return "ready";
         var course=definition.course();if(course==null||!course.contains(current.point))return "outside_course";
-        samples++;
-        if(previous==null){if(samples==1){startY=current.point.y();peakY=startY;}previous=current;return "sampling";}
+        int priorCheckpoint=checkpoint;samples++;
+        if(previous==null){if(!originKnown){startY=current.point.y();peakY=startY;originKnown=true;}previous=current;return "sampling";}
         long elapsed=current.time-previous.time;
         double dx=current.point.x()-previous.point.x(),dy=current.point.y()-previous.point.y(),dz=current.point.z()-previous.point.z();
         double distance=Math.sqrt(dx*dx+dy*dy+dz*dz),flat=Math.hypot(dx,dz);
@@ -57,6 +99,7 @@ final class SkillTrajectory {
                         && largestTurn>=definition.turn()&&backwards>=definition.backwards());
             }
         }else groundedAt=0;
+        if(checkpoint!=priorCheckpoint)verified=checkpointMetrics();
         previous=current;return ready?"ready":"sampling";
     }
     int checkpoint() {return checkpoint;}
@@ -65,7 +108,7 @@ final class SkillTrajectory {
         JsonObject o=new JsonObject();o.addProperty("horizontalDistance",round(horizontal));o.addProperty("backwardsDistance",round(backwards));
         o.addProperty("ascent",round(ascent));o.addProperty("descent",round(descent));o.addProperty("turnDegrees",round(largestTurn));
         o.addProperty("checkpoints",checkpoint);o.addProperty("landedJumps",landedJumps);o.addProperty("jumpHeight",round(jumpApex-jumpStartY));
-        o.addProperty("samples",samples);o.addProperty("samplingGaps",gaps);o.addProperty("landingStableMs",groundedAt==0||previous==null?0:Math.max(0,previous.time-groundedAt));return o;
+        o.addProperty("samples",samples);o.addProperty("samplingGaps",gaps);o.addProperty("landingStableMs",groundedAt==0||previous==null?0:Math.max(0,previous.time-groundedAt));o.add("verifiedCheckpoint",verified.deepCopy());return o;
     }
     private static double round(double d){return Math.round(d*100)/100.0;}
 }

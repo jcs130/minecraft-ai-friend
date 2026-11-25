@@ -101,6 +101,70 @@ final class NativeRpg {
         try{return JsonParser.parseString((String)call("selfState",new Class<?>[]{Player.class},p)).getAsJsonObject();}
         catch(RuntimeException unavailable){var out=new JsonObject();out.addProperty("available",false);out.addProperty("backend","vortex");return out;}
     }
+    JsonObject professionOverview(Player p) {
+        try {
+            Object value=call("professionOverview",new Class<?>[]{Player.class},p);
+            JsonObject out=value instanceof JsonObject object?object.deepCopy():JsonParser.parseString((String)value).getAsJsonObject();
+            if(owner.legacyPointTransfers()!=null)out.add("legacyPointMigration",owner.legacyPointTransfers().state(p));
+            return out;
+        } catch(RuntimeException unavailable) {
+            JsonObject out=new JsonObject();out.addProperty("available",false);out.addProperty("authority","Vortex");
+            out.addProperty("reason","profession_overview_unavailable");out.addProperty("nextCommand","/mycli profession status");return out;
+        }
+    }
+    List<JsonObject> taskRows(Player p) {
+        try {
+            Object value=call("taskOverview",new Class<?>[]{Player.class},p);
+            JsonObject out=value instanceof JsonObject object?object:JsonParser.parseString((String)value).getAsJsonObject();
+            List<JsonObject> rows=new ArrayList<>();
+            if(!TaskJournalModel.flag(out,"available")){JsonObject pending=new JsonObject();pending.addProperty("id","unavailable");pending.addProperty("title","职业任务资料待加载");pending.addProperty("available",false);pending.addProperty("reason",TaskJournalModel.text(out,"reason","native_tasks_loading"));pending.addProperty("nextCommand","/mycli tasks status");return List.of(pending);}
+            if(out.has("items")&&out.get("items").isJsonArray())for(JsonElement item:out.getAsJsonArray("items"))if(item.isJsonObject())rows.add(item.getAsJsonObject().deepCopy());
+            return List.copyOf(rows);
+        } catch(RuntimeException unavailable) {
+            JsonObject out=new JsonObject();out.addProperty("id","unavailable");out.addProperty("title","职业任务资料未加载");
+            out.addProperty("available",false);out.addProperty("reason","native_task_overview_unavailable");out.addProperty("nextCommand","/mycli tasks status");return List.of(out);
+        }
+    }
+    private void professionSummary(Player p,boolean json) {
+        JsonObject out=professionOverview(p);out.addProperty("subjectUuid",p.getUniqueId().toString());out.addProperty("queryOnly",true);
+        if(json){p.sendMessage("MC_PROFESSION "+out);return;}
+        if(!TaskJournalModel.flag(out,"available")){p.sendMessage("§e职业资料尚未加载；查询不改变职业或点数。/mycli profession status");return;}
+        p.sendMessage("§6【职业与技能】"+TaskJournalModel.text(out,"name",TaskJournalModel.text(out,"className",TaskJournalModel.text(out,"classId","未选职业")))+" · 等级 "+TaskJournalModel.text(out,"level","待查询"));
+        p.sendMessage("§7原生学习点 "+TaskJournalModel.text(out,"learningPoints","未就绪")+"；技能与天赋详情 /mycli profession --json；选择职业 /mycli profession list。");
+        if(out.has("legacyPointMigration")){var migration=out.getAsJsonObject("legacyPointMigration");if(TaskJournalModel.flag(migration,"eligible")&&!TaskJournalModel.text(migration,"state","").equals("confirmed"))p.sendMessage("§e未花旧点按1:1迁移："+TaskJournalModel.text(migration,"state","待核对")+"；原记录保留，/mycli profession migrate 使用原迁移编号。");}
+    }
+    private void basicSkills(Player p,String[] raw) {
+        List<String> words=Arrays.stream(raw).filter(s->!s.equals("--json")).toList();int page=1;
+        try {
+            if(words.size()>3)throw new IllegalArgumentException();
+            if(words.size()==2&&!Set.of("list","overview","summary","status").contains(words.get(1)))page=Integer.parseInt(words.get(1));
+            if(words.size()==3)page=Integer.parseInt(words.get(2));
+            List<JsonObject> rows=new ArrayList<>();
+            for(String id:COMMON_IDS){var entry=commonGuide(id);JsonObject source=new JsonObject();source.addProperty("nextAction",entry.effect()+"；"+entry.costLine());source.addProperty("nextCommand","/mycli skills info "+id);rows.add(TaskJournalModel.item("skills","basic_skill",id,entry.name(),source,"/mycli skills info "+id,""));}
+            JsonObject life=owner.lifeGuild().skillState(p);
+            if(life.has("skills"))for(JsonElement value:life.getAsJsonArray("skills")) {
+                JsonObject source=value.getAsJsonObject().deepCopy();String id=TaskJournalModel.text(source,"id","");
+                if(Set.of("gourmet","builder","author","trader","tinkerer").contains(id)) {
+                    source.addProperty("nextAction","生活技艺 "+TaskJournalModel.text(source,"rank","未知")+" · 熟练度 "+TaskJournalModel.text(source,"proficiency","未知"));
+                    rows.add(TaskJournalModel.item("skills","life_skill",id,TaskJournalModel.text(source,"name",id),source,"/mycli skills",""));
+                }
+            }
+            JsonObject foundation=FoundationGrowth.view(p);
+            if(TaskJournalModel.flag(foundation,"available")) {
+                for(String kind:List.of("skills","passives"))if(foundation.has(kind))for(JsonElement value:foundation.getAsJsonArray(kind)) {
+                    JsonObject source=value.getAsJsonObject().deepCopy();String id=source.get("id").getAsString().replace('/',':');
+                    source.addProperty("nextAction","等级 "+TaskJournalModel.text(source,"level","未知")+(source.has("xp")?" · 经验 "+source.get("xp"):" · "+TaskJournalModel.text(source,"description","被动随实际行动成长")));
+                    rows.add(TaskJournalModel.item("skills",kind.equals("skills")?"foundation_skill":"passive_skill",id,TaskJournalModel.text(source,"name",id),source,"/mycli skills list passive",""));
+                }
+            } else {JsonObject unavailable=new JsonObject();unavailable.addProperty("available",false);unavailable.addProperty("reason","foundation_loading");rows.add(TaskJournalModel.item("skills","foundation_skill","loading","基础熟练度加载中",unavailable,"/mycli skills",""));}
+            JsonObject out=TaskJournalModel.page(rows,"skills",page);out.addProperty("type","basic_skills");out.addProperty("manaAuthority","Vortex");out.addProperty("subjectUuid",p.getUniqueId().toString());
+            out.addProperty("refreshCommand","/mycli skills "+page);if(out.has("nextCommand"))out.addProperty("nextCommand","/mycli skills "+(page+1));
+            if(Arrays.asList(raw).contains("--json")){p.sendMessage("MC_RPG "+out);return;}
+            p.sendMessage("§6【基础技能与熟练度】第 "+page+"/"+out.get("pages")+" 页；职业统一入口 /mycli profession");
+            for(JsonElement value:out.getAsJsonArray("items")){JsonObject row=value.getAsJsonObject();p.sendMessage("§e"+row.get("title").getAsString()+" §7"+TaskJournalModel.text(row,"nextAction","")+" §a"+row.get("nextCommand").getAsString());}
+            if(out.has("nextCommand"))p.sendMessage("§a下一页："+out.get("nextCommand").getAsString());
+        } catch(IllegalArgumentException invalid){owner.communication().error(p,"INVALID_PAGE","基础技能按实际页码查询；职业技能改查 /mycli profession。",false,"/mycli skills");}
+    }
     JsonElement mana(Player p){JsonObject s=state(p);return s.has("mana")?s.get("mana"):JsonNull.INSTANCE;}
     JsonObject party(Player p){
         try{return JsonParser.parseString((String)call("partyState",new Class<?>[]{Player.class},p)).getAsJsonObject();}
@@ -162,7 +226,7 @@ final class NativeRpg {
             var guide=SpellGuide.find(id);var row=new JsonObject();row.addProperty("id","mycli:"+id);row.addProperty("name",guide.name());row.addProperty("level",1);
             row.addProperty("cooldownMs",guide.cooldownSeconds()*1000L);Long left=owner.readBasicCooldown(p,id);
             row.add("cooldownRemainingMs",left==null?JsonNull.INSTANCE:new JsonPrimitive(left));row.addProperty("manaCost",guide.mana());
-            row.addProperty("icon","minecraft:"+guide.icon().name().toLowerCase(Locale.ROOT));out.add(row);
+            row.addProperty("icon","minecraft:"+guide.icon().name().toLowerCase(Locale.ROOT));row.addProperty("source","basic");out.add(row);
         }return out;
     }
     int level(Player p){var s=state(p);return s.has("level")?s.get("level").getAsInt():1;}
@@ -248,6 +312,24 @@ final class NativeRpg {
         String group=args[0].toLowerCase(Locale.ROOT);
         if(group.equals("class"))group="profession";
         if(group.equals("quests"))group="tasks";
+        List<String> words=Arrays.stream(args).filter(s->!s.equals("--json")).toList();
+        if(TaskJournal.matches(args)){owner.agentEntry().journal(p,args);return true;}
+        if(group.equals("profession")&&words.size()>1&&words.get(1).equals("migrate")) {
+            if(words.size()!=2||owner.legacyPointTransfers()==null){owner.communication().error(p,"INVALID_ARGUMENT","仅本人 /mycli profession migrate；不要猜测或传入点数。",false,"/mycli profession");return true;}
+            owner.legacyPointTransfers().migrate(p,Arrays.asList(args).contains("--json"));return true;
+        }
+        if(group.equals("profession")&&words.size()>1&&Set.of("learn","prepare","tree","skills").contains(words.get(1))) {
+            String[] forwarded=args.clone();forwarded[0]="skills";if(forwarded[1].equals("skills"))forwarded[1]="list";
+            return delegate(p,forwarded);
+        }
+        if(group.equals("profession")&&(words.size()==1||words.size()==2&&Set.of("status","summary","overview").contains(words.get(1)))) {
+            professionSummary(p,Arrays.asList(args).contains("--json"));return true;
+        }
+        if(Set.of("skills","spells","技能").contains(group)&&(words.size()==1
+                ||words.size()==2&&(Set.of("list","summary","overview","status").contains(words.get(1))||words.get(1).matches("[0-9]{1,4}"))
+                ||words.size()==3&&Set.of("list","summary","overview").contains(words.get(1))&&words.get(2).matches("[0-9]{1,4}"))) {
+            basicSkills(p,args);return true;
+        }
         if(group.equals("rpg"))return route(p,Arrays.copyOfRange(args,1,args.length));
         if(group.equals("help")&&!(args.length==2&&args[1].equalsIgnoreCase("full"))){AgentCliCatalog.commandHelp(p,Arrays.copyOfRange(args,1,args.length));return true;}
         // Use the shared catalog, including all existing non-RPG groups and pages.

@@ -9,7 +9,41 @@ import java.util.Locale;
 /** Read the installed AuraSkills engine; never award XP or apply a modifier here. */
 public final class FoundationGrowth {
     private FoundationGrowth() {}
+    /** Optional, read-only projection. An unloaded/disabled/unknown skill is not level zero. */
+    public static JsonObject skill(Player player, String id) {
+        var out = new JsonObject();
+        out.addProperty("authority", "AuraSkills"); out.addProperty("queryOnly", true);
+        out.addProperty("id", id); out.addProperty("available", false);
+        out.addProperty("status", "unavailable");
+        try {
+            var api = AuraSkillsApi.get(); var user = api.getUser(player.getUniqueId());
+            if (user == null || !user.isLoaded()) return out;
+            for (var skill : Skills.values()) if (skill.isEnabled()
+                    && (skill.getId().toString().equals(id) || skill.getId().toString().equals("auraskills/" + id))) {
+                int level = user.getSkillLevel(skill); boolean capped = level >= skill.getMaxLevel();
+                out.addProperty("id", skill.getId().toString());
+                out.addProperty("name", skill.getDisplayName(Locale.SIMPLIFIED_CHINESE, false));
+                out.addProperty("available", true); out.addProperty("status", "loaded");
+                out.addProperty("level", level); out.addProperty("xp", user.getSkillXp(skill));
+                out.addProperty("requiredXp", capped ? 0 : api.getXpRequirements().getXpRequired(skill, level + 1));
+                out.addProperty("isMaxLevel", capped); return out;
+            }
+        } catch (RuntimeException | LinkageError unavailable) {
+            out.addProperty("available", false); out.addProperty("status", "unavailable");
+            for (String field : java.util.List.of("level", "xp", "requiredXp", "isMaxLevel")) out.remove(field);
+        }
+        return out;
+    }
     public static JsonObject view(Player player) {
+        try { return loadedView(player); }
+        catch (RuntimeException | LinkageError unavailable) {
+            var out = new JsonObject(); out.addProperty("authority", "AuraSkills"); out.addProperty("kind", "foundation");
+            out.addProperty("queryOnly", true); out.addProperty("classExperience", false); out.addProperty("available", false);
+            out.addProperty("status", "unavailable"); out.add("skills", new JsonArray()); out.add("passives", new JsonArray());
+            out.addProperty("nextCommand", "/mycli skills list passive"); return out;
+        }
+    }
+    private static JsonObject loadedView(Player player) {
         var out=new JsonObject();out.addProperty("authority","AuraSkills");out.addProperty("kind","foundation");
         out.addProperty("queryOnly",true);out.addProperty("classExperience",false);
         var api=AuraSkillsApi.get();var user=api.getUser(player.getUniqueId());

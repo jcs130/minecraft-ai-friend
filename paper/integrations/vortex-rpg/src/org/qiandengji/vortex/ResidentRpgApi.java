@@ -18,6 +18,7 @@ final class ResidentRpgApi {
     private final Map<UUID,CompletableFuture<?>> writes=new HashMap<>();
     private final Set<UUID> reportedBootFailures=new HashSet<>();
     private final ResidentSwordArts swordArts;
+    ResidentRpgApi(VortexCorePlugin vortex,VortexBridge bridge) {this(vortex,bridge,null);}
     ResidentRpgApi(VortexCorePlugin vortex,VortexBridge bridge,ResidentSwordArts swordArts) {
         this.vortex=vortex; this.bridge=bridge; this.swordArts=swordArts;
     }
@@ -58,10 +59,10 @@ final class ResidentRpgApi {
             writes.put(id,vortex.classSkillService().chooseClass(p,profile,requested).thenCompose(v->profiles.qiandengjiSave(p)));return;
         }
         // A saved class is authoritative. A changed config never resets it or grants another starting kit.
-        ResidentActors.register(p);vortex.qiandengjiMana().refillFull(id);swordArts.restore(p,profile);ready.add(id);
+        ResidentActors.register(p);vortex.qiandengjiMana().refillFull(id);if(swordArts!=null)swordArts.restore(p,profile);ready.add(id);
     }
     boolean usesSwords(UUID id) {
-        return ready.contains(id) && vortex.playerProfileService().profile(id).filter(swordArts::isSwordsman).isPresent();
+        return swordArts!=null && ready.contains(id) && vortex.playerProfileService().profile(id).filter(swordArts::isSwordsman).isPresent();
     }
     String state(UUID id){
         if(!ready.contains(id)){

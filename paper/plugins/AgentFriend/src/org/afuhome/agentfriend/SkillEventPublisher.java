@@ -34,14 +34,17 @@ final class SkillEventPublisher {
                 || !Double.isFinite(position.getX()) || !Double.isFinite(position.getY())
                 || !Double.isFinite(position.getZ())) return;
         String normalized = id.startsWith("conjure_") ? "conjure" : id;
-        String title = title(normalized);
+        String canonical = normalized.equals("conjure") ? "give" : NativeRpg.skillId(normalized);
+        String title = NativeRpg.COMMON.contains(canonical) ? NativeRpg.commonGuide(canonical).name() : title(normalized);
         if (title == null && plugin.professions() != null && plugin.professions().skill(normalized) != null)
             title = plugin.professions().skill(normalized).title();
         if (title == null) return;
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
         root.addProperty("kind", "skill");
-        root.addProperty("id", id);
+        root.addProperty("id", id); // Retain the existing event ABI for old clients.
+        root.addProperty("canonicalId", canonical);
+        root.addProperty("source", NativeRpg.COMMON.contains(canonical) ? "basic" : "profession");
         root.addProperty("title", title);
         root.addProperty("body", body == null ? "生效" : body);
         root.addProperty("tone", tone(normalized));

@@ -30,6 +30,10 @@ final class AgentCliCatalog {
 
     private static Map<String, Spec> createSpecs() {
         Map<String, Spec> specs = new LinkedHashMap<>();
+        add(specs,"journal","info","read","/mycli journal [all|guild|skills] [页码] [--json]","任务中心：公会事项与个人技能两组，每页最多7项","只读本人真实进度；不报名、不领奖、不发经验","MC_JOURNAL，唯一itemId、原场次与准确下一步");
+        add(specs,"journal.menu","info","gui","/mycli journal menu [all|guild|skills] [页码]","打开两组任务中心；点击提交仍走原生验收","只打开菜单；不会自动接单、晋级或领奖","原版菜单");
+        add(specs,"journal.submit","info","write","/mycli journal submit <itemId>","按当前本人事项进入原生验收并交付","itemId来自journal；缺项/未知不当作成功，不重放旧动作；不支持--json","沿用原领域持久化回执，完成后journal复查");
+        add(specs,"tasks.overview","info","read","/mycli tasks overview [all|guild|skills] [页码] [--json]","journal兼容别名，汇总两组本人事项","只读、每页最多7项","MC_JOURNAL");
         add(specs,"archive","life","read","/mycli archive <动作>","公开日记、公告、照片和真实公会履历；按需查目录","已登录本人；查询不写书、不消耗资源；现有奖励委托仍用commission","私有MC_ARCHIVE；实体书可放箱子/讲台公开阅读");
         add(specs,"archive.status","life","read","/mycli archive status","查档案库是否就绪和下一步","免费只读；不产生写作或摄影证明","MC_ARCHIVE ready/state/nextCommand");
         add(specs,"archive.list","life","read","/mycli archive list [book|photo|notice|event] [--page 页码]","分页查公开作品及本人未公开照片","免费只读；每页最多7项，不输出正文","MC_ARCHIVE items/page/hasNext；info/read看选中作品");
@@ -403,13 +407,18 @@ final class AgentCliCatalog {
             var trade=specs.get("trade");specs.put(trade.id(),new Spec(trade.id(),trade.category(),trade.mode(),trade.usage()+"；auction","金币商城、回收、玩家交易行与附近村民交易",trade.requires()+"；auction是玩家间的金币交易",trade.returns()));
             // One discovery tree. Hide retired class/skill actions, not unrelated gameplay.
             specs.keySet().removeIf(id->Set.of("profession","skills","spells","cast").contains(id.split("\\.")[0]));
-            nativeSpec(specs,"profession","group","/mycli profession <动作>","职业：list/info 查询，choose 主动选择，status 核对","choose 只选一次，授予本职业初始装备；查询免费");
-            nativeSpec(specs,"profession.status","read","/mycli profession status","查本人当前职业","免费只读；不会重选或发装备");
+            nativeSpec(specs,"profession","read","/mycli profession [status|list|info|choose|migrate]","一体查看职业等级、技能、天赋与Vortex学习点；choose/migrate是明确写动作","默认查询免费，不选职、不换算点数；原学习/施法验证保持");
+            nativeSpec(specs,"profession.status","read","/mycli profession status","一体查本人职业等级、技能、天赋和学习点","免费只读，不兑换旧点、不重选或发装备");
+            nativeSpec(specs,"profession.migrate","write","/mycli profession migrate","将核实的未花旧技能点按1:1迁入同UUID的Vortex学习点","需已加载的本人原生职业；按原迁移编号对账，重复不发点；旧历史保留");
             nativeSpec(specs,"profession.list","read","/mycli profession list","列六职业 ID 与定位","免费只读；先 info 了解，再主动 choose");
             nativeSpec(specs,"profession.info","read","/mycli profession info <ID>","查职业定位与初始技能","免费只读；ID 来自 profession list");
             nativeSpec(specs,"profession.choose","write","/mycli profession choose <ID>","选择职业并保存，领取原生初始装备","需未选职且处于可行动状态；免费；只能选一次");
             nativeSpec(specs,"profession.menu","gui","/mycli profession menu","打开职业菜单，点击选择才变更职业","打开免费；选择后以 profession status 核对");
-            nativeSpec(specs,"skills","group","/mycli skills <动作>","技能：list/info 查询，learn 学习，prepare 设置点击技","Vortex管理职业成长和魔力；AuraSkills保留基础熟练度与被动；不再使用旧准备槽和upgrade");
+            nativeSpec(specs,"profession.skills","read","/mycli profession skills","查看本职已学技能和待学节点","原生职业状态，只读、不自动学习");
+            nativeSpec(specs,"profession.tree","read","/mycli profession tree","查看本职天赋、前置与天赋点","复用原Vortex技能树，只读");
+            nativeSpec(specs,"profession.learn","write","/mycli profession learn <节点ID>","在本职业入口学习原生节点","仍由Vortex校验等级/前置/学习点或天赋点；与旧skills learn同一操作，不双花点");
+            nativeSpec(specs,"profession.prepare","write","/mycli profession prepare <技能ID>","设置本职已解锁的点击技能","不施法、不重置冷却，复用原生准备验证");
+            nativeSpec(specs,"skills","read","/mycli skills [页码]|info <ID>","一体分页查看人人可用的基础技能、基础熟练度和被动；职业改查profession","默认查询免费，Vortex管理魔力，AuraSkills统计真实基础行动；不写旧点和旧等级");
             for(String action:List.of("list","status","points","mine"))nativeSpec(specs,"skills."+action,"read","/mycli skills "+action+(action.equals("list")?" [common|passive]":action.equals("status")?" [ID]":""),action.equals("list")?"查职业技能；common通用生存技，passive基础被动":"查本职可用技能、待学节点与点数","免费只读；list common查通用生存技，list passive查基础熟练度和自动被动；无需为基础成长改职业");
             nativeSpec(specs,"skills.info","read","/mycli skills info <ID>","查目标、效果、等级、费用与冷却","免费只读；主动技能、学习节点和被动天赋分别说明");
             nativeSpec(specs,"skills.tree","read","/mycli skills tree","查本职天赋点、节点与前置条件","免费只读；需要已选职业");
@@ -566,7 +575,7 @@ final class AgentCliCatalog {
         String key=prefix.isEmpty()?id:id.substring(prefix.length());
         return order.contains(key)?order.indexOf(key):order.size();
     }
-    private static boolean jsonSupported(String id){return Set.of("help.find","locate.list","locate.info","locate.tp","inventory.clean","inventory.store","inventory.donate").contains(id)||id.equals("arena.stash.summary")||id.startsWith("inventory.tidy")||Set.of("arena.wallet","arena.loot","arena.shop.list","arena.shop.buy","arena.recycle","arena.recycle.list","arena.recycle.quote","arena.recycle.sell","arena.recycle.status").contains(id)|| id.startsWith("trade.auction")||id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.promotion","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
+    private static boolean jsonSupported(String id){return id.equals("journal")||id.equals("tasks.overview")||Set.of("help.find","locate.list","locate.info","locate.tp","inventory.clean","inventory.store","inventory.donate").contains(id)||id.equals("arena.stash.summary")||id.startsWith("inventory.tidy")||Set.of("arena.wallet","arena.loot","arena.shop.list","arena.shop.buy","arena.recycle","arena.recycle.list","arena.recycle.quote","arena.recycle.sell","arena.recycle.status").contains(id)|| id.startsWith("trade.auction")||id.startsWith("trade.shop")||id.startsWith("trade.recycle")||(id.startsWith("dungeon")&&!id.equals("dungeon.menu"))||(id.startsWith("world.story")&&!id.endsWith(".menu"))||id.startsWith("admin.blockaccess.")||id.startsWith("archive")||id.startsWith("challenge")||id.startsWith("tasks")||id.equals("status")||id.equals("progress")||id.equals("skills.status")||Set.of("page","capabilities","rules","intro","trade.wallet","trade.auction","world.board","world.list","world.status","arena.status","arena.entrance","coach.next","coach.guide","guild.exam.status","guild.exam.promotion","guild.exam.info","guild.exam.guide").contains(id)||id.startsWith("protect")||id.startsWith("guild.exam.supplies.");}
 
     static void list(Player player, String[] args) {
         list(player,args,true);
