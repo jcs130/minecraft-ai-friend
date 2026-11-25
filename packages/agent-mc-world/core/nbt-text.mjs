@@ -46,6 +46,13 @@ export function collectActionIds(node, out = []) {
   return out;
 }
 
+// the connection's language table (bot.registry.language)
+// resolves `translate` keys; without it the fallback/key template is kept.
+let TEXT_LANGUAGE = null;
+export function setMinecraftTextLanguage(language) {
+  TEXT_LANGUAGE = language && typeof language === 'object' ? language : null;
+}
+
 // Chat plugins nest hover/guild prefixes deeply; keep a bound for hostile input, not 8.
 const MAX_TEXT_DEPTH = 80;
 function renderText(input, depth = 0) {
@@ -75,7 +82,8 @@ function renderText(input, depth = 0) {
     const args = Array.isArray(component.with)
       ? component.with.map((part) => renderText(part, depth + 1)) : [];
     let nextArg = 0;
-    const template = typeof component.fallback === 'string' ? component.fallback : component.translate;
+    const known = TEXT_LANGUAGE && typeof TEXT_LANGUAGE[component.translate] === 'string' ? TEXT_LANGUAGE[component.translate] : null;
+    const template = known ?? (typeof component.fallback === 'string' ? component.fallback : component.translate);
     text = template.replace(/%(?:(\d+)\$)?s/g, (_match, slot) =>
       args[slot ? Number(slot) - 1 : nextArg++] ?? '');
     if (text === template && args.length) text += ` ${args.join(' ')}`;

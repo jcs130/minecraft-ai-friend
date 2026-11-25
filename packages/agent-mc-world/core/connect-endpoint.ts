@@ -30,6 +30,8 @@ export interface ResolveEndpointOptions {
   lookup?: EndpointLookup;
   /** Optional public/DoH (or test) lookups used when `publicDnsFallback` is on. */
   fallbackLookups?: EndpointFallback[];
+  /** JSON DoH resolver base URLs (https only); default DEFAULT_DOH_RESOLVERS. */
+  dohResolvers?: readonly string[];
 }
 
 /** Raised when public fallback is enabled but no usable A/AAAA/SRV target is found. */
@@ -104,30 +106,42 @@ async function lookupResolver(servers: string[], name: string, type: 'A' | 'AAAA
   }
 }
 
-async function lookupDoh(name: string, type: 'A' | 'AAAA' | 'SRV'): Promise<LookupResult> {
-  const qtype = type === 'SRV' ? 'SRV' : type;
-  const url = `https://dns.google/resolve?name=${encodeURIComponent(name)}&type=${qtype}`;
-  const body = await new Promise<string>((resolve, reject) => {
-    const req = httpsRequest(url, { headers: { accept: 'application/dns-json' }, timeout: 8000 }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => resolve(data));
+/** JSON DNS-over-HTTPS providers (application/dns-json). Order is preference only; every answer is reachability-checked. */
+export const DEFAULT_DOH_RESOLVERS = ['https://cloudflare-dns.com/dns-query', 'https://dns.google/resolve', 'https://dns.alidns.com/resolve'];
+
+function dohSource(base: string): string {
+  try { return `doh-${new URL(base).hostname}`; } catch { return 'doh-invalid'; }
+}
+
+function makeDohLookup(base: string): EndpointLookup {
+  return async (name, type) => {
+    const qtype = type === 'SRV' ? 'SRV' : type;
+    const url = new URL(base);
+    if (url.protocol !== 'https:') throw new Error('DoH resolver must use https');
+    url.searchParams.set('name', name);
+    url.searchParams.set('type', qtype);
+    const body = await new Promise<string>((resolve, reject) => {
+      const req = httpsRequest(url, { headers: { accept: 'application/dns-json' }, timeout: 8000 }, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; if (data.length > 65536) req.destroy(new Error('DoH response too large')); });
+        res.on('end', () => resolve(data));
+      });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(new Error('timeout')); });
+      req.end();
     });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(new Error('timeout')); });
-    req.end();
-  });
-  const parsed = JSON.parse(body) as { Answer?: Array<{ type: number; data: string }> };
-  if (type === 'SRV') {
-    const answer = (parsed.Answer || []).find((row) => row.type === 33);
-    if (!answer || typeof answer.data !== 'string') return { srv: null };
-    const parts = answer.data.trim().split(/\s+/);
-    if (parts.length < 4) return { srv: null };
-    return { srv: { port: Number.parseInt(parts[2], 10) || 0, name: parts[3].replace(/\.$/, '') } };
-  }
-  const recordType = type === 'AAAA' ? 28 : 1;
-  const addresses = (parsed.Answer || []).filter((row) => row.type === recordType).map((row) => row.data);
-  return { addresses };
+    const parsed = JSON.parse(body) as { Answer?: Array<{ type: number; data: string }> };
+    if (type === 'SRV') {
+      const answer = (parsed.Answer || []).find((row) => row.type === 33);
+      if (!answer || typeof answer.data !== 'string') return { srv: null };
+      const parts = answer.data.trim().split(/\s+/);
+      if (parts.length < 4) return { srv: null };
+      return { srv: { port: Number.parseInt(parts[2], 10) || 0, name: parts[3].replace(/\.$/, '') } };
+    }
+    const recordType = type === 'AAAA' ? 28 : 1;
+    const addresses = (parsed.Answer || []).filter((row) => row.type === recordType && typeof row.data === 'string').map((row) => row.data);
+    return { addresses };
+  };
 }
 
 async function firstAddress(
@@ -155,10 +169,12 @@ async function lookupSrv(lookup: EndpointLookup, srvName: string): Promise<{ por
   }
 }
 
-function defaultFallbackLookups(): EndpointFallback[] {
+function defaultFallbackLookups(dohResolvers?: readonly string[]): EndpointFallback[] {
+  const doh = (dohResolvers && dohResolvers.length ? dohResolvers : DEFAULT_DOH_RESOLVERS)
+    .map((base) => ({ source: dohSource(base), lookup: makeDohLookup(base) }));
   return [
     { source: 'public-dns', lookup: (name, type) => lookupResolver(PUBLIC_DNS, name, type) },
-    { source: 'doh-dns.google', lookup: lookupDoh },
+    ...doh,
   ];
 }
 
@@ -173,7 +189,7 @@ export async function resolveMinecraftConnectEndpoint(options: ResolveEndpointOp
 
   const lookup = options.lookup ?? lookupSystem;
   const useFallback = options.publicDnsFallback !== false;
-  const fallbacks = useFallback ? (options.fallbackLookups ?? defaultFallbackLookups()) : [];
+  const fallbacks = useFallback ? (options.fallbackLookups ?? defaultFallbackLookups(options.dohResolvers)) : [];
   const srvName = `_minecraft._tcp.${host}`;
   let target = host;
   let resolvedPort = port;
@@ -221,4 +237,46 @@ export async function resolveMinecraftConnectEndpoint(options: ResolveEndpointOp
     return { host, port, fakeHost: handshake ?? host, source: 'unresolved-use-configured-host' };
   }
   return { host: address, port: resolvedPort, fakeHost: handshake ?? host, source };
+}
+
+export interface ConnectCandidate { host: string; port: number; source: string }
+
+/**
+ * Ordered, de-duplicated dial candidates for one Minecraft endpoint.
+ * Pinned addresses (operator configuration) come first, then every usable
+ * system/public/DoH answer. The handshake host is always the configured name.
+ * Some resolvers return a geo/anycast address that is unreachable from this
+ * network, so the caller dials candidates in order with a bounded timeout.
+ */
+export async function resolveMinecraftConnectCandidates(options: ResolveEndpointOptions & { pinnedAddresses?: readonly string[] }): Promise<{ candidates: ConnectCandidate[]; fakeHost?: string }> {
+  const host = options.host.trim();
+  const handshake = options.handshakeHost?.trim() || (isIP(host) === 0 && !isLocalName(host) ? host : undefined);
+  const out: ConnectCandidate[] = [];
+  const seen = new Set<string>();
+  const add = (ip: string | undefined, port: number, source: string) => {
+    if (!ip || isUnusableResolvedAddress(ip) || seen.has(`${ip}:${port}`)) return;
+    seen.add(`${ip}:${port}`); out.push({ host: ip, port, source });
+  };
+  for (const ip of options.pinnedAddresses ?? []) add(String(ip).trim(), options.port, 'pinned');
+  if (isIP(host) !== 0 || isLocalName(host)) {
+    out.push({ host, port: options.port, source: 'literal' });
+    return { candidates: out, ...(handshake ? { fakeHost: handshake } : {}) };
+  }
+  let viaSrv = false;
+  try {
+    const primary = await resolveMinecraftConnectEndpoint(options);
+    viaSrv = primary.source.endsWith('-srv');
+    add(primary.host, primary.port, primary.source);
+  } catch { /* other fallbacks below */ }
+  if (options.publicDnsFallback !== false && !viaSrv) {
+    const fallbacks = options.fallbackLookups ?? defaultFallbackLookups(options.dohResolvers);
+    for (const fallback of fallbacks) {
+      try {
+        const a = await fallback.lookup(host, 'A');
+        for (const ip of a.addresses ?? []) add(ip, options.port, fallback.source);
+      } catch { /* try next */ }
+    }
+  }
+  if (!out.length) throw new MinecraftEndpointUnresolvedError(host, options.port);
+  return { candidates: out, ...(handshake ? { fakeHost: handshake } : {}) };
 }

@@ -246,6 +246,14 @@ export interface MinecraftConfigSection {
   publicDnsFallback?: boolean;
   /** Automatic reconnect after a dropped connection. Default true. */
   autoReconnect?: boolean;
+  /** Operator-pinned IPs dialed first; the handshake keeps `host` (or `fakeHost`). */
+  connectAddresses?: string[];
+  /** JSON DNS-over-HTTPS resolver base URLs used when the system resolver returns a fake address. */
+  dohResolvers?: string[];
+  /** Per-address TCP connect timeout in milliseconds, default 8000. */
+  connectTimeoutMs?: number;
+  /** Consecutive failed reconnects before automatic reconnect stops; default 5. */
+  maxReconnectAttempts?: number;
   /** Keepalive packet timeout in milliseconds, default 60 seconds. */
   keepAliveTimeoutMs?: number;
   /** Requested server chunk radius, 2..32; omitted preserves Mineflayer's default. Not a visibility/security boundary. */

@@ -3,6 +3,7 @@
 import { readBossBarHud, renderBossBarHud, type BossBarReading } from './boss-bar.ts';
 import { itemCustomName, itemLoreText } from './item-display.ts';
 import { minecraftTextComponent } from './nbt-text.mjs';
+import { richTextAnnotation } from './rich-text.mjs';
 import { commandEntryHints, commandTreeFacts, type CommandTreePacket } from './command-tree-facts.ts';
 import { advertisedPluginChannels, classifyPluginChannels, type PluginChannelKinds } from './plugin-channel-facts.ts';
 
@@ -71,6 +72,8 @@ export type ServerDisplaySnapshot = {
   pluginChannelKinds: PluginChannelKinds;
   commandTree: CommandTreeReading | null;
   stats: LabeledStat[];
+  /** click/hover/icon notes of rich text that plain lines drop. */
+  richNotes?: { tab: string; title: string; actionBar: string; system: Array<{ text: string; note: string; at: number }> };
 };
 
 type PacketClient = {
@@ -168,7 +171,7 @@ export function statsFromLoreLines(lines: readonly string[], sourceText = '', at
   return out;
 }
 
-type ObjectiveState = { name: string; title: string; items: Map<string, ScoreRow> };
+type ObjectiveState = { name: string; title: string; items: Map<string, ScoreRow>; right?: string | null };
 
 class ServerDisplayStore {
   readonly objectives = new Map<string, ObjectiveState>();
@@ -183,6 +186,8 @@ class ServerDisplayStore {
   title: TitleReading | null = null;
   commandTree: CommandTreeReading | null = null;
   readonly chatStats = new Map<string, LabeledStat>();
+  richTab = ''; richTitle = ''; richActionBar = '';
+  readonly richSystem: Array<{ text: string; note: string; at: number }> = [];
   readonly itemStats = new Map<string, LabeledStat>();
   readonly itemSeenAt = new WeakMap<object, number>();
 
@@ -294,7 +299,7 @@ class ServerDisplayStore {
         slot,
         objective,
         title: board.title,
-        rows: [...board.items.values()].sort((a, b) => b.value - a.value || a.displayName.localeCompare(b.displayName, 'zh')).slice(0, 15).map((row) => this.rowWithLine(row)),
+        rows: [...board.items.values()].sort((a, b) => b.value - a.value || a.displayName.localeCompare(b.displayName, 'zh')).slice(0, 15).map((row) => this.rowWithLine(board.right != null && row.right === undefined ? { ...row, right: board.right } : row)),
       });
     }
     for (const board of this.objectives.values()) {
@@ -326,6 +331,7 @@ class ServerDisplayStore {
       pluginChannelKinds: classifyPluginChannels(this.pluginChannels),
       commandTree: this.commandTree,
       stats,
+      richNotes: { tab: this.richTab, title: this.richTitle, actionBar: this.richActionBar, system: [...this.richSystem] },
     };
   }
 }
@@ -381,7 +387,10 @@ export function installServerDisplay(bot: DisplayBot): ServerDisplayHandle {
       return;
     }
     if (action === 0 || action === 2 || action === undefined) {
-      store.upsertObjective(name, packet.displayText === undefined ? undefined : textOf(packet.displayText, 80));
+      const board = store.upsertObjective(name, packet.displayText === undefined ? undefined : textOf(packet.displayText, 80));
+      // objective-wide number format (1.20.3+): 0 blank, 2 fixed text.
+      const fmt = packet.number_format == null ? null : Number(packet.number_format);
+      board.right = fmt === 0 ? '' : fmt === 2 ? textOf(packet.styling, 80) : null;
     }
     if (packet.displayText !== undefined && typeof packet.displayText !== 'string') {
       packet.displayText = asJsonComponent(packet.displayText);
@@ -432,20 +441,31 @@ export function installServerDisplay(bot: DisplayBot): ServerDisplayHandle {
 
   stop.push(listen(client, 'action_bar', (packet: Record<string, unknown>) => {
     const text = textOf(packet.text ?? packet.message);
-    if (text) store.actionBar = { text, at: Date.now() };
+    if (text) { store.actionBar = { text, at: Date.now() }; store.richActionBar = richTextAnnotation(packet.text ?? packet.message); }
   }));
 
   stop.push(listen(client, 'system_chat', (packet: Record<string, unknown>) => {
     const text = textOf(packet.content ?? packet.message ?? packet.formattedMessage);
     if (!text) return;
     const at = Date.now();
-    if (packet.isActionBar === true) store.actionBar = { text, at };
-    else store.noteChat(text, at);
+    const raw = packet.content ?? packet.message ?? packet.formattedMessage;
+    if (packet.isActionBar === true) { store.actionBar = { text, at }; store.richActionBar = richTextAnnotation(raw); }
+    else {
+      store.noteChat(text, at);
+      const note = richTextAnnotation(raw);
+      if (note) {
+        const previous = store.richSystem.findIndex((row) => row.text === text);
+        if (previous >= 0) store.richSystem.splice(previous, 1);
+        store.richSystem.push({ text, note, at });
+        if (store.richSystem.length > 8) store.richSystem.shift();
+      }
+    }
   }));
 
   stop.push(listen(client, 'playerlist_header', (packet: Record<string, unknown>) => {
     store.tabHeader = textOf(packet.header, 240);
     store.tabFooter = textOf(packet.footer, 240);
+    store.richTab = `${richTextAnnotation(packet.header)}${richTextAnnotation(packet.footer)}`;
   }));
 
   stop.push(listen(client, 'experience', (packet: Record<string, unknown>) => {
@@ -475,6 +495,7 @@ export function installServerDisplay(bot: DisplayBot): ServerDisplayHandle {
     const title = titleText(packet);
     if (!title && !store.title) return;
     store.title = { title, subtitle: store.title?.subtitle ?? '', at: Date.now() };
+    store.richTitle = richTextAnnotation(packet.text ?? packet.title);
   }));
   stop.push(listen(client, 'set_title_subtitle', (packet: Record<string, unknown>) => {
     const subtitle = titleText(packet);
@@ -589,16 +610,20 @@ export function renderServerDisplayHud(snapshot: ServerDisplaySnapshot): string 
   if (snapshot.selfTeam && (snapshot.selfTeam.prefix || snapshot.selfTeam.displayName)) {
     parts.push(`计分板队伍 ${snapshot.selfTeam.prefix || snapshot.selfTeam.displayName}`.trim());
   }
-  if (snapshot.actionBar?.text) parts.push(`动作栏 ${snapshot.actionBar.text}`);
+  if (snapshot.actionBar?.text) parts.push(`动作栏 ${snapshot.actionBar.text}${snapshot.richNotes?.actionBar ?? ''}`);
   if (snapshot.tabHeader || snapshot.tabFooter) {
-    parts.push(`列表栏 ${[snapshot.tabHeader, snapshot.tabFooter].filter(Boolean).join(' / ')}`);
+    parts.push(`列表栏 ${[snapshot.tabHeader, snapshot.tabFooter].filter(Boolean).join(' / ')}${snapshot.richNotes?.tab ?? ''}`);
+  }
+  if (snapshot.richNotes?.system.length) {
+    parts.push('[近期带点击/悬浮/图标的系统提示；只是可见线索，未自动点击]');
+    for (const row of snapshot.richNotes.system.slice(-5)) parts.push(`${row.text.slice(0, 80)}${row.note}`);
   }
   if (snapshot.experience && (snapshot.experience.level || snapshot.experience.total)) {
     parts.push(`经验等级 ${snapshot.experience.level}${snapshot.experience.total != null ? `（总计 ${snapshot.experience.total}）` : ''}`);
   }
   if (snapshot.title && (snapshot.title.title || snapshot.title.subtitle)) {
     const when = new Date(snapshot.title.at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) + ' Asia/Shanghai';
-    parts.push(`标题 ${[snapshot.title.title, snapshot.title.subtitle].filter(Boolean).join(' / ')}（${when}）`);
+    parts.push(`标题 ${[snapshot.title.title, snapshot.title.subtitle].filter(Boolean).join(' / ')}（${when}）${snapshot.richNotes?.title ?? ''}`);
   }
   if (snapshot.commandTree) {
     const tree = snapshot.commandTree;

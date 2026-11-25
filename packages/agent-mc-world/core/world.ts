@@ -95,6 +95,8 @@ import { IdleRoamAttention, IdleRoamBlocked, idleRoamOwnsPath } from './idle-roa
 import { bossBarChange, classifyBossBarTitle, readBossBar, readBossBarHud, renderBossBarHud, type BossBarReading } from './boss-bar.ts';
 import { readServerDisplay, renderServerDisplayHud, scoreRowText } from './server-display.ts';
 import { minecraftTextComponent } from './text-component.ts';
+import { richTextAnnotation } from './rich-text.mjs';
+import { setMinecraftTextLanguage } from './nbt-text.mjs';
 import { installOpenBookObserver } from './window-protocol.ts';
 import { MinecraftChatProvenance, incomingPrivateParts, isServerNotice } from '../src/chat-provenance.ts';
 import { configureChatDedup, noteChatInput } from './chat-dedup.ts';
@@ -2929,6 +2931,7 @@ export class MinecraftWorld implements World {
   protected lastAutoEatAttemptAt = 0;
   /** 身上正在生效的状态效果名。服务端对同一效果每 30 秒重推一次 entity_effect,只有出现与消失才成文。 */
   protected readonly activeEffects = new Set<string>();
+  protected readonly silentEffects = new Set<string>();
   protected hookedBots = new WeakSet<object>();
   protected readonly attention = new AttentionReader();
   protected readonly proximityVoice: ProximityVoiceLane;
@@ -4601,6 +4604,10 @@ export class MinecraftWorld implements World {
       fakeHost: this.cfg.fakeHost || undefined,
       publicDnsFallback: this.cfg.publicDnsFallback,
       autoReconnect: this.cfg.autoReconnect,
+      connectAddresses: this.cfg.connectAddresses,
+      dohResolvers: this.cfg.dohResolvers,
+      connectTimeoutMs: this.cfg.connectTimeoutMs,
+      maxReconnectAttempts: this.cfg.maxReconnectAttempts,
       keepAliveTimeoutMs: this.cfg.keepAliveTimeoutMs,
       viewDistance: this.cfg.viewDistance,
       deathRespawnDelayMs: this.cfg.deathRespawnDelayMs,
@@ -7850,6 +7857,9 @@ export class MinecraftWorld implements World {
     this.lastServerFeedback = null;
     this.serverFeedback.clear();
     this.recentSystemMessages.clear();
+    // translate keys in titles/bars/scoreboards use this connection's language table.
+    setMinecraftTextLanguage(bot.registry?.language);
+    bot.once('login', () => setMinecraftTextLanguage(bot.registry?.language));
     const noteActionFeedback = (value: unknown, keyHint = ''): boolean => {
       const rendered = minecraftTextComponent(value);
       const key = keyHint || (rendered.startsWith('block.minecraft.bed.') ? rendered : '');
@@ -7872,14 +7882,14 @@ export class MinecraftWorld implements World {
       const noted = noteActionFeedback(packet.text);
       const text = minecraftTextComponent(packet.text);
       this.extensionMessage(text);
-      if (noted) this.forwardServerMessage({ toString: () => text }, 'actionBar');
+      if (noted) this.forwardServerMessage({ toString: () => text }, 'actionBar', packet.text);
     });
     bot._client.on('system_chat', (packet: { content?: unknown; isActionBar?: boolean }) => {
       if (packet.isActionBar) {
         const noted = noteActionFeedback(packet.content);
         const text = minecraftTextComponent(packet.content);
         this.extensionMessage(text);
-        if (noted) this.forwardServerMessage({ toString: () => text }, 'actionBar');
+        if (noted) this.forwardServerMessage({ toString: () => text }, 'actionBar', packet.content);
       }
     });
 
@@ -7921,9 +7931,9 @@ export class MinecraftWorld implements World {
     // Private identity is parsed from the raw component below. Mineflayer's
     // default whisper regex can mistake a rank/tag (or a public quote) for a
     // sender, so its high-level whisper event is deliberately not consumed.
-    bot.on('title', (text: unknown) => {
+    bot.on('title', (text: unknown, type?: string) => {
       const t = minecraftTextComponent(text);
-      if (t) this.emit('minecraft.event', `[Minecraft] 屏幕大字:${t}`, false);
+      if (t) this.emit('minecraft.event', `[Minecraft] ${type === 'subtitle' ? '屏幕副标题' : '屏幕大字'}:${t}${richTextAnnotation(text)}`, false);
     });
     // 高层 chat/whisper 由 Mineflayer 的英文格式正则识别；没匹配上的聊天由 message 补送。
     bot.on('message', (jsonMsg: { translate?: string; with?: Array<{ toString(): string }>; toString(): string }, position: string, sender?: string | null) => {
@@ -8077,7 +8087,7 @@ export class MinecraftWorld implements World {
         }
         const serverNotice = this.extensionImportantMessage(text);
         if (!privateMessage && !serverNotice && this.suppressRepeatedSystemMessage(text)) return;
-        const notice = `[MC ${privateMessage ? '私聊' : serverNotice ? '插件' : loginMessage ? '登录消息' : '系统'}] ${text}`;
+        const notice = `[MC ${privateMessage ? '私聊' : serverNotice ? '插件' : loginMessage ? '登录消息' : '系统'}] ${text}${richTextAnnotation(jsonMsg)}`;
         const nativeServerFeedback = !privateMessage && !loginMessage
           && (!sender || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(sender))
           && !key.startsWith('commands.message.display.') && !key.startsWith('chat.type.');
@@ -8348,14 +8358,17 @@ export class MinecraftWorld implements World {
       const name = effectNameOf(bot, effect);
       if (this.activeEffects.has(name)) return;
       this.activeEffects.add(name);
-      const zh = ZH_EFFECTS[name] ?? name;
+      const zh = ZH_EFFECTS[name] ?? (/^saturation$/i.test(name) ? '饱和' : name);
       const sec = Math.round((effect?.duration ?? 0) / 20);
+      // servers pulse ≤1 s beneficial effects (e.g. Saturation every 3 s); keep them silent.
+      if (sec <= 1 && !HARMFUL_EFFECTS.has(name)) { this.silentEffects.add(name); return; }
       this.emit('minecraft.event', `[Minecraft] 中了「${zh}」效果(约 ${sec} 秒)。`, HARMFUL_EFFECTS.has(name));
     });
     bot.on('entityEffectEnd', (entity: unknown, effect: unknown) => {
       if (entity !== bot.entity) return;
       const name = effectNameOf(bot, effect);
       this.activeEffects.delete(name);
+      if (this.silentEffects.delete(name)) return;
       this.emit('minecraft.event', `[Minecraft] 「${ZH_EFFECTS[name] ?? name}」效果结束了。`, false, { trigger: 'piggyback' });
     });
     bot.on('entityTamed', (entity: { name?: string }) => {
@@ -8924,20 +8937,20 @@ export class MinecraftWorld implements World {
    * mineflayer 在 message 之后才同步派发 chat/whisper,转发放到微任务里,
    * 已由那两路处理的同一条消息在此跳过。动作栏同一文字在显示期内重发只是续显,不再入流。
    */
-  protected forwardServerMessage(jsonMsg: { toString(): string }, slot: 'system' | 'actionBar'): void {
+  protected forwardServerMessage(jsonMsg: { toString(): string }, slot: 'system' | 'actionBar', raw?: unknown): void {
     queueMicrotask(() => {
       if (this.chatClaimed.has(jsonMsg)) return;
       const text = jsonMsg.toString().trim();
       if (!text) return;
       if (slot === 'system') {
-        this.emit('minecraft.chat', `[MC 系统] ${text}`, false, { trigger: 'piggyback' });
+        this.emit('minecraft.chat', `[MC 系统] ${text}${richTextAnnotation(raw ?? jsonMsg)}`, false, { trigger: 'piggyback' });
         return;
       }
       const now = Date.now();
       const prev = this.lastActionBar;
       this.lastActionBar = { text, at: now };
       if (prev?.text === text && now - prev.at < ACTION_BAR_SHOW_MS) return;
-      this.emit('minecraft.chat', `[MC 动作栏] ${text}`, false, { trigger: 'piggyback' });
+      this.emit('minecraft.chat', `[MC 动作栏] ${text}${richTextAnnotation(raw ?? jsonMsg)}`, false, { trigger: 'piggyback' });
     });
   }
 
