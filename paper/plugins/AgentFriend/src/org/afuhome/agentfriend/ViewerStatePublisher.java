@@ -240,7 +240,6 @@ final class ViewerStatePublisher implements Listener {
         addAbility(result, "mycli:prospect", "探矿术", plugin.mastery().rank(player, "prospect"), prospectingSpell.remainingCooldownMs(player));
         addAbility(result, "mycli:leap", "跃空术", plugin.mastery().rank(player, "leap"), utilitySpells.remainingCooldownMs(player, "leap"));
         addAbility(result, "mycli:flight", "飞行术", plugin.mastery().rank(player, "flight"), utilitySpells.remainingCooldownMs(player, "flight"));
-        addAbility(result, "mycli:golem", "守护傀儡", plugin.mastery().rank(player, "golem"), utilitySpells.remainingCooldownMs(player, "golem"));
         addAbility(result, "mycli:sense", "探敌术", plugin.mastery().rank(player, "sense"), utilitySpells.remainingCooldownMs(player, "sense"));
         addAbility(result, "mycli:heal", "范围治疗", 1, plugin.remainingBuiltinCooldownMs(player, "heal"));
         Set<String> seen = new HashSet<>(Set.of("mycli:starbolt", "mycli:frostnova", "mycli:flamewave",

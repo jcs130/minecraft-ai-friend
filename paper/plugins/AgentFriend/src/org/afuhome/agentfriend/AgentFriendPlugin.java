@@ -123,10 +123,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             new FocusSpell("heal", 2, Material.GLISTERING_MELON_SLICE, "§a范围治疗", "治疗 8 格内受伤玩家；6 魔力"),
             new FocusSpell("feather", 3, Material.FEATHER, "§f羽落", "需要先学会"),
             new FocusSpell("fireworks", 4, Material.FIREWORK_ROCKET, "§6烟花术", "原版烟花粒子；1 魔力"),
-            new FocusSpell("starlight", 5, Material.GLOWSTONE_DUST, "§e星尘术", "照亮周围"),
             new FocusSpell("leap", 6, Material.RABBIT_FOOT, "§b跃空术", "高跳缓降；4 魔力"),
             new FocusSpell("flight", 7, Material.ELYTRA, "§d飞行术", "飞行 15 秒；10 魔力"),
-            new FocusSpell("golem", 8, Material.IRON_BLOCK, "§6守护傀儡", "召唤铁傀儡 45 秒；12 魔力"),
             new FocusSpell("sense", 9, Material.RECOVERY_COMPASS, "§b探敌术", "寻找周围 24 格怪物；3 魔力"),
             new FocusSpell("prospect iron", 11, Material.RAW_IRON, "§f探铁矿", "范围随挖矿等级成长；6 魔力"),
             new FocusSpell("prospect diamond", 12, Material.DIAMOND, "§b探钻石", "范围随挖矿等级成长；6 魔力"),
@@ -915,7 +913,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return switch (spell) {
             case "home" -> 0L;
             case "fireworks" -> FIREWORKS_COOLDOWN_MS;
-            case "starlight" -> STARLIGHT_COOLDOWN_MS;
+            
             case "heal" -> GROUP_HEAL_COOLDOWN_MS;
             case "feather" -> FEATHER_COOLDOWN_MS;
             case "night" -> NIGHT_COOLDOWN_MS;
@@ -935,8 +933,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return switch (id) {
             case "home", "travel" -> 0L;
             case "team" -> Math.max(0L,teamTeleportAt.getOrDefault(player.getUniqueId(),0L)+TEAM_TELEPORT_COOLDOWN_MS-System.currentTimeMillis());
-            case "fireworks", "starlight", "heal", "feather", "night" -> remainingBuiltinCooldownMs(player,id);
-            case "leap", "flight", "golem", "sense" -> utilitySpells.remainingCooldownMs(player,id);
+            case "fireworks", "heal", "feather", "night" -> remainingBuiltinCooldownMs(player,id);
+            case "leap", "flight", "sense" -> utilitySpells.remainingCooldownMs(player,id);
             case "starbolt", "frostnova", "flamewave" -> combatSpells.remainingCooldownMs(player,id);
             case "prospect" -> prospectingSpell.remainingCooldownMs(player);
             case "support" -> villageWatch.remainingSupportCooldownMs(player);
@@ -1755,7 +1753,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
     }
     private void spells(Player p) {
-        p.sendMessage(ChatColor.LIGHT_PURPLE + "守护/恢复：圣愈术(selfheal，治疗自己)、范围治疗(heal，8 格内所有受伤玩家)、饱食(food)；位移：归乡(home)、闪现(blink)；创造/观赏：造物术(give)、烟花术(fireworks)、星尘术(starlight)。");
+        p.sendMessage(ChatColor.LIGHT_PURPLE + "守护/恢复：圣愈术(selfheal，治疗自己)、范围治疗(heal，8 格内所有受伤玩家)、饱食(food)；位移：归乡(home)、闪现(blink)；创造/观赏：造物术(give)、烟花术(fireworks)。");
         p.sendMessage(ChatColor.GOLD + "战斗咏唱：星芒箭(starbolt，自动锁敌、4 魔力)、霜环(frostnova，控场与灭火、7 魔力)、焰浪(flamewave，8 魔力)。");
         p.sendMessage(ChatColor.LIGHT_PURPLE + "探矿术(prospect)：基础 24 格，挖矿每 5 级 +2 格、最多 40 格；手持探矿刻印工具再 +8 格。可选 iron|coal|copper|gold|gems|diamond|redstone|ancient；6 魔力，30 秒冷却。");
         p.sendMessage(ChatColor.AQUA + "探索咏唱：跃空(leap，4 魔力/8 秒，需站在地上)、飞行(flight，10 魔力/90 秒，持续 15 秒)、守护傀儡(golem，12 魔力/75 秒，持续 45 秒)、探敌(sense，3 魔力/15 秒，搜索 24 格)。");
@@ -1813,7 +1811,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             case "圣愈术", "自愈", "自疗", "治疗自己", "selfheal", "heal_self" -> "selfheal";
             case "饱食", "食物", "food" -> "food";
             case "烟花", "烟花术", "fireworks" -> "fireworks";
-            case "星尘", "星尘术", "starlight" -> "starlight";
+            
             case "星芒", "星芒箭", "starbolt" -> "starbolt";
             case "霜环", "冰霜", "frostnova" -> "frostnova";
             case "焰浪", "火焰", "flamewave" -> "flamewave";
@@ -1828,7 +1826,6 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         }
         if (id.equals("heal")) { groupHeal(p); return; }
         if (id.equals("fireworks")) { fireworks(p); return; }
-        if (id.equals("starlight")) { starlight(p); return; }
         if (id.equals("feather") || id.equals("night")) { goddessSpell(p, id); return; }
         if (id.equals("starbolt") || id.equals("frostnova") || id.equals("flamewave")) {
             combatSpells.cast(p, id); return;
@@ -1905,21 +1902,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
         return true;
     }
 
-    private void starlight(Player p) {
-        if (!professions.basicAllowed(p,"starlight")) return;
-        long now = System.currentTimeMillis();
-        String key = p.getUniqueId() + ":starlight";
-        long until = goddessCooldown.getOrDefault(key, 0L);
-        if (now < until) { p.sendMessage(ChatColor.RED + "此技能还需 " + ((until - now + 999) / 1000) + " 秒。"); return; }
-        if (!spendMana(p, 1)) return;
-        goddessCooldown.put(key, now + STARLIGHT_COOLDOWN_MS);
-        Location at = p.getLocation().add(0, 1.4, 0);
-        p.getWorld().spawnParticle(Particle.END_ROD, at, 36, 0.8, 0.7, 0.8, 0.02);
-        p.getWorld().playSound(at, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.4f);
-        presentSpell(p, "starlight");
-        publishSkill(p, "starlight", "星光环绕", at);
-        p.sendMessage(ChatColor.LIGHT_PURPLE + "星尘术：一束星光环绕着你。");
-    }
+
 
     private boolean learned(Player p, NamespacedKey key) {
         return p.getPersistentDataContainer().has(key, PersistentDataType.BYTE);
@@ -2928,7 +2911,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                         + masteryBookLine(p, "frostnova") + "\n" + masteryBookLine(p, "flamewave")
                         + "\n\n成功施放 8 次升 2 级，24 次升 3 级。",
                 "§d法术熟练度 · 探索§r\n\n" + masteryBookLine(p, "leap") + "\n"
-                        + masteryBookLine(p, "flight") + "\n" + masteryBookLine(p, "golem") + "\n"
+                        + masteryBookLine(p, "flight") + "\n"
                         + masteryBookLine(p, "sense") + "\n" + masteryBookLine(p, "prospect"),
                 "§6第一步：打开罗盘§r\n\n把技能罗盘拿在手上，按使用键。\n\n选「旅途指南」可直接进入地点、魔法、公会与队友菜单。\n\n想先逛逛？选「传送地点」去樱花林。",
                 "§b手柄也能玩§r\n\n罗盘：使用键打开。\n方向键：选择图标。\n确认键：使用或进入。\n返回键：关闭菜单。\n\n命格书用页面左右箭头翻页；不用打字。",
@@ -3111,11 +3094,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(22, item(Material.ARROW, "§7返回图鉴", "继续查看其他技能"));
             inv.setItem(24, item(Material.BLAZE_ROD, "§d施放 / 学习", entry.command(), "点击才执行；只查看说明不会消耗魔力"));
         } else if (page.equals("mastery")) {
-            String[] ids = {"starbolt", "frostnova", "flamewave", "leap", "flight", "golem", "sense", "prospect"};
+            String[] ids = {"starbolt", "frostnova", "flamewave", "leap", "flight", "sense", "prospect"};
             Material[] icons = {Material.AMETHYST_SHARD, Material.SNOWBALL, Material.BLAZE_POWDER,
-                    Material.RABBIT_FOOT, Material.ELYTRA, Material.IRON_BLOCK,
+                    Material.RABBIT_FOOT, Material.ELYTRA,
                     Material.RECOVERY_COMPASS, Material.SPYGLASS};
-            int[] slots = {9, 10, 11, 13, 14, 15, 16, 17};
+            int[] slots = {9, 10, 11, 13, 14, 16, 17, 19};
             for (int i = 0; i < ids.length; i++) {
                 String id = ids[i];
                 int uses = spellMastery.uses(p, id);
@@ -3147,9 +3130,8 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             inv.setItem(15, item(Material.BLAZE_POWDER, "§6焰浪", "前方最多 4 只怪物；伤害 4 并燃烧；8 魔力；10 秒冷却"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能", "打开技能罗盘"));
         } else if (page.equals("cosmetic")) {
-            SpellGuide.Entry fireworks = SpellGuide.find("fireworks"), starlight = SpellGuide.find("starlight");
+            SpellGuide.Entry fireworks = SpellGuide.find("fireworks");
             inv.setItem(11, item(fireworks.icon(), "§e" + fireworks.name(), fireworks.costLine(), "点击施放；原有资格与冷却照常"));
-            inv.setItem(15, item(starlight.icon(), "§e" + starlight.name(), starlight.costLine(), "点击施放；原有资格与冷却照常"));
             inv.setItem(22, item(Material.ARROW, "§7返回技能罗盘"));
         } else if (page.equals("utility")) {
             inv.setItem(10, item(Material.RABBIT_FOOT, "§b跃空术", "高高跳起并缓降；4 魔力；8 秒冷却"));
@@ -3492,12 +3474,11 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
                 }
             } else if (page.equals("cosmetic")) {
                 if (slot == 11) cast(p, "fireworks");
-                else if (slot == 15) cast(p, "starlight");
                 else if (slot == 22) openMenu(p, "skills");
             } else if (page.equals("utility")) {
                 switch (slot) {
                     case 10 -> cast(p, "leap"); case 12 -> cast(p, "flight");
-                    case 14 -> cast(p, "golem"); case 16 -> cast(p, "sense");
+                    case 16 -> cast(p, "sense");
                     case 20 -> villageWatch.support(p, null);
                     case 22 -> openMenu(p, "skills"); default -> { }
                 }
@@ -3959,7 +3940,7 @@ public final class AgentFriendPlugin extends JavaPlugin implements Listener, Com
             return choices;
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("cast")) {
-            List<String> choices = new ArrayList<>(List.of("home", "support", "blink", "selfheal", "heal", "food", "give", "fireworks", "starlight", "starbolt", "frostnova", "flamewave", "prospect", "leap", "flight", "golem", "sense", "feather", "night"));
+            List<String> choices = new ArrayList<>(List.of("home", "support", "blink", "selfheal", "heal", "food", "give", "fireworks", "starbolt", "frostnova", "flamewave", "prospect", "leap", "flight", "sense", "feather", "night"));
             choices.addAll(professions.ids()); return choices;
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("cast") && args[1].equalsIgnoreCase("prospect")) return List.of("all", "coal", "iron", "copper", "gold", "gems", "diamond", "redstone", "ancient");

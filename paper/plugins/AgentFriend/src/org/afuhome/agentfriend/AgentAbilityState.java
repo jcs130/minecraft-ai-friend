@@ -46,7 +46,7 @@ final class AgentAbilityState {
         add(result, "mycli:prospect", "探矿术", plugin.mastery().rank(player, "prospect"),
                 ProspectingSpell.totalCooldownMs(), prospecting.remainingCooldownMs(player),
                 "minecraft:spyglass");
-        for (String id : List.of("leap", "flight", "golem", "sense")) {
+        for (String id : List.of("leap", "flight", "sense")) {
             String name = switch (id) {
                 case "leap" -> "跃空术";
                 case "flight" -> "飞行术";
@@ -67,7 +67,6 @@ final class AgentAbilityState {
         add(result, "mycli:support", "支援传送术", 1, VillageWatchManager.SUPPORT_COOLDOWN_MS,
                 plugin.villageWatch().remainingSupportCooldownMs(player), "minecraft:bell");
         addBuiltin(result, player, "fireworks", "烟花术", "minecraft:firework_rocket");
-        addBuiltin(result, player, "starlight", "星光术", "minecraft:glowstone_dust");
         addBuiltin(result, player, "heal", "范围治疗", "minecraft:glistering_melon_slice");
         if (plugin.hasLearnedSkill(player, "feather"))
             addBuiltin(result, player, "feather", "羽落", "minecraft:feather");
