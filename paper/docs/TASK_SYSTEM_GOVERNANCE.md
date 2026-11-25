@@ -2,6 +2,7 @@
 
 > 状态：需求待评估 · 提出人：扛枪（"需要好好治理一下这个任务系统太乱了"，2026-11-25）· 起草：史提西亚（运营线）
 > 关联：[MYCLI_AGENT_CLI.md](MYCLI_AGENT_CLI.md) · [DYNAMIC_BOARD.md](DYNAMIC_BOARD.md) · PR #435（第一层文案修复）
+> **架构方向已定**：收敛为两条主线——公会委托等级 / 个人职业技能等级，详见 [TASK_SYSTEM_TWO_TRACK_CONSOLIDATION.md](TASK_SYSTEM_TWO_TRACK_CONSOLIDATION.md)（扛枪 2026-11-25 指示）。本文件保留问题清单与分层治理路径作为背景。
 > 运营侧不动代码不重启；本文件为分层需求，交开发线评估排期。
 
 ## 1. 背景：一次卡壳暴露的结构问题
