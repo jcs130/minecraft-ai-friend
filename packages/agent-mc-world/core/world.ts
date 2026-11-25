@@ -8371,6 +8371,18 @@ export class MinecraftWorld implements World {
       if (this.silentEffects.delete(name)) return;
       this.emit('minecraft.event', `[Minecraft] 「${ZH_EFFECTS[name] ?? name}」效果结束了。`, false, { trigger: 'piggyback' });
     });
+    // deployment body guards refuse dig/place/open
+    // before any packet is sent. Pathfinder-internal calls only saw an ignored unhandled rejection;
+    // tell the agent plainly that this was a LOCAL refusal and not a server rejection.
+    const localRefusalSeen = new Map<string, number>();
+    (bot as unknown as { on(n: string, cb: (info: { reason?: unknown }) => void): void })
+      .on('localProtectionRefusal', (info) => {
+        const reason = String(info?.reason ?? '').slice(0, 200);
+        const now = Date.now();
+        if (!reason || now - (localRefusalSeen.get(reason) ?? 0) < 15_000) return;
+        localRefusalSeen.set(reason, now);
+        this.emit('minecraft.event', `[Minecraft] 本地保护拦下了一次动作（没有向服务器发包，不是服务器拒绝）：${reason}。`, false);
+      });
     bot.on('entityTamed', (entity: { name?: string }) => {
       this.emit('minecraft.event', `[Minecraft] 驯服了${zhEntity(entity?.name ?? '')}!`, false);
     });

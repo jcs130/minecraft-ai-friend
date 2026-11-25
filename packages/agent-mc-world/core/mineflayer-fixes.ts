@@ -38,6 +38,17 @@ const RESULT_WAIT_MS = 1_500;
 const WINDOW_OPEN_MS = 2_000;
 /** 单次放置等待目标格变化的上限。 */
 const PLACE_CONFIRM_MS = 400;
+/**
+ * the confirmation window must cover the connection round trip.
+ * On a server with a 300-520 ms tab-list ping, so a fixed 400 ms read-back declared
+ * accepted placements "unconfirmed" (the block_update arrived afterwards) and re-sent them.
+ */
+const PLACE_CONFIRM_MAX_MS = 2_500;
+export function placeConfirmMs(bot: Bot): number {
+  const ping = Number((bot as unknown as { player?: { ping?: number } }).player?.ping);
+  if (!Number.isFinite(ping) || ping <= 0) return PLACE_CONFIRM_MS;
+  return Math.min(PLACE_CONFIRM_MAX_MS, Math.max(PLACE_CONFIRM_MS, Math.round(ping * 2.5) + 100));
+}
 /** 一次放置最多重发几遍 */
 const PLACE_TRIES = 3;
 /** 挖掘等服务端把那一格改掉的上限:按 digTime 放大,给服务端的补挖留出余量 */
@@ -1022,7 +1033,7 @@ async function placeOnce(
     looked = true;
   }
   await bot._genericPlace(referenceBlock, faceVector, { swingArm: 'right', ...(looked ? { forceLook: 'ignore' } : {}) });
-  return waitBlockChanged(bot, dest, before, PLACE_CONFIRM_MS, want);
+  return waitBlockChanged(bot, dest, before, placeConfirmMs(bot), want);
 }
 
 /**
