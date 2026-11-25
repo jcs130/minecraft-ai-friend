@@ -16,6 +16,8 @@
 
 在 Blockbench 打开 `kirito-motion/kirito-motion.bbmodel` 可以用代理骨架预览和调整关键帧。保留动作和骨骼名称，导出 Bedrock 动画 JSON 到游戏实例的 `config/qd_kirito_motion/kirito.animation.json`，重启客户端后查看效果。模组读取数值型旋转和位移关键帧，可以只覆盖要调的动作。原模型作者及动作许可见 [ATTRIBUTION.txt](kirito-motion/ATTRIBUTION.txt)。
 
+**左臂抬高修复（2026-11-22）**：加密 `qd_hub_kirito.ysm` 不可直接编辑，手臂姿态由本模组的动作关键帧控制。idle 上臂已再向下修正 6°（左臂外展 18.7°→12.8°），持剑段 `hold_mainhand:sword` 新增左肩/左上臂/左前臂放松轨道（原先左臂不受控、沿用原模型）。权威源为 `resources/assets/qd_kirito_motion/animations/kirito.animation.json`（bbmodel 仅为代理预览，若从 bbmodel 重新导出需保留上述左臂关键帧）。不想重建 JAR 时，直接把该 JSON 作为 override 放入客户端 `config/qd_kirito_motion/` 并重启即可生效。根因、验证与部署见 [KIRITO_LEFT_ARM_20261122.md](../../docs/KIRITO_LEFT_ARM_20261122.md)。
+
 ## 从源码重建 1.1.3
 
 在仓库根目录运行以下命令。准备 Python 3.11 或以上、JDK 21、NeoForge 21.1.252 的 Minecraft 1.21.1 客户端编译类路径，以及 YSM 2.6.5 的 NeoForge JAR。`client-classpath.txt` 应含一行本机编译类路径，用系统路径分隔符连接各 JAR，包含 Minecraft、NeoForge 及其依赖。发布版使用 JDK 21.0.12.1。`qiandeng-controls-0.1.1.jar` 可以从已发布整合包的 `overrides/mods/` 取得。
