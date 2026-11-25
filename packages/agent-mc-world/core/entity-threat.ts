@@ -68,6 +68,19 @@ export function suppressSpeciesThreat(bot: FactBot, entity: FactEntity, provoked
   return entity.name === 'enderman';
 }
 
+/**
+ * Native fuse / ignition evidence only. Species alone is not a lit fuse.
+ * Used by combat to hard-separate and stop swinging before blast radius.
+ */
+export function creeperFuseActive(bot: FactBot, entity: FactEntity): boolean {
+  if (entity.name !== 'creeper') return false;
+  const flags = metaOf(bot, entity, 'mob_flags');
+  const swell = metaOf(bot, entity, 'swell_dir');
+  return (typeof flags === 'number' && (flags & 4) !== 0)
+    || metaOf(bot, entity, 'is_ignited') === true
+    || (typeof swell === 'number' && swell > 0);
+}
+
 /** Potential is not NPC recognition. A distant, non-approaching Creeper is watched,
  * not grounds for autonomous attack/retreat merely because its species is hostile.
  * 6/12 block vanilla blast reach plus 2 blocks reaction margin; closing velocity
@@ -75,8 +88,7 @@ export function suppressSpeciesThreat(bot: FactBot, entity: FactEntity, provoked
 export function potentialCreeperOnly(bot: FactBot, entity: FactEntity, provoked=false): boolean {
   if(entity.name!=='creeper'||provoked)return false;
   const hit=aggressors.get(bot)?.get(entity);if(hit!==undefined&&Date.now()-hit<30_000)return false;
-  const flags=metaOf(bot,entity,'mob_flags'),swell=metaOf(bot,entity,'swell_dir');
-  if(typeof flags==='number'&&(flags&4)!==0||metaOf(bot,entity,'is_ignited')===true||typeof swell==='number'&&swell>0)return false;
+  if(creeperFuseActive(bot,entity))return false;
   type P={x:number;y:number;z:number};
   const p=(bot.entity as unknown as {position?:P})?.position,e=entity as FactEntity&{position?:P;velocity?:P};
   if(!p||!e.position)return false;

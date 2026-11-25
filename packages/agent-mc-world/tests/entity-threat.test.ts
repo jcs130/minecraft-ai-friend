@@ -38,7 +38,15 @@ it('bounds native-damage overrides and does not transfer them to reused IDs',()=
   vi.advanceTimersByTime(30_001);expect(suppressSpeciesThreat(r.bot,r.entity)).toBe(true);
 });
 
-import { potentialCreeperOnly } from '../core/entity-threat.ts';
+import { potentialCreeperOnly, creeperFuseActive } from '../core/entity-threat.ts';
+it.each(['is_ignited','swell_dir','mob_flags'] as const)('creeperFuseActive reads native %s fuse evidence without treating species alone as lit',key=>{
+  const r=rig();expect(creeperFuseActive(r.bot,r.entity)).toBe(false);
+  if(key==='is_ignited')r.set('is_ignited',true);
+  if(key==='swell_dir')r.set('swell_dir',1);
+  if(key==='mob_flags')r.set('mob_flags',4);
+  expect(creeperFuseActive(r.bot,r.entity)).toBe(true);
+  const other=rig('1.21.11','zombie');expect(creeperFuseActive(other.bot,other.entity)).toBe(false);
+});
 it('distinguishes distant potential Creepers from close, approaching, charged, ignited or proven aggressors without using names',()=>{
  const r=rig();const b=r.bot as any,e=r.entity as any;b.entity={position:{x:0,y:64,z:0}};e.position={x:8.3,y:64,z:0};e.velocity={x:0,y:0,z:0};
  expect(potentialCreeperOnly(b,e)).toBe(true);const v=e.velocity;delete e.velocity;expect(potentialCreeperOnly(b,e)).toBe(false);e.velocity=v;e.position.x=7.9;expect(potentialCreeperOnly(b,e)).toBe(false);

@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CombatSession, footingAhead, type CombatTuning } from '../core/combat.ts';
+import { CombatSession, footingAhead, shouldPressureRangedInsteadOfFlee, type CombatTuning } from '../core/combat.ts';
 import type { CombatRangedActions } from '../core/combat.ts';
 import { BowController, type RangedTarget } from '../core/ranged.ts';
 import { MinecraftLog } from '../core/log.ts';
@@ -2360,11 +2360,12 @@ describe('standDown:queue:"now" 夺手', () => {
 
   it('低血撤退不交手:now 排在脱身后,不重置撤退会话', () => {
     const diag = new MinecraftLog();
-    const { bot } = combatRigBot([foe(7, 'skeleton', 7)]);
+    // 近战低血走开放距撤退;近距骷髅会走 ranged-pressure,不能拿来测撤退 standDown。
+    const { bot } = combatRigBot([foe(7, 'zombie', 7)]);
     (bot as unknown as { health: number }).health = 5;
     const { session, calls } = rig(bot, {}, diag);
-    session.onHurtBy(7, 'skeleton');
-    session.onHurtBy(7, 'skeleton');
+    session.onHurtBy(7, 'zombie');
+    session.onHurtBy(7, 'zombie');
     expect(session.active).toBe(true);
 
     expect(session.standDown()).toBeNull();
@@ -2373,17 +2374,17 @@ describe('standDown:queue:"now" 夺手', () => {
     expect(calls.resumed).toBe(0);
     expect(diag.after(0).some((e) => e.event === 'stand-down-deferred')).toBe(true);
     // 会话仍认得撤退中的伤害，后续同一来源继续由它接手。
-    expect(session.onHurtBy(7, 'skeleton')).toBe(true);
+    expect(session.onHurtBy(7, 'zombie')).toBe(true);
     session.stop();
   });
 
   it('撤退里 10 秒没挨打、血也在线:now 能把身体要回去', () => {
 
     const diag = new MinecraftLog();
-    const { bot } = combatRigBot([foe(7, 'skeleton', 10)]);
+    const { bot } = combatRigBot([foe(7, 'zombie', 10)]);
     (bot as unknown as { health: number }).health = 5;
     const { session, calls } = rig(bot, {}, diag);
-    session.onHurtBy(7, 'skeleton'); // 血线拒战 → 撤退
+    session.onHurtBy(7, 'zombie'); // 血线拒战 → 撤退
     expect(session.active).toBe(true);
     (bot as unknown as { health: number }).health = 15;
     Object.assign(session as unknown as Record<string, unknown>, { retreatLastHurtAt: Date.now() - 11_000 });
@@ -2399,10 +2400,10 @@ describe('standDown:queue:"now" 夺手', () => {
 
   it('撤退里刚挨过打:now 仍排在脱身后', () => {
     const diag = new MinecraftLog();
-    const { bot } = combatRigBot([foe(7, 'skeleton', 10)]);
+    const { bot } = combatRigBot([foe(7, 'zombie', 10)]);
     (bot as unknown as { health: number }).health = 5;
     const { session } = rig(bot, {}, diag);
-    session.onHurtBy(7, 'skeleton');
+    session.onHurtBy(7, 'zombie');
     (bot as unknown as { health: number }).health = 15;
     Object.assign(session as unknown as Record<string, unknown>, { retreatLastHurtAt: Date.now() - 2_000 });
 
@@ -2462,19 +2463,22 @@ describe('撤退:安全结束与失败升级', () => {
     session.stop();
   });
 
-  it('远程骷髅射中后撤退 1.5 秒无位移:及时回身处理威胁', async () => {
+  it('近距低血被骷髅射中:不开放距撤退,直接 ranged-pressure 还手', async () => {
+    // 旧路径是先撤再靠 stalled/cornered 回身;近距骷髅开放距逃跑常零挥刀挨箭致死。
+    // 贴身距离保证混战选近战并产生挥刀(7 格可能只拉弓,attacks 仍为空)。
     const diag = new MinecraftLog();
-    const { bot } = combatRigBot([foe(7, 'skeleton', 7)]);
+    const { bot, attacks } = combatRigBot([foe(7, 'skeleton', 2.6)]);
     (bot as unknown as { health: number }).health = 5;
     const { session, events, calls } = rig(bot, {}, diag);
     session.onHurtBy(7, 'skeleton');
+    expect(diag.after(0).some((e) => e.event === 'ranged-pressure')).toBe(true);
+    expect(session.reactionState().retreating).toBe(false);
     await drive(bot as unknown as EventEmitter, 1_650);
     (bot as unknown as EventEmitter).emit('physicsTick');
 
-    const cornered = diag.after(0).find((e) => e.event === 'cornered');
-    expect(cornered?.data).toMatchObject({ cause: 'stalled', foe: 'skeleton' });
-    expect(cornered?.data).toMatchObject({ hits: 0 });
-    expect(events.some((e) => e.text.includes('远处压着我') && e.text.includes('回头打'))).toBe(true);
+    expect(diag.after(0).find((e) => e.event === 'cornered')).toBeUndefined();
+    expect(events.some((e) => e.text.includes('贴上打') || e.text.includes('远程火力'))).toBe(true);
+    expect(attacks.length).toBeGreaterThan(0);
     expect(session.active).toBe(true);
     expect(calls.resumed).toBe(0);
     session.stop();
@@ -2576,12 +2580,12 @@ describe('撤退:安全结束与失败升级', () => {
   }, 10_000);
 
   it('跑不动也没人打:撤退到时收工还身体,不再无限持有', () => {
-    // 远处上层的骷髅不离开范围也不再次命中，玩家无法移动；夹具覆盖常规撤退出口均未满足的状态。
+    // 近战低血进入撤退后卡住且久未再受伤:应收工还身体(不用近距骷髅——会走 pressure)。
     const diag = new MinecraftLog();
-    const { bot } = combatRigBot([foe(7, 'skeleton', 10)]);
+    const { bot } = combatRigBot([foe(7, 'zombie', 10)]);
     (bot as unknown as { health: number }).health = 5;
     const { session, events, calls } = rig(bot, {}, diag);
-    session.onHurtBy(7, 'skeleton');
+    session.onHurtBy(7, 'zombie');
     (bot as unknown as { health: number }).health = 15;
     Object.assign(session as unknown as Record<string, unknown>, {
       retreatStartedAt: Date.now() - 12_000,
@@ -2601,10 +2605,10 @@ describe('撤退:安全结束与失败升级', () => {
 
   it('跑不动但 10 秒内挨过打:撤退照旧,只升级不收工', () => {
     const diag = new MinecraftLog();
-    const { bot } = combatRigBot([foe(7, 'skeleton', 10)]);
+    const { bot } = combatRigBot([foe(7, 'zombie', 10)]);
     (bot as unknown as { health: number }).health = 5;
     const { session, calls } = rig(bot, {}, diag);
-    session.onHurtBy(7, 'skeleton');
+    session.onHurtBy(7, 'zombie');
     Object.assign(session as unknown as Record<string, unknown>, {
       retreatStartedAt: Date.now() - 12_000,
       retreatProgressAt: Date.now() - 12_000,
@@ -2668,6 +2672,14 @@ describe('末地:龙只报不撤,撤退不朝悬崖跑', () => {
       ? { name: 'lava', boundingBox: 'empty' }
       : p.y < 62 ? { name: 'stone', boundingBox: 'block' } : { name: 'air', boundingBox: 'empty' });
     expect(footingAhead(bot, 1, 0)).toBe(false);
+  });
+
+  it('footingAhead:未加载柱按不安全处理(高台边缘读不到下方不能当可走)', () => {
+    const { bot } = combatRigBot();
+    (bot.entity.position as Vec3).y = 208;
+    (bot as unknown as { blockAt: unknown }).blockAt = () => null;
+    expect(footingAhead(bot, 1, 0)).toBe(false);
+    expect(footingAhead(bot, -1, 0)).toBe(false);
   });
 
   it('背对怪群那边是悬崖:撤退改走侧面,记一条 retreat-edge', async () => {
@@ -2975,6 +2987,79 @@ it.each(['creeper','enderman'])('does not hold walking or equip for a no-AI %s d
     expect(r.session.onHurtBy(7,name)).toBe(true);
     expect(r.session.active).toBe(true);expect(r.calls.suspended).toBeGreaterThan(0);
   } finally {r.session.stop();}
+});
+
+describe('Cormy survival: creeper fuse separation and ranged low-HP pressure', () => {
+  function creeperWithFuse(id: number, x: number, ignited = true): FakeFoe {
+    const keys = ['swell_dir', 'is_ignited', 'mob_flags'];
+    const metadata: unknown[] = [0, false, 0];
+    if (ignited) { metadata[0] = 1; metadata[1] = true; metadata[2] = 4; }
+    return { ...foe(id, 'creeper', x), metadata };
+  }
+
+  it('shouldPressureRangedInsteadOfFlee: pure ranged + armed + low HP in mix range, not melee/unarmed/far', () => {
+    expect(shouldPressureRangedInsteadOfFlee(5, 10, [{ name: 'skeleton', flat: 7 }], true, false)).toBe(true);
+    expect(shouldPressureRangedInsteadOfFlee(5, 10, [{ name: 'skeleton' }], true, false)).toBe(true); // unknown flat → treat in-range
+    expect(shouldPressureRangedInsteadOfFlee(5, 10, [{ name: 'skeleton', flat: 20 }], true, false)).toBe(false);
+    expect(shouldPressureRangedInsteadOfFlee(5, 10, [{ name: 'skeleton' }, { name: 'zombie' }], true, false)).toBe(false);
+    expect(shouldPressureRangedInsteadOfFlee(5, 10, [{ name: 'skeleton', flat: 7 }], false, false)).toBe(false);
+    expect(shouldPressureRangedInsteadOfFlee(12, 10, [{ name: 'skeleton', flat: 7 }], true, false)).toBe(false);
+    expect(shouldPressureRangedInsteadOfFlee(5, 10, [{ name: 'skeleton', flat: 7 }], true, true)).toBe(false);
+  });
+
+  it('ignited creeper inside safe range stops melee swings and keeps distance controls', async () => {
+    const enemy = creeperWithFuse(7, 2.2, true);
+    const { bot, attacks, controls } = combatRigBot([enemy]);
+    (bot as any).registry = { entitiesByName: { creeper: { metadataKeys: ['swell_dir', 'is_ignited', 'mob_flags'] } } };
+    const { session } = rig(bot);
+    expect(session.onHurtBy(7, 'creeper')).toBe(true);
+    await drive(bot as unknown as EventEmitter, 900);
+    expect(attacks).toEqual([]);
+    expect(controls.back === true || session.reactionState().retreating || session.active).toBe(true);
+    session.stop();
+  });
+
+  it('low HP under skeleton fire enters ranged-pressure instead of open-distance flee, and can swing', async () => {
+    const skeleton = foe(7, 'skeleton', 2.5);
+    const { bot, attacks } = combatRigBot([skeleton]);
+    (bot as unknown as { health: number }).health = 8;
+    const diag = new MinecraftLog();
+    const { session, events } = rig(bot, {}, diag);
+    expect(session.onHurtBy(7, 'skeleton')).toBe(true);
+    await drive(bot as unknown as EventEmitter, 800);
+    expect(session.reactionState().retreating).toBe(false);
+    expect(events.some((e) => e.text.includes('远程火力') || e.text.includes('贴上打'))).toBe(true);
+    expect(diag.after(0).some((e) => e.event === 'ranged-pressure')).toBe(true);
+    // With sword in reach of a skeleton, desperate pressure should produce swings.
+    await drive(bot as unknown as EventEmitter, 1200);
+    expect(attacks.length).toBeGreaterThan(0);
+    session.stop();
+  }, 15_000);
+
+  it('cornered recovery against a distant skeleton keeps bow instead of forcing empty melee', async () => {
+    const skeleton = foe(7, 'skeleton', 8);
+    const { bot } = combatRigBot([skeleton]);
+    const bag = [{ name: 'bow', type: 2, count: 1 }, { name: 'arrow', type: 3, count: 20 }];
+    (bot as any).inventory.items = () => bag;
+    (bot as any).heldItem = { name: 'bow' };
+    const ranged = rangedRig();
+    const { session } = rig(bot, {}, undefined, ranged.actions);
+    session.onHurtBy(7, 'skeleton');
+    (session as any).state = 'retreating';
+    (session as any).retreatWhy = 'flee';
+    (session as any).retreatStartedAt = Date.now() - 2_000;
+    (session as any).retreatHits = 2;
+    (session as any).retreatProgressAt = Date.now() - 2_000;
+    (session as any).retreatLastHurtAt = Date.now();
+    const ok = (session as any).turnAndFight(bot, {
+      id: 7, name: 'skeleton', ent: skeleton, pos: skeleton.position,
+      reach: 8, flat: 8, visible: true,
+    }, Date.now(), 'stalled');
+    expect(ok).toBe(true);
+    expect((session as any).hybridWeapon).toBe('ranged');
+    expect((session as any).desperate).toBe(true);
+    session.stop();
+  });
 });
 
 // Actual decoded NPC, player and world observations; fake body/terrain, timing and hurt.

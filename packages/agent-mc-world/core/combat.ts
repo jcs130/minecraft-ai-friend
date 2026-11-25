@@ -1,4 +1,4 @@
-import { suppressSpeciesThreat, potentialCreeperOnly } from './entity-threat.ts';
+import { suppressSpeciesThreat, potentialCreeperOnly, creeperFuseActive } from './entity-threat.ts';
 /**
  * 战斗模式 · 档 1(常驻夜间自保)。
  *
@@ -164,7 +164,8 @@ function heldText(bot: Bot): string {
 
 /**
  * 朝 (dx,dz) 迈一步踩得住吗:前方 1.2 格那一柱,从脚那层往下 RETREAT_MAX_DROP 格内有实心(或脚那层
- * 本身是台阶/墙,由 autoJump 跳),且落脚面不是岩浆。区块没加载不拦,那是读不到,不是悬崖。
+ * 本身是台阶/墙,由 autoJump 跳),且落脚面不是岩浆。
+ * 未加载柱当作不安全:高台边缘读不到下方方块时,不能当成可走。
  */
 export function footingAhead(bot: Bot, dx: number, dz: number): boolean {
   const len = Math.hypot(dx, dz);
@@ -175,11 +176,40 @@ export function footingAhead(bot: Bot, dx: number, dz: number): boolean {
   const y = Math.floor(p.y);
   for (let d = 0; d <= RETREAT_MAX_DROP + 1; d++) {
     const b = bot.blockAt(new Vec3(x, y - d, z));
-    if (!b) return true;
+    if (!b) return false;
     if (b.name === 'lava') return false;
     if (b.boundingBox === 'block') return true;
   }
   return false;
+}
+
+/**
+ * Already inside this flat distance: skip open-distance flee and pressure instead.
+ * Farther (e.g. 20-block bow poke) may still retreat — charging on low HP is worse.
+ */
+export const RANGED_PRESSURE_FLAT_MAX = 12;
+
+/**
+ * Pure-ranged low-HP: opening distance under skeleton/witch fire is often fatal.
+ * Keep fighting (desperate) when armed and already in mix range; do not lower
+ * fleeHealth or raise damage. Unknown flat (engage-by-name only) treats as in-range.
+ */
+export function shouldPressureRangedInsteadOfFlee(
+  health: number,
+  fleeHealth: number,
+  foes: ReadonlyArray<{ name: string; flat?: number }>,
+  armed: boolean,
+  desperate: boolean,
+): boolean {
+  if (desperate || !armed || health >= fleeHealth) return false;
+  const fightable = foes.filter((f) => !NO_FIGHT.has(f.name));
+  if (fightable.length === 0) return false;
+  if (!fightable.every((f) => RANGED.has(f.name))) return false;
+  const flats = fightable
+    .map((f) => f.flat)
+    .filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0);
+  if (flats.length > 0 && flats.every((flat) => flat > RANGED_PRESSURE_FLAT_MAX)) return false;
+  return true;
 }
 
 export interface CombatTuning {
@@ -705,7 +735,8 @@ export class CombatSession {
     // entity table. Starting a fight with no visible target just holds the body
     // for three seconds, then resumes the task into the next hit indefinitely.
     const attacker = bot?.entities[attackerId];
-    if (bot && (!attacker?.isValid || !attacker.position || !canSeeEntity(bot, attacker))) {
+    if (!bot || !attacker?.isValid || !attacker.position || !canSeeEntity(bot, attacker)) {
+      if (!bot) return false;
       this.bot = bot;
       this.provoked.add(attackerId);
       this.opts.suspendTasks(`战斗:被看不见的${zhEntity(name)}打了,撤退`);
@@ -714,8 +745,13 @@ export class CombatSession {
       this.beginRetreat('flee');
       return true;
     }
+    // bot + attacker narrowed: visible, valid, positioned attacker for flat range.
     this.provoked.add(attackerId);
-    return this.engage(name, true);
+    const origin = bot.entity?.position;
+    const flat = origin
+      ? Math.hypot(attacker.position.x - origin.x, attacker.position.z - origin.z)
+      : undefined;
+    return this.engage(name, true, 'fighting', flat);
   }
 
   private retreatUnarmed(): void {
@@ -775,12 +811,23 @@ export class CombatSession {
       || (!!life && (life.phase !== 'alive' || life.episodeId !== this.lifeEpisodeAtStart));
   }
 
-  private engage(firstName: string, hurt: boolean, initial: 'fighting' | 'tracking' = 'fighting'): boolean {
+  private engage(
+    firstName: string,
+    hurt: boolean,
+    initial: 'fighting' | 'tracking' = 'fighting',
+    flat?: number,
+  ): boolean {
     const bot = this.opts.getBot();
     if (!this.alive(bot) || (this.active && this.bodyEnded(bot))) return false;
     // 血线不足时转入撤退，避免 250ms 巡检反复尝试进场。
+    // 例外:被近距远程怪打到且手里有家伙时,开放距撤退只会继续挨箭——直接绝望贴身还手。
     const line = this.opts.tuning().fleeHealth + (hurt ? 0 : ENGAGE_MARGIN);
-    if ((bot.health ?? 20) < line) {
+    const health = bot.health ?? 20;
+    const armedForPressure = Boolean(this.bestMeleeWeapon(bot) || this.rangedReady(bot));
+    const rangedPressureEntry = hurt && initial === 'fighting'
+      && shouldPressureRangedInsteadOfFlee(health, this.opts.tuning().fleeHealth,
+        [{ name: firstName, flat }], armedForPressure, false);
+    if (health < line && !rangedPressureEntry) {
       this.bot = bot;
       this.opts.suspendTasks(`战斗:血只剩 ${this.hp()},不接这架`);
       this.hook(bot);
@@ -813,7 +860,18 @@ export class CombatSession {
     this.trackingLease = null;
     this.hadCombatWeapon = Boolean(this.bestMeleeWeapon(bot) || this.rangedReady(bot));
     const now = Date.now();
-    this.controlSummary = { schemaVersion: 1, finalMode: 'fighting', enteredDesperate: false, retreat: null };
+    this.controlSummary = {
+      schemaVersion: 1, finalMode: 'fighting',
+      enteredDesperate: rangedPressureEntry, retreat: null,
+    };
+    if (rangedPressureEntry) {
+      this.desperate = true;
+      this.opts.diag?.write({
+        lane: 'combat', event: 'ranged-pressure',
+        msg: `低血远程入场施压:${firstName},生命 ${this.hp()}/20,不开放距撤退`,
+        data: { first: firstName, health: bot.health, fleeHealth: this.opts.tuning().fleeHealth },
+      });
+    }
     this.startedAt = now;
     this.lifeEpisodeAtStart = this.life(bot)?.episodeId ?? null;
     this.healthBefore = bot.health ?? null;
@@ -829,7 +887,7 @@ export class CombatSession {
     this.targetId = -1;
     this.selectedTarget = null;
     this.swingPhase = 'idle';
-    this.desperate = false;
+    this.desperate = rangedPressureEntry;
     this.retreatBank = null;
     this.pathing = false;
     this.pathRetryAfter = 0;
@@ -873,11 +931,13 @@ export class CombatSession {
       : this.armMelee(bot) : '';
     this.opts.emit(
       initial === 'tracking' ? `先和${zhEntity(firstName)}保持距离，跟进观察，不主动出手。`
-      : hurt
-        ? `有只${zhEntity(firstName)}打过来了,我抄家伙还手!(生命 ${this.hp()}/20${held})`
-        : trialClear
-          ? `试炼层发现${zhEntity(firstName)},我主动清怪!(生命 ${this.hp()}/20${held})`
-          : `${zhEntity(firstName)}贴到跟前了,我先动手!(生命 ${this.hp()}/20${held})`,
+      : rangedPressureEntry
+        ? `血被打到 ${this.hp()}/20 了,远程火力下拉开只会挨箭——贴上打!${held}`
+        : hurt
+          ? `有只${zhEntity(firstName)}打过来了,我抄家伙还手!(生命 ${this.hp()}/20${held})`
+          : trialClear
+            ? `试炼层发现${zhEntity(firstName)},我主动清怪!(生命 ${this.hp()}/20${held})`
+            : `${zhEntity(firstName)}贴到跟前了,我先动手!(生命 ${this.hp()}/20${held})`,
       true, hurt,
     );
     this.opts.diag?.write({
@@ -1203,10 +1263,25 @@ export class CombatSession {
     }
     // E2:血线只在场上仍有活威胁时撤。死亡事件到实体表移除之间不能把已清场误判成逃跑。
     // 转身还手中不看——血线的前提是"跑得掉",cornered 正是跑不掉才回的头。
+    // 纯远程火力下拉开距离等于继续挨箭:有武器时改贴身施压,不降 fleeHealth。
     if (!this.desperate && (bot.health ?? 20) < t.fleeHealth) {
-      this.opts.emit(`血被打到 ${this.hp()}/20 了,我先撤!`, true, true);
-      this.beginRetreat('flee');
-      return;
+      if (shouldPressureRangedInsteadOfFlee(bot.health ?? 20, t.fleeHealth, visibleFoes, armed, this.desperate)) {
+        this.controlSummary.enteredDesperate = true;
+        this.desperate = true;
+        this.opts.emit(
+          `血被打到 ${this.hp()}/20 了,远程火力下拉开只会挨箭——贴上打!`,
+          true, true,
+        );
+        this.opts.diag?.write({
+          lane: 'combat', event: 'ranged-pressure',
+          msg: `低血远程施压:生命 ${this.hp()}/20,不开放距撤退`,
+          data: { health: bot.health, fleeHealth: t.fleeHealth, foes: visibleFoes.map((f) => f.name) },
+        });
+      } else {
+        this.opts.emit(`血被打到 ${this.hp()}/20 了,我先撤!`, true, true);
+        this.beginRetreat('flee');
+        return;
+      }
     }
     if (this.tryCombatFood(bot, foes, now)) return;
 
@@ -1550,6 +1625,15 @@ export class CombatSession {
     D.fill(0);
     const me = bot.entity.position;
 
+    // Lit creeper fuse: hard-separate first. Approaching interest must not win
+    // the blend while the blast timer is running inside safe radius.
+    const fusedClose = foes.find((f) => f.name === 'creeper' && f.flat < CREEPER_SAFE + 0.8
+      && creeperFuseActive(bot, f.ent));
+    if (fusedClose) {
+      const fx = me.x - fusedClose.pos.x, fz = me.z - fusedClose.pos.z;
+      write(I, fx, fz, 1.0, 1);
+    }
+
     // interest:亚格间距。贴着攻击距离上沿做比例控制,把目标的接近速度补进误差——
     // 它以 v 逼近,我就以 v 后退(spacing,单独值 1.8×)
     const tx = target.pos.x - me.x, tz = target.pos.z - me.z;
@@ -1558,8 +1642,11 @@ export class CombatSession {
     const tv = (target.ent as unknown as { velocity?: { x: number; z: number } }).velocity;
     const closing = tv ? -((tv.x * tx + tv.z * tz) / tlen) * 20 : 0;
     const err = (target.reach - closing * SPACE_PREDICT_S) - ideal;
-    if (err > 0.10) write(I, tx, tz, Math.min(1.0, 0.45 + err), 1);
-    else if (err < -0.10) write(I, -tx, -tz, Math.min(1.0, 0.45 - err), 1);
+    // Do not write approach interest into a lit creeper's blast bubble.
+    if (!fusedClose || target.id !== fusedClose.id || err < -0.10) {
+      if (err > 0.10) write(I, tx, tz, Math.min(1.0, 0.45 + err), 1);
+      else if (err < -0.10) write(I, -tx, -tz, Math.min(1.0, 0.45 - err), 1);
+    }
 
     // interest:公转。两侧切向都写,怪少的那侧写得更强——绕着走把它们叠成一个扇区,
     // 同时能碰到你的嘴变少,横扫一刀吃到的反而多
@@ -1618,14 +1705,21 @@ export class CombatSession {
       this.ctxCreeper.fill(0);
       const me = bot.entity.position;
       for (const f of foes) {
-        if (f.name !== 'creeper' || f.flat > 8) continue;
+        if (f.name !== 'creeper' || f.flat > 10) continue;
+        const fused = creeperFuseActive(bot, f.ent);
+        const safe = fused ? CREEPER_SAFE + 1.4 : CREEPER_SAFE;
+        const weight = fused ? HARD : 3.0;
         for (let i = 0; i < 16; i++) {
           const d = slotDir(i);
           const px = me.x + d.x * 2.2, pz = me.z + d.z * 2.2;
-          if (Math.hypot(px - f.pos.x, pz - f.pos.z) > CREEPER_SAFE) continue;
-          const eye = new Vec3(px, me.y + EYE, pz);
-          if (!hasLosFrom(bot, eye, f.ent as never)) continue;
-          writeSlot(this.ctxCreeper, i, 3.0);
+          if (Math.hypot(px - f.pos.x, pz - f.pos.z) > safe) continue;
+          // Lit fuse: always treat the approach sector as hard danger; do not
+          // require LOS (a pillar does not stop the blast timer).
+          if (!fused) {
+            const eye = new Vec3(px, me.y + EYE, pz);
+            if (!hasLosFrom(bot, eye, f.ent as never)) continue;
+          }
+          writeSlot(this.ctxCreeper, i, weight);
         }
       }
     }
@@ -1965,6 +2059,14 @@ export class CombatSession {
       bot.setControlState('jump', false);
       return;
     }
+    // Stop the swing pipeline while a creeper fuse is live inside safe range:
+    // another melee tick pulls the body into the blast instead of clearing it.
+    if (target.name === 'creeper' && target.flat < CREEPER_SAFE
+      && creeperFuseActive(bot, target.ent)) {
+      this.swingPhase = 'idle';
+      bot.setControlState('jump', false);
+      return;
+    }
     const inReach = target.reach <= REACH_MAX;
     const cd = meleeCooldownMs(bot);
     const left = cd - (now - this.lastSwingAt);
@@ -2288,11 +2390,20 @@ export class CombatSession {
     this.emptySince = 0;
     this.swingPhase = 'idle';
     this.targetId = glued.id;
-    this.hybridWeapon = 'melee';
+    // Keep bow/crossbow when that is the ready defensive choice; forcing melee
+    // against a skirmishing skeleton produced zero-swing flee loops.
+    this.hybridWeapon = this.selectDefensiveWeapon({
+      phase: 'start', current: 'melee', heldItem: bot.heldItem?.name ?? null,
+      rangedReady: this.rangedReady(bot), meleeReady: Boolean(this.bestMeleeWeapon(bot)),
+      distance: glued.reach,
+    });
     this.rangedOwner = {};
     this.rangedPendingOwner = null;
     this.nextRangedAt = now;
-    const held = this.armMelee(bot);
+    const held = this.hybridWeapon === 'ranged'
+      ? (bot.heldItem?.name === 'bow' || bot.heldItem?.name === 'crossbow'
+        ? ',保留手里的远程武器还击' : ',准备换上远程武器还击')
+      : this.armMelee(bot);
     const pressure = glued.reach <= 3.2 ? '还咬着我' : '还在远处压着我';
     this.opts.emit(`跑不掉,${zhEntity(glued.name)}${pressure}——回头打!(生命 ${this.hp()}/20${held})`, true, true);
     this.opts.diag?.write({

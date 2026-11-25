@@ -3782,7 +3782,10 @@ export class Executor {
       && Math.hypot(target.x - entry.target.x, target.y - entry.target.y, target.z - entry.target.z) <= PROVEN_TARGET_DISTANCE);
     const targetAttempts = targetFailures.reduce((count, entry) => count + entry.count, 0);
     if (targetAttempts >= 3) {
-      return `目标格 (${target.x},${target.y},${target.z}) 已连续走不通 ${targetAttempts} 次；本次路线仍按实际现场核验。上次卡在:${targetFailures.at(-1)!.why}${this.nearbyRouteHint(bot, target)}`;
+      const exhausted = targetAttempts >= 4
+        ? '同一无路/无支撑失败已达上限痕迹；先换站位、开门或改目标，不要对同一路线反复提交。'
+        : '本次路线仍按实际现场核验。';
+      return `目标格 (${target.x},${target.y},${target.z}) 已连续走不通 ${targetAttempts} 次；${exhausted}上次卡在:${targetFailures.at(-1)!.why}${this.nearbyRouteHint(bot, target)}`;
     }
     const pinned = this.spatialFailures.find((entry) => entry.dimension === dim
       && entry.why.includes('钉在原地')
