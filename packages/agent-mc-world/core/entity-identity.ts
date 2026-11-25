@@ -69,3 +69,22 @@ export function entityIdentityContext(bot: object, identity: EntityIdentity): st
     : '归属未比对';
   return `服务端角色身份=${identity.kind}，${relation}`;
 }
+
+export function entityIdentityOwnedBySelf(bot: object, identity: EntityIdentity | null): boolean {
+  const self = bot as { player?: { uuid?: string }; entity?: { uuid?: string }; _client?: { uuid?: string } };
+  const selfUuid = self.player?.uuid ?? self.entity?.uuid ?? self._client?.uuid;
+  return !!identity?.ownerUuid && !!selfUuid && uuid.test(selfUuid)
+    && identity.ownerUuid.toLowerCase() === selfUuid.toLowerCase();
+}
+
+export const COMPANION_REUNION_MS = 30_000;
+
+export function companionPresenceChange(
+  previous: { lastSeenAt: number; announcedAt: number | null } | undefined,
+  now: number,
+  visible: boolean,
+): 'encounter' | 'reunion' | null {
+  if (!visible) return null;
+  if (!previous || previous.announcedAt === null) return 'encounter';
+  return now - previous.lastSeenAt >= COMPANION_REUNION_MS ? 'reunion' : null;
+}

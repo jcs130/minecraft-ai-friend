@@ -21,7 +21,7 @@ import {
 import { piglinIsHostile } from './piglin.ts';
 import { itemCustomName } from './item-display.ts';
 import { inventoryIdentityText } from './item-identities.ts';
-import { animalStateNote, entityCustomName, entityIdentityNote, type FactBot, type FactEntity } from './animal-state.ts';
+import { animalStateNote, entityCustomName, entityIdentityNote, tamedByMe, type FactBot, type FactEntity } from './animal-state.ts';
 import { BURNING_BLOCKS, SCORCHING_FLOOR, hazardContactBounds } from './hazard-geometry.ts';
 import { remainingEffectTicks } from './status-effects.ts';
 import type { TargetDiag } from './skill-context.ts';
@@ -34,7 +34,7 @@ import { readWorldIdentity } from './world-scope.ts';
 import type { WorldIdentityObservation } from '../src/contracts/world-scope.ts';
 import { signTextSnapshot, type SignTextSnapshot } from './sign-read.ts';
 import { entityMaxHealth } from './entity-max-health.ts';
-import { entityDisplayLabel, observedEntityIdentity, type EntityIdentity } from './entity-identity.ts';
+import { entityDisplayLabel, entityIdentityOwnedBySelf, observedEntityIdentity, type EntityIdentity } from './entity-identity.ts';
 export { WATER_BLOCKS } from './fluid-blocks.ts';
 export { BURNING_BLOCKS, SCORCHING_FLOOR } from './hazard-geometry.ts';
 
@@ -114,6 +114,8 @@ interface EntityInfo {
   item?: ObservedDrop;
   /** 可见实体的身份与当前元数据读数。 */
   note?: string;
+  /** 稳定同伴身份；方位、距离和遮挡变化不属于新遭遇。 */
+  companion?: { key: string; label: string };
 }
 
 export interface ItemStack {
@@ -351,6 +353,8 @@ interface SnapshotSegment {
   /** 完整句子;空串=本段当下无内容(目前只有 structure 可能为空) */
   text: string;
   cmp: string;
+  /** 自动解说的安全投影；持续同伴位置只作为背景保留在主快照。 */
+  commentaryText?: string;
 }
 
 /** 距离量化到 2 格档(比对键用) */
@@ -497,37 +501,38 @@ export function narrateWorldSegments(
   const seen = s.entities.filter((e) => e.visible);
   const seenMobs = seen.filter((e) => !isDroppedItem(e));
   const seenDrops = seen.filter((e) => isDroppedItem(e));
-  const lifeLines: string[] = s.entityObservation
-    ? [`${s.entityObservation.view === 'camera' ? '朝向视野' : '周边视线'}（${s.entityObservation.range} 格；近处 ${s.entityObservation.nearbyOccludedRange ?? 0} 格内未直视实体另列，来自当前实体同步，不是声音）。`]
-    : [];
-  if (seenMobs.length > 0) {
-    lifeLines.push(
-      '看得见的：' +
-        seenMobs
-          .map((e) => {
-            const notes = [e.kind === 'hostile' ? '敌对种类，攻击意图未确认' : e.kind === 'player' ? '玩家，关系未确认' : '', e.note].filter(Boolean);
-            const tag = notes.length > 0 ? `（${notes.join('，')}）` : '';
-            return `${whereIs(e.direction, e.distance, e.dy)}有${entityDisplayLabel(e.name,e.kind === 'player' ? null : e.customName,e.identity)}${tag}`;
-          })
-          .join('、') +
-        '。',
-    );
-  }
   const nearbyTracked = s.entities.filter(e => !e.visible && e.observation?.source === 'nearby-entity-tracking');
-  if (nearbyTracked.length) lifeLines.push('近处未直视：' + nearbyTracked.map(e =>
-    `${whereIs(e.direction,e.distance,e.dy)}有${e.identity?.label ?? zhEntity(e.name)}（${e.observation?.visibility === 'occluded' ? '视线被遮挡' : '视线未验证'}${e.kind === 'player' ? '，玩家关系未确认' : ''}${e.identity && e.note ? `，${e.note}` : ''}）`).join('、') + '；不代表可以攻击、交互或抵达。');
-  if (s.entitiesOmitted > 0) lifeLines.push(`另有 ${s.entitiesOmitted} 个感知实体未展开；可按需查询，未列出不等于没有。`);
-  lifeLines.push(...narrateDrops(seenDrops));
+  const lifeText = (mobs: typeof seenMobs, tracked: typeof nearbyTracked): string => {
+    const lines: string[] = s.entityObservation
+      ? [`${s.entityObservation.view === 'camera' ? '朝向视野' : '周边视线'}（${s.entityObservation.range} 格；近处 ${s.entityObservation.nearbyOccludedRange ?? 0} 格内未直视实体另列，来自当前实体同步，不是声音）。`]
+      : [];
+    if (mobs.length > 0) lines.push('看得见的：' + mobs.map((e) => {
+      const notes = [e.kind === 'hostile' ? '敌对种类，攻击意图未确认' : e.kind === 'player' ? '玩家，关系未确认' : '', e.note].filter(Boolean);
+      const tag = notes.length > 0 ? `（${notes.join('，')}）` : '';
+      return `${whereIs(e.direction, e.distance, e.dy)}有${entityDisplayLabel(e.name,e.kind === 'player' ? null : e.customName,e.identity)}${tag}`;
+    }).join('、') + '。');
+    if (tracked.length) lines.push('近处未直视：' + tracked.map(e =>
+      `${whereIs(e.direction,e.distance,e.dy)}有${e.identity?.label ?? zhEntity(e.name)}（${e.observation?.visibility === 'occluded' ? '视线被遮挡' : '视线未验证'}${e.kind === 'player' ? '，玩家关系未确认' : ''}${e.identity && e.note ? `，${e.note}` : ''}）`).join('、') + '；不代表可以攻击、交互或抵达。');
+    if (s.entitiesOmitted > 0) lines.push(`另有 ${s.entitiesOmitted} 个感知实体未展开；可按需查询，未列出不等于没有。`);
+    lines.push(...narrateDrops(seenDrops));
+    return lines.join('\n');
+  };
+  const commentaryLifeText = lifeText(seenMobs.filter(e => !companionObservation(e)), nearbyTracked.filter(e => !companionObservation(e)));
+  const lifeEntities = [
+    ...nearbyTracked.map(e => companionObservation(e) ? `同伴:${JSON.stringify(companionObservation(e))}`
+      : `近:${e.entityId}|${e.identity?.label ?? e.name}|${e.note ?? ''}|${e.observation?.visibility}|${e.direction}|${distBucket(e.distance)}|${dyBand(e.dy)}`),
+    ...seenMobs.map((e) => companionObservation(e) ? `同伴:${JSON.stringify(companionObservation(e))}`
+      : `见:${e.identity?.label ?? e.name}${e.note ? `(${e.note})` : ''}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}`),
+  ].sort();
   const lifeCmp = [
     ...(s.entityObservation ? [`范围:${s.entityObservation.view}|${s.entityObservation.range}|${s.entityObservation.nearbyOccludedRange}`] : []),
-    ...nearbyTracked.map(e => `近:${e.entityId}|${e.identity?.label ?? e.name}|${e.note ?? ''}|${e.observation?.visibility}|${e.direction}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
+    ...lifeEntities,
     `省略:${s.entitiesOmitted}`,
-    ...seenMobs.map((e) => `见:${e.identity?.label ?? e.name}${e.note ? `(${e.note})` : ''}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}`).sort(),
     ...seenDrops.map((e) =>
       `落:${e.item?.name ?? 'item'}|${e.item?.displayName ?? ''}|${e.direction ?? '脚边'}|${distBucket(e.distance)}|${dyBand(e.dy)}|${e.item?.count ?? '?'}`,
     ).sort(),
   ].join(';');
-  segs.push({ key: 'life', text: lifeLines.join('\n'), cmp: lifeCmp });
+  segs.push({ key: 'life', text: lifeText(seenMobs, nearbyTracked), cmp: lifeCmp, commentaryText: commentaryLifeText });
 
   const structLines: string[] = [];
   // 「根本没扫」与「扫过没看见」必须分开说:把前者说成"没有"就是让她在错误
@@ -597,6 +602,11 @@ export function narrateWorldSegments(
  */
 export function narrateWorld(s: WorldSnapshot, near?: string | null): string {
   return narrateWorldSegments(s, near).map((g) => g.text).filter(Boolean).join('\n');
+}
+
+function companionObservation(e: EntityInfo): { key: string; label: string } | undefined {
+  return e.companion ?? (e.identity && /归属本人|主人是你/.test(e.note ?? '')
+    ? { key: e.identity.uuid ?? e.uuid ?? `entity:${e.entityId ?? e.identity.label}`, label: e.identity.label } : undefined);
 }
 
 function isDroppedItem(e: EntityInfo): boolean {
@@ -1845,6 +1855,11 @@ export function snapshotFromBot(
     // hidden metadata or claiming visual/aural contact.
     const identity = observedEntityIdentity(bot, e);
     const note = visible ? entityObservationNote(bot, e) : identity ? entityIdentityNote(bot, e) : null;
+    const companionLabel = identity?.label ?? customName;
+    const companion = kind !== 'hostile' && kind !== 'player' && companionLabel
+      && (entityIdentityOwnedBySelf(bot, identity) || tamedByMe(bot, e))
+      ? { key: identity?.uuid ?? e.uuid ?? `entity:${e.id ?? companionLabel}`, label: companionLabel }
+      : undefined;
     entities.push({
       ...(Number.isInteger(e.id) ? { entityId: e.id } : {}),
       ...(visible && e.uuid ? { uuid: e.uuid } : {}),
@@ -1859,6 +1874,7 @@ export function snapshotFromBot(
       observation,
       ...(stack ? { item: stack } : {}),
       ...(note ? { note } : {}),
+      ...(companion ? { companion } : {}),
     });
   }
   // Drops must not fill the compact budget and hide a player or a nearby threat.

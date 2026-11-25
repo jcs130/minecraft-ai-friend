@@ -8883,6 +8883,8 @@ export class MinecraftWorld implements World {
     seen: boolean;
     extended: boolean;
   }>();
+  /** 同伴只报首次遭遇和确认分离后的重逢；普通方位、距离、遮挡变化不产生新事件。 */
+  protected readonly companions = new Map<string, { label: string; lastSeenAt: number; announcedAt: number | null }>();
   /** 玩家活动单独跟踪；在线名单不代表人就在身旁。 */
   protected readonly playerObservations = new PlayerObservations();
   protected proximityBot: unknown = null;
@@ -8992,16 +8994,19 @@ export class MinecraftWorld implements World {
     if (nativeBodyBlockedReason(bot)) return;
     if (bot !== this.proximityBot) {
       this.proximity.clear();
+      this.companions.clear();
       this.flocks.clear();
       this.proximityBot = bot;
     }
     this.playerProximityTick(bot);
     const me = bot.entity.position;
+    const now = Date.now();
     const enterSeen: string[] = [];
     const enterHeard: string[] = [];
     const revealed: string[] = [];
     const left: string[] = [];
     const notable: string[] = [];
+    const companionNotices: Array<{ text: string; key: string; label: string; change: 'encounter' | 'reunion' }> = [];
     const present = new Set<number>();
     const flockSeen = new Map<string, number>();
     const flockNear = new Set<string>();
@@ -9032,6 +9037,27 @@ export class MinecraftWorld implements World {
       const visible = canSeeEntity(bot, e);
       const identity = observedEntityIdentity(bot, e);
       const label = observedEntityLabel(bot, e, visible) + (identity ? `（${entityIdentityContext(bot, identity)}）` : '');
+      const companionLabel = identity?.label ?? (visible ? entityCustomName(bot, e) : null);
+      if (kind !== 'hostile' && kind !== 'player' && d <= PROXIMITY_EXIT && companionLabel
+        && (entityIdentityOwnedBySelf(bot, identity) || tamedByMe(bot, e))) {
+        const companionKey = identity?.uuid ?? e.uuid ?? `name:${companionLabel}`;
+        const previous = this.companions.get(companionKey);
+        const change = companionPresenceChange(previous, now, visible);
+        this.companions.set(companionKey, {
+          label: companionLabel,
+          lastSeenAt: now,
+          announcedAt: change ? now : previous?.announcedAt ?? null,
+        });
+        while (this.companions.size > 128) this.companions.delete(this.companions.keys().next().value!);
+        present.add(eid);
+        if (change) companionNotices.push({
+          text: `${change === 'reunion' ? '又看到' : '看见'}${label}在${at} ${Math.round(d)} 格`,
+          key: companionKey,
+          label: companionLabel,
+          change,
+        });
+        continue;
+      }
       if(visible&&(name==='villager'||name==='wandering_trader')&&d<=24)journeyCues.push({kind:'npc',key:`entity:${eid}`,label:zhEntity(name),
         position:[e.position.x,e.position.y,e.position.z],source:'visible-entity',observedAtMs:Date.now()});
       const stateKind = kind === 'hostile' ? 'hostile' : 'notable';
@@ -9091,6 +9117,8 @@ export class MinecraftWorld implements World {
       this.executor?.currentTask || this.combat?.active ? { trigger: 'piggyback' } : undefined);
     if (left.length > 0) this.emit('minecraft.event', `[Minecraft] ${[...new Set(left)].join('、')}走远了。`, false,
       { trigger: 'piggyback' });
+    for (const notice of companionNotices) this.emit('minecraft.event', `[Minecraft] ${notice.text}。`, false,
+      { trigger: 'piggyback', meta: { companionPresence: { key: notice.key, label: notice.label, change: notice.change } } });
     if (notable.length > 0) this.emit('minecraft.event', `[Minecraft] ${notable.join('、')}。`, false,
       { trigger: 'piggyback' });
     for (const [name, count] of flockSeen) {
@@ -9633,6 +9661,15 @@ export class MinecraftWorld implements World {
       // 在线名单排除 bot 自身与观察摄像机;两者都不是 goto_player 的有效目标。
       const self = this.chatName();
       snap.players = snap.players.filter((n) => n !== self && !this.isCamera(n));
+      for (const entity of snap.entities) {
+        if (entity.companion || entity.kind === 'hostile' || entity.kind === 'player') continue;
+        const label = entity.identity?.label ?? entity.customName;
+        if (!label) continue;
+        const raw = typeof entity.entityId === 'number' ? bot.entities[entity.entityId] : undefined;
+        const owned = entityIdentityOwnedBySelf(bot, entity.identity ?? null)
+          || (!!raw && tamedByMe(bot, raw)) || /归属本人|主人是你/.test(entity.note ?? '');
+        if (owned) entity.companion = { key: entity.identity?.uuid ?? entity.uuid ?? `entity:${entity.entityId ?? label}`, label };
+      }
       if(snap.blocksScanned)this.journeyBlocks={generation:this.connectionGeneration,dimension:normalizeDimension(snap.dimension),cues:snap.nearbyBlocks
         .filter(b=>/(?:^|_)sign$/.test(b.name)||['bell','spawner','trial_spawner','vault','lectern','enchanting_table','nether_portal','end_portal'].includes(b.name))
         .slice(0,8).map(b=>({kind:/(?:^|_)sign$/.test(b.name)?'sign' as const:'landmark' as const,key:`${b.name}:${b.x},${b.y},${b.z}`,label:b.name,
@@ -9649,6 +9686,8 @@ export class MinecraftWorld implements World {
    * 首份、上下文截断后、重连后及超过 snapshotAnchorSec 时发送全量锚。
    */
   protected renderSnapshotEvent(): string | null {
+    this.snapshotEventMeta = null;
+    this.snapshotCommentaryProjection = null;
     this.snapshotArmedAt = null;
     const now = Date.now();
     // 同批双份兜底:陈旧重挂导致一批里有两条快照时,第二条现拿直接蒸发
@@ -9717,7 +9756,10 @@ export class MinecraftWorld implements World {
     if (anchorDue) {
       this.snapshotAnchorPending = false;
       this.lastSnapshotFullAt = now;
-      return `[Minecraft] ${segs.map((g) => g.text).filter(Boolean).join('\n')}`;
+      const text = segs.map((g) => g.text).filter(Boolean).join('\n');
+      this.snapshotCommentaryProjection = this.commentarySnapshotProjection(segs, snap, text);
+      this.snapshotEventMeta = this.snapshotCommentaryProjection ? { commentary: this.snapshotCommentaryProjection } : {};
+      return `[Minecraft] ${text}`;
     }
     // 变脏但当下无内容的段(近处/地形都空了)要说出来,静默省略会被当成"没变"
     const body = dirty
@@ -9726,7 +9768,25 @@ export class MinecraftWorld implements World {
       .join('\n');
     // 脏段全都渲染成空:基线已经跟上了,这一条不必存在
     if (!body) return null;
+    this.snapshotCommentaryProjection = this.commentarySnapshotProjection(dirty, snap, body);
+    this.snapshotEventMeta = this.snapshotCommentaryProjection ? { commentary: this.snapshotCommentaryProjection } : {};
     return `[Minecraft] ${body}`;
+  }
+  protected snapshotEventMeta: Record<string, unknown> | null = null;
+  protected snapshotCommentaryProjection: { text: string; companions: Array<{ key: string; label: string }> } | null = null;
+  private commentarySnapshotProjection(
+    segs: Array<{ key: string; text: string; commentaryText?: string }>,
+    snap: WorldSnapshot,
+    text: string,
+  ): { text: string; companions: Array<{ key: string; label: string }> } | null {
+    const companions = snap.entities.flatMap(e => {
+      const companion = e.companion ?? (e.identity && /归属本人|主人是你/.test(e.note ?? '')
+        ? { key: e.identity.uuid ?? e.uuid ?? `entity:${e.entityId ?? e.identity.label}`, label: e.identity.label } : undefined);
+      return companion ? [companion] : [];
+    });
+    if (!companions.length) return null;
+    const commentaryText = segs.map(segment => segment.commentaryText ?? segment.text).filter(Boolean).join('\n');
+    return commentaryText === text ? null : { text: commentaryText, companions };
   }
   /** 各段比对键的基线;null=还没发过全量,下一份必发全量 */
   protected snapshotBaseline: Map<string, string> | null = null;
@@ -9750,10 +9810,21 @@ export class MinecraftWorld implements World {
     if (this.snapshotArmedAt !== null && now - this.snapshotArmedAt < 300_000) return;
     if (now - this.lastSnapshotRenderAt < this.cfg.world.snapshotSec * 1000) return;
     this.snapshotArmedAt = now;
-    this.host.pushDeferred(
-      { type: 'minecraft.world.snapshot', senderKey: 'minecraft', tags: ['snapshot'], render: () => this.renderSnapshotEvent() },
-      { trigger: 'piggyback' },
-    );
+    const meta: Record<string, unknown> = {};
+    this.host.pushDeferred({
+      type: 'minecraft.world.snapshot', senderKey: 'minecraft', tags: ['snapshot'], meta,
+      render: () => {
+        const text = this.renderSnapshotEvent();
+        if (text && this.snapshotEventMeta) Object.assign(meta, this.snapshotEventMeta);
+        const projection = this.snapshotCommentaryProjection;
+        if (text) {
+          const safeText = projection?.text ?? text.replace(/^\[Minecraft\] /, '');
+          if (safeText.trim()) this.emit('minecraft.commentary.snapshot', `[Minecraft] ${safeText}`, false,
+            { deliver: false, trigger: 'debounce', tags: ['snapshot'] });
+        }
+        return text;
+      },
+    }, { trigger: 'piggyback' });
   }
 
   protected emit(
@@ -9816,6 +9887,6 @@ export class MinecraftWorld implements World {
 }
 import { chatDeliveryMessage } from './chat-delivery.ts';
 import { entityCustomName, tamedByMe, type FactEntity } from './animal-state.ts';
-import { observedEntityIdentity, observedEntityLabel, entityIdentityContext } from './entity-identity.ts';
+import { observedEntityIdentity, observedEntityLabel, entityIdentityContext, entityIdentityOwnedBySelf, companionPresenceChange } from './entity-identity.ts';
 import type { ChatDeliveryReceipt } from '../src/contracts/chat-delivery.ts';
 import type { ChatDispatchContext } from './executor.ts';
