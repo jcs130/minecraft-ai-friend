@@ -191,6 +191,8 @@ final class SkillAssessments implements Listener {
     }
     private Run newRun(AssessmentCatalog.Definition d,String market) {
         Run r=new Run();r.id=UUID.randomUUID();r.definition=d;r.market=market;r.started=System.currentTimeMillis();
+        // Contract-record exams wait for an associated contract delivery, not skill preparation (fixes misleading prepare_skill label).
+        if(d.primitive().equals("contract_record"))r.reason="awaiting_contract";
         r.expires=r.started+d.timeout()*1000L;if(d.course()!=null)r.trajectory=new SkillTrajectory(d);return r;
     }
     /** Called before observations as well as on the 5-tick sampler. Market step token owns the run. */
@@ -514,6 +516,7 @@ final class SkillAssessments implements Listener {
         if(r.state.equals("ready"))return r.market.isEmpty()?"/mycli guild exam submit":"/mycli guild claim";
         if(Set.of("interrupted","cancelled").contains(r.state))return r.market.isEmpty()?"落地后 /mycli guild exam start "+(r.grade!=null?"promotion ":"")+r.definition.id():"/mycli guild exam retry；从本阶段重新实操";
         if(r.definition.primitive().equals("contract_record")&&r.definition.proofs().contains("native_clear"))return "开考后新开一场遗迹，逐室实际参战并完成通关；无需返回首室，每日奖励上限不影响考试。传送和重连保留本场考试；/mycli guild exam status 查进度，ready 后 guild exam submit。";
+        if(r.definition.primitive().equals("contract_record")&&r.definition.proofs().contains("shelter"))return "开考后本人建好小屋（地面、墙、屋顶、外窗、通行门、床均合格），再 /mycli guild claim 交付关联委托——委托交付后本场自动 ready，然后 /mycli guild exam submit 交卷。";
         if(r.castAt==0&&!r.definition.skills().isEmpty())return "/mycli skills info "+r.definition.skills().getFirst()+"；主动学习、准备并施放后实际移动";
         if(r.definition.primitive().equals("flight_route"))return "依次经过航点；保持空中水平移动、转向、升降，面朝前方后退，再到降落台稳定停留2秒";
         return r.definition.description();
@@ -662,6 +665,7 @@ final class SkillAssessments implements Listener {
                 reason.equals("task_slot_busy")?"先 /mycli guild status 或 guild exam status 查看当前任务；交付或主动放弃后再开考。":
                 reason.startsWith("certificate_required")?"/mycli guild certificates 查看已取得证书；/mycli guild exam list 选择所缺能力题。":
                 reason.equals("course_unavailable")?"该场地尚未开放；选择列表中已开放的题目，或联系服主勘察并配置场地。":
+                reason.equals("practice_incomplete")&&d!=null&&d.primitive().equals("contract_record")?"本场需先完成并交付关联委托（/mycli guild claim）；交付后自动 ready，再 /mycli guild exam submit 交卷。":
                 "请 /mycli guild exam promotion 或 guild exam info "+(d==null?"<ID>":d.id())+" 查看条件，准备好后重试。"));
     }
     void certificates(Player p) {
