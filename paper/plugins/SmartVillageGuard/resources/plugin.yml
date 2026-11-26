@@ -1,0 +1,16 @@
+name: SmartVillageGuard
+version: '1.0.0'
+main: org.qiandengji.smartvillage.SmartVillageGuardPlugin
+api-version: '1.21'
+description: Keeps the main village limited to configured smart villagers and named functional service NPCs.
+authors: [Qoder]
+softdepend: [Shopkeepers, FancyNpcs, AgentFriend, qiandeng-villager-quests]
+commands:
+  smartvillage:
+    description: Reload or inspect the main-village smart NPC guard
+    usage: /smartvillage reload|status
+    permission: smartvillage.admin
+permissions:
+  smartvillage.admin:
+    description: Manage the smart village guard
+    default: op
