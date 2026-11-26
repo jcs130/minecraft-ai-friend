@@ -73,6 +73,34 @@ def test_state_survives_restart_and_records_real_progress(tmp_path):
     journal.close()
 
 
+def test_repeated_commitment_backs_off_without_counting_reworded_steps_as_progress(tmp_path):
+    journal = ActionJournal(tmp_path / "actions.sqlite")
+    loop = LifeLoop(journal)
+    configured = actor()
+    first = loop.apply(configured, validate_proposal(configured, {
+        "goal": "驻守家园", "phase": "guarding", "nextAction": "原地警戒", "reviewAfterSeconds": 90,
+    }), now=1_000)
+    assert first.stagnant_reviews == 0 and first.review_at == 1_090
+
+    repeated = loop.apply(configured, validate_proposal(configured, {
+        "goal": "驻守家园", "phase": "guarding", "nextAction": "继续观察周围", "reviewAfterSeconds": 90,
+    }), now=2_000)
+    assert repeated.revision == first.revision + 1
+    assert repeated.stagnant_reviews == 1 and repeated.review_at == 2_090
+    assert repeated.last_progress_at == first.last_progress_at
+
+    repeated_again = loop.apply(configured, validate_proposal(configured, {
+        "goal": "驻守家园", "phase": "guarding", "nextAction": "等待新情况", "reviewAfterSeconds": 90,
+    }), now=3_000)
+    assert repeated_again.stagnant_reviews == 2 and repeated_again.review_at == 3_180
+
+    revised = loop.apply(configured, validate_proposal(configured, {
+        "goal": "检查补给", "phase": "preparing", "nextAction": "查看背包", "reviewAfterSeconds": 90,
+    }), now=4_000)
+    assert revised.stagnant_reviews == 0 and revised.review_at == 4_090
+    journal.close()
+
+
 def test_failure_blocks_with_backoff_and_new_observation_can_unblock(tmp_path):
     journal = ActionJournal(tmp_path / "actions.sqlite")
     loop = LifeLoop(journal)
@@ -134,6 +162,48 @@ def test_planner_can_persist_life_without_fabricating_an_action(tmp_path):
             assert prompts[0]["messages"][1]["content"]
             state = host.life_loop.load(str(configured.character_id), "maid")
             assert state.goal == "在河边钓一条鱼" and state.next_action == "检查鱼竿和水面"
+        finally:
+            await model.close()
+            journal.close()
+            await body.destroy()
+
+    asyncio.run(run())
+
+
+def test_villager_planning_turn_requests_a_durable_life_commitment(tmp_path):
+    import asyncio
+    import httpx
+    from agent_mc_harness.npc import IDLE_GOAL, ModelClient, NpcHost, NpcPlanner
+    from agent_mc_harness.runtime import Intent, PlanContext
+    from simbody import SimBody
+
+    async def run():
+        prompts = []
+
+        def respond(request):
+            prompts.append(json.loads(request.content))
+            return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps({
+                "steps": [],
+                "agenda": [{"afterMinutes": 0, "forMinutes": 10, "goal": "在床边休息", "evidence": "保持睡眠直到天亮"}],
+                "life": {"goal": "在床边休息", "phase": "sleeping", "nextAction": "继续睡眠并定时复查",
+                         "successEvidence": "天亮后自然醒来", "reviewAfterSeconds": 300, "status": "waiting"},
+            })}}]})
+
+        model = ModelClient("http://127.0.0.1:1/v1", "test", http=httpx.AsyncClient(transport=httpx.MockTransport(respond)))
+        configured = role(body_kind="villager", agenda_enabled=True,
+                          allowed_tools=["body:observe", "body:chat", "body:move", "body:stop"])
+        body = SimBody(body_id=str(configured.body_id))
+        here = snap(raw={})
+        body.snapshot = lambda: asyncio.sleep(0, result=here)
+        journal = ActionJournal(tmp_path / "villager-planner.sqlite")
+        host = NpcHost(configured, body, NpcPlanner(configured, model), None, journal)
+        try:
+            steps = await host._plan(Intent(id="villager-life-plan", agent=configured.id, goal=IDLE_GOAL),
+                                     PlanContext(snapshot=here, agenda={"current": None, "upcoming": []}))
+            assert steps == [] and not body.acts
+            assert '"agenda", "steps" and "life"' in prompts[0]["messages"][0]["content"]
+            state = host.life_loop.load(str(configured.character_id), "villager")
+            assert state.goal == "在床边休息" and state.status == "waiting"
         finally:
             await model.close()
             journal.close()

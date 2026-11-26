@@ -803,11 +803,16 @@ class NpcPlanner:
                           'successEvidence, reviewAfterSeconds and optional alternatives/status. Omit it for a one-off reply. ')
         if can_schedule:
             response_shape = ('This is a planning turn. Pick a feasible continuing duty from your character and the scene, '
-                              'then decide whether it needs an action now. Return JSON with both "agenda" and "steps". '
-                              'For example {"agenda":[{"afterMinutes":0,"forMinutes":10,"goal":"…","evidence":"…"}],"steps":[]}. '
-                              'Replace the placeholders with your own concrete intention and evidence. An ongoing watch, rest or '
-                              'native job can have a time window with zero steps. If there is genuinely no useful commitment, '
-                              'return {"steps":[]}. At most 3 steps. ')
+                              'then decide whether it needs an action now. Return JSON with "agenda", "steps" and "life". '
+                              'For example {"agenda":[{"afterMinutes":0,"forMinutes":10,"goal":"…","evidence":"…"}],'
+                              '"steps":[],"life":{"goal":"…","phase":"…","nextAction":"…","successEvidence":"…",'
+                              '"reviewAfterSeconds":300}}. '
+                              'Replace the placeholders with your own concrete intention and evidence. The life commitment may '
+                              'match the first agenda window, but it must remain feasible when the window ends. An ongoing watch, '
+                              'rest or native job can have a time window with zero steps. Even when no action is needed, choose a '
+                              'minimal feasible watch or rest commitment instead of omitting life; for example '
+                              '{"steps":[],"life":{"goal":"…","phase":"waiting","nextAction":"观察环境并稍后复核",'
+                              '"successEvidence":"…","reviewAfterSeconds":300,"status":"waiting"}}. At most 3 steps. ')
         if context.agenda is not None:
             facts["agenda"] = context.agenda
             agenda_policy = (" Use agenda.current as your ongoing commitment. Compare its evidence with current observations and receipts. "

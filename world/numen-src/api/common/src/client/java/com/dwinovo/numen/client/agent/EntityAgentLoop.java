@@ -1125,12 +1125,14 @@ public final class EntityAgentLoop {
             return "";
         }
         inventoryMissingLogged = false;
-        if (snapshot == inventoryRenderedFrom) return inventoryRendered;
-        inventoryRendered = renderInventory(snapshot);
+        String rendered = renderInventory(snapshot);
         inventoryRenderedFrom = snapshot;
-        // 这行只在快照真换了新的时才打,所以"年龄"读的是"这段时间背包没变过",不是延迟。
-        // 背包明明变了却不见这一行,才是链路断了。
-        Constants.LOG.info("[numen-inv] 背包块进请求:{} 字符,这份快照 {}ms 前收到",
+        // Hosted bodies may publish a fresh snapshot object on every tick even
+        // when the rendered inventory is unchanged. Cache by content, not object
+        // identity, and keep routine diagnostics at debug level.
+        if (rendered.equals(inventoryRendered)) return inventoryRendered;
+        inventoryRendered = rendered;
+        Constants.LOG.debug("[numen-inv] 背包块进请求:{} 字符,这份快照 {}ms 前收到",
                 inventoryRendered.length(), System.currentTimeMillis() - snapshot.receivedAtMs());
         return inventoryRendered;
     }
