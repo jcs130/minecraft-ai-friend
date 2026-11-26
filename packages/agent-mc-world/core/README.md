@@ -216,7 +216,7 @@ Mineflayer bot 的世界和背包，不创建第二个游戏连接，也不接�
 网页夜视默认为自动：角色所在格的天空光接近零且方块光不足时，平滑抬高方块暗部和实体环境光；
 左下角按钮可切换自动、开、关。网页夜视只改变本地画面，不修改服务端光照、Agent 的感知或行动。
 地面掉落物在网页渲染帧中旋转并轻微浮动，实体位置仍由服务器同步。
-网页画面根据实际发送的 `/mycli cast` 命令显示技能名称，收到可识别的服务端回音后显示生效或受阻；成功的 `mcagent:event` 以服务端位置为准，短时断线重连会补放最近一条施法提示。游戏聊天、系统提示、屏幕标题、死亡与自身受伤也会在画面上短暂提示。
+网页画面可以展示游戏聊天、系统提示、屏幕标题、死亡与自身受伤。服务器扩展负责解释专有施法协议，并向视图提供经核实的技能事件。
 服务端的 Boss 血条与动作栏、主标题和副标题直接投到网页画面；Boss 血条会随服务端更新与移除。
 
 `mc_visual` 按需拍摄 modern-viewer 当前实景，并记录拍摄时间、视角、维度与玩家位置。
@@ -358,7 +358,6 @@ World 将所选文件保存在部署的 `data/minecraft-skin-{bot,player}.png`�
 
 | 工具 | 说明 |
 |---|---|
-| `mc_cast(spell, arguments?)` | 向支持该命令的服务端立即发送一次 `/mycli cast <技能ID> [参数…]`；`arguments` 是按顺序分开的字符串数组，例如造物目标。战斗或撤退中也不排队、不抢移动控制；发送成功不等于生效，须核对服务端回执和现场状态 |
 | `mc_do(steps, queue?)` | 提交任务。立即返回带时刻与任务号（#N）的受理回执；后台依次执行，结果以同一任务号的 `minecraft.task` 事件返回。`queue` 模式见「队列」 |
 | `mc_scout(steps, queue?)` | `tags:['read']`。与 `mc_do` 共用队列和回执，执行 probe / observe，以及按 dryRun 入队的 goto / flight / build / excavate / tunnel。后续操作仍可入队 |
 | `mc_flight_plan(points, budgetMs?, subdivide?)` | `tags:['read']`。施法前从当前观察位置依次投影最多16个目标，可自动分为最多64段；回报逐段碰撞、累计耗时、时长预算与末段支撑；不入队、不移动、不授予许可 |
@@ -1156,7 +1155,7 @@ interest/danger 图，硬约束通过 masking 执行。
 
 控制权优先级为 `ENV > FIGHT > TASK`。环境自保通过 `yieldToEnv` 和 `envBusy` 使战斗让出控制，由环境反射汇报。战斗期间，`busyWith` 暂停任务执行器；`mc_do` 仍受理新任务并说明等待原因。
 
-服务器专有命令与技能由启用对应集成的 World 提供。普通 Minecraft World 不查询 `/mycli`，也不暴露施法工具；千灯纪的接入边界见 `../mymc/README.md`。
+服务器扩展负责暴露对应的命令和技能。开发者接入新资料包时请参阅[服务器档案与挂载约定](../docs/server-profiles.md#server-pack-boundary)。
 
 `mc_combat_tactic` 提供 Agent 可修改的法术优先序与治疗血线，按世界身份保存在
 `data/minecraft-combat-tactics.json`，跨重连和重载恢复。清除也持久化；能力、魔力、冷却
