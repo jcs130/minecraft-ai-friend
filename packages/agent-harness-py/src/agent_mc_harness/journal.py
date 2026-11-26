@@ -188,6 +188,10 @@ class ActionJournal:
         row = self.db.execute("SELECT receipt FROM dispatch WHERE body=? AND id=?", (body, request_id)).fetchone()
         return ActionReceipt.model_validate_json(row[0]) if row and row[0] else None
 
+    def action(self, body: str, request_id: str) -> BodyAction | None:
+        row = self.db.execute("SELECT action FROM dispatch WHERE body=? AND id=?", (body, request_id)).fetchone()
+        return BodyAction.model_validate_json(row[0]) if row else None
+
     def speech_turn_hash(self, request_id: str) -> str | None:
         row = self.db.execute("SELECT turn_hash FROM npc_resident_speech WHERE request=?", (request_id,)).fetchone()
         return row[0] if row else None

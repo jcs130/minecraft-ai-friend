@@ -126,6 +126,9 @@ class PlanContext(BaseModel):
     activity_review: dict[str, Any] | None = None
     agenda: dict[str, Any] | None = None
     proposed_agenda: list[dict[str, Any]] | None = None
+    life_view: dict[str, Any] | None = None
+    life_state: dict[str, Any] | None = None
+    proposed_life: dict[str, Any] | None = None
     lessons: list[str] = Field(default_factory=list)  # active versioned lessons (self-iteration store), trial or adopted
 
 
