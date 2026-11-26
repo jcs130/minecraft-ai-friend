@@ -30,6 +30,7 @@ class ActionJournal:
     def __init__(self, path: str | Path) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path)
+        self.closed = False
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=FULL")
         self.db.execute("CREATE TABLE IF NOT EXISTS dispatch (id TEXT PRIMARY KEY, body TEXT NOT NULL, action TEXT NOT NULL, receipt TEXT)")
@@ -239,4 +240,6 @@ class ActionJournal:
         return ((json.loads(row[0]).get("data") or {}).get("inventory") or []) if row else []
 
     def close(self) -> None:
-        self.db.close()
+        if not self.closed:
+            self.db.close()
+            self.closed = True

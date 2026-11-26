@@ -1067,8 +1067,12 @@ class NpcPlanner:
         if (source := delivery.get("sourceEventId")) and source in intent.source_events:
             intent.source_events = [source]
         if "life" in plan:
-            with validate_resident_decision(intent.resident_turn_hash, "validate_life"):
-                context.proposed_life = validate_proposal(self.role, plan["life"]).wire()
+            try:
+                with validate_resident_decision(intent.resident_turn_hash, "validate_life"):
+                    context.proposed_life = validate_proposal(self.role, plan["life"]).wire()
+            except ValueError:
+                if not can_schedule:
+                    raise
         if "agenda" in plan:
             if (owner_planning or desktop_planning) and plan["agenda"] == []:
                 if context.agenda["current"] or context.agenda["upcoming"]:
@@ -1076,6 +1080,22 @@ class NpcPlanner:
             else:
                 with validate_resident_decision(intent.resident_turn_hash, "validate_agenda"):
                     context.proposed_agenda = schedule(plan["agenda"], time.time())
+        if can_schedule and context.proposed_life is None and context.proposed_agenda:
+            # The model's own validated agenda is still a self-formed commitment.
+            # Use it when an optional life block is missing or malformed instead of
+            # rejecting the whole planning turn and leaving low-tier residents idle.
+            first = context.proposed_agenda[0]
+            goal_max = {"villager": 90, "maid": 140, "numen": 180}[self.role.body_kind]
+            evidence_max = {"villager": 300, "maid": 420, "numen": 600}[self.role.body_kind]
+            review_after = max(15, min(1800, int((first["endsAt"] - first["startsAt"]) / 1000)))
+            context.proposed_life = validate_proposal(self.role, {
+                "goal": first["goal"].strip()[:goal_max],
+                "phase": "agenda",
+                "nextAction": "",
+                "successEvidence": first["evidence"].strip()[:evidence_max],
+                "reviewAfterSeconds": review_after,
+                "status": "active",
+            }).wire()
         if check_in:
             previous = [*context.recent_companion_speech, *self.attempted_companion_speech]
             steps = [step for step in steps if step.tool == "body:chat"
