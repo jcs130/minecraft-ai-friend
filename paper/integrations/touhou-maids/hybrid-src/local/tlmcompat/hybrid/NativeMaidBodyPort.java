@@ -46,7 +46,7 @@ final class NativeMaidBodyPort implements AutoCloseable {
                 if(!"unified".equals(row.get("controller").getAsString()))throw new IllegalArgumentException("unknown_controller");
                 // A disconnected unified host must not wake the retired dialogue
                 // planner. This designation survives lease expiry and bind errors.
-                plugin.registerUnifiedBody(maid);
+                plugin.registerExplicitUnifiedBody(maid);
                 if (row.has("starterKit") && row.get("starterKit").getAsBoolean()) plugin.registerStarterKit(maid);
             }
         }
@@ -59,7 +59,7 @@ final class NativeMaidBodyPort implements AutoCloseable {
         }
         playerProfiles = profiles;
         control=new MaidBodyControl(plugin.getDataFolder().toPath().resolve("native-body-receipts"),bindings,
-            id->guidesEnabled?plugin.guideOwner(id):null);
+            plugin::admittedOwner);
         actions=new NativeMaidBodyActions(plugin,control);
         server=HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),port),16);
         executor=new ThreadPoolExecutor(2,2,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(16),r->{var t=new Thread(r,"maid-body-http");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy());
@@ -168,6 +168,11 @@ final class NativeMaidBodyPort implements AutoCloseable {
     private JsonObject handle(JsonObject input)throws Exception {
         if(closed)throw new MaidBodyControl.Fault(503,"PORT_STOPPED");
         var operation=MaidBodyControl.string(input,"operation");
+        if(operation.equals("maid_list")){
+            MaidBodyControl.keys(input,Set.of("operation"));
+            var result=new JsonObject();result.addProperty("protocol",MaidBodyControl.PROTOCOL);
+            result.add("maids",plugin.onlineMaids());result.add("guides",plugin.onlineGuides());return result;
+        }
         if(operation.equals("guide_list")){
             MaidBodyControl.keys(input,Set.of("operation"));
             if(!guidesEnabled)throw new MaidBodyControl.Fault(404,"GUIDES_DISABLED");
