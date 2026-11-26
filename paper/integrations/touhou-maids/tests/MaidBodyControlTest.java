@@ -63,6 +63,15 @@ public final class MaidBodyControlTest {
         var setting=json("{\"action\":\"task\",\"requestId\":\"task-1\",\"taskId\":\"touhou_little_maid:idle\"}");control.reserve(OWNER,MAID,"task-1",setting);
         check(!control.finish(MAID,"task-1","applied",json("{\"effectsApplied\":true}")).get("goalCompleted").getAsBoolean(),"selecting task does not claim work complete");
         check(control.read(MAID,"missing")==null,"missing history stays missing");
+        var admitted=new java.util.concurrent.atomic.AtomicReference<UUID>(OWNER);
+        var dynamic=new MaidBodyControl(root.resolve("dynamic"),Map.of(),id->MAID.equals(id)?admitted.get():null);
+        fault("NOT_AUTHORIZED",()->dynamic.bind(SECOND,MAID,FIRST,1000));
+        var dynamicLease=dynamic.bind(OWNER,MAID,FIRST,1000);
+        admitted.set(SECOND);
+        fault("NOT_AUTHORIZED",()->dynamic.require(OWNER,MAID,FIRST,dynamicLease.generation(),1001));
+        check(dynamic.active(MAID),"failed live identity recheck does not silently release the original lease");
+        admitted.set(OWNER);
+        check(dynamic.require(OWNER,MAID,FIRST,dynamicLease.generation(),1002).generation().equals(dynamicLease.generation()),"restored admitted owner keeps the fenced generation");
         Files.writeString(root.resolve(MAID.toString()).resolve("broken.json"),"{}");
         fault("RECEIPT_UNAVAILABLE",()->control.read(MAID,"broken"));
         fault("RECEIPT_UNAVAILABLE",()->control.reserve(OWNER,MAID,"broken",walk));

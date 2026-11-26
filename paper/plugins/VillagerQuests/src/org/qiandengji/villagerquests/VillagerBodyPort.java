@@ -42,7 +42,9 @@ final class VillagerBodyPort {
     static final String PROTOCOL = "qiandengji-villager-body/v1";
     private static final List<String> ACTIONS = List.of("context", "inbox", "walk", "speak", "stop", "receipt");
 
-    private record Settings(boolean enabled, int port, Path tokenFile, Map<String, VillagerBodyRules.Binding> bindings) {}
+    private record Settings(boolean enabled, int port, Path tokenFile, Map<String, VillagerBodyRules.Binding> bindings,
+                            List<ChunkTicket> chunkTickets) {}
+    private record ChunkTicket(String world, int x, int z) {}
     private record Lease(VillagerBodyRules.Binding binding, String generation, long expiresAt) {}
     private record Event(long sequence, String eventId, UUID speakerId, String speaker, String text, String channel,
                          String deliveryScope, long occurredAt, String world, String generation) {}
@@ -62,6 +64,7 @@ final class VillagerBodyPort {
     private final BodyReceiptLedger ledger;
     private final NativeVillagerWalk walk;
     private final Map<String, VillagerBodyRules.Binding> bindings = new LinkedHashMap<>();
+    private final Map<ChunkTicket, org.bukkit.World> chunkTickets = new LinkedHashMap<>();
     private final Map<UUID, Lease> leases = new HashMap<>();
     private final Map<UUID, List<Event>> events = new HashMap<>();
     private final Map<UUID, Long> eventSequences = new HashMap<>();
@@ -95,6 +98,7 @@ final class VillagerBodyPort {
             settings = next;
             bindings.clear();
             bindings.putAll(next.bindings());
+            clearChunkTickets();
             plugin.getLogger().info("Villager body port disabled");
             return;
         }
@@ -107,12 +111,13 @@ final class VillagerBodyPort {
         server = nextServer;
         bindings.clear();
         bindings.putAll(next.bindings());
+        applyChunkTickets(next.chunkTickets());
         nextServer.start();
         plugin.getLogger().info("Villager body port listening on loopback:" + next.port() + " for " + next.bindings().size() + " configured bodies");
     }
 
     private Settings readSettings() throws IOException {
-        if (Files.notExists(configPath)) return new Settings(false, 0, configPath.resolveSibling("villager-body.token"), Map.of());
+        if (Files.notExists(configPath)) return new Settings(false, 0, configPath.resolveSibling("villager-body.token"), Map.of(), List.of());
         JsonObject root = JsonParser.parseString(Files.readString(configPath, StandardCharsets.UTF_8)).getAsJsonObject();
         if (root.get("schema").getAsInt() != 1) throw new IllegalArgumentException("villager-body-port schema must be 1");
         boolean enabled = root.get("enabled").getAsBoolean();
@@ -128,13 +133,55 @@ final class VillagerBodyPort {
             Villagers.Spot spot = plugin.villagers.spot(binding.residentId());
             if (spot == null || spot.entityUuid() == null || !spot.entityUuid().equals(binding.bodyId())
                     || spot.npcId() != null)
-                throw new IllegalArgumentException("binding is not a configured non-service native villager: " + binding.residentId());
+                throw new IllegalArgumentException("binding is not a configured native villager: " + binding.residentId());
             if (parsed.containsKey(binding.residentId())
                     || parsed.values().stream().anyMatch(old -> old.bodyId().equals(binding.bodyId())))
                 throw new IllegalArgumentException("duplicate resident/body binding");
             parsed.put(binding.residentId(), binding);
         }
-        return new Settings(enabled, port, tokenPath, Map.copyOf(parsed));
+        List<ChunkTicket> tickets = new ArrayList<>();
+        if (root.has("chunkTickets")) {
+            JsonArray rows = root.getAsJsonArray("chunkTickets");
+            if (rows.size() > 64) throw new IllegalArgumentException("at most 64 smart-body chunk tickets are allowed");
+            for (JsonElement value : rows) {
+                JsonObject row = value.getAsJsonObject();
+                if (row.size() != 3 || !row.has("world") || !row.has("x") || !row.has("z"))
+                    throw new IllegalArgumentException("invalid smart-body chunk ticket");
+                String world = row.get("world").getAsString();
+                if (world.isBlank() || world.length() > 128 || Bukkit.getWorld(world) == null || tickets.stream().anyMatch(old -> old.world().equals(world)
+                        && old.x() == chunkCoordinate(row.get("x")) && old.z() == chunkCoordinate(row.get("z"))))
+                    throw new IllegalArgumentException("invalid or duplicate smart-body chunk ticket");
+                tickets.add(new ChunkTicket(world, chunkCoordinate(row.get("x")), chunkCoordinate(row.get("z"))));
+            }
+        }
+        return new Settings(enabled, port, tokenPath, Map.copyOf(parsed), List.copyOf(tickets));
+    }
+
+    private static int chunkCoordinate(JsonElement value) {
+        try {
+            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) throw new IllegalArgumentException();
+            int coordinate = value.getAsBigDecimal().intValueExact();
+            if (coordinate < -30_000_000 || coordinate > 30_000_000) throw new IllegalArgumentException();
+            return coordinate;
+        } catch (ArithmeticException | IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("chunk ticket coordinates must be integers");
+        }
+    }
+
+    private void applyChunkTickets(List<ChunkTicket> next) {
+        clearChunkTickets();
+        for (ChunkTicket ticket : next) {
+            org.bukkit.World world = Bukkit.getWorld(ticket.world());
+            if (world == null) throw new IllegalArgumentException("smart-body chunk ticket world is not loaded: " + ticket.world());
+            world.addPluginChunkTicket(world.getChunkAt(ticket.x(), ticket.z()), plugin);
+            chunkTickets.put(ticket, world);
+        }
+        if (!tickets.isEmpty()) plugin.getLogger().info("Keeping " + tickets.size() + " audited smart-villager chunks loaded");
+    }
+
+    private void clearChunkTickets() {
+        for (var entry : chunkTickets.entrySet()) entry.getValue().removePluginChunkTicket(entry.getValue().getChunkAt(entry.getKey().x(), entry.getKey().z()), plugin);
+        chunkTickets.clear();
     }
 
     private String readToken(Path file) throws IOException {
@@ -153,6 +200,7 @@ final class VillagerBodyPort {
 
     synchronized void close() {
         stop();
+        clearChunkTickets();
     }
 
     private synchronized void stop() {
