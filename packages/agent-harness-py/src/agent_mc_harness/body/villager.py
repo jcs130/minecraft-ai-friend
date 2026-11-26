@@ -444,11 +444,18 @@ class VillagerBody(BaseBody):
     async def snapshot(self) -> BodySnapshot:
         await self._read_context(emit=True)
         data = self._context
+        entities = []
+        if isinstance(data.get("hostilesNearby"), list):
+            entities.extend({**row, "hostile": True} for row in data["hostilesNearby"] if isinstance(row, dict))
+        if isinstance(data.get("nearbyPlayers"), list):
+            entities.extend({**row, "ally": True} for row in data["nearbyPlayers"] if isinstance(row, dict))
+        raw = dict(data)
+        raw["canAct"] = data.get("ai") is True and data.get("sleeping") is not True and data.get("trading") is not True
         return BodySnapshot(
             sampled_at=datetime.fromtimestamp(self._context_at / 1000, UTC), life_state=self._life,
             position=_position(data.get("position")), dimension=data.get("dimension"),
             health=_number(data.get("health")), max_health=_number(data.get("maxHealth")),
-            text=f"villager {self.resident_id}/{self.body_id} profession={data.get('profession')}", raw=data,
+            entities=entities, text=f"villager {self.resident_id}/{self.body_id} profession={data.get('profession')}", raw=raw,
         )
 
     def _fresh_event(self, event_id: str) -> bool:
