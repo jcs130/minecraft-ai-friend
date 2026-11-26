@@ -2721,7 +2721,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'what is in your hand, and what armour you are wearing. Read-only and instant — '
       + 'it never moves you, never touches the world and never touches the work queue. '
       + 'Set item to a material ID, Chinese material name, or exact custom display name to count current carried stock. Use detail:"storage" with item to also locate equipment, open container and historical chest records. '
-      + 'closed virtual backpacks are not included, and chest records are historical until reopened. '
+      + 'Closed virtual backpacks are not included. Chest locations and counts are historical until reopened; they remain available when carried inventory is still syncing. '
       + 'Use detail:"slots" for both identifiers of each carried stack: inventorySlot for player inventory 0–35, windowSlot for the player window 9–44. Use the field required by the transfer. item optionally filters stacks; freeSlots always covers the entire carried inventory. '
       + 'Use detail:"changes" for the latest confirmed net change across carried slots, or item alone for a typed current carried quantity. '
       + 'Read game guidebooks and custom books in your synced inventory without opening them: detail:"book" lists books, then pass windowSlot and page (1-based) to read a page. '
@@ -5827,8 +5827,9 @@ export class MinecraftWorld implements World {
         ? { title: minecraftTextComponent(win.title) || '容器',
             items: containerStacks(win, bot.registry as never).items }
         : null;
-      const text = renderStoredItemReadout(snap, records, item, opened, bot?.registry);
-      return { stamp: `${bagStamp(snap)}|stock:${item}|${text}${riskText}`, text: text + riskText, data };
+      const { text, history } = renderStoredItemReadout(snap, records, item, opened, bot?.registry);
+      return { stamp: `${bagStamp(snap)}|stock:${item}|${text}${riskText}`, text: text + riskText,
+        data: { ...data, storageHistory: history } };
     }
     const records = this.chestBook().chestsIn(snap.dimension);
     const storage = renderStorageReadout(snap, records);

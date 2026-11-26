@@ -280,12 +280,28 @@ describe('inventory synchronization readouts', () => {
     try {
       const snapshot = snapshotFromBot(r.bot, { scanBlocks: false, invSynced: false });
       snapshot.inventorySync = { phase, reason: phase === 'quarantined' ? '服务器未确认本次点击' : undefined };
-      for (const text of [renderBagReadout(snapshot), renderStoredItemReadout(snapshot, [], 'oak_log'), narrateWorld(snapshot)]) {
+      for (const text of [renderBagReadout(snapshot), renderStoredItemReadout(snapshot, [], 'oak_log').text, narrateWorld(snapshot)]) {
         expect(text).toContain(expected);
         expect(text).not.toContain('物品栏还在从服务器同步');
         expect(text).not.toContain('包里什么都没有');
       }
     } finally { r.close(); }
+  });
+
+  it('recalls scoped, dated chest locations while carried and open-window quantities are unknown', () => {
+    const scene = methodHarness();
+    try {
+      const snapshot = snapshotFromBot(scene.bot, { scanBlocks: false, invSynced: false });
+      const observedAt = Date.parse('2026-11-27T00:00:00Z');
+      const items = [{ name: 'oak_log', count: 12 }];
+      const record = { x: 1, y: 64, z: 4, dimension: snapshot.dimension, items, usedSlots: 1, slots: 27, observedAt };
+      const result = renderStoredItemReadout(snapshot, [record, { ...record, dimension: 'the_end', x: 99 }], 'oak_log',
+        { title: '未同步的窗口', items });
+      expect(result.text).toContain('上次见到×12');
+      expect(result.text).not.toMatch(/随身.*×|未同步的窗口/);
+      expect(result.history).toEqual({ source: 'container-ledger', historical: true, dimension: snapshot.dimension,
+        matchedContainers: 1, locations: [{ at: [1, 64, 4], count: 12, observedAt: '2026-11-27T00:00:00.000Z' }] });
+    } finally { scene.close(); }
   });
 
   it('derives a real click quarantine in fresh snapshots instead of describing an empty bag', async () => {

@@ -64,7 +64,7 @@ export const VANILLA_SURVIVAL_GUIDES: readonly SurvivalGuide[] = [
       + '\n留实际可行的进出路径、移动净空和地面支持，再按需要加入可接近的工作台、熔炉、箱子、照明，以及有材料/安全维度时的床。recipe/crafting_table、recipe/furnace、recipe/torch 按需查；木炭可作火把原料，其获取查 guide/cooking。不是写下设计或放了墙就已竣工。'
       + '\n读 mc_help 的 observe/probe、build 与放置相关能力、goto 和真实建造契约；实际工具名和参数以广告 help 为准，不能猜操作。建筑方式与装饰由 Agent 选择，不启动隐藏建造链。保持出口，核查屋顶/洞口、照明与周边实体；灯和墙不能保证所有怪物都安全。'
       + '\n工作台不自动补材料，熔炉还需实际输入/燃料及取出成品，箱子不创造食物。分别参照 guide/cooking、guide/storage、guide/bed；床需要安全可达的两格空间与使用条件。'
-      + '\n用实际方块、通路、容器可达性、库存和危险观测评估是否可用；归家/重生点与维度是当前事实，历史坐标或 memory 笔记需重新确认，不强制返回旧点。保存位置不等于已建成、可重生或有补给。',
+      + '\n用实际方块、通路、容器可达性、库存和危险观测评估是否可用；在自建房屋的入口加上好辨认的名字或用途，记下入口与回程。归家、重生点和历史地点笔记分别核实。',
     sources: [night, article('de-de/article/how-survive-your-first-day', 'Illustrative shelter and usable work space'), craft,
       ...original('data/minecraft/recipe/{crafting_table,furnace,torch,charcoal}.json; data/minecraft/tags/item/stone_crafting_materials.json'),
       executor('placement', 'Supported placement and collision constraints')] },
@@ -73,7 +73,8 @@ export const VANILLA_SURVIVAL_GUIDES: readonly SurvivalGuide[] = [
     content: '背包容量妨碍当前目标时，可以选择可达箱子或已有获准使用的容器；整理方式按兴趣和工作需要决定。查 recipe/chest：8 个 minecraft:planks 标签木板围一圈，中间空，产出 1 箱子，需工作台。按实际物品和材料查配方，不默认自动制作中间物。'
       + '\n在安全地面与可达位置放置，保持开盖上方可用空间和接近路线；实心阻挡或猫等条件可能影响开启。看真实交互/容器反馈，不把摆下箱子等同于已能存取。当前库存用 mc_bag，mc_help 的 stow/take、容器观察和 build/goto 契约按实际能力读取。'
       + '\n存放冗余材料时，仍随身保留可用口粮、必要工具、照明与退路方块；别把一切都存进去再无补给远行。食物选择查 guide/food、guide/health；仓储不产生新食物，也不证明已经补饱。'
-      + '\n核对目标容器身份、访问权限、存取前后背包与槽位数量。动作被接受或终态返回不能替代真实物品变化；目标或结果未知时保留原回执，不盲目重复存取。记下箱子维度/地点仅是历史提示，再次使用需重新观察可达性和内容；可与 guide/base、guide/cooking 结合，非强制收纳任务。',
+      + '\n经常使用的自有仓库可按常拿的类别增设箱子。把简短的木牌放在能看清、不会挡箱盖和通路的地方，写箱名和物资类别；同类多个箱子可加编号。牌面写稳定用途，具体现存数量查箱账和窗口。先读 mc_help 的 build/use 契约，写完回读牌面。'
+      + '\n存取回执核对目标箱、物品和净变化。找物资先用 mc_bag {detail:"storage",item:"实际物品名"} 查本维度箱账；到场开窗确认再取。值得回访的仓库在本服笔记记下箱名、维度、坐标、日期和原回执。支持写书时可用可编辑的书与笔整理住处说明、仓库索引或探险短记；回读成功再当成已写。结果未知先核对，保留当前工具、口粮和退路材料。',
     sources: [article('en-us/article/block-week-chest', 'Storage and optional organization examples'), craft,
       ...original('data/minecraft/recipe/chest.json; ChestBlock.isChestBlockedAt/isBlockedChestByBlock and cat obstruction handling'),
       executor('skills-container', 'stow/take and actual container/inventory effects')] },
