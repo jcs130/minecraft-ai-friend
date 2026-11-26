@@ -278,9 +278,16 @@ process.on('message', (msg: MainToChild) => {
   if (cast.kind === 'config' && cfg) {
     // Hot config keeps the server chosen at start; switching servers needs a world restart.
     const active = (cfg as { activeServer?: string }).activeServer;
-    let next: typeof cast.cfg = cast.cfg;
+    let next: typeof cast.cfg;
     try { next = applyServerProfile(cast.cfg, active ? { AGENT_MC_SERVER: active } : {}); }
-    catch (e) { log.warn?.(`服务器配置无效，热更新保持原连接参数：${e instanceof Error ? e.message : String(e)}`); next = { ...cast.cfg, ...Object.fromEntries(['host','port','version','username','auth'].map((k) => [k, (cfg as unknown as Record<string, unknown>)[k]])) } as typeof cast.cfg; }
+    catch (e) { log.warn?.('Rejected Minecraft config for the running connection: ' + String(e)); return; }
+    if (next.activeServer !== active || next.host !== cfg.host || next.port !== cfg.port || next.username !== cfg.username) {
+      log.warn?.('Minecraft connection change requires a world restart');
+      return;
+    }
+    // Replace snapshots in full so removal of a guide or conduct rule takes effect.
+    cfg.knowledge = next.knowledge;
+    cfg.serverSafety = next.serverSafety;
     applyCfg(cfg as unknown as Record<string, unknown>, next as unknown as Record<string, unknown>);
   }
 });

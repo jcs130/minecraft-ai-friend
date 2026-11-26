@@ -4951,7 +4951,7 @@ export class MinecraftWorld implements World {
       mc_knowledge: async (args, ctx) => {
         ctx.signal?.throwIfAborted();
         try {
-          const result = await queryMinecraftKnowledge(args, this.bridge?.bot?.version ?? this.cfg.version, this.cfg.knowledge, ctx.signal);
+          const result = await queryMinecraftKnowledge(args, this.bridge?.bot?.version ?? this.cfg.version, this.cfg.knowledge, ctx.signal, this.cfg.activeServer);
           return { text: this.toolLog('mc_knowledge', args, JSON.stringify(result)), meta: { knowledge: result } };
         } catch (error) { return { text: String(error), failed: true }; }
       },

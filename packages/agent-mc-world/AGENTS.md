@@ -11,3 +11,5 @@
 - Viewer source stays in `jcs130/mc-visual-console`; prepare locked release inputs explicitly. Do not commit derived game/viewer assets, runtime state or credentials here.
 - Full package tests, public declaration checks and build verification precede commit. Test consumers against a packed package in isolation.
 - Source migration does not authorize production restarts. Report source, package, deployment and live gameplay evidence separately.
+
+- For server-specific behavior follow [the server pack boundary](docs/server-profiles.md#server-pack-boundary). Keep optional wire protocols and private guide data in the selected extension or operator profile.
