@@ -12,6 +12,9 @@
  * host config API) and restart the world. Nothing here connects anywhere.
  */
 
+import { validateServerGuide, type MinecraftServerGuide } from './server-guide.ts';
+import type { MinecraftKnowledgeConfig } from './reference-index.ts';
+
 /** Per-server conduct rules; enforcement of chat/commands lives in installServerChatPolicy. */
 export interface ServerSafetyRules {
   /** Ordinary public chat. Default true. */
@@ -52,6 +55,8 @@ export interface MinecraftServerProfile {
   connectTimeoutMs?: number;
   maxReconnectAttempts?: number;
   viewerAssetsDir?: string;
+  guide?: MinecraftServerGuide;
+  escapeCommand?: string;
   account?: ServerAccountRules;
   safety?: ServerSafetyRules;
   /** false = config-only entry: it can be validated and listed, but applyServerProfile refuses to select it. */
@@ -71,13 +76,13 @@ export interface ServerProfileSection {
  * Account (username/auth/loginConfigFile) and transport tuning (DoH, timeouts, viewer assets) inherit.
  */
 export const SERVER_SPECIFIC_DEFAULTS: Readonly<Record<string, unknown>> = Object.freeze({
-  port: 25565, version: 'auto', fakeHost: undefined, connectAddresses: undefined,
+  port: 25565, version: 'auto', fakeHost: undefined, connectAddresses: undefined, escapeCommand: '',
 });
 
 /** Connection keys a profile may override on the world section. */
 export const SERVER_PROFILE_FIELDS = [
   'host', 'port', 'version', 'username', 'auth', 'loginConfigFile', 'fakeHost', 'publicDnsFallback',
-  'connectAddresses', 'dohResolvers', 'connectTimeoutMs', 'maxReconnectAttempts', 'viewerAssetsDir',
+  'connectAddresses', 'dohResolvers', 'connectTimeoutMs', 'maxReconnectAttempts', 'viewerAssetsDir', 'escapeCommand',
 ] as const;
 
 const SECRET_KEYS = /^(password|passwd|pwd|secret|token|credential|credentials)$/i;
@@ -89,6 +94,11 @@ export function validateServerProfile(id: string, profile: MinecraftServerProfil
   if (typeof profile.host !== 'string' || !profile.host.trim()) errors.push(`${id}: host is required`);
   if (profile.port !== undefined && !(Number.isInteger(profile.port) && profile.port > 0 && profile.port < 65536)) errors.push(`${id}: port must be 1..65535`);
   for (const key of Object.keys(profile)) if (SECRET_KEYS.test(key)) errors.push(`${id}: "${key}" is not allowed; reference a login-config file instead`);
+  if (profile.guide !== undefined && !validateServerGuide(profile.guide, id)) errors.push('guide must belong to ' + id + ' and have valid entries');
+  if (profile.escapeCommand !== undefined && (typeof profile.escapeCommand !== 'string'
+    || /[\r\n]/.test(profile.escapeCommand) || (profile.escapeCommand !== '' && !/^\/[\w:-]+(?: .+)?$/.test(profile.escapeCommand)))) {
+    errors.push('escapeCommand must be empty or one player command');
+  }
   const name = profile.username ?? '';
   const rules = profile.account ?? {};
   if (name) {
@@ -123,7 +133,7 @@ export function applyServerProfile<T extends object>(section: T, env: Record<str
   const s = section as T & ServerProfileSection & Record<string, unknown>;
   const id = selectedServerId(s, env);
   if (id === null) return section as T & { activeServer?: string; serverSafety?: ServerSafetyRules };
-  const profile = s.servers?.[id];
+  const profile = s.servers && Object.hasOwn(s.servers, id) ? s.servers[id] : undefined;
   if (!profile) throw new Error(`Unknown Minecraft server profile "${id}" (known: ${Object.keys(s.servers ?? {}).join(', ')})`);
   if (profile.selectable === false) throw new Error(`Minecraft server profile "${id}" is config-only (selectable: false)`);
   const errors = validateServerProfile(id, profile);
@@ -133,6 +143,11 @@ export function applyServerProfile<T extends object>(section: T, env: Record<str
     if (value === undefined) delete out[key]; else out[key] = value;
   }
   for (const key of SERVER_PROFILE_FIELDS) if (profile[key] !== undefined) out[key] = structuredClone(profile[key]);
+  const knowledge = { ...(s.knowledge as MinecraftKnowledgeConfig | undefined) };
+  delete knowledge.server;
+  if (profile.guide) knowledge.server = structuredClone(profile.guide);
+  if (Object.keys(knowledge).length) out.knowledge = knowledge;
+  else delete out.knowledge;
   if (profile.safety) {
     out.serverSafety = structuredClone(profile.safety);
     const ml = { ...((s as Record<string, unknown>).miningLimits as Record<string, unknown> | undefined) };
@@ -146,6 +161,17 @@ export function applyServerProfile<T extends object>(section: T, env: Record<str
     delete out.serverSafety;
   }
   return out as T & { activeServer?: string; serverSafety?: ServerSafetyRules };
+}
+
+/** Bind one connection before creating its body, SDK or MCP facade. Unrelated host options stay live. */
+export function mountServerProfile<T extends object>(section: T): T & { activeServer?: string } {
+  const resolved = applyServerProfile(section);
+  if (resolved === section) return section;
+  const pinned = new Set<PropertyKey>([...SERVER_PROFILE_FIELDS, 'activeServer', 'serverSafety', 'knowledge',
+    'miningLimits', 'server', 'servers']);
+  return new Proxy({ ...resolved, server: resolved.activeServer, servers: undefined }, {
+    get: (target, key, receiver) => pinned.has(key) ? Reflect.get(target, key, receiver) : Reflect.get(section, key),
+  });
 }
 
 /** Secret-free listing for consoles/APIs. */

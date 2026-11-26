@@ -4,6 +4,7 @@ import { zhName } from './names.ts';
 import type { ToolDef } from './support/host-contract.ts';
 import { FOOD_CAUTIONS, FOOD_COOKING, FOOD_EFFECTS, MOJANG_1211_SOURCE, VANILLA_GUIDES, VANILLA_KNOWLEDGE_VERSION } from './vanilla-food.ts';
 import { VANILLA_SURVIVAL_GUIDES } from './vanilla-survival.ts';
+import { readServerGuide, validateServerGuide } from './server-guide.ts';
 import { MINEDOJO_SOURCE, readReferenceIndex, type MinecraftKnowledgeConfig } from './reference-index.ts';
 
 const KINDS = ['guide', 'food', 'item', 'block', 'recipe'] as const;
@@ -21,7 +22,7 @@ export const KNOWLEDGE_TOOL: Omit<ToolDef, 'handler'> = {
     + 'action:sources describes optional MineDojo indexes; source:minedojo queries only an explicitly configured local index. Historical references never grant action authority.',
   parameters: { type: 'object', additionalProperties: false, properties: {
     action: { type: 'string', enum: ['help', 'search', 'get', 'sources'], description: 'Omit: id implies get; query/filter/paging implies search; empty arguments imply help.' },
-    source: { type: 'string', enum: ['vanilla', 'minedojo'], description: 'Default vanilla. MineDojo is a separately prepared historical reference index, never player memory.' },
+    source: { type: 'string', enum: ['vanilla', 'minedojo', 'server'], description: 'Use server for the active server guide. Default vanilla. MineDojo is a separately prepared historical reference index, never player memory.' },
     query: { type: 'string', maxLength: 200 }, kind: { type: 'string', enum: [...KINDS] },
     id: { type: 'string', maxLength: 120, description: 'Exact returned ID, e.g. food/beef or guide/cooking.' },
     limit: { type: 'integer', minimum: 1, maximum: 10 }, offset: { type: 'integer', minimum: 0 },
@@ -169,14 +170,17 @@ export function readMinecraftKnowledge(args: Record<string, unknown>, version: s
 }
 
 /** The asynchronous public dispatch preserves the original vanilla-only sync SDK. */
-export async function queryMinecraftKnowledge(args: Record<string, unknown>, version: string, config?: MinecraftKnowledgeConfig, signal?: AbortSignal): Promise<Record<string, unknown>> {
+export async function queryMinecraftKnowledge(args: Record<string, unknown>, version: string, config?: MinecraftKnowledgeConfig, signal?: AbortSignal, activeServer?: string): Promise<Record<string, unknown>> {
   signal?.throwIfAborted();
   const { source = 'vanilla', ...request } = args;
-  if (!['vanilla', 'minedojo'].includes(String(source))) throw new Error('Unknown knowledge source');
+  if (!['vanilla', 'minedojo', 'server'].includes(String(source))) throw new Error('Unknown knowledge source');
+  const guide = activeServer && validateServerGuide(config?.server, activeServer) ? config?.server : undefined;
+  if (source === 'server') return readServerGuide(request, guide);
   if (request.action === 'sources' && source === 'vanilla') {
     if (Object.keys(request).some(key => key !== 'action')) throw new Error('Field does not apply to sources');
     return { protocol: 'agent-mc-knowledge/v1', sources: [{ id: 'vanilla', version, retrieval: 'bundled-versioned-reference' },
-      { ...MINEDOJO_SOURCE, configured: !!config?.minedojo?.indexFile, status: config?.minedojo?.indexFile ? 'configured-not-probed' : 'not-configured', guide: 'docs/minedojo-knowledge.md' }], currentWorldVerified: false };
+      { ...MINEDOJO_SOURCE, configured: !!config?.minedojo?.indexFile, status: config?.minedojo?.indexFile ? 'configured-not-probed' : 'not-configured', guide: 'docs/minedojo-knowledge.md' },
+      ...(guide ? [{ id: 'server', profile: guide.profile, title: guide.title, revision: guide.revision }] : [])], currentWorldVerified: false };
   }
   if (source === 'vanilla') return readMinecraftKnowledge(request, version);
   const action = request.action ?? (request.id !== undefined ? 'get' : request.query !== undefined ? 'search' : 'help');

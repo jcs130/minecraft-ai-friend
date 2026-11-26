@@ -6,6 +6,7 @@ import { observeVisual } from './visual.ts';
 import { createMinecraftChoiceTool } from './choice.ts';
 import { minecraftLifeTool } from './life.ts';
 import { MessageInbox, messageInboxHost, messageInboxFacts } from './message-inbox.ts';
+import { mountServerProfile } from '../../core/server-profiles.ts';
 import { worldIdentityOf } from '../../core/server-config.ts';
 import { withToolHelp } from './tool-help.ts';
 
@@ -23,6 +24,7 @@ export class MinecraftClientWorld implements World {
   /** A naming adapter may change this hint without rewriting quoted player text. */
   protected messageQueryName(): string { return 'mc_messages'; }
   constructor(options: MinecraftWorldOptions, engine?: EnginePort) {
+    options = { ...options, cfg: mountServerProfile(options.cfg) };
     this.engine = engine ?? new MinecraftWorldProxy(options);
     this.messages = new MessageInbox(JSON.stringify({
       realm: worldIdentityOf(options.cfg.local.serverDir, `${options.cfg.host}:${options.cfg.port}`),

@@ -13,7 +13,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-function scopedLoginRig() {
+function scopedLoginRig(onServerReady?: import('../core/bridge.ts').BridgeOptions['onServerReady']) {
   const dir = mkdtempSync(join(tmpdir(), 'login-reconnect-')), configFile = join(dir, 'accounts.json');
   writeFileSync(configFile, JSON.stringify({ enabled: true, accounts: [{ server: 'example.test:25565', username: 'tester',
     credentialEnv: 'AGENT_MC_RECONNECT_FIXTURE', command: 'login', timeoutMs: 1000 }] }));
@@ -29,7 +29,7 @@ function scopedLoginRig() {
   const log = { info: vi.fn(), warn() {}, error() {}, debug() {}, trace() {}, emit() {}, child() { return this; } };
   const onSpawn = vi.fn(), onDisconnect = vi.fn();
   const bridge = new Bridge({ host: 'example.test', port: 25565, username: 'tester', version: '1.21.1', viewerPort: 0,
-    loginConfigFile: () => configFile, log: log as never, onSpawn, onDisconnect });
+    onServerReady, loginConfigFile: () => configFile, log: log as never, onSpawn, onDisconnect });
   bridges.push(bridge); Object.assign(bridge, { installSpawnGear() {} });
   const message = (index: number, text: string) => bots[index]!.emit('message', { toString: () => text }, 'system');
   return { bridge, bots, create, log, onSpawn, onDisconnect, message,
@@ -38,8 +38,10 @@ function scopedLoginRig() {
 
 describe('login readiness', () => {
   it.each(['configuration', 'play-awaiting-position'])('defers World activation until its bot getter is usable: %s', async boundary => {
-    const r = scopedLoginRig();
-    const bot = r.bots[0]!, client = Object.assign(bot._client, { state: 'configuration', write: vi.fn() });
+    const onReady = vi.fn();
+    const r = scopedLoginRig(onReady);
+    const write = vi.fn();
+    const bot = r.bots[0]!, client = Object.assign(bot._client, { state: 'configuration', write });
     try {
       r.bridge.start();
       bot.emit('inject_allowed');
@@ -47,6 +49,7 @@ describe('login readiness', () => {
       if (boundary === 'play-awaiting-position') { client.state = 'play'; client.emit('state', 'play'); }
       r.message(0, 'MC_AUTH_STATE {"username":"tester","authorized":true,"status":"authenticated"}');
       expect(r.bridge.bot).toBeNull();
+      expect(onReady).not.toHaveBeenCalled();
       expect(r.onSpawn).not.toHaveBeenCalled();
       r.onSpawn.mockImplementation(() => expect(r.bridge.bot).toBe(bot));
       client.state = 'play'; client.emit('state', 'play');
@@ -56,6 +59,9 @@ describe('login readiness', () => {
       client.emit('position', { x: 6, y: 64, z: 8 }); bot.emit('spawn');
       expect(r.onSpawn).toHaveBeenCalledOnce();
       await r.bridge.stop(); client.emit('position', {});
+      expect(onReady).toHaveBeenCalledOnce();
+      expect(onReady).toHaveBeenCalledWith(bot, true);
+      expect(write.mock.calls.flat().map(x => x?.channel)).not.toContain('qiandengji:agent');
       expect(r.onSpawn).toHaveBeenCalledOnce();
     } finally { await r.close(); }
   });

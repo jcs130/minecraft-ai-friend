@@ -104,3 +104,6 @@ export {SimpleVoiceChatLane, SIMPLE_VOICE_CHAT_TOOL} from '../core/simple-voice-
 export type {SimpleVoiceChatConfig, SimpleVoiceChatContext} from '../core/simple-voice-chat-lane.ts';
 export type {ProximityVoiceConfig,ProximityVoiceContext,GameVoiceReceipt} from '../core/proximity-voice-lane.ts';
 export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing} from './proximity-voice.ts';
+
+export { applyServerProfile, mountServerProfile, selectedServerId, type MinecraftServerProfile } from '../core/server-profiles.ts';
+export { validateServerGuide, type MinecraftServerGuide } from '../core/server-guide.ts';

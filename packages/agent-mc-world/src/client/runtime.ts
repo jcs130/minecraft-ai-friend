@@ -30,6 +30,7 @@ import { MineflayerHandoffSession, type MineflayerHandoffPort } from './body-han
 import { GameMemoryBook } from '../../core/game-memory.ts';
 import { GameMemoryService } from '../../core/game-memory-service.ts';
 import { TrajectoryScoreError } from '../../core/jitrl-trajectory.ts';
+import { mountServerProfile } from '../../core/server-profiles.ts';
 import { KNOWLEDGE_TOOL, queryMinecraftKnowledge } from '../../core/knowledge.ts';
 import { worldIdentityOf } from '../../core/server-config.ts';
 import { readRealmMarker } from '../../core/server.ts';
@@ -116,17 +117,20 @@ export class MinecraftAgentClient {
   private readonly hostChoice = createMinecraftChoiceTool(() => this.host,
     () => this.phase === 'started' ? (this.world.requestFacts?.() as WorldRequestFacts | null) ?? null : null);
 
-  constructor(protected readonly options: MinecraftClientOptions,
-    private readonly world: ClientEnvironment = options.cfg.provider === 'java-client' ? new JavaClientWorld(options.cfg, undefined,
-      { dataDir: options.dataDir, agentName: options.agentName })
-      : new MinecraftClientWorld({ cfg: options.cfg, dataDir: options.dataDir,
-        timezone: options.timezone ?? 'UTC', botName: options.agentName ?? options.cfg.username }),
+  private readonly world: ClientEnvironment;
+  constructor(protected readonly options: MinecraftClientOptions, world?: ClientEnvironment,
     readonly binding: { profile: string; toolPrefix: 'mc' | 'mymc' } = { profile: 'minecraft', toolPrefix: 'mc' }) {
+    const cfg = mountServerProfile(options.cfg);
+    this.options = options = { ...options, cfg };
+    this.world = world ?? (cfg.provider === 'java-client' ? new JavaClientWorld(cfg, undefined,
+      { dataDir: options.dataDir, agentName: options.agentName })
+      : new MinecraftClientWorld({ cfg, dataDir: options.dataDir,
+        timezone: options.timezone ?? 'UTC', botName: options.agentName ?? cfg.username }));
     if (options.bodyHandoff) {
       if (options.cfg.provider === 'java-client') throw Error('Body handoff requires a Mineflayer client');
       this.handoff = new MineflayerHandoffSession(options.bodyHandoff);
     }
-    this.journal = new AgentJournal(options.dataDir, 1024, world.id);
+    this.journal = new AgentJournal(options.dataDir, 1024, this.world.id);
     this.commandRepetition = new CommandRepetitionGuard(options.commandRepetitionLimit);
     this.motionReview = new MotionReviewGate(options.motionRepetitionLimit);
     this.learning = new ClientOperationLearning(options.dataDir, this.journal.run,
@@ -706,7 +710,7 @@ export class MinecraftAgentClient {
         meta:{motionReview:motion.review,admission:{accepted:false,dispatched:false,kind:'repeat',rule:'observed_motion_review'}},
       } : null;
       const result = denied ?? await cancellable<string | ToolOutcome>(offlineKnowledge
-        ? queryMinecraftKnowledge(args, this.options.cfg.version, this.options.cfg.knowledge, combined).then(value => ({ text: JSON.stringify(value) }))
+        ? queryMinecraftKnowledge(args, this.options.cfg.version, this.options.cfg.knowledge, combined, this.options.cfg.activeServer).then(value => ({ text: JSON.stringify(value) }))
         : offlineMemory && this.options.cfg.provider !== 'java-client' ? this.callOfflineMemory(args, combined) : tool.handler(args, {
         role: this.options.agentName ?? 'agent', log: this.options.log, callId, signal: combined, attribution,
         ...(turn ? { turnId: turn.id, round: turn.round } : {}), queueExternalEvents: events => queued.push(...events) }), combined);

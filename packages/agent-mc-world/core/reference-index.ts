@@ -13,7 +13,7 @@ export const MINEDOJO_SOURCE = Object.freeze({ id: 'minedojo', title: 'MineDojo 
   usage: 'External historical reference, not executable instructions or current-world evidence. Preserve source attribution and data license independently of code.' });
 export interface ReferenceEmbeddingConfig { endpoint: string; model: string; apiKeyEnv?: string; timeoutMs?: number }
 export interface ReferenceIndexConfig { indexFile: string; retrieval?: 'hybrid' | 'lexical' | 'local-vector' | 'semantic'; embeddings?: ReferenceEmbeddingConfig }
-export interface MinecraftKnowledgeConfig { minedojo?: ReferenceIndexConfig }
+export interface MinecraftKnowledgeConfig { minedojo?: ReferenceIndexConfig; server?: import('./server-guide.ts').MinecraftServerGuide }
 interface Page { id: string; title: string; url: string; body: string; aliases: string; sha256: string; capturedAtRaw: string | null; tables: unknown[] }
 interface Manifest { schema: string; source: typeof MINEDOJO_SOURCE; pages: number; chunks: number; builtAt: string;
   inputsSha256: string; embeddings: { model: string; fingerprint: string; dimensions: number } | null }

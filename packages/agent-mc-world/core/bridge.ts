@@ -1,6 +1,5 @@
 import { loadViewerRelay } from './relay-port.ts';
 import { installDeathLifecycle } from './death-lifecycle.ts';
-import { advertiseAgentIdentity } from './server-identity.ts';
 import { declareDecodedChannels } from './decoded-channels.ts';
 import { installConfigurationPhaseGuard, configurationTransportReady } from './configuration-round.ts';
 import { installNativeBodyReadiness } from './body-readiness.ts';
@@ -178,6 +177,8 @@ export interface BridgeOptions {
   showTempo?: () => ShowTempo | null;
   /** spawn 完成(含重连后) */
   onSpawn: () => void;
+  /** Called once per authenticated, playable connection. Packs may announce their own channels here. */
+  onServerReady?: (bot: mineflayer.Bot, reconnect: boolean) => void;
   /** 连接创建后立即接收聊天和欢迎信息；此时实体及背包可能尚未就绪。 */
   onBotCreated?: (bot: mineflayer.Bot) => void;
   /** 同一连接内的死亡重生；连接代次和资源保持不变。 */
@@ -941,7 +942,11 @@ export class Bridge {
       this.refusedStreak = 0;
       this.installSpawnGear(bot, gen);
       // Only activate() runs after both server authentication and world spawn.
-      advertiseAgentIdentity(bot._client, !this.opts.shuttingDown?.());
+      try {
+        this.opts.onServerReady?.(bot, this.opts.autoReconnect !== false && !this.opts.shuttingDown?.());
+      } catch (error) {
+        log.warn('Minecraft server-ready hook failed: ' + String(error));
+      }
       declareDecodedChannels(bot._client,[this.opts.protectionChannel]);
       this.opts.onSpawn();
     };

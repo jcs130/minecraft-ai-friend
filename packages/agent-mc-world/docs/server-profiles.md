@@ -60,3 +60,11 @@ profile cannot accidentally use a reserved admin name.
 Refusals throw `LOCAL_*: ...` before anything is sent, so the agent sees a local refusal
 rather than a silent server rejection. The rules are also exposed to world extensions as
 `bot.cortiServer`, `bot.cortiServerSafety` and `bot.cortiWorldKey()`.
+
+## Server pack boundary
+
+Bind the selected profile before exposing tools or creating the client. An operator can provide a data-only guide in `servers.<id>.guide`. It has `profile` (equal to the profile ID), `title`, `revision` and an array of `{id,title,summary,text,reference}` entries. Use `mc_knowledge({source:"server",query:"travel"})` and then `mc_knowledge({source:"server",id:"travel"})`. Each result identifies the reference and whether the current world verified it. A profile without a guide returns `unavailable`. Shared vanilla and MineDojo sources are independent.
+
+A custom wire protocol belongs in the selected server extension. Use `BridgeOptions.onServerReady(bot,reconnect)` for optional per-connection announcements after authentication, spawn and PLAY readiness. Respawning on the same connection does not repeat the handshake. Own custom channels, command meanings, listeners and disposal in the extension. Keep the generic SDK usable with a third server that has neither plugin nor guide.
+
+Use matching server/account/realm scope for observations and receipts. Test the same account and dimension on two different servers and an unconfigured third server. Test new packages through SDK, MCP and a real consumer before updating its pinned dependency.
