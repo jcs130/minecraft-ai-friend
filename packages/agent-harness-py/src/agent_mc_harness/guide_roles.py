@@ -10,6 +10,7 @@ GUIDE_TOOLS = [
     "body:move", "body:equip", "body:cast", "body:craft", "body:pickup",
     "body:native:spells", "body:native:tasks", "body:native:task", "body:native:guard",
     "body:native:fish", "body:native:dismount", "body:native:workshop",
+    "body:native:schedule", "body:native:rendezvous",
 ]
 GUIDE_PERSONA = (
     "你是这位玩家的冒险伙伴。用简短自然的中文交谈。"
@@ -20,23 +21,47 @@ GUIDE_PERSONA = (
 )
 
 
+MAID_PERSONA = (
+    "你是千灯纪中一位拥有独立名字、记忆和身体的女仆伙伴。保留自己的身份与经历，不把路人都当主人。"
+    "用简短自然的中文交流；有人明确叫你或确实需要帮助时再开口，不重复招呼、打断别人或播报私有数据。"
+    "先观察眼前需求、危险、健康和当前承诺，再选择一个可行的小目标；通过真实身体执行并核对原回执，"
+    "完成、遇阻或情况变化时记录进展并稍后复核。跟随和护卫只是可中断的活动，不是全部生活。"
+    "只使用实际学会的技能、真实库存和已有权限；不编造进度，不重放未知动作，不需要时安静生活。"
+)
+
+
 def parse_guide_roster(payload, server_id, settings):
-    if payload.get("protocol") != "qiandengji-maid-body/v1" or not isinstance(payload.get("guides"), list):
+    if payload.get("protocol") != "qiandengji-maid-body/v1":
         raise ValueError("guide_roster_invalid")
-    guides = {}
+    rows = payload.get("maids", payload.get("guides"))
+    if not isinstance(rows, list):
+        raise ValueError("guide_roster_invalid")
+    roles = {}
     bodies = set()
-    for row in payload["guides"]:
+    for row in rows:
         owner, body = UUID(row["ownerId"]), UUID(row["maidId"])
-        role_id = "guide_" + b32encode(owner.bytes).decode("ascii").rstrip("=").lower()
-        if row["confirmed"] is not True or role_id in guides or body in bodies or body == owner:
+        is_guide = "confirmed" in row
+        if is_guide:
+            role_id = "guide_" + b32encode(owner.bytes).decode("ascii").rstrip("=").lower()
+            character_id = uuid5(NAMESPACE_URL, f"{server_id}/guide/{owner}")
+            persona = GUIDE_PERSONA
+            if row["confirmed"] is not True:
+                raise ValueError("guide_roster_identity_conflict")
+        else:
+            role_id = "maid_" + b32encode(body.bytes).decode("ascii").rstrip("=").lower()
+            character_id = uuid5(NAMESPACE_URL, f"{server_id}/maid/{body}")
+            persona = MAID_PERSONA
+            if row.get("autoEnroll") is not True:
+                raise ValueError("maid_roster_not_admitted")
+        if role_id in roles or body in bodies or body == owner:
             raise ValueError("guide_roster_identity_conflict")
         role = NpcRole(
-            id=role_id, name=row["name"], character_id=uuid5(NAMESPACE_URL, f"{server_id}/guide/{owner}"),
-            owner_id=owner, body_id=body, body_kind="maid", persona=GUIDE_PERSONA,
+            id=role_id, name=row["name"], character_id=character_id,
+            owner_id=owner, body_id=body, body_kind="maid", persona=persona,
             model=settings["model"], provider=settings.get("provider", "tokenplan"),
             interval_seconds=settings.get("intervalSeconds", 90), default_native_guard=True,
-            max_speech_chars=42, allowed_tools=GUIDE_TOOLS,
+            activity_review_seconds=None if is_guide else 90, max_speech_chars=42, allowed_tools=GUIDE_TOOLS,
         )
-        guides[role_id] = role
+        roles[role_id] = role
         bodies.add(body)
-    return guides
+    return roles

@@ -431,16 +431,16 @@ async def serve(path: Path):
             if guide_client and not pausing and time.monotonic() >= next_guides:
                 next_guides = time.monotonic() + 6
                 try:
-                    response = await guide_client.post(guide_endpoint, json={"operation": "guide_list"})
+                    response = await guide_client.post(guide_endpoint, json={"operation": "maid_list"})
                     response.raise_for_status()
                     roster = response.json()
                     online = parse_guide_roster(roster, settings["serverId"], guide_config)
                     if guide_portal:
                         try:
-                            posted = await guide_portal.post(portal_endpoint, json={"guides":roster["guides"]})
+                            posted = await guide_portal.post(portal_endpoint, json={"guides": roster.get("guides", [])})
                             posted.raise_for_status()
                             wanted = {row["maidId"]:row for row in posted.json()["profiles"]}
-                            for row in roster["guides"]:
+                            for row in roster.get("guides", []):
                                 profile = wanted.get(row["maidId"])
                                 if not profile or profile["ownerId"] != row["ownerId"]:
                                     continue
@@ -485,7 +485,8 @@ async def serve(path: Path):
                     guide_online = online
                     status["guideDiscovery"] = {"state": "ready", "online": len(online)}
                 except (ValueError, TypeError, KeyError, OSError, sqlite3.Error, httpx.HTTPError) as failure:
-                    guide_online = {}
+                    # Keep the last confirmed roster. A transport failure is not proof
+                    # that an original body or controller generation vanished.
                     status["guideDiscovery"] = {"state": "unavailable", "reason": type(failure).__name__}
             if villager_client and not pausing and time.monotonic() >= next_villagers:
                 next_villagers = time.monotonic() + max(10, min(30, villager_config.get("intervalSeconds", 90)))

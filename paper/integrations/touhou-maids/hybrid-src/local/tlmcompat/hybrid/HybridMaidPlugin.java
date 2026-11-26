@@ -84,10 +84,13 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
 
     boolean nativeControlled(UUID id){return bodyPort!=null&&bodyPort.active(id);}
     private final Set<UUID> unifiedBodies=new HashSet<>();
+    private final Set<UUID> explicitUnifiedBodies=new HashSet<>();
     private final Set<UUID> starterKitBodies=new HashSet<>();
     void registerUnifiedBody(UUID id){unifiedBodies.add(id);}
+    void registerExplicitUnifiedBody(UUID id){unifiedBodies.add(id);explicitUnifiedBodies.add(id);}
     void registerStarterKit(UUID id){starterKitBodies.add(id);}
     boolean unifiedBody(UUID id){return unifiedBodies.contains(id);}
+    boolean explicitUnifiedBody(UUID id){return explicitUnifiedBodies.contains(id);}
     boolean nativeExclusive(UUID id){return unifiedBodies.contains(id)||bodyPort!=null&&bodyPort.exclusive(id);}
     boolean nativeGuard(UUID id){return bodyPort!=null&&bodyPort.guarding(id);}
     long nativeControlEpoch(UUID id){return bodyPort==null?0:bodyPort.epoch(id);}
@@ -306,6 +309,39 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     boolean guideVoice(EntityMaid maid){return personal!=null&&personal.allOwned()&&guides!=null&&guides.matches(maid);}
     UUID guideOwner(UUID id){return guides==null?null:guides.owner(id);}
     JsonArray onlineGuides(){return guides==null?new JsonArray():guides.online();}
+    UUID admittedOwner(UUID id){
+        if(!unifiedBody(id))return null;
+        var row=records().getAsJsonObject(id.toString());if(row==null)return null;
+        EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
+        if(maid==null||!maid.isAlive()||!maid.getBukkitEntity().isValid())return null;
+        UUID owner=owner(maid);return owner!=null&&owner.toString().equals(row.get("ownerId").getAsString())?owner:null;
+    }
+    JsonArray onlineMaids(){
+        var rows=new JsonArray();if(bodyPort==null)return rows;
+        var guideRows=new HashMap<UUID,JsonObject>();
+        for(var value:onlineGuides()){var row=value.getAsJsonObject();guideRows.put(UUID.fromString(row.get("maidId").getAsString()),row);}
+        for(var entry:records().entrySet()){
+            UUID id;try{id=UUID.fromString(entry.getKey());}catch(IllegalArgumentException invalid){continue;}
+            var registered=entry.getValue().getAsJsonObject();
+            if(registered.has("migration")&&!"maid".equals(registered.getAsJsonObject("migration").get("bodyKind").getAsString()))continue;
+            if(explicitUnifiedBodies.contains(id))continue;
+            EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
+            if(maid==null||!maid.isAlive()||!maid.getBukkitEntity().isValid())continue;
+            UUID nativeOwner=owner(maid);
+            if(nativeOwner==null||!nativeOwner.toString().equals(registered.get("ownerId").getAsString()))continue;
+            var guide=guideRows.get(id);
+            if(guideOwner(id)!=null&&guide==null)continue;
+            if(guide==null&&local.qdj.maids.brain.MaidAgentsMod.residentIdentities().containsKey(id))continue;
+            registerUnifiedBody(id);
+            var row=new JsonObject();row.addProperty("ownerId",nativeOwner.toString());row.addProperty("maidId",id.toString());
+            row.addProperty("name",maid.getName().getString());row.addProperty("autoEnroll",true);row.addProperty("loaded",true);
+            row.addProperty("active",nativeControlled(id));row.addProperty("enrollmentStatus","unified_admitted");
+            if(guide!=null){row.addProperty("confirmed",true);row.addProperty("profileRevision",guide.get("profileRevision").getAsLong());}
+            rows.add(row);
+            if(rows.size()>=128)break;
+        }
+        return rows;
+    }
     boolean applyGuideProfile(UUID owner,UUID id,long revision,String name)throws Exception{
         return guides.applyWebsiteProfile(owner,id,revision,name);
     }
@@ -487,6 +523,8 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             if (!maid.isAlive() || maid.isRemoved() || owner(maid) == null) return;
             try {
                 bind(maid);
+                if (bodyPort != null && !local.qdj.maids.brain.MaidAgentsMod.residentIdentities().containsKey(maid.getUUID()))
+                    registerUnifiedBody(maid.getUUID());
                 if(guides.known(maid.getUUID()))guides.seen(maid);
                 if (personalDialogue(maid) && personal.allOwned()) {
                     brains.applyPersonalDefaults(maid);
