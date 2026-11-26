@@ -173,14 +173,15 @@ final class VillagerBodyPort {
         for (ChunkTicket ticket : next) {
             org.bukkit.World world = Bukkit.getWorld(ticket.world());
             if (world == null) throw new IllegalArgumentException("smart-body chunk ticket world is not loaded: " + ticket.world());
-            world.addPluginChunkTicket(world.getChunkAt(ticket.x(), ticket.z()), plugin);
+            world.addPluginChunkTicket(ticket.x(), ticket.z(), plugin);
+            world.getChunkAt(ticket.x(), ticket.z());
             chunkTickets.put(ticket, world);
         }
-        if (!tickets.isEmpty()) plugin.getLogger().info("Keeping " + tickets.size() + " audited smart-villager chunks loaded");
+        if (!next.isEmpty()) plugin.getLogger().info("Keeping " + next.size() + " audited smart-villager chunks loaded");
     }
 
     private void clearChunkTickets() {
-        for (var entry : chunkTickets.entrySet()) entry.getValue().removePluginChunkTicket(entry.getValue().getChunkAt(entry.getKey().x(), entry.getKey().z()), plugin);
+        for (var entry : chunkTickets.entrySet()) entry.getValue().removePluginChunkTicket(entry.getKey().x(), entry.getKey().z(), plugin);
         chunkTickets.clear();
     }
 
