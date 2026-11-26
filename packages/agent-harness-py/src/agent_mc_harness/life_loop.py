@@ -189,6 +189,8 @@ class LifeLoop:
         self.db.commit()
 
     def load(self, character_id: str, tier: LifeTier) -> LifeState | None:
+        if getattr(self.journal, "closed", False):
+            return None
         row = self.db.execute("SELECT state FROM npc_life_state WHERE character=?", (character_id,)).fetchone()
         if not row:
             return None
