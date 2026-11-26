@@ -38,25 +38,42 @@ def parse_guide_roster(payload, server_id, settings):
         raise ValueError("guide_roster_invalid")
     roles = {}
     bodies = set()
+    owners = set()
+    single = payload.get("onePartnerPerPlayer") is True
     for row in rows:
         owner, body = UUID(row["ownerId"]), UUID(row["maidId"])
         is_guide = "confirmed" in row
+        retained_body = row.get("retainedBody") is True
+        if retained_body and (not single or not is_guide or row.get("confirmed") is not True):
+            raise ValueError("retained_partner_identity_not_verified")
+        if single and owner in owners:
+            raise ValueError("duplicate_player_partner")
         if is_guide:
-            role_id = "guide_" + b32encode(owner.bytes).decode("ascii").rstrip("=").lower()
-            character_id = uuid5(NAMESPACE_URL, f"{server_id}/guide/{owner}")
             persona = GUIDE_PERSONA
             if row["confirmed"] is not True:
                 raise ValueError("guide_roster_identity_conflict")
         else:
-            role_id = "maid_" + b32encode(body.bytes).decode("ascii").rstrip("=").lower()
-            character_id = uuid5(NAMESPACE_URL, f"{server_id}/maid/{body}")
             persona = MAID_PERSONA
             if row.get("autoEnroll") is not True:
                 raise ValueError("maid_roster_not_admitted")
+        if is_guide and not retained_body:
+            role_id = "guide_" + b32encode(owner.bytes).decode("ascii").rstrip("=").lower()
+            character_id = uuid5(NAMESPACE_URL, f"{server_id}/guide/{owner}")
+        else:
+            # A previously existing maid claimed as the one partner must keep her
+            # own state directory, never the removed duplicate guide's owner-keyed memory.
+            role_id = "maid_" + b32encode(body.bytes).decode("ascii").rstrip("=").lower()
+            character_id = uuid5(NAMESPACE_URL, f"{server_id}/maid/{body}")
         if role_id in roles or body in bodies or body == owner:
             raise ValueError("guide_roster_identity_conflict")
+        name = row["name"]
+        if (not is_guide or retained_body) and isinstance(name, str):
+            name = name.strip()
+            if not name or name.startswith("model."):
+                name = "女仆·" + body.hex[:6]
+            name = name[:24]
         role = NpcRole(
-            id=role_id, name=row["name"], character_id=character_id,
+            id=role_id, name=name, character_id=character_id,
             owner_id=owner, body_id=body, body_kind="maid", persona=persona,
             model=settings["model"], provider=settings.get("provider", "tokenplan"),
             interval_seconds=settings.get("intervalSeconds", 90), default_native_guard=True,
@@ -64,4 +81,5 @@ def parse_guide_roster(payload, server_id, settings):
         )
         roles[role_id] = role
         bodies.add(body)
+        owners.add(owner)
     return roles

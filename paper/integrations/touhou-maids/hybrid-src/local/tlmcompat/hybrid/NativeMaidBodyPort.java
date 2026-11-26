@@ -23,6 +23,7 @@ final class NativeMaidBodyPort implements AutoCloseable {
     private final ExecutorService executor;
     private final byte[] token;
     private final boolean guidesEnabled;
+    private final boolean onePartnerPerPlayer;
     private volatile boolean closed;
     static NativeMaidBodyPort open(HybridMaidPlugin plugin){
         var path=plugin.getDataFolder().toPath().resolve("native-body-port.json");if(!Files.exists(path))return null;
@@ -37,9 +38,13 @@ final class NativeMaidBodyPort implements AutoCloseable {
         var secret=Files.readString(tokenFile).strip();if(!secret.matches("[A-Za-z0-9_-]{32,128}"))throw new IllegalArgumentException("token_format");
         token=("Bearer "+secret).getBytes(StandardCharsets.UTF_8);
         guidesEnabled=config.has("guideCompanions")&&config.get("guideCompanions").getAsBoolean();
+        onePartnerPerPlayer=config.has("onePartnerPerPlayer")&&config.get("onePartnerPerPlayer").getAsBoolean();
+        if(onePartnerPerPlayer&&!guidesEnabled)throw new IllegalArgumentException("single_partner_requires_compass");
+        var explicitOwners=new HashSet<UUID>();
         var bindings=new LinkedHashMap<UUID,UUID>();var rows=config.getAsJsonArray("bindings");if(rows.size()>24||rows.isEmpty()&&!guidesEnabled)throw new IllegalArgumentException("bindings");
         for(var value:rows){var row=value.getAsJsonObject();var maid=MaidBodyControl.uuid(row,"maidId");var owner=MaidBodyControl.uuid(row,"ownerId");
             if(bindings.put(maid,owner)!=null)throw new IllegalArgumentException("duplicate_body");
+            if(onePartnerPerPlayer&&!explicitOwners.add(owner))throw new IllegalArgumentException("duplicate_player_partner");
             var registered=plugin.registeredMaids().get(maid.toString());
             if(registered==null||!owner.toString().equals(registered.getAsJsonObject().get("ownerId").getAsString()))throw new IllegalArgumentException("original_binding_required");
             if(row.has("controller")){
@@ -69,6 +74,11 @@ final class NativeMaidBodyPort implements AutoCloseable {
     }
     boolean active(UUID maid){return control.active(maid);}
     boolean guidesEnabled(){return guidesEnabled;}
+    boolean singlePartner(){return onePartnerPerPlayer;}
+    private void requirePrimaryPartner(UUID owner, UUID maid) {
+        if (onePartnerPerPlayer && !maid.equals(plugin.primaryPartner(owner)))
+            throw new MaidBodyControl.Fault(403,"NOT_PRIMARY_PARTNER");
+    }
     JsonObject playerRoleProfile(UUID player, UUID maid) {
         return playerProfiles.read(player, maid, () -> plugin.ownedLoaded(player, maid).getOwnerUUID(),
             NativeMaidMagicSupport::cachedPlayerProfile);
@@ -84,6 +94,7 @@ final class NativeMaidBodyPort implements AutoCloseable {
     JsonObject ownerMode(Player actor, UUID maid, String action, String request, String value) throws Exception {
         if (value != null && !value.isBlank()) throw new CompatibilityException("bad_arguments", "Use the maid ID and original request ID");
         UUID owner = actor.getUniqueId();
+        requirePrimaryPartner(owner, maid);
         control.authorize(owner, maid);
         if (control.read(maid, request) == null) plugin.requireNearby(actor, plugin.ownedLoaded(actor, maid), 32);
         var args = new JsonObject();
@@ -171,6 +182,7 @@ final class NativeMaidBodyPort implements AutoCloseable {
         if(operation.equals("maid_list")){
             MaidBodyControl.keys(input,Set.of("operation"));
             var result=new JsonObject();result.addProperty("protocol",MaidBodyControl.PROTOCOL);
+            result.addProperty("onePartnerPerPlayer",onePartnerPerPlayer);
             result.add("maids",plugin.onlineMaids());result.add("guides",plugin.onlineGuides());return result;
         }
         if(operation.equals("guide_list")){
@@ -189,8 +201,9 @@ final class NativeMaidBodyPort implements AutoCloseable {
         }
         MaidBodyControl.keys(input,Set.of("operation","ownerId","maidId","controllerId","generation","name","arguments","requestId"));
         var owner=MaidBodyControl.uuid(input,"ownerId");var maid=MaidBodyControl.uuid(input,"maidId");var controller=MaidBodyControl.uuid(input,"controllerId");
+        if (!operation.equals("release")) requirePrimaryPartner(owner, maid);
         control.authorize(owner,maid);MaidBodyControl.Lease lease;
-        if(plugin.guideOwner(maid)!=null&&!operation.equals("release")){
+        if(plugin.guideOwner(maid)!=null&&!plugin.explicitUnifiedBody(maid)&&!operation.equals("release")){
             var player=Bukkit.getPlayer(owner);
             if(player==null||!player.isOnline()||player.isDead()||player.getGameMode()==org.bukkit.GameMode.SPECTATOR)
                 throw new MaidBodyControl.Fault(409,"GUIDE_OWNER_UNAVAILABLE");

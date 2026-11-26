@@ -296,8 +296,12 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         String key=actor.getUniqueId()+":"+request;humanDialogue.remove(key);humanDialogue.put(key,System.nanoTime()+180_000_000_000L);
         while(humanDialogue.size()>512)humanDialogue.remove(humanDialogue.keySet().iterator().next());
     }
+    private boolean nativeOwnedBrainAllowed(EntityMaid maid) {
+        UUID owner=maid.getOwnerUUID();
+        return !singlePlayerPartner()||owner!=null&&maid.getUUID().equals(primaryPartner(owner));
+    }
     boolean personalDialogue(EntityMaid maid){
-        return personal!=null && personal.matches(maid) && personalTravel(maid.getUUID()) && !unifiedBody(maid.getUUID());
+        return nativeOwnedBrainAllowed(maid) && personal!=null && personal.matches(maid) && personalTravel(maid.getUUID()) && !unifiedBody(maid.getUUID());
     }
     boolean ownerDialogue(Player actor,EntityMaid maid){
         return actor!=null && personalDialogue(maid) && actor.getUniqueId().equals(maid.getOwnerUUID());
@@ -309,12 +313,32 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     boolean guideVoice(EntityMaid maid){return personal!=null&&personal.allOwned()&&guides!=null&&guides.matches(maid);}
     UUID guideOwner(UUID id){return guides==null?null:guides.owner(id);}
     JsonArray onlineGuides(){return guides==null?new JsonArray():guides.online();}
+    boolean singlePlayerPartner(){return bodyPort!=null&&bodyPort.singlePartner();}
+    Set<UUID> registeredBodies(UUID owner){
+        Set<UUID> ids = new LinkedHashSet<>();
+        for (var entry : records().entrySet()) {
+            if (!(entry.getValue() instanceof JsonObject row) || !owner.toString().equals(row.get("ownerId").getAsString())
+                    || row.has("migration") && !"maid".equals(row.getAsJsonObject("migration").get("bodyKind").getAsString())) continue;
+            ids.add(UUID.fromString(entry.getKey()));
+        }
+        return ids;
+    }
+    UUID primaryPartner(UUID owner){
+        Set<UUID> ids = registeredBodies(owner);
+        var fixed = ids.stream().filter(explicitUnifiedBodies::contains).toList();
+        if (!fixed.isEmpty()) return fixed.size() == 1 ? fixed.getFirst() : null;
+        UUID reservation = guides == null ? null : guides.reservedBody(owner);
+        if (reservation != null) return reservation;
+        return ids.size() == 1 ? ids.iterator().next() : null;
+    }
     UUID admittedOwner(UUID id){
         if(!unifiedBody(id))return null;
         var row=records().getAsJsonObject(id.toString());if(row==null)return null;
         EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
         if(maid==null||!maid.isAlive()||!maid.getBukkitEntity().isValid())return null;
-        UUID owner=owner(maid);return owner!=null&&owner.toString().equals(row.get("ownerId").getAsString())?owner:null;
+        UUID owner=owner(maid);
+        return owner!=null&&owner.toString().equals(row.get("ownerId").getAsString())
+            &&(!singlePlayerPartner()||id.equals(primaryPartner(owner)))?owner:null;
     }
     JsonArray onlineMaids(){
         var rows=new JsonArray();if(bodyPort==null)return rows;
@@ -328,7 +352,8 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             EntityMaid maid=nativeMaid(Bukkit.getEntity(id));
             if(maid==null||!maid.isAlive()||!maid.getBukkitEntity().isValid())continue;
             UUID nativeOwner=owner(maid);
-            if(nativeOwner==null||!nativeOwner.toString().equals(registered.get("ownerId").getAsString()))continue;
+            if(nativeOwner==null||!nativeOwner.toString().equals(registered.get("ownerId").getAsString())
+                ||singlePlayerPartner()&&!id.equals(primaryPartner(nativeOwner)))continue;
             var guide=guideRows.get(id);
             if(guideOwner(id)!=null&&guide==null)continue;
             if(guide==null&&local.qdj.maids.brain.MaidAgentsMod.residentIdentities().containsKey(id))continue;
@@ -336,7 +361,10 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             var row=new JsonObject();row.addProperty("ownerId",nativeOwner.toString());row.addProperty("maidId",id.toString());
             row.addProperty("name",maid.getName().getString());row.addProperty("autoEnroll",true);row.addProperty("loaded",true);
             row.addProperty("active",nativeControlled(id));row.addProperty("enrollmentStatus","unified_admitted");
-            if(guide!=null){row.addProperty("confirmed",true);row.addProperty("profileRevision",guide.get("profileRevision").getAsLong());}
+            if(guide!=null){
+                row.addProperty("confirmed",true);row.addProperty("profileRevision",guide.get("profileRevision").getAsLong());
+                if(singlePlayerPartner()&&guide.has("retainedBody"))row.add("retainedBody",guide.get("retainedBody").deepCopy());
+            }
             rows.add(row);
             if(rows.size()>=128)break;
         }
@@ -346,6 +374,15 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         return guides.applyWebsiteProfile(owner,id,revision,name);
     }
     void bindGuide(EntityMaid maid)throws Exception{bind(maid);}
+    void retainPlayerPartner(UUID owner, EntityMaid kept, UUID old) throws Exception {guides.retainOriginal(owner, kept, old);}
+    void retireMergedPartner(UUID owner, UUID retired) throws Exception {
+        if(nativeControlled(retired)||registeredBodies(owner).isEmpty()||retired.equals(primaryPartner(owner)))
+            throw new CompatibilityException("merge_identity_conflict","旧身份未释放。");
+        owned(owner,retired);
+        JsonObject removed=records().remove(retired.toString()).getAsJsonObject();
+        try{saveRegistry();}catch(Exception failure){records().add(retired.toString(),removed);throw failure;}
+        unifiedBodies.remove(retired);
+    }
     private boolean guidesEnabled(){return bodyPort!=null&&bodyPort.guidesEnabled();}
     public String playerGuideStatus(Player actor){return guides.status(actor,guidesEnabled()).toString();}
     public String playerGuideAction(Player actor,String action,String value)throws Exception{
@@ -414,8 +451,14 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
         if(!ownerDialogue(actor,callback.getMaid())||!social.handles(callback))throw new IllegalStateException("Personal dialogue binding changed");
         brains.chatPersonal(callback);
     }
-    boolean sharedDialogueEnabled(EntityMaid maid){return brains!=null&&brains.allowed(maid);}
-    boolean configuredCompanionIdentity(EntityMaid maid){return brains!=null&&brains.identityMatches(maid)||guides!=null&&guides.matches(maid);}
+    boolean sharedDialogueEnabled(EntityMaid maid){return nativeOwnedBrainAllowed(maid)&&brains!=null&&brains.allowed(maid);}
+    boolean configuredCompanionIdentity(EntityMaid maid){
+        if(singlePlayerPartner()) {
+            UUID owner=maid.getOwnerUUID();
+            return owner!=null&&maid.getUUID().equals(primaryPartner(owner));
+        }
+        return brains!=null&&brains.identityMatches(maid)||guides!=null&&guides.matches(maid);
+    }
     void nearbyConversation(Player actor,EntityMaid maid,NativeMaidNearbyChat.Address address,Set<UUID> recipients){
         nearbyConversation(actor,maid,address,recipients,"near_"+UUID.randomUUID());
     }
@@ -503,7 +546,7 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             speech=NativeMaidVoices.create(this);
             getServer().getMessenger().registerOutgoingPluginChannel(this,CHANNEL);
             getServer().getPluginManager().registerEvents(this,this);
-            getServer().getPluginManager().registerEvents(new SoulTalismanGuidance(),this);
+            getServer().getPluginManager().registerEvents(new SoulTalismanGuidance(this),this);
             getCommand("qdmaid").setExecutor(this);
             pluginPayloads=new HybridPluginPayloads(this);projection=new VanillaMaidProjection(this); menus=new NativeMaidInventory(this);worldPermissions=new NativeWorldPermissions(this);legacyTransport=new LegacyMaidTransport(this);nativeTransport=new NativeMaidTransport(this);
             getServer().getPluginManager().registerEvents(menus,this);
@@ -523,14 +566,15 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
             if (!maid.isAlive() || maid.isRemoved() || owner(maid) == null) return;
             try {
                 bind(maid);
-                if (bodyPort != null && !local.qdj.maids.brain.MaidAgentsMod.residentIdentities().containsKey(maid.getUUID()))
+                boolean isPrimary = !singlePlayerPartner() || maid.getUUID().equals(primaryPartner(owner(maid)));
+                if (isPrimary && bodyPort != null && !local.qdj.maids.brain.MaidAgentsMod.residentIdentities().containsKey(maid.getUUID()))
                     registerUnifiedBody(maid.getUUID());
-                if(guides.known(maid.getUUID()))guides.seen(maid);
+                if(isPrimary&&guides.known(maid.getUUID()))guides.seen(maid);
                 if (personalDialogue(maid) && personal.allOwned()) {
                     brains.applyPersonalDefaults(maid);
                     if (speech != null) speech.applyNativeDefault(maid);
                 }
-                if (bodyPort != null && unifiedBody(maid.getUUID())) {
+                if (isPrimary && bodyPort != null && unifiedBody(maid.getUUID()) && !guides.retained(maid.getUUID())) {
                     NativeMaidKit.initialize(maid);
                     if (guideOwner(maid.getUUID()) != null || starterKitBodies.contains(maid.getUUID()))
                         NativeMaidKit.provision(maid, companion);
@@ -1090,6 +1134,12 @@ public final class HybridMaidPlugin extends JavaPlugin implements Listener, Comm
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
         String action=args.length==0?"help":args[0].toLowerCase(Locale.ROOT),correlation=fresh();
         try{
+            if(action.equals("merge-partner")) {
+                if(!(sender instanceof org.bukkit.command.ConsoleCommandSender||sender instanceof org.bukkit.command.RemoteConsoleCommandSender)||args.length!=5)
+                    throw new CompatibilityException("permission_denied","只允许控制台合并已确认的原伙伴。");
+                sender.sendMessage(PartnerConsolidation.request(this,UUID.fromString(args[1]),UUID.fromString(args[2]),UUID.fromString(args[3]),args[4]).toString());
+                return true;
+            }
             if (action.equals("guard-starter") || action.equals("starter-kit")) {
                 boolean kit = action.equals("starter-kit");
                 if (!(sender instanceof org.bukkit.command.ConsoleCommandSender

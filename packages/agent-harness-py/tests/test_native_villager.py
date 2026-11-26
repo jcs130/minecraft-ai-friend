@@ -488,6 +488,20 @@ def test_unloaded_managed_villager_is_not_attached_and_resident_id_round_trips()
     assert villager_resident_id(role_id) == RESIDENT
 
 
+def test_long_service_resident_id_does_not_reject_the_roster():
+    fixture = row() | {"residentId": "trial-platform-manager", "bodyId": str(uuid4()), "controllerId": str(uuid4()),
+                       "name": "祁岳", "persona": "试炼管理员"}
+    payload = {"protocol": PROTOCOL, "villagers": [row(), fixture]}
+    roles, controllers = parse_villager_roster(payload, "server-a", {"model": "fixture"})
+    by_body = {str(actor.body_id): actor for actor in roles.values()}
+    assert len(roles) == 2
+    assert villager_resident_id(by_body[BODY].id) == RESIDENT
+    actor = by_body[fixture["bodyId"]]
+    assert actor.id.startswith("villagerx_") and len(actor.id) == 32
+    assert "试炼管理员" in actor.persona and controllers[actor.id] == fixture["controllerId"]
+    assert parse_villager_roster(payload, "server-a", {"model": "fixture"})[0][actor.id] == actor
+
+
 def test_consumed_dialogue_keeps_exact_reply_target(run):
     async def scenario():
         server = VillagerServer()

@@ -38,7 +38,7 @@ from .resident_turns import ResidentTurnsClient
 from .runtime import intent_health
 from .social import SocialWorld, publish_json, read_json
 from .status_file import StatusFile
-from .villager_roles import parse_villager_roster, villager_resident_id
+from .villager_roles import parse_villager_roster, villager_role_id
 
 
 @dataclass
@@ -437,10 +437,14 @@ async def serve(path: Path):
                     online = parse_guide_roster(roster, settings["serverId"], guide_config)
                     if guide_portal:
                         try:
-                            posted = await guide_portal.post(portal_endpoint, json={"guides": roster.get("guides", [])})
+                            # This portal ABI fences an owner to its original body UUID.
+                            # Don't submit adopted originals into the old binding; a single
+                            # body conflict would also roll back unrelated players' profiles.
+                            portal_guides = [row for row in roster.get("guides", []) if row.get("retainedBody") is not True]
+                            posted = await guide_portal.post(portal_endpoint, json={"guides": portal_guides})
                             posted.raise_for_status()
                             wanted = {row["maidId"]:row for row in posted.json()["profiles"]}
-                            for row in roster.get("guides", []):
+                            for row in portal_guides:
                                 profile = wanted.get(row["maidId"])
                                 if not profile or profile["ownerId"] != row["ownerId"]:
                                     continue
@@ -493,7 +497,10 @@ async def serve(path: Path):
                 try:
                     response = await villager_client.post(villager_endpoint, json={"operation": "roster"})
                     response.raise_for_status()
-                    online, controllers = parse_villager_roster(response.json(), settings["serverId"], villager_config)
+                    roster = response.json()
+                    online, controllers = parse_villager_roster(roster, settings["serverId"], villager_config)
+                    native_residents = {villager_role_id(row["residentId"]): row["residentId"]
+                                        for row in roster["villagers"] if row["managed"] and row["loaded"]}
                     previous = villager_online or {}
                     for role_id, role in online.items():
                         controller = controllers[role_id]
@@ -502,7 +509,9 @@ async def serve(path: Path):
                             raise ValueError("villager_identity_changed")
                         if role_id in villager_ids:
                             host = residents[role_id].host
-                            if host.role.body_id != role.body_id or settings["bodies"][role_id].get("controllerId") != controller:
+                            bound = settings["bodies"][role_id]
+                            if (host.role.body_id != role.body_id or bound.get("controllerId") != controller
+                                    or bound.get("residentId") != native_residents[role_id]):
                                 raise ValueError("villager_identity_changed")
                             # Keep the original server persona; dynamic roster updates cannot replace it.
                             host.role.name = role.name
@@ -511,7 +520,7 @@ async def serve(path: Path):
                             raise ValueError("villager_identity_already_bound")
                         settings["bodies"][role_id] = {
                             "endpoint": villager_endpoint, "tokenFile": villager_config["tokenFile"],
-                            "residentId": villager_resident_id(role_id), "controllerId": controller,
+                            "residentId": native_residents[role_id], "controllerId": controller,
                         }
                         try:
                             attach(role, player_guide=True)
