@@ -127,7 +127,7 @@ final class VillagerBodyPort {
         for (VillagerBodyRules.Binding binding : VillagerBodyRules.bindings(root.getAsJsonArray("bindings"))) {
             Villagers.Spot spot = plugin.villagers.spot(binding.residentId());
             if (spot == null || spot.entityUuid() == null || !spot.entityUuid().equals(binding.bodyId())
-                    || spot.npcId() != null || spot.serviceCounter() != null)
+                    || spot.npcId() != null)
                 throw new IllegalArgumentException("binding is not a configured non-service native villager: " + binding.residentId());
             if (parsed.containsKey(binding.residentId())
                     || parsed.values().stream().anyMatch(old -> old.bodyId().equals(binding.bodyId())))
@@ -845,7 +845,7 @@ final class VillagerBodyPort {
 
     private boolean identityAllowed(VillagerBodyRules.Binding binding) {
         Villagers.Spot spot = plugin.villagers.spot(binding.residentId());
-        return spot != null && binding.bodyId().equals(spot.entityUuid()) && spot.npcId() == null && spot.serviceCounter() == null;
+        return spot != null && binding.bodyId().equals(spot.entityUuid()) && spot.npcId() == null;
     }
 
     private static JsonObject position(Location at) {
