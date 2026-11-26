@@ -338,6 +338,28 @@ describe('independent asynchronous combat choices', () => {
     expect(r.sent).toHaveLength(0);
   });
 
+  it('does not call a failed post-reply refresh a model timeout', async () => {
+    vi.useFakeTimers();
+    const cfg = config();
+    const reports: Array<{ event: string; data: Record<string, unknown> }> = [];
+    let signal: AbortSignal | null | undefined;
+    const loop = new CombatDecisionLoop({ config: () => cfg, sample: frame, apply: () => true,
+      report: (event, data) => reports.push({ event, data }),
+      fetchImpl: (async (_url, init) => { signal = init?.signal; return response(); }) as typeof fetch,
+      refresh: async () => {
+        await new Promise(resolve => setTimeout(resolve, cfg.timeoutMs * 2));
+        throw Error('scene-read-unavailable');
+      } });
+    try {
+      loop.tick();
+      await vi.advanceTimersByTimeAsync(cfg.timeoutMs * 2 + 1);
+      expect(signal?.aborted).toBe(false);
+      expect(reports.at(-1)).toMatchObject({ event: 'error', data: {
+        reason: 'scene-read-unavailable', phase: 'application', timeoutMs: cfg.timeoutMs, transportElapsedMs: expect.any(Number),
+      } });
+    } finally { loop.stop(); }
+  });
+
   it('expires old results and keeps a completed movement from using an old origin', async () => {
     vi.useFakeTimers(); const r = rig(); r.cfg.timeoutMs = 2000; r.loop.tick();
     await vi.advanceTimersByTimeAsync(r.cfg.maxAgeMs + 1);
