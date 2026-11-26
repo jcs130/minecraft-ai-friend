@@ -28,8 +28,8 @@ final class GuideCompanions implements Listener {
     private static final String MARKER = "qiandengji_player_guide";
     private static final String PARKED = "qiandengji_companion_offline";
     private static final String DEFAULT_SUFFIX = "的伙伴";
-    private record Guide(UUID owner, UUID body, String name, boolean confirmed, long revision) {
-        Guide confirm() { return new Guide(owner, body, name, true, revision); }
+    private record Guide(UUID owner, UUID body, String name, boolean confirmed, long revision, boolean retained) {
+        Guide confirm() { return new Guide(owner, body, name, true, revision, retained); }
         JsonObject json() {
             var row = new JsonObject();
             row.addProperty("ownerId", owner.toString());
@@ -37,6 +37,7 @@ final class GuideCompanions implements Listener {
             row.addProperty("name", name);
             row.addProperty("confirmed", confirmed);
             row.addProperty("profileRevision", revision);
+            if (retained) row.addProperty("retainedBody", true);
             return row;
         }
     }
@@ -59,7 +60,8 @@ final class GuideCompanions implements Listener {
                     var row=item.getAsJsonObject();
                     var guide=new Guide(MaidBodyControl.uuid(row,"ownerId"),MaidBodyControl.uuid(row,"maidId"),
                         name(row.get("name").getAsString()),row.get("confirmed").getAsBoolean(),
-                        row.has("profileRevision")?row.get("profileRevision").getAsLong():0);
+                        row.has("profileRevision")?row.get("profileRevision").getAsLong():0,
+                        row.has("retainedBody")&&row.get("retainedBody").getAsBoolean());
                     if (owners.containsKey(guide.owner)||bodies.containsKey(guide.body)||guide.owner.equals(guide.body))
                         throw new IllegalStateException("guide_registry_identity");
                     remember(guide);
@@ -83,7 +85,8 @@ final class GuideCompanions implements Listener {
     }
 
     private void remember(Guide guide) {
-        owners.put(guide.owner,guide);
+        Guide previous = owners.put(guide.owner,guide);
+        if (previous != null && !previous.body.equals(guide.body)) bodies.remove(previous.body, previous);
         bodies.put(guide.body,guide);
     }
 
@@ -107,9 +110,15 @@ final class GuideCompanions implements Listener {
 
     boolean ready() { return available&&MaidAgentsMod.guideRegistrationReady(); }
     boolean known(UUID id) { return bodies.containsKey(id); }
+    boolean retained(UUID id) { var guide=bodies.get(id);return guide!=null&&guide.retained; }
+    UUID reservedBody(UUID owner) { var guide=owners.get(owner);return guide==null?null:guide.body; }
+    boolean indexAvailable() { return available; }
+    private boolean canonical(Guide guide) {
+        return !plugin.singlePlayerPartner() || guide.body.equals(plugin.primaryPartner(guide.owner));
+    }
     UUID owner(UUID id) {
         var guide=bodies.get(id);
-        return available&&guide!=null&&guide.confirmed?guide.owner:null;
+        return available&&guide!=null&&guide.confirmed&&canonical(guide)?guide.owner:null;
     }
     boolean matches(EntityMaid maid) {
         return maid!=null&&maid.getOwnerUUID()!=null&&maid.getOwnerUUID().equals(owner(maid.getUUID()))
@@ -117,22 +126,26 @@ final class GuideCompanions implements Listener {
     }
     private EntityMaid loaded(Guide guide) {
         var maid=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(guide.body));
-        return maid!=null&&maid.isAlive()&&guide.owner.equals(maid.getOwnerUUID())
-            &&guide.owner.toString().equals(maid.getPersistentData().getString(MARKER))?maid:null;
+        if(maid==null||!maid.isAlive()||!guide.owner.equals(maid.getOwnerUUID())||!canonical(guide))return null;
+        if(guide.retained&&plugin.singlePlayerPartner()&&plugin.registeredBodies(guide.owner).contains(guide.body))return maid;
+        return guide.owner.toString().equals(maid.getPersistentData().getString(MARKER))?maid:null;
     }
     private void register() {
         if (!ready()) return;
         for (var actor:Bukkit.getOnlinePlayers()) {
             var guide=owners.get(actor.getUniqueId());
-            if (guide!=null&&guide.confirmed) MaidAgentsMod.registerPlayerGuide(guide.body,guide.owner,guide.name);
+            if (guide!=null&&guide.confirmed&&canonical(guide)&&!plugin.explicitUnifiedBody(guide.body))
+                MaidAgentsMod.registerPlayerGuide(guide.body,guide.owner,guide.name);
         }
     }
     void seen(EntityMaid maid) throws Exception {
         var guide=bodies.get(maid.getUUID());
         if (!ready()||guide==null||loaded(guide)!=maid) return;
-        MaidAgentsMod.registerPlayerGuide(guide.body,guide.owner,guide.name);
+        if (guide.retained&&plugin.singlePlayerPartner())
+            maid.getPersistentData().putString(MARKER,guide.owner.toString());
+        if(!plugin.explicitUnifiedBody(guide.body))MaidAgentsMod.registerPlayerGuide(guide.body,guide.owner,guide.name);
         if (guide.confirmed) {
-            if(Bukkit.getPlayer(guide.owner)==null)park(maid); else resume(maid);
+            if(Bukkit.getPlayer(guide.owner)==null){if(!guide.retained)park(maid);} else resume(maid);
             return;
         }
         ResidentBodyAccess.save(guide.body);
@@ -163,7 +176,7 @@ final class GuideCompanions implements Listener {
         if (!ready()) return rows;
         for (var actor:Bukkit.getOnlinePlayers()) {
             var guide=owners.get(actor.getUniqueId());
-            if (guide!=null&&guide.confirmed&&allowed(actor)) {
+            if (guide!=null&&guide.confirmed&&allowed(actor)&&canonical(guide)) {
                 var row=guide.json();
                 var maid=loaded(guide);
                 row.addProperty("loaded",maid!=null);
@@ -185,6 +198,19 @@ final class GuideCompanions implements Listener {
         return rows;
     }
 
+    void retainOriginal(UUID owner, EntityMaid kept, UUID oldBody) throws Exception {
+        Guide old=owners.get(owner);
+        if(!plugin.singlePlayerPartner()||old==null||!old.confirmed||!old.body.equals(oldBody)
+                ||!owner.equals(kept.getOwnerUUID())||bodies.containsKey(kept.getUUID()))
+            throw new CompatibilityException("merge_identity_conflict","原伙伴身份或旧罗盘绑定已变。");
+        String label=kept.getName().getString();
+        if(label.startsWith("model.")||label.codePointCount(0,label.length())>24)label="原伙伴";
+        Guide next=new Guide(owner,kept.getUUID(),name(label),true,old.revision+1,true);
+        put(next);
+        kept.getPersistentData().putString(MARKER,owner.toString());
+        plugin.registerUnifiedBody(kept.getUUID());
+    }
+
     private static boolean allowed(Player actor) {
         return actor.isOnline()&&!actor.isDead()
             && (actor.getGameMode()==GameMode.SURVIVAL||actor.getGameMode()==GameMode.ADVENTURE);
@@ -192,13 +218,34 @@ final class GuideCompanions implements Listener {
 
     JsonObject claim(Player actor) throws Exception {
         requirePlayer(actor);
-        var guide=owners.get(actor.getUniqueId());
-        if (guide!=null) return status(actor,true);
+        UUID owner = actor.getUniqueId();
+        var guide=owners.get(owner);
+        if (guide!=null) {
+            if(!canonical(guide))throw new CompatibilityException("partner_identity_conflict","旧绑定尚未整理，不能另领伙伴。");
+            return status(actor,true);
+        }
+        if(plugin.singlePlayerPartner()) {
+            var existing = plugin.registeredBodies(owner);
+            UUID primary=plugin.primaryPartner(owner);
+            if(primary!=null) {
+                var original=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(primary));
+                if(original==null||!original.isAlive()||!owner.equals(original.getOwnerUUID()))
+                    throw new CompatibilityException("original_partner_unloaded","已有原伙伴，暂不另召。请先回到她所在区块。");
+                String label=original.getName().getString();
+                if(label.startsWith("model.")||label.codePointCount(0,label.length())>24)label="原伙伴";
+                guide=new Guide(owner,primary,name(label),true,0,true);
+                put(guide);
+                plugin.registerUnifiedBody(primary);
+                seen(original);
+                return status(actor,true);
+            }
+            if(!existing.isEmpty())throw new CompatibilityException("partner_identity_conflict","有多条旧伙伴记录，需先确定保留哪一位；不会再召唤一位。");
+        }
         var location=NativeMaidOwnerTravel.safe(actor.getLocation());
         if (location==null) throw new CompatibilityException("unsafe_spawn","请站到开阔的实心地面再领取伙伴。");
         String playerName=actor.getName();
         int last=playerName.offsetByCodePoints(0,Math.min(24-DEFAULT_SUFFIX.length(),playerName.codePointCount(0,playerName.length())));
-        guide=new Guide(actor.getUniqueId(),UUID.randomUUID(),name(playerName.substring(0,last)+DEFAULT_SUFFIX),false,0);
+        guide=new Guide(owner,UUID.randomUUID(),name(playerName.substring(0,last)+DEFAULT_SUFFIX),false,0,false);
         put(guide); // Reserve before spawning; an unknown outcome can only recover this UUID.
         plugin.registerUnifiedBody(guide.body);
         var world=((CraftWorld)location.getWorld()).getHandle();
@@ -229,7 +276,7 @@ final class GuideCompanions implements Listener {
     UUID requireId(Player actor) {
         requirePlayer(actor);
         var guide=owners.get(actor.getUniqueId());
-        if(guide==null||!guide.confirmed)throw new CompatibilityException("guide_unavailable","请先领取并确认原伙伴。");
+        if(guide==null||!guide.confirmed||!canonical(guide))throw new CompatibilityException("guide_unavailable","请先领取并确认原伙伴。");
         return guide.body;
     }
 
@@ -237,19 +284,19 @@ final class GuideCompanions implements Listener {
         var maid=requireBody(actor);
         String next=name(value);
         var old=bodies.get(maid.getUUID());
-        put(new Guide(old.owner,old.body,next,true,old.revision));
+        put(new Guide(old.owner,old.body,next,true,old.revision,old.retained));
         maid.setCustomName(net.minecraft.network.chat.Component.literal(next));
     }
 
     boolean applyWebsiteProfile(UUID owner,UUID id,long revision,String value)throws Exception {
         var old=owners.get(owner);
-        if(old==null||!old.confirmed||!old.body.equals(id)||revision<old.revision)return false;
+        if(old==null||!old.confirmed||!old.body.equals(id)||!canonical(old)||revision<old.revision)return false;
         var actor=Bukkit.getPlayer(owner);
         var maid=loaded(old);
         if(actor==null||!allowed(actor)||maid==null)return false;
         String next=name(value);
         if(revision==old.revision)return old.name.equals(next);
-        put(new Guide(owner,id,next,true,revision));
+        put(new Guide(owner,id,next,true,revision,old.retained));
         maid.setCustomName(net.minecraft.network.chat.Component.literal(next));
         return true;
     }
@@ -257,8 +304,8 @@ final class GuideCompanions implements Listener {
     @EventHandler public void quit(PlayerQuitEvent event){
         var guide=owners.get(event.getPlayer().getUniqueId());
         var maid=guide==null?null:loaded(guide);
-        if(guide!=null)plugin.nativeTakeover(event.getPlayer(),guide.body);
-        if(maid!=null)park(maid);
+        if(guide!=null&&canonical(guide)&&!plugin.explicitUnifiedBody(guide.body))plugin.nativeTakeover(event.getPlayer(),guide.body);
+        if(maid!=null&&!guide.retained)park(maid);
     }
     @EventHandler public void join(PlayerJoinEvent event){
         var actor=event.getPlayer();

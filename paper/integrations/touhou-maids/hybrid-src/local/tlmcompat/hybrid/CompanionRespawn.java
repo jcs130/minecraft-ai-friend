@@ -2,6 +2,7 @@ package local.tlmcompat.hybrid;
 
 import java.util.*;
 import java.util.function.Consumer;
+import com.github.tartaricacid.touhoulittlemaid.api.event.MaidDeathEvent;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.nbt.CompoundTag;
 import net.neoforged.neoforge.common.NeoForge;
@@ -15,6 +16,7 @@ final class CompanionRespawn implements AutoCloseable {
     private final HybridMaidPlugin plugin;
     private final NativeMaidOwnerTravel travel;
     private final Consumer<LivingDeathEvent> death=this::lethal;
+    private final Consumer<MaidDeathEvent> maidDeath=this::nativeLethal;
     private record Held(org.bukkit.World world,int x,int z,boolean owned,long until){
         void release(HybridMaidPlugin plugin){if(owned)world.removePluginChunkTicket(x,z,plugin);}
     }
@@ -23,10 +25,24 @@ final class CompanionRespawn implements AutoCloseable {
     CompanionRespawn(HybridMaidPlugin plugin,NativeMaidOwnerTravel travel){
         this.plugin=plugin;this.travel=travel;
         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST,false,death);
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST,false,maidDeath);
         Bukkit.getScheduler().runTaskTimer(plugin,this::tick,5,5);
     }
+    private boolean protectedPartner(EntityMaid maid){
+        return Bukkit.isPrimaryThread()&&maid!=null&&!maid.isRemoved()&&maid.getOwnerUUID()!=null&&plugin.configuredCompanionIdentity(maid);
+    }
+    private void nativeLethal(MaidDeathEvent event){
+        EntityMaid maid=event.getMaid();
+        if(!protectedPartner(maid))return;
+        event.setCanceled(true); // Cancel before the native maid death/persistence path.
+        recover(maid);
+    }
     private void lethal(LivingDeathEvent event){
-        if(!Bukkit.isPrimaryThread()||!(event.getEntity() instanceof EntityMaid maid)||!plugin.configuredCompanionIdentity(maid)||maid.getOwnerUUID()==null)return;
+        if(!(event.getEntity() instanceof EntityMaid maid)||!protectedPartner(maid))return;
+        event.setCanceled(true);
+        recover(maid);
+    }
+    private void recover(EntityMaid maid){
         // Keep inventory on this original entity; never create a second body or a loot-bearing grave.
         CompoundTag data=maid.getPersistentData();
         boolean first=!data.contains(TAG);
@@ -36,7 +52,7 @@ final class CompanionRespawn implements AutoCloseable {
             phase.putBoolean("invulnerable",maid.isInvulnerable());phase.putBoolean("noAI",maid.isNoAi());
             data.put(TAG,phase);
         }
-        event.setCanceled(true);maid.setHealth(1);maid.clearFire();maid.setInvulnerable(true);maid.setNoAi(true);
+        maid.setHealth(1);maid.clearFire();maid.setInvulnerable(true);maid.setNoAi(true);
         maid.getNavigation().stop();maid.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
         if(first){
             // The normal residence finder already persists and reloads this exact original identity.
@@ -92,5 +108,5 @@ final class CompanionRespawn implements AutoCloseable {
         }
     }
     private void warn(RuntimeException error){long now=System.currentTimeMillis();if(now-lastWarning>=30000){lastWarning=now;plugin.getLogger().warning("Companion respawn retained for retry: "+error.getClass().getSimpleName());}}
-    @Override public void close(){NeoForge.EVENT_BUS.unregister(death);held.values().forEach(h->h.release(plugin));held.clear();}
+    @Override public void close(){NeoForge.EVENT_BUS.unregister(death);NeoForge.EVENT_BUS.unregister(maidDeath);held.values().forEach(h->h.release(plugin));held.clear();}
 }

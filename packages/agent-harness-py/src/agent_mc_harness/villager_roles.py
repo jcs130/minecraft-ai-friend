@@ -33,8 +33,18 @@ def _uuid(value: object, field: str) -> UUID:
         raise ValueError(f"villager_roster_invalid_{field}") from None
 
 
+def villager_role_id(resident: str) -> str:
+    """Preserve existing short role IDs and use an independent namespace for long ones."""
+    encoded = b32encode(resident.encode("ascii")).decode("ascii").rstrip("=").lower()
+    short = "villager_" + encoded
+    if len(short) <= 32:
+        return short
+    key = uuid5(NAMESPACE_URL, f"villager-role/{resident}")
+    return "villagerx_" + b32encode(key.bytes).decode("ascii").lower()[:22]
+
+
 def villager_resident_id(role_id: str) -> str:
-    """Decode the stable role ID back to the exact server resident ID used by the body port."""
+    """Decode a legacy short role ID; long roles take their exact resident ID from the roster."""
     if not role_id.startswith("villager_"):
         raise ValueError("villager_role_id_invalid")
     encoded = role_id[len("villager_"):].upper()
@@ -85,9 +95,7 @@ def parse_villager_roster(payload, server_id: str, settings) -> tuple[dict[str, 
             name = row.get("name")
             if not isinstance(name, str) or not 1 <= len(name) <= 24:
                 raise ValueError("villager_roster_invalid_name")
-            role_id = "villager_" + b32encode(resident.encode()).decode("ascii").rstrip("=").lower()
-            if not 3 <= len(role_id) <= 32:
-                raise ValueError("villager_roster_resident_id_too_long")
+            role_id = villager_role_id(resident)
             if role_id in roles:
                 raise ValueError("villager_roster_identity_conflict")
             # This namespace stands in for an internal resident principal. It is not derived from a player
