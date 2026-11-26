@@ -1193,6 +1193,9 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     const capacity = opened ? `，占用 ${occupied.length}/${opened.containerCount} 格，空 ${opened.containerCount - occupied.length} 格` : '';
     return `用了${label};打开了${opened?.title ?? '交互窗口'}${capacity}${contents.length > 0 ? `,里面有:${contents.join('、')}${omitted}` : ',里面暂时是空的'}${note ? `;${note}` : ''}${handNote}`;
   }
+  if (!note && !handChangedAfterUse && held && bot.registry?.blocksByName?.[held]) {
+    return `已拿${label}对空气发送使用请求，背包未变。若要放置，把实测支撑方块坐标填在同一步 use.at，face 选要点击的面（地面为 up）；另一步 look 不会为 use 指定方块。放置后回读相邻落点。`;
+  }
   return note
     ? `拿着${label}发送了使用请求;${note};没有登记的使用效果，背包变化不能单独证明本次使用生效${handNote}`
     : `拿着${label}发送了使用请求;包里一样没动,这样东西没有登记的使用效果,光凭库存读不出有没有发生什么${handNote}`;

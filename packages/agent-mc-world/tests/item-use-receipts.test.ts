@@ -7,8 +7,8 @@ const req = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 const registry = req('prismarine-registry')('1.21.1');
 const Item = req('prismarine-item')(registry);
 
-function rig(change: 'after' | 'consume' | 'before' | 'none') {
-  const original = new Item(registry.itemsByName.written_book.id, 1);
+function rig(change: 'after' | 'consume' | 'before' | 'none', item = 'written_book') {
+  const original = new Item(registry.itemsByName[item].id, 1);
   original.customName = 'Travel journal';
   const replacement = new Item(registry.itemsByName.written_book.id, 1);
   replacement.customName = original.customName;
@@ -37,6 +37,17 @@ function rig(change: 'after' | 'consume' | 'before' | 'none') {
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
+
+it.each(['torch', 'cobblestone', 'written_book'])('explains a missing placement target only for a held block after an uneventful air use (%s)', async item => {
+  const { bot, sent } = rig('none', item);
+  const work = useOnce(bot as unknown as Bot, {skill:'use', item}, {aborted:()=>false} as never);
+  await vi.runAllTimersAsync();
+  const receipt = await work;
+  if (item === 'written_book') expect(receipt).not.toContain('use.at');
+  else expect(receipt).toContain('同一步 use.at');
+  expect(sent).toHaveBeenCalledTimes(1);
+  expect(sent.mock.calls[0][0]).toBe('use_item');
+});
 
 it.each(['after', 'consume'] as const)('retains the sent receipt when the server changes the hand %s activation', async change => {
   const { bot, sent } = rig(change);
