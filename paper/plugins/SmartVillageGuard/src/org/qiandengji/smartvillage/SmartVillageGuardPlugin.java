@@ -111,11 +111,15 @@ public final class SmartVillageGuardPlugin extends JavaPlugin implements Listene
         if (forceAi.contains(villager.getUniqueId()) && !villager.hasAI()) villager.setAI(true);
     }
 
-    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.MONITOR)
     public void onSpawn(EntitySpawnEvent event) {
         if (!(event.getEntity() instanceof Villager villager)) return;
         prepare(villager);
-        if (unwanted(villager)) event.setCancelled(true);
+        // Summon/plugin NBT such as CustomName is applied after the spawn event.
+        // Decide on the next tick so named service bodies are not rejected early.
+        Bukkit.getScheduler().runTask(this, () -> {
+            if (villager.isValid() && unwanted(villager)) villager.remove();
+        });
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
