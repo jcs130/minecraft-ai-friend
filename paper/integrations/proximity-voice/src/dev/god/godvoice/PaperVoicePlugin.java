@@ -172,11 +172,14 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
     }
     @EventHandler public void quit(PlayerQuitEvent event){
         if(npcs!=null)npcs.disconnected(event.getPlayer());
+        cancelVillagerListenerSpeech(event.getPlayer(),"LISTENER_DISCONNECTED");
         UUID actor=event.getPlayer().getUniqueId();bridgePeers.remove(actor);presence.forget(actor);sessions.remove(actor);eventCaptions.remove(actor);uploads.disconnect(actor);dropCapture(actor);sequences.remove(actor);
         cancelSpeech(actor,"ACTOR_DISCONNECTED");
         turns.forget(actor);
     }
     @EventHandler public void worldChanged(PlayerChangedWorldEvent event){
+        if(npcs!=null)npcs.invalidateVillagerListener(event.getPlayer());
+        cancelVillagerListenerSpeech(event.getPlayer(),"LISTENER_WORLD_CHANGED");
         UUID actor=event.getPlayer().getUniqueId();uploads.disconnect(actor);dropCapture(actor);cancelSpeech(actor,"ACTOR_WORLD_CHANGED");
         turns.forget(actor);
     }
@@ -184,6 +187,18 @@ public final class PaperVoicePlugin extends JavaPlugin implements Listener,Plugi
         SpeechLane<Job> lane=lanes.get(actor);if(lane==null)return;
         for(Job job:lane.removeWaiting(j->true)){job.cancelled=true;terminal(job,"cancelled",reason);outstanding.decrementAndGet();}
         Job active=lane.current();if(active!=null){active.cancelled=true;active.cancelReason=reason;if(active.frames!=null)active.frames.cancel();if(active.player!=null)active.player.stopPlaying();else finish(active,"cancelled",reason);}
+    }
+    private void cancelVillagerListenerSpeech(Player listener,String reason){
+        for(var lane:new ArrayList<>(lanes.values())){
+            java.util.function.Predicate<Job> targets=j->j.villager!=null&&j.audience.get(listener.getUniqueId())==listener;
+            for(Job job:lane.removeWaiting(targets)){job.cancelled=true;terminal(job,"cancelled",reason);outstanding.decrementAndGet();}
+            Job job=lane.current();
+            if(job!=null&&targets.test(job)&&!job.cancelled){
+                job.cancelled=true;job.cancelReason=reason;
+                if(job.frames!=null)job.frames.cancel();
+                if(job.player!=null)job.player.stopPlaying();else finish(job,"cancelled",reason);
+            }
+        }
     }
     private Entity source(Job job){
         if(job.villager==null){

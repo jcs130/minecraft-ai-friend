@@ -411,6 +411,21 @@ def test_walk_accepted_then_receipt_completion_and_stop_mapping(run):
     run(scenario())
 
 
+def test_counter_tools_fence_movement_without_disabling_dialogue(run):
+    async def scenario():
+        server = VillagerServer()
+        server.actions = ["context", "inbox", "speak", "receipt"]
+        body = make(server)
+        await body.spawn()
+        try:
+            assert set(body.capabilities().actions) == {"observe", "chat"}
+            outcome = await body.act(BodyAction(verb="move", args={"x": 5, "y": 70, "z": 6}, request_id="not_offered_1"))
+            assert outcome.status == "unsupported" and not server.writes
+        finally:
+            await body.destroy()
+    run(scenario())
+
+
 def test_villager_roles_are_stable_managed_only_and_never_player_owned():
     original = row(persona="住在村边，说话慢条斯理。")
     ignored = row(residentId="wild", bodyId=str(uuid4()), controllerId=str(uuid4()), managed=False)
@@ -580,6 +595,7 @@ def test_host_ignores_stale_or_unattributed_villager_dialogue(tmp_path):
     body = SimpleNamespace(kind="villager", subscribe=lambda listener: (lambda: None))
     host = NpcHost(role, body, lambda *_: None, None, SimpleNamespace())
     event = {"eventId": "event-original", "speakerId": PLAYER, "bodyId": BODY,
+             "listenerId": BODY, "deliveryScope": "nearby", "channel": "chat",
              "serverAttributed": True, "occurredAt": now_ms()}
     from agent_mc_harness.models import BodyEvent
     host._event(BodyEvent(kind="dialogue", body_kind="villager", body_id=BODY, text="你好", data=event))

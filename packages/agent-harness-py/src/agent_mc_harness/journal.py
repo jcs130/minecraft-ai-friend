@@ -128,6 +128,16 @@ class ActionJournal:
     def handled(self, body: str, event: str) -> bool:
         return bool(self.db.execute("SELECT 1 FROM listened WHERE body=? AND event=?", (body, event)).fetchone()) or self.replied(body, event)
 
+    def reply_settled(self, body: str, event: str) -> bool:
+        """A terminal private reply attempt must not trigger a second write, even when it failed."""
+        rows = self.db.execute("SELECT d.receipt FROM replies r JOIN dispatch d ON d.id=r.request AND d.body=r.body "
+                               "WHERE r.body=? AND r.event=?", (body, event))
+        for (value,) in rows:
+            receipt = json.loads(value) if value else {}
+            if receipt.get("terminal") is True and receipt.get("status") not in {None, "accepted", "unknown"}:
+                return True
+        return False
+
     def acknowledged(self, body: str, event: str) -> bool:
         rows = self.db.execute("SELECT d.receipt FROM acknowledgements a JOIN dispatch d ON d.id=a.request AND d.body=a.body WHERE a.body=? AND a.event=?", (body, event))
         return any(receipt and json.loads(receipt).get("status") == "completed" for (receipt,) in rows)

@@ -139,6 +139,37 @@ def test_villager_idle_is_quieter_than_numen_but_danger_wakes_immediately():
     assert next_delay(None, villager, external_event=True, configured_interval=45) == 0
 
 
+def test_npc_schedules_persisted_wall_time_review_on_monotonic_deadline(tmp_path):
+    import asyncio
+    from agent_mc_harness.npc import NpcHost
+    from simbody import SimBody
+
+    async def run():
+        configured = actor("villager")
+        journal = ActionJournal(tmp_path / "review-clock.sqlite")
+        body = SimBody(body_id=str(configured.body_id))
+        await body.spawn()
+        host = NpcHost(configured, body, None, None, journal)
+        proposal = validate_proposal(configured, {"goal": "值守", "reviewAfterSeconds": 75})
+        host.life_loop.apply(configured, proposal)
+        submit = host.runtime.submit_intent
+
+        def one_turn(*args, **kwargs):
+            host.closed = True
+            host.wake.set()
+            return submit(*args, **kwargs)
+
+        host.runtime.submit_intent = one_turn
+        try:
+            await host._actor_loop(body.identity())
+            monotonic_delay = host.next_plan - time.monotonic()
+            assert 68 <= monotonic_delay <= 76  # Not the erroneous 300-second clamp.
+        finally:
+            await host.close()
+
+    asyncio.run(run())
+
+
 def test_planner_can_persist_life_without_fabricating_an_action(tmp_path):
     import asyncio
     import httpx
