@@ -210,3 +210,42 @@ def test_villager_planning_turn_requests_a_durable_life_commitment(tmp_path):
             await body.destroy()
 
     asyncio.run(run())
+
+
+def test_villager_invalid_life_block_falls_back_to_its_validated_agenda(tmp_path):
+    import asyncio
+    import httpx
+    from agent_mc_harness.npc import IDLE_GOAL, ModelClient, NpcHost, NpcPlanner
+    from agent_mc_harness.runtime import Intent, PlanContext
+    from simbody import SimBody
+
+    async def run():
+        def respond(request):
+            return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps({
+                "steps": [],
+                "agenda": [{"afterMinutes": 0, "forMinutes": 5, "goal": "在床边休息", "evidence": "保持睡眠直到天亮"}],
+                "life": {"goal": "在床边休息", "reviewAfterSeconds": "soon"},
+            })}}]})
+
+        model = ModelClient("http://127.0.0.1:1/v1", "test", http=httpx.AsyncClient(transport=httpx.MockTransport(respond)))
+        configured = role(body_kind="villager", agenda_enabled=True,
+                          allowed_tools=["body:observe", "body:chat", "body:move", "body:stop"])
+        body = SimBody(body_id=str(configured.body_id))
+        here = snap(raw={})
+        body.snapshot = lambda: asyncio.sleep(0, result=here)
+        journal = ActionJournal(tmp_path / "villager-fallback.sqlite")
+        host = NpcHost(configured, body, NpcPlanner(configured, model), None, journal)
+        try:
+            steps = await host._plan(Intent(id="villager-fallback-plan", agent=configured.id, goal=IDLE_GOAL),
+                                     PlanContext(snapshot=here, agenda={"current": None, "upcoming": []}))
+            assert steps == [] and not body.acts
+            state = host.life_loop.load(str(configured.character_id), "villager")
+            assert state.goal == "在床边休息" and state.phase == "agenda"
+            assert state.success_evidence == "保持睡眠直到天亮"
+            assert state.review_at >= state.updated_at + 15
+        finally:
+            await model.close()
+            journal.close()
+            await body.destroy()
+
+    asyncio.run(run())
