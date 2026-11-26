@@ -213,12 +213,32 @@ class LifeLoop:
         now = time.time() if now is None else now
         character = str(role.character_id)
         prior = self.load(character, role.body_kind)
-        state = LifeState(schema_version=1, character_id=character, tier=role.body_kind, revision=1 if prior is None else prior.revision + 1,
-                          status=proposal.status, goal=proposal.goal, phase=proposal.phase, next_action=proposal.next_action,
-                          success_evidence=proposal.success_evidence, review_at=now + proposal.review_after_seconds,
-                          blocked_reason="", alternatives=proposal.alternatives,
-                          last_progress_at=prior.last_progress_at if prior else now,
-                          progress_fingerprint=prior.progress_fingerprint if prior else "", stagnant_reviews=0, updated_at=now)
+        same_commitment = (prior is not None and prior.status == proposal.status
+                           and prior.goal == proposal.goal and prior.phase == proposal.phase)
+        if same_commitment and proposal.status in {"active", "waiting"}:
+            # Re-wording the next step is not world progress. Keep the commitment,
+            # but back off repeated no-progress reviews instead of resetting the
+            # stagnation counter on every model turn.
+            stagnant = prior.stagnant_reviews + 1
+            delay = min(300, 45 * (2 ** min(stagnant, 3)))
+            state = prior.model_copy(update={"revision": prior.revision + 1,
+                                             "next_action": proposal.next_action,
+                                             "success_evidence": proposal.success_evidence,
+                                             "alternatives": proposal.alternatives,
+                                             "review_at": now + delay,
+                                             "blocked_reason": "",
+                                             "stagnant_reviews": stagnant,
+                                             "updated_at": now})
+        else:
+            state = LifeState(schema_version=1, character_id=character, tier=role.body_kind,
+                              revision=1 if prior is None else prior.revision + 1,
+                              status=proposal.status, goal=proposal.goal, phase=proposal.phase,
+                              next_action=proposal.next_action, success_evidence=proposal.success_evidence,
+                              review_at=now + proposal.review_after_seconds, blocked_reason="",
+                              alternatives=proposal.alternatives,
+                              last_progress_at=prior.last_progress_at if prior else now,
+                              progress_fingerprint=prior.progress_fingerprint if prior else "",
+                              stagnant_reviews=0, updated_at=now)
         return self._save(state, prior.revision if prior else None)
 
     def observe(self, role, view: LifeView, now: float | None = None) -> LifeState | None:
