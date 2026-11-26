@@ -256,7 +256,8 @@ final class NpcSocial {
         var answer=new JsonObject();
         answer.addProperty("status",reply==null?"failed":reply.isBlank()?"silent":"prepared");
         if(reply!=null)answer.addProperty("reply",reply);
-        return deliver(profile,request,submitted,answer,result);
+        boolean answered=deliver(profile,request,submitted,answer,result);
+        return answered || "silent".equals(value(submitted,"status"));
     }
 
     /** Record a reply already delivered by the managed villager bridge; never send a second caption or audio job. */

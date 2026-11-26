@@ -149,10 +149,15 @@ final class VillagerLives {
     }
 
     private void bindLive(NativeVillageHomes.Home home, Villagers.Spot spot, Record row, Villager villager, long now) {
-        if (villager.hasMetadata("NPC") || plugin.bodyPort() != null && plugin.bodyPort().controls(villager.getUniqueId())) return;
+        if (villager.hasMetadata("NPC")) return;
         boolean service = Villagers.trialMerchant(spot.serviceCounter());
         Location post = service ? plugin.villagers.trialServicePost(spot) : null;
         if (service && post == null) return;
+        if (plugin.bodyPort() != null && plugin.bodyPort().controls(villager.getUniqueId())) {
+            // Counter leases expose dialogue but never own movement. Only the established schedule may route.
+            if (service && (row == null || row.admitted())) attendShop(home, villager, post, now);
+            return;
+        }
         if (row != null && row.deathId().toString().equals(villager.getPersistentDataContainer().get(stamp, PersistentDataType.STRING))) {
             try {
                 if (!row.admitted()) persist(row.admit());

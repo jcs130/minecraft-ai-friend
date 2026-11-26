@@ -41,7 +41,7 @@ MAX_INBOX = 64
 
 VERBS: dict[str, tuple[str, tuple[str, ...], bool]] = {
     "observe": ("context", (), False),
-    "chat": ("speak", ("text", "eventId", "listenerId"), False),
+    "chat": ("speak", ("text", "eventId", "listenerId", "silent"), False),
     "move": ("walk", ("x", "y", "z"), True),
     "stop": ("stop", (), False),
 }
@@ -283,7 +283,13 @@ class VillagerBody(BaseBody):
             raise ArgumentError("unexpected villager action arguments")
         if native == "speak":
             text = obj(action.args, "text", str)
-            if not 1 <= len(text) <= 140 or not text.isprintable() or text.startswith("/") or "§" in text:
+            silent = action.args.get("silent", False)
+            if type(silent) is not bool:
+                raise ArgumentError("silent must be a boolean")
+            if silent:
+                if text or not action.args.get("eventId") or not action.args.get("listenerId"):
+                    raise ArgumentError("silent completion requires an empty reply and its original event/listener")
+            elif not 1 <= len(text) <= 140 or not text.isprintable() or text.startswith("/") or "§" in text:
                 raise ArgumentError("text must be 1..140 printable characters without commands or formatting")
             await self._bind_speech(args, action)
         elif native == "walk":
@@ -492,6 +498,7 @@ class VillagerBody(BaseBody):
                             "listenerId": row.get("listenerId"), "speakerId": row.get("speakerId"), "speaker": row.get("speaker"),
                             "channel": row.get("channel"), "deliveryScope": row.get("deliveryScope"),
                             "occurredAt": row.get("occurredAt"), "world": row.get("world"),
+                            "speakerSession": row.get("speakerSession"),
                             "source": "server_attributed_villager_dialogue", "serverAttributed": True, "trusted": False},
                       raw=row)
             count += 1
@@ -520,6 +527,7 @@ class VillagerBody(BaseBody):
                 for row in reply["data"]["events"]:
                     if (not isinstance(row, dict) or row.get("bodyId", self.body_id) != self.body_id
                             or row.get("listenerId", self.body_id) != self.body_id
+                            or row.get("deliveryScope") == "private" or row.get("channel") == "private"
                             or row.get("residentId", self.resident_id) != self.resident_id):
                         continue
                     event_id, listener = row.get("eventId"), row.get("speakerId")

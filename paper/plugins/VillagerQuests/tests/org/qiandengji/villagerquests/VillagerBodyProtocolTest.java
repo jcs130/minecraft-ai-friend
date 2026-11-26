@@ -21,7 +21,16 @@ public final class VillagerBodyProtocolTest {
         System.out.println("passed=true checks=" + checks);
     }
 
+    private static JsonArray offered(boolean counter) {
+        return VillagerBodyPort.tools(counter).get(0).getAsJsonObject().getAsJsonObject("inputSchema")
+                .getAsJsonObject("properties").getAsJsonObject("action").getAsJsonArray("enum");
+    }
+
     private static void rules() {
+        JsonArray counter = offered(true), ordinary = offered(false);
+        check(counter.toString().equals("[\"context\",\"inbox\",\"speak\",\"receipt\"]"),
+                "counter lease keeps speech and receipt reads, not navigation");
+        check(ordinary.toString().contains("\"walk\",\"speak\",\"stop\""), "normal villager keeps original walk and stop");
         var boundary = VillagerBodyRules.walk(0, 64, 0, 32, 64, 0, -64, 320, true);
         check(boundary.allowed(), "exactly 32 blocks is allowed");
         check(!VillagerBodyRules.walk(0, 64, 0, 32.01, 64, 0, -64, 320, true).allowed(), "over 32 blocks is rejected");

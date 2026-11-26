@@ -193,8 +193,9 @@ class HarnessRuntime:
         self._unsub = body.subscribe(self._on_body_event)
 
     def _on_body_event(self, event: BodyEvent) -> None:
-        if self.private_mailbox and (event.kind == "whisper" or event.data.get("channel") == "private"):
-            return  # Resident whispers use the pair-scoped mailbox and must never enter public recall.
+        if self.private_mailbox and (event.kind == "whisper" or event.data.get("channel") == "private"
+                                     or event.data.get("deliveryScope") == "private"):
+            return  # Private input never enters the shared event ring or public recall.
         if event.kind == "action_result" and event.request_id and (future := self._results.pop(event.request_id, None)) and not future.done():
             future.set_result(event)
         if event.kind == "safety":

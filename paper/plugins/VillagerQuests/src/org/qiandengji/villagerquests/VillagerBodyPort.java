@@ -31,6 +31,10 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Villager;
 import org.bukkit.entity.memory.MemoryKey;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.persistence.PersistentDataType;
 import org.qiandengji.villagerquests.BodyReceiptLedger.Entry;
@@ -38,7 +42,7 @@ import org.qiandengji.villagerquests.BodyReceiptLedger.Status;
 import org.qiandengji.villagerquests.core.Text;
 
 /** Authenticated bind-existing control port. Every game observation and mutation runs on the server thread. */
-final class VillagerBodyPort {
+final class VillagerBodyPort implements Listener {
     static final String PROTOCOL = "qiandengji-villager-body/v1";
     private static final List<String> ACTIONS = List.of("context", "inbox", "walk", "speak", "stop", "receipt");
 
@@ -46,8 +50,9 @@ final class VillagerBodyPort {
                             List<ChunkTicket> chunkTickets) {}
     private record ChunkTicket(String world, int x, int z) {}
     private record Lease(VillagerBodyRules.Binding binding, String generation, long expiresAt) {}
+    private record SpeakerSession(Player player, UUID world, UUID sessionId) {}
     private record Event(long sequence, String eventId, UUID speakerId, String speaker, String text, String channel,
-                         String deliveryScope, long occurredAt, String world, String generation) {}
+                         String deliveryScope, long occurredAt, String world, String generation, UUID speakerSession) {}
     private record Walk(String residentId, UUID bodyId, String controllerId, String generation, String operationId,
                         Location target, long deadline) {
         JsonObject observation(long now) {
@@ -67,6 +72,7 @@ final class VillagerBodyPort {
     private final Map<ChunkTicket, org.bukkit.World> chunkTickets = new LinkedHashMap<>();
     private final Map<UUID, Lease> leases = new HashMap<>();
     private final Map<UUID, List<Event>> events = new HashMap<>();
+    private final Map<UUID, SpeakerSession> speakerSessions = new LinkedHashMap<>(16, .75f, true);
     private final Map<UUID, Long> eventSequences = new HashMap<>();
     private final Map<UUID, Walk> pendingWalks = new HashMap<>();
     private Settings settings;
@@ -74,7 +80,7 @@ final class VillagerBodyPort {
     private HttpServer server;
     private volatile String token;
     private Plugin voice;
-    private Method bindVoice, speakReply, speakReplyDirect, speakNearby, nearbyAudience, speechStatus, recordManagedReply;
+    private Method bindVoice, speakReply, speakReplyDirect, speakNearby, nearbyAudience, speechStatus, recordManagedReply, finishPrivateReply;
     private boolean voiceWarning;
     private Plugin bubbles;
     private Method managedBubble;
@@ -89,6 +95,25 @@ final class VillagerBodyPort {
             ledgerReady = false;
             plugin.getLogger().log(Level.SEVERE, "Body receipts could not be loaded; refusing all writes until restart", failure);
         }
+        Bukkit.getPluginManager().registerEvents(this, plugin);
+    }
+
+    @EventHandler public void speakerQuit(PlayerQuitEvent event) { invalidateSpeaker(event.getPlayer()); }
+    @EventHandler public void speakerChangedWorld(PlayerChangedWorldEvent event) { invalidateSpeaker(event.getPlayer()); }
+
+    private void invalidateSpeaker(Player speaker) {
+        SpeakerSession old = speakerSessions.get(speaker.getUniqueId());
+        if (old != null && old.player() == speaker) speakerSessions.remove(speaker.getUniqueId());
+    }
+
+    private UUID sessionFor(Player speaker) {
+        UUID id = speaker.getUniqueId(), world = speaker.getWorld().getUID();
+        SpeakerSession old = speakerSessions.get(id);
+        if (old != null && old.player() == speaker && old.world().equals(world)) return old.sessionId();
+        SpeakerSession current = new SpeakerSession(speaker, world, UUID.randomUUID());
+        speakerSessions.put(id, current);
+        if (speakerSessions.size() > 256) speakerSessions.remove(speakerSessions.keySet().iterator().next());
+        return current.sessionId();
     }
 
     synchronized void reload() throws IOException {
@@ -226,7 +251,11 @@ final class VillagerBodyPort {
     void tick(long now) {
         if (!Bukkit.isPrimaryThread()) return;
         expire(now);
-        for (Lease lease : List.copyOf(leases.values())) bindInbox(lease);
+        for (Lease lease : List.copyOf(leases.values())) {
+            if (plugin.lives != null && plugin.lives.blocksHandoff(lease.binding().residentId()))
+                release(lease, now, "life_blocked");
+            else bindInbox(lease);
+        }
         for (Walk pending : List.copyOf(pendingWalks.values())) observeWalk(pending, now);
     }
 
@@ -286,6 +315,7 @@ final class VillagerBodyPort {
             row.addProperty("bodyId", binding.bodyId().toString());
             row.addProperty("controllerId", binding.controllerId().toString());
             row.addProperty("name", spot.name());
+            if (spot.persona() != null) row.addProperty("persona", spot.persona());
             row.addProperty("managed", identityAllowed(binding) && (plugin.lives == null || !plugin.lives.blocksHandoff(binding.residentId())));
             row.addProperty("loaded", view != null);
             row.addProperty("profession", view == null ? "unknown" : view.villager.getProfession().getKey().toString());
@@ -318,7 +348,7 @@ final class VillagerBodyPort {
         envelope.addProperty("controllerId", binding.controllerId().toString());
         envelope.addProperty("generation", generation);
         envelope.addProperty("leaseTimeoutMs", VillagerBodyRules.LEASE_MS);
-        envelope.add("tools", tools());
+        envelope.add("tools", tools(managedCounter(binding)));
         return new Reply(200, envelope);
     }
 
@@ -381,6 +411,11 @@ final class VillagerBodyPort {
             if (!write) return error(409, "lease_expired", "Controller generation is not current");
             return rejected(binding, generation, action, operationId, fingerprint, "lease_expired");
         }
+        if (plugin.lives != null && plugin.lives.blocksHandoff(binding.residentId())) {
+            release(lease, now, "life_blocked");
+            return write ? rejected(binding, generation, action, operationId, fingerprint, "life_blocked")
+                         : error(409, "life_blocked", "Native life admission must complete before a new controller lease");
+        }
         lease = new Lease(lease.binding(), lease.generation(), System.currentTimeMillis() + VillagerBodyRules.LEASE_MS);
         leases.put(binding.bodyId(), lease);
         if (!write) return switch (action) {
@@ -393,6 +428,8 @@ final class VillagerBodyPort {
         if (view == null) return rejected(binding, generation, action, operationId, fingerprint, "body_unavailable");
         if (plugin.lives != null && plugin.lives.blocksHandoff(binding.residentId()))
             return rejected(binding, generation, action, operationId, fingerprint, "life_blocked");
+        if (managedCounter(binding) && ("walk".equals(action) || "stop".equals(action)))
+            return rejected(binding, generation, action, operationId, fingerprint, "movement_owned_by_service_schedule");
         Entry accepted = new Entry(binding.residentId(), binding.bodyId().toString(), binding.controllerId().toString(),
                 generation, operationId, action, Status.ACCEPTED, false, now, new JsonObject(), fingerprint);
         if (!persist(accepted)) return unknown(binding, generation, action, operationId);
@@ -495,6 +532,20 @@ final class VillagerBodyPort {
         data.addProperty("trading", v.getTrader() != null);
         data.add("home", location(v.getMemory(MemoryKey.HOME)));
         data.add("jobSite", location(v.getMemory(MemoryKey.JOB_SITE)));
+        Villagers.Spot spot = plugin.villagers.spot(binding.residentId());
+        if (spot != null && spot.serviceCounter() != null) {
+            JsonObject duty = new JsonObject();
+            duty.addProperty("serviceCounter", spot.serviceCounter());
+            duty.addProperty("movementOwnedByServer", true);
+            if (Villagers.trialMerchant(spot.serviceCounter())) {
+                Location post = plugin.villagers.trialServicePost(spot);
+                if (post != null && at.getWorld().equals(post.getWorld()) && post.isChunkLoaded()) {
+                    duty.add("post", location(post));
+                    duty.addProperty("atPost", at.distanceSquared(post) <= 2.25);
+                }
+            }
+            data.add("duty", duty);
+        }
         JsonArray players = new JsonArray(), hostiles = new JsonArray();
         for (Player player : at.getWorld().getPlayers()) if (eligibleNearby(player, v, false)) {
             JsonObject row = new JsonObject();
@@ -545,6 +596,7 @@ final class VillagerBodyPort {
             row.addProperty("deliveryScope", event.deliveryScope());
             row.addProperty("occurredAt", event.occurredAt());
             row.addProperty("world", event.world());
+            row.addProperty("speakerSession", event.speakerSession().toString());
             page.add(row);
             next = event.sequence();
             if (page.size() == 32) break;
@@ -656,6 +708,11 @@ final class VillagerBodyPort {
     private JsonObject speak(VillagerBodyRules.Binding binding, String generation, String operationId, EntityView view,
                              JsonObject args, long now) {
         String text = Text.clean(string(args, "text"), 200);
+        if (args.has("silent")) {
+            if (!args.get("silent").isJsonPrimitive() || !args.get("silent").getAsJsonPrimitive().isBoolean())
+                throw new IllegalArgumentException("invalid_silent_flag");
+            if (args.get("silent").getAsBoolean()) return finishSilent(binding, generation, view, args, now);
+        }
         if (text.isBlank()) throw new IllegalArgumentException("text_required");
         String eventId = string(args, "eventId"), listenerText = string(args, "listenerId");
         UUID listenerId = VillagerBodyRules.uuid(listenerText);
@@ -669,7 +726,11 @@ final class VillagerBodyPort {
             if (event == null || !event.generation().equals(generation) || !event.speakerId().equals(listenerId)
                     || !VillagerBodyRules.fresh(event.occurredAt(), now)) throw new IllegalArgumentException("original_event_not_fresh");
             Player listener = Bukkit.getPlayer(listenerId);
-            if (!eligibleListener(listener, view.villager, "private".equals(event.deliveryScope())))
+            SpeakerSession original = speakerSessions.get(listenerId);
+            if (original == null || original.player() != listener || !original.sessionId().equals(event.speakerSession())
+                    || !original.world().equals(listener.getWorld().getUID())
+                    || !view.villager.getWorld().getKey().toString().equals(event.world())
+                    || !eligibleListener(listener, view.villager, direct))
                 throw new IllegalArgumentException("original_listener_unavailable");
             audience.add(listener);
         } else {
@@ -677,7 +738,7 @@ final class VillagerBodyPort {
             if (audience.isEmpty()) throw new IllegalArgumentException("no_eligible_listener");
         }
         JsonArray delivered = new JsonArray(), bubbled = new JsonArray();
-        boolean bubbleApi = connectBubbles();
+        boolean bubbleApi = !direct && connectBubbles();
         String caption = "[" + plugin.name(binding.residentId()) + "] " + text;
         for (Player player : audience) {
             try {
@@ -713,7 +774,8 @@ final class VillagerBodyPort {
             connectVoice();
             String raw;
             if (reply) {
-                if (direct && speakReplyDirect != null) {
+                if (direct) {
+                    if (speakReplyDirect == null) throw new NoSuchMethodException("privateVillagerVoiceUnavailable");
                     raw = (String) speakReplyDirect.invoke(this.voice, plugin, binding.bodyId(), listenerId, eventId, text, true);
                 } else {
                     if (speakReply == null) throw new NoSuchMethodException("speakVillagerReply");
@@ -745,6 +807,37 @@ final class VillagerBodyPort {
         data.addProperty("voiceOperation", reply ? eventId : operationId);
         data.addProperty("observedAt", now);
         data.addProperty("hearingVerified", false);
+        return data;
+    }
+
+    private JsonObject finishSilent(VillagerBodyRules.Binding binding, String generation, EntityView view,
+                                   JsonObject args, long now) {
+        if (!"".equals(string(args, "text"))) throw new IllegalArgumentException("silent_reply_must_be_empty");
+        String eventId = string(args, "eventId");
+        UUID listenerId = VillagerBodyRules.uuid(string(args, "listenerId"));
+        Event event = eventId == null ? null : findEvent(binding.bodyId(), eventId);
+        Player listener = listenerId == null ? null : Bukkit.getPlayer(listenerId);
+        SpeakerSession session = listenerId == null ? null : speakerSessions.get(listenerId);
+        if (event == null || !"private".equals(event.deliveryScope()) || !event.generation().equals(generation)
+                || !event.speakerId().equals(listenerId) || now - event.occurredAt() > 120_000
+                || session == null || session.player() != listener || !session.sessionId().equals(event.speakerSession())
+                || listener == null || !session.world().equals(listener.getWorld().getUID())
+                || !view.villager.getWorld().getKey().toString().equals(event.world())
+                || !eligibleListener(listener, view.villager, true))
+            throw new IllegalArgumentException("original_private_listener_unavailable");
+        try {
+            connectVoice();
+            if (finishPrivateReply == null || !Boolean.TRUE.equals(finishPrivateReply.invoke(voice, plugin,
+                    binding.bodyId(), listenerId, eventId, "")))
+                throw new IllegalArgumentException("original_private_completion_unconfirmed");
+        } catch (ReflectiveOperationException unavailable) {
+            throw new IllegalArgumentException("original_private_completion_unavailable");
+        }
+        JsonObject data = new JsonObject();
+        data.addProperty("replyStatus", "silent");
+        data.addProperty("voiceOperation", eventId);
+        data.addProperty("captionRecipients", 0);
+        data.addProperty("observedAt", now);
         return data;
     }
 
@@ -781,7 +874,7 @@ final class VillagerBodyPort {
             long sequence = eventSequences.computeIfAbsent(body, ignored -> 0L) + 1;
             eventSequences.put(body, sequence);
             Event event = new Event(sequence, eventId, speaker, name, text, channel, scope, at,
-                    view.villager.getWorld().getKey().toString(), lease.generation());
+                    view.villager.getWorld().getKey().toString(), lease.generation(), sessionFor(player));
             List<Event> log = events.computeIfAbsent(body, ignored -> new ArrayList<>());
             log.add(event);
             while (log.size() > VillagerBodyRules.RETAINED_EVENTS) log.removeFirst();
@@ -831,7 +924,7 @@ final class VillagerBodyPort {
     private void connectVoice() throws ReflectiveOperationException {
         if (voice == null || !voice.isEnabled()) {
             voice = Bukkit.getPluginManager().getPlugin("QiandengVoice");
-            bindVoice = speakReply = speakReplyDirect = speakNearby = nearbyAudience = speechStatus = recordManagedReply = null;
+            bindVoice = speakReply = speakReplyDirect = speakNearby = nearbyAudience = speechStatus = recordManagedReply = finishPrivateReply = null;
             voiceWarning = false;
         }
         if (voice == null || !voice.isEnabled()) throw new NoSuchMethodException("QiandengVoice");
@@ -865,6 +958,12 @@ final class VillagerBodyPort {
                     String.class, String.class, int.class, String.class);
         } catch (NoSuchMethodException olderVoice) {
             recordManagedReply = null;
+        }
+        try {
+            finishPrivateReply = api.getMethod("finishVillagerPrivateReply", Plugin.class, UUID.class, UUID.class,
+                    String.class, String.class);
+        } catch (NoSuchMethodException olderVoice) {
+            finishPrivateReply = null;
         }
     }
 
@@ -922,11 +1021,18 @@ final class VillagerBodyPort {
         return text.length() > 4096 ? null : text;
     }
 
-    private static JsonArray tools() {
+    private boolean managedCounter(VillagerBodyRules.Binding binding) {
+        Villagers.Spot spot = plugin.villagers.spot(binding.residentId());
+        return spot != null && spot.serviceCounter() != null;
+    }
+
+    static JsonArray tools(boolean managedCounter) {
         JsonObject properties = new JsonObject();
         JsonObject action = new JsonObject();
         JsonArray values = new JsonArray();
-        ACTIONS.forEach(values::add);
+        for (String offered : ACTIONS) {
+            if (!managedCounter || (!"walk".equals(offered) && !"stop".equals(offered))) values.add(offered);
+        }
         action.add("enum", values);
         properties.add("action", action);
         JsonObject input = new JsonObject();

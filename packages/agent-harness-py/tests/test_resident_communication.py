@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import time
 from uuid import UUID, uuid4
 
 import httpx
@@ -8,7 +9,8 @@ import pytest
 
 from agent_mc_harness.journal import ActionJournal
 from agent_mc_harness.models import ActionReceipt, BodyAction, BodyEvent
-from agent_mc_harness.npc import DIALOGUE_GOAL, IDLE_GOAL, NpcHost, NpcPlanner
+from agent_mc_harness.npc import DIALOGUE_GOAL, IDLE_GOAL, ModelClient, NpcHost, NpcPlanner
+from agent_mc_harness.villager_roles import VILLAGER_TOOLS
 from agent_mc_harness.resident_protocol import prepare_scene, social_communication, speech_receipt, translate_answer
 from agent_mc_harness.resident_turns import ResidentTurnsClient
 from agent_mc_harness.runtime import Intent, PlanContext, intent_health
@@ -70,6 +72,150 @@ def test_body_replies_once_for_selected_speaker_and_leaves_other_event_pending(k
             host.unsubscribe()
             journal.close()
             await client.close()
+    asyncio.run(run())
+
+
+def test_managed_villager_reply_keeps_only_confirmed_same_session_history(tmp_path):
+    async def run():
+        actor = role(body_kind="villager", allowed_tools=VILLAGER_TOOLS,
+                     persona="我是试炼管理口的合成村民，实际职责是提供个人进度查询入口。")
+        body = SimBody(body_id=str(actor.body_id))
+        original_identity = body.identity()
+        body.identity = lambda: original_identity.model_copy(update={"generation": "first-generation"})
+        await body.spawn()
+        player, other, session = [str(uuid4()) for _ in range(3)]
+        sent = []
+
+        def handle(req):
+            payload = json.loads(req.content)
+            sent.append(json.loads(payload["messages"][1]["content"]))
+            assert "tools" not in payload
+            assert actor.persona in payload["messages"][0]["content"]
+            return httpx.Response(200, json={"choices": [{"message": {"content": '{"reply":"请看公会面板。"}'}}]})
+
+        client = ModelClient("http://127.0.0.1:49999/v1", "test-only",
+                             http=httpx.AsyncClient(transport=httpx.MockTransport(handle)))
+        journal = ActionJournal(tmp_path / "villager.sqlite")
+        host = NpcHost(actor, body, NpcPlanner(actor, client), None, journal)
+
+        def tell(speaker, text, *, sid=session, scope="private", age=0):
+            uid = str(uuid4()) if scope == "private" else f"addressed_chat_{uuid4()}_{body.body_id}"
+            event = BodyEvent(kind="dialogue", body_kind="villager", body_id=body.body_id, text=text,
+                              data={"eventId": uid, "speakerId": speaker, "listenerId": body.body_id,
+                                    "bodyId": body.body_id, "residentId": "test-villager", "serverAttributed": True,
+                                    "channel": "chat", "deliveryScope": scope, "speakerSession": sid,
+                                    "world": "minecraft:overworld", "occurredAt": int(time.time() * 1000) - age})
+            host._event(event)
+            host.runtime._on_body_event(event)
+            return uid
+
+        async def plan(*inputs):
+            intent = Intent(id=str(uuid4()), agent=actor.id, goal=DIALOGUE_GOAL, source_events=list(inputs))
+            steps = await host._plan(intent, PlanContext(snapshot=await body.snapshot(), capabilities=body.capabilities()))
+            return intent, steps
+
+        def finish(intent, action, event, recipient, status="completed"):
+            request_id = str(uuid4())
+            journal.begin(body.body_id, action.action(request_id), intent.source_events)
+            journal.settle(body.body_id, ActionReceipt(request_id=request_id, verb="chat", status=status, terminal=True,
+                data={"reply": {"data": {"voiceOperation": event, "textDelivery": {"deliveredPlayers": [recipient]}}}}))
+            intent.state = "completed"
+            intent.action_receipts[request_id] = {"verb": "chat", "status": status, "terminal": True}
+
+        try:
+            first = tell(player, "甲的私密话题")
+            second = tell(other, "乙的独立话题")
+            assert first in host.pending_dialogue and second in host.pending_dialogue
+            assert not host.runtime.events
+            intent, steps = await plan(first, second)
+            assert intent.source_events == [first]
+            assert steps[0].args == {"text": "请看公会面板。", "eventId": first, "listenerId": player}
+            assert sent[-1] == {"message": "甲的私密话题", "previousDeliveredTurns": []}
+            finish(intent, steps[0], first, player)
+            await plan(second)
+            assert sent[-1] == {"message": "乙的独立话题", "previousDeliveredTurns": []}
+            repeat = tell(player, "接着说呢")
+            intent, steps = await plan(repeat)
+            assert sent[-1]["previousDeliveredTurns"] == [{"player": "甲的私密话题", "reply": "请看公会面板。"}]
+            finish(intent, steps[0], repeat, other)  # A wrong recipient is not proof of conversation.
+            await plan(tell(player, "再说说"))
+            assert [turn["player"] for turn in sent[-1]["previousDeliveredTurns"]] == ["甲的私密话题"]
+            await plan(tell(player, "公开问一次", scope="nearby"))
+            assert sent[-1]["previousDeliveredTurns"] == []
+            await plan(tell(player, "重新登录", sid=str(uuid4())))
+            assert sent[-1]["previousDeliveredTurns"] == []
+            body.identity = lambda: original_identity.model_copy(update={"generation": "new-generation"})
+            await plan(tell(player, "角色重新接管"))
+            assert sent[-1]["previousDeliveredTurns"] == []
+            before = len(sent)
+            expired = tell(player, "延迟的私聊", age=26_000)
+            assert (await plan(expired))[1][0].args == {"text": "", "silent": True,
+                                                        "eventId": expired, "listenerId": player}
+            assert len(sent) == before
+        finally:
+            host.unsubscribe()
+            journal.close()
+            await client.close()
+    asyncio.run(run())
+
+
+def test_actor_queue_prunes_handled_speaker_before_selecting_pending_private(tmp_path):
+    async def run():
+        actor = role(body_kind="villager", allowed_tools=VILLAGER_TOOLS)
+        body = SimBody(body_id=str(actor.body_id))
+        await body.spawn()
+        journal = ActionJournal(tmp_path / "queued.sqlite")
+        host = NpcHost(actor, body, None, None, journal)
+        first, second = str(uuid4()), str(uuid4())
+        for key in (first, second):
+            host._event(BodyEvent(kind="dialogue", body_kind="villager", body_id=body.body_id,
+                text="合成私聊", data={"eventId":key,"speakerId":str(uuid4()),"listenerId":body.body_id,
+                "bodyId":body.body_id,"residentId":"lab","serverAttributed":True,"channel":"chat",
+                "deliveryScope":"private","occurredAt":int(time.time()*1000)}))
+        journal.listen(body.body_id, [first], "original-listen")
+        host.next_plan = time.monotonic() + 300
+        submit = host.runtime.submit_intent
+        chosen = []
+        def once(*args, **kwargs):
+            result = submit(*args, **kwargs)
+            chosen.append(result)
+            host.closed = True
+            host.wake.set()
+            return result
+        host.runtime.submit_intent = once
+        try:
+            await host._actor_loop(body.identity())
+            assert len(chosen) == 1 and chosen[0].goal == DIALOGUE_GOAL
+            assert chosen[0].source_events == [second]
+            assert first not in host.pending_dialogue
+        finally:
+            await host.close()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("response", [{"reply":""}, {"wrong":"shape"}])
+def test_silent_or_invalid_private_plan_closes_original_without_speech(tmp_path, response):
+    async def run():
+        actor = role(body_kind="villager", allowed_tools=VILLAGER_TOOLS)
+        body = SimBody(body_id=str(actor.body_id)); await body.spawn()
+        event, speaker = str(uuid4()), str(uuid4())
+        def handle(req):
+            return httpx.Response(200,json={"choices":[{"message":{"content":json.dumps(response)}}]})
+        client = ModelClient("http://127.0.0.1:49999/v1", "test-only",
+                             http=httpx.AsyncClient(transport=httpx.MockTransport(handle)))
+        journal = ActionJournal(tmp_path / "silent.sqlite")
+        host = NpcHost(actor, body, NpcPlanner(actor, client), None, journal)
+        host._event(BodyEvent(kind="dialogue",body_kind="villager",body_id=body.body_id,text="合成私聊",
+           data={"eventId":event,"speakerId":speaker,"listenerId":body.body_id,"bodyId":body.body_id,
+                 "residentId":"lab","serverAttributed":True,"channel":"chat","deliveryScope":"private",
+                 "occurredAt":int(time.time()*1000)}))
+        try:
+            steps=await host._plan(Intent(id="silent-plan",agent=actor.id,goal=DIALOGUE_GOAL,source_events=[event]),
+                                  PlanContext(snapshot=await body.snapshot(),capabilities=body.capabilities()))
+            assert len(steps)==1 and steps[0].args=={"text":"","silent":True,"eventId":event,"listenerId":speaker}
+            assert not body.acts and not journal.handled(body.body_id,event)
+        finally:
+            host.unsubscribe(); journal.close(); await client.close()
     asyncio.run(run())
 
 

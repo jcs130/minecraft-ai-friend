@@ -31,6 +31,7 @@ from .memory.router import MemoryRouter
 from .memory.social_graph import SocialGraph
 from .npc import FastSelector, ModelClient, NpcHost, NpcPlanner, load_roles
 from .numen_connection import can_reopen, run_with_connection
+from .qwenpaw_association import PawAssociations
 from .resident_numen import admit_numen
 from .resident_protocol import social_receipt
 from .resident_slots import BirthRegistry, activate, slot_templates
@@ -175,6 +176,8 @@ async def serve(path: Path):
     clients = []
     residents: dict[str, ResidentRun] = {}
     social_tasks = []
+    association_tasks = {}
+    associations = PawAssociations(settings.get("qwenPawAssociations"), settings["serverId"])
     slot_tasks = {}
     social = None
     social_graph = None
@@ -513,8 +516,9 @@ async def serve(path: Path):
                             if (host.role.body_id != role.body_id or bound.get("controllerId") != controller
                                     or bound.get("residentId") != native_residents[role_id]):
                                 raise ValueError("villager_identity_changed")
-                            # Keep the original server persona; dynamic roster updates cannot replace it.
+                            # Admit only the authenticated roster for this exact resident/body/controller.
                             host.role.name = role.name
+                            host.role.persona = role.persona
                             continue
                         if villager_identity_already_bound(role, roles, settings["bodies"], residents):
                             raise ValueError("villager_identity_already_bound")
@@ -600,6 +604,15 @@ async def serve(path: Path):
                         # A slow or failed close belongs to this body. Do not
                         # launch another controller before the old one releases it.
                         resident.close_in_background()
+            if associations.enabled and not pausing:
+                for resident in residents.values():
+                    role = resident.host.role
+                    body_health = resident.host.body.health()
+                    if (role.character_id in associations.allowed and role.body_kind in {"maid", "villager"}
+                            and body_health.connected and body_health.lifecycle == "ready"
+                            and role.id not in association_tasks):
+                        association_tasks[role.id] = asyncio.create_task(associations.admit(role), name="paw-link-" + role.id)
+                status["qwenPawAssociations"] = associations.summary()
             await asyncio.to_thread(health_file.publish, status)
             if pausing and all(resident.task.done() for resident in residents.values()):
                 return
@@ -615,6 +628,9 @@ async def serve(path: Path):
         for resident, result in zip(residents.values(), results, strict=True):
             if isinstance(result, BaseException):
                 print(f"NPC {resident.host.role.id} close failed: {type(result).__name__}", flush=True)
+        if association_tasks:
+            await asyncio.gather(*association_tasks.values(), return_exceptions=True)
+        await associations.close()
         if social_graph:
             await social_graph.graph.close()
         for client in clients:

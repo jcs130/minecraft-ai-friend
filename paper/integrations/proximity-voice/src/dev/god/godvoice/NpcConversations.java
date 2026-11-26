@@ -161,7 +161,11 @@ final class NpcConversations implements Listener {
         var turn=villagerTurns.get(event);
         return turn!=null&&turn.direct()&&villagerListener(actor,listener,event)!=null;
     }
+    void invalidateVillagerListener(Player player){
+        villagerTurns.values().removeIf(turn -> turn.speaker() == player);
+    }
     void disconnected(Player player){
+        invalidateVillagerListener(player);
         var binding=hosted.get(player.getUniqueId());
         if(binding!=null && binding.entity()==player)hosted.remove(player.getUniqueId());
     }
