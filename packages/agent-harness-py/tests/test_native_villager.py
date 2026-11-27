@@ -42,6 +42,7 @@ class VillagerServer:
         self.events = []
         self.position = {"x": 1.0, "y": 70.0, "z": 2.0}
         self.drop_write = False
+        self.drop_context = False
         self.envelope_override = None
         self.status_override = None
         self.inbox_override = None
@@ -77,6 +78,8 @@ class VillagerServer:
         action = args["action"]
         data = {"residentId": RESIDENT, "bodyId": BODY, "action": action, "observedAt": now_ms()}
         if action == "context":
+            if self.drop_context:
+                raise httpx.ReadTimeout("injected while reading the resident context", request=request)
             data.update(name="青禾", profession="minecraft:farmer", level=3, health=20, maxHealth=20,
                         position=self.position, dimension="minecraft:overworld", world="world", gameTime=100,
                         sleeping=False, ai=True, trader={}, home={"x": 1, "y": 70, "z": 2}, jobSite={},
@@ -470,6 +473,36 @@ def test_nested_native_errors_fence_or_reject_before_dispatch(run):
                                               controller_id=CONTROLLER, http=http)
                 with pytest.raises(expected):
                     await bridge.open()
+    run(scenario())
+
+
+def test_restart_retires_a_lost_observation_without_replaying_it(run):
+    async def scenario():
+        server = VillagerServer()
+        body = make(server)
+        await body.spawn()
+        try:
+            original = BodyAction(verb="observe", args={}, request_id="restart_observe_1")
+            calls_before_restore = len(server.calls)
+            body.restore_request(original)
+            result = await body.result(original.request_id)
+            assert result.status == "failed" and result.terminal
+            assert result.data.get("readOnly") is True
+            assert result.data.get("effectsApplied") is False
+            assert len(server.calls) == calls_before_restore
+
+            server.drop_context = True
+            lost = await body.act(BodyAction(verb="observe", args={}, request_id="failed_observe_1"))
+            assert lost.status == "failed" and lost.terminal
+            assert lost.data.get("effectsApplied") is False
+
+            server.drop_context = False
+            fresh = await body.act(BodyAction(verb="observe", args={}, request_id="fresh_observe_1"))
+            assert fresh.status == "completed" and fresh.terminal
+            assert fresh.data["reply"]["data"]["bodyId"] == BODY
+            assert not server.writes
+        finally:
+            await body.destroy()
     run(scenario())
 
 

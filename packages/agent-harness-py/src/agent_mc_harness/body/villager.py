@@ -281,6 +281,17 @@ class VillagerBody(BaseBody):
                 args[key] = action.args[key]
         if set(action.args) - set(names):
             raise ArgumentError("unexpected villager action arguments")
+        if native == "context":
+            try:
+                reply, _ = await self._villager(args)
+            except ControlChanged:
+                raise
+            except Exception:
+                return self._failed_read(request_id, action.verb, native)
+            if not self._verify(reply, native) or _millis(reply["data"].get("observedAt")) is None:
+                return self._failed_read(request_id, action.verb, native)
+            return self.receipt(request_id, action.verb, "completed", "context read",
+                                data={"villagerAction": native, "readOnly": True, "reply": reply})
         if native == "speak":
             text = obj(action.args, "text", str)
             silent = action.args.get("silent", False)
@@ -357,7 +368,7 @@ class VillagerBody(BaseBody):
             native = action.args.get("action")
         else:
             raise ValueError("unsupported_villager_original_request")
-        if native not in {"walk", "speak", "stop"}:
+        if native not in {"context", "walk", "speak", "stop"}:
             raise ValueError("unsupported_villager_original_request")
         from .base import _request_signature
         rid = action.request_id
@@ -365,8 +376,11 @@ class VillagerBody(BaseBody):
         if self._request_signatures.setdefault(rid, signature) != signature:
             raise ValueError("request_id_conflict; query the original request")
         if rid not in self._dispatching and rid not in self._receipts:
-            self._remember(self.receipt(rid, action.verb, "unknown", "restored_dispatch_query_original_receipt",
-                                        data={"villagerAction": native}))
+            if native == "context":
+                self._remember(self._failed_read(rid, action.verb, native))
+            else:
+                self._remember(self.receipt(rid, action.verb, "unknown", "restored_dispatch_query_original_receipt",
+                                            data={"villagerAction": native}))
         if native == "speak":
             event_id, listener = action.args.get("eventId"), action.args.get("listenerId")
             if isinstance(event_id, str) and isinstance(listener, str) and UUID_TEXT.fullmatch(listener):
@@ -384,6 +398,9 @@ class VillagerBody(BaseBody):
     async def _do_result(self, request_id: str, previous: ActionReceipt) -> ActionReceipt:
         data = previous.data if isinstance(previous.data, dict) else {}
         action = data.get("villagerAction")
+        if action == "context":
+            return self.settle(request_id, "failed", "read_result_unavailable; obtain a fresh observation",
+                               {"villagerAction": action, "readOnly": True, "effectsApplied": False}) or previous
         if action not in {"walk", "speak", "stop"}:
             return previous
         reply, _ = await self._villager({"action": "receipt", "operationId": request_id, "operationAction": action})
