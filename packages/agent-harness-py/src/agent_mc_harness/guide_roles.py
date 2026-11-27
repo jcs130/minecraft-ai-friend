@@ -76,6 +76,7 @@ def parse_guide_roster(payload, server_id, settings):
             id=role_id, name=name, character_id=character_id,
             owner_id=owner, body_id=body, body_kind="maid", persona=persona,
             model=settings["model"], provider=settings.get("provider", "tokenplan"),
+            autonomy_mode=settings.get("autonomyMode", "balanced"),
             interval_seconds=settings.get("intervalSeconds", 90), default_native_guard=True,
             activity_review_seconds=None if is_guide else 90, max_speech_chars=42, allowed_tools=GUIDE_TOOLS,
         )

@@ -112,6 +112,7 @@ def parse_villager_roster(payload, server_id: str, settings) -> tuple[dict[str, 
             roles[role_id] = NpcRole(
                 id=role_id, name=name, character_id=character, owner_id=owner, body_id=body, body_kind="villager",
                 persona=persona[:4000], model=settings["model"], provider=settings.get("provider", "tokenplan"),
+                autonomy_mode=settings.get("autonomyMode", "balanced"),
                 interval_seconds=interval, max_speech_chars=40, allowed_tools=list(VILLAGER_TOOLS),
             )
             controllers[role_id] = str(controller)
