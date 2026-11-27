@@ -999,6 +999,7 @@ class NpcPlanner:
             'Both modes accept targetName for an exact name or alias and optional travel auto, walk, or teleport. Walking uses the native pathfinder; distance, blocked routes and dimensions may require the paid travel spell when teleportAvailable. '
             'Use {"steps":[],"companion":{"mode":"stop"}} to end your selection. '
             "When your current choice still fits, omit companion. For a new choice return companion with empty steps. "
+            "If blockedWalk is present, wait for a new route or choose another activity. Repeating the same selection does not reopen the path. "
             "Do not issue body:follow or announce arrival alongside a choice. A walk receipt describes a leg of the trip. "
             "Use the fresh distance to the person to judge whether you actually met."
             if social_walk else ""
@@ -1315,7 +1316,7 @@ class NpcHost:
                  companion_adventure=None):
         self.role, self.body, self.planner, self.memory, self.journal = role, body, planner, memory, journal
         self.social = social
-        self.rendezvous_intent: Intent | None = None
+        self.companion_trip: Intent | None = None
         self.social_graph = social_graph
         self.companion_adventure = companion_adventure
         self.companions = MaidCompanions() if role.body_kind == "maid" and "body:move" in role.allowed_tools else None
@@ -1896,8 +1897,8 @@ class NpcHost:
             move = self.companions.next_step(context.snapshot, can_teleport=self._can_rendezvous(context.capabilities))
             if move:
                 steps = [move]
-                if move.tool == "body:native:rendezvous":
-                    self.rendezvous_intent = intent
+                if move.tool in {"body:move", "body:native:rendezvous"}:
+                    self.companion_trip = intent
         if scene is not None and isinstance(self.planner, NpcPlanner):
             self.planner.last_route["activityReview"] = {"observed": scene[0], "selected": [s.tool for s in steps] or ["continue"]}
         return steps + ack_steps
@@ -1981,18 +1982,25 @@ class NpcHost:
                     self.wake.set()
             await asyncio.sleep(2)
 
-    def _settle_rendezvous(self, body_id: str):
-        trip = self.rendezvous_intent
+    def _settle_companion_trip(self, body_id: str):
+        trip = self.companion_trip
         if trip is None or trip.state in ("active", "queued"):
             return
-        request_id = next((rid for rid, action in trip.action_receipts.items() if action["verb"] == "rendezvous"), None)
+        step = trip.steps[0]
+        travel_verb = step.tool.rsplit(":", 1)[-1]
+        request_id = next((rid for rid, action in trip.action_receipts.items() if action["verb"] == travel_verb), None)
         if request_id:
             # Only the original journal entry can settle a dispatched trip.
             receipt = self.journal.receipt(body_id, request_id)
             if not receipt or not receipt.terminal:
                 return
-            self.companions.settle_transfer(trip.steps[0].args["targetUuid"], receipt, turn_hash=trip.resident_turn_hash)
-        elif trip.state in ("failed", "cancelled") or (trip.state == "paused" and trip.needs_host):
+            if travel_verb == "move":
+                self.companions.settle_walk(step, receipt)
+            else:
+                self.companions.settle_transfer(step.args["targetUuid"], receipt, turn_hash=trip.resident_turn_hash)
+        elif travel_verb == "rendezvous":
+            if trip.state not in ("failed", "cancelled") and not (trip.state == "paused" and trip.needs_host):
+                return
             # Runtime authorization can stop a trip before the journal records a body action.
             if trip.state == "cancelled":
                 reason = "rendezvous_cancelled_before_dispatch"
@@ -2003,9 +2011,7 @@ class NpcHost:
             self.companions.fail_pending_transfer(reason)
             if trip.state == "paused":
                 trip.state, trip.reason, trip.needs_host = "failed", reason, False
-        else:
-            return
-        self.rendezvous_intent = None
+        self.companion_trip = None
 
     async def _actor_loop(self, identity):
         while not self.closed:
@@ -2025,7 +2031,7 @@ class NpcHost:
                                      for action in unresolved]
             recovery_snapshot = None
             if not unresolved:
-                self._settle_rendezvous(identity.body_id)
+                self._settle_companion_trip(identity.body_id)
                 if any(intent.state == "paused" and intent.recoverable_pause for intent in self.runtime.intents.values()):
                     recovery_snapshot = await self._observe()
                     if self.runtime.retire_recovered_pauses(recovery_snapshot):
@@ -2130,9 +2136,9 @@ class NpcHost:
                     if move:
                         trip = self.runtime.submit_intent("Keep up with the companion I selected.", agent=self.role.id,
                                                           steps=[move.model_dump()])
-                        if move.tool == "body:native:rendezvous":
+                        if move.tool in {"body:move", "body:native:rendezvous"}:
                             trip.resident_turn_hash = self.companions.turn_hash
-                            self.rendezvous_intent = trip
+                            self.companion_trip = trip
                 self.last_danger = threatened
             # Completed history is bounded in memory; durable receipts and memories remain on disk.
             settled = [key for key, value in self.runtime.intents.items() if value.state in ("completed", "failed", "cancelled")]

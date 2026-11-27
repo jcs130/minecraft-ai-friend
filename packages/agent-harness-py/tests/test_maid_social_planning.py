@@ -267,14 +267,14 @@ def test_host_targeted_walk_reaches_native_bridge_but_direct_model_arguments_can
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("scenario", ["arrive", "unknown", "busy", "scene_changed", "unlisted", "no_skill", "raw", "walk", "release"])
+@pytest.mark.parametrize("scenario", ["arrive", "unknown", "busy", "scene_changed", "unlisted", "no_skill", "raw", "walk", "blocked_walk", "release"])
 def test_desktop_activity_review_dispatches_only_current_compass_decisions(tmp_path, scenario):
     async def run():
         world = VisiblePlayers()
         target = peer(OTHER, "ag_CorMy", 16)
         world.directory = [target]
         world.navigation_target = OWNER if scenario == "release" else ""
-        world.dimension = "minecraft:overworld" if scenario == "walk" else "minecraft:aincrad"
+        world.dimension = "minecraft:overworld" if scenario in {"walk", "blocked_walk"} else "minecraft:aincrad"
         allowed = ["body:move", "body:observe", "body:native:release_rendezvous"]
         if scenario != "no_skill":
             allowed.append("body:native:rendezvous")
@@ -300,14 +300,25 @@ def test_desktop_activity_review_dispatches_only_current_compass_decisions(tmp_p
             elif scenario == "release":
                 answer = {"steps": [], "companion": {"mode": "stop"}}
             else:
-                travel = "walk" if scenario == "walk" else "teleport"
+                travel = {"walk": "walk", "blocked_walk": "auto"}.get(scenario, "teleport")
                 answer = {"steps": [], "companion": {"mode": "approach", "targetName": "ag_CorMy", "travel": travel}}
             return httpx.Response(200, json={"state": "answered", "id": "desktop-turn", "answer": answer})
 
         def game(request):
+            before = world.position
             response = world(request)
             args = json.loads(request.content).get("arguments", {})
-            if args.get("action") != "rendezvous" or scenario != "arrive":
+            action = args.get("action")
+            if action == "walk" and scenario == "blocked_walk":
+                rid = args["requestId"]
+                world.position = before
+                world.receipts[rid].pop("actualPosition", None)
+                world.receipts[rid].update(status="rejected", goalCompleted=False,
+                                           observation={"reason": "path_blocked", "effectsApplied": False})
+                envelope = response.json()
+                envelope["result"]["content"][0]["text"] = json.dumps({"ok": False, "reason": "path_blocked", "data": world.receipts[rid]})
+                return httpx.Response(200, json=envelope)
+            if action != "rendezvous" or scenario not in {"arrive", "blocked_walk"}:
                 return response
             rid = args["requestId"]
             at = {"dimension": target["dimension"], **target["position"]}
@@ -332,7 +343,7 @@ def test_desktop_activity_review_dispatches_only_current_compass_decisions(tmp_p
             host.runtime.step_timeout = .01
             await host.runtime.run_intent(intent)
             assert len(offers) == 1
-            expected = {"arrive": "rendezvous", "unknown": "rendezvous", "walk": "walk", "release": "release_rendezvous"}
+            expected = {"arrive": "rendezvous", "unknown": "rendezvous", "walk": "walk", "blocked_walk": "walk", "release": "release_rendezvous"}
             if scenario not in expected:
                 assert not world.writes and not intent.receipts and not host.companions.remote_sent
                 assert intent.state == ("failed" if scenario == "raw" else "completed")
@@ -345,6 +356,26 @@ def test_desktop_activity_review_dispatches_only_current_compass_decisions(tmp_p
                 assert intent.state == "paused" and not original.terminal
                 assert [a.request_id for a in journal.unresolved(MAID)] == [original.request_id]
                 assert host.companions.next_step(await body.snapshot(), can_teleport=True) is None
+            elif scenario == "blocked_walk":
+                assert intent.state == "failed" and original.terminal and original.text == "path_blocked"
+                assert journal.receipt(MAID, original.request_id) == original
+                host.next_plan = time.monotonic() + 600  # Recovery does not wait for another model answer.
+                host.companions.clock = lambda: host.companions.last_walk + 4
+                host.runtime.start()
+                settler = asyncio.create_task(host._actor_loop(body.identity()))
+                try:
+                    async with asyncio.timeout(4):
+                        while host.companions.last_transfer is None:
+                            await asyncio.sleep(.01)
+                    assert [w["action"] for w in world.writes] == ["walk", "rendezvous"]
+                    transfer = host.companions.last_transfer
+                    assert transfer["status"] == "completed" and transfer["requestId"] != original.request_id
+                    observed = await body.snapshot()
+                    assert (observed.dimension, observed.position) == (target["dimension"], target["position"])
+                finally:
+                    host.closed = True
+                    host.wake.set()
+                    await settler
             else:
                 assert intent.state == "completed" and original.terminal and original.status == "completed"
                 assert journal.receipt(MAID, original.request_id) == original
@@ -355,7 +386,7 @@ def test_desktop_activity_review_dispatches_only_current_compass_decisions(tmp_p
                     settler = asyncio.create_task(host._actor_loop(body.identity()))
                     try:
                         async with asyncio.timeout(2):
-                            while host.rendezvous_intent is not None:
+                            while host.companion_trip is not None:
                                 await asyncio.sleep(.01)
                         result = host.companions.context(observed)
                         assert result["status"] == "arrived"

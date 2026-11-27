@@ -8,7 +8,7 @@ import pytest
 
 from agent_mc_harness.journal import ActionJournal
 from agent_mc_harness.maid_companions import MaidCompanions, parse_choice, walk_available
-from agent_mc_harness.models import BodySnapshot, NativeAction, utcnow
+from agent_mc_harness.models import ActionReceipt, BodySnapshot, NativeAction, utcnow
 from agent_mc_harness.npc import IDLE_GOAL, NpcHost, NpcPlanner
 from agent_mc_harness.resident_turns import ResidentTurnsClient
 from simbody import SimBody
@@ -268,6 +268,94 @@ def compass(*characters, dimension=OVERWORLD, x=0):
     return result
 
 
+def blocked_walk(request="blocked-walk", reason="path_blocked", *, terminal=True):
+    return ActionReceipt(request_id=request, verb="move", status="failed" if terminal else "unknown", terminal=terminal,
+                         text="receipt: failed", data={"data": {"observation": {"reason": reason}}})
+
+
+@pytest.mark.parametrize("start,target", [(0, 14), (4, 10), (0, 10)])
+def test_blocked_walk_waits_only_for_the_same_route(loop, start, target):
+    tracking, now = loop
+    first = compass(player())
+    assert tracking.choose("follow", ALICE, first, travel="walk")
+    leg = tracking.next_step(first)
+    tracking.settle_walk(leg, blocked_walk())
+    # Changed endpoints can proceed on the next tick. The unchanged route used
+    # to be submitted again when the old walk timer expired.
+    now[0] = 31 if (start, target) == (0, 10) else 3
+    current = compass(player(x=target), x=start)
+    assert tracking.choose("follow", ALICE, current, travel="walk")
+    next_leg = tracking.next_step(current, can_teleport=True)
+    if (start, target) == (0, 10):
+        assert next_leg is None and tracking.active
+        assert tracking.context(current)["blockedWalk"]["reason"] == "path_blocked"
+        now[0] = 91
+        next_leg = tracking.next_step(current, can_teleport=True)
+    assert next_leg.tool == "body:move" and next_leg.args["x"] == target
+
+
+def test_new_elevation_reopens_the_route_before_the_cooldown(loop):
+    tracking, now = loop
+    first = compass(player())
+    assert tracking.choose("follow", ALICE, first, travel="walk")
+    leg = tracking.next_step(first)
+    tracking.settle_walk(leg, blocked_walk())
+    now[0] = 3
+    lower = player()
+    lower["position"]["y"] -= 1
+    obs = compass(lower)
+    assert "blockedWalk" not in tracking.context(obs)
+    assert tracking.next_step(obs, can_teleport=True).args["y"] == 63
+
+
+@pytest.mark.parametrize("reason", ["path_blocked", "walk_timeout", "inventory_opened", None])
+def test_only_a_terminal_navigation_failure_enables_auto_fallback(loop, reason):
+    tracking, now = loop
+    first = compass(player())
+    assert tracking.choose("approach", ALICE, first)
+    leg = tracking.next_step(first, can_teleport=True)
+    tracking.settle_walk(leg, blocked_walk(reason=reason, terminal=reason is not None))
+    now[0] = 3
+    next_leg = tracking.next_step(first, can_teleport=True)
+    if reason in {"path_blocked", "walk_timeout"}:
+        assert next_leg.tool == "body:native:rendezvous" and next_leg.args == {"targetUuid": ALICE}
+        now[0] = 100
+        assert tracking.next_step(first, can_teleport=True) is None
+    else:
+        assert next_leg is None
+
+
+def test_host_uses_the_exact_journalled_walk_receipt(tmp_path):
+    async def run():
+        actor = role(body_kind="maid", allowed_tools=["body:move"])
+        body = SimBody(body_id=str(actor.body_id))
+        await body.spawn()
+        journal = ActionJournal(tmp_path / "actions.sqlite3")
+        host = NpcHost(actor, body, NpcPlanner(actor, None), None, journal)
+        try:
+            obs = compass(player())
+            assert host.companions.choose("follow", ALICE, obs, travel="walk")
+            step = host.companions.next_step(obs)
+            trip = host.runtime.submit_intent(IDLE_GOAL, agent=actor.id, steps=[step.model_dump()])
+            host.companion_trip = trip
+            for request in ("walk_original", "walk_unrelated"):
+                journal.begin(str(actor.body_id), step.action(request))
+            journal.settle(str(actor.body_id), blocked_walk("walk_unrelated"))
+            trip.action_receipts["walk_original"] = {"verb": "move"}
+            trip.state = "paused"
+            host._settle_companion_trip(str(actor.body_id))
+            assert host.companion_trip is trip
+            assert host.companions.context(obs).get("blockedWalk") is None
+            journal.settle(str(actor.body_id), blocked_walk("walk_original"))
+            host._settle_companion_trip(str(actor.body_id))
+            assert host.companion_trip is None
+            assert host.companions.context(obs)["blockedWalk"]["requestId"] == "walk_original"
+        finally:
+            await host.close()
+            journal.close()
+    asyncio.run(run())
+
+
 def test_targeted_navigation_selects_and_releases_only_the_current_character(loop):
     tracking, now = loop
     def sample(held, *players):
@@ -430,14 +518,14 @@ def test_portal_meeting_decision_dispatches_or_reports_a_preflight_refusal(tmp_p
             intent = host.runtime.submit_intent(IDLE_GOAL, agent=actor.id)
             await host.runtime.run_intent(intent)
             assert intent.resident_turn_hash == turn_hash
-            host._settle_rendezvous(str(actor.body_id))
+            host._settle_companion_trip(str(actor.body_id))
             last_transfer = host.companions.context(observed)["lastTransfer"]
             assert last_transfer["turnHash"] == turn_hash
             if refusal:
                 assert not body.acts
                 assert not journal.recent(str(actor.body_id))
                 assert not host.companions.active
-                assert not host.rendezvous_intent
+                assert not host.companion_trip
                 assert last_transfer["message"] == refusal
                 assert "requestId" not in last_transfer
                 if refusal == "rendezvous_skill_unavailable":
