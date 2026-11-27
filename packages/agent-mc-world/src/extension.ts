@@ -82,6 +82,7 @@ export { OPTIONS_TOOL, minecraftOptionsFromSnapshot, extendMinecraftOptions, rel
   renderMinecraftOptionIndex, renderMinecraftTravelOptions, readMinecraftOptions } from '../core/options.ts';
 export * from './contracts/options.ts';
 export { createMinecraftChoiceTool } from './client/choice.ts';
+export { explorationActions } from './client/exploration.ts';
 export { minecraftLifeTool } from './client/life.ts';
 export { PhotographyService, PHOTO_TOOL, PHOTO_PLANNER_SYSTEM, preparePhotoContext } from '../core/photography.ts';
 export { renderVoxelPhoto } from '../core/voxel-photo.ts';

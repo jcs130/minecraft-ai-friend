@@ -7190,6 +7190,18 @@ export class MinecraftWorld implements World {
         recovery: [{ tool: 'mc_help', arguments: correction?.helpArguments ?? {},
           text: correction?.hint ?? '按工具签名纠正参数；整批未提交，前面的步骤也未执行。' }] } },
     });
+    // Recheck in the body process, after host inference and IPC, immediately before admission.
+    if (name === 'mc_do' && args.explorationOrigin !== undefined) {
+      const expected = args.explorationOrigin as {position?: number[]; dimension?: string; generation?:number; epoch?:number} | null;
+      const bot = this.bridge?.bot, queue = this.executor?.status(), pos = bot?.entity?.position;
+      if (!expected || !pos || !Array.isArray(expected.position) || expected.position.length !== 3
+        || !expected.position.every(Number.isFinite) || Math.hypot(pos.x-expected.position[0]!,pos.y-expected.position[1]!,pos.z-expected.position[2]!) > 1.5
+        || expected.generation !== this.connectionGeneration || expected.epoch !== this.routePositionEpoch
+        || expected.dimension !== normalizeDimension(dimensionOf(bot!)) || !queue || queue.running || queue.waiting.length || queue.hold
+        || this.methodOwnsBody() || this.combat?.active || this.reflexes?.envActive || bot?.currentWindow) {
+        return {text:'探路选择已过时，身体或位置已变化；没有提交动作。',failed:true,data:{status:'stale',executed:false}};
+      }
+    }
     if (name === 'mc_scout' && args.queue != null && args.queue !== 'append') {
       return invalidArguments('arguments.queue', SCOUT_QUEUE_SCHEMA.description);
     }
