@@ -9,4 +9,6 @@ Immediate observations expose `data.readout` and `meta.observation` using `agent
 
 The SDK exports `spatialReadout` and `SpatialReadout` from `agent-mc-world/client`. Hosts may use repeated typed samples when deciding whether an existing request needs more reasoning. The core never calls a model or adopts a skill, and repeated reads never authorize cancelling native work or replaying an unknown action.
 
+For a nearby slab or stair, `sites[].landing` distinguishes the actual support block from the feet height above it. Its `next` object is a standard exact `goto` step. Mineflayer's existing route planner checks walkable paths first and can fall back to already permitted terrain work. If the standing height is fractional or the sampled body space is partly unknown, `next` is a walk-only dry run. If the top is blocked, `next` is null. A hint does not prove a continuous route, server placement permission, or actual arrival.
+
 A host presenting both `text` and `data` should recognize an exact JSON duplicate and show one structured copy. Preserve native control and typed feedback ahead of potentially capped geometry; retain the complete original receipt and its historical lookup. Do not classify repeated observations by removing every number: that would erase actual position and block-state changes.

@@ -83,6 +83,31 @@ it('revokes a pending startup and ignores late IPC and exits from an older child
   await proxy.stop();await vi.advanceTimersByTimeAsync(10000);expect(state.children).toHaveLength(2);
 });
 
+it('keeps the current server guide and command when a different profile is saved during play', async () => {
+  vi.useFakeTimers();
+  const entry = { id: 'menu', title: 'Menu', summary: 'Server menu', text: 'Guide text', reference: 'page 1' };
+  const firstGuide = { profile: 'first', title: 'First', revision: '1', entries: [entry] };
+  const secondGuide = { ...firstGuide, profile: 'second', title: 'Second' };
+  const cfg = { ...structuredClone(MINECRAFT_CLIENT_DEFAULTS), server: 'first', escapeCommand: '/legacy exit',
+    servers: { first: { host: 'first.invalid', guide: firstGuide }, second: { host: 'second.invalid', guide: secondGuide, escapeCommand: '/second exit' } } };
+  const proxy = new MinecraftWorldProxy({ cfg }), host = new FakeHost();
+  const started = proxy.start(host), child = state.children[0];
+  const init = child.sent.find((m: any) => m.req?.kind === 'init');
+  expect(init.req.init.cfg.knowledge.server).toEqual(firstGuide);
+  expect(init.req.init.cfg.escapeCommand).toBe('');
+  child.emit('message', { t: 'rep', id: init.id, ok: true, value: null });
+  await started;
+  Object.assign(cfg, { server: 'second', escapeCommand: '/second exit',
+    knowledge: { server: secondGuide, minedojo: { indexFile: 'fixture.sqlite' } } });
+  await vi.advanceTimersByTimeAsync(1100);
+  const update = child.sent.find((m: any) => m.cast?.kind === 'config');
+  expect(update?.cast.cfg).toMatchObject({
+    activeServer: 'first', escapeCommand: '',
+    knowledge: { server: firstGuide, minedojo: { indexFile: 'fixture.sqlite' } },
+  });
+  await proxy.stop();
+});
+
 it('stops auto-restarting an engine child after a bounded number of unexpected exits', async () => {
   vi.useFakeTimers();
   const proxy = new MinecraftWorldProxy({ cfg: structuredClone(MINECRAFT_CLIENT_DEFAULTS) }), host = new FakeHost();

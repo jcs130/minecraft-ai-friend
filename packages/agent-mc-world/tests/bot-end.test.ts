@@ -109,4 +109,25 @@ describe('bridge login cleanup without quit', () => {
       vi.useRealTimers();
     }
   });
+
+  it('records the stack for connection errors that need protocol diagnosis', async () => {
+    const bot = Object.assign(new EventEmitter(), {
+      _client: Object.assign(new EventEmitter(), { end: vi.fn() }),
+      loadPlugin() {},
+      quit() {},
+    });
+    const create = vi.spyOn(mineflayer, 'createBot').mockReturnValue(bot as never);
+    const log = { info: vi.fn(), warn: vi.fn(), error() {}, debug() {}, trace() {}, emit() {}, child() { return this; } };
+    const bridge = new Bridge({
+      host: 'example.test', port: 25565, username: 'tester', version: '1.21.1',
+      viewerPort: 0, autoReconnect: false, log: log as never, onSpawn() {}, onDisconnect() {},
+    });
+    bridges.push(bridge);
+    Object.assign(bridge, { installSpawnGear() {} });
+    bridge.start();
+    const error = new Error("Cannot read properties of undefined (reading 'length')");
+    bot.emit('error', error);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('minecraft 连接错误'), { error: error.stack });
+  });
 });

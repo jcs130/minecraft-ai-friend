@@ -26,6 +26,15 @@ describe('source-owned historical gameplay evidence',()=>{
   expect(r.text).toBe('I caught a fish');expect(r.evidence).toBe('speaker-claim');expect(r.goalVerified).toBe(false);
   expect(r.source.reference).toBe('event:minecraft:run-a:1');expect(r.source.sha256).toMatch(/^[a-f0-9]{64}$/);
  });
+ it('keeps the server sample line out of the historical speech claim',()=>{
+   const uuid='2c077019-e4e4-4859-b0ca-f8bcad645fa0';
+   const r=projectGameMemoryEvent(event({text:'[MC] A: 我在桥边\n[服务端发言采样，仅对应发言时] metadata',
+    meta:{uname:'A',senderUuid:uuid,channel:'nearby',identityEvidence:'packet-sender',chatTransport:'chat',chatBody:'我在桥边',
+      speakerOrigin:{uuid,name:'A',displayName:'安',world:'minecraft:overworld',worldUuid:'d5d4804a-6401-4802-8742-2bdb55d81657',
+        observedAt:1795257813757,position:{x:-1.25,y:65,z:2}}}}))!;
+   expect(r.text).toBe('我在桥边');
+   expect(r.data).not.toHaveProperty('speakerOrigin');
+ });
  it('reads the outgoing text instead of treating the transport receipt as speech',()=>{
   const r=projectGameMemoryEvent(event({type:'minecraft.chat.sent',text:'transport sent',meta:{chatDelivery:{
    protocol:'agent-mc/chat-delivery/v1',id:'send-1',text:'Here is my actual reply',status:'sent',recipientRead:'unknown'}}}))!;

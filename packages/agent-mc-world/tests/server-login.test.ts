@@ -470,3 +470,105 @@ describe('scoped automatic server authentication', () => {
     try { expect(bytes.toString('utf8')).toBe('fixture-value'); } finally { bytes.fill(0); }
   });
 });
+
+describe('mc-auth-success confirmation policy', () => {
+  it.each([
+    'MC_AUTH_SUCCESS', '[MC_AUTH_SUCCESS]', '§a[MC_AUTH_SUCCESS] welcome Agent!',
+    'MC_AUTH_SUCCESS: welcome back', 'MC_AUTH_SUCCESS 登录成功',
+    'MC_AUTH_SUCCESS Agent', '[MC_AUTH_SUCCESS] Agent',
+    'MC_AUTH_SUCCESS {"username":"Agent"}', '[MC_AUTH_SUCCESS] {"username":"Agent"}',
+  ])('accepts only a direct matching machine receipt: %s', receipt => {
+    const r = fixture(), login = installServerLogin(r.bot, { ...r.options, confirmation: 'mc-auth-success' });
+    expect(login.detail().authSuccessReceived).toBe(false);
+    r.messages(receipt);
+    expect(login.detail()).toMatchObject({ stage: 'confirmed', authSuccessReceived: true });
+    expect(login.ready()).toBe(true); expect(r.sent).toEqual([]); login.stop();
+  });
+
+  it.each([
+    'MC_AUTH_SUCCESS_EXTRA', '[MC_AUTH_SUCCESS_EXTRA]', '[MC_AUTH_SUCCESS]_EXTRA',
+    'MC_AUTH_SUCCESS Else', '[MC_AUTH_SUCCESS] Else',
+    'MC_AUTH_SUCCESS {"username":"Else"}', '[MC_AUTH_SUCCESS] {"username":"Else"}',
+    'MC_AUTH_SUCCESS {"username":123}', 'MC_AUTH_SUCCESS {broken}',
+    'MC_AUTH_SUCCESS {"authorized":false}',
+    '<Player> MC_AUTH_SUCCESS', '[Global] <Player> [MC_AUTH_SUCCESS]',
+    'Player said MC_AUTH_SUCCESS', 'AUTH_SUCCESS', '登录成功',
+    'MC_AUTH_STATE {"username":"Agent","authorized":true,"status":"authenticated"}',
+  ])('does not unlock on forged, incompatible or wrong-account text: %s', receipt => {
+    const r = fixture(), login = installServerLogin(r.bot, { ...r.options, confirmation: 'mc-auth-success' });
+    r.messages(receipt);
+    expect(login.ready()).toBe(false); expect(login.detail().authSuccessReceived).toBe(false); login.stop();
+  });
+
+  it.each(['chat', 'player', 'title', 'subtitle', 'game_info'])('rejects machine success outside system: %s', position => {
+    const r = fixture(), login = installServerLogin(r.bot, { ...r.options, confirmation: 'mc-auth-success' });
+    r.messages('MC_AUTH_SUCCESS', position); r.bot.emit('title', 'MC_AUTH_SUCCESS', 'title');
+    expect(login.ready()).toBe(false); expect(login.detail().authSuccessReceived).toBe(false); login.stop();
+  });
+
+  it.each([undefined, ''])('requires real success for a credential-free session (%s)', configFile => {
+    const r = fixture(), readCredential = vi.fn(async () => Buffer.from('unused'));
+    const login = installServerLogin(r.bot, { ...r.options, configFile, readCredential, confirmation: 'mc-auth-success' });
+    r.messages('/login <password>'); r.messages('登录成功');
+    r.messages('MC_AUTH_STATE {"authorized":true,"status":"authenticated"}');
+    expect(login.ready()).toBe(false); expect(readCredential).not.toHaveBeenCalled();
+    r.messages('MC_AUTH_SUCCESS'); expect(login.ready()).toBe(true);
+    expect(login.detail().authSuccessReceived).toBe(true); login.stop();
+  });
+
+  it.each([false, true])('accepts late success after retrying without replaying a credential (submitted=%s)', async submitted => {
+    vi.useFakeTimers();
+    const r = fixture();
+    writeFileSync(r.configFile, JSON.stringify({ enabled: true, accounts: [{ ...r.account, timeoutMs: 1000 }] }));
+    let finish!: (bytes: Buffer) => void;
+    const readCredential = vi.fn(() => submitted ? Promise.resolve(Buffer.from('fixture-pass'))
+      : new Promise<Buffer>(resolve => { finish = resolve; }));
+    const login = installServerLogin(r.bot, { ...r.options, readCredential, confirmation: 'mc-auth-success' });
+    try {
+      r.messages('AUTH_LOGIN'); await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(login.detail()).toMatchObject({ stage: 'retrying', authSuccessReceived: false });
+      r.messages('AUTH_LOGIN'); r.messages('登录成功'); expect(login.ready()).toBe(false);
+      r.messages('MC_AUTH_SUCCESS'); expect(login.ready()).toBe(true);
+      r.messages('AUTH_LOGIN'); r.messages('MC_AUTH_SUCCESS');
+      if (!submitted) {
+        const bytes = Buffer.from('late-secret'); finish(bytes); await vi.advanceTimersByTimeAsync(0);
+        expect(bytes.every(byte => byte === 0)).toBe(true);
+      }
+      expect(readCredential).toHaveBeenCalledOnce(); expect(r.sent).toHaveLength(submitted ? 1 : 0);
+    } finally { login.stop(); vi.useRealTimers(); }
+  });
+
+  it.each([
+    'MC_AUTH_DENIED login required', 'MC_AUTH_STATE {"username":"Agent","authorized":false,"status":"login_required"}',
+    'AUTH_FAILED', 'MC_AUTH_FAILED wrong password', 'Wrong password!',
+  ])('immediately clears confirmation on revocation: %s', receipt => {
+    const r = fixture();
+    writeFileSync(r.configFile, JSON.stringify({ enabled: true, accounts: [{ ...r.account, reauthenticateOnRevoked: false }] }));
+    const login = installServerLogin(r.bot, { ...r.options, confirmation: 'mc-auth-success' });
+    r.messages('MC_AUTH_SUCCESS'); expect(login.ready()).toBe(true);
+    r.messages(receipt, 'chat'); expect(login.ready()).toBe(true);
+    r.messages(receipt); expect(login.ready()).toBe(false);
+    expect(login.detail().authSuccessReceived).toBe(false); login.stop();
+  });
+
+  it.each(['stop', 'end', 'kicked'])('clears the receipt permanently after %s', ending => {
+    const r = fixture(), login = installServerLogin(r.bot, { ...r.options, configFile: '', confirmation: 'mc-auth-success' });
+    r.messages('MC_AUTH_SUCCESS'); expect(login.ready()).toBe(true);
+    if (ending === 'stop') login.stop(); else r.bot.emit(ending);
+    r.messages('MC_AUTH_SUCCESS');
+    expect(login.detail()).toMatchObject({ stage: 'closed', authSuccessReceived: false });
+    expect(login.ready()).toBe(false);
+    const next = installServerLogin(r.bot, { ...r.options, configFile: '', confirmation: 'mc-auth-success' });
+    expect(next.detail().authSuccessReceived).toBe(false); expect(next.ready()).toBe(false); next.stop();
+  });
+
+  it('preserves explicit plugin confirmation and distinguishes it from a real machine receipt', () => {
+    const r = fixture(), login = installServerLogin(r.bot, { ...r.options, confirmation: 'plugin' });
+    r.bot.emit('title', '登录成功', 'title');
+    expect(login.ready()).toBe(true); expect(login.detail().authSuccessReceived).toBe(false);
+    r.messages('MC_AUTH_SUCCESS Else'); expect(login.detail().authSuccessReceived).toBe(false);
+    r.messages('MC_AUTH_SUCCESS'); expect(login.detail().authSuccessReceived).toBe(true); login.stop();
+    expect(login.detail().authSuccessReceived).toBe(false);
+  });
+});

@@ -4,6 +4,10 @@ import { METHOD_CAPABILITIES_HELP } from './method-capabilities.ts';
 import { adaptiveDivingDecision } from './diving-budget.mjs';
 
 const SDK_API = Object.freeze({
+  writing: 'Mineflayer 写作与命名：mc_help {skills:["book","use","anvil","build"]} 查询参数。'
+    + '书与笔先用 mc_bag {detail:"book"} 查书目；await mc.do([{skill:"book",windowSlot:36,pages:["营地手记"]}]) 保存草稿，带 title 才原版署名。'
+    + '用 build 放告示牌，再 use{at,text,back?} 写指定面；用 anvil{op:"rename",item:"name_tag",name:"团子"} 改牌名，再 use{item:"团子",target:已观察类型,entityId:已观察ID} 给目标命名。'
+    + '署名、写牌和命名均等待服务端状态；结果不明先重新观察，不重放。',
   routes:'模型可以自行观察、选择路点、避开具体机关，并写 JavaScript 在同一脚本中连续执行。'
     +'同脚高精确地面路线用 await mc.do([{skill:"follow_route",waypoints:[{at:[x,y,z],posture:"sneak"}],avoid:[[trapX,trapY,trapZ]],avoidBlocks:["tripwire","stone_pressure_plate"]}])。mc_help {skills:["follow_route"]} 按需取完整契约。'
     +'路点是绝对脚位置，保留小数；按顺序走并在转角前减速，不自动改道。先 dryRun 检查身体净空/支撑与已声明禁入格，执行仍重验；未知或新的障碍会停止并给已抵达索引。'
@@ -18,7 +22,7 @@ const SDK_API = Object.freeze({
   weapons: '先 mc_bag 按需读取物品 ID、槽位、附魔和耐久；mc_combat_tactic {battlefield:true} 的 loadout.choices 是当前武器模式索引。'
     + '近战支持剑、斧、三叉戟、重锤及工具；单步 mc.do([{skill:"attack",target:实际类型,entityId:实际编号,mode:"melee",weapon:"trident"}]) 精确指定，缺失不替换。'
     + '反射/快战斗的偏好用 mc_combat_tactic {meleeWeapons:["trident","iron_sword"]}，不存在的跳过再回退，[]复原；仅设置不开始战斗。'
-    + '自动远程控制目前只支持弓和普通箭。三叉戟明确投掷用 use 的 item:"trident",at；这会离手，忠诚/激流要读实际附魔，不假设自动回收。'
+    + '原生远程支持弓、已装填箭或有普通箭、光灵箭、药箭的弩、以及忠诚三叉戟。用 attack 的 mode:"ranged",weapon:"crossbow" 或 weapon:"trident" 明确选择；无忠诚的三叉戟投出后可能丢失，激流三叉戟不能投掷。'
     + '弩的装填/发射、特殊投掷可由你编写原生方法：bot.inventory.items、bot.equip、bot.lookAt、bot.activateItem、bot.waitForTicks、bot.deactivateItem；逐项 api 查询真实契约。近战使用 mc.do 的 attack，不能假设原生脚本存在 bot.attack。'
     + '原生按键/发包不等于成功装填、命中、回收或安全落地；按物品与实体实际变化核验。取消蓄力须切槽，不能用松手假装取消而误发射。'
     + 'api:"authoring" 给校验、保存父版本、执行、证据、采用和回退链。保存后可用 mc_combat_tactic.routines 登记精确 procedure 给系统一选择，program 按现场重排。维护者支持某动作不等于你已学会。',

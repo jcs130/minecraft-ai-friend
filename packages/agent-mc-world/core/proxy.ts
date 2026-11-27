@@ -1,5 +1,5 @@
 /** 主进程中的 Minecraft World 代理。游戏连接、执行器和客户端管理在引擎子进程；此处转发工具、事件、控制台及存储请求，并每秒推送配置。 */
-import { applyServerProfile } from './server-profiles.ts';
+import { applyServerProfile, SERVER_PROFILE_FIELDS } from './server-profiles.ts';
 import { fork, type ChildProcess } from 'node:child_process';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
 import { emitLogNote, logChildStdio } from './support/runtime.mjs';
@@ -57,6 +57,21 @@ const PANEL_RPC_TIMEOUT_MS = 150_000;
 /** 初始化确认只表示请求已受理，不等待游戏连接完成。 */
 const INIT_TIMEOUT_MS = 30_000;
 
+// Connection/account/policy and ownership identities belong to one World start,
+// including automatic child recovery. Other fields keep the original hot sampling.
+const STARTUP_FIELDS = [
+  ...SERVER_PROFILE_FIELDS, 'provider', 'profilesFolder', 'javaClient',
+  'autoReconnect', 'keepAliveTimeoutMs', 'viewDistance', 'deathRespawnDelayMs',
+  'server', 'servers', 'activeServer', 'serverSafety', 'memoryAgentId',
+] as const;
+const STARTUP_NESTED_FIELDS = {
+  knowledge: ['server'],
+  local: ['serverDir'],
+  client: ['username', 'auth', 'profilesFolder'],
+  player: ['username', 'auth', 'profilesFolder'],
+  miningLimits: ['hardStopOnWarning', 'warningKeywords'],
+} as const;
+
 interface PendingRpc {
   resolve: (value: unknown) => void;
   reject: (err: Error) => void;
@@ -101,12 +116,24 @@ export class MinecraftWorldProxy implements World {
   private configTimer: ReturnType<typeof setInterval> | null = null;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private unexpectedExits = 0;
+  private startupCfg: MinecraftWorldOptions['cfg'] | null = null;
 
   constructor(private readonly opts: MinecraftWorldOptions) {}
 
-  /** The world section with the selected server profile applied (falls back to the raw section). */
+  /** Never reselect a profile from hot configuration while this World is started. */
   private effectiveCfg(): MinecraftWorldOptions['cfg'] {
-    try { return applyServerProfile(this.opts.cfg); } catch { return this.opts.cfg; }
+    if (!this.startupCfg) return this.opts.cfg;
+    const next = { ...this.opts.cfg } as unknown as Record<string, unknown>;
+    const startup = this.startupCfg as unknown as Record<string, unknown>;
+    for (const key of STARTUP_FIELDS) next[key] = structuredClone(startup[key]);
+    for (const [group, keys] of Object.entries(STARTUP_NESTED_FIELDS)) {
+      const saved = startup[group] as Record<string, unknown> | undefined;
+      next[group] = {
+        ...(next[group] as Record<string, unknown> | undefined),
+        ...Object.fromEntries(keys.map(key => [key, structuredClone(saved?.[key])])),
+      };
+    }
+    return next as unknown as MinecraftWorldOptions['cfg'];
   }
 
   /**
@@ -114,15 +141,16 @@ export class MinecraftWorldProxy implements World {
    * 快照锚点由子进程设置。
    */
   envPromptVars(): Record<string, string> {
+    const cfg = this.effectiveCfg();
     return {
-      'minecraft.version': this.effectiveCfg().version,
+      'minecraft.version': cfg.version,
       'minecraft.world': worldEnvLine(worldIdentityOf(
-        this.opts.cfg.local.serverDir,
-        `${this.effectiveCfg().host}:${this.effectiveCfg().port}`,
+        cfg.local.serverDir,
+        `${cfg.host}:${cfg.port}`,
       )),
       'minecraft.explored': renderExploredLedger(loadExplored(this.storageFileOf('minecraft-explored'))),
       'minecraft.policy': renderPolicyEnv(loadPolicy(this.storageFileOf('minecraft-policy'))),
-      'minecraft.camera': this.opts.cfg.client.enabled
+      'minecraft.camera': cfg.client.enabled
         ? readFileSync(CAMERA_NOTE_FILE, 'utf8').trim()
         : '',
       ...this.promptVars,
@@ -289,6 +317,8 @@ export class MinecraftWorldProxy implements World {
   async start(host: WorldHost): Promise<void> {
     if (this.stoppingPromise) throw new Error('Engine is stopping');
     if (this.child) throw new Error('Engine is already running or starting');
+    // Resolve and validate before fork. A child crash is not a new World selection.
+    this.startupCfg ??= JSON.parse(JSON.stringify(applyServerProfile(this.opts.cfg))) as MinecraftWorldOptions['cfg'];
     this.host = host;
     this.stopping = false;
     this.unexpectedExits = 0;
@@ -323,10 +353,12 @@ export class MinecraftWorldProxy implements World {
     }
     this.teardownChild();
     this.host = null;
+    this.startupCfg = null;
   }
 
 
   private async spawn(): Promise<void> {
+    if (this.stopping || !this.startupCfg) return;
     const child = fork(CHILD_ENTRY, [], {
       execArgv: [...childExecArgv(), '--import', DEPENDENCY_PATCHES_URL],
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -339,7 +371,7 @@ export class MinecraftWorldProxy implements World {
     child.on('message', (msg) => { if (this.child === child) this.onMessage(msg as ChildToMain); });
     child.on('exit', (code, signal) => { if (this.child === child) this.onExit(code, signal); });
     child.on('error', (err) => this.host?.log.error('Minecraft 引擎子进程出错', { err: String(err) }));
-    this.lastConfigJson = JSON.stringify(this.opts.cfg);
+    this.lastConfigJson = JSON.stringify(this.effectiveCfg());
     await this.rpc(
       {
         kind: 'init',
@@ -352,6 +384,7 @@ export class MinecraftWorldProxy implements World {
           extension: this.opts.extension ? { ...this.opts.extension,
             tools: this.opts.extension.tools.map(({ readOnlyCall: _readPredicate, learningCall: _learningPredicate, ...tool }) => tool),
           } : undefined,
+          detachedStorageOpeners: this.opts.detachedStorageOpeners,
           cfg: JSON.parse(this.lastConfigJson) as MinecraftWorldOptions['cfg'],
         },
       },
@@ -560,7 +593,7 @@ export class MinecraftWorldProxy implements World {
   private pushConfigIfChanged(): void {
     if (!this.ready) return;
 
-    const json = JSON.stringify(this.opts.cfg);
+    const json = JSON.stringify(this.effectiveCfg());
     if (json === this.lastConfigJson) return;
     this.lastConfigJson = json;
     this.cast({ kind: 'config', cfg: JSON.parse(json) as MinecraftWorldOptions['cfg'] });

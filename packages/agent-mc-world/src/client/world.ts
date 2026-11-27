@@ -9,6 +9,7 @@ import { MessageInbox, messageInboxHost, messageInboxFacts } from './message-inb
 import { mountServerProfile } from '../../core/server-profiles.ts';
 import { worldIdentityOf } from '../../core/server-config.ts';
 import { withToolHelp } from './tool-help.ts';
+import { applyServerProfile } from '../../core/server-profiles.ts';
 
 type EnginePort = World & { requestFacts?(): WorldRequestFacts | null; publishAgentActivity?(value: unknown): void;
   sendHandoffWitness?(playerUuid:string,channel:string,nonce:string):Promise<void> };
@@ -26,9 +27,10 @@ export class MinecraftClientWorld implements World {
   constructor(options: MinecraftWorldOptions, engine?: EnginePort) {
     options = { ...options, cfg: mountServerProfile(options.cfg) };
     this.engine = engine ?? new MinecraftWorldProxy(options);
+    const cfg = applyServerProfile(options.cfg);
     this.messages = new MessageInbox(JSON.stringify({
-      realm: worldIdentityOf(options.cfg.local.serverDir, `${options.cfg.host}:${options.cfg.port}`),
-      account: `${options.cfg.auth ?? 'offline'}:${options.cfg.username}`, agent: options.botName ?? options.cfg.username,
+      realm: worldIdentityOf(cfg.local.serverDir, `${cfg.host}:${cfg.port}`),
+      account: `${cfg.auth ?? 'offline'}:${cfg.username}`, agent: options.botName ?? cfg.username,
     }), options.dataDir);
   }
   envPromptVars() { return this.engine.envPromptVars(); }
@@ -40,7 +42,7 @@ export class MinecraftClientWorld implements World {
   requestFacts() { return messageInboxFacts(this.engine.requestFacts?.() ?? null, this.messages, this.messageQueryName()); }
   tools(): ToolDef[] {
     return withToolHelp([...this.engine.tools().map((tool): ToolDef => tool.name !== 'mc_visual' ? tool : { ...tool,
-      description: 'Observe the current Minecraft scene. Image-capable hosts receive the real screenshot; otherwise return timestamped game facts. No independent vision model is required. This does not move the body or establish unseen geometry.',
+      description: 'Observe the current Minecraft scene. A nearby wall that fills the view yields voxel evidence without a screenshot; force_image:true requests an image for surface details. Image-capable hosts can receive the real screenshot; otherwise return timestamped game facts. No body motion or unseen geometry.',
       handler: (args, ctx) => observeVisual(tool, args, ctx, this.host, () => this.requestFacts(), false, 'mc'),
     }), this.messages.tool(), this.choice, minecraftLifeTool()]);
   }

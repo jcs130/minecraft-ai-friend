@@ -38,13 +38,13 @@ it('warms and captures first-person at 120 degrees by default, preserves explici
     expect(urls).toHaveLength(1);
     expect((await manager.capture({ viewerUrl: 'http://127.0.0.1:7793', fov: 110 })).fov).toBe(110);
     expect(closed).toBe(1);
-    expect(urls).toEqual(['http://127.0.0.1:7793/?photo=1&fov=120&clean=1', 'http://127.0.0.1:7793/?photo=1&fov=110&clean=1']);
+    expect(urls).toEqual(['http://127.0.0.1:7793/?photo=1&fov=120&distance=2&clean=1', 'http://127.0.0.1:7793/?photo=1&fov=110&distance=2&clean=1']);
     expect((await manager.capture({ viewerUrl: 'http://127.0.0.1:7793', mode: 'third' })).mode).toBe('third');
-    expect(urls.at(-1)).toBe('http://127.0.0.1:7793/third/?photo=1&fov=120&clean=1');
+    expect(urls.at(-1)).toBe('http://127.0.0.1:7793/third/?photo=1&fov=120&distance=2&clean=1');
     await manager.capture({ viewerUrl: 'http://127.0.0.1:7793' });
-    expect(urls.at(-1)).toBe('http://127.0.0.1:7793/?photo=1&fov=120&clean=1');
+    expect(urls.at(-1)).toBe('http://127.0.0.1:7793/?photo=1&fov=120&distance=2&clean=1');
     await manager.capture({ viewerUrl: 'http://127.0.0.1:7793', includeHud: true });
-    expect(urls.at(-1)).toBe('http://127.0.0.1:7793/?photo=1&fov=120');
+    expect(urls.at(-1)).toBe('http://127.0.0.1:7793/?photo=1&fov=120&distance=2');
     wrongRenderer = true;
     await expect(manager.capture({ viewerUrl: 'http://127.0.0.1:7793', mode: 'first' })).rejects.toThrow('未应用');
   } finally { await manager.stop(); }

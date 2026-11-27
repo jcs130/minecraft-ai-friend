@@ -22,6 +22,9 @@ export { HOSTILE } from '../core/melee.ts';
 export { piglinIsHostile } from '../core/piglin.ts';
 export { type ProtectReply } from '../core/protection-port.ts';
 export { MinecraftWorldProxy } from '../core/proxy.ts';
+export { applyServerProfile, describeServerProfiles, selectedServerId, validateServerProfile,
+  type MinecraftServerProfile, type ServerSafetyRules } from '../core/server-profiles.ts';
+export type { MinecraftServerGuide } from '../core/server-guide.ts';
 export { chatInputError, parseSteps, parseScoutSteps, parseNoteText, describeSkillInputCorrection,
   type ParseNote } from '../core/skills.ts';
 export { renderTemplate } from '../core/support/runtime.mjs';

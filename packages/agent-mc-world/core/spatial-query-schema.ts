@@ -14,7 +14,7 @@ export const SPATIAL_QUERY_SCHEMA = { type: 'object', required: ['mode'], additi
   cursor: { ...VOXEL_CURSOR_SCHEMA, description: 'Exact next_cursor from the prior page; mutually exclusive with bounds; absolute, dimension pinned. No automatic continuation.' },
   sites: { type: 'array', minItems: 1, maxItems: SPATIAL_QUERY_LIMITS.sites, uniqueItems: true,
     items: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'integer', minimum: -30_000_000, maximum: 30_000_000 } },
-    description: 'sites only: 1..4 absolute integer block cells [x,y,z], no default. body.clear tests 0.6×1.8 clearance, not permission or reachability.' },
+    description: 'sites only: 1..4 absolute integer block cells [x,y,z], no default. For a slab or stair, landing.next gives the measured feet cell as an exact goto or walk-only probe. body.clear tests 0.6×1.8 clearance; it does not prove a route or placement permission.' },
   rays: { type: 'array', minItems: 1, maxItems: SPATIAL_QUERY_LIMITS.rays,
     items: { $schema: 'http://json-schema.org/draft-07/schema#', type: 'array', minItems: 3, maxItems: 3,
       items: [{ type: 'number', minimum: -90, maximum: 90 }, { type: 'number', minimum: -180, maximum: 180 },

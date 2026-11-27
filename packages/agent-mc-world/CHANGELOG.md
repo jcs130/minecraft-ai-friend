@@ -1,6 +1,58 @@
+## 0.5.7-rc.160-preview.137
+
+- List and read written or writable books from synced player slots, or page through a native opened book. Handle modern item components and legacy book NBT.
+- Send compact opened-book metadata automatically. Read page bodies explicitly without issuing item use or submitting actions.
+
+## 0.5.7-rc.160-preview.136
+
+- Scope player escape commands and optional gameplay guides to the selected server profile. Read guides through the existing knowledge tool across SDK, MCP and World consumers.
+- Remove plugin-specific command examples from common menu instructions.
+
+## 0.5.7-rc.160-preview.135
+
+Treat omitted explosion block offsets as unknown instead of throwing from the protocol event handler and resetting the connection.
+
+## 0.5.7-rc.160-preview.134
+
+Record connection-error stacks so protocol decode failures can be diagnosed without changing reconnect behavior.
+
+## 0.5.7-rc.160-preview.133
+
+Expose configured server/account/agent service scope in World request facts across native world changes and unavailable observations, without claiming authentication or body readiness. Keep spatial scope and native identity evidence unchanged.
+
+## 0.5.7-rc.160-preview.132
+
+Integrate mainline named server profiles, 1.21.11 connection recovery, rich-text surfaces and placement diagnostics with the verified navigation, receipt, storage and strict-login candidate. Export server selection through the public extension boundary.
+
+## 0.5.7-rc.160-preview.131
+
+Integrate deployed segmented navigation, protected-region evidence, native ranged weapons, paged query receipts, detached storage and checkpoint wakeups with mainline protocol support and stable companion commentary.
+
 ## Unreleased
 
 Experimental Java 26.2 stack (protocol 776) with audited data parsing, still `officialSupportRecommended=false`. Native Simple Voice Chat client `mc_svc` (compat 20, off by default) with official receive layout, DNS voice hosts via public-DNS fallback, Authenticate/ConnectionCheck retries, and a `simpleVoiceChatGate` hook so server packs can hold voice until the right backend. Deeply nested chat components (TrChat) and CESU/MUTF-8 NBT strings decode correctly. Server-specific behaviour for 橘乡 lives in the optional pack `packages/agent-mc-world-packs/tangerinecology`, not in the core.
+
+## 0.5.7-rc.160-preview.126
+
+- Recheck queued checkpoint actions when the fire reflex returns movement control and finishes bucket recovery. Other active body holds continue to gate the queue.
+- Show acknowledged actions waiting to start in the body activity HUD.
+
+## 0.5.7-rc.160-preview.124
+
+- Spatial site observations identify a measured slab or stair landing and supply a ready-to-submit exact navigation step. Unknown clearance yields a walking-only route probe.
+
+## 0.5.7-rc.160-preview.123
+
+- Use native arrow crossbows and throwable tridents in ranged combat, with ammunition and enchantment checks, confirmed loading and launch, and projectile-specific hit evidence on Java 1.21.1.
+- Support explicit crossbow and trident selection for ranged combat while preserving melee selection and existing ordinary bow behavior.
+
+## 0.5.7-rc.160-preview.122
+
+Large successful server query results expose an exact, bounded first page to the model. Continue using the original request ID and returned offset. SDK data and the archived receipt retain the complete server observation.
+
+## 0.5.7-rc.160-preview.120
+
+Server extensions can claim rendered chat relays after login. The common system notice, command-feedback and mining-warning handlers skip claimed chat components. Each adapter owns relay delivery and identity evidence. Native player chat keeps its existing sender evidence.
 
 ## 0.5.7-rc.160-preview.115
 

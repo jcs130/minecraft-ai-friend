@@ -15,7 +15,7 @@ export function visualArgumentError(args: Record<string, unknown>, prefix = 'mc'
     return { text: `[${prefix}_visual 失败] mode 只能是 first、third、3dview 或 overview`, failed: true };
   const overviewError = overviewArgumentError(args.mode, args.overview, args.include_hud);
   if (overviewError) return { text: `[${prefix}_visual 失败] ${overviewError}`, failed: true };
-  for (const key of ['include_hud', 'raw', 'background']) {
+  for (const key of ['include_hud', 'raw', 'background', 'force_image']) {
     if (args[key] !== undefined && typeof args[key] !== 'boolean')
       return { text: `[${prefix}_visual 失败] ${key} 只能是 boolean`, failed: true };
   }

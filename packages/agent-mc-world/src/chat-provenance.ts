@@ -1,3 +1,5 @@
+import { nearbySpeakerFromDecoration } from '../core/nearby-speaker.mjs';
+
 /** Identity evidence for Mineflayer's text-pattern chat events. */
 interface ChatMessage {
   translate?: string;
@@ -50,7 +52,7 @@ export const outgoingPrivateParts = (message: ChatMessage, registry?: unknown) =
 
 /** A warning may pause the body only on a native system notice. Player chat,
  * whispers, overlays and events without provenance are observations, not control. */
-export function isServerNotice(message: unknown, position: unknown, sender?: unknown): boolean {
+export function isServerNotice(message: unknown, position: unknown, sender?: unknown): message is object {
   if (position !== 'system' || !message || typeof message !== 'object'
     || (sender != null && sender !== '00000000-0000-0000-0000-000000000000')) return false;
   const component = message as ChatMessage;
@@ -88,8 +90,10 @@ export class MinecraftChatProvenance {
     const body = contentIndex === undefined ? message.toString?.() : parts?.[contentIndex]?.toString();
     if (!body?.trim()) return null;
     const serverRenderedText = message.unsigned?.toString().slice(0, 32_768);
+    const speakerOrigin = nearbySpeakerFromDecoration(message.unsigned, source.sender);
     return { username, message: body,
       identity: { chatTransport: source.position, identityEvidence: 'packet-sender' as const, senderUuid: source.sender },
+      ...(speakerOrigin ? { speakerOrigin } : {}),
       ...(serverRenderedText ? { serverRenderedText } : {}) };
   }
 

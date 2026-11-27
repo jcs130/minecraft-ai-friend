@@ -8,6 +8,7 @@ import { Vec3 } from 'vec3';
 import { recoverBoat } from './boat-recovery.ts';
 import { boatDetour, type BoatPoint } from './boat-detour.ts';
 import type { Bot } from 'mineflayer';
+import { beginViewerInteraction, finishViewerInteraction } from './viewer-interaction.ts';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { isDeepStrictEqual } from 'node:util';
 import pathfinderPkg from 'mineflayer-pathfinder';
@@ -51,6 +52,8 @@ import { clearHandForBlockInteraction, needsBareHandToInteract, withPreparedInte
 import { farmingClickCell, floodedCropSpace } from './farming-target.ts';
 import { cellTarget, type BowShotResult } from './ranged.ts';
 import { rangedBlockedText } from './melee.ts';
+import { signTextSnapshot } from './sign-read.ts';
+import { unwrapNbt } from './nbt-text.mjs';
 
 const { goals } = pathfinderPkg;
 
@@ -187,8 +190,7 @@ export function bucketAimPoint(
  * 服务端一律丢掉。上蜡的牌子编辑不了,原版连编辑框都不开——先说清楚,别发一个
  * 注定被丢掉的包。
  *
- * 验收读的是写完之后服务端回灌的方块实体:`getSignText()` 给 [正面, 背面]。
- * 读回来的那一份原样进回执 —— 这是她第一次能确认"观众看到的是这几个字"。
+ * 验收用服务端回灌的方块实体，按实际版本解码已收到的牌面。
  */
 export async function writeSign(
   bot: Bot, cell: Cell, target: NonNullable<ReturnType<Bot['blockAt']>>, text: string, back: boolean,
@@ -198,19 +200,17 @@ export async function writeSign(
   if (!SIGN_RE.test(target.name)) {
     throw new SkillBlocked(`${where}不是告示牌,写不了字(text 只对告示牌有用)`);
   }
-  // 上蜡记在方块实体的 is_waxed 里(不是 block state),读不到就当没上过——这一层不猜
-  const entityNbt = (target as unknown as { blockEntity?: Record<string, unknown> }).blockEntity;
+  const entityNbt = unwrapNbt((target as unknown as { entity?: unknown }).entity) as { is_waxed?: unknown } | undefined;
   if (entityNbt?.is_waxed === 1 || entityNbt?.is_waxed === true) {
-    throw new SkillBlocked(`${where}上过蜡,原版不让再编辑;先拿斧子右键把蜡刮掉`);
+    throw new SkillBlocked(`${where}已上蜡，原版不允许编辑`);
   }
   const side = back ? '背面' : '正面';
   const readSide = (b: ReturnType<Bot['blockAt']>): string | null => {
-    const sign = b as unknown as { getSignText?: () => Array<string | undefined> } | null;
-    if (!sign || typeof sign.getSignText !== 'function') return null;
-    const both = sign.getSignText();
-    const one = back ? both[1] : both[0];
-    return typeof one === 'string' ? one.replace(/\s+$/, '') : null;
+    const sign = signTextSnapshot(b);
+    return (back ? sign?.back : sign?.front) ?? null;
   };
+  const expected = text.trimEnd();
+  if (readSide(target) === expected) return `${where}${side}已是 ${signLinesText(expected)}，未重复写入`;
   // 第一步:打开编辑框。空手右键才是"编辑",手上拿着染料/荧光墨囊/蜂巢时原版做的
   // 是别的事(改色/发光/上蜡),那几件当场拦下来,不然写不进去还看不出为什么。
   const held = bot.heldItem?.name ?? null;
@@ -219,30 +219,54 @@ export async function writeSign(
       `手上拿着${zhName(held)}时右键牌子做的是改色/发光/上蜡,不是打开编辑框;先 {"skill":"equip"} 空手再来写`,
     );
   }
-  if (activate) await activate();
-  else await bot.activateBlock(target);
-  await sleep(USE_SETTLE_MS);
+  let opened: { front: boolean } | undefined;
+  const onEditor = (packet: { location?: Cell; isFrontText?: boolean }) => {
+    if (packet.location?.x === cell.x && packet.location.y === cell.y && packet.location.z === cell.z) {
+      opened = { front: packet.isFrontText !== false };
+    }
+  };
+  bot._client.on('open_sign_entity', onEditor);
+  try {
+    if (activate) await activate();
+    else await bot.activateBlock(target);
+    const deadline = Date.now() + 1800;
+    while (!opened && Date.now() < deadline) {
+      await sleep(80);
+      if (ctx) checkAbort(ctx);
+    }
+  } finally { bot._client.off('open_sign_entity', onEditor); }
   if (ctx) checkAbort(ctx);
-  bot.updateSign(target, text, back);
-  await sleep(USE_SETTLE_MS);
-  if (ctx) checkAbort(ctx);
-  let now = readSide(bot.blockAt(new Vec3(cell.x, cell.y, cell.z)));
-  if (now === null || now !== text.replace(/\s+$/, '')) {
+  if (!opened) throw new SkillBlocked(`${where}未收到编辑框，未发送文字；查看权限与当前牌面`, [], 'server');
+  if (opened.front === back) {
+    throw new SkillBlocked(`服务端打开了${where}的${opened.front ? '正面' : '背面'}，要写${side}请走到那一侧；未发送文字`, [], 'server');
+  }
+  const view = beginViewerInteraction(bot, { kind: 'sign-write', title: zhName(target.name),
+    lines: text.split(/\r?\n/u), side: back ? 'back' : 'front' });
+  try {
+    bot.updateSign(target, text, back);
     await sleep(USE_SETTLE_MS);
-    now = readSide(bot.blockAt(new Vec3(cell.x, cell.y, cell.z)));
+    if (ctx) checkAbort(ctx);
+    let now = readSide(bot.blockAt(new Vec3(cell.x, cell.y, cell.z)));
+    if (now !== expected) {
+      await sleep(USE_SETTLE_MS);
+      now = readSide(bot.blockAt(new Vec3(cell.x, cell.y, cell.z)));
+    }
+    const wrote = signLinesText(text);
+    if (now === null) {
+      throw new SkillBlocked(`${where}${side}未回传可读文字，重新观察牌面确认结果`, [], 'server');
+    }
+    if (now !== expected) {
+      throw new SkillBlocked(
+        `往${where}${side}写了 ${wrote},读回来是${now === '' ? '(空的)' : ` ${signLinesText(now)}`}`,
+        ['要看到的是:牌子上的字与写进去的一致'],
+        'server',
+      );
+    }
+    finishViewerInteraction(bot, view, 'confirmed', '牌面文字已回传');
+    return `${where}${side}现在写着 ${signLinesText(now)}`;
+  } finally {
+    finishViewerInteraction(bot, view, 'unconfirmed');
   }
-  const wrote = signLinesText(text);
-  if (now === null) {
-    return `往${where}${side}写了 ${wrote};读不回牌子上的字(这个版本的方块实体没给),写没写上核不了`;
-  }
-  if (now !== text.replace(/\s+$/, '')) {
-    throw new SkillBlocked(
-      `往${where}${side}写了 ${wrote},读回来是${now === '' ? '(空的)' : ` ${signLinesText(now)}`}`,
-      ['要看到的是:牌子上的字与写进去的一致'],
-      'server',
-    );
-  }
-  return `${where}${side}现在写着 ${signLinesText(now)}`;
 }
 
 /** 右键之后给服务端回话的时间;第一次没读到就再等一拍(睡着、上鞍要一个来回) */
@@ -767,7 +791,8 @@ export function nothingThere(bot: Bot, cell: Cell, name: string, label: string):
  */
 export async function skillUse(bot: Bot, call: Extract<SkillCall, { skill: 'use' }>, ctx: SkillContext): Promise<string> {
   // 商人的"右键"开出来的是报价窗口,交易两段式走自己那条路(times 在那边是成交几次)
-  if (call.target === 'villager' || call.target === 'wandering_trader') {
+  const held = call.item ? invItemNamed(bot, call.item) : bot.heldItem;
+  if ((call.target === 'villager' || call.target === 'wandering_trader') && held?.name !== 'name_tag') {
     return skillTrade(bot, { ...call, target: call.target }, ctx);
   }
   const times = call.times ?? 1;
@@ -861,7 +886,12 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
   const activateItem = (): Promise<void> =>
     dispatchUse(bot, hand, ctx, { kind: 'item' }, () => bot.activateItem());
   const useOn = (entity: NonNullable<Bot['entities'][string]>): Promise<void> =>
-    dispatchUse(bot, hand, ctx, { kind: 'entity', id: entity.id }, () => bot.useOn(entity));
+    dispatchUse(bot, hand, ctx, { kind: 'entity', id: entity.id }, () => {
+      if (held === 'name_tag' && (bot.entities[entity.id] !== entity || !entity.isValid || !canSeeEntity(bot, entity))) {
+        throw new SkillBlocked(`entityId=${entity.id} 命名发送前已失效或不可见；重新观察`);
+      }
+      return bot.useOn(entity);
+    });
 
   if (call.target === 'piglin_brute' && held === 'gold_ingot') {
     throw new SkillBlocked('猪灵蛮兵不接受以物易物,金锭没有交出去');
@@ -869,8 +899,15 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
   if (call.target === 'piglin' && held === 'gold_ingot') return barterPiglinOnce(bot, ctx, useOn);
 
   if (call.target) {
+    const naming = held === 'name_tag';
+    const tagName = naming ? itemCustomName(bot.heldItem ?? {}) : null;
+    if (naming && (!tagName || call.entityId === undefined || (call.times ?? 1) !== 1 || call.index !== undefined)) {
+      throw new SkillBlocked('命名请用铁砧改好名的命名牌、当前目标的 entityId 和一次右键，省略交易 index');
+    }
     if (!isKnownTarget(bot, call.target)) throw new SkillBlocked(unknownUseTargetText(bot, call.target));
     const entity = useEntityOf(bot, call.target, call.entityId);
+    if (naming && entity.type === 'player') throw new SkillBlocked('命名牌不能给玩家改名');
+    if (tagName && entityCustomName(bot, entity) === tagName) return `${zhEntity(call.target)} entityId=${entity.id} 已叫「${tagName}」，未使用命名牌`;
     await gotoGoal(bot, new goals.GoalFollow(entity, 2), ctx).catch(() => undefined);
     checkAbort(ctx);
     if (!entity.isValid) throw new SkillBlocked(`${zhEntity(call.target)}走了`);
@@ -906,6 +943,15 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     }
     const note = useInvNote(beforeInv, bot);
     const facts = useNoteOn(bot, held, call.target, entity) + leaveVehicle(bot, call.target) + boxNote;
+    if (tagName) {
+      const named = await settleProbe({ want: `实体名称变成「${tagName}」`, read: () => {
+        const observed = bot.entities[entity.id] === entity && entity.isValid ? entityCustomName(bot, entity) : null;
+        return { met: observed === tagName, actual: observed ? `当前实体名称「${observed}」` : '未读到当前实体名称' };
+      } });
+      checkAbort(ctx);
+      if (!named.met) throw new SkillBlocked(`entityId=${entity.id} ${named.actual}，命名尚未确认${note ? `。${note}` : ''}；先重新观察`, [], 'server');
+      return `${zhEntity(call.target)} entityId=${entity.id} 已确认命名为「${tagName}」${note ? `。${note}` : ''}`;
+    }
     if (!probe) {
       noteOffTable(ctx, held, call.target);
       return `${head}。${note || '包里一样没动'}${facts}`;
@@ -1244,7 +1290,7 @@ async function shootBowAt(bot: Bot, cell: Cell, ctx: SkillContext): Promise<stri
   const lease = ctx.attack.acquire(-1);
   let shot: BowShotResult;
   try {
-    shot = await ranged.shoot(cellTarget(cell), lease.token);
+    shot = await ranged.shoot(cellTarget(cell), lease.token, 'bow');
   } finally {
     ctx.attack.release(lease);
   }
@@ -2138,65 +2184,76 @@ export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'an
     if (p.property === 0 && typeof p.value === 'number' && p.value > 0) costShown = p.value;
   };
   const { win, blockName } = await openStationWindow(bot, ctx, cell, ANVIL_BLOCKS, '铁砧');
-  (client as unknown as { on(n: string, f: unknown): void }).on('craft_progress_bar', onProp);
-  let out: { name: string } | null = null;
-  /** shift 取出后产物落进的那一格(窗口里玩家背包段);没看到落格时为 null */
-  let landed: { name: string } | null = null;
+  let view: number | null = null;
   try {
-    await putIntoStation(bot, win, mainPred, 0, itemAsked(call.item, call.pick));
-    await sleep(300);
-    if (call.op !== 'rename') {
-      await putIntoStation(bot, win, withPred, 1, itemAsked(call.with!, call.withPick));
+    (client as unknown as { on(n: string, f: unknown): void }).on('craft_progress_bar', onProp);
+    let out: { name: string } | null = null;
+    /** shift 取出后产物落进的那一格(窗口里玩家背包段);没看到落格时为 null */
+    let landed: { name: string } | null = null;
+    try {
+      await putIntoStation(bot, win, mainPred, 0, itemAsked(call.item, call.pick));
+      await sleep(300);
+      if (call.op !== 'rename') {
+        await putIntoStation(bot, win, withPred, 1, itemAsked(call.with!, call.withPick));
+      }
+      if (call.name !== undefined) {
+        // 原版改名:客户端敲字发 name_item,服务端据此填产出槽
+        // 未要求改名时不发送空名字，也不把显示用的去格式文本写回物品。
+        view = beginViewerInteraction(bot, { kind: 'rename', title: zhName(blockName),
+          item: itemCustomName(main) ?? zhName(main.name), name: call.name });
+        client.write('name_item', { name: call.name });
+      }
+      await sleep(WINDOW_SETTLE_MS);
+      out = win.slots[2] as { name: string } | null;
+      if (!out) {
+        throw new SkillBlocked(
+          call.op === 'rename'
+            ? `铁砧不认这个名字:产出槽没出东西(写的是「${call.name}」)`
+            : `铁砧的产出槽没出东西:${askedLabel(bot, call.item, call.pick, main)}`
+              + `+${askedLabel(bot, call.with!, call.withPick, withOne)}；当前服务端没有返回产物，具体原因未确认`,
+          [], 'server',
+        );
+      }
+      landed = await shiftTakeOutput(bot, win, out.name);
+    } finally {
+      (client as unknown as { removeListener(n: string, f: unknown): void }).removeListener('craft_progress_bar', onProp);
+      try { bot.closeWindow(win as never); } catch { /* 已关 */ }
     }
-    if (call.name !== undefined) {
-      // 原版改名:客户端敲字发 name_item,服务端据此填产出槽
-      // 未要求改名时不发送空名字，也不把显示用的去格式文本写回物品。
-      client.write('name_item', { name: call.name });
+    await sleep(400);
+    const lvl1 = bot.experience.level;
+    const spent = lvl0 - lvl1;
+    if (!landed) {
+      throw new SkillBlocked(`铁砧产出槽有读数，但未确认产物落进背包；经验 ${lvl0} → ${lvl1}。结果待核对，不要据此重做同一单`, [], 'server');
     }
-    await sleep(WINDOW_SETTLE_MS);
-    out = win.slots[2] as { name: string } | null;
-    if (!out) {
-      throw new SkillBlocked(
-        call.op === 'rename'
-          ? `铁砧不认这个名字:产出槽没出东西(写的是「${call.name}」)`
-          : `铁砧的产出槽没出东西:${askedLabel(bot, call.item, call.pick, main)}`
-            + `+${askedLabel(bot, call.with!, call.withPick, withOne)}；当前服务端没有返回产物，具体原因未确认`,
-        [], 'server',
-      );
+    if (spent <= 0) {
+      const gate = costShown !== null ? `这一单显示要 ${costShown} 级,你现在 ${lvl1} 级` : `你现在 ${lvl1} 级`;
+      const changed = invGains(before, bot).length > 0 || invLosses(before, bot).length > 0;
+      if (!changed) {
+        throw new SkillBlocked(`铁砧的产出没拿到手:经验一级没扣、包里一样没动(${gate};等级不够时原版不给取)`, [], 'server');
+      }
     }
-    landed = await shiftTakeOutput(bot, win, out.name);
+    const product = landed
+      ? `${itemCustomName(landed) ?? zhName(landed.name)}(${stationItemFacts(bot, landed)})`
+      : `${itemCustomName(out) ?? zhName(out.name)}(${stationItemFacts(bot, out)};这是取出前产出槽的读数,没看到它落进包里哪一格)`;
+    const anvilNow = blockAtCell(bot, cell)?.name ?? null;
+    const wear = anvilNow === blockName
+      ? ''
+      : anvilNow && (ANVIL_BLOCKS as readonly string[]).includes(anvilNow)
+        ? `;铁砧磨损了一级(现在是${zhName(anvilNow)})`
+        : ';铁砧这一下用碎了,那一格已经空了';
+    const head = call.op === 'rename'
+      ? `在 ${cellText(cell)} 的${zhName(blockName)}上把${askedLabel(bot, call.item, call.pick, main)}改名成「${call.name}」`
+      : `在 ${cellText(cell)} 的${zhName(blockName)}上把${askedLabel(bot, call.item, call.pick, main)}`
+        + `和${askedLabel(bot, call.with!, call.withPick, withOne)}合了${call.name ? `，同时请求改名成「${call.name}」` : ''}`;
+    if (view !== null) {
+      const actualName = itemCustomName(landed);
+      finishViewerInteraction(bot, view, actualName === call.name ? 'confirmed' : 'unconfirmed', actualName ?? undefined);
+    }
+    return `${head}:产物${product};`
+      + `花了 ${Math.max(spent, 0)} 级经验(${lvl0} → ${lvl1})${wear}`;
   } finally {
-    (client as unknown as { removeListener(n: string, f: unknown): void }).removeListener('craft_progress_bar', onProp);
-    try { bot.closeWindow(win as never); } catch { /* 已关 */ }
+    if (view !== null) finishViewerInteraction(bot, view, 'unconfirmed');
   }
-  await sleep(400);
-  const lvl1 = bot.experience.level;
-  const spent = lvl0 - lvl1;
-  if (!landed) {
-    throw new SkillBlocked(`铁砧产出槽有读数，但未确认产物落进背包；经验 ${lvl0} → ${lvl1}。结果待核对，不要据此重做同一单`, [], 'server');
-  }
-  if (spent <= 0) {
-    const gate = costShown !== null ? `这一单显示要 ${costShown} 级,你现在 ${lvl1} 级` : `你现在 ${lvl1} 级`;
-    const changed = invGains(before, bot).length > 0 || invLosses(before, bot).length > 0;
-    if (!changed) {
-      throw new SkillBlocked(`铁砧的产出没拿到手:经验一级没扣、包里一样没动(${gate};等级不够时原版不给取)`, [], 'server');
-    }
-  }
-  const product = landed
-    ? `${itemCustomName(landed) ?? zhName(landed.name)}(${stationItemFacts(bot, landed)})`
-    : `${itemCustomName(out) ?? zhName(out.name)}(${stationItemFacts(bot, out)};这是取出前产出槽的读数,没看到它落进包里哪一格)`;
-  const anvilNow = blockAtCell(bot, cell)?.name ?? null;
-  const wear = anvilNow === blockName
-    ? ''
-    : anvilNow && (ANVIL_BLOCKS as readonly string[]).includes(anvilNow)
-      ? `;铁砧磨损了一级(现在是${zhName(anvilNow)})`
-      : ';铁砧这一下用碎了,那一格已经空了';
-  const head = call.op === 'rename'
-    ? `在 ${cellText(cell)} 的${zhName(blockName)}上把${askedLabel(bot, call.item, call.pick, main)}改名成「${call.name}」`
-    : `在 ${cellText(cell)} 的${zhName(blockName)}上把${askedLabel(bot, call.item, call.pick, main)}`
-      + `和${askedLabel(bot, call.with!, call.withPick, withOne)}合了${call.name ? `，同时请求改名成「${call.name}」` : ''}`;
-  return `${head}:产物${product};`
-    + `花了 ${Math.max(spent, 0)} 级经验(${lvl0} → ${lvl1})${wear}`;
 }
 
 export async function skillGrindstone(bot: Bot, call: Extract<SkillCall, { skill: 'grindstone' }>, ctx: SkillContext): Promise<string> {

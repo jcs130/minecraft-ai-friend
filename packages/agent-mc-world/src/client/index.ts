@@ -54,6 +54,7 @@ export { configureObservationPolicy, entityObservationScope, entityAwareness, OB
 export { KNOWLEDGE_TOOL, readMinecraftKnowledge, queryMinecraftKnowledge } from '../../core/knowledge.ts';
 export { MINEDOJO_SOURCE, REFERENCE_INDEX_SCHEMA, buildReferenceIndex, readReferenceIndex, validateReferenceConfig,
   type MinecraftKnowledgeConfig, type ReferenceIndexConfig, type ReferenceEmbeddingConfig } from '../../core/reference-index.ts';
+export type { MinecraftServerGuide } from '../../core/server-guide.ts';
 export { AgentMetrics, serveAgentMetrics, type HarnessTrace } from './metrics.ts';
 export type { ToolDef, ToolOutcome, ToolCallContext, EventEnvelope, WorldRequestFacts, Logger, ModelFacts } from './contracts.ts';
 export type { FamiliarAction } from '../contracts/host.ts';
@@ -99,10 +100,10 @@ export { planInventoryOrganization, inventoryOrganizationPlanView, planInventory
 
 export { PHOTOGRAPHY_DEFAULTS } from '../../core/photo-image.ts';
 
-export {attachProximityVoice, inspectVoiceWav} from '../proximity-voice.ts';
+export {attachProximityVoice, inspectVoiceWav, readNearbySpeaker} from '../proximity-voice.ts';
 export {attachSimpleVoiceChat, parseVoicechatSecret, createOfficialOpusCodec, inspectVoiceWav as inspectSvcWav, SVC_COMPATIBILITY_VERSION} from '../simple-voice-chat.ts';
 
-export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing} from '../proximity-voice.ts';
+export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing, NearbySpeakerOrigin} from '../proximity-voice.ts';
 
 export { applyServerProfile, mountServerProfile, selectedServerId, type MinecraftServerProfile } from '../../core/server-profiles.ts';
 export { validateServerGuide, type MinecraftServerGuide } from '../../core/server-guide.ts';

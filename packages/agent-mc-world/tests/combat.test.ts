@@ -186,7 +186,7 @@ it('automatic defense keeps an equipped ready bow instead of drawing the invento
     await drive(bot,600,50);
     expect(equip).not.toHaveBeenCalled();expect(attacks).toHaveLength(0);
     expect(ranged.shots.length).toBeGreaterThan(0);
-    expect(events.some(e=>e.text.includes('保留手里的远程武器'))).toBe(true);
+    expect(events.some(e=>e.text.includes('准备远程武器'))).toBe(true);
   }finally{session.stop();}
 });
 
@@ -598,7 +598,7 @@ describe('战斗会话:进入(夺手不夺嘴)', () => {
       }
       expect(session.reactionState().retreating).toBe(true);
       expect(attacks).toHaveLength(0);
-      expect(events.filter(event => event.text.includes('弓箭未能出手'))).toHaveLength(1);
+      expect(events.filter(event => event.text.includes('远程出手未确认'))).toHaveLength(1);
       expect(diag.after(0).find(event => event.event === 'ranged-blocked')?.data)
         .toMatchObject({ cause, held: 'bread', targetId: 7 });
     } finally { session.stop(); }

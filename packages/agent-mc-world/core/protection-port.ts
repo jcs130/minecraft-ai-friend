@@ -104,5 +104,21 @@ export function protectionCheck(
   };
 }
 
+export type ProtectCheck = (action: ProtectAction, cell: ProtectCell, phase?: 'before' | 'after_failure') => Promise<ProtectReply | null>;
+
+/** A declared region only decides when to ask: inside it the server is asked before the packet. */
+export function protectInDeclaredRegions(
+  base: ProtectCheck, declared: (cell: ProtectCell) => string | null,
+  checked: (reply: ProtectReply, region: string, action: ProtectAction, cell: ProtectCell) => void = () => {},
+): ProtectCheck {
+  return async (action, cell, phase) => {
+    const region = phase === 'after_failure' ? null : declared(cell);
+    if (!region) return base(action, cell, phase);
+    const reply = await base(action, cell, 'after_failure');
+    if (reply) checked(reply, region, action, cell);
+    return reply;
+  };
+}
+
 const normDimension = (s: string): string => s.replace(/^minecraft:/, '');
 const keyOf = (action: ProtectAction, dimension: string, cell: ProtectCell): string => `${action}|${normDimension(dimension)}|${cell.x},${cell.y},${cell.z}`;

@@ -25,6 +25,24 @@ function deliveryHarness(nearby: boolean) {
   return { ...r, toss };
 }
 
+it('keeps the item if a player approach fails before an unaddressed toss', async () => {
+  const r = deliveryHarness(false);
+  try {
+    const run = r.runner.start({ name: 'player-approach-before-toss', code: `return await mc.do([
+      {skill:'goto_player',name:'Friend'},
+      {skill:'toss',item:'coal',count:4},
+      {skill:'chat',text:'我还没和朋友会合。'}
+    ]);` });
+    expect(await methodEnded(r, run.id)).toMatchObject({ status: 'completed', result: {
+      done: false, steps: [
+        { outcome: 'fail' }, { outcome: 'skip', why: expect.stringContaining('未抛出') }, { outcome: 'ok' },
+      ],
+    } });
+    expect(r.toss).not.toHaveBeenCalled();
+    expect(r.bot.inventory.items()[0].count).toBe(4);
+  } finally { r.close(); }
+});
+
 it.each([
   { nearby: false, reason: '看不见玩家' },
   { nearby: true, reason: '不足2格' },

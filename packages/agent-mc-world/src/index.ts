@@ -11,7 +11,6 @@ export { assessScaffoldMaterials, isStableScaffoldMaterial } from '../core/scaff
 export { navigationFallBudget, estimateFallDamage, installNavigationFallCosts, setNavigationFallMode } from '../core/navigation-fall.ts';
 export type { FallMode, NavigationFallBudget } from '../core/navigation-fall.ts';
 
-export {attachProximityVoice, inspectVoiceWav} from './proximity-voice.ts';
+export {attachProximityVoice, inspectVoiceWav, readNearbySpeaker} from './proximity-voice.ts';
 export {attachSimpleVoiceChat, parseVoicechatSecret, createOfficialOpusCodec, inspectVoiceWav as inspectSvcWav, SVC_COMPATIBILITY_VERSION} from './simple-voice-chat.ts';
-
-export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing} from './proximity-voice.ts';
+export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing, NearbySpeakerOrigin} from './proximity-voice.ts';

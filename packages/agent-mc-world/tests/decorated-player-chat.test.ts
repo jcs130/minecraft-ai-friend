@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it } from 'vitest';
 import { methodHarness } from './method-harness.ts';
 import { MessageInbox } from '../src/client/message-inbox.ts';
@@ -6,7 +7,7 @@ import { MessageInbox } from '../src/client/message-inbox.ts';
 const rigs: ReturnType<typeof methodHarness>[] = [];
 afterEach(() => rigs.splice(0).forEach(r => r.close()));
 
-function fixture() {
+function fixture(speakerUuid = 'uuid-yui') {
   const r = methodHarness('1.21.1'); rigs.push(r);
   const req = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
   const nbt = req('prismarine-nbt');
@@ -20,16 +21,40 @@ function fixture() {
     .find(([, value]) => (value as { name: string }).name === 'example:raw')![0]);
   Object.assign(r.bot, { username: 'Witness', players: {
     Witness: { username: 'Witness', uuid: 'uuid-self' },
-    Yui: { username: 'Yui', uuid: 'uuid-yui' },
+    Yui: { username: 'Yui', uuid: speakerUuid },
   } });
   (r.world as any).hookMessageEvents(r.bot);
-  const packet = (body: string, display: string) => {
+  const packet = (body: string, display: string, insertion?: string) => {
     const msg = ChatMessage.fromNetwork(typeId, { content: { text: body } });
-    msg.unsigned = ChatMessage.fromNetwork(typeId, { content: { text: display } });
+    msg.unsigned = ChatMessage.fromNetwork(typeId, { content: { text: display,
+      ...(insertion ? { extra: [{ text: '', insertion }] } : {}) } });
     return msg;
   };
   return { ...r, packet };
 }
+
+it('delivers signed nearby text with the native speaker sample and exact unadorned body', async () => {
+  const uuid = randomUUID();
+  const r = fixture(uuid);
+  const sample = { uuid, name: 'Yui', displayName: '悠怡', world: 'minecraft:town', worldUuid: randomUUID(),
+    observedAt: 1795257813757, position: { x: -10.25, y: 100, z: 1.5 } };
+  const body = '@Witness 我在村镇入口';
+  const msg = r.packet(body, '[附近][村镇] 悠怡：'+body, 'qiandengji:nearby:'+JSON.stringify(sample));
+  r.bot.emit('message', msg, 'chat', uuid);
+  r.bot.emit('chat', 'Yui', body, '', msg);
+  await Promise.resolve();
+  expect(r.host.events).toHaveLength(1);
+  expect(r.host.events[0]).toMatchObject({ senderKey: 'Yui', meta: { channel: 'nearby', chatChannel: 'nearby',
+    speakerOrigin: sample, senderUuid: uuid, chatBody: body, sourceWorld: 'minecraft:town' } });
+  expect(r.host.events[0].text).toContain('仅对应发言时');
+  expect(r.host.events[0].text).toContain('2026-11-21T10:43:33.757Z');
+
+  const forged = r.packet(body, '[附近] 悠怡：'+body, 'qiandengji:nearby:'+JSON.stringify({ ...sample, uuid: randomUUID() }));
+  r.bot.emit('message', forged, 'chat', uuid);
+  await Promise.resolve();
+  expect(r.host.events[1]).toMatchObject({ senderKey: 'Yui', text: '[MC] Yui: '+body, meta: { channel: 'public' } });
+  expect(r.host.events[1].meta).not.toHaveProperty('speakerOrigin');
+});
 
 it('retains real packet identity and server decoration when raw chat has no sender argument', async () => {
   const r = fixture();

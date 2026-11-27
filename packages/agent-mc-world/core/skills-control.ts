@@ -110,14 +110,16 @@ export async function groundInputSequence<T>(bot:Bot,ctx:SkillContext,
   finally{cancel('精确路线控制结束');release();detach();bot.off('death',death);bot.off('respawn',respawn);bot.off('forcedMove',forced);}
 }
 
-export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: 'control' }>, ctx: SkillContext): Promise<string> {
+export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: 'control' }>, ctx: SkillContext,
+  options: { finishAtBank?: boolean } = {}): Promise<string> {
   checkAbort(ctx);
   if (!bot.entity?.position) throw new SkillBlocked('还没进入世界，不能直接控制');
   if (inputs.has(bot)) throw new SkillBlocked('上一段直接控制尚未交还身体');
   if (call.mode !== 'flight' && (!bot.physicsEnabled || flightState(bot).flying)) {
     throw new SkillBlocked('当前飞行尚未结束；继续空中移动用 mode:flight，地面控制前先 land');
   }
-  if (call.mode === 'water' && (!bodyInWater(bot) || (bot as Bot & { vehicle?: unknown }).vehicle != null)) {
+  const leavingBank = (): boolean => options.finishAtBank === true && !bot.entity.onGround;
+  if (call.mode === 'water' && ((!bodyInWater(bot) && !leavingBank()) || (bot as Bot & { vehicle?: unknown }).vehicle != null)) {
     throw new SkillBlocked('water 控制要求身体已在水中且未乘坐载具；先核对现场');
   }
   const start = bot.entity.position.clone();
@@ -153,7 +155,8 @@ export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: '
     if (lease.reason) throw new SkillBlocked(lease.reason, [], lease.source);
     checkAbort(ctx);
     if (call.mode === 'water') {
-      if (!bodyInWater(bot)) throw new SkillBlocked('已离开水体，停止水中输入；重新观察');
+      if (!bodyInWater(bot) && !options.finishAtBank) throw new SkillBlocked('已离开水体，停止水中输入；重新观察');
+      if ((bot as Bot & { vehicle?: unknown }).vehicle != null) throw new SkillBlocked('载具状态已改变，停止水中输入');
     }
   };
   const observed = (): string => {
@@ -201,6 +204,7 @@ export async function skillControl(bot: Bot, call: Extract<SkillCall, { skill: '
       const until = Date.now() + call.durationMs;
       while (Date.now() < until) {
         assertActive();
+        if (options.finishAtBank && !bodyInWater(bot) && bot.entity.onGround) break;
         await sleep(Math.min(50, until - Date.now()));
         sample();
       }

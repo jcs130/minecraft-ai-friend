@@ -125,7 +125,10 @@ export interface WorldRequestFacts {
   options?: import('./options.ts').MinecraftOptionsSnapshot;
   /** World-owned compact current facts for optional fast classification; complete evidence remains in text/parts. */
   decision?: { sampledAtMs: number; state: Readonly<Record<string, unknown>> };
-  experience?: { scope: import('../../core/game-memory.ts').GameMemoryScope; observation: import('../../core/operation-experience.ts').OperationObservation | null };
+  experience?: { scope: import('../../core/game-memory.ts').GameMemoryScope;
+    /** Configured server/account binding, stable across native world changes; not network authentication or readiness evidence. */
+    serviceScope?: import('../../core/game-memory.ts').GameMemoryScope;
+    observation: import('../../core/operation-experience.ts').OperationObservation | null };
   /** Fresh typed fields for optional host-side bounded decision stability checks. */
   decisionStability?: { sampledAtMs: number; identity: unknown; dimension: string | null;
     position: readonly [number, number, number] | null; health: number | null; food: number | null;

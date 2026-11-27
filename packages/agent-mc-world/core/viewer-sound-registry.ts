@@ -13,6 +13,7 @@ const EXACT_SOUND_LAYOUTS: Record<string, { count: number; clientJarSha256: stri
   '26.1': {count:1902,clientJarSha256:'bc6194c61566b587f196090d730698f2191170f7580adb143e4ff839939d3840'},
   '1.20.6': { count: 1607, clientJarSha256: '02dfd345ac1ad55692d5dbc8486ac7e4fea72cd54ac494a79cd48963048e56b2' },
   '1.21.1': { count: 1611, clientJarSha256: '499f6897d1837516680f3114072d8106e11c9adcd933fe5cf051b551089b0c99' },
+  '1.21.11': { count: 1838, clientJarSha256: '1473c9489ac50fda3c435049a76a70d61a10b8610db27f5ba9d8756b686cd3bd' },
 };
 
 export function validateViewerSoundRegistry(value: unknown, expectedVersion: string): ViewerSoundRegistry | null {
@@ -38,17 +39,17 @@ export function validateViewerSoundRegistry(value: unknown, expectedVersion: str
 
 export async function loadViewerSoundRegistry(assetsDir: string, minecraftVersion: string,
   fallbackRegistry: ViewerSoundRegistry): Promise<ViewerSoundRegistryResult> {
-  if (minecraftVersion === '26.1') {
+  if (minecraftVersion === '26.1' || minecraftVersion === '1.21.11') {
     try { const raw=await readFile(path.join(assetsDir,'public/sounds/registry.json'),'utf8');if(raw.length>1024*1024)throw Error('Registry size');const exact=validateViewerSoundRegistry(JSON.parse(raw),minecraftVersion);if(exact)return {registry:exact,source:'exact-assets',diagnostic:null}; } catch {}
-    // minecraft-data 26.1 stores sound IDs in wire-holder space (1..1902).
+    // These minecraft-data snapshots store sound IDs in one-based wire-holder space.
     // minecraft-protocol registryEntryHolder has ALREADY subtracted one.
     // Do not reuse the old-version catalogue or shift twice in the packet bridge.
     const sounds: NonNullable<ViewerSoundRegistry['sounds']> = {};
     const names = new Set<string>();
-    for(let id=0;id<1902;id++) {
+    for(let id=0;id<EXACT_SOUND_LAYOUTS[minecraftVersion].count;id++) {
       const name=fallbackRegistry.sounds?.[id+1]?.name;
       if(typeof name!=='string' || !/^[a-z0-9_.]+$/.test(name) || names.has(name))
-        return {registry:{sounds:{}},source:'unavailable',diagnostic:'26.1 minecraft-data sound holder table is invalid'};
+        return {registry:{sounds:{}},source:'unavailable',diagnostic:`${minecraftVersion} minecraft-data sound holder table is invalid`};
       names.add(name);sounds[id]={name};
     }
     return {registry:{sounds},source:'minecraft-data',diagnostic:null};

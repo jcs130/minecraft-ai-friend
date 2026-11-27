@@ -16,21 +16,28 @@ export function validMeleeWeaponOrder(value: unknown): value is string[] {
     && value.every(v => typeof v === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(v) && weaponScore(v) >= 0);
 }
 
+export function isRangedWeaponName(name: string): boolean {
+  return name === 'bow' || name === 'crossbow' || name === 'trident';
+}
+
 export interface WeaponCapability {
   item: string;
   count: number;
   melee: boolean;
-  ranged: 'automatic-bow' | 'explicit-trident-use' | 'native-script-only' | null;
+  /** The older script labels remain readable in historical loadouts. */
+  ranged: 'automatic-bow' | 'automatic-crossbow' | 'trident-throw' | 'explicit-trident-use' | 'native-script-only' | null;
+  /** An explicit ranged action can start with current equipment. Automatic throws also require Loyalty. */
+  rangedReady?: boolean;
 }
 
 /** Inventory facts only; no equipment change, inferred enchantment or automatic throw. */
 export function weaponCapabilities(items: readonly { name: string; count?: number }[]): WeaponCapability[] {
   const counts = new Map<string, number>();
   for (const item of items) {
-    if ((item.count ?? 1) <= 0 || weaponScore(item.name) < 0 && item.name !== 'bow' && item.name !== 'crossbow') continue;
+    if ((item.count ?? 1) <= 0 || weaponScore(item.name) < 0 && !isRangedWeaponName(item.name)) continue;
     counts.set(item.name, (counts.get(item.name) ?? 0) + (item.count ?? 1));
   }
   return [...counts].map(([item, count]) => ({ item, count, melee: weaponScore(item) >= 0,
-    ranged: item === 'bow' ? 'automatic-bow' : item === 'trident' ? 'explicit-trident-use'
-      : item === 'crossbow' ? 'native-script-only' : null }));
+    ranged: item === 'bow' ? 'automatic-bow' : item === 'trident' ? 'trident-throw'
+      : item === 'crossbow' ? 'automatic-crossbow' : null }));
 }

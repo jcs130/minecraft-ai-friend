@@ -138,6 +138,7 @@ export function describeSkill(c: SkillCall, heldItem?: string | null): string {
       return c.grid
         ? `按自己摆的格子合成 ${c.count} 次(${gridText(c.grid)})`
         : `合成 ${c.count} 个${zhName(c.item ?? '')}`;
+    case 'book': return c.title ? `署名《${c.title}》（${c.pages.length} 页）` : `保存书与笔草稿（${c.pages.length} 页）`;
     case 'smelt':
       return `烧 ${c.count} 个${zhName(c.input)}(烧${zhName(c.fuel)})`;
     case 'brew':

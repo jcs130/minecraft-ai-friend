@@ -7,7 +7,7 @@ import { TacticalMinecraftWorld } from './tactical-world.ts';
 import { DeferredRenders } from './deferred-renders.ts';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { encodeBlobs } from './engine-blobs.ts';
-import { applyServerProfile } from './server-profiles.ts';
+import { applyServerProfile, SERVER_PROFILE_FIELDS } from './server-profiles.ts';
 import type {
   ChildToMain,
   EngineInit,
@@ -113,10 +113,25 @@ const host: WorldHost = {
 
 let mod: MinecraftWorld | null = null;
 let cfg: EngineInit['cfg'] | null = null;
+let startupCfg: EngineInit['cfg'] | null = null;
 let statusTimer: ReturnType<typeof setInterval> | null = null;
 let lastStatus = '';
 const activeRequests = new Map<number, AbortController>();
 let stopping = false;
+
+// Match the parent's World-start boundary, including absent optional values.
+const STARTUP_FIELDS = [
+  ...SERVER_PROFILE_FIELDS, 'provider', 'profilesFolder', 'javaClient',
+  'autoReconnect', 'keepAliveTimeoutMs', 'viewDistance', 'deathRespawnDelayMs',
+  'server', 'servers', 'activeServer', 'serverSafety', 'memoryAgentId',
+] as const;
+const STARTUP_NESTED_FIELDS = {
+  knowledge: ['server'],
+  local: ['serverDir'],
+  client: ['username', 'auth', 'profilesFolder'],
+  player: ['username', 'auth', 'profilesFolder'],
+  miningLimits: ['hardStopOnWarning', 'warningKeywords'],
+} as const;
 
 /** Evidence collection must not reject or repeat an already executed operation. */
 function sampleRequestFacts(): WorldRequestFacts | null {
@@ -179,8 +194,10 @@ async function handleRequest(req: EngineRequest, signal: AbortSignal): Promise<u
   if (stopping && req.kind !== 'shutdown') throw new Error('Engine stopped');
   if (req.kind === 'init') {
     if (mod) throw new Error('已经 init 过了');
-    // Overlay the selected server profile (worlds.<id>.server / AGENT_MC_SERVER) before anything reads cfg.
-    cfg = applyServerProfile(req.init.cfg);
+    // The parent has resolved the startup selection. Do not consult a later env
+    // override, including when an automatic child restart keeps the same World.
+    cfg = structuredClone(applyServerProfile(req.init.cfg, { AGENT_MC_SERVER: req.init.cfg.activeServer }));
+    startupCfg = structuredClone(cfg);
     const extension = req.init.extension;
     if (extension && !extension.module.startsWith('file:')) throw new Error('Extension must be an explicit local file URL');
     const create = extension ? (await import(extension.module)).createEngine : (options: import('./world.ts').MinecraftWorldOptions) => new TacticalMinecraftWorld(options);
@@ -190,6 +207,7 @@ async function handleRequest(req: EngineRequest, signal: AbortSignal): Promise<u
       timezone: req.init.timezone,
       botName: req.init.botName,
       extension: req.init.extension,
+      detachedStorageOpeners: req.init.detachedStorageOpeners,
       ...(req.init.dataDir ? { dataDir: req.init.dataDir } : {}),
     });
     if (!mod) throw new Error('Engine factory returned no engine');
@@ -207,6 +225,8 @@ async function handleRequest(req: EngineRequest, signal: AbortSignal): Promise<u
     statusTimer = null;
     await mod?.stop();
     mod = null;
+    cfg = null;
+    startupCfg = null;
     setImmediate(() => process.exit(0));
     return null;
   }
@@ -275,20 +295,20 @@ process.on('message', (msg: MainToChild) => {
   const cast = msg.cast;
   if (cast.kind === 'cancel') { activeRequests.get(cast.requestId)?.abort(new Error(cast.reason)); return; }
   if (cast.kind === 'viewer-activity') { mod?.publishAgentActivity(cast.value); return; }
-  if (cast.kind === 'config' && cfg) {
-    // Hot config keeps the server chosen at start; switching servers needs a world restart.
-    const active = (cfg as { activeServer?: string }).activeServer;
-    let next: typeof cast.cfg;
-    try { next = applyServerProfile(cast.cfg, active ? { AGENT_MC_SERVER: active } : {}); }
-    catch (e) { log.warn?.('Rejected Minecraft config for the running connection: ' + String(e)); return; }
-    if (next.activeServer !== active || next.host !== cfg.host || next.port !== cfg.port || next.username !== cfg.username) {
-      log.warn?.('Minecraft connection change requires a world restart');
-      return;
+  if (cast.kind === 'config' && cfg && startupCfg && !stopping) {
+    // Merge only hot settings. No registry lookup (or partial error fallback) can
+    // replace the connection, login confirmation, safety or ownership snapshot.
+    const next = { ...cast.cfg } as unknown as Record<string, unknown>;
+    const startup = startupCfg as unknown as Record<string, unknown>;
+    for (const key of STARTUP_FIELDS) next[key] = structuredClone(startup[key]);
+    for (const [group, keys] of Object.entries(STARTUP_NESTED_FIELDS)) {
+      const saved = startup[group] as Record<string, unknown> | undefined;
+      next[group] = {
+        ...(next[group] as Record<string, unknown> | undefined),
+        ...Object.fromEntries(keys.map(key => [key, structuredClone(saved?.[key])])),
+      };
     }
-    // Replace snapshots in full so removal of a guide or conduct rule takes effect.
-    cfg.knowledge = next.knowledge;
-    cfg.serverSafety = next.serverSafety;
-    applyCfg(cfg as unknown as Record<string, unknown>, next as unknown as Record<string, unknown>);
+    applyCfg(cfg as unknown as Record<string, unknown>, next);
   }
 });
 

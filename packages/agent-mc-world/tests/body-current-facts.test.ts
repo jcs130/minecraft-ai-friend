@@ -3,6 +3,15 @@ import { installNativeBodyReadiness } from '../core/body-readiness.ts';
 import { installDeathLifecycle } from '../core/death-lifecycle.ts';
 import { methodHarness } from './method-harness.ts';
 
+it('keeps explosion diagnostics when affected block offsets are omitted', () => {
+  const r = methodHarness('1.21.11');
+  try {
+    (r.world as any).hookBotEvents(r.bot);
+    expect(() => r.bot._client.emit('explosion', { x: 0, y: 64, z: 0, radius: 2 })).not.toThrow();
+    expect(() => r.bot._client.emit('explosion', { x: 0, y: 64, z: 0, radius: 2, affectedBlockOffsets: [] })).not.toThrow();
+  } finally { r.close(); }
+});
+
 it('keeps online, health and one death episode distinct from missing respawn position', () => {
   const r = methodHarness('1.21.1'); r.close();
   const body = installNativeBodyReadiness(r.bot as any);
@@ -47,7 +56,10 @@ it('removes stale death coordinates from current request facts while retaining t
     expect(facts.text).toContain('Reach the mine');
     expect(facts.text).toContain('task#63 no observed movement');
     expect(facts.text).toContain('旧坐标不是当前落点');
-    for (const key of ['decision', 'decisionStability', 'experience', 'options']) expect(facts).not.toHaveProperty(key);
+    for (const key of ['decision', 'decisionStability', 'options']) expect(facts).not.toHaveProperty(key);
+    expect(facts.experience?.observation).toBeNull();
+    expect(facts.experience?.serviceScope).toEqual({ realm: world.serverRealmKey(),
+      account: `${world.cfg.auth ?? 'offline'}:${world.cfg.username}`, agent: world.cfg.memoryAgentId ?? world.botName });
     snapshot.mockRestore();
     land();
     expect(r.world.requestFacts()?.decision?.state).toHaveProperty('position');

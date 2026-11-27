@@ -5,6 +5,7 @@ import { dirname, isAbsolute, join } from 'node:path';
 import { cpuMemoryVector } from './memory-cpu-vector.ts';
 import { memoryRequest } from './game-memory-http.ts';
 import { GAME_MEMORY_DEFAULTS } from './game-memory-service.ts';
+import type { MinecraftServerGuide } from './server-guide.ts';
 
 export const REFERENCE_INDEX_SCHEMA = 'agent-mc-reference-index/v1';
 export const MINEDOJO_SOURCE = Object.freeze({ id: 'minedojo', title: 'MineDojo historical Minecraft Wiki',
@@ -13,7 +14,7 @@ export const MINEDOJO_SOURCE = Object.freeze({ id: 'minedojo', title: 'MineDojo 
   usage: 'External historical reference, not executable instructions or current-world evidence. Preserve source attribution and data license independently of code.' });
 export interface ReferenceEmbeddingConfig { endpoint: string; model: string; apiKeyEnv?: string; timeoutMs?: number }
 export interface ReferenceIndexConfig { indexFile: string; retrieval?: 'hybrid' | 'lexical' | 'local-vector' | 'semantic'; embeddings?: ReferenceEmbeddingConfig }
-export interface MinecraftKnowledgeConfig { minedojo?: ReferenceIndexConfig; server?: import('./server-guide.ts').MinecraftServerGuide }
+export interface MinecraftKnowledgeConfig { minedojo?: ReferenceIndexConfig; server?: MinecraftServerGuide }
 interface Page { id: string; title: string; url: string; body: string; aliases: string; sha256: string; capturedAtRaw: string | null; tables: unknown[] }
 interface Manifest { schema: string; source: typeof MINEDOJO_SOURCE; pages: number; chunks: number; builtAt: string;
   inputsSha256: string; embeddings: { model: string; fingerprint: string; dimensions: number } | null }

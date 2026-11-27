@@ -57,6 +57,7 @@ import { readMapDat } from './level-dat.ts';
 import { readMapId } from './item-facts.ts';
 import { Vec3 } from 'vec3';
 import { ServerFeedbackLedger, parseServerActionDenial } from './server-feedback.ts';
+import { ProtectedRegions } from './protection-regions.ts';
 import { ServerQueryLane, SERVER_QUERY_TOOL, SERVER_QUERY_RECEIPT_TOOL, serverQueryTool, serverQueryContextNotice, type ServerQueryDefinition } from './server-query.ts';
 import { supervisorEventView } from '../src/client/event-context.ts';
 import { executionFeedbackContext } from '../src/client/execution-context.ts';
@@ -72,7 +73,7 @@ import { PhotographyService, PHOTO_TOOL } from './photography.ts';
 import { captureVoxelScene } from './voxel-scene.ts';
 import { renderVoxelPhoto } from './voxel-photo.ts';
 import { OVERVIEW_SCHEMA, overviewArgumentError, type OverviewOptions } from './visual-overview.ts';
-import { visualFovError } from './visual-fov.ts';
+import { visualFov, visualFovError } from './visual-fov.ts';
 import { PlayerObservations, playerObservationMeta, renderPlayerObservation, type PlayerObservation } from './player-observation.ts';
 import { precheckEmptyUseTarget } from './precheck.ts';
 import { blockAtCell, resolveAt, dimensionOf } from './cell-facts.ts';
@@ -98,8 +99,10 @@ import { readServerDisplay, renderServerDisplayHud, scoreRowText } from './serve
 import { minecraftTextComponent } from './text-component.ts';
 import { richTextAnnotation } from './rich-text.mjs';
 import { setMinecraftTextLanguage } from './nbt-text.mjs';
-import { installOpenBookObserver } from './window-protocol.ts';
-import { MinecraftChatProvenance, incomingPrivateParts, isServerNotice } from '../src/chat-provenance.ts';
+import { bookPage, readInventoryBook } from './window-protocol.ts';
+import { beginViewerInteraction } from './viewer-interaction.ts';
+import { MinecraftChatProvenance, incomingPrivateParts, isServerNotice, type ChatIdentityEvidence } from '../src/chat-provenance.ts';
+import { nearbySpeakerContext, type NearbySpeakerOrigin } from './nearby-speaker.mjs';
 import { configureChatDedup, noteChatInput } from './chat-dedup.ts';
 import { RAILWAY_TOOL_DECL, railwayReadout } from '../src/railway.ts';
 import {
@@ -151,7 +154,7 @@ import {
 import { Aborted, SkillBlocked, sleep, type BlueprintPlacementIntent } from './skill-context.ts';
 import { worldStateAt } from './skills-build.ts';
 import { chatInputError, describeSkillInputCorrection, readSkillHelp, SKILL_HELP_MAX_SKILLS, SKILL_SIGNATURE_DOC } from './skills.ts';
-import { observeSpatial, parseSpatialObservation, spatialArgumentDiagnostic, SPATIAL_QUERY_SCHEMA, SPATIAL_QUERY_EXAMPLE } from './spatial-observation.ts';
+import { nearCameraWall, observeSpatial, parseSpatialObservation, spatialArgumentDiagnostic, SPATIAL_QUERY_SCHEMA, SPATIAL_QUERY_EXAMPLE } from './spatial-observation.ts';
 import { VOXEL_QUERY_DOC } from './voxel-query-contract.ts';
 import { TOOL_HELP_TOOL, readToolHelp } from '../src/client/tool-help.ts';
 import {
@@ -187,6 +190,7 @@ import { invItemNamed, itemsInReach } from './inventory.ts';
 import { selectionMenuTitle } from './window-semantics.ts';
 import { readOpenWindow, renderWindowReadout, type WindowReadout } from './window-readout.ts';
 import { serverWindows } from './orphan-windows.ts';
+import { DetachedStorageWindow, detachedStorageMatcher, type DetachedStorageOpener } from './detached-storage-window.ts';
 import { readEnchants } from './item-facts.ts';
 import { ItemBreakDecoder, type ItemBreakFact } from './item-break.ts';
 import { WorksBook } from './works.ts';
@@ -199,8 +203,7 @@ import {
   PositionVelocityTracker,
   RANGED_ENTER_RANGE,
   RANGED_EXIT_RANGE,
-  bestRangedWeapon,
-  hasUsableArrows,
+  hasReadyRangedWeapon,
   type BowEvent,
   type BowShotResult,
 } from './ranged.ts';
@@ -2435,8 +2438,9 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     tags: ['read'],
     barrierAfter: true,
     description:
-      'Capture the actual rendered Minecraft scene with time, location and physical readings. The host interprets the image. Inspect entrances and routes, visible player '
-      + 'actions. background=true accepts one observation job immediately and later delivers its result as a minecraft.visual event; '
+      'Capture the actual rendered Minecraft scene with time, location and physical readings. The host interprets the image. '
+      + 'A first-person request can return inexpensive voxel evidence if a nearby solid wall fills the view. Set force_image:true when appearance or wall text matters. '
+      + 'Inspect entrances, routes and visible players. background=true accepts one observation job immediately and later delivers its result as a minecraft.visual event; '
       + 'acceptance does not mean the image is ready. Only one observation may remain in flight, '
       + 'including synchronous calls; wait for its result instead of switching call modes to repeat it. '
       + 'Pending results arrive as events. A call made while an observation '
@@ -2461,6 +2465,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
         },
         include_hud: { type: 'boolean', description: 'Include visible health, items, notices and open menus. Default false captures the 3D scene alone.' },
         raw: { type: 'boolean', description: 'Return the image directly instead of a separate focused observation. Default false.' },
+        force_image: { type: 'boolean', description: 'Skip the nearby-wall voxel preflight. Useful for a sign, surface detail or targeted still image.' },
         background: { type: 'boolean', description: 'Accept a background observation job and deliver its actual result in a minecraft.visual event. Analyzed reports retain saved image references; raw or fallback results include the image. Omitted follows the World visual.background setting (default false). Explicit false waits for the result. Local background waiting is capped at 75 seconds; a model request already running may finish later.' },
       },
       required: [],
@@ -2719,11 +2724,14 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'closed virtual backpacks are not included, and chest records are historical until reopened. '
       + 'Use detail:"slots" for both identifiers of each carried stack: inventorySlot for player inventory 0–35, windowSlot for the player window 9–44. Use the field required by the transfer. item optionally filters stacks; freeSlots always covers the entire carried inventory. '
       + 'Use detail:"changes" for the latest confirmed net change across carried slots, or item alone for a typed current carried quantity. '
+      + 'Read game guidebooks and custom books in your synced inventory without opening them: detail:"book" lists books, then pass windowSlot and page (1-based) to read a page. '
       + 'Ask this instead of re-submitting a task to find out what you are carrying. '
       + 'Once per turn: asking again in the same turn returns a one-line pointer to the answer above.',
     parameters: { type: 'object', properties: {
       item: { type: 'string', description: 'Optional focused stock lookup by material ID, Chinese material name, or exact custom display name.' },
-      detail: { type: 'string', enum: ['summary', 'slots', 'changes','storage'], description: 'Default summary; slots reads the player window (9–44); changes returns latest net changes; storage with item also looks up historical containers.' },
+      detail: { type: 'string', enum: ['summary', 'slots', 'changes','storage','book'], description: 'Default summary; slots reads the player window (9–44); changes returns latest net changes; storage locates an item; book lists or reads carried books.' },
+      windowSlot: { type: 'integer', minimum: 9, maximum: 45, description: 'detail:book only. Use the player window slot from the book list (45 is offhand).' },
+      page: { type: 'integer', minimum: 1, description: 'detail:book with windowSlot only. One book page, first page is 1.' },
       offset: {type:'integer',minimum:0,maximum:71,description:'For a changes continuation, copy the offset and revision from next_safe_read.'},
       revision: {type:'string',maxLength:64,description:'Inventory-change revision returned with a continuation.'},
       requirements: { type: 'array', minItems: 1, description: 'Targeted planning read, instead of item/detail. Material IDs count all stack variants. Keep amounts are your assumptions for this query.',
@@ -2738,11 +2746,12 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_window',
     tags: ['read', 'snapshot'],
     description:
-      'Read the server window/menu that is open right now (plugin GUIs such as /menu, /rtp, /linggen): its title and every '
+      'Read the server window/menu that is open right now: its title and every '
       + 'container slot with item id, display name and lore lines. Read-only and instant — it clicks nothing. '
       + 'Also reports when the server still has a window open that the client could not model (commands are then refused). '
+      + 'For an opened book set bookPage to its 1-based page number; for carried books use mc_bag detail:book. '
       + 'Use the slot numbers with mc_do {"skill":"menu_click","slot":N}; close with {"skill":"menu_close"}.',
-    parameters: { type: 'object', properties: {}, required: [] },
+    parameters: { type: 'object', properties: { bookPage: { type: 'integer', minimum: 1 } }, required: [] },
   },
   {
     name: 'mc_queue',
@@ -2824,6 +2833,8 @@ export interface MinecraftWorldOptions {
   cfg: MinecraftConfigSection;
   /** Explicit server extension module, tool declarations and configuration. */
   extension?: { module: string; tools: ReadonlyArray<Omit<ToolDef, 'handler'>>; config?: Record<string, unknown> };
+  /** Locally declared storage commands whose detached native windows may be recovered after inactivity. */
+  detachedStorageOpeners?: readonly DetachedStorageOpener[];
   timezone?: string;
   botName?: string;
   /**
@@ -3088,6 +3099,7 @@ export class MinecraftWorld implements World {
 
   constructor(opts: MinecraftWorldOptions) {
     this.cfg = opts.cfg;
+    this.detachedStorageOpeners = opts.detachedStorageOpeners ?? [];
 
     this.timezone = opts.timezone ?? SYSTEM_TIMEZONE;
     this.botName = opts.botName ?? 'bot';
@@ -3096,6 +3108,8 @@ export class MinecraftWorld implements World {
       emit: (event) => this.logBodyLease(event),
     });
     this.dataDir = opts.dataDir ?? '';
+    this.protectedRegions = new ProtectedRegions(this.dataDir ? join(this.dataDir, 'minecraft-protected-regions.json') : null);
+    this.protectedRegions.load();
     this.proximityVoice = new ProximityVoiceLane({
       config: () => ({enabled:false,audioProducerUrl:'',outputMode:'game-only',...this.cfg.proximityVoice}),
       context: () => {
@@ -3108,9 +3122,11 @@ export class MinecraftWorld implements World {
           sendNearbyText:(text,requestId)=>this.sendNearbyVoiceText(text,requestId)};
       },
       blob:handle=>this.host?.blob(handle)??null,
-      hearing:(row,world)=>this.emit('minecraft.chat',`[MC 附近语音] ${row.speaker}: ${row.text}`,true,{meta:{uname:row.speaker,senderUuid:row.speakerUuid,
+      hearing:(row,world)=>this.emit('minecraft.chat',`[MC 附近语音] ${row.speaker}: ${row.text}`
+        +(row.speakerOrigin ? nearbySpeakerContext(row.speakerOrigin) : ''),true,{meta:{uname:row.speaker,senderUuid:row.speakerUuid,
         utteranceId:row.utteranceId,channel:'nearby-voice',socialScope:'minecraft-server',
-        source:'mcagent:voice/nearby_voice',sourceWorld:null,deliveryWorld:world,deliveryWorldKey:world.key,transcript:true}},row.speaker),
+        source:'mcagent:voice/nearby_voice',sourceWorld:row.speakerOrigin?.world??null,deliveryWorld:world,deliveryWorldKey:world.key,transcript:true,
+        ...(row.speakerOrigin ? {speakerOrigin:row.speakerOrigin,chatBody:row.text} : {})}},row.speaker),
       changed:receipt=>this.emit('minecraft.voice',`[Minecraft 附近语音] ${receipt.requestId} 游戏=${receipt.game.state}，直播=${receipt.broadcast.state}。`
         +(receipt.game.state==='sent'&&receipt.requestedText?` 本次台词输入：${receipt.requestedText}。`:'')
         +'音频帧发送不证明对方听见或全文生成完整；按原请求ID查状态。',false,{trigger:'piggyback',meta:{proximityVoice:receipt}}),
@@ -3709,6 +3725,8 @@ export class MinecraftWorld implements World {
     if (this.bodyInhibitReason) parts.push({ key: 'bodyRestriction', text: `身体当前受限：${this.bodyInhibitReason}；动作等待恢复回执，不能当作寻路失败。` });
     const serverFeedback = this.serverFeedback.read();
     if (serverFeedback) parts.push({ key: 'serverFeedback', text: serverFeedback });
+    const protectedRegions = this.protectedRegions.read(snap.dimension);
+    if (protectedRegions) parts.push({ key: 'protectedRegions', text: protectedRegions });
     // 终态可能刚投递，而下一拍快照尚未发生。读取最新原文，避免只有受理回执
     // 留在历史里时重做已经完成或受阻的单；日期也保留，不能当成当前队列。
     const outcome = renderLastTaskReadout(last
@@ -3790,6 +3808,7 @@ export class MinecraftWorld implements World {
           surfaceWater: movement?.bodyWet===true&&movement.headWet===false&&!movement.vehicleAttached,
           journeyCues: journey?.observations.map(cue => ({ position: [...cue.position] as [number,number,number], observedAtMs: cue.observedAtMs })) ?? [] } },
       experience: { scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
+        serviceScope: { realm: this.serverRealmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
         observation: { at: new Date().toISOString(), dimension: normalizeDimension(snap.dimension), position: snap.position,
           health: snap.health, food: snap.food, inventory: operationInventory(snap.inventory, snap.invSynced) } },
       snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue', 'minecraft.task.progress'] };
@@ -3826,6 +3845,9 @@ export class MinecraftWorld implements World {
     ];
     return { text: parts.map(part => part.text).join('\n'), parts, partKeys: REQUEST_FACT_KEYS,
       executionPartKeys: EXECUTION_FACT_KEYS, world: readWorldIdentity(null),
+      experience: { scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
+        serviceScope: { realm: this.serverRealmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
+        observation: null },
       snapshotTypes: ['minecraft.world.snapshot', 'minecraft.task.queue', 'minecraft.task.progress'] };
   }
 
@@ -4431,8 +4453,8 @@ export class MinecraftWorld implements World {
       // 清空冻结两槽后通知反射丢弃旧令牌；危机仍在时重新申请。
       onHoldsReleased: () => this.reflexes?.invalidateEnvironmentHold(),
       ranged: {
-        ready: (bot) => this.rangedBot === bot && Boolean(bestRangedWeapon(bot)) && hasUsableArrows(bot),
-        shoot: (target, ownerToken): Promise<BowShotResult> => this.ranged?.shoot(target, ownerToken)
+        ready: (bot, preference) => this.rangedBot === bot && hasReadyRangedWeapon(bot, preference),
+        shoot: (target, ownerToken, preference): Promise<BowShotResult> => this.ranged?.shoot(target, ownerToken, preference)
           ?? Promise.resolve({ kind: 'blocked', reason: 'aborted', cause: 'bot_lost' }),
         abort: () => this.ranged?.abort(),
       },
@@ -4448,6 +4470,7 @@ export class MinecraftWorld implements World {
       inventorySynced: () => this.bridge?.invSynced === true,
       previewResourcePlacement: (item) => this.previewBlueprintResourcePlacement(item),
       probeRoutes: (target, goal, profiles) => this.bridge?.probeRoutes(target, goal, profiles) ?? null,
+      protectedRegion: (cell) => this.protectedRegionAt(cell),
       probeTarget: (target, options) => this.bridge?.probeTarget(target, options) ?? null,
       digBackoffSince: (ts) => this.bridge?.digBackoffSince(ts) ?? [],
       // 战斗会话在场时队列闸住:受理照收,腾出手(resume)再跑
@@ -4539,9 +4562,9 @@ export class MinecraftWorld implements World {
       onLowHealth: (bot) => this.onLowHealth(bot),
       report: result => this.extensionCombatReport(result),
       ranged: {
-        ready: (bot) => this.rangedBot === bot && Boolean(bestRangedWeapon(bot)) && hasUsableArrows(bot),
+        ready: (bot, preference) => this.rangedBot === bot && hasReadyRangedWeapon(bot, preference),
         active: () => this.ranged?.active ?? false,
-        shoot: (target, ownerToken): Promise<BowShotResult> => this.ranged?.shoot(target, ownerToken)
+        shoot: (target, ownerToken, preference): Promise<BowShotResult> => this.ranged?.shoot(target, ownerToken, preference)
           ?? Promise.resolve({ kind: 'blocked', reason: 'aborted', cause: 'bot_lost' }),
         abort: () => this.ranged?.abort(),
       },
@@ -4566,6 +4589,10 @@ export class MinecraftWorld implements World {
       },
       resumeEnvironment: (token) => this.executor?.resumeAfterEnvironment(token)
         ?? { released: false, note: null },
+      onBurningRecovered: bot => {
+        if (!this.shuttingDown && this.bridge?.bot === bot && this.connectionReadiness().ready)
+          this.executor?.wakeCheckpointQueue(bot);
+      },
       stopFallTask: (reason) => {
         this.interruptIdle('fall');
         return this.executor?.stopCurrent(reason) ?? null;
@@ -4614,6 +4641,7 @@ export class MinecraftWorld implements World {
       deathRespawnDelayMs: this.cfg.deathRespawnDelayMs,
       authentication: this.accountAuth.agent,
       loginConfigFile: () => this.cfg.loginConfigFile,
+      loginConfirmation: () => this.cfg.loginConfirmation ?? 'plugin',
       viewerPort: this.cfg.viewerPort,
       viewerMaxSessions: this.cfg.viewerMaxSessions,
       viewerAssetsDir: this.cfg.viewerAssetsDir,
@@ -4633,6 +4661,7 @@ export class MinecraftWorld implements World {
       taskId: () => this.executor?.currentTask?.id ?? null,
       protectionFile: this.dataDir ? join(this.dataDir, 'minecraft-break-permissions.json') : null,
       protectionPreflight: () => this.cfg.protectionPreflight === true,
+      protectedRegion: (dimension, cell) => this.protectedRegionAt(cell, dimension),
 
       // 工地绑定持续约束自动寻路；显式施工与拆改仍通过各自权限检查。
       blueprintZones: () => this.blueprintPathZones(),
@@ -4819,13 +4848,23 @@ export class MinecraftWorld implements World {
 
   /** This hook wraps actual transport dispatch, not task admission. */
   private chatDeliverySequence = 0;
+  private readonly detachedStorageWindow = new DetachedStorageWindow<NonNullable<Bot['currentWindow']>>();
+  private readonly detachedStorageOpeners: readonly DetachedStorageOpener[];
   private dispatchServerChat(text: string, send: () => void, context?: ChatDispatchContext): ChatDeliveryReceipt | undefined {
     const previous = new Map(this.recentSystemMessages);
     const mutates = text.trim().startsWith('/') && !this.serverActionWait.isReadOnlyQuery(text);
     let delivery: ChatDeliveryReceipt | undefined;
     if (mutates) this.recentSystemMessages.clear();
     try { this.serverActionWait.dispatchChat(text, () => {
-      send();
+      if (text.trim().startsWith('/')) {
+        const matches = context?.taskId === undefined ? undefined : detachedStorageMatcher(this.detachedStorageOpeners, text);
+        this.detachedStorageWindow.expect(this.bridge?.bot ?? null,
+          matches ? window => matches(minecraftTextComponent(window.title)) : undefined);
+      }
+      try { send(); } catch (error) {
+        if (text.trim().startsWith('/')) this.detachedStorageWindow.expect(null, undefined);
+        throw error;
+      }
       const message = chatDeliveryMessage(text);
       if (!message) return;
       const audience = message.channel === 'public' ? this.extensionChatAudience(text) : undefined;
@@ -4921,8 +4960,11 @@ export class MinecraftWorld implements World {
   protected extensionServerFeedback(_text: string): void {}
   /** A server pack can opt exact transfer commands into receipt and inventory verification. */
   protected extensionInventoryArrival(_command: string): InventoryArrivalMatcher | undefined { return undefined; }
+  /** Only opt in known detached storage commands and their native window titles. */
   /** Optional routing evidence; the common core does not assume a server's chat radius or prefixes. */
   protected extensionChatAudience(_text: string, _serverRenderedText?: string, _direction: 'incoming'|'outgoing'='outgoing'): import('../src/contracts/chat-delivery.ts').ChatAudienceEvidence | undefined { return undefined; }
+  /** Consume a server-rendered chat relay after login; display text does not establish player identity. */
+  protected extensionServerRelayedChat(_text: string): boolean { return false; }
   private chatAudienceMeta(audience: import('../src/contracts/chat-delivery.ts').ChatAudienceEvidence | undefined): Record<string, unknown> {
     return audience ? { chatChannel: audience.channel, chatScope: audience.scope, chatRoutingSource: audience.source,
       ...(audience.radius === undefined ? {} : { chatRadius: audience.radius }), ...(audience.observedAt ? { chatPolicyObservedAt: audience.observedAt } : {}) } : {};
@@ -4951,7 +4993,9 @@ export class MinecraftWorld implements World {
       mc_knowledge: async (args, ctx) => {
         ctx.signal?.throwIfAborted();
         try {
-          const result = await queryMinecraftKnowledge(args, this.bridge?.bot?.version ?? this.cfg.version, this.cfg.knowledge, ctx.signal, this.cfg.activeServer);
+          const bot = this.bridge?.bot;
+          const result = await queryMinecraftKnowledge(args, bot?.version ?? this.cfg.version, this.cfg.knowledge,
+            ctx.signal, this.cfg.activeServer, bot);
           return { text: this.toolLog('mc_knowledge', args, JSON.stringify(result)), meta: { knowledge: result } };
         } catch (error) { return { text: String(error), failed: true }; }
       },
@@ -5158,6 +5202,27 @@ export class MinecraftWorld implements World {
       },
       mc_check: async (args) => this.toolLog('mc_check', args, this.runCheck(args)),
       mc_bag: async (args, ctx) => {
+        if (args.detail === 'book') {
+          ctx.signal?.throwIfAborted();
+          if (Object.keys(args).some(key => !['detail', 'windowSlot', 'page'].includes(key)))
+            return { failed: true, text: '读书仅使用 detail:"book"、windowSlot 和 page。' };
+          const slots = this.bridge?.bot?.inventory?.slots;
+          if (!this.bridge?.connected || !this.bridge.invSynced || !slots || slots.length < 45)
+            return { failed: true, text: '当前连接的背包还未同步，书本目录未知。' };
+          try {
+            const data = { source: 'current-inventory', serverProfile: this.cfg.activeServer ?? null,
+              ...readInventoryBook(slots, args.windowSlot, args.page) };
+            if ('text' in data && typeof data.text === 'string' && this.bridge.bot) {
+              beginViewerInteraction(this.bridge.bot, { kind: 'book-read', title: data.title || '随身书',
+                author: data.author, page: data.page, pageCount: data.pageCount, text: data.text });
+            }
+            return { text: JSON.stringify(data), data };
+          } catch (error) {
+            return { failed: true, text: error instanceof Error ? error.message : String(error) };
+          }
+        }
+        if (args.windowSlot !== undefined || args.page !== undefined)
+          return { failed: true, text: '书本槽位和页码仅可用于 detail:"book"。' };
         if ((args.offset !== undefined || args.revision !== undefined) && args.detail !== 'changes')
           return {failed:true,text:'库存变化分页仅可用于 detail:"changes"。'};
         if (typeof args.item === 'string' && !/^[^\p{Cc}\p{Cf}]{1,64}$/u.test(args.item.trim().replace(/^minecraft:/i,'')))
@@ -5193,6 +5258,19 @@ export class MinecraftWorld implements World {
       },
       mc_view_map: async (args) => this.viewMap(args),
       mc_window: async (args) => {
+        if (args.bookPage !== undefined) {
+          const screen = this.bridge?.connected ? serverScreen(this.bridge.bot) : null;
+          if (!screen?.book) return { failed: true, text: '当前没有已打开的书。随身书可用 mc_bag {"detail":"book"} 查询。' };
+          try {
+            const data = { source: 'open-book', serverProfile: this.cfg.activeServer ?? null,
+              title: screen.title, author: screen.book.author, ...bookPage(screen.book, args.bookPage) };
+            if (this.bridge?.bot) beginViewerInteraction(this.bridge.bot, { kind: 'book-read', ...data });
+            return { text: JSON.stringify(data), data };
+          } catch (error) {
+            return { failed: true, text: error instanceof Error ? error.message : String(error) };
+          }
+        }
+        if (this.bridge?.bot) this.detachedStorageWindow.touched(this.bridge.bot);
         const readout=this.windowReadout();
         return { text: this.toolLog('mc_window', args, readout.text), data: readout.data as unknown as Record<string, unknown> };
       },
@@ -5362,6 +5440,9 @@ export class MinecraftWorld implements World {
     if (args.raw !== undefined && typeof args.raw !== 'boolean') {
       return { text: this.toolLog(name, args, '[mc_visual 失败] raw 只能是 boolean'), failed: true };
     }
+    if (args.force_image !== undefined && typeof args.force_image !== 'boolean') {
+      return { text: this.toolLog(name, args, '[mc_visual 失败] force_image 只能是 boolean'), failed: true };
+    }
     if (args.background !== undefined && typeof args.background !== 'boolean') {
       return { text: this.toolLog(name, args, '[mc_visual 失败] background 只能是 boolean'), failed: true };
     }
@@ -5380,6 +5461,14 @@ export class MinecraftWorld implements World {
     }
     if (ctx.signal?.aborted) {
       return { text: this.toolLog('mc_visual', args, '[mc_visual 未受理] 本次调用已取消'), failed: true };
+    }
+    if ((args.mode === undefined || args.mode === 'first') && args.include_hud !== true && args.force_image !== true) {
+      const wall = nearCameraWall(bot, visualFov('first', args.fov as number | undefined) ?? 120);
+      if (wall) return { text: this.toolLog('mc_visual', args,
+        `[mc_visual 体素预判] ${wall.sampledAt}，正前方 ${wall.centralWall.distance.toFixed(2)} 格有 ${zhName(wall.centralWall.block)}，`
+        + `坐标 (${wall.centralWall.at.join(', ')})。9 条采样射线都被近处实心方块挡住，本次省略截图。`
+        + '找路线可先用 mc_scout 读体素或换视角；要核对墙面细节可明确 force_image:true。'),
+        meta: { visualPreflight: { ...wall, captureSkipped: true, reason: 'close-opaque-wall' } } };
     }
     if (this.visualInFlight) {
       return { text: this.toolLog('mc_visual', args,
@@ -7433,6 +7522,12 @@ export class MinecraftWorld implements World {
       ),
       emit: (event) => {
         if (generation === this.rangedGeneration && this.rangedBot === bot) {
+          if (event.kind !== 'blocked' && event.projectileId !== undefined) {
+            this.diag.write({ lane: 'combat', event: `native-ranged-${event.kind}`,
+              msg: event.kind === 'released' ? '观察到自己的远程投射物' : '投射物的命中已确认',
+              data: { weapon: event.weapon, shotId: event.shotId, targetId: event.targetId,
+                projectileId: event.projectileId, at: event.at } });
+          }
           if (event.kind !== 'blocked' && this.executor?.ownsRanged(event.ownerToken)) {
             this.executor.onBowEvent(event as BowEvent);
           }
@@ -7844,7 +7939,8 @@ export class MinecraftWorld implements World {
       try { miningLimits = resolveMiningLimits(this.cfg.miningLimits); } catch { /* keep last valid hot config */ }
       return miningLimits;
     },
-      (event, data) => this.diag?.write({ lane: 'event', event, msg: '服务器警告挖矿：暂停挖掘并降低挖矿额度', data }));
+      (event, data) => this.diag?.write({ lane: 'event', event, msg: '服务器警告挖矿：暂停挖掘并降低挖矿额度', data }),
+      component => this.chatClaimed.has(component));
     installMovementPace(bot, () => {
       try { movementPace = resolveMovementPace(this.cfg.movementPace); } catch { /* keep last valid hot config */ }
       return movementPace;
@@ -7868,6 +7964,7 @@ export class MinecraftWorld implements World {
         ? (bot.registry?.language?.[key] ?? rendered) : rendered;
       const noted = this.bridge?.bot === bot && this.hookedBots.has(bot)
         && this.serverFeedback.note(text, 'actionBar', this.executor?.currentTask?.id ?? null);
+      this.noteProtectedRegion(text);
       if (this.bridge?.bot===bot && this.hookedBots.has(bot)) {
         const denial=parseServerActionDenial(text);
         if (denial && this.bridge?.noteServerActionDenied?.(denial)) this.executor?.blockCurrentFromServer(text);
@@ -7909,25 +8006,27 @@ export class MinecraftWorld implements World {
       matchedChatMessages.add(jsonMsg);
       return false;
     };
+    const emitPublicChat = (username: string, message: string, identity: ChatIdentityEvidence,
+      rendered?: string, speakerOrigin?: NearbySpeakerOrigin): void => {
+      const audience = this.extensionChatAudience(message, rendered, 'incoming');
+      const fromSelf = username.toLowerCase() === this.chatName().toLowerCase();
+      if (!fromSelf) { noteChatInput(bot, username, false); this.interruptIdle('chat'); }
+      const deliveryWorld = speakerOrigin ? readWorldIdentity(bot) : undefined;
+      this.emit('minecraft.chat', `[MC] ${username}: ${message}`+(speakerOrigin ? nearbySpeakerContext(speakerOrigin) : ''),
+        !fromSelf && mentionedInChat(message), { ...(fromSelf ? { deliver: false } : {}), meta: {
+          uname: username, channel: 'public', socialScope: 'minecraft-server', ...identity,
+          ...(rendered ? { serverRenderedText: rendered } : {}), ...this.chatAudienceMeta(audience),
+          ...(speakerOrigin ? {channel:'nearby',chatChannel:'nearby',speakerOrigin,sourceWorld:speakerOrigin.world,chatBody:message,
+            deliveryWorld,deliveryWorldKey:deliveryWorld?.key} : {}),
+          ...(fromSelf ? { outgoing: true, direction: 'outgoing' } : {}) } }, username);
+    };
     bot.on('chat', (username: string, message: string, _translate: string, jsonMsg: unknown) => {
       const identity = chatProvenance.identify(username, jsonMsg, bot.players);
       if (!identity) return;
       if (markMatched(jsonMsg)) return;
       if (jsonMsg && typeof jsonMsg === 'object') this.chatClaimed.add(jsonMsg);
-      const decorated = chatProvenance.publicChat(jsonMsg as Parameters<typeof chatProvenance.publicChat>[0], bot.players, bot.registry)?.serverRenderedText;
-      const audience = this.extensionChatAudience(message, decorated, 'incoming');
-      if (username === this.chatName()) {
-        // 自己说的话:落库存档,但不投递——拿自己的话叫醒自己没有意义
-        this.emit('minecraft.chat', `[MC] ${username}: ${message}`, false, { deliver: false,
-          meta: { uname: username, channel: 'public', outgoing: true, direction: 'outgoing', ...identity,
-            ...(decorated ? { serverRenderedText: decorated } : {}), ...this.chatAudienceMeta(audience) } }, username);
-        return;
-      }
-      noteChatInput(bot, username, false);
-      this.interruptIdle('chat');
-      this.emit('minecraft.chat', `[MC] ${username}: ${message}`, mentionedInChat(message),
-        { meta: { uname: username, channel: 'public', socialScope: 'minecraft-server', ...identity,
-          ...(decorated ? { serverRenderedText: decorated } : {}), ...this.chatAudienceMeta(audience) } }, username);
+      const packet = chatProvenance.publicChat(jsonMsg as Parameters<typeof chatProvenance.publicChat>[0], bot.players, bot.registry);
+      emitPublicChat(username, message, identity, packet?.serverRenderedText, packet?.speakerOrigin);
     });
     // Private identity is parsed from the raw component below. Mineflayer's
     // default whisper regex can mistake a rank/tag (or a public quote) for a
@@ -7952,6 +8051,7 @@ export class MinecraftWorld implements World {
         return;
       }
       if (position !== 'chat' && position !== 'system') return;
+      if (matchedChatMessages.has(jsonMsg)) return;
       const outgoing = chatProvenance.outgoingWhisper(jsonMsg, bot.players, this.chatName(), bot.player?.uuid, bot.registry);
       if (outgoing) {
         markMatched(jsonMsg); this.chatClaimed.add(jsonMsg);
@@ -7974,20 +8074,21 @@ export class MinecraftWorld implements World {
       const publicChat = chatProvenance.publicChat(jsonMsg, bot.players, bot.registry);
       if (publicChat) {
         markMatched(jsonMsg); this.chatClaimed.add(jsonMsg);
-        const { username, message, identity, serverRenderedText } = publicChat;
-        const audience = this.extensionChatAudience(message, serverRenderedText, 'incoming');
-        const fromSelf = username.toLowerCase() === this.chatName().toLowerCase();
-        if (!fromSelf) { noteChatInput(bot, username, false); this.interruptIdle('chat'); }
-        this.emit('minecraft.chat', `[MC] ${username}: ${message}`, !fromSelf && mentionedInChat(message),
-          { ...(fromSelf ? { deliver: false } : {}), meta: { uname: username, channel: 'public',
-            socialScope: 'minecraft-server', ...identity, ...(serverRenderedText ? { serverRenderedText } : {}), ...this.chatAudienceMeta(audience),
-            ...(fromSelf ? { outgoing: true, direction: 'outgoing' } : {}) } }, username);
+        const { username, message, identity, serverRenderedText, speakerOrigin } = publicChat;
+        emitPublicChat(username, message, identity, serverRenderedText, speakerOrigin);
         return;
       }
       let unchangedQueryFeedback = false;
       let independentQueryReply = false;
       if (position === 'system') {
         const reply = jsonMsg.toString().trim();
+        if (reply && !loginMessage && !this.shuttingDown && this.bridge?.bot === bot
+          && this.bridge?.connectionState?.ready === true && bot._client.state === 'play'
+          && isServerNotice(jsonMsg, position, sender) && this.extensionServerRelayedChat(reply)) {
+          markMatched(jsonMsg);
+          this.chatClaimed.add(jsonMsg);
+          return;
+        }
         const taskId = this.executor?.currentTask?.id ?? null;
         const queryGeneration = this.queryGeneration();
         const querySequence = ++this.serverQueryMessageSequence;
@@ -8007,6 +8108,7 @@ export class MinecraftWorld implements World {
             // unrelated body task that happened to be running at arrival.
             if (!independentQueryReply) {
               this.serverFeedback.note(reply, 'system', taskId);
+              this.noteProtectedRegion(reply);
               const denial=parseServerActionDenial(reply);
               if (denial && this.bridge?.noteServerActionDenied?.(denial)
                 && taskId!==null && this.executor?.currentTask?.id===taskId) {
@@ -8092,6 +8194,7 @@ export class MinecraftWorld implements World {
         const nativeServerFeedback = !privateMessage && !loginMessage
           && (!sender || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(sender))
           && !key.startsWith('commands.message.display.') && !key.startsWith('chat.type.');
+        if (nativeServerFeedback) this.noteProtectedRegion(text);
         this.emit('minecraft.chat', notice,
           privateMessage || serverNotice,
           { ...(privateMessage || serverNotice ? {} : { trigger: 'piggyback' as const }),
@@ -8131,16 +8234,6 @@ export class MinecraftWorld implements World {
     installServerChatPolicy(bot, serverSafety);
     this.attachExtension(bot);
     this.hookMessageEvents(bot);
-    const detachBook = installOpenBookObserver(bot, (book) => {
-      if (this.bridge?.bot !== bot) return;
-      const heading = book.title ? `《${book.title}》` : '成书';
-      const author = book.author ? `，作者 ${book.author}` : '';
-      const body = book.pages.length
-        ? book.pages.map((page, index) => `${index + 1}. ${page}`).join('\n')
-        : '未能读出正文。';
-      this.emit('minecraft.event', `[Minecraft] 打开了${heading}${author}。\n${body}`, false);
-    });
-    bot.once('end', detachBook);
     const detachUses = this.serverActionWait.observeUses(bot._client, (at) =>
       this.bridge?.bot === bot ? this.useObservation(at) : undefined);
     bot._client.on('end', detachUses);
@@ -8158,15 +8251,15 @@ export class MinecraftWorld implements World {
     });
     // 爆炸仅写 diag，不投递成文事件。
     bot._client.on('explosion', (packet: {
-      x: number; y: number; z: number; radius: number; affectedBlockOffsets: unknown[];
+      x: number; y: number; z: number; radius: number; affectedBlockOffsets?: unknown[];
     }) => {
       const at = bot.entity?.position;
       const distance = at ? Math.hypot(at.x - packet.x, at.y - packet.y, at.z - packet.z) : null;
-      const affected = packet.affectedBlockOffsets.length;
+      const affected = Array.isArray(packet.affectedBlockOffsets) ? packet.affectedBlockOffsets.length : null;
       this.diag.write({
         lane: 'world', event: 'explosion',
         msg: `爆炸:(${Math.round(packet.x)}, ${Math.round(packet.y)}, ${Math.round(packet.z)}) 半径 ${packet.radius.toFixed(1)}`
-          + `,炸掉 ${affected} 格${distance === null ? '' : `,离我 ${distance.toFixed(1)} 格`}`,
+          + `,炸掉 ${affected === null ? '未知' : `${affected} 格`}${distance === null ? '' : `,离我 ${distance.toFixed(1)} 格`}`,
         data: { x: packet.x, y: packet.y, z: packet.z, radius: packet.radius, affected, distance },
       });
     });
@@ -8192,18 +8285,50 @@ export class MinecraftWorld implements World {
     bot.on('entitySpawn', (entity: { type?: string }) => {
       if (entity.type === 'player') this.playerProximityTick(bot);
     });
+    // Mineflayer emits entityHurt synchronously from this packet but only forwards the causing entity.
+    // Consume the native direct projectile ID first and suppress the lossy duplicate for that target.
+    let nativeOwnDamage: { targetId: number } | null = null;
+    const onNativeDamage = (packet: { entityId?: number; sourceCauseId?: number; sourceDirectId?: number }): void => {
+      const ownId = bot.entity?.id;
+      const targetId = packet.entityId;
+      if (this.rangedBot !== bot || typeof ownId !== 'number' || typeof targetId !== 'number'
+        || packet.sourceCauseId !== ownId + 1 || typeof packet.sourceDirectId !== 'number') return;
+      const current = { targetId };
+      nativeOwnDamage = current;
+      queueMicrotask(() => { if (nativeOwnDamage === current) nativeOwnDamage = null; });
+      const taskOwns = this.executor?.claimsCombat(targetId) ?? false;
+      const directId = packet.sourceDirectId - 1;
+      if (directId === ownId) {
+        if (taskOwns) this.executor?.noteCombatTargetHurt(targetId);
+      } else if (Number.isSafeInteger(directId) && directId >= 0) {
+        const at = Date.now();
+        if (taskOwns || this.combat?.acceptsRangedHit(targetId, at, true)) {
+          if (this.ranged?.noteHit(targetId, at, directId)) return;
+        }
+        // Existing bow shots have no bound projectile ID. Only use the older
+        // window when the native direct entity is an actual arrow.
+        const directName = bot.entities[directId]?.name;
+        if ((directName === 'arrow' || directName === 'spectral_arrow')
+          && (this.executor?.acceptsRangedHit(targetId, at) || this.combat?.acceptsRangedHit(targetId, at))) {
+          this.ranged?.noteHit(targetId, at);
+        }
+      }
+    };
+    bot._client.prependListener('damage_event', onNativeDamage);
+    bot.once('end', () => bot._client.off('damage_event', onNativeDamage));
     bot.on('entityHurt', (entity: { id?: number }, source?: { id?: number }) => {
-      if (entity.id === bot.entity?.id) this.interruptIdle('damage');
+      if (typeof entity.id === 'number' && entity.id === bot.entity?.id) this.interruptIdle('damage');
       if (
         this.rangedBot !== bot ||
         typeof entity.id !== 'number' ||
-        source?.id !== bot.entity?.id
+        nativeOwnDamage?.targetId === entity.id ||
+        typeof source?.id !== 'number' || source.id !== bot.entity?.id
       ) return;
       const taskOwns = this.executor?.claimsCombat(entity.id) ?? false;
-      const taskAcceptsArrow = this.executor?.acceptsRangedHit(entity.id) ?? false;
+      const taskAcceptsRanged = this.executor?.acceptsRangedHit(entity.id) ?? false;
       const combatOwns = this.combat?.acceptsRangedHit(entity.id) ?? false;
-      const arrow = taskAcceptsArrow || combatOwns ? this.ranged?.noteHit(entity.id) : null;
-      if (taskOwns && !arrow) this.executor?.noteCombatTargetHurt(entity.id);
+      const rangedHit = taskAcceptsRanged || combatOwns ? this.ranged?.noteHit(entity.id) : null;
+      if (taskOwns && !rangedHit) this.executor?.noteCombatTargetHurt(entity.id);
     });
     bot.on('death', () => {
       if (this.rangedBot === bot) this.ranged?.onDeath();
@@ -8242,6 +8367,7 @@ export class MinecraftWorld implements World {
       let lastKnownNotice = -Infinity;
       const onRefusal = (message: string, position: string, component: unknown, sender?: string) => {
         if (this.bridge?.bot !== bot) return;
+        if (component && typeof component === 'object' && this.chatClaimed.has(component)) return;
         if (!isServerNotice(component, position, sender) || /^\s*</.test(String(message))) return;
         if (!/打开界面时无法执行指令/.test(String(message))) return;
         const now = Date.now();
@@ -8264,9 +8390,14 @@ export class MinecraftWorld implements World {
     onServerScreen(bot, (screen) => {
       if (!screen) return;
       this.interruptIdle('server-screen');
+      if (screen.kind === 'book') {
+        this.emit('minecraft.event', `[Minecraft] 打开书本《${screen.title}》，页数 ${screen.bookPageCount ?? '未知'}。用 mc_window {"bookPage":1} 读取，或用 menu_close 合上。`, true);
+        return;
+      }
       this.emit('minecraft.event', `[Minecraft] ${renderScreen(screen).split('\n').slice(0, 8).join(' ')}。服务端界面开着时会拒绝指令；用 mc_window 读，再 menu_click 选按钮或 menu_close 关闭。`, true);
     });
     bot.on('windowOpen', () => {
+      this.detachedStorageWindow.opened(bot, bot.currentWindow);
       this.interruptIdle('container');
       if (this.guiKickTimer) clearTimeout(this.guiKickTimer);
       this.guiKickTimer = null;
@@ -8689,16 +8820,19 @@ export class MinecraftWorld implements World {
     if (!bot || !queue) return;
     const reaction = this.combat?.reactionState();
     const idle = this.idleBehavior?.actionId;
+    const waiting = queue.waiting[0];
     // Never echo chat, commands or arbitrary tool arguments into an audience HUD.
     const labels: Record<string,string> = { attack:'接近并攻击',goto:'前往目标',goto_player:'跟随玩家',
       eat:'进食',equip:'更换装备',craft:'合成物品',take:'取出物品',put:'存放物品',cast:'施法',chat:'发送游戏消息',
       find:'寻找目标',collect:'采集',mine:'挖掘',interact:'交互',wait:'等待' };
     const title = this.combat?.active ? reaction?.retreating ? '身体：撤离危险' : '身体：交战中'
       : queue.hold ? '身体：等待控制权' : queue.running ? `身体：${labels[queue.running.skill ?? ''] ?? '执行游戏任务'}`
+      : waiting ? '身体：动作排队中'
       : idle === 'wander' || idle === 'stroll' ? '身体：安全闲逛' : idle ? '身体：观察周围'
       : bot.currentWindow ? '身体：查看交互窗口' : '身体：空闲，等待任务';
     const detail = queue.hold ? '任务暂时让出身体控制权' : (queue.running ? `任务 #${queue.running.id} · 第 ${queue.running.stepIndex + 1}/${queue.running.stepCount} 步`
       : reaction?.targetId != null && this.combat?.active ? `当前目标实体 #${reaction.targetId}`
+      : waiting ? `任务 #${waiting.id} 已排队，尚未开始`
       : idle ? '短暂动作，可被新任务打断' : '暂无正在执行的身体任务；不是游戏目标已完成');
     const key = JSON.stringify([this.connectionGeneration, title, detail]);
     if (this.bodyDisplay?.key !== key) this.bodyDisplay = { key, since: now, published: 0 };
@@ -8737,6 +8871,19 @@ export class MinecraftWorld implements World {
       }
     }
     this.observeBodyControl();
+    // A chat command can return and drain the queue before the server opens the
+    // window. Only close an attested storage window with no owner or recent use.
+    if (this.detachedStorageWindow.expired(bot, serverWindows(bot)?.lastClickAt() ?? 0, () => {
+      const queue = this.executor?.status();
+      return !this.shuttingDown && this.bridge?.connectionState?.ready === true && bot._client.state === 'play'
+        && queue != null && !queue.running && !queue.waiting.length && !queue.hold && !this.methodOwnsBody()
+        && !this.combat?.active && !this.reflexes?.environmentOwnerKind && !serverScreen(bot);
+    })) {
+      try { this.closeStrayWindow(); }
+      catch (error) {
+        this.diag.write({ lane: 'skill', event: 'stray-window-close-failed', msg: String(error), level: 'warn' });
+      }
+    }
     this.autoEatTick(bot);
     this.nutritionTick(bot);
     this.tryArrivalIdle();
@@ -8912,7 +9059,7 @@ export class MinecraftWorld implements World {
   protected snapshotArmedAt: number | null = null;
   /** 上一份快照实际进上下文(被渲染)的时刻;snapshotSec 节流的基准 */
   protected lastSnapshotRenderAt = 0;
-  /** 实体接近状态；持弓时已看见的敌对使用 32 进/40 出，其他仍为 16/24。 */
+  /** 实体接近状态；远程就绪时已看见的敌对使用 32 进/40 出，其他仍为 16/24。 */
   protected readonly proximity = new Map<number, {
     kind: 'hostile' | 'notable';
     seen: boolean;
@@ -8948,11 +9095,24 @@ export class MinecraftWorld implements World {
   protected lastLevel: number | null = null;
   /** 顶部状态条已报过的 25% 档位(按标题) */
   protected lastBoomAt = 0;
-  /** mineflayer 聊天模式已派发成 chat/whisper 的消息对象 */
+  /** Components already routed as native or server-relayed chat. */
   protected readonly chatClaimed = new WeakSet<object>();
   /** 最近一条动作栏文字及收到时刻 */
   protected lastActionBar: { text: string; at: number } | null = null;
   protected readonly serverFeedback = new ServerFeedbackLedger();
+  protected readonly protectedRegions: ProtectedRegions;
+
+  private currentDimension(): string { return this.bridge?.bot?.game?.dimension ?? 'overworld'; }
+
+  private noteProtectedRegion(text: string): void {
+    if (this.bridge?.bot && this.protectedRegions.note(text, this.currentDimension()))
+      this.diag?.write({ lane: 'event', event: 'protected-region-noted', msg: '记下服务端声明的方块保护区', data: { regions: this.protectedRegions.size } });
+  }
+
+  private protectedRegionAt(cell: { x: number; y: number; z: number }, dimension = this.currentDimension()): string | null {
+    const region = this.protectedRegions.covers(dimension, cell);
+    return region ? `服务端声明的保护区 [${region.dimension}] X=${region.x[0]}..${region.x[1]}、Z=${region.z[0]}..${region.z[1]}` : null;
+  }
 
   /**
    * 服务器系统消息与动作栏原文以 piggyback 进 minecraft.chat,随下一批投递,不单独唤醒。
@@ -9046,8 +9206,7 @@ export class MinecraftWorld implements World {
     const flockSeen = new Map<string, number>();
     const flockNear = new Set<string>();
     const journeyCues:JourneyCue[]=[];
-    const rangedReady = typeof bot.inventory?.items === 'function' &&
-      Boolean(bestRangedWeapon(bot)) && hasUsableArrows(bot);
+    const rangedReady = typeof bot.inventory?.items === 'function' && hasReadyRangedWeapon(bot);
     for (const key of Object.keys(bot.entities)) {
       const e = bot.entities[key];
       if (!e || e === bot.entity || !e.position) continue;

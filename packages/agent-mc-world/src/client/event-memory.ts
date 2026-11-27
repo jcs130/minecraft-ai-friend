@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readNearbySpeaker } from '../../core/nearby-speaker.mjs';
 import type { EventEnvelope } from '../contracts/host.ts';
 
 /** A source projection, not a learned fact or a current world snapshot. */
@@ -101,7 +102,11 @@ export function projectGameMemoryEvent(event: EventEnvelope): GameMemoryEvent | 
       boundary:'A catalogue or method notification, not proof of learning, casting, or improved performance.'};
   } else if(/^(chat|conversation|hearing|message)(\.|$)/.test(suffix)) {
     if(m.channel==='system' || m.executionFeedback || !actor.name&&!actor.uuid&&!actor.key)return null;
-    category='speech';evidence='speaker-claim';text=typeof m.body==='string'?m.body:event.text;
+    const sampled = (m.channel==='nearby' && m.identityEvidence==='packet-sender' && m.chatTransport==='chat'
+      || m.channel==='nearby-voice' && m.transcript===true && m.source==='mcagent:voice/nearby_voice')
+      && actor.uuid && readNearbySpeaker(m.speakerOrigin,actor.uuid);
+    category='speech';evidence='speaker-claim';
+    text=sampled && typeof m.chatBody==='string' ? m.chatBody : typeof m.body==='string' ? m.body : event.text;
     data={channel:m.chatChannel??m.channel??null,scope:m.chatScope??m.socialScope??null,
       identityEvidence:m.identityEvidence??null,recipient:m.recipient??m.target??null,
       effect:'Attributed words only. Pronouns or unspecified targets remain unknown; claims are not measured actions.'};

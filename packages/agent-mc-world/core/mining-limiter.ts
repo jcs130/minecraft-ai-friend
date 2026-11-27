@@ -299,12 +299,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * Attach the limiter to a bot: wraps `bot.dig` (every caller, including pathfinder and scripts)
  * and watches chat for warnings. Idempotent; re-wraps after plugins replace `bot.dig`.
  */
-export function installMiningLimiter(bot: AnyBot, limits: () => MiningLimits | undefined, diag?: (event: string, data: Record<string, unknown>) => void): MiningLimiter {
+export function installMiningLimiter(bot: AnyBot, limits: () => MiningLimits | undefined,
+  diag?: (event: string, data: Record<string, unknown>) => void, isClaimed?: (message: object) => boolean): MiningLimiter {
   if (!bot._miningLimiter) {
     const limiter = new MiningLimiter(() => ({ ...MINING_LIMIT_DEFAULTS, ...(limits() ?? {}) }));
     bot._miningLimiter = limiter;
     bot.on('messagestr', (text: string, position: string, message: unknown, sender?: string) => {
-      if (!isServerNotice(message, position, sender)) return;
+      if (!isServerNotice(message, position, sender) || isClaimed?.(message)) return;
       if (limiter.onChat(String(text))) {
         diag?.('mining-warning', { text: String(text).slice(0, 200), status: limiter.status() });
         bot.emit?.('miningWarning', String(text));

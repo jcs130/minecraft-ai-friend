@@ -12,9 +12,9 @@ export function installServerLogin(bot: EventEmitter & {
     writeRaw?(buf: Buffer): void;
   };
 }, options: {
-  server: string; username: string; configFile?: string;
+  server: string; username: string; configFile?: string; confirmation?: 'plugin' | 'mc-auth-success';
   readCredential?(file: string): Promise<Buffer>;
   report?(status: { status: string; reason: string | null; username: string; server: string }): void;
 }): { stop(): void; status(): { stage: string; attempted: boolean };
-  detail(): { stage: string; attempted: boolean; reason: string | null; authState?: ServerAuthState }; ready(): boolean;
+  detail(): { stage: string; attempted: boolean; reason: string | null; authSuccessReceived: boolean; authState?: ServerAuthState }; ready(): boolean;
   authState(): ServerAuthState | null };
