@@ -1,7 +1,7 @@
 import {afterEach, expect, it} from 'vitest';
 import {methodHarness} from './method-harness.ts';
 import {MinecraftChatProvenance} from '../src/chat-provenance.ts';
-import {viewerMessageKind} from '../core/modern-viewer.ts';
+import {viewerMessageKind,viewerChatPacket} from '../core/modern-viewer.ts';
 const players={ag_CorMy:{username:'ag_CorMy',uuid:'uuid-cormy'},Witness:{username:'Witness',uuid:'uuid-self'},Jojo:{username:'Jojo',uuid:'uuid-jojo'}};
 const rigs:ReturnType<typeof methodHarness>[]=[];
 afterEach(()=>rigs.splice(0).forEach(r=>r.close()));
@@ -61,4 +61,12 @@ it('archives a canonical outgoing echo without translation arguments without del
   expect(r.host.events).toHaveLength(1);
   expect(r.host.events[0]).toMatchObject({senderKey:'Witness',meta:{outgoing:true,channel:'private'}});
   expect(r.host.pushOpts[0]).toMatchObject({deliver:false});
+});
+
+it('adds the packet speaker to a raw content-only public message',()=>{
+  const message={toString:()=>'你好'},players={Fishy:{username:'Fishy',uuid:'uuid-fishy'}};
+  expect(viewerChatPacket(message,'chat',undefined,{self:'Cormy',sender:'uuid-fishy',players:players as never}))
+    .toMatchObject({kind:'chat',sender:'Fishy',body:'你好',text:'<Fishy> 你好'});
+  expect(viewerChatPacket(message,'system',undefined,{self:'Cormy',sender:'uuid-fishy',players:players as never}))
+    .toEqual({kind:'system',text:'你好'});
 });

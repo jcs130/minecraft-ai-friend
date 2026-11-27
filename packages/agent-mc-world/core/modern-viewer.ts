@@ -57,18 +57,29 @@ import { viewerServerScreen, SERVER_SCREEN_SCRIPT } from './viewer-server-screen
 import { onViewerInteraction, viewerInteraction } from './viewer-interaction.ts';
 export { viewerItem } from './viewer-state.ts';
 
-export function viewerMessageKind(message: { translate?: string; toString(): string }, position: string, registry?: unknown,
-  identity?: {players: mineflayer.Bot['players']; self: string; uuid?: string; sender?: string | null}): string | null {
+export function viewerChatPacket(message: { translate?: string; toString(): string }, position: string, registry?: unknown,
+  identity?: {players: mineflayer.Bot['players']; self: string; uuid?: string; sender?: string | null}) {
   if (position !== 'chat' && position !== 'system') return null;
   if (message.translate === 'commands.message.display.outgoing' || outgoingPrivateParts(message, registry)) return null;
   if (identity) {
     const provenance = new MinecraftChatProvenance();provenance.observe(message, position, identity.sender);
     if (provenance.outgoingWhisper(message, identity.players, identity.self, identity.uuid, registry)) return null;
-    if (provenance.incomingWhisper(message, identity.players, registry)) return 'whisper';
+    if (provenance.incomingWhisper(message, identity.players, registry)) return {kind:'whisper', text:message.toString()};
+    const chat = provenance.publicChat(message, identity.players, registry);
+    if (chat) {
+      const prefix = '<' + chat.username + '> ';
+      const body = chat.message.startsWith(prefix) ? chat.message.slice(prefix.length) : chat.message;
+      return {kind:'chat', sender:chat.username, body, text:prefix+body};
+    }
   }
   if (position === 'system' && /^(?:MC_[A-Z0-9_]+(?:\s|$)|\{\s*"(?:schemaVersion|action|type)"\s*:)/.test(message.toString().trimStart())) return null;
-  return message.translate === 'commands.message.display.incoming' || incomingPrivateParts(message, registry) ? 'whisper'
+  const kind = message.translate === 'commands.message.display.incoming' || incomingPrivateParts(message, registry) ? 'whisper'
     : message.translate === 'chat.type.advancement' ? 'advancement' : position;
+  return { kind, text: message.toString() };
+}
+
+export function viewerMessageKind(...args: Parameters<typeof viewerChatPacket>): string | null {
+  return viewerChatPacket(...args)?.kind ?? null;
 }
 
 const require = createRequire(import.meta.url);
@@ -615,10 +626,10 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     if (result.phase === 'succeeded') recentChatSuccess = { seq: cast.seq, id: cast.spell.id, atMs: now };
     pendingCasts = pendingCasts.filter((entry) => entry !== cast);
   };
-  const publishGameMessage = (kind: string, value: unknown) => {
+  const publishGameMessage = (kind: string, value: unknown, identity?: {sender:string; body:string}) => {
     const text = minecraftTextComponent(value).slice(0, 160);
     if (!text) return;
-    for (const socket of viewerSockets) if (socket.connected) socket.emit('gameMessage', { kind, text });
+    for (const socket of viewerSockets) if (socket.connected) socket.emit('gameMessage', { kind, text, ...(identity && { sender:identity.sender, body:identity.body.slice(0,160) }) });
   };
   const recordManaText = (text: string) => {
     // A structured state snapshot wins over incidental spell feedback in chat.
@@ -637,8 +648,8 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     for (const socket of viewerSockets) if (socket.connected) socket.emit('skillsState', latestSkills);
   };
   const onViewerMessage = (message: { translate?: string; toString(): string }, position: string, sender?: string | null) => {
-    const kind = viewerMessageKind(message, position, bot.registry, {players:bot.players,self:bot.username,uuid:bot.player?.uuid,sender});
-    if (kind) publishGameMessage(kind, message);
+    const packet = viewerChatPacket(message, position, bot.registry, {players:bot.players,self:bot.username,uuid:bot.player?.uuid,sender});
+    if (packet) publishGameMessage(packet.kind, packet.text, packet.sender && packet.body !== undefined ? {sender:packet.sender,body:packet.body} : undefined);
     // An explicitly configured extension may extract state from its system replies.
     if (position === 'chat' || position === 'system') {
       const text = message.toString();

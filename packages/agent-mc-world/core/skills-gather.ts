@@ -236,12 +236,19 @@ export async function skillCollect(
       if (exact && (!exactBlock || exactBlock.name !== block)) throw new SkillBlocked(
         `${cellText(exact)} ${exactBlock ? `实际是 ${exactBlock.name}，需要 ${block}` : '尚未加载'}；没有改采别处`,
         [], 'local', 'target-not-ready');
-      const scanned = exact ? [new Vec3(exact.x, exact.y, exact.z)] : visibleBlocks(bot, ids, 48);
+      // Prefer a visible target already within reach. A wide stone scan may otherwise raycast
+      // thousands of buried blocks before discovering the first viable block or missing tool.
+      const near = !exact && !onlyMature ? visibleBlocks(bot, ids, 5).find(p => {
+        const candidate = bot.blockAt(p);
+        return candidate && bot.canDigBlock(candidate) && !knownProtectedBreakTarget(bot,p)
+          && blueprintCollectSource(bot,p,ctx) === null;
+      }) : undefined;
+      const scanned = exact ? (collectVisible(bot, exact) ? [new Vec3(exact.x,exact.y,exact.z)] : [])
+        : near ? [near] : visibleBlocks(bot,ids,48);
       const found: typeof scanned = [];
       let protectedVisible = 0;
       let structureVisible = 0;
       for (const q of scanned) {
-        if (!collectVisible(bot, q)) continue;
         const structure = blueprintCollectSource(bot, q, ctx);
         if (structure !== null) { structureVisible++; rememberStructure(q, structure); }
         else if (knownProtectedBreakTarget(bot, q)) protectedVisible++;
@@ -581,7 +588,7 @@ export function rememberFindHit(ctx: SkillContext, target: string, hit: ExploreH
 export function findBlockObservation(bot: Bot, target: string, actualName: string): { what: string; sourceItem?: string } {
   target = registryTargetName(bot, target);
   const exact = !!bot.registry.blocksByName[target];
-  const direct = actualName === target || (!exact && (actualName.endsWith(`_${target}`) || actualName.startsWith(`${target}_`)));
+  const direct = (target.startsWith('#') && untilBlockIds(bot,[target]).ids.includes(bot.registry.blocksByName[actualName]?.id)) || actualName === target || (!exact && (actualName.endsWith(`_${target}`) || actualName.startsWith(`${target}_`)));
   return direct ? { what: zhName(actualName) } : {
     what: `${zhName(actualName)}（${zhThing(target)}的可能产出来源，尚未观察到该掉落，不保证产出）`, sourceItem: target,
   };
@@ -601,6 +608,7 @@ export function matchEntityName(bot: Bot, name: string): string | null {
 
 export function resolveFindTarget(bot: Bot, target: string): { ids: number[]; entityName: string | null } {
   target = registryTargetName(bot, target);
+  if (target.startsWith('#')) return { ids: untilBlockIds(bot, [target]).ids, entityName: null };
   const entity = matchEntityName(bot, target);
   // zombie_head / skeleton_skull 之类方块不能把精确实体名抢走；
   // 若本身也是精确方块名，仍按方块找，避免改变 find tnt 的含义。
@@ -636,7 +644,7 @@ export async function skillFind(
   target = registryTargetName(bot, target);
   const { ids, entityName } = resolveFindTarget(bot, target);
   if (ids.length === 0 && entityName === null) {
-    throw new SkillBlocked(categoryScopeText(target) ?? `不认识「${target.slice(0, 80)}」这种方块或实体；用 mc_help {skills:["find"]} 核对 target，用 mc_knowledge {action:"search",kind:"block",query:"log"} 查询方块英文 ID；实体请用当前连接的具体实体 ID（如 zombie），不支持 hostile/tree 类别`);
+    throw new SkillBlocked((target.startsWith('#') ? `本服没有可观察的方块匹配类别 ${target.slice(0,80)}。已知类别 ${UNTIL_CATEGORY_DOC}；也可以给出具体方块 ID。` : null) ?? `不认识「${target.slice(0, 80)}」这种方块或实体；用 mc_help {skills:["find"]} 核对 target，用 mc_knowledge {action:"search",kind:"block",query:"log"} 查询方块英文 ID；实体请用当前连接的具体实体 ID（如 zombie），不支持 hostile/tree 类别`);
   }
   const resourceSearch = entityName === null && resourceFindTarget(bot, ids);
   const structureSearch = resourceSearch && direction !== undefined;

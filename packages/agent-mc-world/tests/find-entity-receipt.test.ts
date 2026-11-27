@@ -43,6 +43,8 @@ it('native full find schema advertises only implemented targets with actionable 
     expect(JSON.stringify(tool)).not.toContain('敌对生物类别写 hostile');
     expect(resolveFindTarget(r.bot as never, 'log').ids.length).toBeGreaterThan(0);
     expect(resolveFindTarget(r.bot as never, 'zombie')).toEqual({ ids: [], entityName: 'zombie' });
+    expect(resolveFindTarget(r.bot as never,'#ores').ids).toContain(r.bot.registry.blocksByName.coal_ore.id);
+    expect(resolveFindTarget(r.bot as never,'#constructor').ids).toEqual([]);
     for (const target of ['hostile', 'tree']) {
       expect(resolveFindTarget(r.bot as never, target)).toEqual({ ids: [], entityName: null });
       await expect(skillFind(r.bot as never, target, undefined, 32, {} as never)).rejects.toThrow(/mc_help.*find.*mc_knowledge/s);
