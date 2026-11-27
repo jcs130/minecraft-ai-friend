@@ -32,6 +32,7 @@ from .memory.social_graph import SocialGraph
 from .npc import FastSelector, ModelClient, NpcHost, NpcPlanner, load_roles
 from .numen_connection import can_reopen, run_with_connection
 from .qwenpaw_association import PawAssociations
+from .qwenpaw_decisions import PawDecisions
 from .resident_numen import admit_numen
 from .resident_protocol import social_receipt
 from .resident_slots import BirthRegistry, activate, slot_templates
@@ -178,6 +179,8 @@ async def serve(path: Path):
     social_tasks = []
     association_tasks = {}
     associations = PawAssociations(settings.get("qwenPawAssociations"), settings["serverId"])
+    paw_decisions = PawDecisions(settings.get("qwenPawDecisions"), settings["serverId"])
+    clients.append(paw_decisions)
     slot_tasks = {}
     social = None
     social_graph = None
@@ -339,7 +342,7 @@ async def serve(path: Path):
 
     turns = {}
     for role in [*roles, *slots.values()]:
-        if config := settings.get("residentTurns", {}).get(role.id):
+        if (config := settings.get("residentTurns", {}).get(role.id)) and not paw_decisions.supports(role):
             turns[role.id] = ResidentTurnsClient(role, config)
             clients.append(turns[role.id])
 
@@ -368,7 +371,8 @@ async def serve(path: Path):
                              item_use_ids=tuple(role.native_items), adventure_partner=role.adventure_partner)
         memory = open_role_memory(state / role.id, connection)
         planner = NpcPlanner(role, provider[role.provider], semaphore=semaphore, role_lock=role_locks[role.id],
-                             fast=system1, resident_turns=turns.get(role.id))
+                             fast=system1, resident_turns=turns.get(role.id),
+                             paw_decisions=paw_decisions if paw_decisions.supports(role) else None)
         return NpcHost(role, body, planner,
                        memory, journal, social=social, social_graph=social_graph,
                        companion_adventure=CompanionAdventure(*source, role.owner_id) if role.adventure_advice and source else None)

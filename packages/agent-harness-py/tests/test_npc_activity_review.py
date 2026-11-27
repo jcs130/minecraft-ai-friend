@@ -81,6 +81,33 @@ def test_late_or_unknown_body_and_pending_writes_stay_fenced():
         assert activity_scene(snap) is None
 
 
+def test_original_companion_without_resident_schema_can_plan(tmp_path):
+    async def run():
+        prompts = []
+
+        def respond(request):
+            prompts.append(json.loads(json.loads(request.content)["messages"][1]["content"]))
+            return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps({"steps": []})}}]})
+
+        model = ModelClient("http://127.0.0.1:1/v1", "test", http=httpx.AsyncClient(transport=httpx.MockTransport(respond)))
+        configured = actor()
+        journal = ActionJournal(tmp_path / "original-companion.sqlite")
+        host = NpcHost(configured, SimBody(), NpcPlanner(configured, model), None, journal)
+        context = maid_context(loaded=True, fullOriginalEntityMaid=True, scene={"hostiles": []},
+                               taskId="touhou_little_maid:idle", nativeGuardDelegated=True)
+        try:
+            assert await host._plan(turn(), context) == []
+            assert prompts[0]["activityReview"]["activity"] == "guarding"
+            for changed in ({"loaded": False}, {"fullOriginalEntityMaid": False}, {"scene": None},
+                            {"resident": {"loaded": True, "activeRequest": "pending-action"}}):
+                withheld = context.snapshot.model_copy(update={"raw": context.snapshot.raw | changed})
+                assert activity_scene(withheld) is None
+        finally:
+            await model.close()
+            journal.close()
+    asyncio.run(run())
+
+
 def test_model_can_remain_waiting_leave_early_or_choose_its_own_break(tmp_path):
     async def run():
         answers, prompts = [], []
