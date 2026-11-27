@@ -95,6 +95,24 @@ function rig() {
 }
 
 describe('temporary path support provenance and bounded cleanup', () => {
+  it('sends no dig for a block behind a solid wall, then allows it once exposed', async () => {
+    const r = rig();
+    Object.assign(r.bot, {
+      _client: Object.assign(new EventEmitter(), { write() {} }),
+      _updateBlockState() {},
+    });
+    const wall = r.seed('stone', r.at(1, 65));
+    r.seed('stone', r.at(1, 64));
+    const behind = r.seed('stone', r.at(2, 65));
+    installMineflayerFixes(r.bot, { error() {}, info() {}, warn() {}, debug() {} } as never);
+    expect(r.bot.canDigBlock(behind)).toBe(true);
+    await expect(r.bot.dig(behind)).rejects.toThrow('被遮挡或未加载');
+    expect(r.dug).toEqual([]);
+    await r.bot.dig(wall);
+    await r.bot.dig(behind);
+    expect(r.dug).toEqual([wall.position.toString(), behind.position.toString()]);
+  });
+
   it.each([true, false])('diagnoses an unconfirmed dig without querying a successful dig (confirmed=%s)', async confirmed => {
     vi.useFakeTimers();
     try {

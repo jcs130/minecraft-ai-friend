@@ -32,11 +32,30 @@ viewerAssetsDir` replace the section's own values (`applyServerProfile`, `core/s
 Server-specific values are never inherited from the section: a profile without `port`, `version`,
 `fakeHost` or `connectAddresses` gets 25565, `auto` and no pinned address/SNI host, so one server's
 pinned IP can't be dialed for another. Account and transport tuning (`username`, `auth`,
-`loginConfigFile`, DoH resolvers, timeouts, viewer assets) do inherit.
+`loginConfigFile`, DoH resolvers, timeouts, viewer assets) do inherit. Login files still match each server and account independently. `loginConfirmation` belongs to the selected profile: it defaults to `plugin`, or may explicitly require `mc-auth-success`; a previous server's strict marker is not inherited.
+
+## Server-specific gameplay
+
+Put any `escapeCommand` for a named server under that profile. If omitted, the selected
+profile uses no player escape command. Deployments that used a shared top-level command
+with named profiles should move it into the intended profiles.
+
+An optional `servers.<id>.guide` holds an operator-supplied reference for menus, shops,
+travel and other local rules. Set `profile` to the same profile ID, `title` and `revision`
+to the source publication, and `entries` to an array of `id`, `title`, `summary`, `text`
+and `reference` records. Reference entries may point to book pages. The guide is read as
+data and recorded outcomes still determine which actions worked.
+
+Use `mc_knowledge { "source": "server", "action": "search", "query": "shop" }`
+to see matching summaries and `get` with a returned entry ID to read its details.
+The knowledge tool takes its scope from the selected profile. The caller cannot read
+a different profile by supplying a server ID. Vanilla and explicitly configured
+MineDojo knowledge remain separate sources. The same tool is exposed to SDK, MCP
+and host adapters.
 
 ## No secrets in profiles
 
-Profiles are validated before use: keys such as `password`, `token`, `secret` are rejected.
+Profiles are validated before use, including inherited account names. Public SDK configuration files accept the profile map and resolve each profile's login/viewer paths relative to that file before readiness validation. Keys such as `password`, `token`, `secret` are rejected.
 Accounts log in through `loginConfigFile`, whose entries reference an environment variable
 (`credentialEnv`) or a private file — never an inline password.
 

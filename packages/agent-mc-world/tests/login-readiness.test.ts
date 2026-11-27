@@ -13,14 +13,15 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-function scopedLoginRig(onServerReady?: import('../core/bridge.ts').BridgeOptions['onServerReady']) {
+function scopedLoginRig(confirmation: 'plugin' | 'mc-auth-success' = 'plugin', session = false, onServerReady?: import('../core/bridge.ts').BridgeOptions['onServerReady']) {
   const dir = mkdtempSync(join(tmpdir(), 'login-reconnect-')), configFile = join(dir, 'accounts.json');
   writeFileSync(configFile, JSON.stringify({ enabled: true, accounts: [{ server: 'example.test:25565', username: 'tester',
     credentialEnv: 'AGENT_MC_RECONNECT_FIXTURE', command: 'login', timeoutMs: 1000 }] }));
   vi.stubEnv('AGENT_MC_RECONNECT_FIXTURE', 'private-reconnect-fixture');
   const bots = Array.from({ length: 3 }, () => {
     const bot = Object.assign(new EventEmitter(), { _client: new EventEmitter(), loadPlugin() {},
-      chat: vi.fn(), quit: vi.fn(), entity: { position: { x: 0, y: 64, z: 0 } } });
+      chat: vi.fn(), quit: vi.fn(), entity: { position: { x: 0, y: 64, z: 0 } },
+      world: { getColumnAt: vi.fn((_position: { x: number; y: number; z: number }) => null as object | null) } });
     bot.quit.mockImplementation((reason?: string) => { bot.emit('end', reason); });
     return bot;
   });
@@ -29,7 +30,7 @@ function scopedLoginRig(onServerReady?: import('../core/bridge.ts').BridgeOption
   const log = { info: vi.fn(), warn() {}, error() {}, debug() {}, trace() {}, emit() {}, child() { return this; } };
   const onSpawn = vi.fn(), onDisconnect = vi.fn();
   const bridge = new Bridge({ host: 'example.test', port: 25565, username: 'tester', version: '1.21.1', viewerPort: 0,
-    onServerReady, loginConfigFile: () => configFile, log: log as never, onSpawn, onDisconnect });
+    onServerReady, loginConfigFile: () => session ? '' : configFile, loginConfirmation: () => confirmation, log: log as never, onSpawn, onDisconnect });
   bridges.push(bridge); Object.assign(bridge, { installSpawnGear() {} });
   const message = (index: number, text: string) => bots[index]!.emit('message', { toString: () => text }, 'system');
   return { bridge, bots, create, log, onSpawn, onDisconnect, message,
@@ -39,7 +40,7 @@ function scopedLoginRig(onServerReady?: import('../core/bridge.ts').BridgeOption
 describe('login readiness', () => {
   it.each(['configuration', 'play-awaiting-position'])('defers World activation until its bot getter is usable: %s', async boundary => {
     const onReady = vi.fn();
-    const r = scopedLoginRig(onReady);
+    const r = scopedLoginRig('plugin', false, onReady);
     const write = vi.fn();
     const bot = r.bots[0]!, client = Object.assign(bot._client, { state: 'configuration', write });
     try {
@@ -335,5 +336,117 @@ describe('login readiness', () => {
       expect(onSpawn).toHaveBeenCalledOnce();
       expect(bridge.invSynced).toBe(true);
     } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('strict connection-local authentication and world readiness', () => {
+  it.each([
+    ['success', 'spawn', 'chunks'], ['success', 'chunks', 'spawn'],
+    ['spawn', 'success', 'chunks'], ['spawn', 'chunks', 'success'],
+    ['chunks', 'success', 'spawn'], ['chunks', 'spawn', 'success'],
+  ])('activates exactly once after all three boundaries: %s, %s, %s', async (...order) => {
+    const r = scopedLoginRig('mc-auth-success', true), bot = r.bots[0]!;
+    try {
+      r.bridge.start();
+      const dispatch = (event: string) => {
+        if (event === 'success') r.message(0, 'MC_AUTH_SUCCESS');
+        else if (event === 'spawn') bot.emit('spawn');
+        else { bot.world.getColumnAt.mockReturnValue({}); bot.emit('chunkColumnLoad', { x: 0, z: 0 }); }
+      };
+      for (const event of order.slice(0, 2)) {
+        dispatch(event); expect(r.bridge.connected).toBe(false); expect(r.onSpawn).not.toHaveBeenCalled();
+      }
+      r.onSpawn.mockImplementation(() => expect(r.bridge.bot).toBe(bot));
+      dispatch(order[2]!);
+      expect(r.bridge.connectionState).toMatchObject({ ready: true, worldReady: true, spawnReceived: true,
+        serverLogin: { authSuccessReceived: true } });
+      expect(bot.world.getColumnAt).toHaveBeenCalledWith(bot.entity.position);
+      expect(r.onSpawn).toHaveBeenCalledOnce();
+      for (const event of order) dispatch(event);
+      expect(r.onSpawn).toHaveBeenCalledOnce(); expect(bot.chat).not.toHaveBeenCalled();
+    } finally { await r.close(); }
+  });
+
+  it('requires finite current feet and their loaded column, not an unrelated chunk event', async () => {
+    const r = scopedLoginRig('mc-auth-success', true), bot = r.bots[0]!;
+    try {
+      r.bridge.start(); r.message(0, 'MC_AUTH_SUCCESS'); bot.emit('spawn');
+      bot.emit('chunkColumnLoad', { x: 32, z: 0 });
+      expect(r.bridge.connectionState.worldReady).toBe(false); expect(r.onSpawn).not.toHaveBeenCalled();
+      bot.world.getColumnAt.mockReturnValue({});
+      bot.entity.position.x = NaN; bot.emit('chunkColumnLoad', {});
+      expect(r.bridge.connected).toBe(false);
+      bot.entity.position.x = Infinity; bot.emit('chunkColumnLoad', {});
+      expect(r.bridge.connectionState.worldReady).toBe(false);
+      bot.entity.position.x = 0; bot.emit('chunkColumnLoad', {});
+      expect(r.bridge.connected).toBe(true); expect(r.onSpawn).toHaveBeenCalledOnce();
+      bot.entity.position.x = 32;
+      bot.world.getColumnAt.mockImplementation(position => position.x === 0 ? {} : null);
+      expect(r.bridge.connected).toBe(false); expect(r.bridge.connectionState.worldReady).toBe(false);
+    } finally { await r.close(); }
+  });
+
+  it('does not unlock a spawned, loaded world through state, title or player success', async () => {
+    const r = scopedLoginRig('mc-auth-success', true), bot = r.bots[0]!;
+    try {
+      r.bridge.start(); bot.world.getColumnAt.mockReturnValue({}); bot.emit('spawn');
+      r.message(0, 'MC_AUTH_STATE {"username":"tester","authorized":true,"status":"authenticated"}');
+      bot.emit('title', 'MC_AUTH_SUCCESS', 'title'); bot.emit('message', 'MC_AUTH_SUCCESS', 'chat');
+      bot.emit('message', 'MC_AUTH_SUCCESS', 'player');
+      r.message(0, 'MC_AUTH_SUCCESS {"username":"Else"}'); r.message(0, 'MC_AUTH_SUCCESS Else');
+      r.message(0, 'MC_AUTH_SUCCESS_EXTRA'); r.message(0, '<Player> MC_AUTH_SUCCESS');
+      expect(r.bridge.connectionState).toMatchObject({ worldReady: true, ready: false,
+        serverLogin: { authSuccessReceived: false } });
+      expect(r.onSpawn).not.toHaveBeenCalled();
+      r.message(0, 'MC_AUTH_SUCCESS tester'); expect(r.bridge.connected).toBe(true);
+    } finally { await r.close(); }
+  });
+
+  it('keeps a retrying connection for late true success without reconnect or password replay', async () => {
+    vi.useFakeTimers(); const r = scopedLoginRig('mc-auth-success'), bot = r.bots[0]!;
+    try {
+      r.bridge.start(); bot.world.getColumnAt.mockReturnValue({}); bot.emit('spawn');
+      r.message(0, 'MC_AUTH_LOGIN'); await vi.advanceTimersByTimeAsync(0);
+      expect(bot.chat).toHaveBeenCalledOnce(); await vi.advanceTimersByTimeAsync(1000);
+      expect(r.bridge.connectionState).toMatchObject({ ready: false, worldReady: true,
+        serverLogin: { stage: 'retrying', authSuccessReceived: false } });
+      expect(bot.quit).not.toHaveBeenCalled(); expect(r.onDisconnect).not.toHaveBeenCalled();
+      r.message(0, 'MC_AUTH_LOGIN'); r.message(0, '登录成功');
+      expect(r.bridge.connected).toBe(false);
+      r.message(0, 'MC_AUTH_SUCCESS'); await vi.advanceTimersByTimeAsync(60_000);
+      expect(r.bridge.connected).toBe(true); expect(r.onSpawn).toHaveBeenCalledOnce();
+      expect(bot.chat).toHaveBeenCalledOnce(); expect(r.create).toHaveBeenCalledOnce();
+    } finally { await r.close(); vi.useRealTimers(); }
+  });
+
+  it.each(['MC_AUTH_DENIED login required', 'MC_AUTH_STATE {"username":"tester","authorized":false,"status":"login_required"}'])
+  ('revokes immediately and prevents old connection callbacks from restoring readiness: %s', async receipt => {
+    vi.useFakeTimers(); const r = scopedLoginRig('mc-auth-success', true), bot = r.bots[0]!;
+    try {
+      r.bridge.start(); bot.world.getColumnAt.mockReturnValue({}); bot.emit('spawn'); r.message(0, 'MC_AUTH_SUCCESS');
+      const staleChunk = bot.listeners('chunkColumnLoad').slice();
+      r.message(0, receipt);
+      expect(r.bridge.connectionState).toMatchObject({ ready: false, worldReady: true,
+        serverLogin: { authSuccessReceived: false } });
+      bot.emit('chunkColumnLoad', {}); expect(r.bridge.connected).toBe(false);
+      r.message(0, 'MC_AUTH_SUCCESS'); expect(r.bridge.connected).toBe(true);
+      expect(r.onSpawn).toHaveBeenCalledOnce();
+      bot.emit('end', 'fixture end');
+      expect(r.bridge.connectionState).toMatchObject({ ready: false, worldReady: false,
+        serverLogin: { authSuccessReceived: false } });
+      await vi.advanceTimersByTimeAsync(3000);
+      for (const callback of staleChunk) callback({});
+      bot.emit('spawn'); r.message(0, 'MC_AUTH_SUCCESS');
+      expect(r.bridge.connected).toBe(false); expect(r.bridge.connectionState.spawnReceived).toBe(false);
+      const next = r.bots[1]!; next.world.getColumnAt.mockReturnValue({}); next.emit('spawn');
+      expect(r.bridge.connected).toBe(false); r.message(1, 'MC_AUTH_SUCCESS');
+      expect(r.bridge.connected).toBe(true); expect(r.onSpawn).toHaveBeenCalledTimes(2);
+      const stoppedChunk = next.listeners('chunkColumnLoad').slice();
+      await r.bridge.stop(); for (const callback of stoppedChunk) callback({});
+      r.message(1, 'MC_AUTH_SUCCESS'); next.emit('spawn');
+      expect(r.bridge.connectionState).toMatchObject({ ready: false, worldReady: false,
+        serverLogin: { authSuccessReceived: false } });
+      expect(r.onSpawn).toHaveBeenCalledTimes(2);
+    } finally { await r.close(); vi.useRealTimers(); }
   });
 });

@@ -13,6 +13,8 @@ export const MINECRAFT_DEFAULTS = {
   combatOptions: structuredClone(COMBAT_EXECUTION_DEFAULTS),
   // enabled 由Persona的装配层显式开启。
   enabled: false,
+  server: '',
+  servers: {} as Record<string, import('./server-profiles.ts').MinecraftServerProfile>,
   /** 服务器地址(私服 dry-run 默认本机) */
   host: '127.0.0.1',
   port: 25565,
@@ -22,6 +24,8 @@ export const MINECRAFT_DEFAULTS = {
   profilesFolder: '',
   /** Private scoped account file; only encrypted credential references are read by the client. */
   loginConfigFile: '',
+  /** Server confirmation policy, applied to each new connection. */
+  loginConfirmation: 'plugin' as 'plugin' | 'mc-auth-success',
   /** Handshake/SNI host when connecting to a resolved IP. */
   fakeHost: '',
   /** Retry public DNS when the system resolver returns a fake 198.18.0.0/15 address. */
@@ -240,6 +244,7 @@ export interface MinecraftConfigSection {
   auth?: 'offline' | 'microsoft';
   profilesFolder?: string;
   loginConfigFile: string;
+  loginConfirmation?: 'plugin' | 'mc-auth-success';
   /** Handshake/SNI host when `host` is a resolved IP. */
   fakeHost?: string;
   /** Retry public DNS when the system resolver returns a fake 198.18.0.0/15 address. Default true. */
@@ -390,6 +395,9 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
       'worlds.minecraft.auth': { type: 'string', title: '账号验证', enum: ['offline', 'microsoft'], 'x-hot': false },
       'worlds.minecraft.profilesFolder': { type: 'string', title: '正版凭据缓存目录', 'x-hot': false,
         description: '留空使用本部署的私有 auth/agent 目录；不要放进共享目录或提交到仓库。', 'x-path': { kind: 'directory' } },
+      'worlds.minecraft.loginConfirmation': { type: 'string', enum: ['plugin', 'mc-auth-success'],
+        title: '服务器登录确认策略', 'x-hot': false,
+        description: 'plugin 保留普通认证插件回执；mc-auth-success 只接受本连接可信 system 的 MC_AUTH_SUCCESS，并要求出生、有限位置和当前脚下区块列加载。空登录配置也必须等待真实成功；下次连接生效。' },
       'worlds.minecraft.loginConfigFile': { type: 'string', title: '自动登录配置文件', 'x-hot': true,
         description: '按服务器和账号匹配系统提示，每连接提交一次；私有配置引用 DPAPI、环境变量或私有密码文件。等成功标记且角色进世界后才可操作。留空关闭，下次重连读取。',
         'x-path': { kind: 'file', extensions: ['.json'] } },

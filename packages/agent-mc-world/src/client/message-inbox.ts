@@ -3,6 +3,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import {extendWorldHost} from './world-namespace.ts';
 import { join } from 'node:path';
+import { nearbySpeakerContext, readNearbySpeaker, type NearbySpeakerOrigin } from '../../core/nearby-speaker.mjs';
 import type { ToolDef, WorldHost, WorldRequestFacts } from './contracts.ts';
 
 export const MESSAGE_CHANNELS = ['system', 'login', 'plugin', 'private', 'public', 'nearby-voice'] as const;
@@ -67,7 +68,7 @@ interface MessageObservation {
   repeats: number;
   reviewedAt?: string;
   eventType?: string;
-  provenance?: Record<string, string | number | boolean>;
+  provenance?: Record<string, unknown>;
 }
 
 interface InboxFile {
@@ -92,10 +93,28 @@ function recipientNames(identity: string, configured: readonly string[] = []): s
     typeof name === 'string' && /^[A-Za-z0-9_\p{Script=Han}]{1,32}$/u.test(name)).map(name => name.toLowerCase()))];
 }
 
+function speakerObservation(channel: MessageChannel | null, meta?: Record<string, unknown>): NearbySpeakerOrigin | undefined {
+  if (typeof meta?.senderUuid !== 'string') return undefined;
+  const nearbyText = channel === 'public' && (meta.channel === 'nearby' || meta.chatChannel === 'nearby')
+    && meta.identityEvidence === 'packet-sender' && meta.chatTransport === 'chat';
+  const nearbyVoice = channel === 'nearby-voice' && meta.channel === 'nearby-voice'
+    && meta.source === 'mcagent:voice/nearby_voice' && meta.transcript === true;
+  return nearbyText || nearbyVoice ? readNearbySpeaker(meta.speakerOrigin, meta.senderUuid) : undefined;
+}
+
 function publicSpeech(event: ReceivedMessage): { sender: string; body: string } | null {
   if (event.type === 'minecraft.client.message' || event.meta?.nativeType === 'minecraft.client.message') {
     return event.meta?.kind === 'player' && typeof event.meta.sender === 'string'
       ? { sender: event.meta.sender, body: event.text } : null;
+  }
+  const channel = messageChannel(event.text);
+  const origin = speakerObservation(channel, event.meta);
+  if (origin) {
+    if (typeof event.meta?.chatBody === 'string') return { sender: origin.name, body: event.meta.chatBody };
+    const heading = channel === 'nearby-voice' ? '[MC 附近语音]' : '[MC]';
+    const prefix = [origin.displayName, origin.name].map(name => `${heading} ${name}: `)
+      .find(candidate => event.text.startsWith(candidate));
+    if (prefix) return { sender: origin.name, body: speechText(event.text, origin).slice(prefix.length) };
   }
   const match = /^\[MC(?: 附近语音)?\] ([A-Za-z0-9_\p{Script=Han}]{1,64}):\s?([\s\S]*)$/u.exec(event.text);
   return match ? { sender: match[1], body: match[2] } : null;
@@ -114,8 +133,14 @@ export function messageChannel(text: string): MessageChannel | null {
   }
 }
 
+function speechText(text: string, origin: NearbySpeakerOrigin | undefined): string {
+  if (!origin) return text;
+  const location = nearbySpeakerContext(origin);
+  return text.endsWith(location) ? text.slice(0, -location.length) : text;
+}
+
 function heading(row: MessageObservation, previewChars = 96): string {
-  const text = row.text.replace(/\s+/g, ' ');
+  const text = speechText(row.text, speakerObservation(row.channel, row.provenance)).replace(/\s+/g, ' ');
   const display = row.provenance?.serverRenderedText;
   return `${row.id} [${row.channel}] ${row.lastAt} ${text.slice(0, previewChars)}${text.length > previewChars ? '…' : ''}`
     + (typeof display === 'string' ? ` [服务端显示：${display.replace(/\s+/g, ' ').slice(0, 160)}]` : '');
@@ -210,12 +235,15 @@ export class MessageInbox {
       : undefined;
     if (previous) { previous.lastAt = event.ts; previous.repeats++; }
     else {
+      const nearbySpeaker = speakerObservation(channel, event.meta);
+      const provenance = Object.fromEntries(Object.entries(event.meta ?? {}).filter(([key, value]) =>
+        ['kind', 'sender', 'senderUuid', 'sequence', 'generation', 'socialScope', 'uname', 'channel', 'identityEvidence', 'chatTransport', 'utteranceId', 'deliveryWorldKey', 'transcript', 'serverRenderedText', 'chatChannel', 'chatScope', 'chatRoutingSource', 'chatRadius', 'chatPolicyObservedAt'].includes(key)
+        && ['string', 'number', 'boolean'].includes(typeof value)));
       this.state.messages.push({ id: `message_${this.state.nextId++}`, channel, source: event.source,
         senderKey: event.senderKey, firstAt: event.ts, lastAt: event.ts, text, digest,
         originalChars: event.text.length, repeats: 1, eventType: event.type,
-        provenance: Object.fromEntries(Object.entries(event.meta ?? {}).filter(([key, value]) =>
-          ['kind', 'sender', 'senderUuid', 'sequence', 'generation', 'socialScope', 'uname', 'channel', 'identityEvidence', 'chatTransport', 'utteranceId', 'deliveryWorldKey', 'transcript', 'serverRenderedText', 'chatChannel', 'chatScope', 'chatRoutingSource', 'chatRadius', 'chatPolicyObservedAt'].includes(key)
-          && ['string', 'number', 'boolean'].includes(typeof value))) as MessageObservation['provenance'] });
+        provenance: { ...provenance, ...(nearbySpeaker ? { speakerOrigin: nearbySpeaker, sourceWorld: nearbySpeaker.world,
+          ...(channel === 'nearby-voice' ? { source: 'mcagent:voice/nearby_voice' } : {}) } : {}) } });
       if (this.state.messages.length > MESSAGE_LIMIT) {
         const reviewed = this.state.messages.findIndex(row => !!row.reviewedAt);
         this.state.messages.splice(reviewed < 0 ? 0 : reviewed, 1);
@@ -239,9 +267,13 @@ export class MessageInbox {
         source: row.source, text: row.text, meta: row.provenance })?.body ?? row.text;
       return this.recipientNames.some(name => new RegExp(`(^|[^A-Za-z0-9_])@?${name}(?![A-Za-z0-9_])`, 'i').test(body));
     };
-    const speaker = (row: MessageObservation) => String(row.provenance?.sender ?? row.provenance?.uname
-      ?? publicSpeech({ ts: row.lastAt, type: row.eventType ?? 'minecraft.chat', source: row.source,
-        text: row.text, meta: row.provenance })?.sender ?? row.senderKey ?? row.source).toLowerCase();
+    const speaker = (row: MessageObservation) => {
+      const origin = speakerObservation(row.channel, row.provenance);
+      if (origin) return `uuid:${origin.uuid.toLowerCase()}`;
+      return String(row.provenance?.sender ?? row.provenance?.uname
+        ?? publicSpeech({ ts: row.lastAt, type: row.eventType ?? 'minecraft.chat', source: row.source,
+          text: row.text, meta: row.provenance })?.sender ?? row.senderKey ?? row.source).toLowerCase();
+    };
     const preview: MessageObservation[] = [];
     const speakers = new Set<string>();
     // At most four peers, one per speaker; mentions remain visible under notice/chat floods.
@@ -280,7 +312,15 @@ export class MessageInbox {
       if (missing.length) return { text: `这些消息编号不在当前保留索引中：${missing.join(', ')}。用 list/search 查询当前索引；没有展开其他编号或修改考虑标记。`, failed: true,
         meta: { admission: { accepted: false, kind: 'correction', rule: 'messages.retained-id', missingIds: missing } } };
       const selected = unique.map(id => this.state.messages.find(row => row.id === id)!);
-      return { meta: this.readback(['read', ...unique], selected),
+      const speakerObservations = selected.flatMap(row => {
+        const origin = speakerObservation(row.channel, row.provenance);
+        const deliveryWorldKey = row.provenance?.deliveryWorldKey;
+        return origin ? [{ messageId: row.id, receivedAt: row.firstAt,
+          deliveryWorldKey: typeof deliveryWorldKey === 'string' ? deliveryWorldKey : null,
+          speakerOrigin: origin, historical: true }] : [];
+      });
+      return { meta: { ...this.readback(['read', ...unique], selected),
+          ...(speakerObservations.length ? { speakerObservations } : {}) },
         text: this.storageNote() + selected.map(row => `[${this.label}收到的消息 ${row.id}] 连接与观察作用域 ${this.state.identity}\n`
         + `channel=${row.channel} source=${row.source} senderKey=${row.senderKey ?? '未提供'}\n`
         + (row.eventType ? `eventType=${row.eventType} provenance=${JSON.stringify(row.provenance ?? {})}\n` : '')

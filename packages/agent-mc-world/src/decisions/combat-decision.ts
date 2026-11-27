@@ -32,7 +32,7 @@ export interface CombatDecisionOptions {
   fetchImpl?: typeof fetch;
   /** Supplied by the host adapter; the game core never resolves providers or credentials. */
   request?: (input: { state: unknown; questions: Record<string, { type: 'choice'; instructions: string; criteria: Record<string, string> }> },
-    options: { provider?: string; signal: AbortSignal; timeoutMs: number }) => Promise<{ answers?: Record<string,unknown>; latency_ms?: unknown; usage?: unknown }>;
+    options: { provider?: string; signal: AbortSignal; timeoutMs: number; correlationId?: string }) => Promise<{ answers?: Record<string,unknown>; latency_ms?: unknown; usage?: unknown }>;
   now?: () => number;
 }
 
@@ -229,18 +229,21 @@ export class CombatDecisionLoop {
       program: frame.policy ? { name: frame.policy.name, sourceHash: frame.policy.sourceHash } : null };
     Object.assign(entry, scope, { frame: publicFrame });
     this.options.report('requested', { ...scope, mode: cfg.mode, frame: publicFrame,
-      inputFormat: 'combat-compact-v3',choiceBindings:bindings,request:compact,requestBytes: Buffer.byteLength(body) });
+      timeoutMs: cfg.timeoutMs, inputFormat: 'combat-compact-v3',choiceBindings:bindings,request:compact,requestBytes: Buffer.byteLength(body) });
     let dispatchAttempted = false;
+    let transportElapsedMs: number | undefined;
     try {
+      const sentAtMs = now();
       const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, cfg.timeoutMs);
+        timer = setTimeout(() => { controller.abort(new DOMException('Combat decision deadline', 'TimeoutError')); reject(new Error('timeout')); }, cfg.timeoutMs);
       });
       const payload = await Promise.race([(async () => {
         if (usesHostDecision(cfg)) {
           if (!this.options.request) throw new Error('host-decision-unavailable');
           const { state, questions } = JSON.parse(body);
           return this.options.request({ state, questions }, { provider: cfg.decisionProvider?.trim() || undefined,
-            signal: AbortSignal.any([controller.signal, this.lifetime.signal]), timeoutMs: cfg.timeoutMs });
+            signal: AbortSignal.any([controller.signal, this.lifetime.signal]), timeoutMs: cfg.timeoutMs,
+            correlationId: scope.decisionId });
         }
         const secret = cfg.apiKeyEnv ? process.env[cfg.apiKeyEnv] : undefined;
         if (cfg.apiKeyEnv && !secret) throw new Error('credential-unavailable');
@@ -251,6 +254,9 @@ export class CombatDecisionLoop {
         if (!response.ok) throw new Error(`http-${response.status}`);
         return await response.json() as { answers?: Record<string,unknown>; latency_ms?: unknown; usage?: unknown };
       })(), timeout]);
+      clearTimeout(timer);
+      timer = undefined;
+      transportElapsedMs = now() - sentAtMs;
       if (this.stopped) return;
       const answer = parseTypedChoice(payload.answers?.tactic, Object.keys(criteria));
       if (!answer) throw new Error('invalid-response');
@@ -331,7 +337,7 @@ export class CombatDecisionLoop {
       const result = { ...scope, elapsedMs:now()-startedAtMs, choice:lead.choice,
         probability:leadRanking.probability,confidence:lead.confidence,probabilities:lead.probabilities,margin:leadRanking.margin,outcome,
         sceneChanges: changed,
-        modelMs: payload.latency_ms ?? null, usage: payload.usage ?? null,
+        modelMs: payload.latency_ms ?? null, transportElapsedMs, usage: payload.usage ?? null,
         validation: { ranking:leadRanking, toleratedSceneChanges: scene.tolerated, selectedExecutable: !!executable||!!abilityCandidate },
         ...(cfg.selectionMode==='compatible'?{selectionMode:'compatible',selections}:{}),
         application: { attempted: dispatchAttempted||selections.some(s=>(s.application as {attempted:boolean}).attempted),
@@ -376,7 +382,8 @@ export class CombatDecisionLoop {
       if (cfg.mode === 'act' && live.enabled && live.mode === cfg.mode && live.endpoint === cfg.endpoint
         && live.connection === cfg.connection && live.decisionProvider === cfg.decisionProvider)
         this.options.fallback?.();
-      const failure = { ...scope, outcome: 'error', elapsedMs: now() - startedAtMs,
+      const failure = { ...scope, outcome: 'error', elapsedMs: now() - startedAtMs, timeoutMs: cfg.timeoutMs,
+        transportElapsedMs, phase: transportElapsedMs === undefined ? 'inference' : 'application',
         application: { attempted: dispatchAttempted, dispatched: dispatchAttempted ? null : false, keptCurrent: false },
         reason: controller.signal.aborted ? 'timeout' : error instanceof Error ? error.message : 'transport' };
       Object.assign(entry, failure); this.options.report('error', failure);

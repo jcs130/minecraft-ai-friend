@@ -88,29 +88,33 @@ export function renderStoredItemReadout(
   query: string,
   openWindow?: { title: string; items: readonly ItemStack[] } | null,
   registry?: NameRegistry | null,
-): string {
-  if (!s.invSynced) return `[物资查询] ${narrateInventorySync(s.inventorySync)}`;
+): { text: string; history: { source: 'container-ledger'; historical: true; dimension: string; matchedContainers: number; locations: {
+  at: [number, number, number]; count: number; observedAt: string | null;
+}[] } | null } {
   const item = query.trim().toLowerCase().replace(/^minecraft:/, '');
-  if (!/^[^\p{Cc}\p{Cf}]{1,64}$/u.test(item)) return '[物资查询] 物品名格式不对。';
+  if (!/^[^\p{Cc}\p{Cf}]{1,64}$/u.test(item)) return { text: '[物资查询] 物品名格式不对。', history: null };
   const normalize = (name: string) => name.trim().toLowerCase().replace(/\s+/gu, ' ');
   const displayMatch = (stack: ItemStack) => stack.displayName !== undefined
     && normalize(stack.displayName) === normalize(item);
   const matches = (stack: ItemStack) => matchItemName(item, stack.name, registry)
     || zhName(stack.name) === item || displayMatch(stack);
-  const carriedStacks: ItemStack[] = [...s.inventory,
-    ...s.equipment.map((piece) => ({ ...piece, count: piece.count ?? 1, durability: piece.durability ?? undefined }))];
+  const carriedStacks: ItemStack[] = s.invSynced ? [...s.inventory,
+    ...s.equipment.map((piece) => ({ ...piece, count: piece.count ?? 1, durability: piece.durability ?? undefined }))] : [];
   const carried = carriedStacks.filter(matches)
     .reduce((total, stack) => total + stack.count, 0);
-  const cursor = s.cursorItem && matches(s.cursorItem) ? narrateCursor(s) : '';
+  const cursorItem = s.invSynced ? s.cursorItem : null;
+  const cursor = cursorItem && matches(cursorItem) ? narrateCursor(s) : '';
   const label = zhName(item);
-  const currentWindow = openWindow
-    ? `当前打开的「${openWindow.title}」里${label}×${openWindow.items.filter(matches)
+  const window = s.invSynced ? openWindow : null;
+  const currentWindow = window
+    ? `当前打开的「${window.title}」里${label}×${window.items.filter(matches)
       .reduce((total, stack) => total + stack.count, 0)}（现读）；`
     : '虚拟大背包等未开窗容器未计入；';
-  const ids = [...new Set([...carriedStacks, ...(s.cursorItem ? [s.cursorItem] : []), ...(openWindow?.items ?? [])]
+  const ids = [...new Set([...carriedStacks, ...(cursorItem ? [cursorItem] : []), ...(window?.items ?? [])]
     .filter(displayMatch).map((stack) => stack.name))];
   const names = ids.length ? `当前匹配名称的工具物品名:${ids.join('、')}。` : '';
   const found = records.flatMap((record) => {
+    if (record.dimension !== s.dimension) return [];
     const count = record.items.filter(matches)
       .reduce((total, stack) => total + stack.count, 0);
     return count > 0 ? [{ record, count }] : [];
@@ -118,14 +122,19 @@ export function renderStoredItemReadout(
     || Math.hypot(a.record.x - s.position.x, a.record.y - s.position.y, a.record.z - s.position.z)
        - Math.hypot(b.record.x - s.position.x, b.record.y - s.position.y, b.record.z - s.position.z));
   const locations = found.slice(0, 3).map(({ record, count }) => {
-    const when = record.observedAt
-      ? new Date(record.observedAt).toISOString().replace('T', ' ').slice(0, 16) + ' UTC'
-      : '旧档无时间';
-    return `(${record.x},${record.y},${record.z}) 上次见到×${count}（${when}）`;
+    const clock = new Date(record.observedAt ?? NaN);
+    return {
+      at: [record.x, record.y, record.z] as [number, number, number],
+      count, observedAt: Number.isFinite(clock.getTime()) ? clock.toISOString() : null,
+    };
   });
-  return `[物资查询] 随身${label}×${carried}。${names}${cursor}${currentWindow}${locations.length
-    ? `本维度容器历史记录：${locations.join('；')}。到场开窗重查后再取；这些不是随身数量。`
-    : `本维度容器账本没记到${label}；不等于其他容器里没有。`}`;
+  const locationText = locations.map(row => `(${row.at.join(',')}) 上次见到×${row.count}（${row.observedAt ?? '旧档无时间'}）`);
+  const carriedText = s.invSynced ? `随身${label}×${carried}。` : `${narrateInventorySync(s.inventorySync)}。`;
+  const storageText = locations.length
+    ? `本维度容器历史记录：${locationText.join('；')}。到场开窗重查后再取；这些不是随身数量。`
+    : `本维度容器账本没记到${label}；不等于其他容器里没有。`;
+  return { text: `[物资查询] ${carriedText}${names}${cursor}${currentWindow}${storageText}`,
+    history: { source: 'container-ledger', historical: true, dimension: s.dimension, matchedContainers: found.length, locations } };
 }
 
 /** 背包接近满时，把容器账本中的槽位读数和距离带给收纳决策。 */

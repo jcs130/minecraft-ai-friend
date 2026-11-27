@@ -26,12 +26,13 @@ import { CONTAINER_FIND, FURNACE_KINDS } from './chests.ts';
 import { chooseTool, equipToolFor, miningToolPlan, nearBreak } from './tools.ts';
 import { UNTIL_DIG_RADIUS, type UntilHit, untilBlockIds, untilHit, untilUnknownNote } from './until.ts';
 import { spiralAlignmentError } from './tunnel-alignment.ts';
-import { observationView } from './perception-sight.ts';
+import { observedBlock, observationView } from './perception-sight.ts';
 
 const { goals } = pathfinderPkg;
 
 function firstProtectedBreak(bot: Bot, cells: readonly Cell[]): string | null {
   for (const cell of cells) {
+    if (!observedBlock(bot, cell)) continue;
     const block = blockAtCell(bot, cell);
     if (!block || AIR_NAMES.has(block.name) || LIQUIDS.has(block.name)) continue;
     const note = breakPermissionNote(bot, block);
@@ -44,7 +45,7 @@ function firstProtectedBreak(bot: Bot, cells: readonly Cell[]): string | null {
 export async function skillExcavate(bot: Bot, call: Extract<SkillCall, { skill: 'excavate' }>, ctx: SkillContext): Promise<string> {
   const cells = shapeCells(bot, call.shape, call.anchors, call.fill, EXCAVATE_CELL_CAP);
   if (call.dryRun) {
-    const reading = readRegion(bot, cells);
+    const reading = readRegion(observationView(bot), cells);
     const lines = [`试算${SHAPE_ZH[call.shape]}(共 ${cells.length} 格): ${compositionText(reading)}。`];
     const permission = firstProtectedBreak(bot, cells);
     if (permission) lines.push(`${permission}。`);
@@ -72,7 +73,7 @@ export async function skillExcavate(bot: Bot, call: Extract<SkillCall, { skill: 
   if (permission) throw new SkillBlocked(permission);
   if (targets.length === 0) {
     // 液体不是挖掘目标；整片只有液体时必须明确受阻，不能报已经清空。
-    const reading = readRegion(bot, cells);
+    const reading = readRegion(observationView(bot), cells);
     if (reading.counts.size === 0 && reading.unloaded === 0) {
       return `那片 ${cells.length} 格本来就是空的,不用挖`;
     }
@@ -119,6 +120,7 @@ export async function skillExcavate(bot: Bot, call: Extract<SkillCall, { skill: 
   let underfootBelow = '';
   let unreachable: Cell | null = null;
   let unreachableN = 0;
+  let invisible = 0;
   // 这一片里的格子火把一律不贴:还没挖的贴上去回头连火把一起挖掉,已经挖空的那些
   // 本来就该空着,贴进去等于自己给自己造障碍
   const inRegion = new Set(targets.map(cellKeyOf));
@@ -127,6 +129,7 @@ export async function skillExcavate(bot: Bot, call: Extract<SkillCall, { skill: 
     await settleOnGround(bot, ctx, 1_500);
     let b = blockAtCell(bot, c);
     if (!b || AIR_NAMES.has(b.name) || LIQUIDS.has(b.name)) continue; // 挖别处时已经塌了/通了
+    if (!observedBlock(bot, c)) { invisible++; continue; }
     if (ledgered.has(`${c.x},${c.y},${c.z}`) && LEDGER_GUARD_BLOCKS.has(b.name)) {
       guarded++;
       guardedSample = `(${c.x}, ${c.y}, ${c.z}) 的${zhName(b.name)}`;
@@ -161,6 +164,7 @@ export async function skillExcavate(bot: Bot, call: Extract<SkillCall, { skill: 
       }
       b = blockAtCell(bot, c);
       if (!b || AIR_NAMES.has(b.name) || LIQUIDS.has(b.name)) continue;
+      if (!observedBlock(bot, c)) { invisible++; continue; }
       if (!bot.canDigBlock(b)) { unreachable = unreachable ?? c; unreachableN++; continue; }
     }
     await equipToolFor(bot, b, ctx, miningToolPlan(call.tool));
@@ -200,6 +204,7 @@ export async function skillExcavate(bot: Bot, call: Extract<SkillCall, { skill: 
   if (nearLava > 0) notes.push(`${nearLava} 块紧贴着岩浆,没动`);
   if (underfoot > 0) notes.push(`${underfoot} 格是我此刻站着的支撑(它下面是${underfootBelow}),没动`);
   if (undiggable > 0) notes.push(`${undiggable} 块是${zhName(undiggableSample)},根本挖不动`);
+  if (invisible > 0) notes.push(`${invisible} 格施工时被遮挡或未加载，先清理可见面或换位置再继续`);
   if (unreachableN > 0 && unreachable) notes.push(`${unreachableN} 块够不着(最近的在 (${unreachable.x}, ${unreachable.y}, ${unreachable.z}))`);
   notes.push(...keep.tally());
   const tail = `${notes.length > 0 ? `${notes.join(';')}。` : ''}挖完人在 ${cellText(feetOf(bot))}`;
@@ -423,7 +428,7 @@ export async function skillTunnel(bot: Bot, call: Extract<SkillCall, { skill: 't
   if (call.dryRun) {
     if (spiral) {
       const carve = spiralCells(start, planned, rise > 0, corner);
-      const reading = readRegion(bot, carve);
+      const reading = readRegion(observationView(bot), carve);
       const shaft = spiralQuad(start, corner);
       const xs = shaft.map((c) => c.x);
       const zs = shaft.map((c) => c.z);
@@ -445,7 +450,7 @@ export async function skillTunnel(bot: Bot, call: Extract<SkillCall, { skill: 't
       : [...new Map(floor.flatMap((c, i) => [c, { x: c.x, y: c.y + 1, z: c.z },
         ...(i > 0 && c.y > floor[i - 1].y ? [{ ...floor[i - 1], y: floor[i - 1].y + 2 }] : []),
       ]).map(c => [cellKeyOf(c), c])).values()];
-    const reading = readRegion(bot, carve);
+    const reading = readRegion(observationView(bot), carve);
     const head = vertical
       ? `试算${kind}(${planned} 格,要挖 ${carve.length} 格)`
       : `试算通道(${planned} 步,连头顶共 ${carve.length} 格)`;

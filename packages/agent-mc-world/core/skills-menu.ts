@@ -61,7 +61,7 @@ const posText = (bot: Bot): string => {
 export async function skillMenuClick(bot: Bot, call: MenuClick, ctx: SkillContext): Promise<string> {
   if (serverScreen(bot)?.kind === 'dialog' && !bot.currentWindow) return dialogClick(bot, call, ctx);
   const before = readOpenWindow(bot);
-  if (before.state === 'none') throw new SkillBlocked('当前没有打开的服务端菜单；先发对应指令（如 /rtp、/linggen）再用 mc_window 读格子');
+  if (before.state === 'none') throw new SkillBlocked('当前没有打开的服务端菜单；按当前服务器的资料或现场提示打开菜单，再用 mc_window 读格子');
   if (before.state === 'server-only') {
     throw new SkillBlocked(`服务端菜单 #${before.windowId} 没有可读格子，不能盲点；先 menu_close 再重新打开`);
   }

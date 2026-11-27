@@ -304,7 +304,7 @@ export function underwaterRouteNote(bot: Bot, target: Cell,
   const feet = bot.blockAt(new Vec3(target.x, target.y, target.z));
   const head = bot.blockAt(new Vec3(target.x, target.y + 1, target.z));
   if (!feet || !head || !WATER_BLOCKS.has(feet.name) || !WATER_BLOCKS.has(head.name)) return null;
-  return '目标需要下潜：当前 goto 不规划水下下降路线，寻路失败不代表目标不可达；已入水可用 control(mode:water) 短步下沉并核验高度/氧气，surface 换气';
+  return '目标需要下潜：从陆上起步的 goto 不规划水下下降路线，寻路失败不代表目标不可达；已经入水可用 swim 试算并核对水路和氧气，surface 可换气登岸';
 }
 
 /**
@@ -1170,9 +1170,10 @@ export function breakPermissionNote(bot: Bot, block: NonNullable<ReturnType<Bot[
 export async function digBlock(bot: Bot, target: NonNullable<ReturnType<Bot['blockAt']>>, ctx: SkillContext): Promise<void> {
   const permission = breakPermissionNote(bot, target);
   if (permission) throw new SkillBlocked(permission, [], 'server', 'protection-denied', { completed: 0, remaining: 1, unit: 'cells' });
-  // canDigBlock 与服务端使用相同的可挖掘性和 5.1 格距离约束。
+  // Mineflayer's range check does not test line of sight. The native dig
+  // wrapper tests the visible face again at dispatch, including pathfinder digs.
   if (!bot.canDigBlock(target)) {
-    throw new SkillBlocked(`够不到${zhName(target.name)}(离得太远或者隔着方块),没挖成`);
+    throw new SkillBlocked(`够不到${zhName(target.name)}(离得太远或不能挖掘),没挖成`);
   }
   // Honest mining throttle (mining-limiter.ts): short gaps are waited here, long ones are a blocked step.
   await awaitMiningBudget(bot as any, target.name, () => ctx.aborted(), target.hardness);

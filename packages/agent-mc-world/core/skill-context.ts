@@ -377,8 +377,8 @@ export async function sleep(ms: number): Promise<void> {
 }
 
 export interface TaskRangedActions {
-  ready(bot: Bot): boolean;
-  shoot(target: RangedTarget, ownerToken: unknown): Promise<BowShotResult>;
+  ready(bot: Bot, preference?: string): boolean;
+  shoot(target: RangedTarget, ownerToken: unknown, preference?: string): Promise<BowShotResult>;
   abort(): void;
 }
 
@@ -388,6 +388,7 @@ export interface TaskAttackLease {
   swings: number;
   meleeHits: number;
   arrows: number;
+  tridents?: number;
   rangedHits: number;
   hurts: number;
   lastHurtAt: number;

@@ -1,6 +1,7 @@
 import type { EventEmitter } from 'node:events';
 import { isAuthMeLoginDialog, minecraftTextComponent, unwrapNbt } from './nbt-text.mjs';
-import { readOpenedBook } from './window-protocol.ts';
+import { bookPage, readOpenedBook, type ReadableBook } from './window-protocol.ts';
+import { beginViewerInteraction, clearViewerInteraction } from './viewer-interaction.ts';
 
 /**
  * Screens the server opens that are not container windows: 26.1 dialogs (show_dialog /
@@ -21,6 +22,8 @@ export interface ServerScreen {
   inputs: string[];
   /** Dialog is a registry reference the client cannot resolve (id only). */
   reference: string | null;
+  book?: ReadableBook;
+  bookPageCount?: number | null;
 }
 
 interface ScreenBot extends EventEmitter {
@@ -79,6 +82,7 @@ export function installServerScreens(bot: ScreenBot): () => void {
   const set = (s: ServerScreen | null) => { st.current = s; for (const fn of st.listeners) { try { fn(s); } catch { /* listener */ } } };
   const onDialog = (packet: unknown) => {
     try { if (isAuthMeLoginDialog((packet as any)?.dialog ?? packet)) return; } catch { /* not auth */ }
+    clearViewerInteraction(bot, 'book-read');
     set(parseDialog(packet));
   };
   const onClear = () => { if (st.current?.kind === 'dialog') set(null); };
@@ -87,14 +91,21 @@ export function installServerScreens(bot: ScreenBot): () => void {
     const title = book.title || '书本';
     const body: string[] = [];
     if (book.author) body.push(`作者 ${book.author}`);
-    body.push(...book.pages);
-    if (!book.pages.length) body.push('未能读出正文。');
+    const bookPageCount = book.pages?.length ?? null;
+    for (let page = 1; page <= Math.min(bookPageCount ?? 0, 2); page++) body.push(bookPage(book, page).text.slice(0, 300));
+    if (bookPageCount === null) body.push('客户端未收到正文。');
     set({ kind: 'book', openedAt: Date.now(), title, body, buttons: [], dialogType: null,
-      canCloseWithEscape: true, exitAction: null, inputs: [], reference: null });
+      canCloseWithEscape: true, exitAction: null, inputs: [], reference: null, book, bookPageCount });
+    beginViewerInteraction(bot, { kind: 'book-read', title, author: book.author,
+      page: bookPageCount ? 1 : null, pageCount: bookPageCount,
+      text: bookPageCount ? bookPage(book, 1).text : (bookPageCount === null ? '等待书页内容' : '') });
   };
-  const onDeath = () => set({ kind: 'death', openedAt: Date.now(), title: '你死了', body: [], buttons: [{ index: 0, label: '重生', tooltip: null, action: { type: 'respawn' } }],
-    dialogType: null, canCloseWithEscape: false, exitAction: null, inputs: [], reference: null });
-  const onRespawn = () => { if (st.current?.kind === 'death' || st.current?.kind === 'dialog') set(null); };
+  const onDeath = () => {
+    clearViewerInteraction(bot);
+    set({ kind: 'death', openedAt: Date.now(), title: '你死了', body: [], buttons: [{ index: 0, label: '重生', tooltip: null, action: { type: 'respawn' } }],
+      dialogType: null, canCloseWithEscape: false, exitAction: null, inputs: [], reference: null });
+  };
+  const onRespawn = () => { clearViewerInteraction(bot); if (st.current) set(null); };
   const onEnd = () => dispose();
   bot._client.on('show_dialog', onDialog); bot._client.on('clear_dialog', onClear); bot._client.on('open_book', onBook);
   bot.on('death', onDeath); bot.on('respawn', onRespawn); bot.on('spawn', onRespawn); bot.once('end', onEnd);
@@ -103,6 +114,8 @@ export function installServerScreens(bot: ScreenBot): () => void {
     if (disposed) return; disposed = true;
     bot._client.off('show_dialog', onDialog); bot._client.off('clear_dialog', onClear); bot._client.off('open_book', onBook);
     bot.off('death', onDeath); bot.off('respawn', onRespawn); bot.off('spawn', onRespawn); bot.off('end', onEnd);
+    clearViewerInteraction(bot);
+    STATES.delete(bot);
     st.listeners.clear();
   };
   return dispose;
@@ -111,6 +124,7 @@ export function installServerScreens(bot: ScreenBot): () => void {
 /** Forget a book screen (the vanilla client sends nothing when a book closes). */
 export function closeLocalScreen(bot: object, kinds: ServerScreen['kind'][] = ['book']): boolean {
   const st = STATES.get(bot); if (!st?.current || !kinds.includes(st.current.kind)) return false;
+  if (st.current.kind === 'book') clearViewerInteraction(bot, 'book-read');
   st.current = null; for (const fn of st.listeners) { try { fn(null); } catch { /* */ } }
   return true;
 }

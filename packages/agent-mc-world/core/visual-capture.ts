@@ -315,7 +315,8 @@ export class MinecraftViewCaptureManager {
         const pagePath = native && mode === 'first' ? '/?photo=1'
           : mode === 'overview' ? '/third/?photo=1' : fov === undefined ? `/${mode}/?photo=1`
           : `${mode === 'first' ? '/' : '/third/'}?photo=1&fov=${fov}`;
-        await session.page.goto(`${origin}${pagePath}${options.includeHud === true ? '' : '&clean=1'}`, { waitUntil: 'domcontentloaded', timeout: remaining(deadlineAtMs) });
+        const nearby = captureLane && !native ? '&distance=2' : '';
+        await session.page.goto(`${origin}${pagePath}${nearby}${options.includeHud === true ? '' : '&clean=1'}`, { waitUntil: 'domcontentloaded', timeout: remaining(deadlineAtMs) });
         session.openedAtMs = Date.now();
         await session.page.addStyleTag({ content: 'body[data-cortico-capture-hide-hud="true"] *{visibility:hidden!important}body[data-cortico-capture-hide-hud="true"] canvas[data-cortico-capture-scene="true"]{visibility:visible!important}' });
         timings.pageMs = performance.now() - pageStarted;

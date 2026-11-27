@@ -23,7 +23,7 @@ import { itemMatchesPick, pickMissText, pickTargetOf } from './item-pick.ts';
 import { zhDimension, zhEntity, zhName } from './names.ts';
 import { invItemNamed, missingTossItem, noSuchItem } from './inventory.ts';
 import { itemCustomName } from './item-display.ts';
-import { bestRangedWeapon, hasRangedLos, hasUsableArrows, type RangedTarget } from './ranged.ts';
+import { hasRangedLos, hasReadyRangedWeapon, selectRangedWeapon, type RangedTarget } from './ranged.ts';
 import { attackTargetRadius, bestWeapon } from './melee.ts';
 import { taggedCraftChoice } from './tagged-crafting.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
@@ -644,29 +644,26 @@ function precheckAttackTarget(bot: Bot, call: Extract<SkillCall, { skill: 'attac
 /** Report the requested mode's current equipment without selecting a different mode. */
 function precheckAttack(bot: Bot, call: Extract<SkillCall, { skill: 'attack' }>): PrecheckNote | null {
   if ((!call.mode || call.mode === 'auto') && inventoryReadConfirmed(bot) && !bestWeapon(bot)
-    && (!bestRangedWeapon(bot) || !hasUsableArrows(bot))) {
+    && !hasReadyRangedWeapon(bot)) {
     const target = precheckAttackTarget(bot, call);
     if (target) return target;
-    return { level: 'soft', rule: 'attack.autoLoadout', text: `当前没有可用近战武器或弓箭组合，主手为 ${bot.heldItem?.name ?? '空手'}；`
+    return { level: 'soft', rule: 'attack.autoLoadout', text: `当前没有可用近战或远程武器，主手为 ${bot.heldItem?.name ?? '空手'}；`
       + 'auto 不会降级为空手挥击。若前序步骤取到武器，执行时重查；否则本步会明确受阻，法术与避险不受此检查限制。' };
   }
   if (call.mode === 'melee' && inventoryReadConfirmed(bot) && !bestWeapon(bot)) {
     const target = precheckAttackTarget(bot, call);
     if (target) return target;
-    const bow = bestRangedWeapon(bot);
-    const arrows = hasUsableArrows(bot);
+    const ranged = selectRangedWeapon(bot);
     return { level: 'soft', rule: 'attack.meleeLoadout',
       text: `当前随身没有执行器可自动选用的近战武器，主手为 ${bot.heldItem?.name ?? '空'}；`
-        + '本步明确指定 melee，只会近战挥击，不会射箭。'
-        + (bow ? `当前有 ${bow.name}${arrows ? '和普通箭' : '，但没有普通箭'}；远程命中与安全位置尚未验证。` : '')
+        + '本步明确指定 melee，只会近战挥击，不会射箭或投掷。'
+        + (ranged ? `当前有可用的 ${ranged.item.name}${ranged.kind === 'bow' ? ' 和普通箭' : ''}；远程命中与安全位置尚未验证。` : '')
         + '这是受理时库存，执行前会重查；未改写模式或代为补给。' };
   }
   if (call.mode !== 'ranged' && call.mode !== 'kite') return precheckAttackTarget(bot, call);
-  if (!bestRangedWeapon(bot)) {
-    return { level: 'hard', text: '包里没有可用的弓;强制远程不会改用近战', rule: 'attack.noBow' };
-  }
-  if (!hasUsableArrows(bot)) {
-    return { level: 'hard', text: '包里没有普通箭;强制远程不会改用近战', rule: 'attack.noArrow' };
+  if (inventoryReadConfirmed(bot) && !hasReadyRangedWeapon(bot, call.weapon)) {
+    const weapon = call.weapon ? `指定远程武器 ${call.weapon}` : '自动远程武器';
+    return { level: 'hard', text: `当前${weapon}不可用；强制远程不会改用其他模式`, rule: 'attack.noRangedWeapon' };
   }
   const target = attackEntity(bot, call.target, call.entityId);
   if (!target) return precheckAttackTarget(bot, call);
@@ -687,6 +684,8 @@ export interface PrecheckDeps {
   lastAte?: () => number | null;
   /** 容器上次开窗读数；只用于提示可能已满，不能代替这次开窗确认。 */
   chests?: ChestBook;
+  /** 服务端声明过的方块保护区；返回范围说明，区外返回 null。不授予也不否决权限。 */
+  protectedRegion?: (cell: Cell) => string | null;
 }
 
 function precheckStow(bot: Bot, call: Extract<SkillCall, { skill: 'stow' }>, deps: PrecheckDeps): PrecheckNote | null {
@@ -794,6 +793,8 @@ export function precheckStep(bot: Bot, call: SkillCall, deps: PrecheckDeps,
   if (!bot?.inventory) return null;
   if ((call as { dryRun?: boolean }).dryRun) return null; // 试算本身不用再试算
   try {
+    const region = precheckProtectedRegion(call, deps);
+    if (region) return region;
     const tool = precheckMiningTool(bot, call, deps);
     if (tool) return tool;
     switch (call.skill) {
@@ -837,6 +838,27 @@ export function precheckStep(bot: Bot, call: SkillCall, deps: PrecheckDeps,
   }
 }
 
+/** 改方块的步骤落在服务端声明的保护区内时提前说明；行走、开门和使用按钮不受限，执行刻仍以服务端逐格回执为准。 */
+function precheckProtectedRegion(call: SkillCall, deps: PrecheckDeps): PrecheckNote | null {
+  if (!deps.protectedRegion || ('dryRun' in call && call.dryRun)) return null;
+  if (call.skill !== 'build' && call.skill !== 'excavate' && call.skill !== 'tunnel' && call.skill !== 'harvest') return null;
+  const anchors: Cell[] = [];
+  const add = (anchor: unknown) => { if (anchor !== undefined) { const cell = deps.resolve(anchor); if (cell) anchors.push(cell); } };
+  if ('at' in call) add(call.at);
+  if ('anchors' in call && Array.isArray(call.anchors)) call.anchors.forEach(add);
+  if ('on' in call && Array.isArray(call.on)) call.on.forEach(face => add(face?.at));
+  const shaped = call.skill === 'build' ? deps.cellsOf(call) : null;
+  const cells = shaped?.length ? shaped : anchors;
+  let first: string | null = null, inside = 0;
+  for (const cell of cells) {
+    const region = deps.protectedRegion(cell);
+    if (region) { first ??= region; inside++; }
+  }
+  if (!first) return null;
+  return { level: 'hard', rule: 'terrain.protectedRegion',
+    text: `${call.skill} 有 ${inside}/${cells.length} 个目标格落在${first}；区内采集、建造会被服务端拒绝，换到范围外再提交` };
+}
+
 /**
  * 整单试算(受理刻)。只收否定,全通返回空数组 —— 1418 次受理都挂一段试算,
  * 她会调不动也会读吐;只报否定才让信号稀缺、token 成本近零。
@@ -873,6 +895,7 @@ export function precheckSteps(bot: Bot, steps: SkillCall[], deps: PrecheckDeps):
       // The requested endpoint is not a verified next starting cell.
       projectedStart = null;
     }
+    if (note?.rule === 'terrain.protectedRegion') { out.push({ index: i, note }); continue; }
     if (!note) continue;
     // 受理刻只看得见当前背包；同单前面的取物/制作成功后才会有的材料，
     // 不能在这里误报「手里没有」。执行时的因果闸仍会处理上游落空。

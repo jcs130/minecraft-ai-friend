@@ -126,6 +126,92 @@ describe('whisper identity from raw messages', () => {
   });
 });
 
+describe('server-relayed chat lifecycle', () => {
+  it('consumes a relay once before command and mining feedback while preserving real notices', async () => {
+    const r = methodHarness('1.21.1');
+    try {
+      const world = r.world as any;
+      const relay = vi.fn((text: string) => text.startsWith('Relay: '));
+      const systemFeedback = vi.fn();
+      const systemMessage = vi.fn(() => false);
+      const denied = vi.fn();
+      const miningWarning = vi.fn();
+      const warning = '[反作弊] 检测到你疑似在使用自动化模组，继续使用将被临时封禁';
+      const text = `Relay: can't break that block here ${warning}`;
+      const received = { toString: () => text };
+      Object.assign(world, { extensionServerRelayedChat: relay, extensionServerFeedback: systemFeedback,
+        extensionMessage: systemMessage });
+      world.cfg.miningLimits.enabled = true;
+      Object.assign(world.bridge, { connectionState: { ready: true }, noteServerBreakDenied: denied });
+      world.hookedBots.add(r.bot);
+      world.hookMessageEvents(r.bot);
+      r.bot.on('miningWarning', miningWarning);
+      r.bot.emit('message', received, 'system', null);
+      r.bot.emit('messagestr', text, 'system', received, null);
+      r.bot.emit('message', received, 'system', null);
+      r.bot.emit('chat', 'Someone', text, '', received);
+      await Promise.resolve();
+      expect(relay.mock.calls).toEqual([[text]]);
+      expect(systemMessage).not.toHaveBeenCalled();
+      expect(systemFeedback).not.toHaveBeenCalled();
+      expect(denied).not.toHaveBeenCalled();
+      expect(miningWarning).not.toHaveBeenCalled();
+      expect(r.host.events).toHaveLength(0);
+
+      const genuine = { toString: () => warning };
+      r.bot.emit('message', genuine, 'system', null);
+      r.bot.emit('messagestr', warning, 'system', genuine, null);
+      await Promise.resolve();
+      expect(systemMessage.mock.calls).toEqual([[warning]]);
+      expect(systemFeedback.mock.calls).toEqual([[warning]]);
+      expect(miningWarning.mock.calls).toEqual([[warning]]);
+      expect(r.host.events).toHaveLength(1);
+      expect(r.host.events[0]).toMatchObject({ text: `[MC 系统] ${warning}`,
+        meta: { executionFeedback: { kind: 'server-message' } } });
+    } finally { r.close(); }
+  });
+
+  it('skips the relay handler outside the current authenticated play connection or for player input', async () => {
+    const r = methodHarness('1.21.1');
+    try {
+      const world = r.world as any;
+      const relay = vi.fn(() => true);
+      const component = () => ({ toString: () => 'Relay: overlap' });
+      world.extensionServerRelayedChat = relay;
+      const bridge = world.bridge;
+      bridge.connectionState = { ready: true };
+      world.hookMessageEvents(r.bot);
+      r.bot.emit('message', component(), 'system', null);
+      world.hookedBots.add(r.bot);
+      bridge.connectionState.ready = false;
+      r.bot.emit('message', component(), 'system', null);
+      bridge.connectionState.ready = true;
+      r.bot._client.state = 'configuration';
+      r.bot.emit('message', component(), 'system', null);
+      r.bot._client.state = 'play';
+      bridge.bot = { game: r.bot.game };
+      r.bot.emit('message', component(), 'system', null);
+      bridge.bot = r.bot;
+      world.shuttingDown = true;
+      r.bot.emit('message', component(), 'system', null);
+      world.shuttingDown = false;
+      r.bot.emit('message', component(), 'system', 'uuid-jojo');
+      r.bot.emit('message', { ...component(), unsigned: component() }, 'system', null);
+      Object.assign(r.bot, { players });
+      r.bot.emit('message', component(), 'chat', 'uuid-jojo');
+      const whisper = { ...component(), translate: 'commands.message.display.incoming',
+        with: [{ toString: () => 'Jojo' }, { toString: () => 'Relay: private' }] };
+      r.bot.emit('message', whisper, 'system', null);
+      await Promise.resolve();
+      expect(relay).not.toHaveBeenCalled();
+      expect(r.host.events).toEqual(expect.arrayContaining([
+        expect.objectContaining({ senderKey: 'Jojo', meta: expect.objectContaining({ channel: 'public', senderUuid: 'uuid-jojo' }) }),
+        expect.objectContaining({ senderKey: 'Jojo', meta: expect.objectContaining({ channel: 'private' }) }),
+      ]));
+    } finally { r.close(); }
+  });
+});
+
 describe('live readouts and honest startup', () => {
   it('reads actual current account identity and death lifecycle rather than an old configured name', () => {
     const r = methodHarness();

@@ -19,6 +19,34 @@ function pool(low=64,high=68,range=4) {
  return h;
 }
 describe('oxygen-aware loaded-water routes',()=>{
+ it('plans an exit through connected water and refuses a bank across an intervening wall',async()=>{
+  const h=methodHarness('1.21.1');fixtures.push(h);
+  for(let x=0;x<=3;x++)for(let y=64;y<=65;y++)h.set(x,y,0,'water');
+  for(let x=-1;x<=4;x++)for(let y=64;y<=68;y++)for(const z of [-1,1])h.set(x,y,z,'stone');
+  for(let y=64;y<=68;y++)h.set(-1,y,0,'stone');
+  h.set(4,64,0,'stone');
+  h.bot.entity.position=new Vec3(.5,65.3,.5);h.bot.entity.onGround=false;
+  const call=()=>planSwim(h.bot as unknown as Bot,[8,65,0],6,()=>false,{seekBank:true});
+  expect(await call()).toMatchObject({complete:true,at:[4,65,0],waypoints:[expect.anything(),expect.anything(),expect.anything(),{at:[4,65,0],bank:true}]});
+  h.set(3,64,0,'stone');h.set(3,65,0,'stone');h.set(3,66,0,'stone');h.set(2,67,0,'stone');
+  expect((await call()).waypoints.some(step=>step.at[0]===4)).toBe(false);
+ });
+ it('swims onto a real shallow bank and settles on dry ground',async()=>{
+  vi.useFakeTimers();const h=methodHarness('1.21.1');fixtures.push(h);
+  for(let x=-2;x<=3;x++)for(let z=-1;z<=1;z++)for(let y=64;y<=65;y++)h.set(x,y,z,'water');
+  for(let x=-3;x<=4;x++)for(let y=64;y<=68;y++)for(const z of [-2,2])h.set(x,y,z,'stone');
+  for(let z=-1;z<=1;z++)for(let y=64;y<=68;y++)h.set(-3,y,z,'stone');
+  for(let x=4;x<=6;x++)for(let z=-1;z<=1;z++)h.set(x,64,z,'stone');
+  h.bot.entity.position=new Vec3(.5,65.3,.5);h.bot.entity.onGround=false;
+  let settled=false;
+  const finish=skillSwim(h.bot as unknown as Bot,{at:[8,65,0],seekBank:true,maxDurationMs:15000},
+   {taskId:94,aborted:()=>false} as SkillContext).then(value=>({value}),error=>({error})).finally(()=>{settled=true;});
+  for(let i=0;i<320&&!settled;i++)await vi.advanceTimersByTimeAsync(50);
+  expect(await finish).toHaveProperty('value');
+  expect(lastSwimResult(h.bot as unknown as Bot)).toMatchObject({complete:true,at:[4,65,0]});
+  expect(movementReadout(h.bot as unknown as Bot)).toMatchObject({bodyWet:false,onGround:true});
+  expect(Object.values(h.keys).every(v=>!v)).toBe(true);
+ });
  it.each([undefined,12])('crosses a surface route without inventing or waiting for an oxygen refill (%s)',async oxygen=>{
   vi.useFakeTimers();const h=methodHarness('1.21.1');fixtures.push(h);
   for(let x=-2;x<=7;x++)for(let z=-2;z<=2;z++)for(let y=64;y<=65;y++)h.set(x,y,z,'water');

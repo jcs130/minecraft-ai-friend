@@ -1,11 +1,13 @@
 /** Immutable, offline reference retrieval. No personal/game notebook or implicit embeddings. */
 import minecraftData from 'minecraft-data';
+import type { Bot } from 'mineflayer';
 import { zhName } from './names.ts';
 import type { ToolDef } from './support/host-contract.ts';
 import { FOOD_CAUTIONS, FOOD_COOKING, FOOD_EFFECTS, MOJANG_1211_SOURCE, VANILLA_GUIDES, VANILLA_KNOWLEDGE_VERSION } from './vanilla-food.ts';
 import { VANILLA_SURVIVAL_GUIDES } from './vanilla-survival.ts';
-import { readServerGuide, validateServerGuide } from './server-guide.ts';
 import { MINEDOJO_SOURCE, readReferenceIndex, type MinecraftKnowledgeConfig } from './reference-index.ts';
+import { readServerGuide, validateServerGuide } from './server-guide.ts';
+import { readServerRecipeBook } from './server-recipe-book.ts';
 
 const KINDS = ['guide', 'food', 'item', 'block', 'recipe'] as const;
 type Kind = typeof KINDS[number];
@@ -17,12 +19,13 @@ const caches = new Map<string, Entry[]>();
 export const KNOWLEDGE_TOOL: Omit<ToolDef, 'handler'> = {
   name: 'mc_knowledge', tags: ['read'],
   description: 'Read versioned vanilla Minecraft knowledge on demand: food/cooking/health, bed/sleep, night shelter, equipment, base, storage, farming, items, mining blocks and crafting. '
-    + 'search returns summaries; get(id) reads one entry. Offline local lookup, no model/network/action. '
+    + 'For current recipes search by item ID/name or a partial Chinese name, e.g. {source:"recipe_book",query:"铁胸"}. A connected kind:recipe search prefers observed server results and labels vanilla fallback. No game writes. '
+    + 'Other searches return summaries; get(id) reads one reference. '
     + 'Baseline reference only; mc_memory holds historical experience. Main semantic target Java 1.21.1. '
-    + 'action:sources describes optional MineDojo indexes; source:minedojo queries only an explicitly configured local index. Historical references never grant action authority.',
+    + 'For a server menu, shops, ranks, travel or skills, use source:server for the active profile guide. action:sources lists references. References never grant action authority.',
   parameters: { type: 'object', additionalProperties: false, properties: {
     action: { type: 'string', enum: ['help', 'search', 'get', 'sources'], description: 'Omit: id implies get; query/filter/paging implies search; empty arguments imply help.' },
-    source: { type: 'string', enum: ['vanilla', 'minedojo', 'server'], description: 'Use server for the active server guide. Default vanilla. MineDojo is a separately prepared historical reference index, never player memory.' },
+    source: { type: 'string', enum: ['vanilla', 'minedojo', 'server', 'recipe_book'], description: 'recipe_book: only the connected server’s declared/unlocked recipe data. server: active profile guide. Explicit vanilla reads only reference data.' },
     query: { type: 'string', maxLength: 200 }, kind: { type: 'string', enum: [...KINDS] },
     id: { type: 'string', maxLength: 120, description: 'Exact returned ID, e.g. food/beef or guide/cooking.' },
     limit: { type: 'integer', minimum: 1, maximum: 10 }, offset: { type: 'integer', minimum: 0 },
@@ -170,17 +173,27 @@ export function readMinecraftKnowledge(args: Record<string, unknown>, version: s
 }
 
 /** The asynchronous public dispatch preserves the original vanilla-only sync SDK. */
-export async function queryMinecraftKnowledge(args: Record<string, unknown>, version: string, config?: MinecraftKnowledgeConfig, signal?: AbortSignal, activeServer?: string): Promise<Record<string, unknown>> {
+export async function queryMinecraftKnowledge(args: Record<string, unknown>, version: string, config?: MinecraftKnowledgeConfig,
+  signal?: AbortSignal, activeServer?: string, bot?: Bot | null): Promise<Record<string, unknown>> {
   signal?.throwIfAborted();
   const { source = 'vanilla', ...request } = args;
-  if (!['vanilla', 'minedojo', 'server'].includes(String(source))) throw new Error('Unknown knowledge source');
-  const guide = activeServer && validateServerGuide(config?.server, activeServer) ? config?.server : undefined;
-  if (source === 'server') return readServerGuide(request, guide);
+  if (!['vanilla', 'minedojo', 'server', 'recipe_book'].includes(String(source))) throw new Error('Unknown knowledge source');
+  if (source === 'recipe_book') return readServerRecipeBook(bot, request, activeServer);
+  const serverGuide = activeServer && validateServerGuide(config?.server, activeServer) ? config?.server : undefined;
+  if (source === 'server') return readServerGuide(request, serverGuide);
+  if (args.source === undefined && request.kind === 'recipe' && typeof request.query === 'string'
+      && request.query.trim() && (!request.action || request.action === 'search') && bot) {
+    const server = readServerRecipeBook(bot, request, activeServer);
+    if (Number(server.total) > 0) return server;
+    return { ...readMinecraftKnowledge(request, version),
+      recipeBook: { coverage: server.coverage, sampledAt: server.sampledAt, matchingEntries: 0 } };
+  }
   if (request.action === 'sources' && source === 'vanilla') {
     if (Object.keys(request).some(key => key !== 'action')) throw new Error('Field does not apply to sources');
     return { protocol: 'agent-mc-knowledge/v1', sources: [{ id: 'vanilla', version, retrieval: 'bundled-versioned-reference' },
       { ...MINEDOJO_SOURCE, configured: !!config?.minedojo?.indexFile, status: config?.minedojo?.indexFile ? 'configured-not-probed' : 'not-configured', guide: 'docs/minedojo-knowledge.md' },
-      ...(guide ? [{ id: 'server', profile: guide.profile, title: guide.title, revision: guide.revision }] : [])], currentWorldVerified: false };
+      ...(serverGuide ? [{ id: 'server', profile: serverGuide.profile, title: serverGuide.title, revision: serverGuide.revision }] : []),
+      { id: 'recipe_book', retrieval: 'observed-connection-packets', coverage: readServerRecipeBook(bot, { action: 'help' }, activeServer).coverage }], currentWorldVerified: false };
   }
   if (source === 'vanilla') return readMinecraftKnowledge(request, version);
   const action = request.action ?? (request.id !== undefined ? 'get' : request.query !== undefined ? 'search' : 'help');

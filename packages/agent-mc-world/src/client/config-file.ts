@@ -4,9 +4,24 @@ import { Ajv } from 'ajv';
 import { MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_CONFIG_GROUP, MINECRAFT_PLAYER_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP } from '../../core/config.ts';
 import type { ConfigGroup } from './contracts.ts';
 import { MINECRAFT_CLIENT_DEFAULTS, assertMinecraftReady, type MinecraftClientConfig } from './config.ts';
+import { applyServerProfile, validateServerProfile, type MinecraftServerProfile } from '../../core/server-profiles.ts';
 
-function merge(base: Record<string, unknown>, patch: Record<string, unknown>): void {
+function merge(base: Record<string, unknown>, patch: Record<string, unknown>, profiles = false): void {
   for (const [key, value] of Object.entries(patch)) {
+    if (profiles && key === 'servers') {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('servers must be a profile map.');
+      for (const [id, profile] of Object.entries(value)) {
+        const errors = validateServerProfile(id, profile as MinecraftServerProfile);
+        if (errors.length) throw new Error(`Invalid Minecraft server profile: ${errors.join('; ')}`);
+      }
+      base.servers = structuredClone(value);
+      continue;
+    }
+    if (profiles && key === 'server') {
+      if (typeof value !== 'string') throw new Error('server must be a profile id.');
+      base.server = value;
+      continue;
+    }
     if (!Object.hasOwn(base, key)) throw new Error(`Unknown Minecraft configuration field: ${key}`);
     const previous = base[key];
     if (previous && typeof previous === 'object' && !Array.isArray(previous)) {
@@ -34,7 +49,7 @@ export function loadPrivateClientConfig<T extends MinecraftClientConfig>(path: s
   if (input.operatorIdentity !== undefined && (typeof input.operatorIdentity !== 'string' || !/^[a-f0-9]{24}$/.test(input.operatorIdentity)))
     throw new Error('operatorIdentity must be a session identity hash.');
   const cfg = structuredClone(policy.defaults);
-  merge(cfg as unknown as Record<string, unknown>, input.world as Record<string, unknown>);
+  merge(cfg as unknown as Record<string, unknown>, input.world as Record<string, unknown>, true);
   const ajv = new Ajv({ strict: false, validateFormats: false });
   for (const group of policy.groups) for (const [key, schema] of Object.entries(group.schema.properties)) {
     if (!key.startsWith(policy.schemaPrefix)) continue;
@@ -45,14 +60,19 @@ export function loadPrivateClientConfig<T extends MinecraftClientConfig>(path: s
     if (!validate(value)) throw new Error(`Invalid ${key}: ${ajv.errorsText(validate.errors)}`);
   }
   if (cfg.loginConfigFile) cfg.loginConfigFile = resolve(dirname(fullPath), cfg.loginConfigFile);
+  for (const profile of Object.values(cfg.servers ?? {})) {
+    if (profile.loginConfigFile) profile.loginConfigFile = resolve(dirname(fullPath), profile.loginConfigFile);
+    if (profile.viewerAssetsDir) profile.viewerAssetsDir = resolve(dirname(fullPath), profile.viewerAssetsDir);
+  }
   if (cfg.provider === 'java-client' && cfg.javaClient) {
     cfg.javaClient.credentialsFile = resolve(dirname(fullPath), cfg.javaClient.credentialsFile);
     cfg.javaClient.ledgerDir = resolve(dirname(fullPath), cfg.javaClient.ledgerDir);
   }
   for (const account of [cfg, cfg.client, cfg.player] as Array<{ profilesFolder?: string }>)
     if (account.profilesFolder) account.profilesFolder = resolve(dirname(fullPath), account.profilesFolder);
-  policy.validate(cfg);
-  return { cfg, dataDir: resolve(dirname(fullPath), input.dataDir), timezone: String(input.timezone ?? 'UTC'),
+  const selected = applyServerProfile(cfg);
+  policy.validate(selected);
+  return { cfg: selected, dataDir: resolve(dirname(fullPath), input.dataDir), timezone: String(input.timezone ?? 'UTC'),
     acceptsImages: input.acceptsImages === true, metricsPort: Number(input.metricsPort ?? 0), consolePort: Number(input.consolePort ?? 0),
     operatorBinding: typeof input.operatorIdentity === 'string' ? { identity: input.operatorIdentity, directory: resolve(dirname(fullPath), input.dataDir) } : undefined };
 }

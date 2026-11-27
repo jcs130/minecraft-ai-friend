@@ -164,6 +164,62 @@ function collisionRay(origin: Point, direction: Point, range: number, read: (cel
   return { kind: 'clear', distance: range };
 }
 
+/** A conservative, local preflight for first-person visual requests. */
+export function nearCameraWall(bot: Bot, fov: number) {
+  const self = bot.entity;
+  if (!self?.position || typeof bot.blockAt !== 'function') return null;
+  const { eyeHeight } = self as (Bot['entity'] & { eyeHeight?: number });
+  if (![self.yaw,self.pitch,eyeHeight].every(Number.isFinite)) return null;
+  const position = pointOf(self.position);
+  if (!position.every(Number.isFinite)) return null;
+  // Nearby actors can be useful even when terrain fills the rest of the view.
+  if (Object.values(bot.entities ?? {}).some(entity => entity !== self && entity.isValid !== false
+      && entity.position && Math.hypot(entity.position.x-self.position.x,entity.position.y-self.position.y,
+        entity.position.z-self.position.z) < 3)) return null;
+  const eye: Point = [position[0], position[1] + eyeHeight!, position[2]];
+  const yaw = self.yaw, pitch = self.pitch, forward = rayDirection(yaw,pitch);
+  const right: Point = [Math.cos(yaw),0,-Math.sin(yaw)];
+  const up: Point = [Math.sin(yaw)*Math.sin(pitch),Math.cos(pitch),Math.cos(yaw)*Math.sin(pitch)];
+  const scale = Math.tan(fov * Math.PI / 360) * .58;
+  const cache = new Map<string,Sample>();
+  let requiresImage = false;
+  const read = (cell: Point): Sample => {
+    const key = cell.join(',');
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const block = bot.blockAt(new Vec3(...cell), false);
+    if (!block) return { unknown:'unloaded' };
+    if (/sign|banner|door|portal|chest|lectern|spawner|shulker|barrel|furnace|button|lever|water|lava|item_frame/.test(block.name))
+      requiresImage = true;
+    const material: Material = {
+      name:block.name,stateId:block.stateId,properties:null,air:AIR_NAMES.has(block.name),liquid:LIQUIDS.has(block.name),
+      collision:block.shapes?.map(shape=>[...shape] as Box) ?? null,
+      vision:observationTransparent(block.name) ? 'transparent' : block.shapes ? 'shape-dependent' : 'unknown',
+    };
+    const sample = {material};
+    cache.set(key,sample);
+    return sample;
+  };
+  const solid = (hit: ReturnType<typeof collisionRay>): hit is BlockHit => hit.kind === 'block'
+    && hit.material.vision === 'shape-dependent'
+    && hit.material.collision?.some(box=>box.join(',') === '0,0,0,1,1,1') === true;
+  const center = collisionRay(eye, forward, 1.2, read);
+  if (!solid(center) || requiresImage) return null;
+  const hits = [center];
+  for (const x of [-1,0,1]) for (const y of [-1,0,1]) {
+    if (!x && !y) continue;
+    const ray = forward.map((component,i)=>component + right[i]! * x * scale * 16/9 + up[i]! * y * scale) as Point;
+    const length = Math.hypot(...ray);
+    const hit = collisionRay(eye, ray.map(n=>n/length) as Point, 2.6, read);
+    if (!solid(hit) || requiresImage) return null;
+    hits.push(hit);
+  }
+  return { sampledAt: new Date().toISOString(), source: 'local-voxel-collision' as const, position,
+    centralWall: { block: center.material.name, at: center.cell, distance: center.distance },
+    opaqueRays: hits.length, checkedRays: 9,
+    farthestHit: Math.max(...hits.map(hit=>hit.distance)) };
+}
+
 interface VoxelCoverage {
   requestedBounds:number[]; requestedCount:number; origin:number[]; returnedCount:number; remainingCount:number;
   observedCount?:number; unknownCount?:number; invisibleCount?:number; unloadedCount?:number;
@@ -285,7 +341,7 @@ function readSpatialObservation(bot: Bot, input: SpatialObserveInput) {
       return sign ? { ...site, sign } : site;
     });
     const unknownTargets=sites.filter(s=>s.target===null).length;
-    const partial=unknownTargets>0||sites.some(s=>s.body.unknown>0||s.below.topArea===null||s.faces.some(f=>f.area===null));
+    const partial=unknownTargets>0||sites.some(s=>s.body.unknown>0||s.landing?.clearance==='unknown'||s.below.topArea===null||s.faces.some(f=>f.area===null));
     return {
     ...common, position,kind:'sites' as const,status:partial?'partial' as const:'complete' as const,
     selfFooting:{source:'client-contact' as const,...footingFromBot(bot)},
@@ -293,7 +349,7 @@ function readSpatialObservation(bot: Bot, input: SpatialObserveInput) {
       airTargets:sites.filter(s=>s.target&&AIR_NAMES.has(s.target.block)).length},
     interpretation:'null=未知（遮挡、未加载或未核实），不等于空气、无支撑或不可达。仅 target.block 明示 air/cave_air/void_air 才是已观察空气；selfFooting 是本人当前接触，不代表候选落点。',
     sites, blockReads: cache.size,
-    geometry: 'absolute cells; faces: ref+face=target, boundary area 0..1 (0 omitted, null unknown); body=0.6x1.8 centered, block collisions + 1-cell collar, first 3 hits/count, fluids by cell; not reachability, placement permission or safe footing',
+    geometry: 'absolute cells; faces: ref+face=target, boundary area 0..1 (0 omitted, null unknown); body=0.6x1.8 centered, block collisions + 1-cell collar, first 3 hits/count, fluids by cell. landing.topY is the measured slab/stair top; next is null if blocked, a walk-only dry run if fractional/unknown, or an exact goto candidate. Route and placement still need verification.',
   };
   }
   if (query?.format === 'visible') return visibleVoxelObservation(query,common,read);

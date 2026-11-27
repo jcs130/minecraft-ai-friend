@@ -12,7 +12,8 @@
 import type { Bot } from 'mineflayer';
 import { nativeBodyBlockedReason, nativeBodyReadiness } from './body-readiness.ts';
 import { localHazardExit } from './hazard-exit.ts';
-import { skillSwim } from './swim-route.ts';
+import { planSwim, progressingSwim, skillSwim } from './swim-route.ts';
+import { breathingReadout } from './breathing.ts';
 import { observeDamage, type DamageEvidence } from './damage-evidence.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
@@ -68,7 +69,7 @@ import { publishViewerCastCommand } from './command-events.ts';
 import { skillGesture } from './skills-social.ts';
 import { skillMenuClick, skillMenuClose, skillSwapHands } from './skills-menu.ts';
 import { skillLook } from './skills-look.ts';
-import { skillControl, waterControlActive, surfacePauseReady, surfacePause } from './skills-control.ts';
+import { movementReadout, skillControl, waterControlActive, surfacePauseReady, surfacePause } from './skills-control.ts';
 import {followRoute} from './follow-route.ts';
 import {crossFire,fireRoutes,fireRouteGeometryCurrent,intentionalFireCrossing,type FireRoute} from './fire-route.ts';
 import { sendDeduplicatedChat } from './chat-dedup.ts';
@@ -121,6 +122,7 @@ export type {
   Expectation, MarkLookup, ParseNote, QueueMode, SkillCall, StepBounds,
 } from './skills.ts';
 export { dangerNoteText } from './skill-context.ts';
+import { skillBook } from './skills-book.ts';
 
 type UsedBlockState = { name: string; stateId: number; open: string | null };
 
@@ -690,7 +692,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
   switch (call.skill) {
     case 'craft': case 'take': case 'stow': case 'compact': case 'organize': case 'toss':
     case 'equip': case 'eat': case 'smelt': case 'brew': case 'enchant':
-    case 'anvil': case 'grindstone': case 'harvest':
+    case 'anvil': case 'grindstone': case 'harvest': case 'book':
       inventoryMutation = true;
       break;
     case 'use':
@@ -723,10 +725,30 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
           + `需要穿过时使用 {"skill":"transit","at":[${target.x},${target.y},${target.z}]}，以实际维度或折跃落点变化验收；无需用定时前进替代。`
         : null;
       const finalGoal = gotoArrivalGoal(call, target);
+      const waterLegFor = (at: Cell, goal: InstanceType<typeof goals.Goal>) => {
+        if (!bodyInWater(bot) || bot.physicsEnabled !== true || flightState(bot).flying) return null;
+        const movement = movementReadout(bot);
+        if (movement.vehicleAttached) return null;
+        // A directed surface journey can choose a boat and expose regular
+        // surface checkpoints. A nearby bank must not divert that journey.
+        const me = bot.entity.position;
+        if (movement.headWet !== true && Math.hypot(me.x-at.x,me.z-at.z)>32) return null;
+        const waterTarget = !(goal instanceof goals.GoalNearXZ) && WATER_BLOCKS.has(blockAtCell(bot, at)?.name ?? '');
+        if (waterTarget && travelGoalReached(bot, goal)) return null;
+        return { at: [at.x, at.y, at.z] as [number, number, number], seekBank: !waterTarget, submerged: movement.headWet === true };
+      };
       const travelContext: SkillContext = call.walkOnly && ctx.probeRoutes ? {
         ...ctx, probeRoutes: (at, goal) => ctx.probeRoutes!(at, goal, ['walk'])?.filter((route) => route.profile === 'walk') ?? null,
       } : ctx;
       if (call.dryRun) {
+        const water = waterLegFor(target, finalGoal);
+        if (water) {
+          const plan = await planSwim(bot, water.at, undefined, ctx.aborted, water);
+          if (plan.complete || water.submerged) {
+            return JSON.stringify({ ...plan, scope: water.seekBank ? 'water_to_bank_only' : 'swim_to_target',
+              note: water.seekBank ? '仅试算出水段；站稳后另算到原目标的陆路' : '仅试算到水中目标；执行以实际坐标为准' });
+          }
+        }
         const probes = travelContext.probeRoutes?.(target, call.groundY || call.exact ? finalGoal : undefined);
         if (!probes || probes.length === 0) throw new SkillBlocked('探路器不可用(没连上服务器)');
         const me = bot.entity.position;
@@ -741,8 +763,25 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       const startedAt = Date.now();
       let sceneTarget = target;
       let note: string | null = null;
+      let waterNote: string | null = null;
       let configuredLegs = 0;
       const runLeg = async (at: Cell, goal: InstanceType<typeof goals.Goal>, diagnoseTarget = false): Promise<void> => {
+        const water = waterLegFor(at, goal);
+        if (water) {
+          // This substep never excavates or places. An actual bank landing
+          // is a checkpoint; the requested destination remains the goal.
+          const plan = await planSwim(bot, water.at, undefined, ctx.aborted, water);
+          checkAbort(ctx);
+          if (plan.complete || water.submerged) {
+            await skillSwim(bot, { ...water, maxDurationMs: water.seekBank ? 18_000 : 45_000 }, ctx, plan);
+            const actual = feetOf(bot);
+            waterNote = water.seekBank ? `先从水里游到 ${cellText(actual)} 并站稳` : `水路推进至 ${cellText(actual)}`;
+            if (travelGoalReached(bot, goal)) return;
+            if (!water.seekBank) throw new SkillBlocked(`已游至 ${cellText(actual)}，尚未满足原目标的落脚条件`);
+            await ctx.checkpoint?.(async () => { await settleOnGround(bot, ctx, 1_500); });
+            checkAbort(ctx);
+          }
+        }
         const movements = bot.pathfinder?.movements;
         const permitsTerrain = movements?.canDig === true || (movements?.scafoldingBlocks?.length ?? 0) > 0;
         let walkProbes = travelContext.probeRoutes?.(at, goal, ['walk'])?.filter(p => p.profile === 'walk') ?? null;
@@ -842,6 +881,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
         throw withRouteScene(
           bot, travelContext, err, sceneTarget,
           [...digBackoffScene(ctx, startedAt), ...(portalNote ? [portalNote] : []), ...(note ? [note] : []),
+            ...(waterNote ? [waterNote] : []),
             ...(sceneTarget !== target ? [
               `长途最终目标 ${cellText(target)}，这一段先去 ${cellText(sceneTarget)}`,
               "本次受阻发生在途中，尚未核实最终目标的落脚条件",
@@ -857,7 +897,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
       const footing = water ? ';仍在水中，未确认登岸' : '';
       const route = configuredLegs === 0 ? ';沿现有通路到达，未挖掘或垫脚'
         : ';部分路段根据完整路线试算或现有通路失败，按配置允许的挖掘/垫脚能力继续；不代表这些动作实际发生';
-      return `到了 ${cellText(actual)}${arrival}${footing}${route}${note ? `。\n${note}` : ''}${portalNote ? `。\n${portalNote}` : ''}`;
+      return `到了 ${cellText(actual)}${arrival}${footing}${route}${waterNote ? `；${waterNote}` : ''}${note ? `。\n${note}` : ''}${portalNote ? `。\n${portalNote}` : ''}`;
     }
     case 'swim': {
       if(call.dimension && normalizeDimension(dimensionOf(bot))!==normalizeDimension(call.dimension))throw new SkillBlocked('swim 维度不符，先穿门再重新观察');
@@ -1049,6 +1089,7 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispat
     case 'use': return skillUse(bot, call, ctx);
     case 'ride': return skillRide(bot, call, ctx);
     case 'anvil': return skillAnvil(bot, call, ctx);
+    case 'book': return skillBook(bot, call, ctx);
     case 'grindstone': return skillGrindstone(bot, call, ctx);
     case 'craft': return skillCraft(bot, call, ctx);
     case 'smelt': return skillSmelt(bot, call.input, call.count, call.fuel, ctx, call.at);
@@ -1993,6 +2034,8 @@ interface ExecutorOptions {
   previewResourcePlacement?: ResourcePlacementPreview;
   /** 路线试算(goto 的 dryRun 与受阻现场的三种走法用) */
   probeRoutes?: SkillContext['probeRoutes'];
+  /** 服务端声明过的方块保护区范围说明；区外返回 null。只用于受理刻试算提示。 */
+  protectedRegion?: (cell: { x: number; y: number; z: number }) => string | null;
   /** 目标点分诊(探路误诊断的另一半) */
   probeTarget?: SkillContext['probeTarget'];
   /** 挖掘失败退避账的取用面(桥持有);不接 = 这个部署没有退避(台架) */
@@ -4085,6 +4128,7 @@ export class Executor {
       blockAt: (cell) => blockAtCell(bot, cell),
       lastAte: () => lastAteOf(bot),
       chests: this.chestBook(),
+      protectedRegion: this.opts.protectedRegion,
     };
   }
 
@@ -4463,6 +4507,13 @@ export class Executor {
       }
     }
     return notes.join(';');
+  }
+
+  /** A transient movement owner released the body without holding a queue token. */
+  wakeCheckpointQueue(bot: Bot): void {
+    if (this.opts.getBot() !== bot || bot._client.state !== 'play' || (bot as Bot & { isAlive?: boolean }).isAlive === false
+      || !(bot.health > 0) || nativeBodyBlockedReason(bot)) return;
+    if (this.queue.some(task => task.checkpointRequest || task.checkpointContinuation)) this.pump();
   }
 
   /** 队列空着且没在做事就开下一件;身体被战斗占着时闸住(resume 时再泵) */
@@ -5529,6 +5580,14 @@ export class Executor {
           continue;
         }
         const preceding = steps[i - 1];
+        if (call.skill === 'toss' && call.at === undefined && !call.target && preceding?.skill === 'goto_player'
+          && (outcomes[i - 1] === 'fail' || outcomes[i - 1] === 'skip')) {
+          const why = `第 ${i} 步未抵达玩家 ${preceding.name}，未抛出；交付请在确认距离后用 toss.target 指定玩家`;
+          const line = `${stepLabel(i)} 跳过(${why})`;
+          land(i, 'skip', why, line);
+          blockedSteps.push(line);
+          continue;
+        }
         if (consumesOpenWindow(call) && !storageWindow(bot.currentWindow)
           && i > 0 && (outcomes[i - 1] === 'fail' || outcomes[i - 1] === 'skip')
           && (consumesOpenWindow(preceding) || preceding.skill === 'use'
@@ -6446,6 +6505,8 @@ interface ReflexOptions {
   pauseEnvironment: (reason: string) => QueueHoldToken | null;
   /** 所有环境危险清除并稳定落脚后恢复冻结断点。 */
   resumeEnvironment: (token: QueueHoldToken) => QueueResumeResult;
+  /** Nonfreezing fire recovery can finish while a checkpoint waits on its movement. */
+  onBurningRecovered?: (bot: Bot) => void;
   /** 深坠落只终止当前危险任务，排队与冻结计划继续保留。 */
   stopFallTask: (reason: string) => QueueHoldToken | null;
   /** 深坠落结束并满足安全恢复条件后，释放对应队列租约。 */
@@ -7302,6 +7363,7 @@ export class Reflexes {
     /** 找水目标零推进过的格,这一段着火里不再选 */
     excluded: Set<string>;
   } | null = null;
+  private readonly burnCleanups = new WeakMap<Bot, number>();
 
   /**
    * 灭火反射。包里有水桶就往自己身上倒水,火灭后用空桶舀回;没有水桶、在下界或倒不成时,
@@ -7412,14 +7474,39 @@ export class Reflexes {
   private endBurning(bot: Bot, b: NonNullable<Reflexes['burning']>): void {
     this.burning = null;
     if (this.escapeGoal?.kind === 'burn') {
+      const ownedGoal = this.escapeGoal.goal;
       this.escapeGoal = null;
-      dropGoal(bot, 'escape', '火灭了,不用再去找水', this.opts.diag);
+      const owner = goalOwnerOf(bot);
+      if (owner?.kind === 'escape' && owner.goal === ownedGoal) dropGoal(bot, 'escape', '火灭了,不用再去找水', this.opts.diag);
     }
+    // Evaluate after this tick has processed other environmental holds and
+    // after all overlapping bucket recovery for the same body has settled.
+    const boundary = nativeBodyReadiness(bot);
+    const wake = () => queueMicrotask(() => {
+      if (this.stopped || this.opts.getBot() !== bot || this.burning || this.burnCleanups.get(bot)) return;
+      const current = nativeBodyReadiness(bot);
+      if (current?.boundaryAt === boundary?.boundaryAt && current?.boundary === boundary?.boundary)
+        this.opts.onBurningRecovered?.(bot);
+    });
     if (b.pour !== 'poured' || b.water === null) {
       this.reportBurn(bot, '身上的火灭了');
+      wake();
       return;
     }
-    void this.scoopBack(bot, b.water);
+    this.burnCleanups.set(bot, (this.burnCleanups.get(bot) ?? 0) + 1);
+    const settled = () => {
+      const remaining = (this.burnCleanups.get(bot) ?? 1) - 1;
+      if (remaining) this.burnCleanups.set(bot, remaining);
+      else this.burnCleanups.delete(bot);
+    };
+    void this.scoopBack(bot, b.water).then(() => {
+      settled();
+      wake();
+    }, error => {
+      settled();
+      this.opts.log.warn('灭火后收水结果未知', {error:String(error)});
+      wake();
+    });
   }
 
   private async scoopBack(bot: Bot, water: Cell): Promise<void> {
@@ -7854,6 +7941,13 @@ export class Reflexes {
     return this.opts.emergencyDrown?.() ?? this.opts.antiDrown();
   }
 
+  private clearDrownRoute(bot: Bot, reason: string): void {
+    const escape = this.escapeGoal;
+    if (escape?.kind !== 'drown') return;
+    this.escapeGoal = null;
+    if (bot.pathfinder?.goal === escape.goal) dropGoal(bot, 'escape', reason, this.opts.diag);
+  }
+
   private endDrown(bot: Bot): void {
     const active = this.drowning;
     const escape = this.escapeGoal;
@@ -7863,12 +7957,7 @@ export class Reflexes {
     this.surfacedAt = 0;
     this.drownExcluded.clear();
     this.drownRouteTold = null;
-    if (escape?.kind === 'drown') {
-      this.escapeGoal = null;
-      if (bot.pathfinder?.goal === escape.goal) {
-        dropGoal(bot, 'escape', '紧急防溺水已关闭', this.opts.diag);
-      }
-    }
+    this.clearDrownRoute(bot, '紧急防溺水已关闭');
     if (!active && escape?.kind !== 'drown') return;
     if (this.lavaEscape === null && this.buried === null && !waterControlActive(bot)) {
       bot.setControlState('jump', false);
@@ -7899,14 +7988,20 @@ export class Reflexes {
       if (this.surfacedAt === 0) this.surfacedAt = now;
       const dry = hasDryFooting(bot);
       const landing = this.escapeGoal?.kind === 'drown' && this.escapeGoal.drownPhase === 'landing';
-      bot.setControlState('jump', !dry && landing);
-      const breathing = this.oxygenTrusted ? oxygen >= 15 : now - this.surfacedAt >= SURFACED_CLEAR_MS;
+      const air = breathingReadout(bot, { attach: false });
+      const oxygenAt = Date.parse(air.oxygenUpdatedAt ?? '');
+      const fresh = air.oxygen !== null && oxygenAt <= now && now - oxygenAt <= 2_000;
+      const full = fresh && air.oxygen === 20;
+      const breathing = full || (!fresh && now - this.surfacedAt >= SURFACED_CLEAR_MS);
       if (dry || (breathing && !landing)) {
-        const why = this.oxygenTrusted ? `氧气回满 ${oxygen}/20` : `已出水 ${Math.round((now - this.surfacedAt) / 1000)} 秒`;
+        const why = full ? '氧气已回满 20/20' : `头部持续出水 ${Math.round((now - this.surfacedAt) / 1000)} 秒，氧气回满未核实`;
         this.drowning = false;
         this.submergedAt = 0;
         this.surfacedAt = 0;
         this.drownExcluded.clear();
+        this.lastDrownEscapeAt = 0;
+        this.clearDrownRoute(bot, dry ? '已登岸，撤销本轮救援路线' : '已换气，撤销本轮救援路线');
+        bot.setControlState('jump', false);
         if (dry) this.waterTrap = null;
         this.opts.diag?.write({
           lane: 'reflex', event: 'drown-clear',
@@ -7929,6 +8024,7 @@ export class Reflexes {
         this.beginEnvironment('防溺水上浮找岸');
         this.routeDrownToLand(bot, now, oxygen);
       }
+      bot.setControlState('jump', bodyInWater(bot));
       return;
     }
     this.surfacedAt = 0;
@@ -7953,7 +8049,7 @@ export class Reflexes {
       if (submergedMs < 2_000 && !hurtUnderwater) return;
       // 氧气读数是主判据;读数不可信或一直不跌时按水下时长兜底(20 口气原版 15 秒耗尽)
       const lowOxygen = this.oxygenTrusted && oxygen <= 6;
-      if (!lowOxygen && !hurtUnderwater && submergedMs < SUBMERGED_TRIGGER_MS) return;
+      if (!lowOxygen && !hurtUnderwater && (submergedMs < SUBMERGED_TRIGGER_MS || progressingSwim(bot, now))) return;
       const why = hurtUnderwater
         ? `头在水下、周围没有敌人却在掉血(生命 ${Math.ceil(bot.health ?? 0)}/20,已沉 ${Math.round(submergedMs / 1000)}s)`
         : lowOxygen
@@ -7975,12 +8071,14 @@ export class Reflexes {
         this.opts.report({ kind: 'reflex', hurt: true, text: `[反射] ${why},正在上浮找岸。` });
       }
     }
-    // 持续上浮,并每 8s 尝试给寻路器一个换气点或登岸点
+    // Revoke the previous owner before setting the rescue key. Its cleanup
+    // must not release the new owner's ascent.
+    const explicitEscape = this.opts.escapeActive?.() ?? false;
+    if (!explicitEscape) {
+      this.beginEnvironment('防溺水上浮找岸');
+      this.routeDrownToLand(bot, now, oxygen);
+    }
     bot.setControlState('jump', true);
-    // surface 任务持有寻路目标时，反射只保留上浮按键，避免双方覆盖目标。
-    if (this.opts.escapeActive?.()) return;
-    this.beginEnvironment('防溺水上浮找岸');
-    this.routeDrownToLand(bot, now, oxygen);
   }
 
   /**

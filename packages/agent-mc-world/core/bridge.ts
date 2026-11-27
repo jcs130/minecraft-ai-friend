@@ -43,7 +43,7 @@ import {
 import { BREAK_ACL_CHANNEL, BreakPermissions } from './break-permissions.ts';
 import {
   type BlockProtectionPort, type ProtectReply, NearbyProtectionBackoff, holdUnverifiedPathAction,
-  selectHeldPathAction, protectionCheck, type ProtectAction, type ProtectCell, type ProtectStatus,
+  selectHeldPathAction, protectionCheck, protectInDeclaredRegions, type ProtectAction, type ProtectCell, type ProtectStatus,
 } from './protection-port.ts';
 import { isSpawnAnchorBlock } from './policy.ts';
 import { assessScaffoldMaterials } from './scaffold-material.ts';
@@ -58,6 +58,7 @@ import { watchFlightAbilities } from './flight.ts';
 import { trackWindowProps } from './containers.ts';
 import { installTreadWater } from './travel.ts';
 import { installBreathingReadings } from './breathing.ts';
+import { installServerRecipeBook } from './server-recipe-book.ts';
 import { trackMaps } from './map-view.ts';
 import { trackDamageSources } from './damage-source.ts';
 import { installRuntimeRegistry } from './runtime-registry.ts';
@@ -138,6 +139,8 @@ export interface BridgeOptions {
   authentication?: MinecraftAuthentication;
   /** Private account configuration, reread for every network connection. Empty disables automatic login. */
   loginConfigFile?: () => string;
+  /** Confirmation policy, evaluated once per connection; default plugin. */
+  loginConfirmation?: () => 'plugin' | 'mc-auth-success';
   /** prismarine-viewer 网页端口;0=不开 viewer */
   viewerPort: number;
   viewerMaxSessions?: number;
@@ -162,6 +165,8 @@ export interface BridgeOptions {
   protectionFile?: string | null;
   /** Optional proactive server permission queries; default is diagnosis after a failed effect. */
   protectionPreflight?: () => boolean;
+  /** 服务端声明过的方块保护区；区内挖/放在发包前先向服务端查询。返回范围说明，区外 null。 */
+  protectedRegion?: (dimension: string, cell: ProtectCell) => string | null;
   /** Explicit live permission for passive water ascent; omitted means no automatic treading. */
   antiDrown?: () => boolean;
   /** 由服务器扩展显式配置的按格保护频道。 */
@@ -345,6 +350,7 @@ export class Bridge {
   /** An entity can exist before login/first spawn; it is not yet an operable body. */
   protected spawnedBot: mineflayer.Bot | null = null;
   protected protocolSpawned = false;
+  protected loginConfirmation: 'plugin' | 'mc-auth-success' = 'plugin';
   protected serverLogin: ReturnType<typeof installServerLogin> | null = null;
   spawnHold: SpawnHold | null = null;
   protected started = false;
@@ -454,10 +460,20 @@ export class Bridge {
   /** Health/spawn can precede the authoritative position; neither is a spatial boundary. */
   get spawnPositionPending(): boolean { return this._spawnPositionPending; }
 
+  /** Current connection spawned with finite feet in a loaded column. */
+  protected get worldReady(): boolean {
+    const bot = this._bot, position = bot?.entity?.position;
+    if (this.stopped || !bot || !this.protocolSpawned || !position
+      || ![position.x, position.y, position.z].every(Number.isFinite)) return false;
+    try { return !!bot.world?.getColumnAt(position); } catch { return false; }
+  }
+
   get connected(): boolean {
     return this._bot !== null && this.spawnedBot === this._bot
       && configurationTransportReady(this._bot._client)
       && (this.serverLogin?.ready() ?? true)
+      && (this.loginConfirmation !== 'mc-auth-success' || (this.worldReady
+        && this.serverLogin?.detail().authSuccessReceived === true))
       && (this._bot as unknown as { entity?: unknown }).entity !== undefined;
   }
 
@@ -466,8 +482,8 @@ export class Bridge {
       phase: this.stopped || !this.started ? 'stopped' : this.connected ? 'online'
         : this._bot ? 'connecting' : this.reconnectAttempt > 0 ? 'retrying' : 'connecting',
       failure: this.failure,
-      spawnReceived: this.protocolSpawned, ready: this.connected, reconnects: this.reconnectAttempt,
-      serverLogin: this.serverLogin?.detail() ?? { stage: 'disabled', attempted: false, reason: null } };
+      spawnReceived: this.protocolSpawned, worldReady: this.worldReady, ready: this.connected, reconnects: this.reconnectAttempt,
+      serverLogin: this.serverLogin?.detail() ?? { stage: 'disabled', attempted: false, reason: null, authSuccessReceived: false } };
   }
 
   /** 连接生命周期已启用；不要求当前已经完成登录。 */
@@ -594,6 +610,7 @@ export class Bridge {
     this.viewer = null;
     this.lastError = null;
     this.failure = null;
+    this.serverLogin?.stop();
     if (bot) endMinecraftBot(bot, 'bridge-stop');
     this.disposedThrough = Math.max(this.disposedThrough, this.generation);
     for (const gen of [...this.bags.keys()].sort((a, b) => b - a)) {
@@ -622,6 +639,8 @@ export class Bridge {
       clearTimeout(this.aclReplanTimer);
       this.aclReplanTimer = null;
     }
+    this.serverLogin?.stop();
+    this.serverLogin = null;
     this.protection.beginConnection();
     const { host, port, username, version, log } = this.opts;
     this.lastError = null;
@@ -722,6 +741,7 @@ export class Bridge {
     this.protocolSpawned = false;
     this.opts.onBotCreated?.(bot);
     this.bagFor(gen).register('breathing-readings', installBreathingReadings(bot));
+    this.bagFor(gen).register('server-recipe-book', installServerRecipeBook(bot));
     this.bagFor(gen).register('window-title-unwrap', installWindowTitleUnwrap(bot));
     this.bagFor(gen).register('server-display', installServerDisplay(bot).stop);
     this.bagFor(gen).register('orphan-windows', installOrphanWindowClose(bot));
@@ -731,14 +751,19 @@ export class Bridge {
       spawnHold.dispose();
       if (this.spawnHold === spawnHold) this.spawnHold = null;
     });
+    const confirmation = this.opts.loginConfirmation?.() ?? 'plugin';
+    this.loginConfirmation = confirmation;
     const login = installServerLogin(bot, { server: `${host}:${port}`, username,
-      configFile: this.opts.loginConfigFile?.(),
+      configFile: this.opts.loginConfigFile?.(), confirmation,
       report: status => {
+        if (this.stopped || this._bot !== bot || this.generation !== gen) return;
         log.info(`minecraft authentication ${status.status}`, { username, server: `${host}:${port}`, reason: status.reason });
         if (status.status === 'confirmed') activate();
         if (status.status === 'required') {
           this.opts.onAlarm?.('服务器系统回执要求重新登录：网络连接保留，但当前操作授权未就绪。旧在线状态已经失效；保留目标，等待新的授权确认，不重复提交未生效的动作。');
         }
+        // Strict attempts retain this connection for late success, without password replay.
+        if (status.status === 'retrying' && confirmation === 'mc-auth-success') return;
         if (status.status === 'blocked' || status.status === 'retrying') queueMicrotask(() => {
           if (this.stopped || this.opts.shuttingDown?.() || this._bot !== bot || this.generation !== gen) return;
           if (status.status === 'blocked') {
@@ -840,10 +865,18 @@ export class Bridge {
       () => this.opts.protectionPreflight?.() === true;
     const serverCheck=this.serverProtection ? protectionCheck(this.serverProtection, () => protectionWorld(bot),
       () => this.opts.protectionPreflight?.() === true) : null;
+    const regionCheck=serverCheck?protectInDeclaredRegions(serverCheck,
+      cell=>this.opts.protectedRegion?.(protectionWorld(bot),cell)??null,
+      (reply,region,action,cell)=>{
+        if(reply.status==='allow_likely')return;
+        this.opts.diag?.write({lane:'path',event:'protected-region-check',incident:reply.status==='deny',
+          msg:`${region} 内 ${action} (${cell.x}, ${cell.y}, ${cell.z}) 发包前查询：${reply.status} ${reply.reason}`,taskId:this.opts.taskId?.()??undefined});
+      }):null;
     (bot as mineflayer.Bot & { cortiProtectCheck?: ReturnType<typeof protectionCheck> })
       .cortiProtectCheck = async (action,cell,phase) => {
         const denied=action==='place'?this.observedPlaceDenial(protectionWorld(bot),cell):null;
-        return denied ?? (serverCheck ? serverCheck(action,cell,phase) : null);
+        if(denied)return denied;
+        return regionCheck?regionCheck(action,cell,phase):null;
       };
     (bot as mineflayer.Bot & { cortiBreakVerdict?: (block: { position: { x: number; y: number; z: number }; type: number }) =>
       'allowed' | 'protected' | 'unknown' }).cortiBreakVerdict = (block) =>
@@ -933,7 +966,7 @@ export class Bridge {
     activate = () => {
       if (this.stopped || this._bot !== bot || this.generation !== gen || this.spawnedBot === bot
         || !this.protocolSpawned || !login.ready() || !configurationTransportReady(bot._client)
-        || bot.entity === undefined) return;
+        || bot.entity === undefined || (confirmation === 'mc-auth-success' && !this.worldReady)) return;
       setBlueprintMcVersion(bot.version);
       this.spawnedBot = bot;
       this.failure = null;
@@ -950,6 +983,11 @@ export class Bridge {
       declareDecodedChannels(bot._client,[this.opts.protectionChannel]);
       this.opts.onSpawn();
     };
+    if (confirmation === 'mc-auth-success') {
+      const onChunk = () => activate();
+      bot.on('chunkColumnLoad', onChunk);
+      this.bagFor(gen).register('login-world-readiness', () => { bot.off('chunkColumnLoad', onChunk); });
+    }
     bot.on('spawn', () => {
       if (this.stopped || this._bot !== bot || this.generation !== gen) return;
       const wasReady = this.spawnedBot === bot;
@@ -961,6 +999,7 @@ export class Bridge {
     const onGone = (reason: string) => {
       if (this._bot !== bot || this.generation !== gen) return;
       this.failure = reason;
+      login.stop();
       this._bot = null;
       this.spawnedBot = null;
       this.protocolSpawned = false;
@@ -989,7 +1028,7 @@ export class Bridge {
       this.lastError = err;
       this.failure = errorFailure(err);
       this.opts.authentication?.failPending();
-      log.warn(`minecraft 连接错误: ${this.failure}`);
+      log.warn(`minecraft 连接错误: ${this.failure}`, { error: err.stack ?? err.message });
       this.noteConnectError(err);
     });
     };

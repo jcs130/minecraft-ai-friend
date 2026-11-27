@@ -54,6 +54,7 @@ import { viewerPlayerSkin } from './viewer-player-skin.ts';
 import { configuredPlayerSkin, type LocalPlayerSkin } from './viewer-local-skin.ts';
 import type { ViewerRelay } from './relay-port.ts';
 import { viewerServerScreen, SERVER_SCREEN_SCRIPT } from './viewer-server-screen.ts';
+import { onViewerInteraction, viewerInteraction } from './viewer-interaction.ts';
 export { viewerItem } from './viewer-state.ts';
 
 export function viewerMessageKind(message: { translate?: string; toString(): string }, position: string, registry?: unknown,
@@ -76,6 +77,9 @@ const { WorldView } = require('prismarine-viewer/viewer/lib/worldView.js') as {
 };
 
 const VIEW_DISTANCE = 5;
+// The read-only capture lane needs nearby terrain, independent of the
+// audience's streaming radius. WorldView includes the center plus two rings.
+const CAPTURE_VIEW_DISTANCE = 3;
 const MANA_CSS = `[data-corti-mana-vital]:not([data-ready="1"]),#corti-skills:not([data-ready="1"]){display:none!important}.corti-mana-bar{height:5px;margin-top:7px;background:#294852;border-radius:5px;overflow:hidden}.corti-mana-bar span{display:block;height:100%;width:0;background:linear-gradient(90deg,#447acb,#8de9ff);box-shadow:0 0 9px #87dafa;transition:width .3s ease}`;
 
 export const MANA_READY_CSS = '#corti-server-stats{position:fixed;right:14px;top:80px;z-index:8;background:#11242cee;color:#eff;padding:10px;border:1px solid #aec;border-radius:7px;font:13px system-ui;max-width:260px;box-sizing:border-box}#corti-right-column{position:fixed;top:64px;right:14px;z-index:35;display:flex;flex-direction:column;align-items:stretch;gap:8px;width:min(360px,calc(100vw - 28px));max-height:calc(100vh - 200px);overflow-y:auto;overscroll-behavior:contain;pointer-events:none}#corti-right-column>*{pointer-events:auto;position:static!important;top:auto!important;right:auto!important;width:100%!important;max-width:none!important;margin:0!important;flex:0 0 auto}#corti-right-column>[hidden]{display:none!important}#corti-right-column .agent-activity-list{max-height:min(38vh,300px);overflow-y:auto}#corti-server-stats strong,#corti-server-stats small{display:block}#corti-server-stats small{font-size:10px;opacity:.7}[data-corti-mana-vital]:not([data-ready="1"]),#corti-skills:not([data-ready="1"]){display:none!important}';
@@ -978,6 +982,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
 
   function accept(socket: Socket, view: 'first' | 'third'): void {
     const capture = socket.handshake.headers['x-mc-viewer-capture'] === '1';
+    const viewDistance = capture ? CAPTURE_VIEW_DISTANCE : VIEW_DISTANCE;
     const overlay = socket.handshake.query.overlay === '1';
     const releaseSlot = !closed && bot.entity ? sessionSlots.reserve(capture) : null;
     if (!releaseSlot) {
@@ -1035,7 +1040,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       } else if (event !== 'entity') socket.emit(event, payload);
       return true;
     } } as unknown as Socket;
-    const worldView = new WorldView(bot.world, VIEW_DISTANCE, bot.entity.position, worldSocket);
+    const worldView = new WorldView(bot.world, viewDistance, bot.entity.position, worldSocket);
     socket.removeAllListeners('mouseClick');
     let active = true;
     let captureLease: ViewerCaptureLease | undefined;
@@ -1089,7 +1094,17 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       socket.emit('containerState', state);
     };
     const stopContainerObservation = observeViewerContainer(bot, publishContainer);
-    const containerTimer = setInterval(publishContainer, 150);
+    let lastInteraction: string | null | undefined;
+    const publishInteraction = () => {
+      if (!active || !socket.connected || capture || overlay) return;
+      const frame = viewerInteraction(bot);
+      const stamp = frame ? `${frame.id}:${frame.phase}` : null;
+      if (stamp === lastInteraction) return;
+      lastInteraction = stamp;
+      socket.emit('viewerInteraction', frame);
+    };
+    const stopInteractions = capture || overlay ? () => {} : onViewerInteraction(bot, publishInteraction);
+    const containerTimer = setInterval(() => { publishContainer(); publishInteraction(); }, 150);
     let scoreboardSignature = '';
     const publishScoreboard = () => {
       if (!active || !socket.connected) return;
@@ -1121,7 +1136,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     const pendingEntities = new Map<string, { entity: ViewerEntity; full: boolean }>();
     const knownEntities = new Set<string>();
     const nearby = (entity: ViewerEntity) => entity !== bot.entity && entity.name !== 'text_display' && entity.position && bot.entity?.position &&
-      Math.hypot(entity.position.x - bot.entity.position.x, entity.position.z - bot.entity.position.z) <= VIEW_DISTANCE * 16;
+      Math.hypot(entity.position.x - bot.entity.position.x, entity.position.z - bot.entity.position.z) <= viewDistance * 16;
     const removeEntity = (entity: ViewerEntity) => {
       const id = String(entity.id);
       pendingEntities.delete(id);
@@ -1236,7 +1251,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
         const cz = Math.floor(worldView.lastPos.z / 16);
         for (const key of Array.from(streamedChunks)) {
           const [x, z] = key.split(',').map(Number);
-          if (Math.abs(x / 16 - cx) >= VIEW_DISTANCE || Math.abs(z / 16 - cz) >= VIEW_DISTANCE) {
+          if (Math.abs(x / 16 - cx) >= viewDistance || Math.abs(z / 16 - cz) >= viewDistance) {
             worldView.unloadChunk(new Vec3(x, 0, z));
           }
         }
@@ -1368,6 +1383,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
       clearInterval(biomeTimer);
       clearInterval(containerTimer);
       stopContainerObservation();
+      stopInteractions();
       clearInterval(scoreboardTimer);
       clearInterval(minimapTimer);
       clearInterval(lightTimer);
@@ -1384,6 +1400,7 @@ export async function startModernViewer(bot: mineflayer.Bot, options: ModernView
     viewerSockets.add(socket);
     socket.once('disconnect', stop);
     socket.emit('version', bot.version);
+    publishInteraction();
     socket.emit('tacticalRoute', latestRoute);
     if (latestSkills) socket.emit('skillsState', latestSkills);
     if (recentCastCue && Date.now() - recentCastCue.atMs < 4_000)

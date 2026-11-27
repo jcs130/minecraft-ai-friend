@@ -185,15 +185,82 @@ it('the actual memory tool retains the server service identity while local notes
   expect(first.serviceScope).toEqual({ realm: world.serverRealmKey(), account: 'offline:fixture', agent: 'fixture-agent' });
 });
 
-it('replaces a lost world observation with explicit unknown rather than leaving the prior identity current', () => {
-  const world: any = Object.assign(Object.create(MinecraftWorld.prototype), {
-    connectionReadiness: () => ({ ready: false, phase: 'retrying' }), goalTable: () => ({ list: [] }),
-    lastFinishedTask: null,
-  });
-  const facts = world.unavailableRequestFacts('disconnected');
-  expect(facts.world).toMatchObject({ key: null, uuid: null, instanceId: null, source: 'unknown' });
-  expect(JSON.parse(facts.parts.find((part: any) => part.key === 'identity').text).world.key).toBeNull();
+it('actual World request facts keep service scope stable across native levels and dimensions but isolate endpoints and accounts', async () => {
+  const { methodHarness } = await import('./method-harness.ts');
+  const r = methodHarness('1.21.1'), world = r.world as any, b = r.bot as unknown as Bot;
+  const cfg = { host: 'fixture.test', port: 25565, auth: undefined, username: 'fixture', memoryAgentId: 'fixture-agent' };
+  Object.assign(world.cfg, cfg);
+  vi.spyOn(world, 'worldIdentity').mockImplementation(() => ({ key: `${world.cfg.host}:${world.cfg.port}`, local: false }));
+  const dispose = installWorldIdentity(b);
+  try {
+    enter(b, 'minecraft:overworld');
+    const first = r.world.requestFacts()!;
+    expect(first.experience?.observation).not.toBeNull();
+    expect(first.experience?.serviceScope).toEqual({ realm: world.serverRealmKey(), account: 'offline:fixture', agent: 'fixture-agent' });
+    for (const [key, dimension] of [['minecraft:aincrad', 'overworld'], ['minecraft:the_nether', 'the_nether']]) {
+      b.game.dimension = dimension;
+      enter(b, key, 'respawn');
+      const next = r.world.requestFacts()!;
+      expect(next.world?.key).toBe(key);
+      expect(next.experience?.scope.realm).not.toBe(first.experience?.scope.realm);
+      expect(next.experience?.serviceScope).toEqual(first.experience?.serviceScope);
+      expect(next.experience?.observation?.dimension).toBe(`minecraft:${dimension}`);
+      expect(next.experience?.scope.account).toBe(next.experience?.serviceScope?.account);
+      expect(next.experience?.scope.agent).toBe(next.experience?.serviceScope?.agent);
+    }
+    for (const change of [{ host: 'another.test' }, { port: 25566 }, { username: 'another' }, { auth: 'microsoft' }]) {
+      Object.assign(world.cfg, cfg, change);
+      const next = r.world.requestFacts()!.experience!;
+      expect(next.serviceScope).not.toEqual(first.experience?.serviceScope);
+      expect(next.serviceScope).toEqual({ realm: world.serverRealmKey(),
+        account: `${world.cfg.auth ?? 'offline'}:${world.cfg.username}`, agent: next.scope.agent });
+    }
+  } finally { dispose(); r.close(); }
 });
+
+it.each(['disconnected', 'stopped', 'snapshot-unavailable', 'body-not-ready'] as const)(
+  'actual World request facts expose configured scope without spatial observation when %s', async phase => {
+    const { methodHarness } = await import('./method-harness.ts');
+    const r = methodHarness('1.21.1'), world = r.world as any;
+    const dispose = installWorldIdentity(r.bot as unknown as Bot);
+    try {
+      enter(r.bot as unknown as Bot, 'minecraft:aincrad');
+      const first = r.world.requestFacts()!.experience!;
+      const snapshot = vi.spyOn(world, 'snapshot').mockReturnValue(null);
+      if (phase === 'disconnected' || phase === 'stopped') {
+        world.bridge = { connected: false, connectionState: { active: true, phase,
+          serverLogin: { stage: 'required', reason: 'fixture' } } };
+      } else if (phase === 'body-not-ready') {
+        const { installNativeBodyReadiness } = await import('../core/body-readiness.ts');
+        const body = installNativeBodyReadiness(r.bot as any);
+        r.bot.emit('respawn');
+        try {
+          const facts = r.world.requestFacts()!;
+          expect(facts.experience?.serviceScope).toEqual(first.serviceScope);
+          expect(facts.experience?.observation).toBeNull();
+          expect(facts.world?.key).toBeNull();
+          expect(facts.decision).toBeUndefined();
+          expect(snapshot).not.toHaveBeenCalled();
+        } finally { body.dispose(); }
+        return;
+      }
+      const facts = r.world.requestFacts()!;
+      expect(facts.experience?.serviceScope).toEqual(first.serviceScope);
+      expect(facts.experience?.observation).toBeNull();
+      expect(facts.world).toMatchObject({ key: null, uuid: null, instanceId: null, source: 'unknown' });
+      const identity = JSON.parse(facts.parts!.find(part => part.key === 'identity')!.text);
+      expect(identity.realm).toBeNull();
+      expect(identity.world.key).toBeNull();
+      expect(facts.decision).toBeUndefined();
+      expect(facts.decisionStability).toBeUndefined();
+      expect(facts.options).toBeUndefined();
+      if (phase !== 'snapshot-unavailable') expect(snapshot).not.toHaveBeenCalled();
+      world.cfg.username = 'another-account';
+      expect(r.world.requestFacts()!.experience?.serviceScope).not.toEqual(first.serviceScope);
+      world.cfg.host = 'another.test';
+      expect(r.world.requestFacts()!.experience?.serviceScope?.realm).not.toBe(first.serviceScope?.realm);
+    } finally { dispose(); r.close(); }
+  });
 
 it.each([false, true])('World invalidates spatial facts only when the native world actually changes (switch=%s)', change => {
   const b = bot(); installWorldIdentity(b); enter(b, 'minecraft:overworld');

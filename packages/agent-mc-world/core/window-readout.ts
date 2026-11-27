@@ -36,11 +36,13 @@ export function readOpenWindow(bot: any, options: { loreLines?: number } = {}): 
   const loreLines = options.loreLines ?? 12;
   const tracked = serverWindows(bot)?.current() ?? null;
   const win = bot?.currentWindow && bot.currentWindow.id !== 0 ? bot.currentWindow : null;
+  const currentScreen = serverScreen(bot);
+  const screen = currentScreen?.kind === 'book' ? { ...currentScreen, book: undefined } : currentScreen;
   if (!win) {
     return { schema: 'agent-mc/window-read/v1', open: !!tracked, state: tracked ? 'server-only' : 'none',
       windowId: tracked?.id ?? null, title: tracked ? minecraftTextComponent(tracked.title) || null : null,
       containerSlots: tracked?.itemCount != null ? tracked.itemCount - 36 : null, slots: [], adopted: false,
-      screen: serverScreen(bot) };
+      screen };
   }
   const end = Number.isInteger(win.inventoryStart) && win.inventoryStart > 0 ? win.inventoryStart : (win.slots?.length ?? 0);
   const slots: WindowSlotReadout[] = [];
@@ -52,14 +54,14 @@ export function readOpenWindow(bot: any, options: { loreLines?: number } = {}): 
   }
   return { schema: 'agent-mc/window-read/v1', open: true, state: 'tracked', windowId: win.id ?? null,
     title: minecraftTextComponent(win.title) || null, containerSlots: end, slots,
-    adopted: tracked && tracked.id === win.id ? tracked.adopted : false, screen: serverScreen(bot) };
+    adopted: tracked && tracked.id === win.id ? tracked.adopted : false, screen };
 }
 
 export function renderWindowReadout(r: WindowReadout, maxChars = 6000): string {
   if (r.state === 'none' && r.screen) {
     return renderScreen(r.screen) + (r.screen.kind === 'dialog'
       ? '\n点按钮用 {"skill":"menu_click","slot":按钮序号} 或 {"skill":"menu_click","name":"按钮文字"}；关闭用 {"skill":"menu_close"}。对话框开着时服务端会拒绝指令。'
-      : r.screen.kind === 'book' ? '\n合上用 {"skill":"menu_close"}。' : '');
+      : r.screen.kind === 'book' ? `\n${r.screen.bookPageCount ?? '未知'} 页；用 mc_window {"bookPage":1} 逐页读取。合上用 {"skill":"menu_close"}。` : '');
   }
   if (r.state === 'none') return '[窗口] 当前没有打开的服务端窗口/菜单。';
   if (r.state === 'server-only') {

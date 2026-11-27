@@ -36,7 +36,9 @@ it('invalidates old physical facts on disconnect while retaining goals and histo
     expect(offline.text).toContain('Reach the mine');
     expect(offline.text).toContain('task#7 verified bow craft');
     expect(offline.text).toContain('null 表示未知');
-    for (const key of ['decision', 'decisionStability', 'experience', 'options']) expect(offline).not.toHaveProperty(key);
+    for (const key of ['decision', 'decisionStability', 'options']) expect(offline).not.toHaveProperty(key);
+    expect(offline.experience?.observation).toBeNull();
+    expect(offline.experience?.serviceScope).toEqual(online.experience?.serviceScope);
     expect(offline.parts?.some(p => ['body', 'place', 'gear', 'taskProgress'].includes(p.key))).toBe(false);
     internals.bridge.connected = true;
     r.bot.health = 9;

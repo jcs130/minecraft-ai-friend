@@ -22,6 +22,7 @@ import { parseSpatialObservation, SPATIAL_OBSERVATION_LIMITS, SPATIAL_QUERY_SCHE
 import { VOXEL_QUERY_DOC } from './voxel-query-contract.ts';
 import {parseWalkRoute,WALK_ROUTE_FIELDS,type WalkRoute} from './route-contract.ts';
 import type {FireCrossing} from './fire-route.ts';
+import { isRangedWeaponName } from './weapon-capabilities.ts';
 import type { InventoryOrganization, InventoryDisposition } from './inventory-organization.ts';
 
 const STEP_DEPENDENCY_DOC = '依赖本次 steps 内更早步骤的1起序号；第一步只能省略或写[]。'
@@ -134,6 +135,7 @@ export type SkillCall = StepBounds & (
   | { skill: 'probe'; shape: ShapeName; anchors: Anchor[]; fill?: BoxFill; where?: string[]; slice?: SpatialSliceAxis }
   | ({ skill: 'observe' } & SpatialObserveInput)
   | { skill: 'craft'; item?: string; count: number; grid?: string[][] }
+  | { skill: 'book'; pages: string[]; windowSlot?: number; title?: string }
   | { skill: 'smelt'; input: string; count: number; fuel: string; at?: Anchor }
   | { skill: 'brew'; at?: Anchor; input: string; bottle: string; count: number; fuel: string }
   | { skill: 'enchant'; at: Anchor; item: string; pick?: string; index?: number }
@@ -870,9 +872,9 @@ const PICK_DOC = '同 id 的几件里挑哪一件:写清单括号里的字(「�
 /** 精确攻击沿用 use/ride 的类型或玩家名 + 本连接 ID；省略 ID 不默认选 0。 */
 function parseAttack(c: Record<string, unknown>, at: string): ParseResult {
   if (c.weapon !== undefined && (typeof c.weapon !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(c.weapon)))
-    return { error: `${at} attack.weapon 要精确的近战物品英文 ID` };
-  if (c.weapon !== undefined && (c.mode === 'ranged' || c.mode === 'kite'))
-    return { error: `${at} attack.weapon 指定近战武器，只与 auto/melee 配合；投掷或弩使用独立 use/原生脚本` };
+    return { error: `${at} attack.weapon 要精确的武器英文 ID` };
+  if (typeof c.weapon === 'string' && (c.mode === 'ranged' || c.mode === 'kite') && !isRangedWeaponName(c.weapon))
+    return { error: `${at} attack.weapon 在 ranged/kite 下可选 bow、crossbow 或 trident` };
   if (c.entityId !== undefined && (typeof c.entityId !== 'number' || !Number.isSafeInteger(c.entityId)
       || c.entityId < 0 || c.entityId > 2_147_483_647)) {
     return { error: `${at} attack 的 entityId 要是本连接里观察到的非负整数实体 ID；target 仍填实体英文类型或玩家名` };
@@ -1000,6 +1002,27 @@ function parseAnvil(c: Record<string, unknown>, at: string, marks?: MarkLookup):
       ...(withPick ? { withPick } : {}),
     },
   };
+}
+
+const BOOK_MAX_PAGES = 100;
+const BOOK_PAGE_CHARS = 1023;
+const BOOK_TITLE_CHARS = 32;
+
+function parseBook(c: Record<string, unknown>, at: string): ParseResult {
+  if (!Array.isArray(c.pages) || c.pages.length < 1 || c.pages.length > BOOK_MAX_PAGES
+    || c.pages.some(page => typeof page !== 'string' || page.length > BOOK_PAGE_CHARS)) {
+    return { error: `${at} book.pages 要 1–${BOOK_MAX_PAGES} 页字符串，每页最多 ${BOOK_PAGE_CHARS} 字符` };
+  }
+  const slot = c.windowSlot;
+  if (slot !== undefined && (typeof slot !== 'number' || !Number.isInteger(slot) || slot < 9 || slot > 45)) {
+    return { error: `${at} book.windowSlot 要背包书目给出的槽号（9–45）` };
+  }
+  const title = c.title;
+  if (title !== undefined && (typeof title !== 'string' || !title.trim() || title !== title.trim()
+    || title.length > BOOK_TITLE_CHARS || /[\r\n]/u.test(title))) {
+    return { error: `${at} book.title 要非空单行书名，最多 ${BOOK_TITLE_CHARS} 字符；省略则保存草稿` };
+  }
+  return { step: { skill: 'book', pages: [...c.pages], windowSlot: slot, title } };
 }
 
 function parseGrindstone(c: Record<string, unknown>, at: string, marks?: MarkLookup): ParseResult {
@@ -1230,7 +1253,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     doc: `{"skill":"goto","at":[100,-20],"dimension":"overworld"} 去坐标。dimension 是当前维度前置条件,不符就不动。
                                                  **只写 [x,z] = 按水平距离到那儿附近**，高度不进到达判据，也不保证站上陆地；长途按近处航段推进，不必猜未加载终点的高度。途中受阻会报告实际位置。
                                                  要指定楼层或高度,请给完整 [x,y,z]。
-                                                 水路按水面通行；当前不规划主动下潜，填水下 Y 不能补齐这项能力。已入水可用 control(mode:water) 短步游动/下沉，核验高度与氧气；surface 换气。
+                                                 陆路不主动下潜。水里起步时，附近水中目标可走三维水路，陆地目标可先找附近能站稳的岸，站稳再算陆路；此时 dryRun 只试算水段。长途水面航行另有船程与进食检查点，单独规划潜水用 swim。
                                                  完整坐标的到达判定允许离目标格 1 格，回执给出实际落脚格；到门旁不代表已经进屋。
                                                  exact:true 要完整 [x,y,z]，脚下必须到该格；用于穿过门洞或精确站位，不会把门外邻格当作进屋。
                                                  后续螺旋楼梯需要起点 X/Z 对齐时，使用精确站位并核对实际脚格；普通邻域到达不能证明对齐。
@@ -1565,6 +1588,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  告示牌目标另附 sign：已收到的正反面原文；null 未收到/不支持，不是空白。只读，不开编辑框、不写字。
                                                  faces 是邻格碰撞面：ref+face方向=目标格；area 为格边界上的面积比，0 省略，null 未知。几何面积不代替物品放置规则或权限。
                                                  body 是以目标格水平中心为脚点的 0.6×1.8 净空；计入邻格延伸形状，clear:null 表示未知。blockers/fluids 为总数，hits/fluidHits 各最多3项；液体按格另报，实体不在此检查。
+                                                 半砖或楼梯看 landing.topY 实测踏面脚高。直接用 landing.next 的脚格 goto；非整数踏面或未知净空仅试算，已挡住时 next=null。
                                                  不试走、不试放、不验证支撑稳定性；每格检查当前实况，不投影先前施工。需要原始形状再查 voxels，长距离遮挡用 rays，地形剖面用 probe.slice，外观用 mc_visual。
 {"skill":"observe","mode":"voxels","bounds":[-2,-1,-2,2,3,2]}
                                                  按 MineDojo 的局部体素观测方式，直接读当前连接已加载方块，不需图像估深。
@@ -1625,6 +1649,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
                                                  再带 "index":1,"times":2 = 按菜单 1 号成交 2 次
                                                  喂鸡用 wheat_seeds，驯狼用 bone、喂狼用肉，驯猫/喂猫用 cod 或 salmon。
                                                  多只同类可带现场读到的 entityId 精确点一只；ID 只在当前连接有效，失效后重新观察，不会改点别只。
+{"skill":"use","item":"团子","target":"cat","entityId":42}
+                                                 使用铁砧改好名的命名牌。item 填背包里命名牌的显示名，entityId 填当前看到的实体编号；现场名称核对后才报告成功。村民同样使用这一写法。
 {"skill":"use","item":"potion"}                  只给 item:对自己/面前用,喝药水。
                                                  投掷类(喷溅药水、末影珍珠、雪球、鸡蛋、三叉戟)再给 at = 朝那一格扔
 {"skill":"use","item":"bow","at":[12,70,-5]}     满弓朝那一格的中心射一支普通箭,不用走过去。回执报箭插在哪、
@@ -1779,6 +1805,19 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     ],
   },
   {
+    name: 'book',
+    doc: `{"skill":"book","windowSlot":36,"pages":["营地手记","沿河往东。"]} 保存或重写书与笔的全部页面。先用 mc_bag {"detail":"book"} 查槽位；省略槽位时只改主手的书与笔。
+{"skill":"book","windowSlot":36,"pages":["营地手记"],"title":"沿河的营地"} 保存并署名成书；署名后不可编辑，作者由服务器填写。回执核对服务端回传的书名和全文。`,
+    inputHint: '游戏里的书与笔；pages 为完整书页，填 title 才署名。',
+    parse: parseBook,
+    fields: [
+      { key: 'pages', kind: 'opaque', required: true, schema: { type: 'array', minItems: 1, maxItems: BOOK_MAX_PAGES,
+        items: { type: 'string', maxLength: BOOK_PAGE_CHARS } } },
+      { key: 'windowSlot', kind: 'int', lo: 9, hi: 45, def: 36, doc: '背包书目中的物品槽位；省略时只使用主手' },
+      { key: 'title', kind: 'string', schema: { type: 'string', maxLength: BOOK_TITLE_CHARS }, doc: '署名成书的书名，省略保留可编辑稿' },
+    ],
+  },
+  {
     name: 'anvil',
     doc: `{"skill":"anvil","op":"combine","item":"iron_pickaxe","with":"iron_pickaxe"}
                                                  铁砧:两件同种合修(耐久相加+12%),或本体+附魔书。
@@ -1827,19 +1866,20 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   },
   {
     name: 'attack',
-    doc: `{"skill":"attack","target":"zombie"}             攻击最近的该目标。mode 不写/auto = 距离判断可用近战武器或弓箭(8 格切弓、5.5 格切回近战)，两者都不可用时明确受阻，不降级为空手;
+    doc: `{"skill":"attack","target":"zombie"}             攻击最近的该目标。mode 不写/auto = 8 格切可用远程、5.5 格切回近战，两者都不可用时明确受阻，不降级为空手。
 {"skill":"attack","target":"zombie","entityId":42} 精确指定现场观察到的这一只；target 是英文类型或玩家名，编号另填 entityId，不把 "42" 写成 target。
                                                  ID 只在当前连接有效；失效、类型不符或被遮挡时不改打附近同类，重新观察。
-                                                 melee = 只近战;ranged = 只用弓;kite = 用弓并尽量保持 8–14 格。
-                                                 weapon:"trident" 可精确指定本步近战武器（auto/melee）；缺失或损坏时明确受阻，不暗换剑或空手。三叉戟近战不会扔出，重锤支持普通近战，不自动安排高处下落。
-                                                 ranged/kite 没有可用弓箭或看不见目标时会受阻,不会暗换近战;
-                                                 auto 在 8 格外这一箭射不出(被挡、没弹道等)也受阻收手,换站位再下单。
+{"skill":"attack","target":"skeleton","entityId":42,"mode":"ranged","weapon":"crossbow"}  指定弩，可用已装填箭的弩，或用普通箭、光灵箭、药箭装填。
+                                                 melee = 只近战；ranged = 只远程；kite = 远程并尽量保持 8–14 格。武器或视线不足时，ranged/kite 不改用近战。
+                                                 ranged/kite 的 weapon 可选 bow、crossbow、trident。自动投掷仅选忠诚三叉戟；没有忠诚的三叉戟明确投出后要看落点并主动拾回，可能丢失。激流三叉戟不能投掷。
+                                                 auto/melee 填 weapon 精确指定近战物品，缺失或损坏时不换用其他武器。近战三叉戟不会投掷，重锤不会自动安排高处下落。
+                                                 auto 在 8 格外远程出手受阻时，需重新找站位。
                                                  end_crystal / ender_dragon 在 128 格内找,其余 32 格`,
     parse: parseAttack,
     fields: [
       { key: 'target', kind: 'string', required: true, hint: '实体英文类型或玩家名；数字实体编号另填 entityId' },
       { key: 'entityId', kind: 'int', lo: 0, hi: 2_147_483_647, def: 0, doc: '可选；与 target 一起精确指定本连接观察到的实体 ID；省略时选最近同类，指定后不改选其他实体' },
-      { key: 'weapon', kind: 'string', doc: '可选；本步近战武器英文 ID；仅 auto/melee，失去后不替换。省略则按默认选择。' },
+      { key: 'weapon', kind: 'string', doc: '可选；auto/melee 指定近战物品英文 ID；ranged/kite 指定 bow、crossbow 或 trident。失去后不替换。' },
       {
         key: 'mode', kind: 'enum', values: ['auto', 'melee', 'ranged', 'kite'],
         error: 'attack 的 mode 只认 auto/melee/ranged/kite',
@@ -1996,8 +2036,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   },
   {
     name: 'menu_click',
-    doc: `{"skill":"menu_click","slot":13}           点当前服务端菜单（/rtp、/linggen、/menu 等插件界面）的第 13 格；先用 mc_window 读格子名与说明
-{"skill":"menu_click","name":"觉醒"}       按名称或说明文字点唯一匹配的格子；多格匹配时改用 slot
+    doc: `{"skill":"menu_click","slot":13}           点当前服务端菜单的第 13 格；先用 mc_window 读格子名与说明
+{"skill":"menu_click","name":"返回"}       按名称或说明文字点唯一匹配的格子；多格匹配时改用 slot
 只点菜单区，不点背包格。名称或说明含点券/购买/出售/交易/价格等的格子会被拒绝，不花钱。点完读服务端消息和位置确认效果。`,
     fields: [
       { key: 'slot', kind: 'int', lo: -1, hi: 89, def: -1, unit: '格', doc: '-1 或不写 = 按 name 选' },
@@ -2117,9 +2157,8 @@ function fieldSchema(f: FieldSpec): Record<string, unknown> {
 }
 
 /**
- * 同名字段跨技能的合并:区间取并集,枚举取并集;任一技能未限制则保持未限制。
- * 其余(type/items)本就一致,
- * 留先出场的那份。放宽到并集不丢约束——真校验在 parseSteps,schema 只管别把
+ * 同名字段跨技能的合并:区间、类型、枚举取并集;任一技能未限制则保持未限制。
+ * 其余字段本就一致,留先出场的那份。放宽到并集不丢约束——真校验在 parseSteps,schema 只管别把
  * 合法值挡在门外。
  */
 function widenField(
@@ -2129,17 +2168,27 @@ function widenField(
   const out = { ...into };
   for (const [k, v] of Object.entries(add)) {
     const prev = out[k];
-    if (['minimum', 'maximum', 'minItems', 'maxItems', 'enum'].includes(k)) continue;
+    if (['minimum', 'maximum', 'minItems', 'maxItems', 'enum', 'type', 'items'].includes(k)) continue;
     if (prev === undefined) out[k] = v;
   }
-  for (const k of ['minimum', 'minItems', 'maximum', 'maxItems', 'enum']) {
+  for (const k of ['minimum', 'minItems', 'maximum', 'maxItems', 'enum', 'type']) {
     const prev = into[k], next = add[k];
     // Missing means unrestricted, not that a later skill may add a restriction.
     // In particular organize.target must not restrict find/attack/use targets.
     if (prev === undefined || next === undefined) delete out[k];
     else if (k === 'minimum' || k === 'minItems') out[k] = Math.min(prev as number, next as number);
     else if (k === 'maximum' || k === 'maxItems') out[k] = Math.max(prev as number, next as number);
+    else if (k === 'type') {
+      const types = (v: unknown) => Array.isArray(v) ? v : [v];
+      out[k] = [...new Set([...types(prev), ...types(next)])];
+    }
     else out[k] = [...new Set([...(prev as unknown[]), ...(next as unknown[])])];
+  }
+  if (into.items !== undefined && add.items !== undefined) {
+    out.items = widenField(
+      into.items as Record<string, unknown>,
+      add.items as Record<string, unknown>,
+    );
   }
   return out;
 }

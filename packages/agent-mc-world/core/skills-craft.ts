@@ -32,6 +32,7 @@ import { isInventoryClickError, resumeInventoryCursor } from './inventory-click-
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { clearOffHandConfirmed, equipHandConfirmed, equipSlotConfirmed } from './equipment.ts';
 import { takeWornItem } from './equipment-access.ts';
+import { beginViewerInteraction, finishViewerInteraction } from './viewer-interaction.ts';
 
 /**
  * `bot.craft` 吃的配方数据面(见 mineflayer-fixes 的覆写版):
@@ -194,65 +195,78 @@ export async function skillCraft(
     ? recipe.inShape.flat().filter(cell => cell && cell.id !== -1).length
     : recipe.ingredients?.length ?? 0;
   show.planBeats({ open: times, close: times, result: times, click: inputs * times });
-  for (let n = 0; n < times; n++) {
-    checkAbort(ctx);
-    const beforeOne = targetId === null ? null : invCountById(bot, targetId);
-    try {
-      await withShowPacer(bot, show, () => bot.craft(recipe as never, 1, recipe.requiresTable ? table ?? undefined : undefined));
-    } catch (err) {
-      if (err instanceof Aborted) throw err;
-      const msg = zhErrorText((err as Error).message);
+  const gridSize = recipe.requiresTable ? 3 : 2;
+  const grid = Array.from({ length: gridSize ** 2 }, (_, index) => {
+    const ingredient = recipe.inShape ? recipe.inShape[Math.floor(index / gridSize)]?.[index % gridSize]
+      : recipe.ingredients?.[index];
+    return ingredient && ingredient.id >= 0 ? zhName(nameOfId(bot, ingredient.id)) : null;
+  });
+  const view = beginViewerInteraction(bot, { kind: 'craft', title: targetId === null ? '自定义配方' : label,
+    gridSize, grid, shaped: !!recipe.inShape });
+  try {
+    for (let n = 0; n < times; n++) {
+      checkAbort(ctx);
+      const beforeOne = targetId === null ? null : invCountById(bot, targetId);
+      try {
+        await withShowPacer(bot, show, () => bot.craft(recipe as never, 1, recipe.requiresTable ? table ?? undefined : undefined));
+      } catch (err) {
+        if (err instanceof Aborted) throw err;
+        const msg = zhErrorText((err as Error).message);
+        throw new SkillBlocked(
+          n === 0 ? `合成 ${label}: ${msg}` : `合成 ${label} 做到第 ${n + 1} 次时: ${msg}。${doneSoFar()}`,
+          err instanceof SkillBlocked ? err.scene : [], 'server',
+          isInventoryClickError(err) ? 'inventory-click-sync' : undefined,
+        );
+      }
+      if (targetId !== null && beforeOne !== null) {
+        const got = await awaitCraftGain(bot, targetId, beforeOne, ctx);
+        if (got === 0) lateRounds.push(n + 1);
+        ctx.diag?.write({
+          lane: 'craft', event: got === 0 ? 'no-gain' : 'gain', taskId: ctx.taskId,
+          msg: `合成 ${label} 第 ${n + 1}/${times} 次,入包 ${got} 个`,
+          data: { item: label, before: beforeOne, got, requiresTable: recipe.requiresTable },
+        });
+      } else {
+        await sleep(CRAFT_SETTLE_MS);
+      }
+    }
+
+    // 名字没净增时看同名换新(放大地图的产物还是地图);有名字净增就不另报
+    const named = invGains(before, bot);
+    const gains = named.length > 0 || targetId !== null ? named : invVariantGains(variantsBefore, bot);
+    const targetGain = targetId === null ? 0 : invCountById(bot, targetId) - targetBefore;
+    ctx.diag?.write({
+      lane: 'craft', event: 'verify', taskId: ctx.taskId,
+      msg: gains.length > 0 ? `净增 ${gains.join('、')}` : '一样都没多出来',
+      data: { label, times, gains, targetGain, lateRounds },
+    });
+    /**
+     * 单次 no-gain 只记现场，槽位回灌可能落入下一次等待窗口。
+     * 合成以目标物品总净增裁决，不因某一次尚未入包立即停止。
+     */
+    const late = lateRounds.length > 0
+      ? `(第 ${lateRounds.join('、')} 次当场没读到入包,服务端槽位回灌迟到)`
+      : '';
+    if (gains.length === 0 || (targetId !== null && targetGain <= 0)) {
       throw new SkillBlocked(
-        n === 0 ? `合成 ${label}: ${msg}` : `合成 ${label} 做到第 ${n + 1} 次时: ${msg}。${doneSoFar()}`,
-        err instanceof SkillBlocked ? err.scene : [], 'server',
-        isInventoryClickError(err) ? 'inventory-click-sync' : undefined,
+        `摆了 ${times} 次${label},包里${targetId !== null && gains.length > 0
+          ? `${label}一个都没多` : '一样都没多出来'}${late}。${doneSoFar()}`,
+        gains.length > 0 ? [`这一步包里多出来的是:${gains.join('、')}`] : [], 'server',
       );
     }
-    if (targetId !== null && beforeOne !== null) {
-      const got = await awaitCraftGain(bot, targetId, beforeOne, ctx);
-      if (got === 0) lateRounds.push(n + 1);
-      ctx.diag?.write({
-        lane: 'craft', event: got === 0 ? 'no-gain' : 'gain', taskId: ctx.taskId,
-        msg: `合成 ${label} 第 ${n + 1}/${times} 次,入包 ${got} 个`,
-        data: { item: label, before: beforeOne, got, requiresTable: recipe.requiresTable },
-      });
-    } else {
-      await sleep(CRAFT_SETTLE_MS);
-    }
+    // 合成出来的手持工具和武器立即拿上;运输用的方块不动。
+    const held = targetId !== null ? await equipIfHandheld(bot, nameOfId(bot, targetId)) : false;
+    // Returning old grid materials is an inventory gain, not a crafted product.
+    const product = targetId === null ? gains : [`${zhName(nameOfId(bot, targetId))}×${targetGain}`];
+    finishViewerInteraction(bot, view, 'confirmed', targetId === null ? '库存净增 ' + product.join('、') : product.join('、'));
+    const otherGains = targetId === null ? [] : gains.filter((gain) => !product.includes(gain));
+    return `${made.length > 0 ? `${made.join('、')};` : ''}合成出来:${product.join('、')}` +
+      (otherGains.length ? `;此外库存净增:${otherGains.join('、')}(不计作本次产物)` : '') +
+      (targetId !== null && targetGain < call.count ? `(要 ${call.count} 个,只多出 ${targetGain} 个)${late}` : '') +
+      (held ? ',已经拿在手上' : '');
+  } finally {
+    finishViewerInteraction(bot, view, 'unconfirmed');
   }
-
-  // 名字没净增时看同名换新(放大地图的产物还是地图);有名字净增就不另报
-  const named = invGains(before, bot);
-  const gains = named.length > 0 || targetId !== null ? named : invVariantGains(variantsBefore, bot);
-  const targetGain = targetId === null ? 0 : invCountById(bot, targetId) - targetBefore;
-  ctx.diag?.write({
-    lane: 'craft', event: 'verify', taskId: ctx.taskId,
-    msg: gains.length > 0 ? `净增 ${gains.join('、')}` : '一样都没多出来',
-    data: { label, times, gains, targetGain, lateRounds },
-  });
-  /**
-   * 单次 no-gain 只记现场，槽位回灌可能落入下一次等待窗口。
-   * 合成以目标物品总净增裁决，不因某一次尚未入包立即停止。
-   */
-  const late = lateRounds.length > 0
-    ? `(第 ${lateRounds.join('、')} 次当场没读到入包,服务端槽位回灌迟到)`
-    : '';
-  if (gains.length === 0 || (targetId !== null && targetGain <= 0)) {
-    throw new SkillBlocked(
-      `摆了 ${times} 次${label},包里${targetId !== null && gains.length > 0
-        ? `${label}一个都没多` : '一样都没多出来'}${late}。${doneSoFar()}`,
-      gains.length > 0 ? [`这一步包里多出来的是:${gains.join('、')}`] : [], 'server',
-    );
-  }
-  // 合成出来的手持工具和武器立即拿上;运输用的方块不动。
-  const held = targetId !== null ? await equipIfHandheld(bot, nameOfId(bot, targetId)) : false;
-  // Returning old grid materials is an inventory gain, not a crafted product.
-  const product = targetId === null ? gains : [`${zhName(nameOfId(bot, targetId))}×${targetGain}`];
-  const otherGains = targetId === null ? [] : gains.filter((gain) => !product.includes(gain));
-  return `${made.length > 0 ? `${made.join('、')};` : ''}合成出来:${product.join('、')}` +
-    (otherGains.length ? `;此外库存净增:${otherGains.join('、')}(不计作本次产物)` : '') +
-    (targetId !== null && targetGain < call.count ? `(要 ${call.count} 个,只多出 ${targetGain} 个)${late}` : '') +
-    (held ? ',已经拿在手上' : '');
 }
 
 /** 原版锻造台的升级配方只有下界合金这一族:钻石件 + 下界合金锭 + 下界合金升级模板 */

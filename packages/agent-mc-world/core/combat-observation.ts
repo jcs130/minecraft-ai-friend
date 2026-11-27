@@ -40,6 +40,7 @@ export function sanitizeCombatResult<T extends CombatResult>(result: T): T {
   if (!['unavailable', 'legacy-unverified', 'server-confirmed', 'partial'].includes(clean.killAttribution ?? ''))
     clean.killAttribution = clean.kills === null ? 'unavailable' : 'legacy-unverified';
   if (clean.targetDeaths !== undefined && !counts(clean.targetDeaths)) delete clean.targetDeaths;
+  if (clean.tridentsThrown !== undefined && (!Number.isSafeInteger(clean.tridentsThrown) || clean.tridentsThrown < 0)) delete clean.tridentsThrown;
   if (clean.killAttribution === 'server-confirmed' || clean.killAttribution === 'partial') {
     const observed = clean.targetDeaths ?? {};
     const total = Object.values(observed).reduce((a, b) => a + b, 0);
@@ -91,6 +92,7 @@ export interface CombatResult {
   swings: number;
   meleeLanded: number;
   arrows: number;
+  tridentsThrown?: number;
   rangedLanded: number;
   sceneBefore?: CombatScene;
 }

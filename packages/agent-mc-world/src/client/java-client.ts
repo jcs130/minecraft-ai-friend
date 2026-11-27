@@ -367,7 +367,8 @@ export class JavaClientWorld implements World {
         ctx.signal?.throwIfAborted();
         try {
           return { text: JSON.stringify(await queryMinecraftKnowledge(args,
-            typeof this.state?.minecraftVersion === 'string' ? this.state.minecraftVersion : this.knowledgeVersion ?? this.cfg.version, this.cfg.knowledge, ctx.signal)) };
+            typeof this.state?.minecraftVersion === 'string' ? this.state.minecraftVersion : this.knowledgeVersion ?? this.cfg.version,
+            this.cfg.knowledge, ctx.signal, this.cfg.activeServer)) };
         } catch (error) { return { text: String(error), failed: true }; }
       } },
       tool('mc_capabilities', 'Read actual client/backend capabilities, including the common Mineflayer-shaped JavaScript subset; no control claim or launcher.', parameters({}), async (_args, ctx) => {

@@ -160,11 +160,14 @@ async function readAccountCredential(account, configFile) {
 }
 
 export function installServerLogin(bot, options) {
+  const strict = options.confirmation === 'mc-auth-success';
+  let authSuccessReceived = false;
   let stage = 'disabled', attempted = false, active = true, account, timer;
   let reason = null, authState = null, recoveryAttempted = false, recovering = false;
   let dialogSubmit = false;
   let credentialGeneration = 0, timeoutMs = 30000, recoveredAt = null;
   const report = (status, detail = null) => {
+    if (['required', 'blocked', 'closed'].includes(status)) authSuccessReceived = false;
     if (stage === status && reason === detail) return;
     if (status === 'confirmed' && recovering) { recoveredAt = Date.now(); recovering = false; }
     stage = status; reason = detail;
@@ -223,7 +226,7 @@ export function installServerLogin(bot, options) {
     }
   } catch { account = undefined; report('blocked', 'invalid-configuration'); }
   const stop = () => {
-    active = false; clearTimeout(timer);
+    active = false; authSuccessReceived = false; credentialGeneration++; clearTimeout(timer);
     bot.off('message', onMessage); bot.off('title', onTitle); bot.off('end', stop); bot.off('kicked', stop);
     bot._client?.off?.('show_dialog', onDialog); bot._client?.off?.('clear_dialog', onClearDialog);
     stage = 'closed';
@@ -256,7 +259,7 @@ export function installServerLogin(bot, options) {
     credentialGeneration++;
     report('required', 'authorization-revoked');
     // One attempt per revocation; a stable authorized interval permits a later renewal.
-    if (wasConfirmed && loginRequired && account.command === 'login'
+    if (wasConfirmed && loginRequired && account?.command === 'login'
       && account.reauthenticateOnRevoked !== false
       && (!recoveryAttempted || (recoveredAt !== null && Date.now() - recoveredAt >= 30000))) queueMicrotask(() => {
       if (active && stage === 'required' && reason === 'authorization-revoked') submitCredential(true);
@@ -277,28 +280,49 @@ export function installServerLogin(bot, options) {
     if (message && typeof message.toString === 'function' && message.toString !== Object.prototype.toString) return message.toString();
     return minecraftTextComponent(message) || '';
   };
+  // Exact machine token, never a configured plugin marker or forwarded player line.
+  const isMachineSuccess = (value) => {
+    const match = /^(?:MC_AUTH_SUCCESS|\[MC_AUTH_SUCCESS\])(?=$|[\s:：,，.。!！»›\-—])([\s\S]*)$/.exec(value);
+    if (!match) return false;
+    const suffix = match[1].replace(/^[\s:：,，.。!！»›\-—]+/, '').trim();
+    if (!suffix) return true;
+    if (suffix.startsWith('{')) {
+      try {
+        const data = JSON.parse(suffix);
+        return !!data && typeof data === 'object' && !Array.isArray(data)
+          && (data.username === undefined || data.username === options.username)
+          && data.authorized !== false && !['denied', 'failed', 'login_required'].includes(data.status);
+      } catch { return false; }
+    }
+    // Welcome/translated receipts are allowed; a bare word is an account identity.
+    if (/^(?:welcome\b|欢迎|登录成功|已成功登录|successful login\b|logged in\b)/i.test(suffix)) return true;
+    return /^[A-Za-z0-9_]+$/.test(suffix) && suffix === options.username;
+  };
   const onReceipt = (message, position) => {
-    if (!active || !account || !['armed', 'submitted', 'confirmed', 'required'].includes(stage)) return;
+    if (!active || !['disabled', 'armed', 'submitted', 'confirmed', 'required', ...(strict ? ['retrying'] : [])].includes(stage)) return;
     if (position !== 'system' && position !== 'title' && position !== 'subtitle') return;
-    const value = displayText(message).replace(COLOR_CODES, '').trimStart();
+    if (strict && position !== 'system') return;
+    const value = displayText(message).replace(COLOR_CODES, '').trim();
+    if (isPlayerWrapped(value)) return;
     if (loginPendingNotices.some(notice => value.includes(notice))) return;
+    const machineSuccess = position === 'system' && isMachineSuccess(value);
+    if (machineSuccess) authSuccessReceived = true;
+    if (!account && !strict) return;
     const stateMatch = /^(?:MC_AUTH_STATE|\[MC_AUTH_STATE\])\s+(\{.*\})\s*$/s.exec(value);
     if (stateMatch) {
-      // Only a direct system receipt can open the gate. Unknown/malformed
-      // JSON is not success, even if a configured text marker matches it.
+      // Strict mode treats positive state as guidance, but revocation remains authoritative.
       try {
         const data = JSON.parse(stateMatch[1]);
         if (!data || typeof data !== 'object' || Array.isArray(data)
           || typeof data.authorized !== 'boolean' || typeof data.status !== 'string'
           || (data.username !== undefined && data.username !== options.username)) return;
         authState = { authorized: data.authorized === true,
-          status: typeof data.status === 'string' ? data.status : 'unknown',
+          status: data.status,
           passwordSet: typeof data.passwordSet === 'boolean' ? data.passwordSet : null,
-          // Guidance only: never execute an arbitrary command from server text.
           nextCommand: typeof data.nextCommand === 'string' && data.nextCommand.length <= 256
             && !/[\r\n\x00]/.test(data.nextCommand) ? data.nextCommand : null };
-        if (authState.authorized && authState.status === 'authenticated') report('confirmed');
-        else if (data.authorized === false && ['confirmed', 'required'].includes(stage)) {
+        if (!strict && authState.authorized && authState.status === 'authenticated') report('confirmed');
+        else if (data.authorized === false && (strict || ['confirmed', 'required'].includes(stage))) {
           revoke(authState.status === 'login_required');
         }
       } catch { /* No authority in invalid JSON. */ }
@@ -306,22 +330,26 @@ export function installServerLogin(bot, options) {
     }
     if (/^(?:MC_AUTH_STATE|\[MC_AUTH_STATE\])(?:\s|$)/.test(value)) return;
     if (/^(?:MC_AUTH_DENIED|\[MC_AUTH_DENIED\])(?:\s|$)/.test(value)
-      && ['confirmed', 'required'].includes(stage)) {
+      && (strict || ['confirmed', 'required'].includes(stage))) {
       authState = { ...authState, authorized: false, status: 'login_required',
         passwordSet: authState?.passwordSet ?? null, nextCommand: null };
       revoke(true);
       return;
     }
-    const playerChat = isPlayerWrapped(value);
-    if (playerChat) return;
-    const loginReceiptAllowed = account.command === 'login' && !authState;
-    if (matchesConfigured(value, account.failureMarkers) || (loginReceiptAllowed && matchesBuiltIn(value, loginFailureReceipts))) {
+    const loginReceiptAllowed = account?.command === 'login' && !authState;
+    if ((account && matchesConfigured(value, account.failureMarkers))
+      || ((strict || loginReceiptAllowed) && matchesBuiltIn(value, loginFailureReceipts))
+      || (strict && /^(?:MC_AUTH_FAILED|\[MC_AUTH_FAILED\]|MC_AUTH_2FA|\[MC_AUTH_2FA\])(?:\s|$)/.test(value))) {
+      authSuccessReceived = false;
+      if (authState) authState = { ...authState, authorized: false };
       report(['confirmed', 'required'].includes(stage) ? 'required' : 'blocked', 'server-rejected'); return;
     }
-    if (matchesConfigured(value, account.successMarkers) || (loginReceiptAllowed && matchesBuiltIn(value, loginSuccessReceipts))) {
+    if (strict ? machineSuccess : matchesConfigured(value, account.successMarkers)
+      || (loginReceiptAllowed && matchesBuiltIn(value, loginSuccessReceipts))) {
       if (authState) authState = { ...authState, authorized: true, status: 'authenticated' };
       report('confirmed'); return;
     }
+    if (!account) return;
     // Titles are not login prompts. AuthMe wording and plugin prefixes vary.
     // Only the configured login action may use this fallback; it never selects
     // register or a command from text. Player-chat wrappers are rejected above.
@@ -342,7 +370,7 @@ export function installServerLogin(bot, options) {
   bot._client?.on?.('clear_dialog', onClearDialog);
   bot.once('end', stop);
   bot.once('kicked', stop);
-  return { stop, status: () => ({ stage, attempted }), detail: () => ({ stage, attempted, reason,
+  return { stop, status: () => ({ stage, attempted }), detail: () => ({ stage, attempted, reason, authSuccessReceived,
       ...(authState ? { authState: { ...authState } } : {}) }),
-    ready: () => stage === 'disabled' || stage === 'confirmed', authState: () => authState && { ...authState } };
+    ready: () => strict ? stage === 'confirmed' && authSuccessReceived : stage === 'disabled' || stage === 'confirmed', authState: () => authState && { ...authState } };
 }

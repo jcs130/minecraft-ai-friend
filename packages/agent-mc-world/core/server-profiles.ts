@@ -12,8 +12,8 @@
  * host config API) and restart the world. Nothing here connects anywhere.
  */
 
-import { validateServerGuide, type MinecraftServerGuide } from './server-guide.ts';
 import type { MinecraftKnowledgeConfig } from './reference-index.ts';
+import { validateServerGuide, type MinecraftServerGuide } from './server-guide.ts';
 
 /** Per-server conduct rules; enforcement of chat/commands lives in installServerChatPolicy. */
 export interface ServerSafetyRules {
@@ -48,6 +48,7 @@ export interface MinecraftServerProfile {
   auth?: 'offline' | 'microsoft';
   /** Login-config file (AuthMe etc.); it references env vars or private files, never inline passwords. */
   loginConfigFile?: string;
+  loginConfirmation?: 'plugin' | 'mc-auth-success';
   fakeHost?: string;
   publicDnsFallback?: boolean;
   connectAddresses?: string[];
@@ -55,8 +56,8 @@ export interface MinecraftServerProfile {
   connectTimeoutMs?: number;
   maxReconnectAttempts?: number;
   viewerAssetsDir?: string;
-  guide?: MinecraftServerGuide;
   escapeCommand?: string;
+  guide?: MinecraftServerGuide;
   account?: ServerAccountRules;
   safety?: ServerSafetyRules;
   /** false = config-only entry: it can be validated and listed, but applyServerProfile refuses to select it. */
@@ -65,6 +66,7 @@ export interface MinecraftServerProfile {
 }
 
 export interface ServerProfileSection {
+  username?: string;
   server?: string;
   servers?: Record<string, MinecraftServerProfile>;
 }
@@ -76,12 +78,13 @@ export interface ServerProfileSection {
  * Account (username/auth/loginConfigFile) and transport tuning (DoH, timeouts, viewer assets) inherit.
  */
 export const SERVER_SPECIFIC_DEFAULTS: Readonly<Record<string, unknown>> = Object.freeze({
-  port: 25565, version: 'auto', fakeHost: undefined, connectAddresses: undefined, escapeCommand: '',
+  port: 25565, version: 'auto', fakeHost: undefined, connectAddresses: undefined, loginConfirmation: 'plugin',
+  escapeCommand: '',
 });
 
 /** Connection keys a profile may override on the world section. */
 export const SERVER_PROFILE_FIELDS = [
-  'host', 'port', 'version', 'username', 'auth', 'loginConfigFile', 'fakeHost', 'publicDnsFallback',
+  'host', 'port', 'version', 'username', 'auth', 'loginConfigFile', 'loginConfirmation', 'fakeHost', 'publicDnsFallback',
   'connectAddresses', 'dohResolvers', 'connectTimeoutMs', 'maxReconnectAttempts', 'viewerAssetsDir', 'escapeCommand',
 ] as const;
 
@@ -94,10 +97,11 @@ export function validateServerProfile(id: string, profile: MinecraftServerProfil
   if (typeof profile.host !== 'string' || !profile.host.trim()) errors.push(`${id}: host is required`);
   if (profile.port !== undefined && !(Number.isInteger(profile.port) && profile.port > 0 && profile.port < 65536)) errors.push(`${id}: port must be 1..65535`);
   for (const key of Object.keys(profile)) if (SECRET_KEYS.test(key)) errors.push(`${id}: "${key}" is not allowed; reference a login-config file instead`);
-  if (profile.guide !== undefined && !validateServerGuide(profile.guide, id)) errors.push('guide must belong to ' + id + ' and have valid entries');
+  if (profile.loginConfirmation !== undefined && !['plugin', 'mc-auth-success'].includes(profile.loginConfirmation)) errors.push(`${id}: loginConfirmation must be plugin or mc-auth-success`);
+  if (profile.guide !== undefined && !validateServerGuide(profile.guide, id)) errors.push(`${id}: invalid guide or guide belongs to a different server profile`);
   if (profile.escapeCommand !== undefined && (typeof profile.escapeCommand !== 'string'
-    || /[\r\n]/.test(profile.escapeCommand) || (profile.escapeCommand !== '' && !/^\/[\w:-]+(?: .+)?$/.test(profile.escapeCommand)))) {
-    errors.push('escapeCommand must be empty or one player command');
+    || (profile.escapeCommand !== '' && !/^\/[\w:-]+(?: [^\r\n]+)?$/.test(profile.escapeCommand)))) {
+    errors.push(`${id}: escapeCommand must be empty or a single player command`);
   }
   const name = profile.username ?? '';
   const rules = profile.account ?? {};
@@ -118,8 +122,6 @@ export function validateServerProfile(id: string, profile: MinecraftServerProfil
 
 /** The selected profile id, or null when the section has no profiles. */
 export function selectedServerId(section: ServerProfileSection, env: Record<string, string | undefined> = process.env): string | null {
-  const servers = section.servers ?? {};
-  if (Object.keys(servers).length === 0) return null;
   const pick = (env[SERVER_ENV] ?? '').trim() || (section.server ?? '').trim();
   return pick || null;
 }
@@ -131,12 +133,16 @@ export function selectedServerId(section: ServerProfileSection, env: Record<stri
 export function applyServerProfile<T extends object>(section: T, env: Record<string, string | undefined> = process.env):
   T & { activeServer?: string; serverSafety?: ServerSafetyRules } {
   const s = section as T & ServerProfileSection & Record<string, unknown>;
+  // Mounted sections cross the body-process boundary without the profile registry.
+  if (s.servers === undefined && typeof s.activeServer === 'string' && s.activeServer && s.activeServer === s.server) {
+    return section as T & { activeServer?: string; serverSafety?: ServerSafetyRules };
+  }
   const id = selectedServerId(s, env);
   if (id === null) return section as T & { activeServer?: string; serverSafety?: ServerSafetyRules };
   const profile = s.servers && Object.hasOwn(s.servers, id) ? s.servers[id] : undefined;
   if (!profile) throw new Error(`Unknown Minecraft server profile "${id}" (known: ${Object.keys(s.servers ?? {}).join(', ')})`);
   if (profile.selectable === false) throw new Error(`Minecraft server profile "${id}" is config-only (selectable: false)`);
-  const errors = validateServerProfile(id, profile);
+  const errors = validateServerProfile(id, { ...profile, username: profile.username ?? (s.username as string | undefined) });
   if (errors.length) throw new Error(`Invalid Minecraft server profile: ${errors.join('; ')}`);
   const out: Record<string, unknown> = { ...(s as Record<string, unknown>), activeServer: id };
   for (const [key, value] of Object.entries(SERVER_SPECIFIC_DEFAULTS)) {
@@ -179,8 +185,8 @@ export function describeServerProfiles(section: ServerProfileSection, env: Recor
   const active = selectedServerId(section, env);
   return Object.entries(section.servers ?? {}).map(([id, p]) => ({
     id, label: p.label ?? id, host: p.host, port: p.port ?? 25565, version: p.version ?? null,
-    username: p.username ?? null, selectable: p.selectable !== false, active: id === active,
-    publicChat: p.safety?.publicChat !== false, errors: validateServerProfile(id, p),
+    username: p.username ?? section.username ?? null, selectable: p.selectable !== false, active: id === active,
+    publicChat: p.safety?.publicChat !== false, errors: validateServerProfile(id, { ...p, username: p.username ?? section.username }),
   }));
 }
 

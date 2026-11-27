@@ -99,10 +99,10 @@ export { planInventoryOrganization, inventoryOrganizationPlanView, planInventory
 
 export { PHOTOGRAPHY_DEFAULTS } from '../../core/photo-image.ts';
 
-export {attachProximityVoice, inspectVoiceWav} from '../proximity-voice.ts';
+export {attachProximityVoice, inspectVoiceWav, readNearbySpeaker} from '../proximity-voice.ts';
 export {attachSimpleVoiceChat, parseVoicechatSecret, createOfficialOpusCodec, inspectVoiceWav as inspectSvcWav, SVC_COMPATIBILITY_VERSION} from '../simple-voice-chat.ts';
 
-export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing} from '../proximity-voice.ts';
+export type {ProximityVoiceClient, ProximityVoiceOptions, ProximityVoiceBot, ProximityVoiceResult, NearbyVoiceHearing, NearbySpeakerOrigin} from '../proximity-voice.ts';
 
 export { applyServerProfile, mountServerProfile, selectedServerId, type MinecraftServerProfile } from '../../core/server-profiles.ts';
 export { validateServerGuide, type MinecraftServerGuide } from '../../core/server-guide.ts';

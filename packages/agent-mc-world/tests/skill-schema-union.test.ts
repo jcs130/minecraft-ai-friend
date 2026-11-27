@@ -18,6 +18,17 @@ describe('shared field declarations accept every skill-specific target', () => {
     expect(validate(step), JSON.stringify(validate.errors)).toBe(true);
   });
 
+  it('preserves relative coordinate components after a numeric-only anchor skill', () => {
+    const step = { skill: 'goto', at: ['~', 64, '~5'] };
+    expect(parseSteps([step])).not.toHaveProperty('error');
+    expect(validate(step), JSON.stringify(validate.errors)).toBe(true);
+    expect((SKILL_STEP_SCHEMA.properties as any).at).toMatchObject({
+      type: ['array', 'string'],
+      items: { type: ['number', 'string'] },
+    });
+    expect(validate({ skill: 'goto', at: [{ x: 1 }, 64, 2] })).toBe(false);
+  });
+
   it('does not expand the separate scout skill allowlist', () => {
     const step = { skill: 'find', target: 'oak_log', distance: 32 };
     expect(validate(step)).toBe(true);

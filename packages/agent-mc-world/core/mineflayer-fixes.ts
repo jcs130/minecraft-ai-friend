@@ -31,6 +31,7 @@ import { armTemporaryScaffoldPlacement, assertTemporaryScaffoldDigSafe, closeTem
 import { assertInventoryClicksReady, clickInventoryConfirmed, installInventoryClickSync,
   inventoryClickState, isInventoryClickError, isInventoryCursorPacket, sameInventoryStack } from './inventory-click-sync.ts';
 import { PLACE_REACH } from './cell-facts.ts';
+import { observedBlock } from './perception-sight.ts';
 
 /** 摆好材料之后等产出槽被服务端填上的上限 */
 const RESULT_WAIT_MS = 1_500;
@@ -1171,6 +1172,17 @@ function installConfirmedDig(bot: PatchedBot, log: Logger, diag?: MinecraftLog):
 
   bot.dig = (async (block: DigBlock, forceLook?: boolean | 'ignore', digFace?: unknown): Promise<void> => {
     const pos = block.position;
+    const validateTarget = () => {
+      if (!observedBlock(bot, pos)) {
+        throw new SkillBlocked(`(${pos.x}, ${pos.y}, ${pos.z}) 的目标面被遮挡或未加载；未发送挖掘，先挖开面前的方块或换位置`);
+      }
+      const live = bot.blockAt(pos);
+      if (!live || live.stateId !== block.stateId || live.type !== block.type) {
+        throw new SkillBlocked(`(${pos.x}, ${pos.y}, ${pos.z}) 的方块已变化；未发送挖掘，请重新观察`);
+      }
+      return live;
+    };
+    validateTarget();
     const pathAttempt = bot.pathfinder?.isMining?.() === true ? pathGeneration : null;
     checkBreakPermission(block);
     const protection = await bot.cortiProtectCheck?.('break', pos);
@@ -1200,7 +1212,7 @@ function installConfirmedDig(bot: PatchedBot, log: Logger, diag?: MinecraftLog):
       }
     }
     assertTemporaryScaffoldDigSafe(bot, block);
-    const before = bot.blockAt(pos);
+    const before = validateTarget();
     const digMs = bot.digTime(block);
     const budget = Number.isFinite(digMs)
       ? Math.max(DIG_CONFIRM_MIN_MS, digMs * DIG_CONFIRM_FACTOR)

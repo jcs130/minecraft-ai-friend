@@ -1,5 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { ToolDef, ToolOutcome } from './support/host-contract.ts';
+import { readTextPage, TextPageRangeError } from '../src/client/text-pages.ts';
 
 /** Server packages define a finite read-only protocol; callers cannot supply commands. */
 export type ServerQueryDefinition = {
@@ -95,9 +96,10 @@ export type ServerQueryReceipt = {
 export const SERVER_QUERY_RECEIPT_TOOL = {
   name: 'mc_query_receipt',
   tags: ['read'],
-  description: 'Read a previously returned server query receipt by its exact requestId. Never sends a command. Unknown IDs have unknown results.',
+  description: 'Read a previously returned server query receipt by exact requestId. For oversized results follow next_safe_read with the returned offset. Reads never send a command. Unknown IDs have unknown results.',
   parameters: { type: 'object', additionalProperties: false, required: ['requestId'],
-    properties: { requestId: { type: 'string', minLength: 1, maxLength: 128 } } },
+    properties: { requestId: { type: 'string', minLength: 1, maxLength: 128 },
+      offset: { type: 'integer', minimum: 0, description: 'Optional continuation offset from next_safe_read. Omit for the first page.' } } },
 } satisfies Omit<ToolDef, 'handler'>;
 
 const queryFields = {
@@ -142,6 +144,7 @@ const HISTORY_LIMIT = 32;
 const REPLY_LIMIT = 4096;
 const DATA_LIMIT = 8192;
 const MULTIPART_LIMIT = 65536;
+const RECEIPT_TEXT_LIMIT = 7000;
 
 type Record_ = {
   receipt: ServerQueryReceipt;
@@ -158,7 +161,56 @@ type Record_ = {
 };
 
 const failure = (message: string): ToolOutcome => ({ text: message, failed: true, data: { goal_completed: false } });
-const receiptRead = (requestId: unknown, tool = SERVER_QUERY_RECEIPT_TOOL.name) => ({ tool, arguments: { requestId } });
+const receiptRead = (requestId: unknown, tool = SERVER_QUERY_RECEIPT_TOOL.name, offset?: number) =>
+  ({ tool, arguments: { requestId, ...(offset === undefined ? {} : { offset }) } });
+const isReceiptRead = (keys: string[]) => keys.includes('requestId') && keys.every(key => key === 'requestId' || key === 'offset');
+const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+
+/** Page only the model's text. The SDK result and archived terminal retain the original data. */
+function receiptPageText(header: string, data: Record<string, unknown>, original: string, offset: number): string | null {
+  const render = (value: Record<string, unknown>) => header + '\n' + JSON.stringify(value);
+  const details = object(data.reply) ? data.reply : {};
+  const native = object(details.data) ? details.data : {};
+  const items = native.items;
+  if (Array.isArray(items) && items.length) {
+    const page = (start: number, rows: unknown[], returned = rows.length, forceContinuation = false) => {
+      const next = start + returned, hasMore = next < items.length;
+      return render({ ...data, reply: { ...details, data: { ...native, items: rows } },
+        receiptView: { unit: 'items', offset: start, returned, total: items.length, hasMore,
+          note: 'Only these rows are shown. Server completeness fields describe the original reply.' },
+        ...(hasMore || forceContinuation ? { next_safe_read: receiptRead(data.requestId, undefined, next) } : {}) });
+    };
+    // Reserve the longest pagination metadata. Choose one unit for this receipt,
+    // even if a later native item is too large to display as a whole row.
+    const budget = RECEIPT_TEXT_LIMIT - page(items.length, [], items.length, true).length - 8;
+    const sizes = items.map(row => JSON.stringify(row).length + 1);
+    if (sizes.every(size => size <= budget)) {
+      if (offset >= items.length) return null;
+      const rows: unknown[] = [];
+      let used = 0;
+      for (let index = offset; index < items.length && used + sizes[index] <= budget; index++) {
+        used += sizes[index];
+        rows.push(items[index]);
+      }
+      return page(offset, rows);
+    }
+  }
+  // Some servers return one very large row or an object without a row list.
+  // Expose exact JSON as bounded UTF-16 chunks without splitting a character.
+  const handle = 'log:' + createHash('sha256').update(original).digest('hex');
+  try {
+    const page = readTextPage(original, handle, { offset, maxChars: 2400 });
+    return render({ requestId: data.requestId, query: data.query, phase: data.phase,
+      outcomeUnknown: data.outcomeUnknown, requestNonce: false, goal_completed: false,
+      receiptView: { unit: page.unit, offset, returned: page.returnedChars, total: page.totalChars, hasMore: page.hasMore,
+        note: 'Join the jsonChunk strings in offset order to recover the exact original JSON.' },
+      jsonChunk: page.text,
+      ...(page.nextOffset === null ? {} : { next_safe_read: receiptRead(data.requestId, undefined, page.nextOffset) }) });
+  } catch (error) {
+    if (error instanceof TextPageRangeError) return null;
+    throw error;
+  }
+}
 /** Return a bounded repair path in the failed receipt itself; never infer or send a command. */
 function queryInputFailure(message: string, definitions: readonly ServerQueryDefinition[]): ToolOutcome {
   const ids = [...new Set(definitions.map(item => item.id))];
@@ -191,12 +243,13 @@ export class ServerQueryLane {
 
   readReceipt(args: Record<string, unknown>): ToolOutcome {
     this.expire();
-    if (!args || Object.keys(args).length !== 1 || typeof args.requestId !== 'string' ||
-        !args.requestId.length || args.requestId.length > 128) {
-      return failure('Provide only the requestId from the original query receipt. No query was sent.');
+    if (!args || !isReceiptRead(Object.keys(args)) || typeof args.requestId !== 'string' ||
+        !args.requestId.length || args.requestId.length > 128 ||
+        (args.offset !== undefined && (typeof args.offset !== 'number' || !Number.isSafeInteger(args.offset) || args.offset < 0))) {
+      return failure('Provide the original requestId and optional non-negative integer offset from next_safe_read. No query was sent.');
     }
     const record = this.records.get(args.requestId);
-    return record ? this.outcome(record) : { text: 'Unknown or expired requestId; its server result is unknown. No query was sent.',
+    return record ? this.outcome(record, {}, typeof args.offset === 'number' ? args.offset : 0) : { text: 'Unknown or expired requestId; its server result is unknown. No query was sent.',
       data: { requestId: args.requestId, found: false, outcomeUnknown: true, requestNonce: false, goal_completed: false } };
   }
 
@@ -247,7 +300,7 @@ export class ServerQueryLane {
       return { text: 'Available read-only server queries. The observed phase and original requestId identify the read; it does not complete a goal. '
         + 'If still sent, read that requestId later. Timeout is unknown, with no automatic retry.\n' + JSON.stringify(data), data };
     }
-    if (keys.length === 1 && 'requestId' in args) return this.readReceipt(args);
+    if (isReceiptRead(keys)) return this.readReceipt(args);
     if ('requestId' in args && typeof args.query === 'string' && keys.every(k => ['query','arguments','requestId'].includes(k))) {
       const known = typeof args.requestId === 'string' && this.records.has(args.requestId);
       const definition = definitions.find(item => item.id === args.query);
@@ -406,11 +459,13 @@ export class ServerQueryLane {
     if (this.pending === record) this.pending = undefined;
     for(const settle of record.waiters??[])settle();
     record.waiters?.clear();
-    try { this.onTerminal?.(this.outcome(record)); } catch { /* A consumer's event sink cannot strand the query lane. */ }
+    try { this.onTerminal?.(this.outcome(record, {}, null)); } catch { /* A consumer's event sink cannot strand the query lane. */ }
   }
 
-  private outcome(record: Record_, extra: Record<string, unknown> = {}): ToolOutcome {
-    const data: Record<string, unknown> = { ...JSON.parse(JSON.stringify(record.receipt)), ...extra,
+  private outcome(record: Record_, extra: Record<string, unknown> = {}, offset: number | null = 0): ToolOutcome {
+    const archived = JSON.stringify(record.receipt);
+    const original: ServerQueryReceipt = JSON.parse(archived);
+    const data: Record<string, unknown> = { ...original, ...extra,
       ...(record.receipt.phase === 'sent' ? {next_safe_read: receiptRead(record.receipt.requestId)} : {}) };
     const messages: Record<ServerQueryReceipt['phase'], string> = {
       sent: '已发送，待回复。Read requestId later; sending does not prove completion.',
@@ -419,7 +474,20 @@ export class ServerQueryLane {
       cancelled: 'Query observation was cancelled; the server result is unknown. No automatic retry was sent.',
       send_failed: 'The send operation failed; delivery and server result are unknown. No automatic retry was sent.',
     };
-    return { text: messages[record.receipt.phase] + '\n' + JSON.stringify(data), data,
+    const header = messages[record.receipt.phase];
+    let text = header + '\n' + JSON.stringify(data);
+    if (offset !== null) {
+      const pageable = header.length + 1 + archived.length > RECEIPT_TEXT_LIMIT &&
+        record.receipt.phase === 'replied' && record.receipt.reply?.ok !== false;
+      if (pageable) {
+        const page = receiptPageText(header, original, archived, offset);
+        if (page === null) return failure('Receipt offset is outside the original result. Read the same requestId without an offset or follow next_safe_read. No query was sent.');
+        text = page;
+      } else if (offset !== 0) {
+        return failure('This receipt has no continuation. Read the same requestId without an offset. No query was sent.');
+      }
+    }
+    return { text, data,
       ...(record.receipt.phase === 'send_failed' || record.receipt.reply?.ok === false ? { failed: true as const } : {}) };
   }
 

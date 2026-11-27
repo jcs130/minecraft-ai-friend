@@ -19,5 +19,7 @@ export interface DecisionResponse {
 }
 /** Optional host-owned typed choice service. Core never resolves URLs, credentials or models. */
 export interface DecisionPort {
-  request(input: DecisionRequest, options?: { provider?: string; signal?: AbortSignal; timeoutMs?: number }): Promise<DecisionResponse>;
+  request(input: DecisionRequest, options?: { provider?: string; signal?: AbortSignal; timeoutMs?: number;
+    /** Local decision identifier for correlating transport observations. */
+    correlationId?: string }): Promise<DecisionResponse>;
 }

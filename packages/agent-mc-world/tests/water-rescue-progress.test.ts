@@ -7,6 +7,7 @@ import { headInWater } from '../core/terrain.ts';
 import { hasDryFooting } from '../core/skills-build.ts';
 import { methodHarness } from './method-harness.ts';
 import { installTreadWater } from '../core/travel.ts';
+import { installBreathingReadings } from '../core/breathing.ts';
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-17T00:43:00Z')); });
 afterEach(() => vi.useRealTimers());
@@ -46,6 +47,28 @@ function rescue(options: { passive?: boolean; emergency?: boolean } = {}) {
     disableEmergency() { emergency = false; },
     close() { reflexes.stop(); detachTread(); h.close(); } };
 }
+
+it('lets a slowly progressing planned swim pass ten seconds, then takes over on real low air', async () => {
+  const r=rescue({passive:false,emergency:true});
+  const cleanup=installBreathingReadings(r.bot as unknown as Bot);
+  const fresh=()=>{r.bot.oxygenLevel=14;r.bot.emit('breath');};
+  fresh();
+  const timer=setInterval(fresh,400);
+  try {
+    r.bot.physics.simulatePlayer=(state:{pos:Vec3})=>{ if(r.keys.forward)state.pos.x+=.011; };
+    r.bot.physicsEnabled=true;
+    r.exec.submit([{skill:'swim',at:[4,65,0]}], 'append');
+    await vi.advanceTimersByTimeAsync(11_200);
+    expect(r.bot.entity.position.x).toBeGreaterThan(2);
+    expect(r.reflexes.environmentOwnerKind).toBeNull();
+    expect(r.diagnostics.some(x=>x.event==='drown-trigger')).toBe(false);
+    clearInterval(timer);
+    r.bot.oxygenLevel=5;r.bot.emit('breath');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(r.reflexes.environmentOwnerKind).toBe('drown');
+    expect(r.keys.jump).toBe(true);
+  } finally { clearInterval(timer);cleanup();r.close(); }
+});
 
 it('keeps ordinary diving input free but starts critical rescue with passive ascent disabled', async () => {
   const r = rescue({ passive: false, emergency: true });
@@ -89,6 +112,23 @@ it('honors explicit emergency disable and releases only its rescue ownership', a
     expect(r.keys.jump).toBe(false);
     expect(r.bot.pathfinder.goal).toBeNull();
     expect(r.diagnostics.some(row => row.event === 'drown-disabled')).toBe(true);
+  } finally { r.close(); }
+});
+
+it('retires a rescue path on dry footing without waiting for its route watchdog', async () => {
+  const r = rescue();
+  try {
+    await vi.advanceTimersByTimeAsync(2300);
+    expect(r.bot.pathfinder.goal).not.toBeNull();
+    r.bot.entity.position = new Vec3(.5, 68, .5);
+    r.bot.entity.onGround = true;
+    r.bot.oxygenLevel = 20;
+    await vi.advanceTimersByTimeAsync(250);
+    expect(r.bot.pathfinder.goal).toBeNull();
+    expect(r.keys.jump).toBe(false);
+    expect(r.diagnostics.some(row => row.event === 'drown-clear')).toBe(true);
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(r.diagnostics.some(row => row.event === 'escape-goal-stalled')).toBe(false);
   } finally { r.close(); }
 });
 

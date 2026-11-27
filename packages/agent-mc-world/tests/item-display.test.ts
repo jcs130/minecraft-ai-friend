@@ -91,8 +91,8 @@ describe('item instance display names', () => {
       expect(text).not.toContain('副手玩家头');
     }
     expect(renderBagReadout(snapshot)).toContain('diamond_sword');
-    expect(renderStoredItemReadout(snapshot, [], '大背包')).toContain('随身大背包×1');
-    expect(renderStoredItemReadout(snapshot, [], '大背包')).toContain('player_head');
+    expect(renderStoredItemReadout(snapshot, [], '大背包').text).toContain('随身大背包×1');
+    expect(renderStoredItemReadout(snapshot, [], '大背包').text).toContain('player_head');
   });
 
   it('invalidates equipment and hand context when only the instance name changes', () => {
@@ -123,7 +123,7 @@ describe('item instance display names', () => {
     expect(slotStack({ slots: [first] }, 0)).toMatchObject({ name: 'player_head', displayName: '大背包' });
     const { bot } = botWithItems();
     const snapshot = snapshotFromBot(bot, { scanBlocks: false });
-    expect(renderStoredItemReadout(snapshot, [], '收藏猫头', { title: '箱子', items: contents.items }))
+    expect(renderStoredItemReadout(snapshot, [], '收藏猫头', { title: '箱子', items: contents.items }).text)
       .toContain('收藏猫头×1（现读）');
   });
 
