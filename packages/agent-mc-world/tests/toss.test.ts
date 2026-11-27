@@ -24,6 +24,34 @@ function rig(blocked = false, version = '1.20.6') {
   return { bot, clock, count: (n: number) => { count = n; } };
 }
 describe('toss receipt and aim', () => {
+  it.each(['clear','ledge','fire','busy','cancel'])('owns only its bounded retreat after the drop on %s', async scene => {
+    vi.useFakeTimers();
+    const { bot } = rig(false, '1.21.11');
+    bot.entity.onGround = true;
+    bot.controlState = { forward: scene === 'busy', back: false };
+    bot.setControlState = vi.fn((key, state) => { bot.controlState[key] = state; });
+    const air = {name:'air', boundingBox:'empty', shapes:[]};
+    const ground = {name:'stone', boundingBox:'block', shapes:[[0,0,0,1,1,1]]};
+    bot.blockAt = (p: Vec3) => {
+      if (scene === 'fire' && p.z >= 1 && p.y === 64) return {...air,name:'fire'};
+      if (p.y !== 63 || (scene === 'ledge' && p.z >= 1)) return air;
+      return ground;
+    };
+    bot.on('physicsTick', () => { if (bot.controlState.back) bot.entity.position.z += .18; });
+    let cancelled = false;
+    const result = skillToss(bot,{skill:'toss',item:'cobblestone',count:1},{aborted:()=>cancelled} as any);
+    const finished = scene === 'cancel' ? expect(result).rejects.toThrow() :
+      expect(result).resolves.toContain(scene === 'clear' ? '实测后退' : '未确认后退');
+    await vi.advanceTimersByTimeAsync(150);
+    if (scene === 'cancel') cancelled = true;
+    await vi.advanceTimersByTimeAsync(4000);
+    await finished;
+    expect(bot.toss).toHaveBeenCalledTimes(1);
+    expect(bot.controlState.back).toBe(false);
+    expect(bot.controlState.forward).toBe(scene === 'busy');
+    if (scene === 'clear') expect(bot.entity.position.z - .5).toBeGreaterThanOrEqual(2);
+    if (['ledge','fire','busy'].includes(scene)) expect(bot.setControlState).not.toHaveBeenCalled();
+  });
   it.each([
     { query: 'Worn blade', names: ['Worn blade', 'Spare blade'], suggest: true },
     { query: 'Worn blade', names: ['Worn blade', 'Worn blade'], suggest: false },

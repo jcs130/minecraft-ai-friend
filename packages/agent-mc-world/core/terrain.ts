@@ -1695,7 +1695,7 @@ function blockState(
 ): Pick<WorldSnapshot['nearbyBlocks'][number], 'age' | 'moisture' | 'open' | 'soil'> {
   const max = CROP_MAX_AGE[name];
   if (max === undefined && name !== 'farmland' && !isDoorOrGate(name)) return {};
-  const b = bot.blockAt(p as never);
+  const b = bot.blockAt(new Vec3(p.x, p.y, p.z));
   const props = typeof b?.getProperties === 'function' ? b.getProperties() : undefined;
   if (isDoorOrGate(name)) {
     if (props?.open === true || props?.open === 'true') return { open: true };
@@ -1731,7 +1731,7 @@ export function cropAgeAt(
   bot: any,
   p: { x: number; y: number; z: number },
 ): { value: number; max: number } | null {
-  const b = bot.blockAt(p as never);
+  const b = bot.blockAt(new Vec3(p.x, p.y, p.z));
   if (!b) return null;
   const max = CROP_MAX_AGE[b.name as string];
   if (max === undefined) return null;
