@@ -66,10 +66,15 @@ export const DROP_SOURCE_HINT: Record<string, string> = {
  */
 export function collectVisible(bot: Bot, p: { x: number; y: number; z: number }): boolean {
   if (canSeeBlockAt(bot, p)) return true;
-  const b = bot.blockAt(p as never);
+  const b = blockAtCell(bot, p);
   if (!b || b.boundingBox !== 'empty' || b.name === 'air') return false;
   const me = bot.entity.position;
-  return Math.hypot(me.x - (p.x + 0.5), me.y - (p.y + 0.5), me.z - (p.z + 0.5)) <= 4.5;
+  if (Math.hypot(me.x - (p.x + 0.5), me.y - (p.y + 0.5), me.z - (p.z + 0.5)) > 4.5) return false;
+  const eye = me.offset(0, (bot.entity as {eyeHeight?: number}).eyeHeight ?? 1.62, 0);
+  const ray = new Vec3(p.x + 0.5, p.y + 0.5, p.z + 0.5).minus(eye);
+  if (ray.norm() < 0.001) return true;
+  const hit = bot.world.raycast(eye, ray.normalize(), ray.norm());
+  return !hit || ('position' in hit && b.position.equals(hit.position as Vec3));
 }
 
 function knownProtectedBreakTarget(bot: Bot, p: { x: number; y: number; z: number }): boolean {

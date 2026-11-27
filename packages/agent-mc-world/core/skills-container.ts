@@ -206,6 +206,56 @@ export function yawCompass(yaw: number): string {
   return names[Math.round(deg / 45) % 8];
 }
 
+// The server owns throw velocity. Use the pickup-delay window for separation
+// without turning away from a recipient, starting a path, or extending settlement.
+async function settleToss(bot: Bot, ctx: SkillContext, origin: Vec3, yaw: number, drops: Set<number>): Promise<string> {
+  const until = Date.now() + TOSS_SETTLE_MS;
+  const dx = Math.sin(yaw), dz = Math.cos(yaw);
+  const y = Math.floor(origin.y);
+  const startEntity = bot.entity;
+  const distanceBack = () => (bot.entity.position.x - origin.x) * dx + (bot.entity.position.z - origin.z) * dz;
+  const canStepBack = (): boolean => {
+    const pos = bot.entity.position;
+    if (bot.entity !== startEntity || !bot.entity.onGround || (bot as Bot & {vehicle?: unknown}).vehicle || bot.currentWindow ||
+        bot.pathfinder?.isMoving?.() || Math.abs(pos.y - origin.y) > 0.25 ||
+        Math.abs(Math.atan2(Math.sin(bot.entity.yaw-yaw), Math.cos(bot.entity.yaw-yaw))) > 0.12) return false;
+    for (const id of drops) {
+      const item = bot.entities[id]?.position;
+      if (item && (item.x - pos.x) * dx + (item.z - pos.z) * dz > 0.1) return false;
+    }
+    for (const ahead of [0, 0.35, 0.75]) {
+      for (const xSide of [-0.3, 0.3]) for (const zSide of [-0.3, 0.3]) {
+        const x = Math.floor(pos.x + dx * ahead + xSide), z = Math.floor(pos.z + dz * ahead + zSide);
+        const below = blockAtCell(bot, {x, y:y-1, z});
+        if (!below || !below.shapes?.some(s => s[0] === 0 && s[2] === 0 && s[3] === 1 && s[4] === 1 && s[5] === 1) ||
+            ['magma_block','cactus','campfire','soul_campfire','powder_snow'].includes(below.name) ||
+            ![y,y+1].every(h => AIR_NAMES.has(blockAtCell(bot,{x,y:h,z})?.name ?? ''))) return false;
+      }
+    }
+    return true;
+  };
+  let pressed = false;
+  try {
+    const controls = ['forward','back','left','right','jump','sprint','sneak'] as const;
+    if (typeof bot.setControlState === 'function' && bot.controlState && !controls.some(key => bot.controlState[key])) {
+      for (let ticks = 0; ticks < 18 && distanceBack() < 2 && canStepBack(); ticks++) {
+        checkAbort(ctx);
+        if (controls.some(key => key !== 'back' && bot.controlState[key])) break;
+        if (!pressed) { bot.setControlState('back', true); pressed = true; }
+        await sleep(50);
+      }
+    }
+  } finally {
+    if (pressed) bot.setControlState('back', false);
+  }
+  const moved = startEntity === bot.entity ? distanceBack() : 0;
+  while (Date.now() < until) {
+    checkAbort(ctx);
+    await sleep(Math.min(100, until - Date.now()));
+  }
+  return moved > 0.1 ? `抛出后实测后退${moved.toFixed(1)}格` : '未确认后退，仍有回拾可能';
+}
+
 export async function skillToss(
   bot: Bot,
   call: Extract<SkillCall, { skill: 'toss' }>,
@@ -304,11 +354,11 @@ export async function skillToss(
     if (pick !== undefined) picked.push(pickTargetOf(it, bot.registry as never));
   }
   if (tossed === 0) throw new SkillBlocked(`${zhName(item)}没扔出去`);
-  await sleep(TOSS_SETTLE_MS);
+  const retreat = await settleToss(bot, ctx, origin, bot.entity.yaw, drops);
   checkAbort(ctx);
   const netAway = have - invCount(bot, pred);
   if (netAway <= 0) {
-    throw new SkillBlocked(`${zhName(item)}确实抛出×${tossed},但稍等后背包同类物品没有净减少;可能已自动捡回或同时拾得同类物品。先核对距离和抛物空间，换位置或方式；不要重复原地 toss 腾格`);
+    throw new SkillBlocked(`${zhName(item)}确实抛出×${tossed},但稍等后背包同类物品没有净减少;${retreat}。可能已自动捡回或同时拾得同类物品。先核对距离和抛物空间，换位置或方式；不要重复原地 toss 腾格`);
   }
   const anchor = isSpawnAnchorBlock(item) ? anchorInHandNote(bot, ctx, [zhName(item)], '扔掉') : '';
   // Vanilla collect packets identify entities, not the thrower's ownership. Nearby matching drops can merge.
@@ -316,7 +366,7 @@ export async function skillToss(
   const selfCollected = collectors.has(bot.entity.id) ? '；观察到本人拾取同类掉落物' : '';
   const delivery = recipient ? (seenPickup ? `；${call.target}拾取过同类掉落物，本次交付数量未确认，不自动重投`
     : '；对方领取未确认，先查回执/询问，不自动重投') : '；走近仍可能捡回';
-  return `${pickedBack ? `上次记录：${pickedBack}。` : ''}抛出${picked.length ? pickedText(picked) : zhName(item)}×${tossed}；4秒后净少${netAway}${selfCollected}${delivery}${anchor}。${where}`;
+  return `${pickedBack ? `上次记录：${pickedBack}。` : ''}抛出${picked.length ? pickedText(picked) : zhName(item)}×${tossed}；4秒后净少${netAway}${selfCollected}${delivery}${anchor}。${retreat}。${where}`;
   } finally { bot.off('entitySpawn', track); bot.off('entityUpdate', track); bot.off('playerCollect', collect); }
 }
 
