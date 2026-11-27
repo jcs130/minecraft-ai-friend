@@ -2,6 +2,30 @@ import {expect,it} from 'vitest';
 import {applyGoal,parseGoal,MinecraftWorld,type GoalTable} from '../core/world.ts';
 import { MINECRAFT_CLIENT_DEFAULTS } from '../src/client/config.ts';
 
+it('reports capacity before plan validation and preserves every occupied slot', async () => {
+  const world = new MinecraftWorld({ cfg: structuredClone(MINECRAFT_CLIENT_DEFAULTS) });
+  const goal = world.tools().find(tool => tool.name === 'mc_goal')!;
+  const call = (args: Record<string, unknown>) => goal.handler(args, {} as never);
+  const text = (receipt: unknown) => typeof receipt === 'string' ? receipt : (receipt as {text:string}).text;
+  const project = (slot: number) => ({ text: `project-${slot}`, plan: [{do:'inspect', judgment:'observed'}] });
+  const invalid = {add: {text:'new project', plan:[{do:'inspect'}]}};
+  for (let slot = 1; slot <= 5; slot++) await call({add:project(slot)});
+  for (const request of [invalid, {add:project(6)}]) {
+    const rejected = await call(request);
+    expect(rejected).toMatchObject({failed:true, meta:{goalAdmission:{code:'GOAL_BOARD_FULL',registered:false,capacity:5}}});
+    expect(text(rejected)).not.toContain('project-1');
+  }
+  const mixed = await call({...invalid,drop:2});
+  expect(mixed).toMatchObject({failed:true});
+  expect(text(mixed)).not.toContain('5/5');
+  const board = text(await call({}));
+  for (let slot = 1; slot <= 5; slot++) expect(board).toContain(`#${slot} v1 project-${slot}`);
+  await call({drop:2});
+  expect(text(await call(invalid))).toMatch(/verify|judgment/);
+  await call({add:project(6)});
+  expect(text(await call({}))).toContain('#2 v1 project-6');
+});
+
 it('lets a caller recover a rejected plan-only revision without losing the existing goal', async () => {
   const world = new MinecraftWorld({ cfg: structuredClone(MINECRAFT_CLIENT_DEFAULTS) });
   const call = (args: Record<string, unknown>) => world.tools().find(t => t.name === 'mc_goal')!.handler(args, {} as never);

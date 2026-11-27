@@ -695,6 +695,16 @@ export interface GoalTable {
   list: MinecraftGoal[];
 }
 
+function nextGoalSlot(table: GoalTable): number | undefined {
+  const used = new Set(table.list.map(goal => goal.slot));
+  for (let slot = 1; slot <= GOAL_SLOTS; slot++) {
+    if (!used.has(slot)) return slot;
+  }
+  return undefined;
+}
+
+const GOAL_BOARD_FULL = `目标板 ${GOAL_SLOTS}/${GOAL_SLOTS} 已满，本次未登记。已有任务可以直接使用动作工具推进。需要查阅已有目标时用空参数查询。`;
+
 /** 登记时刻。现实时刻是主口径(跨场次可对账),游戏内天数只够当一句现场描述 */
 export interface GoalStamp {
   day: number | null;
@@ -784,7 +794,7 @@ function optionalText(value: unknown): string | null | { error: true } {
 }
 
 /** `{}` = 查询；add/milestone/reopen/done/drop 一次只受理一个。 */
-export function parseGoal(args: Record<string, unknown>): GoalOp | { error: string } {
+export function parseGoal(args: Record<string, unknown>, table?: GoalTable): GoalOp | { error: string; code?: 'GOAL_BOARD_FULL' } {
   const operations = ['add', 'revise', 'milestone', 'reopen', 'done', 'drop'] as const;
   const extras = Object.keys(args).filter((key) => !operations.some((operation) => operation === key));
   if (extras.length > 0) return { error: `mc_goal 有未知字段: ${extras.join(', ')}` };
@@ -799,6 +809,7 @@ export function parseGoal(args: Record<string, unknown>): GoalOp | { error: stri
     if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
       return { error: 'add 要一个 {text, plan, kind?, target?, blueprint?, current?, total?, unit?} 对象' };
     }
+    if (table && nextGoalSlot(table) === undefined) return { error: GOAL_BOARD_FULL, code: 'GOAL_BOARD_FULL' };
     const body = obj as Record<string, unknown>;
     const fields = ['text', 'plan', 'blueprint', 'kind', 'target', 'current', 'total', 'unit'];
     const extras = Object.keys(body)
@@ -962,12 +973,8 @@ export function applyGoal(
 ): string {
   if (op.kind === 'query') return renderGoalQuery(table.list, stamp.at, note);
   if (op.kind === 'add') {
-    const used = new Set(table.list.map((g) => g.slot));
-    const slot = Array.from({ length: GOAL_SLOTS }, (_, i) => i + 1).find((n) => !used.has(n));
-    if (slot === undefined) {
-      return `${GOAL_SLOTS} 格全占着,这条没挂上——先 done 或 drop 一条。\n`
-        + renderGoalQuery(table.list, stamp.at, note);
-    }
+    const slot = nextGoalSlot(table);
+    if (slot === undefined) return GOAL_BOARD_FULL;
     const goal: MinecraftGoal = {
       slot, revision:1,
       text: op.text,
@@ -2489,7 +2496,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     tags: ['write'],
     bodyControl: 'independent',
     description:
-      'Register and track what you are working towards in this world: up to five slots (#1..#5). '
+      'Optionally track projects in this world in five slots (#1..#5). Actions can run without a slot. '
       + 'Targets can be builds, gathered items, entity kills or captures, exploration, transport, farming, '
       + 'redstone work, survival time, or any other project. '
       + 'A verify condition must directly establish its milestone result. The evaluator only tests '
@@ -5182,8 +5189,9 @@ export class MinecraftWorld implements World {
         }
       },
       mc_goal: async (args) => {
-        const op = parseGoal(args);
-        if ('error' in op) return { text: this.toolLog('mc_goal', args, `[mc_goal 失败] ${op.error}`), failed: true };
+        const op = parseGoal(args, this.goalTable());
+        if ('error' in op) return { text: this.toolLog('mc_goal', args, `[mc_goal 失败] ${op.error}`), failed: true,
+          ...(op.code ? { meta: { goalAdmission: { code: op.code, registered: false, capacity: GOAL_SLOTS } } } : {}) };
         const goal = op.kind === 'done' ? this.goalTable().list.find(value => value.slot === op.slot) : null;
         const result = this.goalClosure(args);
         if (goal && !this.goalTable().list.includes(goal)) {
@@ -5937,9 +5945,9 @@ export class MinecraftWorld implements World {
   });
 
   protected setGoal(args: Record<string, unknown>): string {
-    const op = parseGoal(args);
-    if ('error' in op) return `[mc_goal 失败] ${op.error}`;
     const table = this.goalTable();
+    const op = parseGoal(args, table);
+    if ('error' in op) return `[mc_goal 失败] ${op.error}`;
     const writeState = (): string => JSON.stringify(table.list.map((goal) => ({
       slot: goal.slot,
       revision: goal.revision,

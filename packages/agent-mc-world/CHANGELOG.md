@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.145
+
+Report a full optional goal board before validating a new plan. The rejection leaves existing projects intact and lets callers proceed with ordinary actions.
+
 ## 0.5.7-rc.160-preview.144
 
 Add one-call, host-selected exploration to the Mineflayer action tool. Directional travel and fixed destinations use the ordinary native navigation queue and terminal receipts.
