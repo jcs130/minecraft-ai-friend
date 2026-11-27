@@ -17,7 +17,6 @@ import type { EventEnvelope, Logger, ModelFacts, ToolDef, ToolOutcome, World, Wo
 import { MinecraftClientWorld } from './world.ts';
 import { JavaClientWorld, JAVA_CLIENT_ENVIRONMENT } from './java-client.ts';
 import { assertMinecraftReady } from './config.ts';
-import { applyServerProfile } from '../../core/server-profiles.ts';
 import type { MinecraftClientConfig } from './config.ts';
 import { renderTemplate } from '../../core/support/runtime.mjs';
 import { AgentJournal } from './journal.ts';

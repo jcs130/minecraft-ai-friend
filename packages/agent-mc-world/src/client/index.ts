@@ -54,7 +54,6 @@ export { configureObservationPolicy, entityObservationScope, entityAwareness, OB
 export { KNOWLEDGE_TOOL, readMinecraftKnowledge, queryMinecraftKnowledge } from '../../core/knowledge.ts';
 export { MINEDOJO_SOURCE, REFERENCE_INDEX_SCHEMA, buildReferenceIndex, readReferenceIndex, validateReferenceConfig,
   type MinecraftKnowledgeConfig, type ReferenceIndexConfig, type ReferenceEmbeddingConfig } from '../../core/reference-index.ts';
-export type { MinecraftServerGuide } from '../../core/server-guide.ts';
 export { AgentMetrics, serveAgentMetrics, type HarnessTrace } from './metrics.ts';
 export type { ToolDef, ToolOutcome, ToolCallContext, EventEnvelope, WorldRequestFacts, Logger, ModelFacts } from './contracts.ts';
 export type { FamiliarAction } from '../contracts/host.ts';

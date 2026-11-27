@@ -5,7 +5,6 @@ import { zhName } from './names.ts';
 import type { ToolDef } from './support/host-contract.ts';
 import { FOOD_CAUTIONS, FOOD_COOKING, FOOD_EFFECTS, MOJANG_1211_SOURCE, VANILLA_GUIDES, VANILLA_KNOWLEDGE_VERSION } from './vanilla-food.ts';
 import { VANILLA_SURVIVAL_GUIDES } from './vanilla-survival.ts';
-import { readServerGuide, validateServerGuide } from './server-guide.ts';
 import { MINEDOJO_SOURCE, readReferenceIndex, type MinecraftKnowledgeConfig } from './reference-index.ts';
 import { readServerGuide, validateServerGuide } from './server-guide.ts';
 import { readServerRecipeBook } from './server-recipe-book.ts';
