@@ -16,6 +16,7 @@ import { skillSwim } from './swim-route.ts';
 import { observeDamage, type DamageEvidence } from './damage-evidence.ts';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
+import { eyeObstruction } from './eye-obstruction.ts';
 import { clearNavigationDrop, hasApprovedNavigationDrop } from './navigation-fall.ts';
 import type { Logger } from './support/host-contract.ts';
 import { nowIso, SYSTEM_TIMEZONE } from './support/runtime.mjs';
@@ -7586,7 +7587,7 @@ export class Reflexes {
       if (this.drownRescueEnabled()) void this.antiDrown(bot);
     }
     // hurting=true:实心方块闷头那一路(圆石/石头)只在掉血时起手,口径在这条挂钩上
-    void this.antiSuffocate(bot, true);
+    void this.antiSuffocate(bot, true, evidence.origin === 'packet' && evidence.sourceType === 'minecraft:in_wall');
     if (now - this.lastEnvHurtAt < Reflexes.ENV_HURT_LOG_MS) return;
     this.lastEnvHurtAt = now;
     const touch = hazardTouch(bot);
@@ -7604,7 +7605,7 @@ export class Reflexes {
     });
   }
 
-  private buried: { startedAt: number; block: string; digging: boolean; reported: boolean } | null = null;
+  private buried: { startedAt: number; block: string; digging: boolean; reported: boolean; confirmedCell?: string } | null = null;
 
   /**
    * 环境伤害入口启动窒息自救，启动后逐心跳复查头部方块。
@@ -7612,15 +7613,16 @@ export class Reflexes {
    * 身体所有权沿用环境身份优先级，队列冻结受 beginEnvironment 约束。
    * 下落方块优先寻找可用横向出口，找不到时挖头部格；其他窒息方块直接挖头部格。
    */
-  private async antiSuffocate(bot: Bot, hurting = false): Promise<void> {
-    const headPos = bot.entity.position.offset(0, 1, 0);
-    const head = bot.blockAt(headPos);
+  private async antiSuffocate(bot: Bot, hurting = false, inWall = false): Promise<void> {
+    const confirmed = inWall || this.buried?.confirmedCell
+      ? eyeObstruction(bot, inWall ? undefined : this.buried?.confirmedCell) : null;
+    const headPos = confirmed?.position ?? bot.entity.position.offset(0, 1, 0);
+    const head = confirmed ?? bot.blockAt(headPos);
     const faller = head !== null && isSuffocatingFaller(head.name);
-    // transparent 排除铁砧/台阶这类非整方块:头在它们的格里不窒息,掉血多半是砸击
-    // 伤害,挖它们脱不了困(玻璃也被这条排除 —— 宁可漏这种罕见形态,不误挖铁砧)
+    // Unattributed damage keeps the previous opaque-block rule. A native in_wall packet
+    // can also start rescue for an actual collision at eye height in a transparent block.
     const solid = head !== null && !faller && head.boundingBox === 'block'
-      && head.transparent !== true
-      && (hurting || this.buried !== null);
+      && (confirmed !== null || head.transparent !== true && (hurting || this.buried !== null));
     if (head === null || (!faller && !solid)) {
       const was = this.buried;
       if (was === null) return;
@@ -7665,6 +7667,7 @@ export class Reflexes {
         text: `[反射] ${faller ? `被${zhName(head.name)}埋住了!正在挖开脱身` : `头卡在${zhName(head.name)}里,在掉血!正在挖开脱身`}。生命 ${Math.ceil(bot.health ?? 0)}/20。`,
       });
     }
+    if (confirmed) esc.confirmedCell = confirmed.position.toString();
     if (esc.digging) return;
     esc.digging = true;
     try {
