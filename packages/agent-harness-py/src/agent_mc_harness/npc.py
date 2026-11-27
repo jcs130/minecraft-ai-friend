@@ -47,6 +47,9 @@ VILLAGER_REPLY_TTL_MS = 25_000
 VILLAGER_CONTEXT_SECONDS = 180
 UUID_STRING = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\Z")
 COMPANION_CHECK_IN_SECONDS = 180
+NATIVE_ROUTINE_REVIEW_SECONDS = 900
+NATIVE_DANGER_REVIEW_SECONDS = 15
+NATIVE_SCHEDULES = ("DAY", "NIGHT", "ALL")
 COMPANION_TRAVEL_BLOCKS = 16
 SELF_CHOSEN_WAIT = "自主选择在这里等候"  # Recorded when a rest had no addressed order behind it.
 REGISTERED_HOME_RANGE = 48
@@ -97,6 +100,8 @@ class NpcBodyProfile(BaseModel):
     activity_review_seconds: int | None = Field(default=None, ge=10, le=600)
     expedition_wait_seconds: int | None = Field(default=None, ge=30, le=1800)
     adventure_advice: bool = False
+    autonomy_mode: Literal["balanced", "native_first"] = "balanced"
+    native_schedule: Literal["DAY", "NIGHT", "ALL"] | None = None
 
 
 class NpcRole(NpcCharacterProfile, NpcBodyProfile):
@@ -116,6 +121,11 @@ class NpcRole(NpcCharacterProfile, NpcBodyProfile):
             Step(tool=tool).action("config_validation")
         if self.native_owner_id == self.body_id:
             raise ValueError("independent_owner_identity_required")
+        if self.autonomy_mode == "native_first" and self.body_kind not in {"maid", "villager"}:
+            raise ValueError("native_first_requires_maid_or_villager")
+        if self.native_schedule is not None and (self.autonomy_mode != "native_first" or self.body_kind != "maid"
+                                                or "body:native:schedule" not in self.allowed_tools):
+            raise ValueError("native_schedule_requires_authorized_maid_routine")
         if self.default_native_guard and (self.body_kind != "maid" or "body:native:guard" not in self.allowed_tools):
             raise ValueError("default_guard_requires_native_maid_capability")
         if self.activity_review_seconds is not None and self.body_kind != "maid":
@@ -540,6 +550,49 @@ class NpcPlanner:
         self.pending_companion_result: tuple[str, str] | None = None
         self.social_roster = ()
         self.next_social_review = 0.0
+        self.next_native_review: float | None = None
+        self.native_agenda_start = None
+        self.native_problem = None
+        self.next_native_schedule_attempt = 0.0
+        self.next_native_danger_review = 0.0
+
+    def _native_routine_route(self, native, reason):
+        self.last_route = {"layer": "native-policy", "reason": reason, "autonomyMode": "native_first"}
+        if self.role.body_kind == "maid":
+            self.last_route.update(schedule=native.get("schedule"), activity=native.get("activity"))
+        return []
+
+    def _native_schedule_step(self, context, native, now):
+        selected = self.role.native_schedule
+        if (selected is None or native.get("schedule") == selected or native.get("schedule") not in NATIVE_SCHEDULES
+                or now < self.next_native_schedule_attempt or native.get("canMove") is not True
+                or context.capabilities is None or not social_walk_available(context.snapshot)):
+            return None
+        step = Step(tool="body:native:schedule", args={"schedule": selected})
+        if step_support(step, context.capabilities):
+            return None
+        self.next_native_schedule_attempt = now + 300
+        return step
+
+    def _defer_native_review(self, native, now, current_agenda):
+        if self.role.body_kind == "maid":
+            confirmed = (native.get("schedule") in NATIVE_SCHEDULES and native.get("activity") in ("idle", "work", "rest", "play"))
+            problem = native.get("taskId") if native.get("taskEnabled") is False else None
+        else:
+            confirmed = native.get("ai") is True or (native.get("duty") or {}).get("movementOwnedByServer") is True
+            problem = None
+        if not confirmed:
+            return False
+        agenda_start = (current_agenda or {}).get("startsAt")
+        new_agenda = agenda_start is not None and agenda_start != self.native_agenda_start
+        new_problem = problem is not None and problem != self.native_problem
+        self.native_agenda_start, self.native_problem = agenda_start, problem
+        if self.next_native_review is None:
+            self.next_native_review = now + NATIVE_ROUTINE_REVIEW_SECONDS
+        if not (new_agenda or new_problem) and now < self.next_native_review:
+            return True
+        self.next_native_review = now + NATIVE_ROUTINE_REVIEW_SECONDS
+        return False
 
     def _settle_companion_check_in(self, context: PlanContext, now: float) -> None:
         pending = self.pending_companion_check_in
@@ -707,12 +760,23 @@ class NpcPlanner:
         available_for_routine = role.activity_review_seconds is None or activity in {"free", "guarding"}
         keep_quiet_guard = role.activity_review_seconds is None and already_guarding(current_native_state(context))
         current_agenda = (context.agenda or {}).get("current")
+        native_first = role.autonomy_mode == "native_first"
+        quiet_routine = native_first and intent.goal == IDLE_GOAL and not context.dialogue and not (context.party_context or {}).get("message")
+        native = current_native_state(context) if native_first else {}
+        if quiet_routine and not native:
+            return self._native_routine_route(native, "native_observation_unavailable")
+        if quiet_routine and (native.get("sleeping") is True or native.get("activity") == "rest"
+                              or (native.get("resident") or {}).get("sleeping") is True):
+            return self._native_routine_route(native, "native_rest")
         if intent.goal in (IDLE_GOAL, DANGER_GOAL) and now >= self.next_meal:
             meal = routine_meal(role, context)
             if meal:
                 self.next_meal = now + 90.0
                 self.last_route = {"layer": "native-policy", "reason": "ordinary_meal_needed"}
                 return [meal]
+        if quiet_routine and not following and not current_agenda and (step := self._native_schedule_step(context, native, now)):
+            self._native_routine_route(native, "apply_native_schedule")
+            return [step]
         if intent.goal == IDLE_GOAL and not context.dialogue and not following:
             restore = restore_default_guard(role, context)
             # For an opted-in expedition the observed free body, or a reviewed
@@ -732,6 +796,19 @@ class NpcPlanner:
                 self.next_catch = now + 300.0
                 self.last_route = {"layer": "native-policy", "reason": "prepared_native_fishing"}
                 return [catch]
+        if quiet_routine and result_note is None and self._defer_native_review(native, now, current_agenda):
+            return self._native_routine_route(native, "native_routine_continuing")
+        if native_first and intent.goal == DANGER_GOAL and not context.dialogue:
+            snapshot = context.snapshot
+            if (native and snapshot.health is not None and snapshot.max_health and snapshot.health >= snapshot.max_health * .5
+                    and role.body_kind == "maid" and already_guarding(native)
+                    and ((native.get("resident") or {}).get("combat") or {}).get("targetId")
+                    and not injured_ally(nearby_living_entities(snapshot, native))):
+                return self._native_routine_route(native, "native_guard_engaged")
+            if now < self.next_native_danger_review:
+                return self._native_routine_route(native, "native_danger_between_reviews")
+            self.next_native_danger_review = now + NATIVE_DANGER_REVIEW_SECONDS
+        if intent.goal == IDLE_GOAL and not context.dialogue and available_for_routine:
             if position := companion_check_in(role, context):
                 ending = (context.companion_adventure or {}).get("lastActivityEndedAt", 0)
                 fresh_ending = self.last_adventure_ending < ending and 0 <= time.time() * 1000 - ending <= 15 * 60_000
@@ -1009,6 +1086,9 @@ class NpcPlanner:
                        {"role": "system", "content": role.persona +
                         ("\n" + WHALE_SPEECH_POLICY if role.speech_profile == "whale" else "") +
                         "\nYou control only this registered NPC through game actions. "
+                        + ("The game owns ordinary work, patrol and rest under the observed native schedule. "
+                           "Let a working routine continue with empty steps. Choose a new action when a real need, commitment or request calls for it. "
+                           if native_first else "")
                         + response_shape + "Use empty steps to continue or rest. Only these tools: " + json.dumps(tools) + ". Never invent success, inventory, abilities or coordinates. "
                         "cast spellId is the learned skill's bare ID, for example radiant_pulse; omit the display prefix mycli:. "
                         "The observation is already supplied. Read again only for missing facts or after an action. "
@@ -1197,6 +1277,19 @@ def activity_scene(snapshot) -> tuple[str, str] | None:
     return mode, cue
 
 
+def nearby_living_entities(snapshot, raw):
+    entities = snapshot.entities if isinstance(snapshot.entities, list) else []
+    resident = raw.get("resident", {})
+    return entities + resident.get("nearbyEntities", []) if isinstance(resident, dict) else entities
+
+
+def injured_ally(entities) -> bool:
+    return any(isinstance(e, dict) and e.get("ally") is True
+               and isinstance(e.get("maxHealth"), (int, float)) and e["maxHealth"] > 0
+               and isinstance(e.get("health"), (int, float)) and 0 < e["health"] < e["maxHealth"] * .7
+               for e in entities)
+
+
 def danger(snapshot) -> bool:
     if snapshot is None or snapshot.life_state != "alive":
         return False
@@ -1205,16 +1298,8 @@ def danger(snapshot) -> bool:
     raw = snapshot.raw if isinstance(snapshot.raw, dict) else {}
     scene = raw.get("scene", {})
     enemies = scene.get("hostiles", scene.get("enemies", [])) if isinstance(scene, dict) else []
-    entities = snapshot.entities if isinstance(snapshot.entities, list) else []
-    resident = raw.get("resident", {})
-    if isinstance(resident, dict):
-        entities = entities + resident.get("nearbyEntities", [])
-    if any(isinstance(e, dict) and e.get("ally") is True
-           and isinstance(e.get("maxHealth"), (int, float)) and e["maxHealth"] > 0
-           and isinstance(e.get("health"), (int, float)) and 0 < e["health"] < e["maxHealth"] * .7
-           for e in entities):
-        return True
-    return bool(enemies) or any(isinstance(e, dict) and e.get("hostile") is True for e in entities)
+    entities = nearby_living_entities(snapshot, raw)
+    return bool(enemies) or injured_ally(entities) or any(isinstance(e, dict) and e.get("hostile") is True for e in entities)
 
 
 def social_walk_available(snapshot) -> bool:

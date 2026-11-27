@@ -101,6 +101,28 @@ progress. The dialogue journal keeps a work attempt tied to its source event
 across restart so a new planning turn cannot repeat an identical order for the
 same input.
 
+### Native routines and model usage
+
+Set `autonomy_mode: "native_first"` on a maid or villager's body profile
+(the role itself in schema 1) to let the game handle ordinary work, wandering
+and rest. Dynamic maid and villager
+rosters take the same setting as `autonomyMode` in `guideCompanions` and
+`villagerBodies`. `balanced` is the default for existing roles.
+
+For a maid the host reads the schedule, active day phase and native task from
+the original body. A configured `native_schedule` of `DAY`, `NIGHT` or `ALL`
+is applied through the normal `body:native:schedule` action when the maid is
+idle and the capability is available. With the field omitted, use the maid's
+existing in-game schedule. A schedule change needs a native receipt and a
+fresh readback. It does not grant extra tasks or supplies.
+
+During a confirmed ordinary native routine the first model review is due after
+15 minutes. Existing follow and guard logic continues, and native rest delays
+routine reviews until the body is awake. Addressed dialogue, urgent danger, a
+new commitment window or a newly unavailable task can still trigger a model
+decision. For villagers the mode respects vanilla AI and service posts.
+Resident health reports the native-policy reason for a skipped model turn.
+
 ### Maid starter equipment and favorability
 
 A registered unified maid gets her starter kit on the original entity when it
