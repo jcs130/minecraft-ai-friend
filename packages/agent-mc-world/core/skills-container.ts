@@ -162,6 +162,25 @@ function rememberDiscard(bot: Bot, entity: Bot['entity']): void {
  * 平扔最高到脚下约 1.8 格,两格高的通道够用。选择已测空隙最长的方向，同距取首。
  * 没有已测空隙返回 null；这是方向建议，不是丢弃许可，不寻路或修改方块。
  */
+function retreatSurface(read: (x:number,y:number,z:number)=>ReturnType<Bot['blockAt']>, pos:Vec3, dx:number, dz:number, ahead:number): string | null {
+  // Farmland's top is 1/16 below the adjoining full block.
+  const feet = Math.floor(pos.y + 0.125);
+  for (const sx of [-0.3,0.3]) for (const sz of [-0.3,0.3]) {
+    const x=Math.floor(pos.x+dx*ahead+sx), z=Math.floor(pos.z+dz*ahead+sz);
+    const below=read(x,feet-1,z);
+    if (!below?.shapes?.some(s=>s[0]===0 && s[2]===0 && s[3]===1 && s[5]===1 && s[4]>=0.9375 && s[4]<=1)
+      || ['magma_block','cactus','campfire','soul_campfire','powder_snow'].includes(below.name))
+      return '脚下缺少平稳落脚面';
+    for (const y of [feet,feet+1]) {
+      const cell=read(x,y,z);
+      if (!cell || !(AIR_NAMES.has(cell.name) || (cell.boundingBox==='empty' && retreatPassable.has(cell.name))))
+        return '退路经过'+(cell?.name ?? '未加载格');
+    }
+  }
+  return null;
+}
+const retreatPassable=new Set(['torch','wall_torch','soul_torch','soul_wall_torch','short_grass','tall_grass','fern','wheat','carrots','potatoes','beetroots']);
+
 export function planTossThrow(bot: Bot): { yaw: number; pitch: number; distance: number } | null {
   // Unknown geometry cannot establish a clear throw; the caller may still discard.
   if (typeof bot.blockAt !== 'function' || typeof bot.look !== 'function') return null;
@@ -174,6 +193,13 @@ export function planTossThrow(bot: Bot): { yaw: number; pitch: number; distance:
     { pitch: 0, layers: [0, 1] },
   ];
   let best: { yaw: number; pitch: number; distance: number } | null = null;
+  let bestRetreat = -1;
+  const cells=new Map<string,ReturnType<Bot['blockAt']>>();
+  const read=(x:number,y:number,z:number)=>{
+    const key=x+','+y+','+z;
+    if (!cells.has(key)) cells.set(key,blockAtCell(bot,{x,y,z}));
+    return cells.get(key) ?? null;
+  };
   for (const { pitch, layers } of throws) {
     for (let deg = 0; deg < 360; deg += TOSS_YAW_STEP) {
       const rad = (deg * Math.PI) / 180;
@@ -184,13 +210,21 @@ export function planTossThrow(bot: Bot): { yaw: number; pitch: number; distance:
       for (let d = 0.25; d <= TOSS_RANGE.max; d += 0.25) {
         // Include the first metre and a drop's width; integer-only rays miss
         // a nearby wall when the player stands against a cell boundary.
-        if (![-0.15, 0.15].every(side => layers.every(dy => clear(blockAtCell(bot, {
-          x: Math.floor(me.x + dx * d + dz * side), y: feetY + dy,
-          z: Math.floor(me.z + dz * d - dx * side),
-        }))))) break;
+        if (![-0.15, 0.15].every(side => layers.every(dy => clear(read(
+          Math.floor(me.x + dx*d + dz*side),feetY+dy,Math.floor(me.z + dz*d - dx*side)))))) break;
         reach = d;
       }
-      if (reach > 0 && (!best || reach > best.distance)) best = { yaw: rad, pitch, distance: reach };
+      if (!reach) continue;
+      const usable=Math.min(reach,TOSS_RANGE.min), previous=best?Math.min(best.distance,TOSS_RANGE.min):0;
+      if (usable<previous) continue;
+      let retreat=0;
+      if (bot.entity.onGround) for (const step of [0,0.35,0.75,1.1,1.45,1.8,2]) {
+        if (retreatSurface(read,me,-dx,-dz,step)) break;
+        retreat=step;
+      }
+      if (!best || usable>previous || retreat>bestRetreat || (retreat===bestRetreat && reach>best.distance)) {
+        best={yaw:rad,pitch,distance:reach};bestRetreat=retreat;
+      }
     }
   }
   return best;
@@ -211,26 +245,21 @@ export function yawCompass(yaw: number): string {
 async function settleToss(bot: Bot, ctx: SkillContext, origin: Vec3, yaw: number, drops: Set<number>): Promise<string> {
   const until = Date.now() + TOSS_SETTLE_MS;
   const dx = Math.sin(yaw), dz = Math.cos(yaw);
-  const y = Math.floor(origin.y);
   const startEntity = bot.entity;
+  let reason='移动控制已占用';
   const distanceBack = () => (bot.entity.position.x - origin.x) * dx + (bot.entity.position.z - origin.z) * dz;
   const canStepBack = (): boolean => {
     const pos = bot.entity.position;
     if (bot.entity !== startEntity || !bot.entity.onGround || (bot as Bot & {vehicle?: unknown}).vehicle || bot.currentWindow ||
         bot.pathfinder?.isMoving?.() || Math.abs(pos.y - origin.y) > 0.25 ||
-        Math.abs(Math.atan2(Math.sin(bot.entity.yaw-yaw), Math.cos(bot.entity.yaw-yaw))) > 0.12) return false;
+        Math.abs(Math.atan2(Math.sin(bot.entity.yaw-yaw), Math.cos(bot.entity.yaw-yaw))) > 0.12) {reason='站位、朝向或移动控制已变化';return false;}
     for (const id of drops) {
       const item = bot.entities[id]?.position;
-      if (item && (item.x - pos.x) * dx + (item.z - pos.z) * dz > 0.1) return false;
+      if (item && (item.x - pos.x) * dx + (item.z - pos.z) * dz > 0.1) {reason='掉落物在退路上';return false;}
     }
     for (const ahead of [0, 0.35, 0.75]) {
-      for (const xSide of [-0.3, 0.3]) for (const zSide of [-0.3, 0.3]) {
-        const x = Math.floor(pos.x + dx * ahead + xSide), z = Math.floor(pos.z + dz * ahead + zSide);
-        const below = blockAtCell(bot, {x, y:y-1, z});
-        if (!below || !below.shapes?.some(s => s[0] === 0 && s[2] === 0 && s[3] === 1 && s[4] === 1 && s[5] === 1) ||
-            ['magma_block','cactus','campfire','soul_campfire','powder_snow'].includes(below.name) ||
-            ![y,y+1].every(h => AIR_NAMES.has(blockAtCell(bot,{x,y:h,z})?.name ?? ''))) return false;
-      }
+      const blocked=retreatSurface((x,y,z)=>blockAtCell(bot,{x,y,z}),pos,dx,dz,ahead);
+      if (blocked) {reason=blocked;return false;}
     }
     return true;
   };
@@ -241,7 +270,7 @@ async function settleToss(bot: Bot, ctx: SkillContext, origin: Vec3, yaw: number
       for (let ticks = 0; ticks < 18 && distanceBack() < 2 && canStepBack(); ticks++) {
         checkAbort(ctx);
         if (controls.some(key => key !== 'back' && bot.controlState[key])) break;
-        if (!pressed) { bot.setControlState('back', true); pressed = true; }
+        if (!pressed) { bot.setControlState('back', true); pressed = true; reason='未测到位置变化'; }
         await sleep(50);
       }
     }
@@ -253,7 +282,7 @@ async function settleToss(bot: Bot, ctx: SkillContext, origin: Vec3, yaw: number
     checkAbort(ctx);
     await sleep(Math.min(100, until - Date.now()));
   }
-  return moved > 0.1 ? `抛出后实测后退${moved.toFixed(1)}格` : '未确认后退，仍有回拾可能';
+  return moved > 0.1 ? `抛出后实测后退${moved.toFixed(1)}格` : `未确认后退（${reason}），仍有回拾可能`;
 }
 
 export async function skillToss(

@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.147
+
+Choose an open throw with a verified retreat across supported crop rows and torches. Report why a retreat was blocked.
+
 ## 0.5.7-rc.160-preview.146
 
 Exact crop harvest and state reads accept ordinary coordinate records. After dropping items, the sender uses the pickup-settlement window to step away on verified level ground and reports the observed movement.

@@ -39,7 +39,7 @@ describe('toss receipt and aim', () => {
     };
     bot.on('physicsTick', () => { if (bot.controlState.back) bot.entity.position.z += .18; });
     let cancelled = false;
-    const result = skillToss(bot,{skill:'toss',item:'cobblestone',count:1},{aborted:()=>cancelled} as any);
+    const result = skillToss(bot,{skill:'toss',item:'cobblestone',count:1,at:[0,64,-3]},{aborted:()=>cancelled} as any);
     const finished = scene === 'cancel' ? expect(result).rejects.toThrow() :
       expect(result).resolves.toContain(scene === 'clear' ? '实测后退' : '未确认后退');
     await vi.advanceTimersByTimeAsync(150);
@@ -51,6 +51,25 @@ describe('toss receipt and aim', () => {
     expect(bot.controlState.forward).toBe(scene === 'busy');
     if (scene === 'clear') expect(bot.entity.position.z - .5).toBeGreaterThanOrEqual(2);
     if (['ledge','fire','busy'].includes(scene)) expect(bot.setControlState).not.toHaveBeenCalled();
+  });
+  it('can discard from a torch-lit crop row and leaves room to walk away from the item', async () => {
+    vi.useFakeTimers();
+    const {bot}=rig(false,'1.21.11');
+    bot.entity.position.y=63.9375;
+    bot.entity.onGround=true;
+    bot.controlState={back:false};
+    bot.setControlState=(key:string,on:boolean)=>{bot.controlState[key]=on;};
+    const cropSoil={name:'farmland',boundingBox:'block',shapes:[[0,0,0,1,0.9375,1]]};
+    const empty=(name:string)=>({name,boundingBox:'empty',shapes:[]});
+    bot.blockAt=(p:Vec3)=>p.y===63 ? (p.z>=1?empty('water'):cropSoil) : empty(p.y===64?'torch':'air');
+    bot.on('physicsTick',()=>{if(bot.controlState.back){
+      bot.entity.position.x+=0.18*Math.sin(bot.entity.yaw);
+      bot.entity.position.z+=0.18*Math.cos(bot.entity.yaw);
+    }});
+    const finished=expect(skillToss(bot,{skill:'toss',item:'cobblestone',count:1},ctx)).resolves.toContain('实测后退');
+    await vi.advanceTimersByTimeAsync(4200);await finished;
+    expect(bot.entity.position.z).toBeLessThan(1);
+    expect(Math.hypot(bot.entity.position.x-.5,bot.entity.position.z-.5)).toBeGreaterThanOrEqual(2);
   });
   it.each([
     { query: 'Worn blade', names: ['Worn blade', 'Spare blade'], suggest: true },
