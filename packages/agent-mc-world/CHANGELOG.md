@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.143
+
+Resolve find target categories using the same registry as until, prefer visible reachable gathering targets and retain packet authors in the web viewer.
+
 ## 0.5.7-rc.160-preview.137
 
 - List and read written or writable books from synced player slots, or page through a native opened book. Handle modern item components and legacy book NBT.

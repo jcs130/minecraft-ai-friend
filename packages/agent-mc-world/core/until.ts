@@ -26,7 +26,7 @@ export function untilBlockIds(bot: Bot, until: readonly string[]): { ids: number
     const name = raw.replace(/^minecraft:/, '');
     if (name.startsWith('#')) {
       const bare = name.slice(1);
-      const tagged = tags?.[bare] ?? tags?.[`minecraft:${bare}`] ?? null;
+      const tagged = tags && Object.hasOwn(tags, bare) ? tags[bare] : tags?.[`minecraft:${bare}`];
       if (tagged) {
         for (const n of tagged) {
           const b = byName[n.replace(/^minecraft:/, '')];
@@ -34,7 +34,7 @@ export function untilBlockIds(bot: Bot, until: readonly string[]): { ids: number
         }
         continue;
       }
-      const pred = UNTIL_CATEGORIES[bare];
+      const pred = Object.hasOwn(UNTIL_CATEGORIES, bare) ? UNTIL_CATEGORIES[bare] : undefined;
       if (!pred) { unknown.push(name); continue; }
       for (const b of Object.values(byName)) if (pred(b.name)) ids.add(b.id);
       continue;
