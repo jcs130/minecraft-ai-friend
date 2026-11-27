@@ -1,5 +1,16 @@
 # Decisions during a journey
 
+For spatial exploration with the Mineflayer SDK, MCP or hosted World, use
+`mc_do({"explore":{"goal":"看看营地东边有什么","direction":"east","distance":64}})`.
+Omit the heading to let the host's fast decision service choose a compass direction with the
+current terrain, risks and endpoint coordinates. To specify a location instead, pass
+`{"explore":{"at":[-572,432]}}` or a precise feet cell `{"explore":{"at":[-572,70,432]}}`.
+The choice can hold. Otherwise the same call submits one native navigation task; it needs
+no main-model round per pathfinder waypoint. Check its original task ID for arrival or
+obstruction. A projected coordinate alone says nothing about the terrain at the destination.
+Decisions expire on a change of body ownership, connection, dimension or position. Hosts
+without a fast decision service can use ordinary goto as before.
+
 Long navigation keeps its body task while the host considers new evidence. Journey observations identify their original task, step, destination, sampling time and visible clues. A villager, sign or landmark is not proof of village boundaries, a new settlement or a reachable entrance. Bounded notification novelty is not a persistent record of unexplored places; use scoped game notes and host memory when deciding whether to visit.
 
 Without a new visible clue, a fixed-destination route can produce one measured

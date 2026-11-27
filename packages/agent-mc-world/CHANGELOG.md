@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.144
+
+Add one-call, host-selected exploration to the Mineflayer action tool. Directional travel and fixed destinations use the ordinary native navigation queue and terminal receipts.
+
 ## 0.5.7-rc.160-preview.143
 
 Resolve find target categories using the same registry as until, prefer visible reachable gathering targets and retain packet authors in the web viewer.

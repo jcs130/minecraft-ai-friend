@@ -4,6 +4,7 @@ import type { MinecraftWorldOptions } from '../../core/world.ts';
 import type { ToolDef, World, WorldHost, WorldRequestFacts } from './contracts.ts';
 import { observeVisual } from './visual.ts';
 import { createMinecraftChoiceTool } from './choice.ts';
+import { explorationActions } from './exploration.ts';
 import { minecraftLifeTool } from './life.ts';
 import { MessageInbox, messageInboxHost, messageInboxFacts } from './message-inbox.ts';
 import { mountServerProfile } from '../../core/server-profiles.ts';
@@ -20,6 +21,7 @@ export class MinecraftClientWorld implements World {
   private readonly engine: EnginePort;
   private readonly messages: MessageInbox;
   private readonly choice = createMinecraftChoiceTool(() => this.host, () => this.requestFacts(), () => this.choiceProvider());
+  private readonly explore = explorationActions(() => this.host, () => this.requestFacts(), () => this.choiceProvider());
   /** Adapter-owned saved connection ID; default inherits the host. No endpoint or credential resolution here. */
   protected choiceProvider(): string | undefined { return undefined; }
   /** A naming adapter may change this hint without rewriting quoted player text. */
@@ -41,7 +43,7 @@ export class MinecraftClientWorld implements World {
   }
   requestFacts() { return messageInboxFacts(this.engine.requestFacts?.() ?? null, this.messages, this.messageQueryName()); }
   tools(): ToolDef[] {
-    return withToolHelp([...this.engine.tools().map((tool): ToolDef => tool.name !== 'mc_visual' ? tool : { ...tool,
+    return withToolHelp([...this.engine.tools().map((tool): ToolDef => tool.name === 'mc_do' ? this.explore(tool) : tool.name !== 'mc_visual' ? tool : { ...tool,
       description: 'Observe the current Minecraft scene. A nearby wall that fills the view yields voxel evidence without a screenshot; force_image:true requests an image for surface details. Image-capable hosts can receive the real screenshot; otherwise return timestamped game facts. No body motion or unseen geometry.',
       handler: (args, ctx) => observeVisual(tool, args, ctx, this.host, () => this.requestFacts(), false, 'mc'),
     }), this.messages.tool(), this.choice, minecraftLifeTool()]);
