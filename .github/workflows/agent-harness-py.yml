@@ -37,5 +37,6 @@ jobs:
         working-directory: packages/agent-harness-py
         run: |
           python -m pytest -q tests/test_villager_quests.py tests/test_villager_service.py tests/test_native_villager.py
+          python -m pytest -q tests/test_npc_activity_review.py tests/test_qwenpaw_decisions.py
           python -m ruff check src/agent_mc_harness/quests tests/test_villager_quests.py
           python -m mypy src/agent_mc_harness/quests tests/test_villager_quests.py

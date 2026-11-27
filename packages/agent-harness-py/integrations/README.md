@@ -48,6 +48,23 @@ N.E.K.O. 通过定向消息把回合交给指定角色，用运行时工具收�
 
 ## 接入其他 Agent
 
+### 本机 QwenPaw 居民
+
+`npc.json` 的 `qwenPawDecisions` 可将已登记的女仆和村民交给独立的 QwenPaw 实例规划，使用 `/api/console/chat` 和每角色独立的工作区。角色按 `characterId` 匹配，工作区 ID 由 `qwenpaw_link.Character.agent_id` 计算。服务端仍用原身体接口执行，核验原动作回执，继续读取该角色现有的记忆和语音配置。
+
+```json
+{
+  "qwenPawDecisions": {
+    "dedicatedInstance": true,
+    "endpoint": "http://127.0.0.1:18092",
+    "tokenFile": "/srv/private/resident-paw-token",
+    "allowedCharacters": ["69a076dc-b94a-4975-9884-03fef8f2c1da"]
+  }
+}
+```
+
+为每个已选角色预先建立 QwenPaw 工作区，禁用内置工具、MCP、ACP、定时唤醒和对外频道。这里的 QwenPaw 只提交计划，游戏动作权限由原身体目录和服务器核验。已选角色的常规规划和对话只使用 QwenPaw。通信失败时本轮结束，下一轮重新观察。Numen 身体沿用现有控制端。玩家伙伴依旧由认证名册按主人在线状态启停。
+
 所有客户端请求都向官网出站，使用 HTTPS 和 JSON。桌面可以使用普通 HTTP 客户端。授权期间调用下列接口，业务前缀为 `/api/v1/`。
 
 | POST 路径 | 请求与结果 |

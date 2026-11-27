@@ -37,6 +37,22 @@ def available(port):
         return sock.connect_ex(("127.0.0.1",port))==0
 
 
+def qwenpaw_child(config, environ):
+    workspace = Path(config["root"])
+    python = Path(config["python"])
+    port = config["port"]
+    if (not workspace.is_absolute() or not python.is_absolute() or not python.is_file()
+            or not (workspace / "work/config.json").is_file()
+            or not (workspace / "secret/console-token.txt").is_file()
+            or type(port) is not int or not 1024 <= port <= 65535):
+        raise ValueError("qwenpaw_supervisor_config_invalid")
+    env = {key: value for key, value in environ.items() if not key.upper().startswith(("QWENPAW_", "COPAW_"))}
+    env.update(QWENPAW_WORKING_DIR=str(workspace / "work"), QWENPAW_SECRET_DIR=str(workspace / "secret"),
+               QWENPAW_AUTH_ENABLED="true", PYTHONUTF8="1")
+    args = [str(python), "-m", "qwenpaw", "app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"]
+    return args, workspace, env
+
+
 def bootstrap(row):
     from urllib.parse import urlsplit
     endpoint=urlsplit(row["endpoint"])
@@ -90,12 +106,20 @@ def serve(config):
     from agent_mc_harness.status_file import StatusFile
     status_file = StatusFile(state / "supervisor.json")
     env=dict(os.environ,PYTHONUTF8="1",PYTHONPATH=os.pathsep.join([str(root/"packages/agent-harness-py/src"),str(root/"packages/agent-memory/graphiti-sidecar")]),AGENT_HARNESS_PY_REPO_ROOT=str(root))
+    paw = qwenpaw_child(settings["qwenPawService"], os.environ) if "qwenPawService" in settings else None
+    kinds = ("graphiti", "qwenpaw", "npc") if paw else ("graphiti", "npc")
     def start(kind):
         stamp=time.strftime("%Y%m%d-%H%M%S")
         stream=(state/(kind+"-"+stamp+".log")).open("ab");logs.append(stream)
-        if kind=="graphiti":args=[str(root/"paper/integrations/unified-npc/graphiti_service.py"),"--config",settings["graphitiConfig"]]
-        else:args=["-m","agent_mc_harness.npc_service","--config",settings["npcConfig"]]
-        children[kind]=subprocess.Popen([settings["python"],"-X","utf8",*args],cwd=root,env=env,stdin=subprocess.DEVNULL,stdout=stream,stderr=subprocess.STDOUT,
+        if kind == "qwenpaw":
+            args, cwd, child_env = paw
+            if available(settings["qwenPawService"]["port"]):
+                raise RuntimeError("qwenpaw_supervised_port_in_use")
+        else:
+            args = ([str(root/"paper/integrations/unified-npc/graphiti_service.py"),"--config",settings["graphitiConfig"]]
+                    if kind == "graphiti" else ["-m","agent_mc_harness.npc_service","--config",settings["npcConfig"]])
+            args, cwd, child_env = [settings["python"],"-X","utf8",*args], root, env
+        children[kind]=subprocess.Popen(args,cwd=cwd,env=child_env,stdin=subprocess.DEVNULL,stdout=stream,stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name=="nt" else 0)
         cooldown[kind]=time.monotonic()+15
     try:
@@ -107,7 +131,7 @@ def serve(config):
                 if not host_pause.exists():write(host_pause,{"reason":"maintenance"if pause.exists()else"game_offline"})
             else:
                 if host_pause.exists():host_pause.unlink()
-            for kind in ("graphiti","npc"):
+            for kind in kinds:
                 child=children.get(kind)
                 if child and child.poll()is None:continue
                 if time.monotonic()<cooldown.get(kind,0):continue
@@ -127,8 +151,10 @@ def serve(config):
         if npc and npc.poll()is None:
             try:npc.wait(timeout=160)
             except subprocess.TimeoutExpired:npc.terminate();npc.wait(timeout=10)
-        graph=children.get("graphiti")
-        if graph and graph.poll()is None:graph.terminate();graph.wait(timeout=10)
+        for kind in ("graphiti", "qwenpaw"):
+            child=children.get(kind)
+            if child and child.poll() is None:
+                child.terminate();child.wait(timeout=10)
         for stream in logs:stream.close()
         lock.close()
 

@@ -515,7 +515,8 @@ class ModelClient:
 
 
 class NpcPlanner:
-    def __init__(self, role: NpcRole, model: ModelClient, *, semaphore=None, role_lock=None, fast=None, resident_turns=None):
+    def __init__(self, role: NpcRole, model: ModelClient, *, semaphore=None, role_lock=None, fast=None,
+                 resident_turns=None, paw_decisions=None):
         self.role, self.model = role, model
         self.semaphore = semaphore or asyncio.Semaphore(2)
         self.role_lock = role_lock or asyncio.Lock()
@@ -523,6 +524,7 @@ class NpcPlanner:
         self.last_decision_timings: dict[str, dict[str, Any]] = {}
         self.fast = fast
         self.resident_turns = resident_turns
+        self.paw_decisions = paw_decisions
         self.social_receipts = {}
         self.next_meal = 0.0
         self.next_catch = 0.0
@@ -606,6 +608,11 @@ class NpcPlanner:
                     remaining = deadline - loop.time()
                     if remaining <= 0:
                         raise TimeoutError("NPC model fallback timed out")
+                    if self.paw_decisions:
+                        self.last_route = {"provider": "qwenpaw", "model": self.role.model}
+                        response = await self.paw_decisions.request(self.role, payload, remaining)
+                        timing["answerReceived"] = True
+                        return response, "qwenpaw"
                     response = await self.model.request("/chat/completions", payload, remaining)
                     timing["answerReceived"] = True
                     return response, self.role.provider
@@ -1161,6 +1168,10 @@ def activity_scene(snapshot) -> tuple[str, str] | None:
     """Compare meaningful activity changes across observations, never small position fluctuations."""
     native = current_native_state(PlanContext(snapshot=snapshot))
     resident = native.get("resident")
+    if ("resident" not in native and native.get("fullOriginalEntityMaid") is True
+            and isinstance(native.get("scene"), dict)):
+        # The private companion bridge reports physical state at the top level.
+        resident = native
     if not isinstance(resident, dict) or resident.get("loaded") is not True or resident.get("downed"):
         return None
     expedition = resident.get("expedition") or {}
