@@ -28,6 +28,14 @@ def completed_plan(fenced=False):
     )
 
 
+def completed_reset():
+    return stream(
+        {"object": "message", "type": "message", "role": "assistant", "id": "reset",
+         "status": "completed", "metadata": {"clear_history": True, "clear_plan": True}},
+        {"object": "response", "status": "completed"},
+    )
+
+
 def config(tmp_path, actors):
     token = tmp_path / "secret"
     token.write_text("qa-token", encoding="ascii")
@@ -45,16 +53,24 @@ def test_paw_turn_uses_same_scoped_agent_for_each_character(tmp_path):
         def respond(request):
             assert request.url.path == "/api/console/chat"
             assert request.headers["Authorization"] == "Bearer qa-token"
-            requests.append((request.headers["X-Agent-Id"], json.loads(request.content)))
-            return httpx.Response(200, text=completed_plan(fenced=len(requests) == 2))
+            body = json.loads(request.content)
+            requests.append((request.headers["X-Agent-Id"], body))
+            if body["input"][0]["content"][0]["text"] == "/clear":
+                return httpx.Response(200, text=completed_reset())
+            return httpx.Response(200, text=completed_plan(fenced=len(requests) == 4))
 
         http = httpx.AsyncClient(transport=httpx.MockTransport(respond))
         paw = PawDecisions(config(tmp_path, [maid, villager]), "synthetic", http=http)
         for actor in (maid, villager, maid):
             result, source = await NpcPlanner(actor, None, paw_decisions=paw).decision("plan", MESSAGES, 3)
             assert source == "qwenpaw" and json.loads(result["choices"][0]["message"]["content"]) == {"steps": []}
-        assert requests[0] == requests[2] and requests[0][0] != requests[1][0]
-        assert all(agent == payload["session_id"] for agent, payload in requests)
+        assert len(requests) == 6
+        assert requests[:2] == requests[4:] and requests[0][0] != requests[2][0]
+        assert all(payload["session_id"] == "turn-" + agent for agent, payload in requests)
+        for reset, decision in zip(requests[::2], requests[1::2], strict=True):
+            assert reset[0] == decision[0]
+            assert reset[1]["input"][0]["content"][0]["text"] == "/clear"
+            assert decision[1]["input"][0]["content"][0]["text"].endswith(MESSAGES["messages"][1]["content"])
         assert not paw.supports(role(body_kind="numen", character_id=maid.character_id))
         await paw.close()
     asyncio.run(run())
@@ -65,9 +81,31 @@ def test_paw_turn_uses_same_scoped_agent_for_each_character(tmp_path):
 def test_incomplete_paw_turn_cannot_propose_action_or_fall_back(tmp_path, failure):
     async def run():
         actor = role(body_kind="maid")
-        http = httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(200, text=failure)))
+        def respond(request):
+            text = json.loads(request.content)["input"][0]["content"][0]["text"]
+            return httpx.Response(200, text=completed_reset() if text == "/clear" else failure)
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(respond))
         paw = PawDecisions(config(tmp_path, [actor]), "synthetic", http=http)
         with pytest.raises(RuntimeError, match="qwenpaw_decision_unavailable"):
             await NpcPlanner(actor, None, paw_decisions=paw).decision("plan", MESSAGES, 3)
+        await paw.close()
+    asyncio.run(run())
+
+
+def test_missing_reset_acknowledgement_prevents_model_request(tmp_path):
+    async def run():
+        actor = role(body_kind="maid")
+        requests = []
+
+        def respond(request):
+            requests.append(json.loads(request.content)["input"][0]["content"][0]["text"])
+            return httpx.Response(200, text=completed_plan())
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+        paw = PawDecisions(config(tmp_path, [actor]), "synthetic", http=http)
+        with pytest.raises(RuntimeError, match="qwenpaw_decision_unavailable"):
+            await NpcPlanner(actor, None, paw_decisions=paw).decision("plan", MESSAGES, 3)
+        assert requests == ["/clear"]
         await paw.close()
     asyncio.run(run())
