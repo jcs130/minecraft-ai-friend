@@ -37,6 +37,8 @@ describe('server references on the shared knowledge tool', () => {
       knowledge:{server:{profile:'alpha'}}, uiEnabled:false });
     expect(mounted.servers).toBeUndefined();
     expect(mountServerProfile(mounted)).toBe(mounted);
+    const child = JSON.parse(JSON.stringify(mounted));
+    expect(applyServerProfile(child, { AGENT_MC_SERVER: 'beta' })).toBe(child);
     expect(mountServerProfile(input).activeServer).toBe('beta');
   });
   it('rejects foreign guide and invalid selector at configuration time', () => {

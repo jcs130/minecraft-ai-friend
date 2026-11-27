@@ -133,6 +133,10 @@ export function selectedServerId(section: ServerProfileSection, env: Record<stri
 export function applyServerProfile<T extends object>(section: T, env: Record<string, string | undefined> = process.env):
   T & { activeServer?: string; serverSafety?: ServerSafetyRules } {
   const s = section as T & ServerProfileSection & Record<string, unknown>;
+  // Mounted sections cross the body-process boundary without the profile registry.
+  if (s.servers === undefined && typeof s.activeServer === 'string' && s.activeServer && s.activeServer === s.server) {
+    return section as T & { activeServer?: string; serverSafety?: ServerSafetyRules };
+  }
   const id = selectedServerId(s, env);
   if (id === null) return section as T & { activeServer?: string; serverSafety?: ServerSafetyRules };
   const profile = s.servers && Object.hasOwn(s.servers, id) ? s.servers[id] : undefined;
