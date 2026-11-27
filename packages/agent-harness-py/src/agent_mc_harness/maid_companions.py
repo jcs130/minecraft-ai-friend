@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass
 from uuid import UUID
 
-from .models import BodySnapshot
+from .models import ActionReceipt, BodySnapshot
 from .resident_trace import trace_resident_turn
 from .runtime import Step
 
@@ -37,6 +37,28 @@ class _Player:
     position: Point
     dimension: str
     distance: float | None
+
+    def waypoint(self, origin: Point) -> Point:
+        if self.distance is not None and self.distance > WALK_RANGE:
+            return tuple(a + (b - a) * 32 / self.distance for a, b in zip(origin, self.position, strict=True))
+        return self.position
+
+
+@dataclass(frozen=True)
+class _BlockedWalk:
+    request_id: str
+    target: str
+    dimension: str
+    origin: Point
+    destination: Point
+    reason: str
+    retry_at: float
+
+    def matches(self, player: _Player, dimension: str, origin: Point, destination: Point, now: float) -> bool:
+        return (now < self.retry_at and player.uuid == self.target and self.dimension == dimension == player.dimension
+                and math.floor(origin[1]) == math.floor(self.origin[1]) and math.dist(self.origin, origin) < 1.5
+                and math.floor(destination[1]) == math.floor(self.destination[1])
+                and math.dist(self.destination, destination) < 2)
 
 
 def _players(snapshot: BodySnapshot | None, *, use_directory: bool = True) -> dict[str, _Player]:
@@ -179,6 +201,7 @@ class MaidCompanions:
         self.turn_hash: str | None = None
         self.missing_since: float | None = None
         self.blocked_until: dict[str, float] = {}
+        self.blocked_walk: _BlockedWalk | None = None
 
     @property
     def active(self) -> bool:
@@ -249,6 +272,11 @@ class MaidCompanions:
         source = "skill_compass" if "characterDirectory" in raw else "sight"
         if raw.get("characterDirectoryUnavailable"):
             source = "skill_compass_unavailable"
+        blocked = self.blocked_walk
+        origin = _point(snapshot.position) if snapshot else None
+        target = visible.get(self.target)
+        same_route = (blocked and target and origin
+                      and blocked.matches(target, snapshot.dimension, origin, target.waypoint(origin), now))
         return {
             "source": source,
             "characters": [{"uuid": p.uuid, "name": p.name, "aliases": list(p.aliases), "distance": round(p.distance, 1) if p.distance is not None else None,
@@ -258,6 +286,9 @@ class MaidCompanions:
             "selection": {"mode": self.mode, "travel": self.travel, "uuid": self.target, "name": self.name} if self.active else None,
             "status": self.status,
             "lastTransfer": self.last_transfer,
+            **({"blockedWalk": {"requestId": blocked.request_id, "reason": blocked.reason,
+                               "destination": dict(zip("xyz", blocked.destination, strict=True)),
+                               "retryAfterSeconds": math.ceil(blocked.retry_at - now)}} if same_route else {}),
         }
 
     def choose(self, mode: str, target_uuid: str | None, snapshot: BodySnapshot | None, *,
@@ -317,6 +348,25 @@ class MaidCompanions:
             self.attempts = 0
             self._alongside()
 
+    def settle_walk(self, step: Step, receipt: ActionReceipt):
+        if not receipt.terminal or receipt.status != "failed" or not self.target or self.last_origin is None:
+            return
+        destination = _point(step.args)
+        if destination is None or destination != self.last_goal or step.args.get("targetUuid", self.target) != self.target:
+            return
+        data = receipt.data or {}
+        reply = data.get("reply") or data
+        detail = reply.get("data") if isinstance(reply, dict) else None
+        detail = detail if isinstance(detail, dict) else {}
+        observation = detail.get("observation")
+        observation = observation if isinstance(observation, dict) else {}
+        reason = observation.get("reason") or detail.get("reason") or receipt.text
+        if reason not in ("path_blocked", "walk_timeout"):
+            return
+        origin = _point(observation.get("actualPosition")) or self.last_origin
+        self.blocked_walk = _BlockedWalk(receipt.request_id, self.target, step.args["dimension"], origin,
+                                         destination, reason, self.clock() + BLOCKED_COOLDOWN)
+
     def next_step(self, snapshot: BodySnapshot | None, *, busy: bool = False, can_teleport: bool = False) -> Step | None:
         """Generate one action from a fresh observation when the host can act."""
         if snapshot is None or not -1 <= time.time() - snapshot.sampled_at.timestamp() <= 5:
@@ -351,16 +401,26 @@ class MaidCompanions:
         now = self.clock()
         player = visible[self.target]
         origin = _point(snapshot.position)
+        if origin is None:
+            return None
         elapsed = now - self.last_walk
         if elapsed < STEP_INTERVAL and not direct_cast:
             return None
         remote = player.distance is None or player.distance > WALK_RANGE
+        destination = player.waypoint(origin)
         if not remote and self.last_goal is not None and math.dist(self.last_goal, player.position) > 4:
             # The previous path may have been cancelled because the person moved.
             # That outcome is not evidence that walking to the new position is blocked.
             self.attempts = 0
+        moved = self.last_origin is not None and (math.floor(self.last_origin[1]) != math.floor(origin[1])
+                                                 or math.dist(self.last_origin, origin) >= 1.5)
+        if moved:
+            self.attempts = 0
+        blocked = self.blocked_walk
+        same_blocked_walk = blocked and blocked.matches(player, snapshot.dimension, origin, destination, now)
         no_progress = self.attempts >= 2 and self.last_origin and math.dist(origin, self.last_origin) < 1.5
-        use_spell = not register and (self.travel == "teleport" or (self.travel == "auto" and can_teleport and (remote or no_progress)))
+        use_spell = not register and (self.travel == "teleport" or
+                                     (self.travel == "auto" and can_teleport and (remote or no_progress or same_blocked_walk)))
         if use_spell:
             if self.remote_sent:
                 self.status = "check_original_rendezvous_receipt"
@@ -375,15 +435,12 @@ class MaidCompanions:
         if player.distance is None:
             self._clear("different_dimension_requires_rendezvous")
             return None
-        # Distant overland travel uses bounded legs. A native path failure never
-        # licenses a growing series of unverified moves or an unrequested paid spell.
-        destination = player.position
-        if player.distance > WALK_RANGE:
-            destination = tuple(a + (b - a) * 32 / player.distance for a, b in zip(origin, player.position, strict=True))
-        if self.last_goal is not None and math.dist(self.last_goal, destination) < 2 and elapsed < WALK_TIMEOUT:
+        if same_blocked_walk:
+            self.status = "path_blocked_waiting_for_change"
             return None
-        if self.last_origin is not None and math.dist(self.last_origin, origin) >= 1.5:
-            self.attempts = 0
+        if (not moved and self.last_goal is not None and math.floor(self.last_goal[1]) == math.floor(destination[1])
+                and math.dist(self.last_goal, destination) < 2 and elapsed < WALK_TIMEOUT):
+            return None
         if self.attempts >= 2:
             self.blocked_until[self.target] = now + BLOCKED_COOLDOWN
             self._clear("path_unavailable")
