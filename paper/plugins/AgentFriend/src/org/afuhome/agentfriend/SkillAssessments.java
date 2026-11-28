@@ -284,11 +284,14 @@ final class SkillAssessments implements Listener {
     }
     private void reuseTraining(Player p,Run r) {
         if(!r.definition.reuseTraining())return;
+        int originalProofCount=r.proofs.size();
         for(String proof:r.definition.proofs()) {
+            if(r.proofs.has(proof))continue;
             boolean done=proof.equals("door_passage")||proof.equals("ladder_ascent")?plugin.traversalPractice().verified(p,proof):plugin.featureTutorials().verified(p,proof);
             if(done)r.proofs.addProperty(proof,"retained_server_training");
         }
         checkProofs(p,r);
+        if(r.state.equals("active")&&r.proofs.size()>originalProofCount)save(p,r);
     }
     void proof(Player p,String id,String evidence) {
         Run r=current(p);if(r==null||!r.state.equals("active")||System.currentTimeMillis()>=r.expires
@@ -772,12 +775,14 @@ final class SkillAssessments implements Listener {
         JsonObject out=AssessmentCatalog.JSON.toJsonTree(d).getAsJsonObject();out.addProperty("description",description(d));out.addProperty("evaluationPolicy",shelter(d)?"direct_result_v1":"two_track_v1");out.addProperty("type","definition");out.addProperty("eligibility",eligibility(p,d));
         contractGuidance(p,d,out);
         Run r=observed(p);boolean same=r!=null&&r.definition.id().equals(d.id())&&Set.of("active","ready","interrupted").contains(r.state);
-        if(same){out.addProperty("eligibility","in_progress");
+        if(same){
+            if(System.currentTimeMillis()<r.expires&&(!r.state.equals("interrupted")||canResume(r)))
+                out.addProperty("eligibility","in_progress");
             if(shelter(r.definition))merge(out,resultSnapshot(p,r));
-            else if(canResume(r))out.addProperty("nextCommand","/mycli guild exam resume");
-            else if(r.state.equals("ready"))out.addProperty("nextCommand",r.market.isEmpty()?"/mycli guild exam submit":"/mycli guild claim");}
+            else out.addProperty("nextCommand",safeNextCommand(r));
+        }
         else out.addProperty("nextCommand",busy(p)?"/mycli guild exam status":"/mycli guild exam start "+d.id());
-        if(same&&!out.has("nextCommand"))out.addProperty("nextCommand","/mycli guild exam status");send(p,"MC_GUILD_EXAM",out);
+        send(p,"MC_GUILD_EXAM",out);
         if(!machine)p.sendMessage("§b"+d.title()+"："+description(d)+"；限时"+d.timeout()+"秒。下一步："+out.get("nextCommand").getAsString());
     }
     /** Chat is a read-only projection, not the full mcagent:exam receipt. */

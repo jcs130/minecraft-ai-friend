@@ -263,3 +263,21 @@ node scripts/sync-home.mjs --config E:/MC/private/portal-sync/config.json --dry-
 # 2026-10-29 照片全量管理候选
 
 0.8.29候选支持全部照片保存、本人/管理员私有预览与公开开关；保留原3张公开选择，不自动公开26张旧照片。335项完整检查通过/3条件跳过，桌面和390px浏览器检查通过；生产仍0.8.28，未切换。上线须先云端后家庭同步器，按原维护流程备份并取得本次网站停启确认，Paper不需重启。见[照片流程](../../docs/PHOTO_LIBRARY_20261029.md)。
+
+## N.E.K.O. 设备游玩回执
+
+从门户 `0.8.48` 起，已授权设备可向 `POST /api/v1/desktop-devices/play-status` 提交 JSON `{"requestId":"原开始游玩 UUID"}`。沿用设备的访问凭据、设备 ID 和设备证明，与 `/status` 使用相同认证。接口不会续租，也不会发布游戏动作。
+
+HTTP 200 固定返回 `requestId`、`status`、`characterId`、`mode`、`updatedAt`、`reason`。已知回执包含选定角色的原 `characterId`、该身体模式（`maid` 或 `numen`）、Unix 毫秒更新时间和原因。活跃时原因是 `null`。未知回执的角色、模式和时间均为 `null`。
+
+| 状态 | 含义 |
+| --- | --- |
+| `active` | 此设备的原用号仍持有有效的桌面控制租约。 |
+| `stopped` | 服务器已处理本设备对原编号的停止，且该编号不会再次取得租约。 |
+| `expired` | 原租约已失效。 |
+| `rejected` | 原启动未获租约，服务器已记录拒绝。 |
+| `unknown` | 该授权下没有可核实的回执。兼容旧版服务器及旧数据库时保留原编号，等待核对。 |
+
+开始、停止及其回执共享相应的数据库事务。相同编号的已知终态不会重新取得租约。接口只核对桌面控制权，已派发的物理动作仍须使用对应身体的原操作回执。撤销或更换设备授权后，原授权不能继续查询。
+
+在本目录用 Node 22.13+ 执行 `npm ci --ignore-scripts`，然后运行 `node --test tests/desktop-devices.test.mjs`。测试启动绑定回环的临时门户，使用独立 SQLite、合成女仆与 Numen 授权和受信代理模拟 HTTPS。测试不需要游戏服或真实角色。

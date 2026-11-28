@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {DesktopDevices} from '../src/desktop-devices.mjs';
 import {ResidentTurns} from '../src/resident-turns.mjs';
+import {Store} from '../src/store.mjs';
 import {siteFixture,testPassword} from './helpers.mjs';
 
 const random = () => randomBytes(32).toString('base64url');
@@ -14,7 +15,7 @@ const origin = 'https://portal.example';
 const redirectUri = 'http://127.0.0.1:39457/qd-desktop/callback';
 const bearer = token => 'Bearer ' + token;
 
-function fixture(t) {
+function fixture(t, bodyKind = 'maid') {
   let clock = 100_000;
   const db = new DatabaseSync(':memory:');
   t.after(() => db.close());
@@ -22,10 +23,10 @@ function fixture(t) {
   const owner = {id:randomUUID(),username:'Fixture owner'}, stranger = {id:randomUUID(),username:'Fixture stranger'};
   for (const person of [owner,stranger]) db.prepare('INSERT INTO owners VALUES(?)').run(person.id);
   const worker = 'rwt_' + random();
-  const role = {id:'existing',name:'结衣',bodyKind:'maid',bodyId:randomUUID(),characterId:randomUUID(),
+  const role = {id:'existing',name:'合成居民',bodyKind,bodyId:randomUUID(),characterId:randomUUID(),
     ownerGameId:randomUUID(),workerHash:digest(worker)};
   db.prepare('INSERT INTO ownerships VALUES(?,?)').run(role.ownerGameId,owner.id);
-  const store = {db,ownerById:id=>[owner,stranger].find(p=>p.id===id),
+  const store = {db,transaction:Store.prototype.transaction,ownerById:id=>[owner,stranger].find(p=>p.id===id),
     ownedUuids:id=>db.prepare('SELECT agent_uuid FROM ownerships WHERE owner_id=?').all(id).map(r=>r.agent_uuid)};
   const config = {residentTurns:[role]};
   const now = () => clock;
@@ -180,7 +181,7 @@ test('the HTTPS portal requires its own signed-in browser and CSRF for consent a
         const chunks = [];
         res.on('data',chunk=>chunks.push(chunk));
         res.on('end',()=>resolve({status:res.statusCode,cookie:res.headers['set-cookie']?.[0]?.split(';')[0],
-          body:JSON.parse(Buffer.concat(chunks).toString('utf8'))}));
+          body:JSON.parse(Buffer.concat(chunks).toString('utf8')),cache:res.headers['cache-control']}));
       });
       req.on('error',reject);
       req.end(body === undefined ? undefined : JSON.stringify(body));
@@ -213,8 +214,154 @@ test('the HTTPS portal requires its own signed-in browser and CSRF for consent a
   assert.equal(exchanged.body.character,role.characterId);
   const controlled = {...device,Authorization:bearer(exchanged.body.accessToken)};
   assert.equal((await send(endpoint + '/status',{headers:controlled,body:{}})).body.character.bodyId,role.bodyId);
+  const requestId = randomUUID(), original = {requestId,mode:'maid'};
+  const query = headers => send(endpoint + '/play-status',{headers,body:{requestId}});
+  assert.equal((await query(device)).status,401);
+  assert.equal((await query({...controlled,'X-QD-Device':randomUUID()})).status,401);
+  assert.equal((await query({...controlled,...browser})).status,403);
+  assert.equal((await send(endpoint + '/play-status',{headers:controlled,body:{requestId:'bad'}})).status,400);
+  assert.deepEqual((await query(controlled)).body,{
+    requestId,status:'unknown',characterId:null,mode:null,updatedAt:null,reason:'NO_RECEIPT',
+  });
+  assert.equal((await send(endpoint + '/start',{headers:controlled,body:original})).status,200);
+  const active = await query(controlled);
+  assert.equal(active.status,200);
+  assert.match(active.cache,/no-store/);
+  assert.deepEqual(active.body,{requestId,status:'active',characterId:role.characterId,mode:'maid',
+    updatedAt:active.body.updatedAt,reason:null});
+  assert.ok(Number.isSafeInteger(active.body.updatedAt));
+  assert.equal((await send(endpoint + '/stop',{headers:controlled,body:{requestId}})).status,200);
+  assert.equal((await query(controlled)).body.status,'stopped');
+  assert.equal((await send(endpoint + '/start',{headers:controlled,body:original})).status,409);
   const devices = await send(endpoint,{headers:{Cookie:signed.cookie}});
   const revoked = await send(endpoint + '/revoke',{headers:browser,body:{id:devices.body.devices[0].id}});
   assert.equal(revoked.body.revoked,true);
   assert.equal((await send(endpoint + '/status',{headers:controlled,body:{}})).status,401);
+  assert.equal((await query(controlled)).status,401);
+});
+
+test('play receipts preserve the original device request across restart and stop', async t => {
+  const f = fixture(t);
+  const login = flow(f.devices);
+  approve(f,login);
+  exchange(f,login);
+  const other = flow(f.devices);
+  approve(f,other);
+  exchange(f,other);
+  const input = {requestId:randomUUID(),mode:'maid'};
+  const row = f.devices.access(login.request);
+  assert.equal(f.devices.playStatus(row,input.requestId).status,'unknown');
+  const started = await f.devices.start(row,input,login.request);
+  assert.deepEqual(f.devices.playStatus(row,input.requestId),{
+    requestId:input.requestId,status:'active',characterId:f.role.characterId,mode:'maid',
+    updatedAt:100_000,reason:null,
+  });
+  assert.equal(f.devices.playStatus(f.devices.access(other.request),input.requestId).status,'unknown');
+  const {devices,residents} = f.boot();
+  const current = devices.access(login.request);
+  assert.deepEqual(await devices.start(current,input,login.request),started);
+  assert.equal(devices.playStatus(current,input.requestId).status,'active');
+  devices.stop(current,input.requestId);
+  const stopped = devices.playStatus(current,input.requestId);
+  assert.equal(stopped.status,'stopped');
+  f.advance(100);
+  devices.stop(current,input.requestId);
+  assert.deepEqual(devices.playStatus(current,input.requestId),stopped);
+  assert.equal(residents.roles.get(f.role.id).grant,null);
+  await assert.rejects(devices.start(current,input,login.request),{reason:'DESKTOP_PLAY_ENDED'});
+  const recovered = f.boot().devices;
+  assert.deepEqual(recovered.playStatus(recovered.access(login.request),input.requestId),stopped);
+  const next = {requestId:randomUUID(),mode:'maid'};
+  await recovered.start(recovered.access(login.request),next,login.request);
+  recovered.stop(recovered.access(login.request),input.requestId);
+  assert.equal(recovered.playStatus(recovered.access(login.request),next.requestId).status,'active');
+});
+
+test('a stop received while start is pending fences the original request', async t => {
+  const f = fixture(t);
+  const login = flow(f.devices);
+  approve(f,login);
+  exchange(f,login);
+  const row = f.devices.access(login.request);
+  const input = {requestId:randomUUID(),mode:'maid'};
+  let complete;
+  f.devices.provider = {current:() => new Promise(resolve => { complete = resolve; })};
+  const start = f.devices.start(row,input,login.request);
+  f.devices.stop(row,input.requestId);
+  assert.equal(f.devices.playStatus(row,input.requestId).status,'stopped');
+  complete({characterId:f.role.characterId,status:'ready',activeKind:'maid'});
+  await assert.rejects(start,{reason:'DESKTOP_PLAY_ENDED'});
+  assert.equal(f.residents.roles.get(f.role.id).grant,null);
+});
+
+test('an expired device play cannot resume from a late poll or duplicate start', async t => {
+  const f = fixture(t);
+  const login = flow(f.devices);
+  approve(f,login);
+  exchange(f,login);
+  const row = f.devices.access(login.request);
+  const input = {requestId:randomUUID(),mode:'maid'};
+  const started = await f.devices.start(row,input,login.request);
+  f.advance(20_000);
+  const before = f.db.prepare('SELECT instance,last_seen FROM resident_grants').get();
+  assert.equal(f.devices.playStatus(row,input.requestId).status,'expired');
+  assert.deepEqual(f.db.prepare('SELECT instance,last_seen FROM resident_grants').get(),before);
+  assert.throws(()=>f.residents.authorize(f.residents.roles.get(f.role.id),{
+    headers:{...login.request.headers,authorization:bearer(started.token)},
+  },false),{reason:'RESIDENT_GRANT_EXPIRED'});
+  await assert.rejects(f.devices.start(row,input,login.request),{reason:'DESKTOP_PLAY_ENDED'});
+  const recovered = f.boot().devices;
+  assert.equal(recovered.playStatus(recovered.access(login.request),input.requestId).status,'expired');
+});
+
+test('Numen receipts reflect rejected requests and lease writes survive transaction failure', async t => {
+  const f = fixture(t,'numen');
+  const login = flow(f.devices);
+  approve(f,login);
+  exchange(f,login);
+  const row = f.devices.access(login.request);
+  const rejected = {requestId:randomUUID(),mode:'maid'};
+  await assert.rejects(f.devices.start(row,rejected,login.request),{reason:'DESKTOP_BODY_BUSY'});
+  assert.equal(f.devices.playStatus(row,rejected.requestId).status,'rejected');
+  assert.equal(f.devices.playStatus(row,rejected.requestId).mode,'numen');
+  await assert.rejects(f.devices.start(row,{...rejected,mode:'numen'},login.request),{reason:'DESKTOP_PLAY_ENDED'});
+  const input = {requestId:randomUUID(),mode:'numen'};
+  f.db.exec(`CREATE TEMP TRIGGER test_write_failure BEFORE INSERT ON desktop_play_receipts
+    BEGIN SELECT RAISE(ABORT,'fixture write failure'); END`);
+  await assert.rejects(f.devices.start(row,input,login.request),/fixture write failure/);
+  assert.equal(f.db.prepare('SELECT count(*) AS total FROM resident_grants').get().total,0);
+  assert.equal(f.residents.roles.get(f.role.id).grant,null);
+  assert.equal(f.devices.playStatus(row,input.requestId).status,'unknown');
+  f.db.exec('DROP TRIGGER test_write_failure');
+  await f.devices.start(row,input,login.request);
+  assert.equal(f.devices.playStatus(row,input.requestId).mode,'numen');
+  f.db.exec(`CREATE TEMP TRIGGER test_write_failure BEFORE INSERT ON desktop_play_receipts
+    BEGIN SELECT RAISE(ABORT,'fixture write failure'); END`);
+  assert.throws(()=>f.devices.stop(row,input.requestId),/fixture write failure/);
+  assert.equal(f.devices.playStatus(row,input.requestId).status,'active');
+  assert.equal(f.db.prepare('SELECT instance FROM resident_grants').get().instance,input.requestId);
+  f.db.exec('DROP TRIGGER test_write_failure');
+  f.devices.stop(row,input.requestId);
+  assert.equal(f.devices.playStatus(row,input.requestId).status,'stopped');
+});
+
+test('a cold restart and a fresh play preserve the previous request expiration', async t => {
+  const f = fixture(t);
+  const login = flow(f.devices);
+  approve(f,login);
+  const original = exchange(f,login);
+  const input = {requestId:randomUUID(),mode:'maid'};
+  await f.devices.start(f.devices.access(login.request),input,login.request);
+  f.advance(15 * 60_000 + 1);
+  const recovered = f.boot().devices;
+  const renewed = recovered.refresh({refreshToken:original.refreshToken,rotationId:randomUUID()},login.request);
+  login.request.headers.authorization = bearer(renewed.accessToken);
+  const row = recovered.access(login.request);
+  const expired = recovered.playStatus(row,input.requestId);
+  assert.equal(expired.status,'expired');
+  assert.equal(expired.updatedAt,120_000);
+  const next = {requestId:randomUUID(),mode:'maid'};
+  await recovered.start(row,next,login.request);
+  assert.deepEqual(recovered.playStatus(row,input.requestId),expired);
+  assert.equal(recovered.playStatus(row,next.requestId).status,'active');
 });
