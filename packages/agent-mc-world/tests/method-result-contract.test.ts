@@ -6,7 +6,7 @@ describe('program task result evidence', () => {
     const r=methodHarness('1.21.1');
     try{
       const tool=r.world.tools().find(t=>t.name==='mc_script')!;
-      const args={api:'mindcraft',name:'note_origin',params:{},durationMs:10000,waitMs:5000,code:'const self=bot.entity; const p=self.position; const blocks=bot.findBlocks({matching:["minecraft:chest","oak_log"],maxDistance:64,count:10}); if (!Array.isArray(blocks)) throw Error("not a list"); if (!Object.isFrozen(self)) throw Error("mutable entity"); return {x:p.x,y:p.y,z:p.z};'};
+      const args={api:'mindcraft',name:'note_origin',params:{},durationMs:10000,waitMs:5000,code:'const self=bot.entity; const p=self.position; const blocks=bot.findBlocks({matching:["minecraft:chest",bot.registry.blocksByName.oak_log.id],maxDistance:64,count:10}); if (!Array.isArray(blocks)) throw Error("not a list"); if (!Object.isFrozen(self)) throw Error("mutable entity"); return {x:p.x,y:p.y,z:p.z};'};
       expect(tool.readOnlyCall?.({api:'mindcraft'})).toBe(true);
       expect(tool.readOnlyCall?.(args)).toBe(false);
       expect(tool.learningCall?.(args)).toBe(false);

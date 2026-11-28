@@ -64,7 +64,7 @@ const READ_ONLY = new Set<NativeName>(['read', 'blockAt', 'findBlocks', 'findBlo
   'canDigBlock', 'digTime', 'inventory.items', 'getControlState', 'waitForTicks']);
 
 export function nativeApiHelp(name?: string): string {
-  const lead = 'mc_script 提供 bot 与 Vec3。Mineflayer 4.37.1 公共接口通过 Worker JSON 传输，动作须逐个 await；Mineflayer 身体的同步观察（blockAt、findBlock(s)、inventory.items 等）可直接在程序内使用，原有 await 写法也有效；返回 Block.getProperties() 与 Vec3 运算在 Worker 内同步。属性保留原生 string/number/boolean，不自动转数字；具体见 api:"blockAt"。'
+  const lead = 'mc_script 提供 bot 与 Vec3。Mineflayer 4.37.1 公共接口通过 Worker JSON 传输，动作须逐个 await；Mineflayer 身体的同步观察（blockAt、findBlock(s)、inventory.items 等）可直接在程序内使用，原有 await 写法也有效；bot.registry.blocksByName[name] 与 itemsByName[name] 按需读取当前版本条目；返回 Block.getProperties() 与 Vec3 运算在 Worker 内同步。属性保留原生 string/number/boolean，不自动转数字；具体见 api:"blockAt"。'
     + ' 首次身体调用排入现有身体队列并独占至程序结束；此后不能再调用 mc.do，防止等待自己的队列。读数不占身体。'
     + ' 取消、战斗/环境接管、死亡、断线或超时均撤销原生程序，不自动重放。可用 api:<方法名> 按需查看签名；缺少的 API 明确不可用。';
   if (name === undefined || name === 'index') return `${lead}\n${Object.keys(NATIVE_API).join(', ')}\n上游文档：https://github.com/PrismarineJS/mineflayer/blob/master/docs/api.md`;

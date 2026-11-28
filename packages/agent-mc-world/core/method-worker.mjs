@@ -64,6 +64,18 @@ function capabilities(scope) {
   if (bot && workerData.nativeMethods.includes('read')) Object.defineProperty(bot,'entity',{
     get: () => readNow('mineflayer',{name:'read',args:['entity']},scope)
   });
+  if (bot && workerData.gameLibrary && workerData.nativeMethods.includes('read')) {
+    // Registry entries are immutable for the owned connection. Resolve only names the program uses.
+    const table = group => {
+      const cache = new Map();
+      return new Proxy(Object.create(null),{get(_target,name) {
+        if (typeof name !== 'string' || name==='then' || !/^[a-z0-9_]+$/.test(name)) return undefined;
+        if (!cache.has(name)) cache.set(name,readNow('mineflayer',{name:'read',args:[`registry.${group}.${name}`]},scope) ?? undefined);
+        return cache.get(name);
+      }});
+    };
+    bot.registry={blocksByName:table('blocksByName'),itemsByName:table('itemsByName')};
+  }
   if (bot) for (const key of ['entities', 'players']) Object.defineProperty(bot, key, {
     get() { throw new TypeError(`bot.${key} is not a live object in this worker. Use await bot.read("${key}") or await bot.read("entitySnapshot") for a detached, read-only observation.`); },
     enumerable: false,
