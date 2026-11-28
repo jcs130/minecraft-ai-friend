@@ -2,6 +2,26 @@
 import pf from 'mineflayer-pathfinder';
 import { detailedCraftingPlan } from './recipe-plan.mjs';
 export function createWorld(mc) {
+  // Adapted from wehos/mc-agent-neko escapeDigPlan (a4ce409, MIT).
+  function getEscapeDigPlan(bot, x, y, z) {
+    const target = bot.blockAt(bot.entity.position.clone().set(x, y, z).floored());
+    if (!target?.diggable || target.boundingBox === 'empty') return null;
+    const eye = bot.blockAt(bot.entity.position.offset(0,bot.entity.eyeHeight,0));
+    if (!eye || typeof bot.entity.onGround !== 'boolean') return null;
+    const wet = ['water','flowing_water'].includes(eye.name);
+    const helmet = bot.inventory.slots[bot.getEquipmentDestSlot('head')];
+    let best = null;
+    for (const stack of [bot.heldItem, null, ...bot.inventory.items()]) {
+      const time = target.digTime(stack?.type ?? null, bot.game.gameMode === 'creative', wet,
+        !bot.entity.onGround, [...(stack?.enchants ?? []), ...(helmet?.enchants ?? [])], bot.entity.effects);
+      if (Number.isFinite(time) && (!best || time < best.digMs)) {
+        best = {tool:stack?.name ?? null, slot:stack?.slot ?? null, digMs:time,
+          budgetMs:Math.round(time * 1.4) + 1500, block:target.name, inWater:wet, onGround:bot.entity.onGround};
+      }
+    }
+    return best;
+  }
+
   function getNearestFreeSpace(bot, size=1, distance=8) {
       /**
        * Get the nearest empty space with solid blocks beneath it of the given size.
@@ -421,5 +441,5 @@ export function createWorld(mc) {
       return mc.getAllBiomes()[biomeId]?.name ?? null;
   }
   function getDetailedCraftingPlan(bot, targetItem, count=1) { return detailedCraftingPlan(bot,mc,targetItem,count); }
-  return { getDetailedCraftingPlan, getNearestFreeSpace, getBlockAtPosition, getSurroundingBlocks, getFirstBlockAboveHead, getNearestBlocks, getNearestBlocksWhere, getNearestBlock, getNearbyEntities, getNearestEntityWhere, getNearbyPlayers, getVillagerProfession, getInventoryCounts, getCraftableItems, getPosition, getNearbyEntityTypes, isEntityType, getNearbyPlayerNames, getNearbyBlockTypes, isClearPath, shouldPlaceTorch, getBiomeName };
+  return { getEscapeDigPlan, getDetailedCraftingPlan, getNearestFreeSpace, getBlockAtPosition, getSurroundingBlocks, getFirstBlockAboveHead, getNearestBlocks, getNearestBlocksWhere, getNearestBlock, getNearbyEntities, getNearestEntityWhere, getNearbyPlayers, getVillagerProfession, getInventoryCounts, getCraftableItems, getPosition, getNearbyEntityTypes, isEntityType, getNearbyPlayerNames, getNearbyBlockTypes, isClearPath, shouldPlaceTorch, getBiomeName };
 }

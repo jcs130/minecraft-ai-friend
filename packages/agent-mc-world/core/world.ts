@@ -7346,7 +7346,9 @@ export class MinecraftWorld implements World {
       methodAdmission?.({ accepted: value, receipt: '', retryAfterMs, completedImmediately: completed,
         rejection: rejected, taskId });
     }, name === 'mc_scout' ? undefined : () => {
-      if (!methodAdmission && this.methodOwnsBody()) this.methods.stop('新的身体任务已受理，原身体方法取消');
+      // Appending or replacing the backlog preserves the current owner.
+      // The executor cancels individual queued tasks removed by replace.
+      if (!methodAdmission && mode.mode === 'now' && this.methodOwnsBody()) this.methods.stop('紧急身体任务已受理，原身体方法取消');
       this.interruptIdle('task');
     }, name);
     // 受理回执附当前队列状态，与结局回执和世界快照共用渲染。

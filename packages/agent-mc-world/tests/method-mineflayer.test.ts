@@ -161,6 +161,21 @@ describe('agent programs using Mineflayer public primitives', () => {
     r.exec.resumeAfterEnvironment(hold);
   });
 
+  it.each([undefined, 'replace', 'append', 'afterCheckpoint', 'now'])('keeps the active program when the public body tool admits queue=%s, except for explicit immediate takeover', async queue => {
+    const r = rig();
+    const run = r.runner.start({code: "await bot.setControlState('forward',true); await bot.waitForTicks(10); return await bot.getControlState('forward');"});
+    await until(() => r.live.getControlState('forward'));
+    const body = r.world.tools().find(tool => tool.name === 'mc_do')!;
+    const outcome = await body.handler({steps:[{skill:'chat', text:'one'}, {skill:'chat', text:'two'}], ...(queue ? {queue} : {})},
+      {role:'main',log:r.host.log} as never);
+    expect(outcome).not.toHaveProperty('failed',true);
+    const end = await methodEnded(r,run.id);
+    expect(end.status).toBe(queue === 'now' ? 'cancelled' : 'completed');
+    if (queue !== 'now') expect(end.result).toBe(true);
+    await until(() => r.said.length === 2);
+    expect(r.live.getControlState('forward')).toBe(false);
+  });
+
   it('holds native keys across calls, moves with real physics and releases them before queued work', async () => {
     const r = rig();
     const run = r.runner.start({ name: 'native movement', code: `

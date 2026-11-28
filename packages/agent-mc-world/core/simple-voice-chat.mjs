@@ -98,6 +98,7 @@ export function attachSimpleVoiceChat(bot, {
   if (udpPort !== undefined && (!Number.isSafeInteger(udpPort) || udpPort < 1 || udpPort > 65535)) throw Error('SVC_UDP_PORT_INVALID');
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 300000) throw Error('SVC_TIMEOUT_INVALID');
   attached.get(bot)?.close();
+  const connectionLifetime = new AbortController();
   let closed = false, key, uuid, secretMeta = null, sock = null, sequence = 0n, keepalive = null, uploading = false, udpAuthenticated = false, udpValidated = false, udpAddress = null, resolveError = null, authTimer = null, authTries = 0;
   let receivedAudioFrames = 0;
   const stateOf = () => ({
@@ -228,7 +229,7 @@ export function attachSimpleVoiceChat(bot, {
 
   const close = (unregister = true) => {
     if (closed) return;
-    closed = true;
+    closed = true; connectionLifetime.abort();
     if (keepalive) { clearInterval(keepalive); keepalive = null; }
     stopAuthLoop();
     try { bot._client.off('custom_payload', onPayload); } catch {}
@@ -261,28 +262,57 @@ export function attachSimpleVoiceChat(bot, {
     compatibilityVersion,
     state: stateOf,
     async ready(signal) { await waitReady(signal); return stateOf(); },
-    async upload(wav, { requestId = randomUUID(), signal, whisper = false } = {}) {
+    async upload(wav, options = {}) {
+      inspectVoiceWav(wav);
+      // Keep the WAV API while sharing the same microphone and packet sequence.
+      return client.uploadFrames(ReadableStream.from(pcmFrames(pcm16Mono48kFromWav(wav))), options);
+    },
+    async uploadFrames(source, { requestId = randomUUID(), signal, whisper = false } = {}) {
       if (!UUID.test(requestId)) throw Error('SVC_REQUEST_UUID_REQUIRED');
       if (uploading) throw Error('SVC_UPLOAD_ALREADY_PENDING');
-      inspectVoiceWav(wav);
-      if (!opus) throw Error('SVC_OPUS_CODEC_REQUIRED');
+      const reader = source.getReader();
       uploading = true;
-      try {
-        await waitReady(signal,true);
-        const frames = pcmFrames(pcm16Mono48kFromWav(wav));
-        for (const frame of frames) {
-          if (closed || !ready() || signal?.aborted) {
-            return { requestId, transport: 'simple-voice-chat', state: 'cancelled', reason: 'SVC_UPLOAD_CANCELLED_OR_DISCONNECTED', recipientHeard: 'unknown' };
-          }
-          const encoded = await opus.encode(frame);
-          const seq = Buffer.alloc(8); seq.writeBigInt64BE(sequence++);
-          send(1, Buffer.concat([vint(encoded.length), encoded, seq, Buffer.from([whisper ? 1 : 0])]));
-          await sleep(Math.round(1000 * SVC_FRAME_SAMPLES / SVC_SAMPLE_RATE));
-        }
+      const lifetime = signal ? AbortSignal.any([signal, connectionLifetime.signal]) : connectionLifetime.signal;
+      const cancelled = () => closed || lifetime.aborted || !ready();
+      const stopReading = () => { void reader.cancel(lifetime.reason).catch(() => {}); };
+      let frames = 0, drained = false;
+      const result = state => ({requestId, transport:'simple-voice-chat', state, frames, recipientHeard:'unknown',
+        ...(state === 'cancelled' ? {reason:'SVC_UPLOAD_CANCELLED_OR_DISCONNECTED'} : {})});
+      const writeMic = encoded => {
         const seq = Buffer.alloc(8); seq.writeBigInt64BE(sequence++);
-        send(1, Buffer.concat([vint(0), seq, Buffer.from([0])]));
-        return { requestId, transport: 'simple-voice-chat', state: 'sent', frames: frames.length, recipientHeard: 'unknown' };
-      } finally { uploading = false; }
+        send(1, Buffer.concat([vint(encoded.length), encoded, seq, Buffer.from([encoded.length && whisper ? 1 : 0])]));
+      };
+      lifetime.addEventListener('abort', stopReading, {once:true});
+      try {
+        if (cancelled()) return result('cancelled');
+        await waitReady(lifetime, true);
+        while (!cancelled()) {
+          const {done, value} = await reader.read();
+          if (cancelled()) break;
+          if (done) { drained = true; break; }
+          if (!(value instanceof Int16Array) || value.length !== SVC_FRAME_SAMPLES) throw Error('SVC_PCM_960_REQUIRED');
+          if (frames >= SVC_SAMPLE_RATE * 30 / SVC_FRAME_SAMPLES) throw Error('SVC_AUDIO_DURATION_EXCEEDED');
+          const encoded = await opus.encode(value);
+          if (cancelled()) break;
+          writeMic(encoded); frames++;
+          await sleep(1000 * SVC_FRAME_SAMPLES / SVC_SAMPLE_RATE);
+        }
+        if (!drained || cancelled()) return result('cancelled');
+        if (!frames) throw Error('SVC_AUDIO_EMPTY');
+        return result('sent');
+      } catch (error) {
+        if (cancelled()) return result('cancelled');
+        throw error;
+      } finally {
+        try {
+          if (frames && !closed && ready() && udpAuthenticated) writeMic(Buffer.alloc(0));
+        } finally {
+          lifetime.removeEventListener('abort', stopReading);
+          if (!drained) stopReading();
+          reader.releaseLock();
+          uploading = false;
+        }
+      }
     },
     close,
   };
