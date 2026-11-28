@@ -280,7 +280,7 @@ export class MethodRunner {
       const syncRead = (message.method === 'mindcraft' && message.args?.family === 'world')
         || (message.method === 'mineflayer' && this.host.gameLibrary && this.host.nativeMethods?.includes(message.args?.name) && synchronousObservations.has(message.args?.name))
         || (message.method === 'mineflayer' && this.host.nativeMethods?.includes('read') && message.args?.name === 'read'
-          && Array.isArray(message.args.args) && message.args.args.length === 1 && (message.args.args[0] === 'entity' || (this.host.gameLibrary &&
+          && Array.isArray(message.args.args) && message.args.args.length === 1 && (message.args.args[0] === 'entity' || message.args.args[0] === 'inventory.slots' || (this.host.gameLibrary &&
             typeof message.args.args[0] === 'string' && /^registry\.(blocksByName|itemsByName)\.[a-z0-9_]+$/.test(message.args.args[0]))));
       if (message.method === 'mindcraft' && !this.host.gameLibrary ||
         message.sync && (!syncRead ||

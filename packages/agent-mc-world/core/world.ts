@@ -5158,7 +5158,7 @@ export class MinecraftWorld implements World {
           }
           if (args.runId !== undefined && (!Number.isInteger(args.runId) || Number(args.runId) <= 0)) throw new Error('runId须为正整数');
           if (args.call !== undefined && (args.runId === undefined || !Number.isInteger(args.call)
-            || Number(args.call) < 1 || Number(args.call) > METHOD_LIMITS.calls)) throw new Error('call须配合runId，取1至32的调用编号');
+            || Number(args.call) < 1 || Number(args.call) > METHOD_LIMITS.calls)) throw new Error('查整段脚本传 {runId:方法编号}；只看其中一次调用才加 call（1 至 32），例如 {runId:3,call:1}');
           if(args.runId!==undefined)await this.methods.wait(Number(args.runId),Number(args.waitMs??0),ctx.signal);
           return this.toolLog('mc_script', args, JSON.stringify(this.methods.inspect(args.runId as number | undefined, args.call as number | undefined)));
         } catch (error) { return { text: this.toolLog('mc_script', args, String(error)), failed: true }; }
