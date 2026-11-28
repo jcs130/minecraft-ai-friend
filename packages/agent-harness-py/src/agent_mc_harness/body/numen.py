@@ -86,6 +86,16 @@ LUA_DIALECTS: dict[str, dict[str, str]] = {
 LUA_DIALECTS["numen-hosted-0.1.5"] = {key: source.replace("numen.", "numen_hosted.")
                                       for key, source in LUA_DIALECTS["numen-0.1.5"].items()}
 
+# Let the model choose an observed route around elevation changes rather than
+# asking the native planner to keep searching from an upper floor to a distant floor.
+HOSTED_WALK = (
+    "local dest={{x={x},y={y},z={z}}}; local here=numen_hosted.status.self().pos; "
+    "if math.max(math.abs(here.x-dest.x),math.abs(here.z-dest.z))>64 or math.abs(here.y-dest.y)>24 then "
+    "raise('bad_argument','walk_waypoint_required: pick a visible waypoint within 64 blocks horizontally "
+    "and 24 vertically, or use an available travel skill if the destination is distant',nil) end; "
+    "return numen_hosted.move.walk(dest)"
+)
+
 
 def namespace(port) -> str:
     return "numen_hosted" if port.dialect == "numen-hosted-0.1.5" else "numen"
@@ -588,6 +598,8 @@ class NumenBody(BaseBody):
                                                notes="Existing item ID; hand is main|off|head|chest|legs|feet."
                                                + (" Use auto for the native wardrobe to choose a wearable slot." if hosted else ""))
             acts["move"] = ActionSupport(native="lua " + dialect["move"].split("(")[0], args=["x", "y", "z"],
+                                         notes=("Choose a visible waypoint within 64 blocks horizontally and 24 vertically. "
+                                                "Read the original request until it settles." if hosted else ""),
                                          async_=not native or hasattr(self.port, "start_walk"))
             acts["stop"] = ActionSupport(native="lua " + ("numen.task.stop" if dialect["stop"] == STOP_LUA else dialect["stop"]),
                                          notes="lands between programs: Numen runs one program per companion" if native else
@@ -802,7 +814,8 @@ class NumenBody(BaseBody):
             code = LUA_DIALECTS[getattr(self.port, "dialect", "numen-paper")]["move"].format(x=lua_num(x), y=lua_num(y), z=lua_num(z))
             start_walk = getattr(self.port, "start_walk", None)
             if start_walk:
-                mapped = await start_walk("return " + code, request_id)
+                bounded = HOSTED_WALK.format(x=lua_num(x), y=lua_num(y), z=lua_num(z))
+                mapped = await start_walk(bounded, request_id, original_code="return " + code)
             else:
                 mapped = await self.port.call("lua", {"code": code}, request_id)
         elif verb == "attack":

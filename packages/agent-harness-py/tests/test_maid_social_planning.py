@@ -116,16 +116,17 @@ def test_recent_rejected_maid_waypoint_changes_the_plan(tmp_path):
     asyncio.run(run())
 
 
-def test_native_blocked_walk_reaches_next_model_turn(tmp_path):
+@pytest.mark.parametrize("reason", ["path_blocked", "walk_timeout"])
+def test_native_blocked_walk_reaches_next_model_turn(tmp_path, reason):
     from agent_mc_harness.models import ActionReceipt, utcnow
 
     destination = {"x": 3, "y": 64, "z": 9, "dimension": "minecraft:overworld"}
     def seed(journal):
         rid = "original-blocked-walk"
-        journal.begin(MAID, BodyAction(verb="move", args=destination, request_id=rid))
+        journal.begin(MAID, BodyAction(verb="move", args={k: destination[k] for k in "xyz"}, request_id=rid))
         journal.settle(MAID, ActionReceipt(verb="move", request_id=rid, status="failed", terminal=True,
-                       text="path_blocked", data={"reply": {"data":{"observedAt":utcnow().isoformat(),
-                       "observation":{"reason":"path_blocked", "effectsApplied":False}}}}))
+                       text="receipt: failed", data={"reply": {"data":{"observedAt":utcnow().isoformat(),
+                       "observation":{"reason":reason, "actualPosition":{"dimension": destination["dimension"]}}}}}))
 
     def decide(world, facts):
         previous = facts["recentBodyResults"][0]

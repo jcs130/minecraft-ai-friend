@@ -1,10 +1,11 @@
 import asyncio
+import hashlib
 import json
 from types import SimpleNamespace
 
 import pytest
 
-from agent_mc_harness.body.hosted_mcp import HostedMcpPort
+from agent_mc_harness.body.hosted_mcp import HostedMcpPort, MissingOriginalReceipt
 
 BODY="10000000-0000-0000-0000-000000000011"
 OWNER="20000000-0000-0000-0000-000000000021"
@@ -48,13 +49,16 @@ def test_slow_hosted_walk_yields_to_speech_and_reconciles_original_id(tmp_path, 
                         message = "Speech dispatched; it is not evidence of a reply."
                         state, success = "partial", True
                     else:
-                        assert args["args"]["code"] == "return numen_hosted.move.walk({x=3,y=60,z=7})"
+                        assert args["args"]["code"].startswith("local dest={x=3,y=60,z=7};")
+                        assert args["args"]["code"].endswith("return numen_hosted.move.walk(dest)")
                         dispatched.set()
                         await finish.wait()
                         message = "no_path; stood at (2, 64, 2)"
                         state, success = "blocked", False
                     return SimpleNamespace(isError=False, structuredContent=dict(
                         id=args["id"], state=state, message=json.dumps(dict(success=success, message=message))))
+                if args["op"] == "result" and not finish.is_set():
+                    return SimpleNamespace(isError=False, structuredContent=dict(id=args["id"], state="running"))
                 return await super().call_tool(tool, args)
 
         session = WalkingSession()
@@ -86,6 +90,102 @@ def test_slow_hosted_walk_yields_to_speech_and_reconciles_original_id(tmp_path, 
 
     monkeypatch.setattr("agent_mc_harness.body.hosted_mcp.WALK_INLINE_SECONDS", 0.01)
     asyncio.run(run())
+
+def test_hosted_walk_reads_a_terminal_receipt_while_launch_reply_is_stalled(tmp_path, monkeypatch):
+    async def run():
+        class UnresponsiveLaunch(Session):
+            async def call_tool(self, tool, args):
+                if args["op"] == "call":
+                    self.calls.append(args)
+                    await asyncio.Future()
+                if args["op"] == "result":
+                    self.calls.append(args)
+                    return SimpleNamespace(isError=False, structuredContent={
+                        "id": args["id"], "state": "completed", "message": "reached 4,64,2.",
+                    })
+                return await super().call_tool(tool, args)
+
+        session = UnresponsiveLaunch()
+        adapter = port(tmp_path, session)
+        await adapter.open()
+        try:
+            assert (await adapter.start_walk("first", "old-walk")).status == "accepted"
+            final = await adapter.result("old-walk")
+            assert final.status == "completed" and "reached" in final.text
+            assert adapter.walk_request[2].cancelled()
+            assert (await adapter.start_walk("guarded-first", "old-walk", original_code="first")).status == "completed"
+            assert (await adapter.start_walk("second", "next-walk")).status == "accepted"
+            assert [row["id"] for row in session.calls if row["op"] == "call"] == ["old-walk", "next-walk"]
+        finally:
+            await adapter._retire_walk_waiter()
+            await adapter.close()
+
+    monkeypatch.setattr("agent_mc_harness.body.hosted_mcp.WALK_INLINE_SECONDS", 0.01)
+    asyncio.run(run())
+
+
+def test_hosted_walk_asks_for_a_waypoint_before_running_native_search():
+    from lupa import LuaError, LuaRuntime
+
+    from agent_mc_harness.body.numen import HOSTED_WALK
+
+    lua = LuaRuntime()
+    lua.execute("""
+        calls = 0
+        raise = function(_, message) error(message) end
+        numen_hosted = {
+            status = {self = function() return {pos={x=0,y=102,z=0}} end},
+            move = {walk = function(dest) calls = calls + 1; return dest.y end}
+        }
+    """)
+    with pytest.raises(LuaError, match="walk_waypoint_required"):
+        lua.execute(HOSTED_WALK.format(x=36, y=68, z=18))
+    with pytest.raises(LuaError, match="walk_waypoint_required"):
+        lua.execute(HOSTED_WALK.format(x=65, y=102, z=0))
+    assert lua.globals().calls == 0
+    assert lua.execute(HOSTED_WALK.format(x=10, y=95, z=8)) == 95
+    assert lua.globals().calls == 1
+
+
+@pytest.mark.parametrize("verb,text", [("chat", "近况如何？"), ("chat", "/warp village"), ("move", "")])
+def test_original_receipt_missing_after_handoff_only_releases_unconfirmed_plain_chat(tmp_path, verb, text):
+    async def run():
+        class MissingReceiptSession(Session):
+            async def call_tool(self, tool, args):
+                if args["op"] == "result":
+                    self.calls.append(args)
+                    digest = hashlib.sha256(args["id"].encode()).hexdigest()
+                    message = f"call failed: java.nio.file.NoSuchFileException: /synthetic/hosted-receipts/{BODY}/{digest}.json"
+                    return SimpleNamespace(isError=True, content=[SimpleNamespace(type="text", text=message)])
+                if args["op"] == "facts":
+                    return SimpleNamespace(isError=False, structuredContent={
+                        "roleUuid": BODY, "ready": True, "workPending": False, "fenced": True,
+                        "epoch": args["epoch"], "mode": self.mode,
+                    })
+                return await super().call_tool(tool, args)
+
+        session = MissingReceiptSession()
+        adapter = port(tmp_path, session)
+        request = "original-transmission"
+        payload = {"text": text}
+        adapter.ledger.begin(request, hashlib.sha256(json.dumps(["say", payload], sort_keys=True).encode()).hexdigest(),
+                             "previous-connection")
+        adapter.action_journal = SimpleNamespace(action=lambda *_: SimpleNamespace(verb=verb, args=payload))
+        await adapter.open()
+        try:
+            if verb == "chat" and not text.startswith("/"):
+                failed = await adapter.result(request)
+                assert failed.status == "failed" and failed.data["originalOutcome"] == "unknown"
+                assert failed.data["retryAllowed"] is False
+            else:
+                with pytest.raises(MissingOriginalReceipt):
+                    await adapter.result(request)
+            assert not any(row["op"] == "call" for row in session.calls)
+        finally:
+            await adapter.close()
+
+    asyncio.run(run())
+
 
 def test_stop_releases_the_inline_walk_waiter_without_replaying(tmp_path):
     async def run():
