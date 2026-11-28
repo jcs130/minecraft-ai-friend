@@ -1,5 +1,9 @@
 ## 0.5.7-rc.160-preview.160
 
+## 0.5.7-rc.160-preview.161
+
+Conflicting targeted and bulk container withdrawals now point to `all` and retain the original item and source. A correction only gives an executable example when the caller supplied a valid quantity. Whole-container withdrawal remains available explicitly.
+
 Nearby vocal performances share the native SVC microphone with priority replies and resumable frame offsets.
 
 ## 0.5.7-rc.160-preview.154
