@@ -128,15 +128,15 @@ export class ChestBook {
   private readonly map: Map<string, ChestRecord>;
   private readonly realm: string | null;
 
-  constructor(private readonly file: string | null, shared?: { records: Map<string, ChestRecord>; realm: string }) {
+  constructor(private readonly file: string | null, shared?: { records: Map<string, ChestRecord>; realm: string }, private readonly onContents?: (record: ChestRecord)=>void) {
     this.map = shared?.records ?? new Map();
     this.realm = shared?.realm ?? null;
     if (!shared) this.load();
   }
 
   /** Frozen operation view: a late result keeps its original world, even after a world switch. */
-  forRealm(realm: string): ChestBook {
-    return new ChestBook(this.file, { records: this.map, realm });
+  forRealm(realm: string, onContents?: (record:ChestRecord)=>void): ChestBook {
+    return new ChestBook(this.file, { records: this.map, realm },onContents);
   }
 
   private belongs(rec: ChestRecord): boolean {
@@ -161,17 +161,19 @@ export class ChestBook {
     items: ItemStack[],
     usedSlots: number,
     slots: number,
+    blockName?: string,
   ): void {
     /** 刷新内容时保留原 placedAt。 */
     const prev = this.map.get(this.key(dimension, p));
     const rec: ChestRecord = {
       x: p.x, y: p.y, z: p.z, dimension, items, usedSlots, slots, ...this.scope(),
       observedAt: Date.now(),
-      ...(prev?.name !== undefined ? { name: prev.name } : {}),
+      ...(blockName || prev?.name ? {name:blockName || prev?.name} : {}),
       ...(prev?.placedAt !== undefined ? { placedAt: prev.placedAt } : {}),
     };
     this.map.set(this.key(dimension, p), rec);
     this.save();
+    this.onContents?.(rec);
   }
 
   /** 更新方块名及可选的放置时间，保留原内容记录。 */
@@ -217,6 +219,7 @@ export class ChestBook {
       furnace: { ...state, loadedAt, expectedDoneAt },
     });
     this.save();
+    this.onContents?.(this.map.get(k)!);
   }
 
   due(now: number): ChestRecord[] {

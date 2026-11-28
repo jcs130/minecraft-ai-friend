@@ -231,7 +231,7 @@ export function rememberChest(
       }
     }
   }
-  ctx.chests?.remember(dimensionOf(bot), pos, snap.items, snap.usedSlots, snap.slots);
+  ctx.chests?.remember(dimensionOf(bot), pos, snap.items, snap.usedSlots, snap.slots,bot.blockAt?.(new Vec3(pos.x,pos.y,pos.z))?.name);
   return snap;
 }
 

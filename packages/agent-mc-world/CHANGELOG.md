@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.164
+
+Register durable camp locations with mc_map and inspect previously observed facilities and container contents with mc_bag. Scoped by server, native world, dimension, account and agent. Carried counts remain separate.
+
 ## 0.5.7-rc.160-preview.160
 
 ## 0.5.7-rc.160-preview.161
