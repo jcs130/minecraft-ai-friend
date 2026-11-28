@@ -7,6 +7,7 @@ const denied = (status, reason) => Object.assign(new Error(reason), {status, rea
 const idle = {state: 'local'};
 const idleExpiry = 12 * 3600_000;
 const desktopExpiry = 15 * 60_000;
+const desktopPollTimeout = 20_000;
 const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const codeFormat = /^[2-9A-HJ-NP-Z]{4}(?:-[2-9A-HJ-NP-Z]{4}){2}$/;
 const newCode = () => [...randomBytes(12)].map(b => alphabet[b % alphabet.length]).join('').match(/.{4}/g).join('-');
@@ -98,7 +99,9 @@ export class ResidentTurns {
           || keys.has(r.workerHash) || bodies.has(r.bodyId) || r.characterId && characters.has(r.characterId) || this.roles.has(r.id)) {
         throw Error('Invalid resident turn binding');
       }
-      const saved = store.db.prepare('SELECT owner,hash,until,desktop,instance,last_seen FROM resident_grants WHERE role=? AND body=? AND character=? AND kind=? AND game_owner=? AND until>?')
+      // Retain expired desktop grants until clear() can record the matching receipt.
+      const saved = store.db.prepare(`SELECT owner,hash,until,desktop,instance,last_seen FROM resident_grants
+        WHERE role=? AND body=? AND character=? AND kind=? AND game_owner=? AND (until>? OR desktop IS NOT NULL)`)
         .get(r.id, r.bodyId, r.characterId, r.bodyKind, r.ownerGameId, this.now());
       this.roles.set(r.id, {...r, grant: saved ? {...saved, lastPoll:saved.last_seen ?? -Infinity} : null, pending: null});
       bodies.add(r.bodyId); keys.add(r.workerHash); characters.add(r.characterId);
@@ -131,19 +134,25 @@ export class ResidentTurns {
     const {id, name, bodyKind, bodyId, characterId} = r;
     return {id, name, bodyKind, bodyId, characterId, state: r.fresh && !r.ready ? 'preparing' : 'available'};
   }
-  clear(r) {
-    if (r.grant) this.store.db.prepare('DELETE FROM resident_grants WHERE role=? AND hash=?').run(r.id, r.grant.hash);
+  clear(r, status = 'expired') {
+    const grant = r.grant;
+    if (grant) {
+      const remove = () => this.store.db.prepare('DELETE FROM resident_grants WHERE role=? AND hash=?').run(r.id, grant.hash);
+      if (grant.desktop && this.desktopPlayEnded) {
+        this.store.transaction(() => {
+          if (remove().changes) this.desktopPlayEnded(r,grant,status);
+        });
+      } else remove();
+    }
     r.grant = null;
     r.wake = null;
     r.pending?.finish(idle);
   }
+  desktopPlayDeadline(grant) {
+    return Math.min(grant.until,grant.lastPoll + desktopPollTimeout);
+  }
   desktopController(r) {
-    if (!this.valid(r)) return null;
-    if (r.grant.desktop && this.now() - r.grant.lastPoll >= 20_000) {
-      this.clear(r);
-      return null;
-    }
-    return r.grant;
+    return this.valid(r) ? r.grant : null;
   }
   grant(r, owner, origin, token = 'rdt_' + randomBytes(32).toString('base64url'), accountTokenHash = null, desktop = null) {
     if (!this.owns(owner, r) || r.fresh && !r.ready) throw denied(409, 'RESIDENT_NOT_READY');
@@ -162,6 +171,7 @@ export class ResidentTurns {
           .run(bindingKey(r),accountTokenHash,owner,this.now());
         if (!result.changes) throw denied(401,'ONBOARDING_EXPIRED');
       }
+      desktop?.record?.();
       db.exec('COMMIT');
     } catch (error) {
       db.exec('ROLLBACK');
@@ -351,7 +361,7 @@ export class ResidentTurns {
   }
   valid(r) {
     if (r.grant && r.grant.until > this.now() && this.owns(r.grant.owner, r)
-        && (!r.grant.desktop || this.desktopAuthority?.(r.grant))
+        && (!r.grant.desktop || this.desktopPlayDeadline(r.grant) > this.now() && this.desktopAuthority?.(r.grant))
         && this.store.db.prepare('SELECT 1 FROM resident_grants WHERE role=? AND hash=?').get(r.id, r.grant.hash)) return true;
     this.clear(r);
     return false;
