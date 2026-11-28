@@ -7224,7 +7224,7 @@ export class MinecraftWorld implements World {
         retryable: false, retry_after: null, next_safe_read: null, executed: false,
         errors: correction?.errors ?? [{ path: '/queue', expected: name === 'mc_scout' ? SCOUT_QUEUE_SCHEMA : QUEUE_SCHEMA, problem: text, actual: args.queue ?? null }],
         ...(correction?.uncheckedSteps ? { uncheckedSteps: correction.uncheckedSteps } : {}),
-        minimal_legal_example: correction?.minimal_legal_example ?? { steps: [{ skill: 'observe', mode: 'voxels' }] } },
+        minimal_legal_example: correction ? correction.minimal_legal_example : { steps: [{ skill: 'observe', mode: 'voxels' }] } },
       meta: { admission: { accepted: false, dispatched: false, kind: 'correction', rule,
         ...(correction ? { fieldPath: correction.path, inputSchema: correction.inputSchema } : {}),
         recovery: [{ tool: 'mc_help', arguments: correction?.helpArguments ?? {},

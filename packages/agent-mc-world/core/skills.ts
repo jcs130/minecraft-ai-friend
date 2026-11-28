@@ -1093,6 +1093,8 @@ function parseOrganize(c: Record<string, unknown>, at: string, marks?: MarkLooku
   return { step: out };
 }
 
+const TAKE_ITEM_ALL_CONFLICT = '保留 item 和原容器位置，删除 all；定量取物要写 count（1–64），已有数量沿用。整箱取会转移其他物品。';
+
 /** `take` 的两种操作必须显式区分：定量取物，或取指定容器的可取物。 */
 function parseTake(c: Record<string, unknown>, at: string, marks?: MarkLookup): ParseResult {
   const item = str(c.item);
@@ -1105,6 +1107,7 @@ function parseTake(c: Record<string, unknown>, at: string, marks?: MarkLookup): 
     return { error: `${at} take 的 at 要 [x,y,z](${RELATIVE_HINT})${markMissNote(c.at, marks)}` };
   }
   const all = c.all === true;
+  if (item && all) return { error: `${at} /all ${TAKE_ITEM_ALL_CONFLICT}` };
   if (fromOpen && (takeAt || all)) {
     return { error: `${at} take 的 from:open 不能与 at 或 all:true 一起用` };
   }
@@ -1113,7 +1116,7 @@ function parseTake(c: Record<string, unknown>, at: string, marks?: MarkLookup): 
   }
   if (all) {
     if (!takeAt) return { error: `${at} take 的 all:true 必须同时给 at:[x,y,z]` };
-    if (item || c.count !== undefined || c.pick !== undefined) {
+    if (c.count !== undefined || c.pick !== undefined) {
       return { error: `${at} take 的 all:true 不能再给 item、count 或 pick` };
     }
     return { step: { skill: 'take', at: takeAt, all: true } };
@@ -1994,7 +1997,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
       { key: 'count', kind: 'opaque', schema: { type: 'integer', minimum: 1, maximum: 64 }, doc: '定量取物必须显式写;不默认数量' },
       { key: 'at', kind: 'anchor', error: `take 的 at 要 [x,y,z](${RELATIVE_HINT})`, doc: '点名哪一格容器' },
       { key: 'from', kind: 'enum', values: ['open'], error: 'from 只认 open', doc: '从当前打开的容器窗口取;不写 = 找附近箱子' },
-      { key: 'all', kind: 'flag', doc: 'at+all:true 取指定容器;炉子有原料时保留原料和燃料' },
+      { key: 'all', kind: 'flag', doc: '整箱取。只想取一种物品用 item+count 并省略 all；炉子有原料时保留原料和燃料' },
       { key: 'pick', kind: 'string' },
     ],
   },
@@ -2513,12 +2516,13 @@ function locateStepProblem(value: unknown, error: string) {
   const hint = spec ? spec.target?.hint ?? spec.inputHint ?? skillSignature(spec)
     : 'steps 写成真正的 JSON 数组；只可完整解码一次，损坏的 JSON 不补括号、不截取前缀。保留原来全部步骤的顺序和依赖，再纠正参数。';
   const base = index >= 0 ? `/steps/${index}` : '/steps';
-  const field = /^第 \d+ 步 \/(to|slot|windowSlot) 不受 /.exec(error)?.[1] ?? spec?.fields.find(f => error.includes(f.key))?.key
+  const filterConflict = spec?.name === 'take' && error.endsWith(TAKE_ITEM_ALL_CONFLICT);
+  const field = filterConflict ? 'all' : /^第 \d+ 步 \/(to|slot|windowSlot) 不受 /.exec(error)?.[1] ?? spec?.fields.find(f => error.includes(f.key))?.key
     ?? (item && !spec ? 'skill' : undefined);
   const path = field ? `${base}/${field}` : base;
   const declaration = spec?.fields.find(f => f.key === field);
-  return { item, spec, path, hint, problem: {
-    path, expected: declaration ? fieldSchema(declaration) : hint, problem: error,
+  return { item, spec, path, hint, filterConflict, problem: {
+    path, expected: filterConflict ? {absent:true} : declaration ? fieldSchema(declaration) : hint, problem: error,
     actual: field ? item?.[field] ?? null : index >= 0 ? item : value ?? null,
   } };
 }
@@ -2533,14 +2537,19 @@ export function describeSkillInputCorrection(raw: unknown, error: string, additi
 } {
   let value = raw;
   if (typeof value === 'string') { try { value = JSON.parse(value); } catch { /* Keep malformed input opaque. */ } }
-  const { item, spec, path, hint, problem } = locateStepProblem(value, error);
+  const { item, spec, path, hint, problem, filterConflict } = locateStepProblem(value, error);
   const supplied = JSON.stringify(raw) ?? String(raw);
   let example: unknown = null;
   try {
     const encoded = spec?.doc.match(/^\{[^\n]+\}/m)?.[0];
     const first = encoded ? JSON.parse(encoded) : null;
-    const chosen = spec?.name === 'observe' && item?.mode === 'voxels'
+    let chosen = spec?.name === 'observe' && item?.mode === 'voxels'
       ? { skill: 'observe', mode: 'voxels', bounds: [0,0,0,0,0,0] } : first;
+    if (filterConflict) {
+      // No sample item, location or inferred quantity may widen the requested withdrawal.
+      const {all: _all, ...targeted} = item;
+      chosen = Number.isInteger(targeted.count) ? targeted : null;
+    }
     if (chosen && !('error' in parseSteps([chosen]))) example = { steps: [chosen] };
   } catch { /* No invented example when the registry has none. */ }
   const errors = [problem];

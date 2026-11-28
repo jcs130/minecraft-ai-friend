@@ -7,6 +7,26 @@ import type { Bot } from 'mineflayer';
 import { readSkillHelp } from '../core/skills.ts';
 import { getResourceActionContract } from '../src/collect-contract.ts';
 
+it('preserves the item filter when correcting a bulk withdrawal, including secondary steps',async()=>{
+  const r=methodHarness('1.21.1');
+  try {
+    const submit=vi.spyOn(r.exec,'submitDetailed');
+    const mixed={skill:'take',at:[10,64,20],item:'wheat',all:true};
+    const tool=r.world.tools().find(t=>t.name==='mc_do')!;
+    const reject=(steps:unknown[])=>tool.handler({queue:'replace',steps},{} as never);
+    const result=await reject([{skill:'harvest',block:'wheat'},mixed,{...mixed,at:[11,64,20]}]);
+    expect(result).toMatchObject({failed:true,data:{executed:false,errors:[{path:'/steps/0/at'},
+      {path:'/steps/1/all',expected:{absent:true},actual:true},{path:'/steps/2/all',expected:{absent:true},actual:true}]}});
+    expect((result as {text:string}).text).toContain('保留 item');
+    expect(await reject([mixed])).toMatchObject({failed:true,data:{minimal_legal_example:null}});
+    expect(await reject([{...mixed,count:3}])).toMatchObject({failed:true,data:{minimal_legal_example:{steps:[
+      {skill:'take',at:[10,64,20],item:'wheat',count:3}]}}});
+    expect(submit).not.toHaveBeenCalled();
+    expect(parseSteps([{skill:'take',at:[10,64,20],all:true}])).toHaveProperty('steps');
+    expect(parseSteps([{skill:'take',at:[10,64,20],item:'wheat',count:3}])).toHaveProperty('steps');
+  } finally {r.close();}
+});
+
 it('points an angular look request to the supported rotation without dispatching later steps', () => {
   const turn = { yawDeg: -135, pitchDeg: 15, orientation: 'relative' };
   const rejected = parseSteps([{ skill: 'look', ...turn }, { skill: 'chat', text: 'after turning' }]);
