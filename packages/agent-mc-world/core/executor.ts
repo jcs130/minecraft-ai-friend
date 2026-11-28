@@ -2457,7 +2457,7 @@ export class Executor {
     const refused = refusal(tunnelPrecheckHold?.text, tunnelPrecheckHold?.rule ?? 'tunnel.geometry', 'correction')
       ?? refusal(soilPrecheckHold?.text, 'farm.soil', 'correction')
       ?? refusal(takeEvidenceHold?.proof === 'not-container' ? takeEvidenceHold.text : null, 'take.not-container', 'correction')
-      ?? refusal(this.duplicatePendingNote(task.steps), 'queue.pending')
+      ?? refusal(this.duplicatePendingNote(task.steps, mode), 'queue.pending')
       ?? refusal(this.immediateAttackTargetNote(task.steps, mode), 'attack.noTarget', 'correction')
       ?? refusal(this.storageWindowNote(task.steps), 'storage.access', 'correction')
       ?? refusal(this.opts.admissionCheck?.(task.steps) ?? null, 'extension.admission', 'correction')
@@ -2589,7 +2589,7 @@ export class Executor {
   }
 
   /** 同一整单已经在途时不再入队；换坐标或数量的修正计划照常受理。 */
-  private duplicatePendingNote(steps: readonly SkillCall[]): string | null {
+  private duplicatePendingNote(steps: readonly SkillCall[], mode: QueueMode): string | null {
     const key = exactTaskKey(steps);
     const active = this.task;
     if (active && exactTaskKey(active.steps) === key) {
@@ -2597,7 +2597,16 @@ export class Executor {
     }
     const pending = [this.frozen, this.checkpointDrain?.continuation, ...this.queue]
       .find((task) => task && exactTaskKey(task.steps) === key);
-    return pending ? `任务#${pending.id} 已在队列里；等它执行后再决定。原任务与队列保留` : null;
+    if (pending) return `任务#${pending.id} 已在队列里；等它执行后再决定。原任务与队列保留`;
+    // Replace may revise an unstarted task. It cannot replace the running
+    // task, so resubmitting that route with one extra stop would walk it twice.
+    const predecessor = mode === 'append' ? this.queue.at(-1) ?? active : active;
+    if (mode !== 'now' && predecessor && predecessor.steps.length < steps.length
+      && steps[0]?.skill === 'goto' && !steps[0].dryRun
+      && exactTaskKey(predecessor.steps) === exactTaskKey(steps.slice(0, predecessor.steps.length))) {
+      return `前 ${predecessor.steps.length} 步已在任务#${predecessor.id} 中。本批未入队；要接着做，可只追加第 ${predecessor.steps.length + 1} 步及以后，或等原任务终态后调整。原任务与队列保留`;
+    }
+    return null;
   }
 
   private navigationBurstNote(steps: readonly SkillCall[], now: number): string | null {

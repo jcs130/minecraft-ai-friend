@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.148
+
+Avoid replaying an in-flight approach when extending its itinerary. An unknown server query named mc_bag points to the native inventory read.
+
 ## 0.5.7-rc.160-preview.147
 
 Choose an open throw with a verified retreat across supported crop rows and torches. Report why a retreat was blocked.

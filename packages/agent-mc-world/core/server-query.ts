@@ -212,16 +212,16 @@ function receiptPageText(header: string, data: Record<string, unknown>, original
   }
 }
 /** Return a bounded repair path in the failed receipt itself; never infer or send a command. */
-function queryInputFailure(message: string, definitions: readonly ServerQueryDefinition[]): ToolOutcome {
+function queryInputFailure(message: string, definitions: readonly ServerQueryDefinition[],
+  next_safe_read: {tool:string;arguments:Record<string,unknown>} = { tool: 'mc_help', arguments: { skill: 'chat' } }): ToolOutcome {
   const ids = [...new Set(definitions.map(item => item.id))];
   const recovery = {
     supportedQueryIds: ids.slice(0, 32).map(id => id.slice(0, 128)),
     moreQueries: Math.max(0, ids.length - 32),
     index: {},
     callForms: ['{}', '{"query":"listed query ID","arguments":["argument token"]}', '{"requestId":"returned requestId"}'],
-    rule: 'Choose one form. arguments is optional and query-specific. requestId is returned by a sent query; never invent it or combine it with query. Only registered queries are supported. For other server commands, read the chat action contract via next_safe_read.',
+    rule: 'Choose one form. arguments is optional and query-specific. requestId is returned by a sent query; never invent it or combine it with query. Only registered queries are supported. For the suggested read, use next_safe_read directly.',
   };
-  const next_safe_read = { tool: 'mc_help', arguments: { skill: 'chat' } };
   return { text: message + '\n' + JSON.stringify({ recovery, next_safe_read }), failed: true,
     data: { goal_completed: false, recovery, next_safe_read } };
 }
@@ -318,6 +318,9 @@ export class ServerQueryLane {
       return queryInputFailure('Use {}, {query,arguments?:string[]}, or {requestId} separately. No query was sent.', definitions);
     }
     const matches = definitions.filter(definition => definition.id === args.query);
+    if (!matches.length && args.query === 'mc_bag')
+      return queryInputFailure('Inventory is a native read tool. Call mc_bag directly. No query was sent.', definitions,
+        {tool:'mc_bag',arguments:{detail:'slots'}});
     if (matches.length !== 1) return queryInputFailure('Unknown or ambiguous query. Read {} for the available protocol definitions. No query was sent.', definitions);
     if (!context) return failure('Server connection is unavailable. No query was sent; reconnect before submitting a query.');
     if (context.afterSequence !== undefined && (!Number.isSafeInteger(context.afterSequence) || context.afterSequence < 0)) {

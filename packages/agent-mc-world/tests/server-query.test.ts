@@ -128,6 +128,13 @@ describe('read-only server query lane', () => {
       expect(send).not.toHaveBeenCalled();
     });
 
+  it('routes a misplaced inventory tool name to its native slots read on a server without query plugins', () => {
+    const {lane,send,context}=setup();
+    const result=lane.call({query:'mc_bag',arguments:['detail:slots']},[],context);
+    expect(result).toMatchObject({failed:true,data:{next_safe_read:{tool:'mc_bag',arguments:{detail:'slots'}}}});
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('bounds error recovery instead of expanding every configured protocol description', () => {
     const { lane, send, context } = setup();
     const many = Array.from({ length: 100 }, (_, i) => ({ ...definitions[0], id: `query${i}`, description: 'large'.repeat(2000) }));
