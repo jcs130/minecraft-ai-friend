@@ -38,10 +38,24 @@ export class DesktopDevices {
       refresh_hash TEXT NOT NULL UNIQUE, access_hash TEXT NOT NULL UNIQUE,
       old_refresh_hash TEXT, rotate_id TEXT, retry_until INTEGER,
       access_until INTEGER NOT NULL, refresh_until INTEGER NOT NULL, revoked_at INTEGER, legacy_hash TEXT,
-      UNIQUE(owner,device));`);
+      UNIQUE(owner,device));
+      CREATE TABLE IF NOT EXISTS desktop_play_receipts (
+      authorization TEXT NOT NULL REFERENCES desktop_authorizations(id) ON DELETE CASCADE,
+      request TEXT NOT NULL, character TEXT NOT NULL, mode TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('active','stopped','expired','rejected')),
+      reason TEXT, updated_at INTEGER NOT NULL, PRIMARY KEY(authorization,request));`);
     residents.desktopAuthority = (grant, req) => {
       const row = this.db.prepare('SELECT * FROM desktop_authorizations WHERE id=?').get(grant.desktop);
       return !!this.role(row) && (!req || this.proves(row, req));
+    };
+    residents.desktopPlayEnded = (role, grant, status) => {
+      if (!valid(uuid,grant.instance)) return;
+      const authorization = this.db.prepare('SELECT id FROM desktop_authorizations WHERE id=?').get(grant.desktop);
+      if (!authorization) return;
+      const reason = status === 'stopped' ? 'USER_STOPPED' : 'LEASE_EXPIRED';
+      const deadline = residents.desktopPlayDeadline(grant);
+      const updatedAt = status === 'expired' && Number.isFinite(deadline) ? Math.min(this.now(),deadline) : this.now();
+      this.rememberPlay(authorization,role,grant.instance,status,reason,updatedAt);
     };
   }
 
@@ -212,24 +226,71 @@ export class DesktopDevices {
       recoveryUrl:this.publicOrigin + '/resident-connect.html?flow=bodies'};
   }
 
+  rememberPlay(row, role, requestId, status, reason, updatedAt = this.now()) {
+    return this.db.prepare(`INSERT INTO desktop_play_receipts(authorization,request,character,mode,status,reason,updated_at)
+      VALUES(?,?,?,?,?,?,?) ON CONFLICT(authorization,request) DO UPDATE SET
+        status=excluded.status, reason=excluded.reason, updated_at=max(desktop_play_receipts.updated_at,excluded.updated_at)
+      WHERE desktop_play_receipts.status='active' AND excluded.status IN ('stopped','expired')`)
+      .run(row.id,requestId,role.characterId,role.bodyKind,status,reason,updatedAt).changes;
+  }
+
+  playStatus(row, requestId) {
+    if (!valid(uuid,requestId)) throw denied(400,'DESKTOP_REQUEST_INVALID');
+    const role = this.role(row);
+    if (!role) throw authRequired();
+    const receipt = this.db.prepare(`SELECT character AS characterId, mode, status, updated_at AS updatedAt, reason
+      FROM desktop_play_receipts WHERE authorization=? AND request=?`).get(row.id,requestId);
+    if (!receipt) return {requestId,status:'unknown',characterId:null,mode:null,updatedAt:null,reason:'NO_RECEIPT'};
+    if (receipt.status !== 'active') return {requestId,...receipt};
+    const grant = role.grant;
+    const saved = this.db.prepare(`SELECT until,last_seen FROM resident_grants
+      WHERE role=? AND desktop=? AND instance=?`).get(role.id,row.id,requestId);
+    const sameGrant = grant?.desktop === row.id && grant.instance === requestId;
+    const deadline = saved ? this.residents.desktopPlayDeadline({
+      until:saved.until, lastPoll:sameGrant ? grant.lastPoll : saved.last_seen ?? -Infinity,
+    }) : receipt.updatedAt;
+    if (saved && sameGrant && deadline > this.now()) return {requestId,...receipt};
+    return {requestId,...receipt,status:'expired',reason:'LEASE_EXPIRED',
+      updatedAt:Math.max(receipt.updatedAt,Math.min(this.now(),deadline))};
+  }
+
   async start(row,input,req) {
-    if (!valid(uuid,input?.requestId)) throw denied(400,'DESKTOP_REQUEST_INVALID');
+    const requestId = input?.requestId;
+    if (!valid(uuid,requestId)) throw denied(400,'DESKTOP_REQUEST_INVALID');
     const status = await this.status(row);
-    if (this.access(req).id !== row.id) throw authRequired();
-    if (!status.canStart || status.character.bodyKind !== input.mode) throw denied(409,'DESKTOP_BODY_BUSY');
-    const role = this.role(row), live = this.residents.desktopController(role);
-    const token = 'rdt_' + derive(req.headers['x-qd-device-proof'], row.id + ':' + input.requestId);
-    if (live && live.desktop === row.id && live.instance === input.requestId && live.hash === digest(token))
+    const authorized = this.access(req);
+    if (authorized.id !== row.id) throw authRequired();
+    const role = this.role(authorized), live = this.residents.desktopController(role);
+    const prior = this.playStatus(authorized,requestId);
+    if (prior.status !== 'unknown' && prior.status !== 'active') throw denied(409,'DESKTOP_PLAY_ENDED');
+    const token = 'rdt_' + derive(req.headers['x-qd-device-proof'], row.id + ':' + requestId);
+    const same = live?.desktop === row.id && live.instance === requestId && live.hash === digest(token);
+    if (!status.canStart || status.character.bodyKind !== input.mode ||
+        live && !same && (live.desktop || live.hash !== authorized.legacy_hash)) {
+      if (prior.status === 'unknown' && !same) this.rememberPlay(authorized,role,requestId,'rejected','DESKTOP_BODY_BUSY');
+      throw denied(409,'DESKTOP_BODY_BUSY');
+    }
+    if (same)
       return {endpoint:this.publicOrigin + '/api/v1/resident-turns/' + role.id,token,expiresAt:live.until,resident:this.residents.describe(role)};
-    if (live && (live.desktop || live.hash !== row.legacy_hash)) throw denied(409,'DESKTOP_BODY_BUSY');
-    const grant = this.residents.grant(role,row.owner,this.publicOrigin,token,null,{id:row.id,instance:input.requestId});
-    this.db.prepare('UPDATE desktop_authorizations SET legacy_hash=NULL WHERE id=?').run(row.id);
-    return grant;
+    return this.residents.grant(role,authorized.owner,this.publicOrigin,token,null,{
+      id:authorized.id,instance:requestId,
+      record:() => {
+        if (!this.rememberPlay(authorized,role,requestId,'active',null)) throw denied(409,'DESKTOP_PLAY_ENDED');
+        this.db.prepare('UPDATE desktop_authorizations SET legacy_hash=NULL WHERE id=?').run(authorized.id);
+      },
+    });
   }
 
   stop(row, requestId) {
+    if (!valid(uuid,requestId)) throw denied(400,'DESKTOP_REQUEST_INVALID');
     const role = this.role(row);
-    if (role?.grant?.desktop === row.id && role.grant.instance === requestId) this.residents.clear(role);
+    if (!role) throw authRequired();
+    if (role.grant?.desktop === row.id && role.grant.instance === requestId && this.residents.desktopController(role)) {
+      this.residents.clear(role,'stopped');
+    } else if (this.playStatus(row,requestId).status === 'unknown') {
+      // A stop can reach the server while the matching start is still awaiting the body.
+      this.rememberPlay(row,role,requestId,'stopped','USER_STOPPED');
+    }
     return {stopped:true};
   }
 
@@ -254,7 +315,7 @@ export class DesktopDevices {
     if (!req.portalOrigin.secure || req.portalOrigin.origin !== this.publicOrigin) throw denied(403,'DESKTOP_HTTPS_REQUIRED');
     const op = pathname.slice(url.length + 1);
     rate('desktop-authorization:' + peer, 60, minutes);
-    if (['begin','exchange','refresh','status','start','stop','unlink'].includes(op)) {
+    if (['begin','exchange','refresh','status','play-status','start','stop','unlink'].includes(op)) {
       if (req.method !== 'POST' || req.headers.origin || req.headers.cookie ||
           !/^application\/json(?:;|$)/i.test(req.headers['content-type'] ?? '')) throw denied(403,'DESKTOP_CLIENT_REQUIRED');
       const input = await jsonBody(req, 2048);
@@ -267,6 +328,10 @@ export class DesktopDevices {
         if (op === 'status') {
           result = await this.status(row);
           if (this.access(req).id !== row.id) throw authRequired();
+        }
+        if (op === 'play-status') {
+          res.setHeader('Cache-Control','private, no-store');
+          result = this.playStatus(row,input?.requestId);
         }
         if (op === 'start') result = await this.start(row,input,req);
         if (op === 'stop') result = this.stop(row,input?.requestId);
