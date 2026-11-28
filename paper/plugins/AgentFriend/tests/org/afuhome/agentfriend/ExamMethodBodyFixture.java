@@ -197,6 +197,29 @@ public final class ExamMethodBodyFixture {
     public static void main(String[] args)throws Exception {
         AssessmentCatalog catalog=AssessmentCatalog.load(new File(args[0]));Path output=Path.of(args[1]);
         Env e=new Env(catalog,output,"chat-projection");
+        chatTest("expired inventory exam detail offers the same restart as status",()->{
+            Env expiry=new Env(catalog,output,"inventory-expiry");
+            expiry.start("inventory_basic");
+            expiry.call("interrupt",expiry.p,expiry.run(),"timeout");
+            expiry.call("info",expiry.p,catalog.definitions.get("inventory_basic"),true);
+            JsonObject detail=full(expiry);
+            check(detail.get("eligibility").getAsString().equals("ready"),"expired exam still marked in progress");
+            check(detail.get("nextCommand").equals(expiry.summary().get("nextCommand")),"detail and status disagree after timeout");
+        });
+        chatTest("partial inventory training survives reload and combines with new proofs",()->{
+            Env training=new Env(catalog,output,"inventory-reuse");
+            training.plugin.training.proofs.addAll(List.of("cli_list","cli_detail","cli_status"));
+            training.start("inventory_basic");
+            JsonObject original=training.active().deepCopy();
+            check(original.get("state").getAsString().equals("active"),"partial evidence incorrectly graded ready");
+            check(original.getAsJsonObject("proofs").keySet().equals(training.plugin.training.proofs),"partial evidence was not saved");
+            training.clearMemory();
+            for(String proof:List.of("backpack_retrieve","door_passage","ladder_ascent"))
+                training.call("proof",training.p,proof,"server_observed_test");
+            JsonObject completed=training.active();
+            check(completed.get("state").getAsString().equals("ready"),"retained and new proofs did not combine");
+            check(completed.get("runId").equals(original.get("runId"))&&completed.get("expiresAt").equals(original.get("expiresAt")),"proof collection replaced run/deadline");
+        });
         chatTest("short JSON keeps exact old ABI and source independence",()->{
             JsonObject shortJson=JsonParser.parseString("{\"available\":false,\"state\":\"interrupted\",\"reason\":\"data_unavailable\",\"scope\":\"self\",\"extra\":{\"text\":\"中文\\n\\\"\\\\𐐀\"},\"guide\":{\"current\":{\"unknown\":true}}}").getAsJsonObject();
             JsonObject before=shortJson.deepCopy(),chat=projection(e,shortJson);bounded(chat);check(chat.equals(before),"short ABI degraded");
@@ -326,7 +349,8 @@ final class Communication {
 final class Professions {int level(Player p,String id){return 1;}}
 final class Training {
     int enrollments,starts;void enroll(Player p){enrollments++;}void command(Player p,String action){starts++;}
-    boolean verified(Player p,String proof){return false;}
+    final Set<String> proofs=new HashSet<>();
+    boolean verified(Player p,String proof){return proofs.contains(proof);}
 }
 final class ExamSupplies {
     int allocations;
