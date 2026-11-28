@@ -6,7 +6,7 @@ import { installMiningLimiter, MINING_LIMIT_DEFAULTS, resolveMiningLimits } from
 import { onServerScreen, renderScreen, serverScreen } from './server-screens.ts';
 import { compactWorkExecutionEvidence } from '../src/contracts/continuation-evidence.ts';
 import { nativeBodyBlockedReason, nativeBodyReadiness } from './body-readiness.ts';
-import { methodLearningCall } from '../src/learning/method-capability.ts';
+import { isMindcraftProgram, methodLearningCall } from '../src/learning/method-capability.ts';
 import {RecordedSceneStore,type RecordedScene} from '../src/learning/recorded-scene.ts';
 import { operationInventory } from './operation-experience.ts';
 import { TrajectoryScoreError } from './jitrl-trajectory.ts';
@@ -2321,7 +2321,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     name: 'mc_script',
     tags: ['act'],
     learningCall: methodLearningCall,
-    readOnlyCall: args => !!args.find || !!args.api || ['list','read'].includes(String((args.scene as {op?:unknown}|undefined)?.op)) || ['list', 'read', 'evidence'].includes(String((args.library as { op?: unknown } | undefined)?.op))
+    readOnlyCall: args => !!args.find || (args.api !== undefined && Object.keys(args).length===1) || ['list','read'].includes(String((args.scene as {op?:unknown}|undefined)?.op)) || ['list', 'read', 'evidence'].includes(String((args.library as { op?: unknown } | undefined)?.op))
       || Object.keys(args).length===1 && ['list','read'].includes(String((args.routine as {op?:unknown}|undefined)?.op)),
     description: 'Write and run an async JavaScript function body with params and the restricted mc SDK using the {api:"authoring"} guide. '
       + 'The guide covers writing, validation, saving, execution, review and reuse. Use feedback, calculations or conditional steps to adapt your actions. {library:{op:"list",query:"purpose"}} searches this scoped game-method library. A host procedure_find may use a different library. '
@@ -2335,7 +2335,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'A sent server command still needs observed effects; done is the executor result, not proof of an external quest. '
       + 'await mc.flightPlan(args) uses the same read-only geometry/budget contract as mc_flight_plan. '
       + 'Use JavaScript conditions, calculations and bounded loops to adapt to feedback. Prepare a timed route before casting; combine already-known cast/movement/blink steps with needs in one mc.do to avoid model delays. '
-      + 'Mindcraft programs can compose world observations and skills on this bot. Use {api:"mindcraft"} for the on-demand index. '
+      + 'Mindcraft programs can compose world observations and skills on this bot. {api:"mindcraft"} alone reads the index; with code it runs the supplied JavaScript through the normal body program. '
       + 'bot and Vec3 expose a bounded asynchronous transport for Mineflayer public primitives; use {api:"index"} then {api:"blockAt"}, {api:"activateItem"}, etc. for native signatures and differences. '
       + 'One public method can pass directly to this body with native:{name:"lookAt",args:[{x,y,z},true]}; read the returned run as usual. '
       + 'Native calls preserve the current hand and do not navigate or select tools. bot.blockAt returns Block|null with getProperties() for your own JavaScript result checks. '
@@ -5044,6 +5044,12 @@ export class MinecraftWorld implements World {
       },
 
       mc_script: async (args, ctx) => {
+        if(isMindcraftProgram(args)) {
+          const {api:_library,...program}=args;
+          args=program;
+        } else if(args.api!==undefined && args.code!==undefined) {
+          return {failed:true,text:'No code ran. Use {api:"mindcraft"} alone to read the index. To run JavaScript, send code with optional name, params, durationMs, waitMs, validate and api:"mindcraft". Remove other selectors.'};
+        }
         if(args.scene!==undefined){try{if(Object.keys(args).length!==1||!args.scene||typeof args.scene!=='object'||Array.isArray(args.scene))throw Error('Use scene separately');
           return {text:JSON.stringify(this.practiceScenes(args.scene as Record<string,unknown>))};}catch(error){return {text:String(error),failed:true};}}
         try {
