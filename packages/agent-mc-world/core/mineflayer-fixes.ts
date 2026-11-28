@@ -23,6 +23,7 @@ import { installPlacementMissState, PlacementRetryDeferred } from './placement-m
 import { ShowPacer, currentShowPacer, withShowPacer, type ShowTempo } from './show.ts';
 import { dropOwnedGoal } from './executor.ts';
 import { SkillBlocked } from './skill-context.ts';
+import { CraftResultSlotTimeout } from './craft-grid-observation.ts';
 import { installInventoryWindowSyncGuard } from './inventory-window-sync.ts';
 import { installDamageEvidence } from './damage-evidence.ts';
 import { installOwnedFishing } from './fishing.ts';
@@ -1495,7 +1496,7 @@ async function craftOnce(
     const per = new Map<number, number>();
     for (const id of plan.values()) per.set(id, (per.get(id) ?? 0) + 1);
     const laid = [...per].map(([id, n]) => `${itemLabel(bot, id)}×${n}`).join('、');
-    throw new Error(`材料摆上去了(${laid}),等了 ${RESULT_WAIT_MS}ms 服务端没有给出产物`);
+    throw new CraftResultSlotTimeout(`材料摆上去了(${laid}),等了 ${RESULT_WAIT_MS}ms 服务端没有给出产物`);
   }
 
   await show?.beat('result'); // 产出槽在摄像机画面上亮一拍再收
