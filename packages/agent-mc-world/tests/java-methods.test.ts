@@ -38,6 +38,16 @@ function rig(){
 // Native and Mineflayer methods both start a real SES worker. Preserve the
 // upstream bounded completion window while retaining short-reply coverage.
 async function finished(r:ReturnType<typeof rig>,id:number){await vi.waitFor(()=>expect(r.m.runner.read(id)[0].status).not.toBe('running'),{timeout:5000});await vi.waitFor(()=>expect(r.events.some(e=>e.execution.evidence.localId===id)).toBe(true),{timeout:5000});return r.m.runner.read(id)[0];}
+it('dispatches a single native Java read once and honours bridge generation without taking the body',async()=>{
+  const r=rig();
+  const args={native:{name:'blockAt',args:[{x:2,y:63,z:2}]},waitMs:1000};
+  const reply=await r.call(args);
+  expect(JSON.parse(reply.text)).toMatchObject({status:'completed',result:{name:'carrots',position:{x:2,y:63,z:2}}});
+  expect(r.readAttempts).toHaveLength(1);
+  expect(r.readAttempts[0].expectedGeneration).toBe(r.state.generation);
+  expect(r.calls.some(c=>c.method==='do')).toBe(false);
+  await expect(r.call({...args,code:'return 1;'})).rejects.toThrow();
+});
 it('rejects unsupported queue overrides without dispatching a native action',async()=>{
  const r=rig();const reply=await r.call({code:'return await mc.do([{skill:"chat",text:"must not send"}],{queue:"now"});'});
  const result=await finished(r,JSON.parse(reply.text).id);

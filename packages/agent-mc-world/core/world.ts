@@ -85,6 +85,7 @@ import { resolveProcedure, procedureReference, PROCEDURE_RECEIPT_SCHEMA, PROCEDU
   type ProcedureReceipt } from './support/procedure.ts';
 import { MineflayerMethod, NATIVE_API } from './method-mineflayer.ts';
 import { methodApiHelp } from './method-api.ts';
+import { nativeInvocation, NATIVE_INVOCATION_SCHEMA } from './mineflayer-call.ts';
 import { methodCapabilities } from './method-capabilities.ts';
 import { flightState } from './flight.ts';
 import { movementReadout } from './skills-control.ts';
@@ -2335,6 +2336,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'await mc.flightPlan(args) uses the same read-only geometry/budget contract as mc_flight_plan. '
       + 'Use JavaScript conditions, calculations and bounded loops to adapt to feedback. Prepare a timed route before casting; combine already-known cast/movement/blink steps with needs in one mc.do to avoid model delays. '
       + 'bot and Vec3 expose a bounded asynchronous transport for Mineflayer public primitives; use {api:"index"} then {api:"blockAt"}, {api:"activateItem"}, etc. for native signatures and differences. '
+      + 'One public method can pass directly to this body with native:{name:"lookAt",args:[{x,y,z},true]}; read the returned run as usual. '
       + 'Native calls preserve the current hand and do not navigate or select tools. bot.blockAt returns Block|null with getProperties() for your own JavaScript result checks. '
       + 'The first native body call queues a body lease held until program end; after it, mc.do is unavailable in that program. Read calls do not acquire the body. '
       + 'No imports, process, filesystem, network or protected raw bot access. Calls must be awaited serially. For a delay use await bot.waitForTicks(ticks) with an integer from 1 to 200. The sandbox has no global setTimeout. '
@@ -2358,6 +2360,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       name: { type: 'string', minLength: 1, maxLength: 80 },
       library: METHOD_LIBRARY_SCHEMA,
       find: BLOCK_FIND_SCHEMA,
+      native:NATIVE_INVOCATION_SCHEMA,
       routine: WORK_ROUTINE_SCHEMA,
       code: { type: 'string', minLength: 1, maxLength: METHOD_LIMITS.sourceChars },
       procedure: { type: 'object', properties: { handle: { type: 'string' }, revision: { type: 'string' } }, required: ['handle', 'revision'] },
@@ -5031,6 +5034,7 @@ export class MinecraftWorld implements World {
         if(args.scene!==undefined){try{if(Object.keys(args).length!==1||!args.scene||typeof args.scene!=='object'||Array.isArray(args.scene))throw Error('Use scene separately');
           return {text:JSON.stringify(this.practiceScenes(args.scene as Record<string,unknown>))};}catch(error){return {text:String(error),failed:true};}}
         try {
+          const native = nativeInvocation(args);
           if (args.find !== undefined) args = blockFindRequest(args);
           if(args.waitMs!==undefined&&(typeof args.waitMs!=='number'||!Number.isInteger(args.waitMs)||args.waitMs<0||args.waitMs>30000))throw new Error('waitMs须为0至30000');
           if (args.routine !== undefined) {
@@ -5087,7 +5091,7 @@ export class MinecraftWorld implements World {
             if (args.code !== undefined || args.procedure !== undefined || args.runId !== undefined || args.call !== undefined) throw new Error('stop不能与code、procedure、runId或call合用');
             return this.toolLog('mc_script', args, this.methods.stop('mc_script明确取消') ? '已取消当前方法' : '当前没有运行中的方法');
           }
-          if (args.code !== undefined || args.procedure !== undefined) {
+          if (native || args.code !== undefined || args.procedure !== undefined) {
             if (args.runId !== undefined || args.call !== undefined) throw new Error('code不能与runId或call合用');
             if (args.code !== undefined && args.procedure !== undefined) throw new Error('code和procedure不能合用');
             if (args.validate !== true && (!this.executor || !this.bridge?.bot?.entity)) throw new Error('Minecraft尚未连接');
@@ -5096,7 +5100,8 @@ export class MinecraftWorld implements World {
               ? this.methodLibrary().blob(handle) : this.host?.blob(handle) ?? null) : undefined;
             const root = graph?.versions[graph.root];
             ctx.signal?.throwIfAborted();
-            const run = this.methods.start({ name: root?.id ?? args.name as string, code: root?.code ?? args.code as string,
+            const run = native ? this.methods.startNative(native,{name:args.name as string|undefined,durationMs:args.durationMs as number|undefined})
+              : this.methods.start({ name: root?.id ?? args.name as string, code: root?.code ?? args.code as string,
               params: args.params as Record<string, unknown> | undefined,
               durationMs: args.durationMs as number | undefined, validate: args.validate === true,
               ...(graph && reference ? { procedure: { reference, graph } } : {}) });

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { nativeCallSource, type NativeInvocation } from './mineflayer-call.ts';
 import { Worker } from 'node:worker_threads';
 import { PROCEDURE_LIMITS, type ProcedureGraph, type ProcedureInvocation, type ProcedureReference } from './support/procedure.ts';
 import { compactWorkExecutionEvidence } from '../src/contracts/continuation-evidence.ts';
@@ -117,7 +118,14 @@ export class MethodRunner {
     this.active.stop(reason);return true;
   }
 
-  start(request: MethodRequest): MethodRun {
+  start(request: MethodRequest): MethodRun { return this.launch(request); }
+
+  startNative(native:NativeInvocation, options:{name?:string; durationMs?:number}={}):MethodRun {
+    if (!this.host.nativeMethods?.includes(native.name)) throw new Error('Native method unavailable: '+native.name);
+    return this.launch({...options,code:nativeCallSource(native.name),params:{args:native.args}},native.name);
+  }
+
+  private launch(request: MethodRequest, native?:NativeInvocation['name']): MethodRun {
     const occupied=request.validate===true?this.validating:this.active;
     if (occupied) throw new Error(`方法#${occupied.run.id}仍在运行；先读取结果或明确取消`);
     if (typeof request.code !== 'string' || !request.code.trim() || request.code.length > METHOD_LIMITS.sourceChars) throw new Error(`code须为1至${METHOD_LIMITS.sourceChars}字符的JavaScript函数体`);
@@ -139,7 +147,7 @@ export class MethodRunner {
         versions: Object.values(graph.versions).map(v => ({ id: v.id, revision: v.revision, sourceHash: v.sourceHash, parent: v.parent, author: v.author })) };
     }
     const controller = new AbortController();
-    const worker = new Worker(new URL('./method-worker.mjs', import.meta.url), {
+    const worker = native ? null : new Worker(new URL('./method-worker.mjs', import.meta.url), {
       workerData: { code: request.code, params, validate: request.validate === true, nativeMethods: this.host.nativeMethods,
         graph: request.procedure?.graph, maxInvocations: PROCEDURE_LIMITS.invocations },
       env: {}, execArgv: [], resourceLimits: { maxOldGenerationSizeMb: 64, stackSizeMb: 4 },
@@ -163,7 +171,7 @@ export class MethodRunner {
       }
       if (result !== undefined) run.result = result;
       controller.abort(new Error(error ?? '方法结束'));
-      void worker.terminate();
+      void worker?.terminate();
       if(this.active?.run.id===run.id)this.active=null;
       if(this.validating?.run.id===run.id)this.validating=null;
       this.host.onFinish(structuredClone(run));
@@ -177,9 +185,43 @@ export class MethodRunner {
       const old=[...this.runs.values()].find(r=>r.status!=='running');
       if(!old)break;this.runs.delete(old.id);
     }
-    worker.on('error', (error) => finish('failed', String(error)));
-    worker.on('exit', (code) => { if (!finished) finish('failed', `脚本线程退出(${code})`); });
-    worker.on('message', (message) => {
+    worker?.on('error', (error) => finish('failed', String(error)));
+    worker?.on('exit', (code) => { if (!finished) finish('failed', `脚本线程退出(${code})`); });
+    const dispatch = (id: number, method: MethodOperation, rawArgs: unknown, scope?: MethodTrace['procedure']) => {
+      if (request.validate) { finish('failed', '语法校验不可调用World'); return; }
+      if (outstanding) { finish('failed', 'World调用必须逐个await；连续身体动作请放入同一mc.do'); return; }
+      if (run.trace.length >= METHOD_LIMITS.calls || (method === 'do' && ++actions > METHOD_LIMITS.actions)) {
+        finish('failed', '方法已达到调用上限；请读取终态后修订方法'); return;
+      }
+      let args: Record<string, unknown>;
+      try {
+        args = jsonValue(rawArgs) as Record<string, unknown>;
+        if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('调用参数须为JSON对象');
+      } catch (error) { finish('failed', String(error)); return; }
+      const trace: MethodTrace = { call: id, method, args, startedAt: new Date().toISOString() };
+      if (scope) trace.procedure = { revision: scope.revision, invocation: scope.invocation };
+      run.trace.push(trace);
+      outstanding = true;
+      void Promise.resolve().then(() => {
+        controller.signal.throwIfAborted();
+        return this.host.call(method, args, controller.signal);
+      }).then((value) => {
+        if (finished) return;
+        trace.result = jsonValue(value);
+        trace.endedAt = new Date().toISOString();
+        outstanding = false;
+        if (worker) worker.postMessage({ id, value: trace.result });
+        else finish('completed', undefined, (trace.result as { value?: unknown })?.value ?? null);
+      }).catch((error) => {
+        if (finished) return;
+        trace.error = String(error).slice(0, 1600);
+        trace.endedAt = new Date().toISOString();
+        outstanding = false;
+        if (worker) worker.postMessage({ id, error: trace.error });
+        else finish('failed', trace.error);
+      });
+    };
+    worker?.on('message', (message) => {
       if (finished) return;
       if (message.kind === 'error') {
         let error = String(message.error);
@@ -215,34 +257,9 @@ export class MethodRunner {
       if (message.kind !== 'call' || !['capabilities', 'state', 'do', 'flightPlan', 'swimPlan', 'mineflayer'].includes(message.method)) {
         finish('failed', '脚本协议包含未知操作'); return;
       }
-      if (request.validate) { finish('failed', '语法校验不可调用World'); return; }
-      if (outstanding) { finish('failed', 'World调用必须逐个await；连续身体动作请放入同一mc.do'); return; }
-      if (run.trace.length >= METHOD_LIMITS.calls || (message.method === 'do' && ++actions > METHOD_LIMITS.actions)) {
-        finish('failed', '方法已达到调用上限；请读取终态后修订方法'); return;
-      }
-      let args: Record<string, unknown>;
-      try {
-        args = jsonValue(message.args) as Record<string, unknown>;
-        if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('调用参数须为JSON对象');
-      } catch (error) { finish('failed', String(error)); return; }
-      const trace: MethodTrace = { call: message.id, method: message.method, args, startedAt: new Date().toISOString() };
-      if (message.scope) trace.procedure = { revision: message.scope.revision, invocation: message.scope.invocation };
-      run.trace.push(trace);
-      outstanding = true;
-      void Promise.resolve().then(() => this.host.call(trace.method, args, controller.signal)).then((value) => {
-        if (finished) return;
-        trace.result = jsonValue(value);
-        trace.endedAt = new Date().toISOString();
-        outstanding = false;
-        worker.postMessage({ id: message.id, value: trace.result });
-      }).catch((error) => {
-        if (finished) return;
-        trace.error = String(error).slice(0, 1600);
-        trace.endedAt = new Date().toISOString();
-        outstanding = false;
-        worker.postMessage({ id: message.id, error: trace.error });
-      });
+      dispatch(message.id, message.method, message.args, message.scope);
     });
+    if (native) dispatch(1, 'mineflayer', { name: native, args: (params as { args: unknown[] }).args });
     return structuredClone(run);
   }
 }

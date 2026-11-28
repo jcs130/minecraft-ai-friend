@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.153
+
+Single supported Mineflayer calls on the script tool now accept `{native:{name:"lookAt",args:[point,true]}}` and dispatch to the connected body without starting a JavaScript worker. Named aliases use the same path. Script programs, cancellation, body leases and persisted request replay retain their existing contracts. The legacy inventory alias returns the slot summary. Use `{native:{name:"inventory.items",args:[]}}` for the item snapshots accepted by equip.
+
 ## 0.5.7-rc.160-preview.152
 
 Native nearby SVC packets can be transcribed on the client using a server-profile ASR endpoint. Speaker identity comes from the authenticated packet and current player roster. Listening runs independently of the body queue.

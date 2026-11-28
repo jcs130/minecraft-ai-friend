@@ -6,7 +6,7 @@ import { readToolHelp } from '../src/client/tool-help.ts';
 it('maps supported native calls and provider-safe names to the canonical tool without embedding argument text', () => {
   for (const method of BOT_METHODS) expect(mineflayerCallHelp('bot.'+method)?.method).toBe('bot.'+method);
   const point={x:1,y:64,z:-3};
-  const expected={name:'mymc_script',args:{code:'return await bot.lookAt(...params.args)',params:{args:[point,true]},waitMs:1000}};
+  const expected={name:'mymc_script',args:{native:{name:'lookAt',args:[point,true]},waitMs:1000}};
   expect(resolveMineflayerCall('mineflayer_look_at',{point,force:true},'mymc')).toEqual(expected);
   expect(resolveMineflayerCall('bot.lookAt',{args:[point,true]},'mymc')).toEqual(expected);
   const text='hello); throw Error("unexpected")';

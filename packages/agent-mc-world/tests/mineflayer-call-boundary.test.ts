@@ -32,3 +32,30 @@ it('reuses receipts across native/canonical names and enforces the same SDK and 
     await client.close();await server.close();await runtime.disconnect();await rm(dir,{recursive:true,force:true});
   }
 });
+
+it('reopens pre-upgrade call receipts and coalesces new SDK and MCP calls without replaying the body', async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'native-replay-'));
+  const calls:unknown[]=[];
+  const world:World={id:'minecraft',tools:()=>[{name:'mc_script',description:'run',tags:['body'],parameters:{type:'object'},
+    handler:async(args)=>{calls.push(args);return {text:'observed '+calls.length};}}],envPromptVars:()=>null,start:async()=>{},stop:async()=>{}};
+  const open=()=>new MinecraftAgentClient({cfg:{...structuredClone(MINECRAFT_CLIENT_DEFAULTS),host:'localhost',username:'ReplayFixture'},dataDir:dir,log:nullLogger()},world);
+  let runtime=open();
+  const point={x:2,y:70,z:-5},legacy={code:'return await bot.lookAt(...params.args)',params:{args:[point,true]},waitMs:1000};
+  try{
+    await runtime.connect();
+    const saved=await runtime.call('mc_script',legacy,'upgrade');
+    await runtime.disconnect();
+    runtime=open();await runtime.connect();
+    expect(await runtime.call('bot.lookAt',{point,force:true},'upgrade')).toMatchObject(saved);
+    await expect(runtime.call('bot.lookAt',{point,force:false},'upgrade')).rejects.toThrow(/different|conflict/i);
+    expect(calls).toEqual([legacy]);
+    const server=createMinecraftMcpServer(runtime,'test');
+    const client=new Client({name:'native-consumer',version:'1'});
+    const [left,right]=InMemoryTransport.createLinkedPair();
+    try{
+      await server.connect(left);await client.connect(right);
+      expect((await client.callTool({name:'bot_look_at',arguments:{point,force:true}})).isError).not.toBe(true);
+      expect(calls).toEqual([legacy,{native:{name:'lookAt',args:[point,true]},waitMs:1000}]);
+    }finally{await client.close();await server.close();}
+  }finally{await runtime.disconnect();await rm(dir,{recursive:true,force:true});}
+});
