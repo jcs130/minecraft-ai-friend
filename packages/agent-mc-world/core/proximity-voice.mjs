@@ -6,7 +6,10 @@ const CHANNEL='mcagent:voice',UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 const terminal=new Set(['sent','failed','cancelled','unknown','not_found']);
 const states=new Set([...terminal,'uploading','queued','playing','subscribed']),attached=new WeakMap();
 export function inspectVoiceWav(wav){
-  if(!Buffer.isBuffer(wav)||wav.length<44||wav.length>4*1024*1024||wav.toString('ascii',0,4)!=='RIFF'||wav.toString('ascii',8,12)!=='WAVE')throw Error('VOICE_PCM16_WAV_REQUIRED');
+  return inspectPcmWav(wav,4*1024*1024,30000);
+}
+export function inspectPcmWav(wav,maxBytes,maxMs){
+  if(!Buffer.isBuffer(wav)||wav.length<44||wav.length>maxBytes||wav.toString('ascii',0,4)!=='RIFF'||wav.toString('ascii',8,12)!=='WAVE')throw Error('VOICE_PCM16_WAV_REQUIRED');
   let fmt,bytes,offset;
   for(let at=12;at+8<=wav.length;){const size=wav.readUInt32LE(at+4),kind=wav.toString('ascii',at,at+4);
     if(kind==='data'){offset=at+8;bytes=size;break;}
@@ -15,7 +18,7 @@ export function inspectVoiceWav(wav){
     at+=8+size+(size%2);
   }
   if(!fmt||fmt.format!==1||fmt.bits!==16||![1,2].includes(fmt.channels)||fmt.sampleRate<8000||fmt.sampleRate>96000||!offset||!bytes||offset+bytes>wav.length||bytes%(fmt.channels*2))throw Error('VOICE_PCM16_WAV_REQUIRED');
-  const durationMs=bytes/(fmt.channels*2*fmt.sampleRate)*1000;if(durationMs<100||durationMs>30000)throw Error('VOICE_DURATION_0_1_TO_30_SECONDS');
+  const durationMs=bytes/(fmt.channels*2*fmt.sampleRate)*1000;if(durationMs<100||durationMs>maxMs)throw Error(maxMs===30000?'VOICE_DURATION_0_1_TO_30_SECONDS':'SVC_PROGRAM_DURATION_EXCEEDED');
   return{...fmt,durationMs,bytes:wav.length,samples:bytes/(fmt.channels*2)};
 }
 export function attachProximityVoice(bot,{onHearing,onResult,isAuthenticated,seenUtterances=new Set(),timeoutMs=110000}={}){

@@ -1,4 +1,4 @@
-import { inspectVoiceWav } from './proximity-voice.mjs';
+import { inspectVoiceWav, inspectPcmWav } from './proximity-voice.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -11,7 +11,23 @@ export const SVC_FRAME_SAMPLES = 960;
 export const SVC_MAX_OPUS_BYTES = 4096;
 
 export function pcm16Mono48kFromWav(wav) {
-  const info = inspectVoiceWav(wav);
+  const pcm=wavSamples(wav,inspectVoiceWav(wav));
+  return pcm.read(0,pcm.length);
+}
+
+export function programFrames(wav) {
+  const pcm=wavSamples(wav,inspectPcmWav(wav,64*1024*1024,300000));
+  const total=Math.ceil(pcm.length/SVC_FRAME_SAMPLES);
+  return {total, stream(offset) {
+    let cursor=offset;
+    return new ReadableStream({pull(controller) {
+      if(cursor>=total) {controller.close();return;}
+      controller.enqueue(pcm.read(cursor++*SVC_FRAME_SAMPLES,SVC_FRAME_SAMPLES));
+    }});
+  }};
+}
+
+function wavSamples(wav,info) {
   let dataAt, dataBytes;
   for (let at = 12; at + 8 <= wav.length;) {
     const size = wav.readUInt32LE(at + 4), kind = wav.toString('ascii', at, at + 4);
@@ -23,20 +39,22 @@ export function pcm16Mono48kFromWav(wav) {
   const frames = src.length / (channels * 2);
   const duration = frames / srcRate;
   const outCount = Math.round(duration * SVC_SAMPLE_RATE);
-  const out = new Int16Array(outCount);
-  for (let i = 0; i < outCount; i++) {
-    const srcPos = i * srcRate / SVC_SAMPLE_RATE;
-    const i0 = Math.min(frames - 1, Math.floor(srcPos));
-    const i1 = Math.min(frames - 1, i0 + 1);
-    const t = srcPos - i0;
-    const sample = (c) => {
-      const at = (i, c) => src.readInt16LE((i * channels + c) * 2);
-      return at(i0, c) + (at(i1, c) - at(i0, c)) * t;
-    };
-    const mono = channels === 1 ? sample(0) : (sample(0) + sample(1)) / 2;
-    out[i] = Math.max(-32768, Math.min(32767, Math.round(mono)));
-  }
-  return out;
+  return {length:outCount,read(start,count) {
+    const out = new Int16Array(count);
+    for (let i = start; i < Math.min(outCount,start+count); i++) {
+      const srcPos = i * srcRate / SVC_SAMPLE_RATE;
+      const i0 = Math.min(frames - 1, Math.floor(srcPos));
+      const i1 = Math.min(frames - 1, i0 + 1);
+      const t = srcPos - i0;
+      const sample = (c) => {
+        const at = (i, c) => src.readInt16LE((i * channels + c) * 2);
+        return at(i0, c) + (at(i1, c) - at(i0, c)) * t;
+      };
+      const mono = channels === 1 ? sample(0) : (sample(0) + sample(1)) / 2;
+      out[i-start] = Math.max(-32768, Math.min(32767, Math.round(mono)));
+    }
+    return out;
+  }};
 }
 
 export function pcmFrames(pcm) {

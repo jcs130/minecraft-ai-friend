@@ -267,7 +267,7 @@ export function attachSimpleVoiceChat(bot, {
       // Keep the WAV API while sharing the same microphone and packet sequence.
       return client.uploadFrames(ReadableStream.from(pcmFrames(pcm16Mono48kFromWav(wav))), options);
     },
-    async uploadFrames(source, { requestId = randomUUID(), signal, whisper = false } = {}) {
+    async uploadFrames(source, { requestId = randomUUID(), signal, whisper = false, program = false } = {}) {
       if (!UUID.test(requestId)) throw Error('SVC_REQUEST_UUID_REQUIRED');
       if (uploading) throw Error('SVC_UPLOAD_ALREADY_PENDING');
       const reader = source.getReader();
@@ -291,7 +291,7 @@ export function attachSimpleVoiceChat(bot, {
           if (cancelled()) break;
           if (done) { drained = true; break; }
           if (!(value instanceof Int16Array) || value.length !== SVC_FRAME_SAMPLES) throw Error('SVC_PCM_960_REQUIRED');
-          if (frames >= SVC_SAMPLE_RATE * 30 / SVC_FRAME_SAMPLES) throw Error('SVC_AUDIO_DURATION_EXCEEDED');
+          if (frames >= SVC_SAMPLE_RATE * (program ? 300 : 30) / SVC_FRAME_SAMPLES) throw Error('SVC_AUDIO_DURATION_EXCEEDED');
           const encoded = await opus.encode(value);
           if (cancelled()) break;
           writeMic(encoded); frames++;

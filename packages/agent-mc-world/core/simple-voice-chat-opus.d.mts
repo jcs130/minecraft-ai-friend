@@ -9,3 +9,5 @@ export function createOfficialOpusCodec(options?: { jar?: string; javaPath?: str
   decode?(frame: Buffer): Promise<Int16Array> | Int16Array;
   close?(): void;
 };
+
+export function programFrames(wav:Buffer):{total:number; stream(offset:number):ReadableStream<Int16Array>};
