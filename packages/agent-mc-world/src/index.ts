@@ -1,4 +1,5 @@
 export * from './client/index.ts';
+export { CampStockBook, campScopeKey, bedFoot, type AssetScope } from '../core/camp-stock.ts';
 export * from './contracts/protocol.ts';
 export { getResourceActionContract } from './collect-contract.ts';
 export type { WorldIdentityObservation } from './contracts/world-scope.ts';

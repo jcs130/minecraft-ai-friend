@@ -186,7 +186,8 @@ import {
   worldIdentityOf, writeOps,
   type AccessSettings, type GameSettings, type LevelType, type WorldIdentity, type WorldInfo,
 } from './server-config.ts';
-import { ChestBook } from './chests.ts';
+import { ChestBook, type ChestRecord } from './chests.ts';
+import { CampStockBook, campScopeKey, bedFoot, isCampFacility, type Cell } from './camp-stock.ts';
 import { DirectionalSweepBook } from './directional-sweeps.ts';
 import { containerStacks } from './containers.ts';
 import { invItemNamed, itemsInReach } from './inventory.ts';
@@ -2583,7 +2584,8 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
     bodyControl: 'independent',
     readOnlyCall: args => Object.keys(args).length === 0,
     description:
-      'Register dimension-tagged named places in this world: home, bed, chest, workstation, danger zone, resource spot, '
+      'Use camp:{name,pos,radius} to persist a named camp in the current server/world/account. Read its observed facilities and container contents via mc_bag detail:camp. '
+      + 'Register dimension-tagged named places in this world: home, bed, chest, workstation, danger zone, resource spot, '
       + 'portal, farm, landmark — up to 24. Call with no fields to read them all back with the bearing '
       + 'and distance for places in your current dimension. Tied to the current world and empty after a restart '
       + 'or a world change, so the lasting copy belongs in your own notes.' + GOAL_CLOSURE_CONTRACT,
@@ -2591,6 +2593,9 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       type: 'object',
       description: '一次只受理一件事。set 收数组 = 一次把笔记里那份地图整个装载回来。',
       properties: {
+        camp: {type:'object',additionalProperties:false,required:['name'],properties:{
+          name:{type:'string',minLength:1,maxLength:64},pos:{type:'array',items:{type:'integer'},minItems:3,maxItems:3,description:'Defaults to your current block.'},
+          radius:{type:'integer',minimum:1,maximum:128,description:'3D radius in blocks, default 24.'}}},
         // schema 中 set 一律为数组；受理侧也兼容单个对象。
         set: {
           type: 'array',
@@ -2734,6 +2739,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       'Read inventory now, or compare requirements (required = total needed, keep = amount you choose to retain) to current stock. Shows how many of the 36 slots are used, what is in them, '
       + 'what is in your hand, and what armour you are wearing. Read-only and instant — '
       + 'it never moves you, never touches the world and never touches the work queue. '
+      + 'Use detail:"camp" to list durable camps, then pass camp by name for last-observed facilities and storage, optional item and offset. These positions are not proof of ownership or live stock. '
       + 'Set item to a material ID, Chinese material name, or exact custom display name to count current carried stock. Use detail:"storage" with item to also locate equipment, open container and historical chest records. '
       + 'Closed virtual backpacks are not included. Chest locations and counts are historical until reopened; they remain available when carried inventory is still syncing. '
       + 'Use detail:"slots" for both identifiers of each carried stack: inventorySlot for player inventory 0–35, windowSlot for the player window 9–44. Use the field required by the transfer. item optionally filters stacks; freeSlots always covers the entire carried inventory. '
@@ -2743,10 +2749,11 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'Once per turn: asking again in the same turn returns a one-line pointer to the answer above.',
     parameters: { type: 'object', properties: {
       item: { type: 'string', description: 'Optional focused stock lookup by material ID, Chinese material name, or exact custom display name.' },
-      detail: { type: 'string', enum: ['summary', 'slots', 'changes','storage','book'], description: 'Default summary; slots reads the player window (9–44); changes returns latest net changes; storage locates an item; book lists or reads carried books.' },
+      detail: { type: 'string', enum: ['summary', 'slots', 'changes','storage','book','camp'], description: 'Default summary; slots reads the player window (9–44); changes returns latest net changes; storage locates an item; book lists or reads carried books.' },
+      camp: {type:'string',maxLength:64,description:'Registered camp name for detail:camp.'},
       windowSlot: { type: 'integer', minimum: 9, maximum: 45, description: 'detail:book only. Use the player window slot from the book list (45 is offhand).' },
       page: { type: 'integer', minimum: 1, description: 'detail:book with windowSlot only. One book page, first page is 1.' },
-      offset: {type:'integer',minimum:0,maximum:71,description:'For a changes continuation, copy the offset and revision from next_safe_read.'},
+      offset: {type:'integer',minimum:0,description:'For a changes continuation, copy offset and revision; for camp pass nextOffset.'},
       revision: {type:'string',maxLength:64,description:'Inventory-change revision returned with a continuation.'},
       requirements: { type: 'array', minItems: 1, description: 'Targeted planning read, instead of item/detail. Material IDs count all stack variants. Keep amounts are your assumptions for this query.',
         items: { type: 'object', additionalProperties: false, required: ['item', 'required'], properties: {
@@ -2980,6 +2987,9 @@ export class MinecraftWorld implements World {
   protected readonly playerClient: GameClient;
   protected readonly diag: MinecraftLog;
   protected readonly chests: ChestBook;
+  protected readonly campStock: CampStockBook;
+  private campScanAfter = 0;
+  private campObservationError: string | null = null;
   protected readonly directionalSweeps: DirectionalSweepBook;
   protected readonly explored: ExploreBook;
   protected readonly deaths: DeathBook;
@@ -3175,6 +3185,7 @@ export class MinecraftWorld implements World {
     const ledger = (name: string): string | null => (opts.dataDir ? join(opts.dataDir, name) : null);
 
     this.chests = new ChestBook(ledger('minecraft-chests.json'));
+    this.campStock = new CampStockBook(ledger('minecraft-camp-stock.sqlite'));
     this.directionalSweeps = new DirectionalSweepBook(ledger('minecraft-directional-sweeps.json'));
     this.explored = new ExploreBook(ledger('minecraft-explored.json'));
     this.deaths = new DeathBook(ledger('minecraft-deaths.json'), this.timezone);
@@ -4840,6 +4851,7 @@ export class MinecraftWorld implements World {
       closeMinecraftViewCapture(), bridge?.stop() ?? Promise.resolve(),
     ]);
     await bridgeStop;
+    this.campStock?.close();
     // 托管进程随 World 收干净:客户端直接杀,MC 停机走 stop 指令存档
     await this.client.stop();
     await this.playerClient.stop();
@@ -5234,13 +5246,15 @@ export class MinecraftWorld implements World {
         }
         return result;
       },
-      mc_map: async (args) => this.toolLog('mc_map', args, this.setMap(args)),
+      mc_map: async (args) => args.camp !== undefined ? this.campTool(args,true) : this.toolLog('mc_map', args, this.setMap(args)),
       mc_blueprint: async (args) => {
         const outcome = this.setBlueprint(args);
         return { ...outcome, text: this.toolLog('mc_blueprint', args, outcome.text) };
       },
       mc_check: async (args) => this.toolLog('mc_check', args, this.runCheck(args)),
       mc_bag: async (args, ctx) => {
+        if (args.detail==='camp') return this.campTool(args,false);
+        if (args.camp!==undefined) return {failed:true,text:'查询营地请用 detail:"camp"。'};
         if (args.detail === 'book') {
           ctx.signal?.throwIfAborted();
           if (Object.keys(args).some(key => !['detail', 'windowSlot', 'page'].includes(key)))
@@ -5862,6 +5876,18 @@ export class MinecraftWorld implements World {
       if (!storageHistory) {
         const text = data.synced ? `本人随身 ${item} ×${data.count}，占 ${data.stacks} 格，空 ${data.freeSlots} 格。`
           : '本人随身库存未同步，数量与空格未知。';
+        const scope = this.campScope();
+        if (scope && this.campStock) {
+          try {
+            const known = this.campStock.read(scope,undefined,this.campItem(item),0,4);
+            if (known.records.length) {
+              const trail = known.records.map(({camp,x,y,z,kind,seenAt,openedAt,items})=>({camp,x,y,z,kind,seenAt,openedAt,
+                ...(items ? {itemStacks:items.filter(s=>s.name===this.campItem(item)||s.displayName===item||s.name.endsWith('_'+this.campItem(item)))}:{})}));
+              const facts={...data,campEvidence:trail,more:known.nextOffset!==null};
+              return {stamp:JSON.stringify(facts),text:text+riskText+'\n营地上次实测（不计入随身）：'+JSON.stringify(trail),data:facts};
+            }
+          } catch(error) {this.campObservationError=String(error);}
+        }
         return {stamp:JSON.stringify(data), text:text + riskText,data};
       }
       const records = this.chestBook().chestsIn(snap.dimension);
@@ -7660,8 +7686,83 @@ export class MinecraftWorld implements World {
   }
 
   /** Each operation retains a view of the world in which it started. */
+  private campScope(): string | null {
+    const bot=this.bridge?.bot;
+    if(!this.campStock || !bot?.entity || !readWorldIdentity(bot).key || !this.cfg.username) return null;
+    return campScopeKey({realm:this.realmKey(),dimension:normalizeDimension(bot.game.dimension),
+      account:`${this.cfg.auth??'offline'}:${this.cfg.username}`,agent:this.cfg.memoryAgentId?.trim()||this.botName});
+  }
+
+  private campItem(item:string):string {
+    const query=item.trim().replace(/^minecraft:/,'');
+    if(query==='床')return 'bed';
+    if(query==='白床')return 'white_bed';
+    if(/^[a-z0-9_:.-]+$/.test(query))return query;
+    return Object.keys(this.bridge?.bot?.registry?.itemsByName??{}).find(key=>zhName(key)===query)??query;
+  }
+
+  private campTool(args:Record<string,unknown>,register:boolean): {failed?:true;text:string;data?:Record<string,unknown>} {
+    const scope=this.campScope();
+    if(!scope)return {failed:true,text:'尚无已确认的当前世界和角色，营地账本不可读写。'};
+    try {
+      if(register) {
+        const c=args.camp as {name?:unknown;pos?:unknown;radius?:unknown}|null;
+        if(Object.keys(args).length!==1 || !c || typeof c.name!=='string' || Object.keys(c).some(k=>!['name','pos','radius'].includes(k)))throw Error('单独使用 camp:{name,pos?,radius?}。');
+        const a=c.pos,me=this.bridge!.bot!.entity.position;
+        if(a!==undefined && (!Array.isArray(a)||a.length!==3||!a.every(Number.isSafeInteger)))throw Error('pos 需要三个整数。');
+        const p=Array.isArray(a)?{x:a[0],y:a[1],z:a[2]}:{x:Math.floor(me.x),y:Math.floor(me.y),z:Math.floor(me.z)};
+        this.campStock.register(scope,c.name,p,(c.radius===undefined?24:c.radius) as number);
+        this.campScanAfter=0;
+      } else if(Object.keys(args).some(k=>!['detail','camp','item','offset'].includes(k)) ||
+        (args.camp!==undefined && typeof args.camp!=='string') || (args.item!==undefined && typeof args.item!=='string'))throw Error('营地查询参数为 camp、item 和 offset。');
+      const camps=this.campStock.camps(scope);
+      const name=register?(args.camp as {name:string}).name.trim():args.camp as string|undefined;
+      if(name && !camps.some(c=>c.name===name))throw Error('当前世界没有这个名称的已登记营地。');
+      const item=args.item?this.campItem(String(args.item)):undefined;
+      const [realm,dimension,account,agent]=JSON.parse(scope);
+      const [server,world]=JSON.parse(realm);
+      const data={scope:{server,world:world[1],dimension,account,agent},camps:name?camps.filter(c=>c.name===name):camps,
+        ...(name||item?this.campStock.read(scope,name,item,(args.offset??0) as number):{}),
+        source:'last-observed',contentsRule:'items=null 表示内容未知；[] 表示上次开窗时为空。重叠营地或同一双箱的入口不可累加。',observationError:this.campObservationError};
+      return {text:JSON.stringify(data),data};
+    } catch(error){return {failed:true,text:String(error)};}
+  }
+
+  private observeCamp(bot: Bot,snap:WorldSnapshot) {
+    if(!this.campStock || !snap.blocksScanned || Date.now()<this.campScanAfter)return;
+    this.campScanAfter=Date.now()+12000;
+    try {
+      const scope=this.campScope();if(!scope)return;
+      const camps=this.campStock.camps(scope),me=bot.entity.position;
+      if(!camps.some(c=>Math.hypot(me.x-c.x,me.y-c.y,me.z-c.z)<=c.radius+17))return;
+      const visible=observationView(bot);
+      const visit=(p:Cell,known:boolean)=>{
+        const block=visible.blockAt(new Vec3(p.x,p.y,p.z));if(!block)return;
+        let key:Cell=p;
+        if(block.name.endsWith('_bed')){
+          const props=block.getProperties();
+          const foot=bedFoot(p,props.part,props.facing);if(!foot)return;
+          if(known && (foot.x!==p.x || foot.z!==p.z))this.campStock.observe(scope,p,'','visible-replacement');
+          key=foot;
+        }
+        if(!known && !isCampFacility(block.name))return;
+        if(!camps.some(c=>Math.hypot(key.x-c.x,key.y-c.y,key.z-c.z)<=c.radius))return;
+        this.campStock.observe(scope,key,block.name,'visible-block');
+      };
+      for(const p of this.campStock.nearby(scope,me,16))visit(p,true);
+      for(const p of snap.nearbyBlocks)if(isCampFacility(p.name))visit(p,false);
+      this.campObservationError=null;
+    } catch(error){this.campObservationError=String(error);}
+  }
+
   protected chestBook(): ChestBook {
-    return this.chests.forRealm(this.realmKey());
+    const realm=this.realmKey();
+    const scope=this.campScope();
+    return this.chests.forRealm(realm,scope ? (record:ChestRecord)=>{
+      if (!record.observedAt || !record.name || !isCampFacility(record.name)) return;
+      try { this.campStock.observe(scope,record,record.name,'container-window',record.observedAt,record.items); }
+      catch(error){this.campObservationError=String(error);}
+    } : undefined);
   }
 
   /**
@@ -9935,6 +10036,7 @@ export class MinecraftWorld implements World {
           || (!!raw && tamedByMe(bot, raw)) || /归属本人|主人是你/.test(entity.note ?? '');
         if (owned) entity.companion = { key: entity.identity?.uuid ?? entity.uuid ?? `entity:${entity.entityId ?? label}`, label };
       }
+      this.observeCamp(bot,snap);
       if(snap.blocksScanned)this.journeyBlocks={generation:this.connectionGeneration,dimension:normalizeDimension(snap.dimension),cues:snap.nearbyBlocks
         .filter(b=>/(?:^|_)sign$/.test(b.name)||['bell','spawner','trial_spawner','vault','lectern','enchanting_table','nether_portal','end_portal'].includes(b.name))
         .slice(0,8).map(b=>({kind:/(?:^|_)sign$/.test(b.name)?'sign' as const:'landmark' as const,key:`${b.name}:${b.x},${b.y},${b.z}`,label:b.name,
