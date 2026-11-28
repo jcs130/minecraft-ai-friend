@@ -101,6 +101,7 @@ import { minecraftTextComponent } from './text-component.ts';
 import { richTextAnnotation } from './rich-text.mjs';
 import { setMinecraftTextLanguage } from './nbt-text.mjs';
 import { bookPage, readInventoryBook } from './window-protocol.ts';
+import { selfSkin } from './self-skin.ts';
 import { beginViewerInteraction } from './viewer-interaction.ts';
 import { MinecraftChatProvenance, incomingPrivateParts, isServerNotice, type ChatIdentityEvidence } from '../src/chat-provenance.ts';
 import { nearbySpeakerContext, type NearbySpeakerOrigin } from './nearby-speaker.mjs';
@@ -3776,7 +3777,7 @@ export class MinecraftWorld implements World {
         (bot as Bot & { deathLifecycle?: { episodeId?: string; phase?: string } })?.deathLifecycle?.episodeId ?? null,
         readWorldIdentity(bot).key, normalizeDimension(snap.dimension)]),
       executionPartKeys: travelOptions ? [...EXECUTION_FACT_KEYS, 'travelOptions'] : EXECUTION_FACT_KEYS,
-      options, world: readWorldIdentity(bot),
+      options, world: readWorldIdentity(bot), selfSkin: selfSkin(bot),
       decision: { sampledAtMs: Date.now(), state: {
         identityObservations: identityObservations(snap, Date.now()),
         connection: this.connectionReadiness(), dimension: normalizeDimension(snap.dimension),

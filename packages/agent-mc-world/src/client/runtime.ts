@@ -590,6 +590,7 @@ export class MinecraftAgentClient {
       ...(workCurrent?.workStates ? { workStates: structuredClone(workCurrent.workStates) } : {}),
       ...(workCurrent?.workBindings ? { workBindings: structuredClone(workCurrent.workBindings) } : {}),
       ...(workCurrent?.world ? { world: structuredClone(workCurrent.world) } : {}),
+      selfSkin: workCurrent?.selfSkin ? { ...workCurrent.selfSkin } : null,
       ...(current?.decisionStability ? { decisionStability: structuredClone(current.decisionStability) } : {}),
       ...(current?.decisionBoundary !== undefined ? {decisionBoundary:current.decisionBoundary} : {}),
       ...(current?.partKeys ? {partKeys:['connection','executionState',...current.partKeys]} : {}),

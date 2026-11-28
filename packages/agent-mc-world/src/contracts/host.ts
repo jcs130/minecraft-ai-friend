@@ -98,6 +98,8 @@ export interface WorldHost {
   log: Logger;
 }
 export interface WorldRequestFacts {
+  /** Vanilla texture advertised for this connected account. Null/absent means unknown. */
+  selfSkin?: { username: string; uuid: string; textureHash: string; model: 'slim' | 'classic'; source: 'player-info' } | null;
   /** Native world identity, separate from the dimension type; absent on legacy producers. */
   world?: import('./world-scope.ts').WorldIdentityObservation;
   /** Event state streams fully represented by these current facts. This permits
