@@ -2,6 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { methodHarness, methodEnded } from './method-harness.ts';
 
 describe('program task result evidence', () => {
+  it('runs the live Mindcraft code shape under action ownership while keeping standalone documentation read-only',async()=>{
+    const r=methodHarness('1.21.1');
+    try{
+      const tool=r.world.tools().find(t=>t.name==='mc_script')!;
+      const args={api:'mindcraft',name:'note_origin',params:{},durationMs:10000,waitMs:5000,code:'const self=bot.entity; const p=self.position; if (!Object.isFrozen(self)) throw Error("mutable entity"); return {x:p.x,y:p.y,z:p.z};'};
+      expect(tool.readOnlyCall?.({api:'mindcraft'})).toBe(true);
+      expect(tool.readOnlyCall?.(args)).toBe(false);
+      expect(tool.learningCall?.(args)).toBe(false);
+      const out=await tool.handler(args,{role:'main',log:r.host.log});
+      expect(out).toMatchObject({execution:{kind:'method',phase:'completed',terminal:true}});
+      const id=(out as any).execution.evidence.localId;
+      expect(r.runner.read(id)[0].result).toMatchObject({x:expect.any(Number),y:expect.any(Number),z:expect.any(Number)});
+      for(const mix of [{api:'index'}, {stop:true},{find:{names:['stone']}},{routine:{op:'list'}}]){
+        expect(await tool.handler({...args,...mix},{role:'main',log:r.host.log})).toMatchObject({failed:true});
+      }
+    }finally{r.close();}
+  });
   it('distinguishes a completed operation from its unmet world postcondition through the real executor', async () => {
     const r = methodHarness();
     try {

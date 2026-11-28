@@ -1,9 +1,15 @@
+/** Mindcraft is both a documentation topic and the built-in JavaScript game library. */
+export function isMindcraftProgram(args:Record<string,unknown>):boolean {
+  return args.api==='mindcraft' && typeof args.code==='string' && args.code.trim().length>0
+    && Object.keys(args).every(key=>['api','code','name','params','durationMs','waitMs','validate'].includes(key));
+}
 /** Exact branches, shared by direct engines, SDK and IPC descriptors. */
 export function methodLearningCall(args: Record<string, unknown>): boolean {
   if(args.scene&&typeof args.scene==='object'&&!Array.isArray(args.scene))return Object.keys(args).length===1&&['capture','list','read'].includes(String((args.scene as Record<string,unknown>).op));
   const keys=Object.keys(args);
   if(args.library && typeof args.library==='object' && !Array.isArray(args.library))
     return keys.length===1 && ['list','read','save','evidence','review','adopt'].includes(String((args.library as {op?:unknown}).op));
+  if(args.validate===true && isMindcraftProgram(args))return true;
   if(args.validate===true) return keys.every(k=>['validate','name','code','params','durationMs','procedure','waitMs'].includes(k));
   if(!keys.length)return true;
   if(args.runId!==undefined)return keys.every(k=>['runId','call'].includes(k));

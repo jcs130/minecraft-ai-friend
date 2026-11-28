@@ -44,24 +44,31 @@ function revive(value) {
   return result;
 }
 
+function readNow(method,args,scope) {
+  const sync = new SharedArrayBuffer(96_008);
+  const state = new Int32Array(sync,0,2);
+  parentPort.postMessage({kind:'call',id:++serial,method,args:JSON.parse(JSON.stringify(args)),scope,sync});
+  Atomics.wait(state,0,0);
+  const reply = JSON.parse(new TextDecoder().decode(new Uint8Array(sync,8,Atomics.load(state,1))));
+  if (reply.error) throw new Error(reply.error);
+  return harden(revive(reply.value.value));
+}
+
 function capabilities(scope) {
   const bot = workerData.nativeMethods ? Object.fromEntries(workerData.nativeMethods
     .filter(name => !name.includes('.')).map(name => [name, (...args) => rpc('mineflayer', { name, args }, scope)])) : undefined;
   if (bot) bot.inventory = { items: () => rpc('mineflayer', { name: 'inventory.items', args: [] }, scope) };
   if(bot&&workerData.nativeMethods.includes('pathfinder.goto')) bot.pathfinder={goto:goal=>rpc('mineflayer',{name:'pathfinder.goto',args:[goal]},scope)};
-  if (bot) for (const key of ['entity', 'entities', 'players']) Object.defineProperty(bot, key, {
+  if (bot && workerData.nativeMethods.includes('read')) Object.defineProperty(bot,'entity',{
+    get: () => readNow('mineflayer',{name:'read',args:['entity']},scope)
+  });
+  if (bot) for (const key of ['entities', 'players']) Object.defineProperty(bot, key, {
     get() { throw new TypeError(`bot.${key} is not a live object in this worker. Use await bot.read("${key}") or await bot.read("entitySnapshot") for a detached, read-only observation.`); },
     enumerable: false,
   });
-  const library = workerData.gameLibrary && bot ? programLibrary(bot, (name,args) => {
-    const sync = new SharedArrayBuffer(96_008);
-    const state = new Int32Array(sync,0,2);
-    parentPort.postMessage({kind:'call',id:++serial,method:'mindcraft',args:JSON.parse(JSON.stringify({family:'world',name,args})),scope,sync});
-    Atomics.wait(state,0,0);
-    const reply = JSON.parse(new TextDecoder().decode(new Uint8Array(sync,8,Atomics.load(state,1))));
-    if (reply.error) throw new Error(reply.error);
-    return harden(revive(reply.value.value));
-  }, (name,args)=>rpc('mindcraft',{family:'skills',name,args},scope)) : {};
+  const library = workerData.gameLibrary && bot ? programLibrary(bot,
+    (name,args) => readNow('mindcraft',{family:'world',name,args},scope),
+    (name,args) => rpc('mindcraft',{family:'skills',name,args},scope)) : {};
   return { ...library, mc: harden({ capabilities: () => rpc('capabilities', {}, scope), state: () => rpc('state', {}, scope), do: (steps, options) => {
       if(options!==undefined&&(!options||typeof options!=='object'||Array.isArray(options)||Object.keys(options).some(k=>k!=='queue')
         || !['append','now','afterCheckpoint'].includes(options.queue)))throw new TypeError('mc.do options must be {queue:"append"|"now"|"afterCheckpoint"}');
