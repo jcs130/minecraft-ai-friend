@@ -1,10 +1,11 @@
 import type { ToolDef, ToolOutcome, ToolSchema } from './contracts.ts';
+import { mineflayerCallHelp } from './mineflayer-call.ts';
 import { omitContextSchemaAnnotations, withSkillInputSignatures } from './schema-reading.ts';
 
 export const TOOL_HELP_TOOL = {
   name: 'mc_tool_help', tags: ['read'],
   helpFor: (args: Record<string, unknown>) => typeof args.name === 'string' ? args.name : null,
-  description: 'Read the actual Minecraft tool catalogue or one tool description/schema. Omit name for a short index. name returns the root constraints and child JSON pointers; path expands a documented subtree. full:true returns that exact original schema node. No tool is executed and no model is called. mc_help reads action/skill manuals; this tool reads tool parameter contracts.',
+  description: 'Read the actual Minecraft tool catalogue or one tool description/schema. Omit name for a short index. name returns the root constraints and child JSON pointers; path expands a documented subtree. full:true returns that exact original schema node. No tool is executed and no model is called. For supported bot.* or mineflayer_* calls, name returns native argument order and the canonical tool. mc_help reads action/skill manuals; this tool reads tool parameter contracts.',
   parameters: { type: 'object', additionalProperties: false, properties: {
     name: { type: 'string', minLength: 1 },
     path: { type: 'string', description: 'JSON pointer into the advertised input schema, e.g. /properties/steps/items. Empty means root. Use only returned child pointers.' },
@@ -60,11 +61,13 @@ export function readToolHelp(tools: readonly CatalogTool[], args: Record<string,
     if (typeof args.name !== 'string' || !args.name) throw new Error('name must be an advertised tool name');
     if (args.path !== undefined && typeof args.path !== 'string') throw new Error('path must be a JSON pointer string');
     if (args.full !== undefined && typeof args.full !== 'boolean') throw new Error('full must be boolean');
-    const tool = tools.find(tool => tool.name === args.name);
+    const prefix=tools.find(t=>t.name.endsWith('_script'))?.name.slice(0,-7) ?? tools.find(t=>t.name.endsWith('_bag'))?.name.slice(0,-4);
+    const alias=prefix ? mineflayerCallHelp(args.name,prefix) : undefined;
+    const tool = tools.find(tool => tool.name === (alias?.canonicalTool ?? args.name));
     if (!tool) throw new Error(`Unknown Minecraft tool ${args.name}; omit name for the actual catalogue`);
     const path = args.path as string ?? '';
     const node = schemaAt(fullParameterSchemas.get(tool.parameters) ?? tool.parameters, path);
-    return { text: JSON.stringify({ protocol, name: tool.name, description: tool.description, tags: tool.tags ?? [], path,
+    return { text: JSON.stringify({ protocol, name: tool.name, ...(alias?{alias}:{}), description: tool.description, tags: tool.tags ?? [], path,
       ...(args.full ? { schema: node, complete: true } : { schemaSummary: summarize(node, path) }) }) };
   } catch (error) {
     return { text: JSON.stringify({ protocol, error: String(error), executed: false }), failed: true };

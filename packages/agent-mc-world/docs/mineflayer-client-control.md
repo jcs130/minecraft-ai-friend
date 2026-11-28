@@ -1,5 +1,7 @@
 # Mineflayer-shaped control for both bodies
 
+SDK and MCP callers can submit a supported `bot.*` name, or use `mineflayer_look_at` with `{"args":[{"x":1,"y":64,"z":2},true]}`. Read the active `*_tool_help` with the alias name for its native argument order and actual tool. `bot.inventory.items` returns the canonical bag slot receipt, `bot.chat` uses the normal single-message chat path, and native method calls return normal script receipts. For actions sharing control state, such as holding a movement key, waiting, and releasing it, put the sequence in one script. The active tool grant, body lease, request ID and cancellation still apply. Arbitrary plugins and method names are unavailable.
+
 Java 1.21.1 is the primary target. Mineflayer remains the default protocol client. An explicitly attached real Java client is another body behind the **same shared JavaScript method worker**, not a new language for the Agent.
 
 ```text

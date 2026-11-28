@@ -579,6 +579,7 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
       },
       'worlds.minecraft.proximityVoice.enabled': {type:'boolean',title:'游戏附近语音',description:'按需发给附近玩家，复用当前已认证连接；不自动配音游戏文字。'},
       'worlds.minecraft.simpleVoiceChat.enabled': {type:'boolean',title:'原生 Simple Voice Chat',description:'在已认证连接上使用原生 SVC 客户端发声，不是 mc_voice/mcagent:voice。默认关闭。sent 不表示听见。'},
+      'worlds.minecraft.simpleVoiceChat.udpPort': {type:'number',minimum:1,maximum:65535,title:'SVC UDP 端口',description:'服务器档案可覆盖公布的 UDP 端口；省略时使用服务端协商值。'},
       'worlds.minecraft.simpleVoiceChat.officialJar': {type:'string',title:'官方 SVC jar',description:'用于 48kHz 20ms VOIP Concentus 编解码的官方 Simple Voice Chat jar 路径。不是 TTS 凭据。'},
       'worlds.minecraft.proximityVoice.audioProducerUrl': {type:'string',title:'演出音频服务',description:'显式配置的音频产物服务地址。音色与 TTS 由演出扩展维护。'},
       'worlds.minecraft.proximityVoice.speechSource': {type:'string',enum:['artifact','server'],title:'游戏语音生成',description:'artifact 使用音频产物服务；server 由游戏服务器合成，仅限游戏附近语音。'},

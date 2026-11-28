@@ -3140,6 +3140,7 @@ export class MinecraftWorld implements World {
       file:this.dataDir?join(this.dataDir,'minecraft-voice',createHash('sha256').update(JSON.stringify([this.cfg.host,this.cfg.port,this.cfg.auth,this.cfg.username])).digest('hex')+'.json'):null,
     });
     this.simpleVoiceChat = new SimpleVoiceChatLane({
+      serverHost: () => this.cfg.host,
       config: () => ({enabled:false,officialJar:'',javaPath:'',compatibilityVersion:20,...this.cfg.simpleVoiceChat}),
       blob: handle => this.host?.blob(handle) ?? null,
     });
@@ -4047,6 +4048,7 @@ export class MinecraftWorld implements World {
         if (method !== 'state') throw new Error('Unknown connection method');
         return { server: { host: this.cfg.host, port: this.cfg.port, requestedVersion: this.cfg.version,
           actualVersion: this.bridge?.bot?.version ?? null, username: this.bridge?.bot?.username ?? null },
+          simpleVoiceChat: this.simpleVoiceChat?.status(),
           viewer: { ...this.bridge?.viewerResources(), mode: this.bridge?.viewerKind ?? null, url: this.bridge?.viewerUrl ?? null },
           accounts: Object.fromEntries(Object.entries(this.accountAuth).map(([lane, auth]) => [lane, auth.snapshot()])),
           connection: this.bridge?.connectionState ?? null,

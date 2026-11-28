@@ -1,4 +1,5 @@
 import { operatorPlaySteps } from './operator-play.ts';
+import { resolveMineflayerCall } from './mineflayer-call.ts';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { inspectToolCall } from '../contracts/call-capability.ts';
@@ -288,6 +289,8 @@ export class MinecraftAgentClient {
   }
   /** Inspect argument-specific capabilities without dispatching or acquiring the body. */
   inspectCall(name: string, args: unknown) {
+    const mapped=resolveMineflayerCall(name,args as Record<string,unknown>,this.toolPrefix);
+    if(mapped){name=mapped.name;args=mapped.args;}
     return inspectToolCall(this.tools().find(tool => tool.name === name), name, args);
   }
   /** Server observations matched by exact scope/occurrence/revision; host adoption stays explicit. */
@@ -634,6 +637,8 @@ export class MinecraftAgentClient {
   }
 
   async call(name: string, args: Record<string, unknown>, options: string | CallOptions = {}, legacySignal?: AbortSignal): Promise<ToolOutcome> {
+    const mapped=resolveMineflayerCall(name,args,this.toolPrefix);
+    if(mapped){name=mapped.name;args=mapped.args;}
     const { requestId: callId = randomUUID(), turnId, signal = legacySignal, attribution } = typeof options === 'string' ? { requestId: options } : options;
     const gate = this.options.bodyGate;
     if (gate && !gate.expose(name) && (typeof options === 'string' || options.bodyKey !== gate.key))

@@ -87,6 +87,8 @@ describe('native Simple Voice Chat client (jcs130 contract + official codec)', (
     expect(parsed).toMatchObject({ port: 24454, udpHost: '127.0.0.1', udpPort: 24454, voiceHost: '127.0.0.1:24454', keepAlive: 1000 });
     expect(JSON.stringify(parsed)).not.toContain(key.toString('hex'));
     expect(parsed).not.toHaveProperty('key');
+    expect(parseVoicechatSecret(secretPacket({port:24454,key,uuid,host:'35527'}))).toMatchObject({udpHost:null,udpPort:35527});
+    expect(parseVoicechatSecret(secretPacket({port:24454,key,uuid,host:'65536'}))).toBeNull();
     expect(SVC_COMPATIBILITY_VERSION).toBe(20);
     expect(SVC_CHANNELS).toContain('voicechat:request_secret');
   });
@@ -205,7 +207,7 @@ describe('native Simple Voice Chat client (jcs130 contract + official codec)', (
     });
     clean.push(() => voice.close());
     await new Promise((r) => setTimeout(r, 50));
-    client.emit('custom_payload', { channel: 'voicechat:secret', data: secretPacket({ port, key, uuid, host: `127.0.0.1:${port}` }) });
+    client.emit('custom_payload', { channel: 'voicechat:secret', data: secretPacket({port,key,uuid,host:`127.0.0.1:${port}`}) });
     await voice.ready();
     const end = Date.now() + 5000;
     while (heard.length < 3 && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
@@ -314,11 +316,11 @@ describe('native Simple Voice Chat client (jcs130 contract + official codec)', (
     });
     const states: string[] = [];
     const { bot, client } = fakeBot();
-    const voice = attachSimpleVoiceChat(bot, { opus: { encode: () => Buffer.from([248, 255, 254]) }, bindHost: '127.0.0.1', timeoutMs: 6000,
+    const voice = attachSimpleVoiceChat(bot, { opus: { encode: () => Buffer.from([248, 255, 254]) }, serverHost:'127.0.0.1', udpPort:port, bindHost:'127.0.0.1', timeoutMs: 6000,
       onState: (row) => states.push(String(row.state)) });
     clean.push(() => voice.close());
     await new Promise((r) => setTimeout(r, 50));
-    client.emit('custom_payload', { channel: 'voicechat:secret', data: secretPacket({ port, key, uuid, host: `127.0.0.1:${port}` }) });
+    client.emit('custom_payload', { channel: 'voicechat:secret', data: secretPacket({port:24454,key,uuid,host:''}) });
     await voice.ready();
     const end = Date.now() + 5000;
     while (!voice.state().udpValidated && Date.now() < end) await new Promise((r) => setTimeout(r, 20));

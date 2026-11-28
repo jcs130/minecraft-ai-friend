@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.151
+
+Resolve supported Mineflayer-shaped tool calls before normal grant checks and replay. Native Simple Voice Chat accepts a per-server UDP port and waits for authentication before sending audio.
+
 ## 0.5.7-rc.160-preview.150
 
 Resume the normal reconnect policy after all dial candidates fail before the protocol client receives a socket. Discard late results after a manual stop or a replacement connection.
