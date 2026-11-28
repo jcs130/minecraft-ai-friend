@@ -81,14 +81,16 @@ import { errorFailure, kickFailure } from './link.ts';
  * hostname. A pre-connected socket is handed to minecraft-protocol, which then
  * needs the `connect` event re-emitted to send its handshake.
  */
-function makePublicDnsConnect(host: string, port: number, handshakeHost?: string,
-  dial: { pinnedAddresses?: readonly string[]; dohResolvers?: readonly string[]; connectTimeoutMs?: number; log?: Logger } = {}) {
+function makePublicDnsConnect(host: string, port: number, handshakeHost: string | undefined,
+  dial: { pinnedAddresses?: readonly string[]; dohResolvers?: readonly string[]; connectTimeoutMs?: number; log?: Logger; current: () => boolean }) {
   return (client: { setSocket(socket: import('node:net').Socket): void; emit(event: string, ...args: unknown[]): void }) => {
     const timeoutMs = Math.min(Math.max(dial.connectTimeoutMs ?? 8000, 1000), 60000);
+    let attached = false;
     void resolveMinecraftConnectCandidates({ host, port, handshakeHost, publicDnsFallback: true,
       pinnedAddresses: dial.pinnedAddresses, dohResolvers: dial.dohResolvers }).then(async ({ candidates }) => {
       let lastError: unknown = null;
       for (const candidate of candidates) {
+        if (!dial.current()) return;
         const socket = net.connect(candidate.port, candidate.host);
         try {
           await new Promise<void>((resolve, reject) => {
@@ -101,15 +103,21 @@ function makePublicDnsConnect(host: string, port: number, handshakeHost?: string
           dial.log?.warn(`minecraft 候选地址不可达 ${candidate.host}:${candidate.port}(${candidate.source}): ${err instanceof Error ? err.message : String(err)}`);
           continue;
         }
+        if (!dial.current()) { socket.destroy(); return; }
         socket.removeAllListeners('error');
         dial.log?.info(`minecraft 已连上 ${candidate.host}:${candidate.port}(${candidate.source})，握手主机 ${handshakeHost ?? host}`);
         client.setSocket(socket);
+        attached = true;
         client.emit('connect');
         return;
       }
       throw lastError ?? new Error(`no reachable address for ${host}:${port}`);
     }).catch((err: unknown) => {
+      if (!dial.current()) return;
       client.emit('error', err);
+      // minecraft-protocol installs its close -> end handler in setSocket.
+      // Exhausted candidates have no attached transport to deliver that end.
+      if (!attached) client.emit('end', 'connectFailed');
     });
   };
 }
@@ -661,7 +669,9 @@ export class Bridge {
       host, port, username,
       version: stack.experimental ? stack.minecraftVersion : (protocolVersion(version) || undefined),
       ...(handshakeHost ? { fakeHost: handshakeHost } : {}),
-      ...(publicDns ? { connect: makePublicDnsConnect(host, port, handshakeHost, { pinnedAddresses: this.opts.connectAddresses, dohResolvers: this.opts.dohResolvers, connectTimeoutMs: this.opts.connectTimeoutMs, log: this.opts.log }) } : {}),
+      ...(publicDns ? { connect: makePublicDnsConnect(host, port, handshakeHost, { pinnedAddresses: this.opts.connectAddresses, dohResolvers: this.opts.dohResolvers, connectTimeoutMs: this.opts.connectTimeoutMs, log: this.opts.log,
+        current: () => !this.stopped && this.generation === gen && !this.opts.shuttingDown?.(),
+      }) } : {}),
       ...(this.opts.authentication?.botOptions() ?? { auth: 'offline' as const }),
       checkTimeoutInterval: this.opts.keepAliveTimeoutMs ?? 60_000,
       ...(this.opts.viewDistance !== undefined ? { viewDistance: this.opts.viewDistance } : {}),
