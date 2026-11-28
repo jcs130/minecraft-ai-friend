@@ -3150,6 +3150,7 @@ export class MinecraftWorld implements World {
       file:this.dataDir?join(this.dataDir,'minecraft-voice',createHash('sha256').update(JSON.stringify([this.cfg.host,this.cfg.port,this.cfg.auth,this.cfg.username])).digest('hex')+'.json'):null,
     });
     this.simpleVoiceChat = new SimpleVoiceChatLane({
+      performanceReceipt: data=>this.diag.write({lane:'link',event:'svc-performance',level:'info',msg:String(data.state),data:{...data}}),
       publicSpeechReceipt: data=>this.diag.write({lane:'link',event:'svc-public-speech',level:'info',msg:String(data.state),data:{...data}}),
       serverHost: () => this.cfg.host,
       config: () => ({enabled:false,officialJar:'',javaPath:'',compatibilityVersion:20,...this.cfg.simpleVoiceChat}),
