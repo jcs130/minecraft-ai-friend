@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.165
+
+Melee chase hands gaze to the pathfinder. Automatic switches between similar targets require confirmation, lateral search uses directional keys, and retreat favors a continuing safe direction when routes score similarly.
+
 ## 0.5.7-rc.160-preview.164
 
 Register durable camp locations with mc_map and inspect previously observed facilities and container contents with mc_bag. Scoped by server, native world, dimension, account and agent. Carried counts remain separate.

@@ -140,6 +140,25 @@ export function assessCombatChoice(answer: TypedChoice<string>, config: Pick<Com
 }
 
 export class CombatDecisionLoop {
+  private pendingRetarget?: { key: string; decision: number; at: number };
+
+  private confirmRetarget(frame: CombatDecisionFrame, candidate: CombatCandidate, decision: number, now: number, maxGap: number): boolean {
+    if (candidate.kind !== 'engage' || frame.program || !frame.battlefield.action.fighting) return true;
+    const field = frame.battlefield;
+    const current = field.actors.find(a => a.entityId === field.action.targetEntityId);
+    const next = field.actors.find(a => a.entityId === candidate.targetId);
+    // Only debounce a discretionary switch between equivalent, visible opponents.
+    // A new attacker, a lost target or a materially closer threat can be acted on immediately.
+    if (!current || !next || current.entityId === next.entityId || current.lineOfSight !== true || current.health.current === 0
+      || current.type !== next.type || current.targetEntityId !== next.targetEntityId
+      || next.distance === null || current.distance === null || next.distance + 1 < current.distance) return true;
+    const key = JSON.stringify([field.connectionGeneration, field.dimension, field.world?.key, field.world?.revision,
+      field.self.entityId, frame.tacticRevision, current.entityId, current.uuid, next.entityId, next.uuid]);
+    const prior = this.pendingRetarget;
+    if (prior?.key === key && prior.decision === decision-1 && now-prior.at <= maxGap) return true;
+    this.pendingRetarget = {key, decision, at:now};
+    return false;
+  }
   private readonly abstention = new CombatAbstention();
   private readonly runId = randomUUID();
   private stopped = false;
@@ -164,13 +183,13 @@ export class CombatDecisionLoop {
     if (this.stopped) return false;
     const cfg = { ...this.options.config() };
     const now = this.options.now?.() ?? Date.now();
-    if (!cfg.enabled || (!usesHostDecision(cfg) && !cfg.endpoint)) { this.abstention.clear(); return false; }
+    if (!cfg.enabled || (!usesHostDecision(cfg) && !cfg.endpoint)) { this.abstention.clear(); this.pendingRetarget=undefined; return false; }
     if (this.inFlight) return true;
     if (now - this.lastCheckedAtMs < cfg.minIntervalMs) return this.lastEligible;
     this.lastCheckedAtMs = now;
     const frame = this.options.sample();
     this.lastEligible = !!frame && !frame.battlefield.action.emergency && (frame.candidates.length > 0 || !!frame.program);
-    if (!frame || !this.lastEligible) { this.abstention.clear(); return false; }
+    if (!frame || !this.lastEligible) { this.abstention.clear(); this.pendingRetarget=undefined; return false; }
     const observesAttention = cfg.mode === 'shadow' && this.options.attentionInShadow;
     if (observesAttention) {
       if (this.abstention.context(frame, now, true)?.ownerReviewRequested) return false;
@@ -281,6 +300,7 @@ export class CombatDecisionLoop {
       const scene = current ? assessCombatDecisionScene(frame, current, selected ?? null) : { changed: ['unavailable'], tolerated: [] };
       const changed = scene.changed;
       let outcome: string;
+      let confirmingTarget = false;
       if (!liveCfg.enabled || liveCfg.mode !== cfg.mode || liveCfg.endpoint !== cfg.endpoint
         || liveCfg.connection !== cfg.connection || liveCfg.decisionProvider !== cfg.decisionProvider
         || liveCfg.model !== cfg.model || liveCfg.apiKeyEnv !== cfg.apiKeyEnv || liveCfg.selectionMode !== cfg.selectionMode) outcome = 'configuration-changed';
@@ -292,6 +312,10 @@ export class CombatDecisionLoop {
       else if (!selected) outcome = 'keep';
       else if (!executable) outcome = 'no-longer-executable';
       else if (cfg.mode === 'shadow') outcome = 'shadow';
+      else if (!this.confirmRetarget(current, executable, id, now(), liveCfg.minIntervalMs + liveCfg.maxAgeMs)) {
+        confirmingTarget = true;
+        outcome = 'keep';
+      }
       // Movement prose includes measured distance; apply the freshly checked candidate.
       else { dispatchAttempted = true; outcome = await this.options.apply(executable, current, scope) ? 'sent' : 'rejected'; }
       if (this.stopped) return;
@@ -341,7 +365,7 @@ export class CombatDecisionLoop {
         validation: { ranking:leadRanking, toleratedSceneChanges: scene.tolerated, selectedExecutable: !!executable||!!abilityCandidate },
         ...(cfg.selectionMode==='compatible'?{selectionMode:'compatible',selections}:{}),
         application: { attempted: dispatchAttempted||selections.some(s=>(s.application as {attempted:boolean}).attempted),
-          dispatched: outcome==='sent'?true:uncertainDispatch?null:false, keptCurrent: outcome === 'keep', reason: outcome === 'moved' ? 'origin-moved' : outcome },
+          dispatched: outcome==='sent'?true:uncertainDispatch?null:false, keptCurrent: outcome === 'keep', reason: confirmingTarget ? 'confirm-retarget' : outcome === 'moved' ? 'origin-moved' : outcome },
         candidate: (outcome === 'sent' ? effective : selected) ?? null, candidates:dispatched };
       Object.assign(entry, result);
       this.options.report('result', result);

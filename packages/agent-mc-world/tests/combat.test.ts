@@ -999,6 +999,43 @@ describe('战斗会话:进入(夺手不夺嘴)', () => {
     session.stop();
   });
 
+  it('keeps an equally safe retreat bearing but drops it as soon as its corridor closes', () => {
+    const {bot} = combatRigBot();
+    const {session} = rig(bot);
+    const planner = session as unknown as {
+      movementSafe: (bot: Bot,x:number,z:number) => boolean;
+      retreatHeading: (bot: Bot, foes: [], dx:number, dz:number, previous:{x:number;z:number}|null) => {x:number;z:number};
+    };
+    const heading = (angle:number, previous:{x:number;z:number}|null) =>
+      planner.retreatHeading(bot, [], Math.cos(angle), Math.sin(angle), previous);
+    const first = heading(Math.PI/16-.001,null);
+    expect(heading(Math.PI/16+.001,null)).not.toEqual(first);
+    expect(heading(Math.PI/16+.001,first)).toEqual(first);
+    vi.spyOn(planner,'movementSafe').mockImplementation((_bot,x,z) => x!==first.x || z!==first.z);
+    expect(heading(Math.PI/16+.001,first)).not.toEqual(first);
+  });
+
+  it('gives the pathfinder exclusive gaze until the pursued target comes into reach', async () => {
+    const zombie = foe(7, 'zombie', 6.4);
+    const {bot, attacks} = combatRigBot([zombie]);
+    const native = bot as Bot;
+    const aim = vi.spyOn(native, 'lookAt');
+    const path = vi.spyOn(native.pathfinder, 'setGoal');
+    const {session} = rig(bot, {chaseMax:12});
+    expect(session.onHurtBy(7, 'zombie')).toBe(true);
+    await drive(bot, 1700);
+    expect(path.mock.calls.some(([goal]) => goal != null)).toBe(true);
+    aim.mockClear();
+    await drive(bot, 200);
+    expect(aim).not.toHaveBeenCalled();
+    zombie.position.x = 2.4;
+    await drive(bot, 1000);
+    expect(path).toHaveBeenCalledWith(null);
+    expect(aim).toHaveBeenCalled();
+    expect(attacks).toContain(7);
+    session.stop();
+  });
+
   it('关着 / 环境自保中 / 冷却中都进不了场,退回反射的降级行为', () => {
     const { bot } = combatRigBot([foe(7, 'zombie', 2.5)]);
     const off = rig(bot, { enabled: false });
