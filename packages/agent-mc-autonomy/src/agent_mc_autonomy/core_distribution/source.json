@@ -29,14 +29,14 @@
       "modern-viewer/src"
     ],
     "source_receipt": {
-      "sourceSha256": "10eff1f6d036ca7274c1c23bf92119d1ca42e2470f211f3f4317746a61b7bd7d",
-      "sourceFiles": 455,
+      "sourceSha256": "9c692510939e88f2072710834f60f7ad6ad35c95ef2498c072e3ff01c027c5dd",
+      "sourceFiles": 454,
       "scope": "renderer_source_host_adapters_and_asset_preparation"
     },
     "original_catalog_sha256": "e014078c1e0498fd70616cb951fb87b8091cea934cc3d26959b8b94394c5f353",
     "bundle_sha256": {
-      "world-preview.js": "0e3a4a7e6b2e0a56f5a56d8f3e350976718268f578566e6fd23239233ce69d9f",
-      "native-console.js": "a480e25da037485988615db47a44ec07768b78d31b7841a31627a2f3c6a1f777"
+      "world-preview.js": "d9014ab4b19767439f91cb344cdd161f2603b27de992898412348b25134d1599",
+      "native-console.js": "33a3637683ffe59004ae4eda5a391ec62ea4fa55e7a31bdf2303a5bf6d69743b"
     },
     "bundled_in_core": false,
     "source_inventory": {
