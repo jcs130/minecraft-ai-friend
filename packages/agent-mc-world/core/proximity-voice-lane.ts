@@ -22,6 +22,8 @@ export interface ProximityVoiceContext {
   /** Re-read authentication AND the native world identity during upload. */
   stillCurrent(): boolean;
   disableAutoSpeech(): void;
+  /** An already authenticated SVC client owns its socket, codec and incoming speech. */
+  nativeUpload?: ProximityVoiceClient['upload'];
   /** Optional attested nearby-text route, never a global/private fallback. */
   sendNearbyText?(text:string, requestId:string): ChatDeliveryReceipt;
 }
@@ -71,7 +73,7 @@ async function artifactResponseError(response:Response):Promise<VoiceArtifactRes
 export const PROXIMITY_VOICE_TOOL: Omit<ToolDef,'handler'> = {
   name: 'mc_voice', tags: ['speak'], bodyControl: 'independent',
   description: 'Optional speech to nearby Minecraft players, using the existing authenticated game connection. '
-    + 'Not audience commentary, private chat or shout. {} shows availability and output mode. '
+    + 'Uses standard SVC with a configured local artifact producer on SVC-only profiles, or the connected mcagent voice service. Not audience commentary, private chat or shout. {} shows availability and output mode. '
     + '{action:"speak",text,requestId?} speaks one line. Server speech uses the server-selected voice, supports up to 200 UTF-16 units and is game-only. '
     + 'Artifact speech uses the configured audio producer (generated audio must also fit 30s). '
     + '{action:"upload",audio_handle,text?,requestId?} uploads a PCM16 WAV blob (0.1–30s, max4MiB); text is an optional authored caption, not verified transcription. '
@@ -144,12 +146,21 @@ export class ProximityVoiceLane {
   }
   sync() {
     const context=this.options.config().enabled?this.options.context():null;
-    const key=context?JSON.stringify([context.generation,context.world.key,context.world.revision]):'';
+    const key=context?JSON.stringify([context.generation,context.world.key,context.world.revision,Boolean(context.nativeUpload)]):'';
     if(key===this.connectionKey&&this.client&&context?.stillCurrent())return;
     this.disconnect('Game connection or native world changed; query original request');
     if(!context||!context.world.key||!context.stillCurrent())return;
     this.context=context;this.connectionKey=key;
-    try {this.client=attachProximityVoice(context.bot,{timeoutMs:this.options.timeoutMs,
+    try {
+    if(context.nativeUpload) {
+      this.client={upload:context.nativeUpload,
+        say:async()=>{throw Error('SVC_NEEDS_CLIENT_AUDIO');},
+        status:async(requestId)=>({requestId,state:'unknown'}),
+        close:()=>{}};
+      this.connectionError=null;
+      return;
+    }
+    this.client=attachProximityVoice(context.bot,{timeoutMs:this.options.timeoutMs,
       isAuthenticated:()=>context.stillCurrent()&&this.context===context,
       seenUtterances:this.seen,
       onHearing:row=>{if(context.stillCurrent())this.options.hearing(row,structuredClone(context.world));},
@@ -186,7 +197,7 @@ export class ProximityVoiceLane {
         if(args.requestId!==undefined){if(typeof args.requestId!=='string'||!uuid.test(args.requestId))throw Error('VOICE_REQUEST_UUID_REQUIRED');
           const row=this.receipts.get(args.requestId);if(!row)throw Error('VOICE_REQUEST_NOT_IN_THIS_CLIENT_LEDGER');
           if(row.broadcast.actionId&&row.audioProducerUrl&&!['completed','failed','cancelled'].includes(row.broadcast.state))void this.refreshBroadcast(row);
-          if(this.client&&!this.active&&['unknown','queued','playing','uploading'].includes(row.game.state)) {
+          if(this.client&&!this.context?.nativeUpload&&!this.active&&['unknown','queued','playing','uploading'].includes(row.game.state)) {
             // Read-only status runs asynchronously too; it never re-uploads audio.
             const client=this.client;this.active={requestId:row.requestId,abort:new AbortController()};
             this.job=client.status(row.requestId).then(result=>this.serverResult(result),()=>{}).finally(()=>{if(this.active?.requestId===row.requestId)this.active=null;});
@@ -194,8 +205,8 @@ export class ProximityVoiceLane {
         }
         const config=this.options.config();
         return {text:JSON.stringify({enabled:config.enabled,connected:!!this.client,
-          world:this.context?.world??null,outputMode:config.outputMode,speechSource:config.speechSource??'artifact',connectionError:this.connectionError,serverAcknowledged:this.serverAcknowledged,
-          audioProducerConfigured:!!config.audioProducerUrl,autoSpeechOff:'requested; server acknowledgement not verified',
+          world:this.context?.world??null,transport:this.context?.nativeUpload?'simple-voice-chat':'mcagent:voice',outputMode:config.outputMode,speechSource:config.speechSource??'artifact',connectionError:this.connectionError,serverAcknowledged:this.serverAcknowledged,
+          audioProducerConfigured:!!config.audioProducerUrl,autoSpeechOff:this.context?.nativeUpload?'not applicable to SVC':'requested; server acknowledgement not verified',
           autoSpeechOffRequested:this.autoSpeechOffRequested,activeRequest:this.active?.requestId??null,
           recent:[...this.receipts.values()].slice(-6),audience:'nearby game players; livestream mirror only in live-and-game mode'})};
       }
