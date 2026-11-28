@@ -41,7 +41,7 @@ export const NATIVE_API = Object.freeze({
   canSeeBlock: 'canSeeBlock(block): boolean from Mineflayer visibility, using a fresh block at its position.',
   canDigBlock: 'canDigBlock(block): boolean from Mineflayer reach and diggability; server permission is separately checked when digging.',
   digTime: 'digTime(block): milliseconds for the currently held tool.',
-  'inventory.items': 'inventory.items(): current native inventory stacks, including slot and instance identity. Read heldItem or inventory.slots separately for equipment.',
+  'inventory.items': 'inventory.items(): current native inventory stacks, including slot and instance identity. bot.inventory.slots is a fresh synchronous array of all native slots, including null entries and equipment. In the Java player window, use slots.slice(9,45) for the 36 storage slots. For crafting by item name use await skills.craftRecipe(bot, item, batches) and check the outcome.',
   getControlState: 'getControlState(control): boolean. forward/back/left/right/jump/sprint/sneak.',
   setQuickBarSlot: 'setQuickBarSlot(slot): select a hotbar index 0..8. This is not an inventory slot (36..44); no item is moved or dropped. Read heldItem to check the selected stack.',
   look: 'look(yaw,pitch,force?): Promise<void>. Native radians; no relative angle or automatic navigation.',

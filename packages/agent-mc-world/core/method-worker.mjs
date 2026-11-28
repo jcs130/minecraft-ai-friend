@@ -59,7 +59,12 @@ function capabilities(scope) {
     ? readNow('mineflayer',{name,args},scope) : rpc('mineflayer',{name,args},scope);
   const bot = workerData.nativeMethods ? Object.fromEntries(workerData.nativeMethods
     .filter(name => !name.includes('.')).map(name => [name, native(name)])) : undefined;
-  if (bot) bot.inventory = { items: native('inventory.items') };
+  if (bot) {
+    bot.inventory = { items: native('inventory.items') };
+    if (workerData.nativeMethods.includes('read')) Object.defineProperty(bot.inventory, 'slots', {
+      get: () => readNow('mineflayer', { name:'read', args:['inventory.slots'] }, scope),
+    });
+  }
   if(bot&&workerData.nativeMethods.includes('pathfinder.goto')) bot.pathfinder={goto:goal=>rpc('mineflayer',{name:'pathfinder.goto',args:[goal]},scope)};
   if (bot && workerData.nativeMethods.includes('read')) Object.defineProperty(bot,'entity',{
     get: () => readNow('mineflayer',{name:'read',args:['entity']},scope)

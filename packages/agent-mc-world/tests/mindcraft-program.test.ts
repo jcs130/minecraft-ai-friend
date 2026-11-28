@@ -4,6 +4,22 @@ import { methodApiHelp } from '../core/method-api.ts';
 import { gameLibrary } from '../core/mindcraft/catalog.mjs';
 
 describe('model-authored Mindcraft programs on the existing Mineflayer body', () => {
+  it('reads a current native slot array from an actual program, keeping null, equipment and hotbar indices',async()=>{
+    const h=methodHarness('1.21.1');
+    try {
+      const iron=h.bot.registry.itemsByName.iron_ingot.id;
+      h.bot.inventory.slots[5]={name:'iron_helmet',type:h.bot.registry.itemsByName.iron_helmet.id,count:1,slot:5};
+      h.bot.inventory.slots[36]={name:'iron_ingot',type:iron,count:16,slot:36};
+      const run=h.runner.start({code:`const slots=bot.inventory.slots;
+        return {length:slots.length,free:slots.slice(9,45).filter(s=>s===null).length,
+          helmet:slots[5].name,iron:slots[36].count,same:(await bot.read("inventory.slots"))[36].instanceHash===slots[36].instanceHash};`});
+      const end=await methodEnded(h,run.id);
+      expect(end.status,end.error).toBe('completed');
+      expect(end.result).toEqual({length:46,free:35,helmet:'iron_helmet',iron:16,same:true});
+      expect(h.exec.currentTask).toBeNull();
+    } finally {h.close();}
+  });
+
   it('uses the visible block and actual footing for a read-only escape digging program',async()=>{
     const h=methodHarness('1.21.1');
     try {
