@@ -95,9 +95,9 @@ final class NativeMaidBodyActions {
             return reply(true,control.finish(id,request,"applied",result),null);
         }
         boolean physical=!Set.of("ack","speak").contains(action);
-        if(physical&&(walks.containsKey(id)||fishing.containsKey(id))&&!Set.of("stop","stay","sit","follow").contains(action))return blocked(owner,id,input,"maid_busy");
+        if(physical&&activeMovement(id)&&!Set.of("stop","stay","sit","follow").contains(action))return blocked(owner,id,input,"maid_busy");
         if(physical&&!Set.of("stop","stay").contains(action)){
-            if(plugin.editingMaidInventory(maid)||plugin.workshops().busy(id)||maid.isNoAi()||maid.isVehicle())return blocked(owner,id,input,"maid_busy");
+            if(physicalBusy(maid))return blocked(owner,id,input,"maid_busy");
             if(maid.isPassenger()&&!action.equals("dismount")&&!(MaidCompanionActions.fishingSeat(maid)&&Set.of("fish","follow","sit").contains(action)))return blocked(owner,id,input,"dismount_required");
         }
         switch(action){
@@ -111,7 +111,7 @@ final class NativeMaidBodyActions {
                     return blocked(owner,id,input,"team_target_moved_or_unavailable");
                 if(maid.position().distanceTo(target)>96||target.y<maid.level().getMinBuildHeight()||target.y>=maid.level().getMaxBuildHeight())return blocked(owner,id,input,"walk_out_of_range");
                 var pos=BlockPos.containing(target);if(!maid.level().hasChunkAt(pos))return blocked(owner,id,input,"destination_unloaded");
-                if(!maid.level().getWorldBorder().isWithinBounds(pos)||!canWalkTo(maid,pos))return blocked(owner,id,input,"path_blocked");
+                if(!maid.level().getWorldBorder().isWithinBounds(pos)||!canWalkTo(maid,pos))return blocked(owner,id,input,"path_blocked",position(maid));
             }
             case "equip"->{int slot=integer(input,"slot");String hand=MaidBodyControl.string(input,"hand");if(!Set.of("main","off","head","chest","legs","feet").contains(hand))throw new MaidBodyControl.Fault(400,"INVALID_hand");value=hand+" "+slot;
                 try{plugin.nativeEquipmentValidate(maid,value);}catch(CompatibilityException refused){return blocked(owner,id,input,refused.code());}}
@@ -259,6 +259,9 @@ final class NativeMaidBodyActions {
         if(action.equals("context")){data.addProperty("nativeGuardDelegated",guarding(id));
             var loaded=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
             if(loaded!=null){data.addProperty("passenger",loaded.isPassenger());if(loaded.getVehicle()!=null)data.addProperty("vehicleType",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(loaded.getVehicle().getType()).toString());}
+            data.addProperty("nativeGuardAvailable",loaded!=null&&loaded.isAlive()&&!loaded.isRemoved()
+                    &&!loaded.isSleeping()&&!loaded.isPassenger()&&!activeMovement(id)&&!physicalBusy(loaded)
+                    &&!resumeGuards.containsKey(id));
             if(local.qdj.maids.brain.ResidentBodyAccess.external(id))data.add("resident",JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.status(id)));
             else if(data.get("loaded").getAsBoolean())data.add("scene",plugin.companionScene(loaded));}
         if(action.equals("context")){
@@ -307,6 +310,14 @@ final class NativeMaidBodyActions {
         if(action.equals("brain"))externalBrain(data,id);
         return reply(true,data,null);
     }
+    private boolean activeMovement(UUID id) {
+        return walks.containsKey(id)||fishing.containsKey(id);
+    }
+
+    private boolean physicalBusy(EntityMaid maid) {
+        return plugin.editingMaidInventory(maid)||plugin.workshops().busy(maid.getUUID())||maid.isNoAi()||maid.isVehicle();
+    }
+
     private boolean socialWalkAvailable(EntityMaid maid) {
         UUID id = maid.getUUID();
         String task = maid.getTask().getUid().toString();
@@ -620,7 +631,15 @@ final class NativeMaidBodyActions {
     private static double number(JsonObject input,String key){try{if(!input.get(key).isJsonPrimitive()||!input.getAsJsonPrimitive(key).isNumber())throw new IllegalArgumentException();double n=input.get(key).getAsDouble();if(!Double.isFinite(n))throw new IllegalArgumentException();return n;}catch(Exception e){throw new MaidBodyControl.Fault(400,"INVALID_"+key);}}
     private static int integer(JsonObject input,String key){double n=number(input,key);if(n<0||n>Integer.MAX_VALUE||n!=Math.floor(n))throw new MaidBodyControl.Fault(400,"INVALID_"+key);return (int)n;}
     private static JsonObject position(EntityMaid maid){var p=new JsonObject();p.addProperty("x",maid.getX());p.addProperty("y",maid.getY());p.addProperty("z",maid.getZ());p.addProperty("dimension",maid.level().dimension().location().toString());return p;}
-    private JsonObject blocked(UUID owner,UUID id,JsonObject input,String reason)throws Exception {String request=MaidBodyControl.request(input,"requestId");control.reserve(owner,id,request,input);var info=new JsonObject();info.addProperty("reason",reason);info.addProperty("effectsApplied",false);return reply(false,control.finish(id,request,"rejected",info),reason);}
+    private JsonObject blocked(UUID owner,UUID id,JsonObject input,String reason)throws Exception {
+        return blocked(owner,id,input,reason,null);
+    }
+    private JsonObject blocked(UUID owner,UUID id,JsonObject input,String reason,JsonObject actualPosition)throws Exception {
+        String request=MaidBodyControl.request(input,"requestId");control.reserve(owner,id,request,input);
+        var info=new JsonObject();info.addProperty("reason",reason);info.addProperty("effectsApplied",false);
+        if(actualPosition!=null)info.add("actualPosition",actualPosition);
+        return reply(false,control.finish(id,request,"rejected",info),reason);
+    }
     private static JsonObject reply(boolean ok,JsonObject data,String reason){var body=new JsonObject();body.addProperty("protocol","qiandengji-maids/v1");body.addProperty("ok",ok);body.addProperty("status",data.has("status")?data.get("status").getAsString():"completed");body.add("data",data);
         if(reason!=null)body.addProperty("reason",reason);var item=new JsonObject();item.addProperty("type","text");item.addProperty("text",body.toString());var content=new JsonArray();content.add(item);var result=new JsonObject();result.add("content",content);result.addProperty("isError",false);return result;}
 }

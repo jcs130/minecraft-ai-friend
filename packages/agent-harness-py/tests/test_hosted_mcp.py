@@ -48,13 +48,16 @@ def test_slow_hosted_walk_yields_to_speech_and_reconciles_original_id(tmp_path, 
                         message = "Speech dispatched; it is not evidence of a reply."
                         state, success = "partial", True
                     else:
-                        assert args["args"]["code"] == "return numen_hosted.move.walk({x=3,y=60,z=7})"
+                        assert args["args"]["code"].startswith("local dest={x=3,y=60,z=7};")
+                        assert args["args"]["code"].endswith("return numen_hosted.move.walk(dest)")
                         dispatched.set()
                         await finish.wait()
                         message = "no_path; stood at (2, 64, 2)"
                         state, success = "blocked", False
                     return SimpleNamespace(isError=False, structuredContent=dict(
                         id=args["id"], state=state, message=json.dumps(dict(success=success, message=message))))
+                if args["op"] == "result" and not finish.is_set():
+                    return SimpleNamespace(isError=False, structuredContent=dict(id=args["id"], state="running"))
                 return await super().call_tool(tool, args)
 
         session = WalkingSession()
@@ -86,6 +89,62 @@ def test_slow_hosted_walk_yields_to_speech_and_reconciles_original_id(tmp_path, 
 
     monkeypatch.setattr("agent_mc_harness.body.hosted_mcp.WALK_INLINE_SECONDS", 0.01)
     asyncio.run(run())
+
+def test_hosted_walk_reads_a_terminal_receipt_while_launch_reply_is_stalled(tmp_path, monkeypatch):
+    async def run():
+        class UnresponsiveLaunch(Session):
+            async def call_tool(self, tool, args):
+                if args["op"] == "call":
+                    self.calls.append(args)
+                    await asyncio.Future()
+                if args["op"] == "result":
+                    self.calls.append(args)
+                    return SimpleNamespace(isError=False, structuredContent={
+                        "id": args["id"], "state": "completed", "message": "reached 4,64,2.",
+                    })
+                return await super().call_tool(tool, args)
+
+        session = UnresponsiveLaunch()
+        adapter = port(tmp_path, session)
+        await adapter.open()
+        try:
+            assert (await adapter.start_walk("first", "old-walk")).status == "accepted"
+            final = await adapter.result("old-walk")
+            assert final.status == "completed" and "reached" in final.text
+            assert adapter.walk_request[2].cancelled()
+            assert (await adapter.start_walk("guarded-first", "old-walk", original_code="first")).status == "completed"
+            assert (await adapter.start_walk("second", "next-walk")).status == "accepted"
+            assert [row["id"] for row in session.calls if row["op"] == "call"] == ["old-walk", "next-walk"]
+        finally:
+            await adapter._retire_walk_waiter()
+            await adapter.close()
+
+    monkeypatch.setattr("agent_mc_harness.body.hosted_mcp.WALK_INLINE_SECONDS", 0.01)
+    asyncio.run(run())
+
+
+def test_hosted_walk_asks_for_a_waypoint_before_running_native_search():
+    from lupa import LuaError, LuaRuntime
+
+    from agent_mc_harness.body.numen import HOSTED_WALK
+
+    lua = LuaRuntime()
+    lua.execute("""
+        calls = 0
+        raise = function(_, message) error(message) end
+        numen_hosted = {
+            status = {self = function() return {pos={x=0,y=102,z=0}} end},
+            move = {walk = function(dest) calls = calls + 1; return dest.y end}
+        }
+    """)
+    with pytest.raises(LuaError, match="walk_waypoint_required"):
+        lua.execute(HOSTED_WALK.format(x=36, y=68, z=18))
+    with pytest.raises(LuaError, match="walk_waypoint_required"):
+        lua.execute(HOSTED_WALK.format(x=65, y=102, z=0))
+    assert lua.globals().calls == 0
+    assert lua.execute(HOSTED_WALK.format(x=10, y=95, z=8)) == 95
+    assert lua.globals().calls == 1
+
 
 def test_stop_releases_the_inline_walk_waiter_without_replaying(tmp_path):
     async def run():

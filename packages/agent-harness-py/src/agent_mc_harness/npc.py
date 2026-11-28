@@ -54,6 +54,7 @@ COMPANION_TRAVEL_BLOCKS = 16
 SELF_CHOSEN_WAIT = "自主选择在这里等候"  # Recorded when a rest had no addressed order behind it.
 REGISTERED_HOME_RANGE = 48
 JOURNEY_ANCHOR_RETRY_SECONDS = 600
+GUARD_RESTORE_RETRY_SECONDS = 60
 MAID_BOND_TONES = (
     "Friendly and practical, as companions just getting to know each other.",
     "Familiar and relaxed. Suggest a helpful next step when it fits.",
@@ -310,7 +311,8 @@ def routine_catch(role: NpcRole, context: PlanContext) -> Step | None:
 
 def restore_default_guard(role: NpcRole, context: PlanContext) -> Step | None:
     native = current_native_state(context)
-    if not role.default_native_guard or native.get("nativeGuardDelegated") is not False:
+    if (not role.default_native_guard or native.get("nativeGuardDelegated") is not False
+            or native.get("nativeGuardAvailable") is False):
         return None
     review = context.activity_review or {}
     resident = native.get("resident") or {}
@@ -426,7 +428,7 @@ def unnecessary_step(step: Step, context: PlanContext, native: dict[str, Any], r
     if step.tool == "body:inventory":
         return not step.args and context.snapshot.inventory is not None
     if step.tool == "body:native:guard":
-        return not step.args and already_guarding(native)
+        return not step.args and (already_guarding(native) or native.get("nativeGuardAvailable") is False)
     if step.tool == "body:native:schedule":
         return set(step.args) == {"schedule"} and isinstance(native.get("schedule"), str) and step.args["schedule"] == native["schedule"]
     if step.tool == "body:native:task":
@@ -539,6 +541,8 @@ class NpcPlanner:
         self.next_meal = 0.0
         self.next_catch = 0.0
         self.next_anchor_leave = 0.0
+        self.next_guard_restore = 0.0
+        self.guard_restore_scene = None
         self.next_guard_review = 0.0
         self.next_companion_check_in = time.monotonic() + 25
         self.next_companion_attempt = 0.0
@@ -778,10 +782,17 @@ class NpcPlanner:
             self._native_routine_route(native, "apply_native_schedule")
             return [step]
         if intent.goal == IDLE_GOAL and not context.dialogue and not following:
-            restore = restore_default_guard(role, context)
+            observed = current_native_state(context)
+            guard_scene = tuple(observed.get(key) for key in (
+                "nativeGuardAvailable", "nativeGuardDelegated", "sitting", "homeMode"))
+            if guard_scene != self.guard_restore_scene:
+                self.guard_restore_scene = guard_scene
+                self.next_guard_restore = 0.0
+            restore = restore_default_guard(role, context) if now >= self.next_guard_restore else None
             # For an opted-in expedition the observed free body, or a reviewed
             # expired wait, can resume even if a previous agenda is still current.
             if restore and (not current_agenda or role.expedition_wait_seconds is not None):
+                self.next_guard_restore = now + GUARD_RESTORE_RETRY_SECONDS
                 self.last_route = {"layer": "native-policy", "reason": "resume_configured_guard"}
                 return [restore]
             if now >= self.next_anchor_leave and (leave := leave_journey_anchor(role, context)):
@@ -1311,7 +1322,8 @@ def reaction_choices(role: NpcRole, context: PlanContext) -> dict[str, Step]:
     if not native or not danger(context.snapshot):
         return {}
     if role.body_kind == "maid":
-        if already_guarding(native) or native.get("passenger") is True or native.get("sitting") is True:
+        if (already_guarding(native) or native.get("nativeGuardAvailable") is False
+                or native.get("passenger") is True or native.get("sitting") is True):
             return {}
         candidates = {"guard": Step(tool="body:native:guard")}
     else:
@@ -1783,9 +1795,15 @@ class NpcHost:
                 if timestamp(evidence.get("observedAt")) is not None:
                     result["observedAt"] = evidence["observedAt"]
                 result["native"] = {key: evidence[key] for key in ("status", "goalCompleted", "observation", "workshops") if key in evidence}
-                if (receipt.terminal and receipt.status == "failed" and receipt.text == "path_blocked"
+                observation = evidence.get("observation")
+                reason = observation.get("reason") if isinstance(observation, dict) else None
+                if (receipt.terminal and receipt.status == "failed"
+                        and (reason or receipt.text) in {"path_blocked", "walk_timeout"}
                         and "destination" in result and (observed := timestamp(evidence.get("observedAt")))):
                     result["pathBlockedUntil"] = observed / 1000 + WALK_TIMEOUT
+                    position = observation.get("actualPosition") if isinstance(observation, dict) else None
+                    if isinstance(position, dict) and position.get("dimension") and not result["destination"].get("dimension"):
+                        result["destination"] = {**result["destination"], "dimension": position["dimension"]}
             if isinstance(data.get("meal"), dict):
                 result["observedMeal"] = data["meal"]
             if isinstance(data.get("itemUse"), dict):

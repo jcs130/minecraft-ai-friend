@@ -22,6 +22,7 @@ from .numen import PortResult, RawEvent, _field, command_lua
 HEARTBEAT_INTERVAL_SECONDS = 2
 HEARTBEAT_RPC_SECONDS = 3
 WALK_INLINE_SECONDS = 2
+WALK_RECEIPT_PROBE_SECONDS = 2
 
 
 class HostedMcpPort:
@@ -352,6 +353,8 @@ class HostedMcpPort:
             running = background_task(text)
             if running:
                 return PortResult("accepted", text, value, running)
+        if (state in ("failed", "blocked", "cancelled") or outcome is False) and "walk_waypoint_required:" in text:
+            value = {**value, "reason": "walk_waypoint_required", "targetReached": False}
         if state in ("failed", "blocked", "cancelled"):
             if "this turn was cut off" in text.lower():
                 text = "Native execution was interrupted; earlier steps may already have run. The goal is unconfirmed; do not replay this request."
@@ -377,14 +380,17 @@ class HostedMcpPort:
             return PortResult("completed", text, value)
         return PortResult("unknown", text, value)
 
-    async def start_walk(self, code, request_id):
-        return await self._submit("lua", {"code": code}, request_id, walk=True)
+    async def start_walk(self, code, request_id, *, original_code=None):
+        return await self._submit("lua", {"code": code}, request_id, walk=True,
+                                  original_args={"code": original_code} if original_code is not None else None)
 
     async def call(self, tool, args, request_id):
         return await self._submit(tool, args, request_id, walk=False)
 
-    async def _submit(self, tool, args, request_id, *, walk):
-        signature = hashlib.sha256(json.dumps([tool,args], sort_keys=True).encode()).hexdigest()
+    async def _submit(self, tool, args, request_id, *, walk, original_args=None):
+        # Validate the caller's original movement target across bridge upgrades.
+        signature = hashlib.sha256(json.dumps([tool, args if original_args is None else original_args],
+                                              sort_keys=True).encode()).hexdigest()
         # Only admission is serialized. A long-running call must stay interruptible.
         async with self.control_lock:
             if self.stopping.is_set():
@@ -397,10 +403,9 @@ class HostedMcpPort:
             if self.lost or self.closing:
                 return PortResult("rejected", "Hosted control unavailable; this new action was not dispatched.")
             if walk and self.walk_request:
-                original, walk_epoch, pending = self.walk_request
-                if walk_epoch == self.epoch and (
-                    not pending.done() or self.ledger.get(original, self.task_connection)["status"] in {"accepted", "unknown"}
-                ):
+                original, walk_epoch, _ = self.walk_request
+                if (walk_epoch == self.epoch
+                        and self.ledger.get(original, self.task_connection)["status"] in {"accepted", "unknown"}):
                     return PortResult("rejected", "The previous hosted walk has no terminal result. Query its original request or stop it before choosing another route.",
                                       {"reason": "walk_in_progress", "originalRequestId": original, "targetReached": False})
             self.ledger.begin(request_id, signature, self.task_connection)
@@ -412,6 +417,9 @@ class HostedMcpPort:
             return await self._dispatch(tool, args, request_id, epoch, generation)
         done, _ = await asyncio.wait({task}, timeout=WALK_INLINE_SECONDS)
         if task.cancelled():
+            saved = self.ledger.get(request_id, self.task_connection)
+            if saved and saved["status"] not in ("accepted", "unknown"):
+                return PortResult(**saved)
             return PortResult("unknown", "The local walk wait ended after a control change. Query the original request without resending.",
                               {"reason": "walk_wait_ended", "originalRequestId": request_id})
         return task.result() if done else self._walk_pending(request_id)
@@ -430,6 +438,8 @@ class HostedMcpPort:
                 bound = self.ledger.bind_background(request_id, generation, result.execution_id, result.text)
                 return result if bound["status"] == "accepted" else PortResult(**bound)
             self.ledger.save(request_id, result.status, result.text, result.execution_id)
+            if result.status not in ("accepted", "unknown"):
+                self.next_receipt_probe.pop(request_id, None)
             return result
         except Exception as error:
             return PortResult("unknown", "Original hosted action outcome unknown; query its request ID.",
@@ -439,11 +449,16 @@ class HostedMcpPort:
         if self.stopping.is_set():
             return PortResult("unknown", "Session closed; query the original request after reconnect.")
         saved = self.ledger.get(request_id, self.task_connection)
-        if saved and saved["status"] not in ("accepted", "unknown"): return PortResult(**saved)
-        if self.walk_request and self.walk_request[0] == request_id:
-            task = self.walk_request[2]
-            if not task.done() and not self.lost:
+        if saved and saved["status"] not in ("accepted", "unknown"):
+            return PortResult(**saved)
+        waiting_for_walk = (not self.lost and self.walk_request is not None
+                            and self.walk_request[0] == request_id and not self.walk_request[2].done())
+        if waiting_for_walk:
+            # The game can commit the original result while its write reply is still stalled.
+            now = asyncio.get_running_loop().time()
+            if now < self.next_receipt_probe.get(request_id, 0):
                 return self._walk_pending(request_id)
+            self.next_receipt_probe[request_id] = now + WALK_RECEIPT_PROBE_SECONDS
         if saved and saved["data"]["fingerprint"] == HOSTED_STOP:
             # No "result" file exists for lease transitions on the Numen server.
             async with self.control_lock:
@@ -459,6 +474,12 @@ class HostedMcpPort:
             self.next_receipt_probe[request_id] = now + 15
             async with asyncio.timeout(10), self._mcp_session() as session:
                 value = await self._request(session, "result", id=request_id)
+        elif waiting_for_walk:
+            try:
+                async with asyncio.timeout(HEARTBEAT_RPC_SECONDS):
+                    value = await self.rpc("result", id=request_id)
+            except Exception:
+                return self._walk_pending(request_id)
         else:
             value = await self.rpc("result", id=request_id)
         result = self.mapped(value, request_id)
@@ -472,7 +493,12 @@ class HostedMcpPort:
         if result.status not in ("accepted", "unknown"):
             self.ledger.save(request_id, result.status, result.text, result.execution_id)
             self.next_receipt_probe.pop(request_id, None)
+            if waiting_for_walk and self.walk_request and self.walk_request[0] == request_id:
+                # Retire a local waiter only after the native original is terminal.
+                await self._retire_walk_waiter()
             return result
+        if waiting_for_walk:
+            return self._walk_pending(request_id)
         return PortResult(**saved) if saved else result
 
     async def observe(self):

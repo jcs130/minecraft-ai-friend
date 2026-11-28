@@ -6,6 +6,7 @@ import httpx
 
 from agent_mc_harness.models import ActionSupport, BodySnapshot, NativeAction
 from agent_mc_harness.npc import (
+    GUARD_RESTORE_RETRY_SECONDS,
     IDLE_GOAL,
     JOURNEY_ANCHOR_RETRY_SECONDS,
     SELF_CHOSEN_WAIT,
@@ -69,8 +70,29 @@ def test_default_guard_resumes_only_an_idle_unoccupied_body():
     assert restore_default_guard(actor, maid_context(**ready)).tool == "body:native:guard"
     for change in ({"sitting": True}, {"passenger": True}, {"homeMode": True}, {"canMove": False},
                    {"nativeGuardDelegated": True}, {"taskId": "touhou_little_maid:fishing"},
-                   {"follow": {"temporaryWait": True}}):
+                   {"follow": {"temporaryWait": True}}, {"nativeGuardAvailable": False}):
         assert restore_default_guard(actor, maid_context(**(ready | change))) is None
+
+
+def test_native_guard_resume_uses_availability_and_bounds_legacy_retries(monkeypatch):
+    async def run():
+        clock = [100.0]
+        monkeypatch.setattr("agent_mc_harness.npc.time.monotonic", lambda: clock[0])
+        actor = role(body_kind="maid", default_native_guard=True, autonomy_mode="native_first",
+                     allowed_tools=["body:native:guard"])
+        planner = NpcPlanner(actor, None)
+        scene = dict(nativeGuardDelegated=False, taskId="touhou_little_maid:idle", canMove=True,
+                     passenger=False, sitting=False, homeMode=False, follow={"temporaryWait": False},
+                     schedule="ALL", activity="idle")
+        intent = Intent(id="qa-guard", agent=actor.id, goal=IDLE_GOAL)
+        assert await planner(intent, maid_context(**scene, nativeGuardAvailable=False)) == []
+        assert [step.tool for step in await planner(intent, maid_context(**scene))] == ["body:native:guard"]
+        assert await planner(intent, maid_context(**scene)) == []
+        clock[0] += GUARD_RESTORE_RETRY_SECONDS
+        assert [step.tool for step in await planner(intent, maid_context(**scene, nativeGuardAvailable=True))] == [
+            "body:native:guard"]
+
+    asyncio.run(run())
 
 
 def test_idle_activity_review_resumes_configured_expedition():

@@ -30,6 +30,7 @@ final class CombatRpg implements Listener {
     private final ExecutorService io=Executors.newSingleThreadExecutor(r->{var t=new Thread(r,"AgentFriend-Combat-Ledger");t.setDaemon(true);return t;});
     private final Map<UUID,Map<UUID,Contribution>> contributions=new HashMap<>();
     private final LinkedHashMap<UUID,CombatRpgLedger.Award> pending=new LinkedHashMap<>();
+    private final Map<UUID,Long> nextResidentProjection=new HashMap<>();
     private final NamespacedKey origin,healthKey,attackKey;
     private boolean writing,stopping,fault;
     private int ticks;
@@ -161,15 +162,29 @@ final class CombatRpg implements Listener {
         if(value>0)attr.addModifier(new AttributeModifier(key,value,AttributeModifier.Operation.ADD_NUMBER));
         if(type==Attribute.GENERIC_MAX_HEALTH&&p.getHealth()>attr.getValue())p.setHealth(attr.getValue());
     }
+    private void projectResidentExperience(Player player,long now){
+        UUID id=player.getUniqueId();
+        long cumulative=ledger.snapshot().player(id,player.getName()).xp();
+        // No award exists for a new or private companion with an empty combat ledger.
+        if(cumulative==0||now<nextResidentProjection.getOrDefault(id,0L))return;
+        try{
+            // Reconcile the cumulative ledger; the RPG profile applies only its outstanding delta.
+            ResidentCli.nativeCall("combatExperience",new Class[]{UUID.class,long.class},id,cumulative);
+            nextResidentProjection.remove(id);
+        }catch(ReflectiveOperationException|RuntimeException unavailable){
+            nextResidentProjection.put(id,now+60_000);
+            Throwable cause=unavailable;
+            while(cause.getCause()!=null&&cause.getCause()!=cause)cause=cause.getCause();
+            plugin.getLogger().warning("Resident combat projection pending for "+id+": "+cause);
+        }
+    }
+
     private void tick(){
         if(stopping)return;long now=System.currentTimeMillis();
         // Durable outbox written with the actual dungeon reward receipt. Recover
         // across a crash between dungeon settlement and this ledger's disk write.
         if(++ticks%5==0)for(Player p:ResidentCli.online()){
-            if(ResidentCli.isResident(p.getUniqueId()))try{
-                // Set a cumulative projection from the durable ledger, never re-add an award on reconnect.
-                ResidentCli.nativeCall("combatExperience",new Class[]{UUID.class,long.class},p.getUniqueId(),(long)ledger.snapshot().player(p.getUniqueId(),p.getName()).xp());
-            }catch(ReflectiveOperationException|RuntimeException missing){plugin.getLogger().warning("Resident combat projection unavailable: "+p.getUniqueId());}
+            if(ResidentCli.isResident(p.getUniqueId()))projectResidentExperience(p,now);
             var proof=plugin.getConfig().getConfigurationSection("site-dungeons.conquest-proofs."+p.getUniqueId());
             if(proof!=null)for(String floor:proof.getKeys(false))try{
                 int number=Integer.parseInt(floor);UUID run=UUID.fromString(proof.getString(floor,""));
