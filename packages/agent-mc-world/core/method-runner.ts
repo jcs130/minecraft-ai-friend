@@ -274,8 +274,11 @@ export class MethodRunner {
       if (message.kind !== 'call' || !['capabilities', 'state', 'do', 'flightPlan', 'swimPlan', 'mineflayer', 'mindcraft'].includes(message.method)) {
         finish('failed', '脚本协议包含未知操作'); return;
       }
+      const syncRead = (message.method === 'mindcraft' && message.args?.family === 'world')
+        || (message.method === 'mineflayer' && this.host.nativeMethods?.includes('read') && message.args?.name === 'read'
+          && Array.isArray(message.args.args) && message.args.args.length === 1 && message.args.args[0] === 'entity');
       if (message.method === 'mindcraft' && !this.host.gameLibrary ||
-        message.sync && (message.method !== 'mindcraft' || message.args?.family !== 'world' ||
+        message.sync && (!syncRead ||
         !(message.sync instanceof SharedArrayBuffer) || message.sync.byteLength !== 96_008)) {
         finish('failed', 'Mindcraft unavailable on this body or invalid read buffer'); return;
       }
