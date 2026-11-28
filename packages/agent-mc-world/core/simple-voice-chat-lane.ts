@@ -1,4 +1,6 @@
 import { SvcHearing, transcribeSvcWav, type VoiceSpeaker, type VoiceTranscript } from './svc-hearing.ts';
+import { SvcPublicSpeech } from './svc-public-speech.ts';
+import type { ChatDeliveryReceipt } from '../src/contracts/chat-delivery.ts';
 import { randomUUID } from 'node:crypto';
 import type { ToolDef } from './support/host-contract.ts';
 import { attachSimpleVoiceChat, createOfficialOpusCodec, type SimpleVoiceChatClient, type SimpleVoiceChatOpus } from '../src/simple-voice-chat.ts';
@@ -21,6 +23,7 @@ export interface SimpleVoiceChatConfig {
   /** Override the remote UDP port for a server behind an operator-provided port mapping. */
   udpPort?: number;
   transcriptionEndpoint?: string;
+  publicChatArtifactUrl?: string;
 }
 export interface SimpleVoiceChatContext {
   bot: Parameters<typeof attachSimpleVoiceChat>[0];
@@ -45,6 +48,16 @@ export const SIMPLE_VOICE_CHAT_TOOL: Omit<ToolDef, 'handler'> = {
 };
 
 export class SimpleVoiceChatLane {
+  private readonly publicSpeech = new SvcPublicSpeech(row=>this.options.publicSpeechReceipt?.({...row}));
+  publicChat(chat:ChatDeliveryReceipt) {
+    const cfg=this.options.config();
+    if (!cfg.enabled || !cfg.publicChatArtifactUrl) return;
+    const client=this.client, context=this.context;
+    return this.publicSpeech.enqueue(chat,cfg.publicChatArtifactUrl,client && context ? {
+      current:()=>this.client===client && context.stillCurrent() && client.state().udpAuthenticated && client.state().udpValidated,
+      send:(bytes,requestId,signal)=>client.upload(bytes,{requestId,signal}),
+    } : null);
+  }
   private hearing:SvcHearing | null=null;
   private client: SimpleVoiceChatClient | null = null;
   private context: SimpleVoiceChatContext | null = null;
@@ -52,6 +65,7 @@ export class SimpleVoiceChatLane {
   constructor(private readonly options: {
     config: () => SimpleVoiceChatConfig;
     serverHost?: () => string;
+    publicSpeechReceipt?:(receipt:Readonly<Record<string,unknown>>)=>void;
     blob: (handle: string) => { bytes: Uint8Array; mime?: string } | null;
     /** Optional host-provided Opus codec; otherwise the official SVC jar's Concentus is used. */
     opus?: () => SimpleVoiceChatOpus & { close?(): void };
@@ -91,9 +105,10 @@ export class SimpleVoiceChatLane {
   /** True while a native SVC client is attached to the current connection. */
   get attached(): boolean { return this.client !== null; }
   status() {
-    return {...(this.client?.state() ?? {connected:false,udpAuthenticated:false,udpValidated:false,udpPort:null,reason:this.lastError,recipientHeard:'unknown'}),hearing:this.hearing?.status()??null};
+    return {...(this.client?.state() ?? {connected:false,udpAuthenticated:false,udpValidated:false,udpPort:null,reason:this.lastError,recipientHeard:'unknown'}),hearing:this.hearing?.status()??null, publicSpeech:this.publicSpeech.status()};
   }
   disconnect(_reason?: string) {
+    this.publicSpeech.disconnect();
     this.hearing?.close();this.hearing=null;
     try { this.client?.close(); } catch {}
     this.client = null;

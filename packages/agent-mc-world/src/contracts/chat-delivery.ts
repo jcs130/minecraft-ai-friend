@@ -22,6 +22,8 @@ export interface ChatDeliveryReceipt {
   callId?: string;
   /** Shared authored utterance; does not attest audio playback or recipient reading. */
   voiceRequestId?: string;
+  /** Shared WAV for independent native SVC and web playback of this public send. */
+  publicSpeechArtifactId?: string;
   taskExecutionId?: string;
   stepIndex?: number;
   boundary: 'client-transport';
