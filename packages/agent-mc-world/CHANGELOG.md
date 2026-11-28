@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.150
+
+Resume the normal reconnect policy after all dial candidates fail before the protocol client receives a socket. Discard late results after a manual stop or a replacement connection.
+
 ## 0.5.7-rc.160-preview.149
 
 Keep inventory facts and deltas independent of the host's tool names. Explicit SDK and MCP inventory reads retain their slot and page continuations.
