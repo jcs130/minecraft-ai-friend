@@ -165,6 +165,7 @@ export type SkillCall = StepBounds & (
       times?: number;
       /** 门、活板门与栅栏门的期望开启状态；已符合时不再点击。 */
       open?: boolean;
+      sleep?: true;
       /** 只对告示牌:右键打开编辑框之后把这几行字写上去(\n 分行,最多 4 行) */
       text?: string;
       /** 写在牌子背面(1.20 起两面各有一套字);缺省写正面 */
@@ -765,6 +766,10 @@ function parseUse(c: Record<string, unknown>, at: string, marks?: MarkLookup): P
 
   const times = intIn(c.times, 1, USE_TIMES_MAX, 1);
   if (times === null) return { error: `${at} use 的 times 要在 1-${USE_TIMES_MAX} 之间` };
+  if (c.sleep !== undefined && (c.sleep !== true || !useAt || item || target || times !== 1
+    || ['open','text','back','face','index','entityId'].some(key=>c[key]!==undefined))) {
+    return { error: at+' 就寝只给 sleep:true 和已观察到的床坐标 at，一次一次执行' };
+  }
   if (c.open !== undefined && (typeof c.open !== 'boolean' || !useAt || times !== 1)) {
     return { error: `${at} use 的 open 要布尔值，并与方块 at 一起给；明确开关状态只执行一次` };
   }
@@ -824,6 +829,7 @@ function parseUse(c: Record<string, unknown>, at: string, marks?: MarkLookup): P
       ...(entityId !== undefined ? { entityId } : {}),
       ...(index !== undefined ? { index } : {}),
       ...(times > 1 ? { times } : {}),
+      ...(c.sleep === true ? {sleep:true as const} : {}),
       ...(typeof c.open === 'boolean' ? { open: c.open } : {}),
       ...(text !== undefined ? { text } : {}),
       ...(back ? { back: true as const } : {}),
@@ -1628,6 +1634,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     name: 'use',
     doc: `{"skill":"use","at":[103,64,-31]}
                                                  右键世界里已有的那一格:开门、拉杆、按钮、开箱子看一眼、点床睡觉。优先空手；满包时功能方块可用普通无自定义名称的工具，不丢主手物品。
+{"skill":"use","at":[103,64,-31],"sleep":true} 就寝只点近处现场可见的床，确认维度允许后等待本人的入睡与起床。多人入睡并不保证跳夜。
                                                  门、活板门或栅栏门可给 open:true 开启、open:false 关闭；已符合就保持，不反复翻转。回执核验期望状态。
                                                  at 是要点击的方块坐标；item 是从背包拿在手里的物品，不是被点击方块的名字。
                                                  点击已有方块不要求包里有同名物品。查看方块容器后会关窗；要取物直接用 take at 点名方块。
@@ -1677,6 +1684,7 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
       { key: 'entityId', kind: 'int', lo: 0, hi: 2_147_483_647, def: 0, doc: '可选；本连接里观察到的实体 ID，与 target 一起给，精确点该实体，不退回最近者' },
       { key: 'index', kind: 'int', lo: 1, hi: 99, def: 1 },
       { key: 'times', kind: 'int', lo: 1, hi: USE_TIMES_MAX, def: 1, doc: '连着右键几次;带 index 时是成交几次' },
+      { key: 'sleep', kind: 'flag', doc: '就寝用 sleep:true 和近处可见床的 at；检查实际维度、床与原生入睡事件后等待醒来' },
       { key: 'open', kind: 'flag', doc: '门、活板门、栅栏门的期望状态；true 开、false 关，已符合不点击；与 at 一起给' },
       { key: 'text', kind: 'string', doc: `写在告示牌上的字,\\n 分行;最多 ${SIGN_LINES} 行、每行 ${SIGN_LINE_CHARS} 字符` },
       { key: 'back', kind: 'flag', doc: '写在牌子背面;缺省正面' },

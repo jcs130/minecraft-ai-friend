@@ -1,3 +1,4 @@
+import { unwrapNbt } from './nbt-text.mjs';
 import { randomUUID } from 'node:crypto';
 import type { Bot } from 'mineflayer';
 import type { WorldIdentityObservation } from '../src/contracts/world-scope.ts';
@@ -8,6 +9,9 @@ interface State {
   revision: number;
   source: WorldIdentityObservation['source'];
   observedAt: string | null;
+  bedRules?: Map<string, boolean>;
+  hasLocalBedOverrides?: boolean;
+  hasTimedBedOverrides?: boolean;
   dispose?: () => void;
 }
 const states = new WeakMap<Bot, State>();
@@ -44,7 +48,43 @@ export function installWorldIdentity(bot: Bot): () => void {
     state.source = key === null ? 'unknown' : source;
     state.observedAt = new Date().toISOString();
   };
-  const login = (packet: unknown) => observe('vanilla-login', packet);
+  // Prismarine's registry projects dimensions to height and minY, dropping bed_works.
+  const registry = (packet: {id?:string;entries?:{key:string;value?:{value?:Record<string,unknown>}}[]}) => {
+    if (!Array.isArray(packet.entries)) return;
+    const ruleKey = 'minecraft:gameplay/bed_rule';
+    const attribute = (tag:unknown) => {
+      const attributes = (tag as {value?:Record<string,unknown>} | undefined)?.value;
+      return attributes?.[ruleKey] ?? attributes?.['gameplay/bed_rule'];
+    };
+    // Location/time overrides cannot safely be evaluated from dimension alone.
+    if (packet.id === 'minecraft:worldgen/biome' || packet.id === 'minecraft:timeline') {
+      const timeline=packet.id === 'minecraft:timeline';
+      const hasOverride=packet.entries.some(e=>attribute(e.value?.value?.[timeline?'tracks':'attributes'])!==undefined);
+      if(timeline) state.hasTimedBedOverrides=hasOverride;
+      else state.hasLocalBedOverrides=hasOverride;
+      return;
+    }
+    if (packet.id !== 'minecraft:dimension_type') return;
+    state.bedRules = new Map();
+    for (const entry of packet.entries) {
+      const fields=entry.value?.value;
+      const legacy = unwrapNbt(fields?.bed_works);
+      const rule = unwrapNbt(attribute(fields?.attributes)) as {can_sleep?:string;explodes?:unknown}|undefined;
+      const vanilla = entry.key === 'minecraft:overworld';
+      state.bedRules.set(entry.key, vanilla && (legacy!==undefined ? legacy===1 || legacy===true :
+        rule===undefined ? fields===undefined || fields.attributes!==undefined :
+        (rule.can_sleep==='when_dark' || rule.can_sleep==='always') && !rule.explodes));
+    }
+  };
+  client.on('registry_data', registry);
+  const login = (packet: unknown) => {
+    const codec = (packet as {dimensionCodec?:{value?:Record<string,unknown>}})?.dimensionCodec;
+    if(codec?.value?.['minecraft:dimension_type']) {
+      const types=unwrapNbt(codec.value['minecraft:dimension_type']) as {value?:{name:string;element?:{bed_works?:number}}[]};
+      state.bedRules=new Map((types.value??[]).map(row=>[row.name,row.element?.bed_works===1]));
+    }
+    observe('vanilla-login',packet);
+  };
   const respawn = (packet: unknown) => observe('vanilla-respawn', packet);
   // Run before Mineflayer emits its derived game/respawn events.
   client.prependListener('login', login);
@@ -52,6 +92,7 @@ export function installWorldIdentity(bot: Bot): () => void {
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    client.off('registry_data',registry); state.bedRules=undefined;
     client.off('login', login); client.off('respawn', respawn); bot.off('end', dispose);
     state.key = null; state.source = 'unknown'; state.observedAt = null; state.revision++;
     state.dispose = undefined;
@@ -68,6 +109,19 @@ export function readWorldIdentity(bot: Bot | null | undefined): WorldIdentityObs
   return { schema: 'agent-mc-world-identity/v1', key: state?.key ?? null, uuid: null, instanceId: null,
     dimensionType: typeof type === 'string' && type.length > 0 ? type : null,
     source: state?.source ?? 'unknown', revision: state?.revision ?? 0, observedAt: state?.observedAt ?? null };
+}
+
+/** Only attempt unattended rest with a positive dimension rule. Old pre-datapack
+ * versions have fixed vanilla Overworld rules. Unknown server-defined types stay unknown. */
+export function bedsWorkHere(bot: Bot): boolean {
+  const type = bot.game?.dimension as string | undefined;
+  if (!type) return false;
+  const id = type.includes(':') ? type : 'minecraft:' + type;
+  const rules = states.get(bot)?.bedRules;
+  const state=states.get(bot);
+  if(id!=='minecraft:overworld' || state?.hasLocalBedOverrides || state?.hasTimedBedOverrides) return false;
+  if (rules) return rules.get(id) === true;
+  return !!bot.supportFeature?.('dimensionIsAnInt');
 }
 
 /** Namespace spatial records by server realm AND native world. Unknown worlds never share a persistent key. */
