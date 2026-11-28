@@ -58,7 +58,12 @@ it('publishes net changes while current facts omit the full bag; item reads use 
     expect(facts.text).not.toContain('包里有：');
     const passiveEvent=world.renderSnapshotEvent();
     expect(passiveEvent).toContain('115→64');
-    expect(passiveEvent).not.toMatch(/包里有：|当前随身物品 ID：/);
+    expect(passiveEvent).not.toMatch(/包里有：|当前随身物品 ID：|mc_bag/);
+    expect(facts.parts!.find(p=>p.key==='inventoryIds')?.text).not.toContain('mc_bag');
+    expect(facts.parts!.find(p=>p.key==='carriedInventory')?.text).not.toContain('明细 mc_bag');
+    expect(r.host.events.find(e=>e.meta?.carriedInventory)?.text).not.toContain('明细 mc_bag');
+    expect(peek.data.next_safe_read).toEqual({tool:'mc_bag',arguments:{detail:'slots'}});
+    expect(peek.text).toContain('mc_bag');
     expect(world.requestFactsCache.text).not.toContain('包里有：');
     expect(world.requestFactsCache.parts.find((part:any)=>part.key==='carriedInventory').text).toContain('115→64');
     const events=r.host.events.map(e=>e.meta?.carriedInventory as any).filter(Boolean);

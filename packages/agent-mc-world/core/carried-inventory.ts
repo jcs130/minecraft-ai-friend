@@ -101,5 +101,5 @@ export function carriedInventoryText(reading: CarriedInventoryReading | undefine
   const suffix = reading.omittedChanges ? '，另有' + reading.omittedChanges + '类变化' : '';
   const delta = reading.kind === 'baseline' ? '已同步基线 ' + reading.observedAt
     : '上次观察变化 ' + reading.observedAt + '：' + (entries.join('、') || '仅占格数变化') + suffix;
-  return '随身 ' + reading.usedSlots + '/36 格，空 ' + reading.freeSlots + '。' + delta + '。明细 mc_bag {detail:"slots"}。';
+  return '随身 ' + reading.usedSlots + '/36 格，空 ' + reading.freeSlots + '。' + delta + '。';
 }

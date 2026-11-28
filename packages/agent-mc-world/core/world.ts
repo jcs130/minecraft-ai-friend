@@ -5255,7 +5255,8 @@ export class MinecraftWorld implements World {
               data:{next_safe_read:{tool:'mc_bag',arguments:{detail:'changes'}}}};
             reading=page;
           }
-          return {text:carriedInventoryText(reading), data:reading ? {...reading} : {protocol:'agent-mc-carried-inventory/v1',kind:'unknown',usedSlots:null,freeSlots:null,
+          const detailHint = reading ? '明细 mc_bag {detail:"slots"}。' : '';
+          return {text:carriedInventoryText(reading) + detailHint, data:reading ? {...reading} : {protocol:'agent-mc-carried-inventory/v1',kind:'unknown',usedSlots:null,freeSlots:null,
             next_safe_read:{tool:'mc_bag',arguments:{detail:'slots'}}}};
         }
         if (args.detail === 'storage' && !(typeof args.item === 'string' && args.item.trim()))
