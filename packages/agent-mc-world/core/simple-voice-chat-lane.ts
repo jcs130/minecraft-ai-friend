@@ -64,7 +64,7 @@ export class SimpleVoiceChatLane {
       this.client = attachSimpleVoiceChat(this.context.bot, {
         opus: this.codec, isAuthenticated: () => this.context!.stillCurrent(),
         compatibilityVersion: cfg.compatibilityVersion || 20, bindHost: cfg.bindHost || '0.0.0.0',
-        serverHost:this.options.serverHost?.(), udpPort:cfg.udpPort,
+        serverHost:this.options.serverHost?.(), udpPort:cfg.udpPort === 0 ? undefined : cfg.udpPort,
         resolveUdpHost: this.options.resolveUdpHost ?? resolveSvcUdpHost,
       });
     } catch (error) {
