@@ -605,28 +605,37 @@ export async function unwedgeBody(bot: Bot, ctx: SkillContext): Promise<number> 
   bot.clearControlStates();
   const before = bot.entity.position.clone();
   let attempted = false;
-  const safe = (direction: 'back' | 'left'): boolean => {
+  const moves = [
+    {key:'back',forward:-1,left:0,ms:400}, {key:'left',forward:0,left:1,ms:300},
+    {key:'right',forward:0,left:-1,ms:300}, {key:'forward',forward:1,left:0,ms:300},
+  ] as const;
+  const safe = (move: typeof moves[number]): boolean => {
     const p = bot.entity.position, yaw = bot.entity.yaw;
     if (!Number.isFinite(yaw)) return false;
-    const dx = direction === 'back' ? Math.sin(yaw) : -Math.cos(yaw);
-    const dz = direction === 'back' ? Math.cos(yaw) : Math.sin(yaw);
+    const dx = -Math.sin(yaw)*move.forward - Math.cos(yaw)*move.left;
+    const dz = -Math.cos(yaw)*move.forward + Math.sin(yaw)*move.left;
     return corridorSafe(bot, p, p.offset(dx * 1.2, 0, dz * 1.2));
   };
+  const rejected: string[] = [], pressed:string[] = [];
   try {
-    for (const [direction, ms] of [['back', 400], ['left', 300]] as const) {
+    for (const move of moves) {
+      const {key:direction,ms}=move;
+      if (bot.entity.position.distanceTo(before)>=UNWEDGE_MOVED) break;
       checkAbort(ctx);
-      if (!safe(direction)) {
+      if (!safe(move)) {
+        rejected.push(direction);
         ctx.diag?.write({ lane: 'path', event: 'goto-unwedge-unsafe', taskId: ctx.taskId,
-          msg: `解卡${direction === 'back' ? '后退' : '侧移'}未核实到连续干燥支撑与净空，未发移动按键` });
+          msg: `解卡方向 ${direction} 未核实到连续干燥支撑与净空，未发移动按键` });
         continue;
       }
       attempted = true;
+      pressed.push(direction);
       bot.setControlState('sneak', true);
       bot.setControlState(direction, true);
       try {
         for (let elapsed = 0; elapsed < ms; elapsed += 50) {
           checkAbort(ctx);
-          if (!safe(direction)) break;
+          if (!safe(move)) break;
           await sleep(50);
         }
       } finally {
@@ -644,9 +653,9 @@ export async function unwedgeBody(bot: Bot, ctx: SkillContext): Promise<number> 
   const moved = Math.hypot(after.x - before.x, after.y - before.y, after.z - before.z);
   ctx.diag?.write({
     lane: 'path', event: 'goto-unwedge', taskId: ctx.taskId,
-    msg: `钉在原地,安全平地后退/侧移解卡:挪了 ${moved.toFixed(2)} 格`,
+    msg: `钉在原地,核对平地支撑后短距解卡:挪了 ${moved.toFixed(2)} 格`,
     data: {
-      moved: Number(moved.toFixed(3)),
+      moved: Number(moved.toFixed(3)), rejected, pressed,
       from: { x: Number(before.x.toFixed(3)), y: Number(before.y.toFixed(3)), z: Number(before.z.toFixed(3)) },
       to: { x: Number(after.x.toFixed(3)), y: Number(after.y.toFixed(3)), z: Number(after.z.toFixed(3)) },
     },
