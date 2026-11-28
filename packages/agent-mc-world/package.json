@@ -1,6 +1,6 @@
 {
   "name": "agent-mc-world",
-  "version": "0.5.7-rc.160-preview.165",
+  "version": "0.5.7-rc.160-preview.166",
   "type": "module",
   "description": "Independent Mineflayer execution client for Agents, with MCP, SDK and optional server capability packs",
   "repository": {
@@ -175,6 +175,7 @@
     "release-sources.json",
     "bridges",
     "scripts/build.mjs",
+    "scripts/import-profile-learning.mjs",
     "scripts/copy-viewer-assets.mjs",
     "scripts/defer-viewer-audio.mjs",
     "scripts/viewer-input.mjs",

@@ -52,7 +52,7 @@ const SDK_API = Object.freeze({
     + '{library:{op:"review",id:"method-id",revision:"实际版本",executionId:"原UUID",outcome:"achieved|not-achieved|unknown",assessment:"核验依据",context:"场景/样本边界",measurements:{"distance-blocks":实际数值或null},counterexamples:["失败/不适用条件"]}}。'
     + '语法回执不能作为执行复盘。你的评估与原回执分开保留，不自动证明因果或长期改善。'
     + '\n采用/回退：{library:{op:"adopt",id:"method-id",revision:"已评估版本",reviewId:"复盘UUID",expectedAdopted:null,reason:"选择理由"}}；'
-    + '已有选择时 expectedAdopted 填其 revision。以后 list 返回 selected.reference，核对本次前提后显式复用。'
+    + '依赖服务器条目时附 mc_knowledge 的 server/get 返回的 rule；场景召回会提醒规则变更。已有选择时 expectedAdopted 填其 revision。以后 list 返回 selected.reference，核对本次前提后显式复用。'
     + '失败也保留回执与反例，改源码并另存父版本；候选仍可显式试用，不因未采用而禁止运行。'
     + '只有下一次相似场景实际检索、采用并得到可比较的世界净变化，才有复用/改善证据；不为学习凑次数制造危险或打断伙伴。',
   'mc.capabilities': METHOD_CAPABILITIES_HELP,

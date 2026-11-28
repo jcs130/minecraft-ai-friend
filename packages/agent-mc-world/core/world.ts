@@ -23,6 +23,7 @@ import { GoalCheckpointBook, type GoalCheckpointScope } from './goal-checkpoint.
 import { serverLoginFailureText } from './server-login.mjs';
 import { observationView, observedEntity, configureObservationPolicy } from './perception-sight.ts';
 import {JourneyObserver,journeyOpportunityText,journeyChoicePolicy,type JourneyCue} from './journey.ts';
+import { validateServerGuide } from './server-guide.ts';
 import { GameMemoryBook, GAME_MEMORY_TOOL } from './game-memory.ts';
 import { KNOWLEDGE_TOOL, queryMinecraftKnowledge } from './knowledge.ts';
 import { OPTIONS_TOOL, minecraftOptionsFromSnapshot, readMinecraftOptions, renderMinecraftOptionIndex, renderMinecraftTravelOptions } from './options.ts';
@@ -3002,8 +3003,15 @@ export class MinecraftWorld implements World {
   protected readonly gameMemoryService: GameMemoryService;
   private readonly methodLibraries = new Map<string, MethodLibrary>();
 
+  private learningRealm(realm: string) {
+    return this.cfg.activeServer ? JSON.stringify([realm,this.cfg.activeServer]) : realm;
+  }
+  private activeGuide() {
+    const guide=this.cfg.knowledge?.server, profile=this.cfg.activeServer;
+    return profile && validateServerGuide(guide,profile) ? guide : undefined;
+  }
   protected methodLibrary(): MethodLibrary {
-    const scope = createHash('sha256').update(JSON.stringify([this.serverRealmKey(), this.cfg.auth ?? 'offline', this.cfg.username, this.botName])).digest('hex');
+    const scope = createHash('sha256').update(JSON.stringify([this.learningRealm(this.serverRealmKey()), this.cfg.auth ?? 'offline', this.cfg.username, this.botName])).digest('hex');
     let library = this.methodLibraries.get(scope);
     if (!library) {
       library = new MethodLibrary(this.dataDir ? join(this.dataDir, 'minecraft-methods', scope) : null);
@@ -5113,7 +5121,7 @@ export class MinecraftWorld implements World {
               result = library.save(input, this.methods.read(Number(input.validationRunId))[0], ctx.role);
             } else if (input.op === 'evidence') result = library.evidence(input);
             else if (input.op === 'review') result = library.review(input, ctx.role);
-            else if (input.op === 'adopt') result = library.adopt(input, ctx.role);
+            else if (input.op === 'adopt') result = library.adopt(input, ctx.role, this.activeGuide());
             else throw new Error('library.op 只认 list/read/save/evidence/review/adopt');
             return this.toolLog('mc_script', args, JSON.stringify(result));
           }
@@ -5207,7 +5215,8 @@ export class MinecraftWorld implements World {
           ctx.signal?.throwIfAborted();
           const bot = this.bridge?.bot;
           const result = await this.gameMemoryService.execute(args, {
-            scope: { realm: this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
+            recallMethods: (query,limit) => this.methodLibrary().recall(query,limit,this.activeGuide()),
+            scope: { realm: args.action==='scene' ? this.learningRealm(this.realmKey()) : this.realmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
             serviceScope: { realm: this.serverRealmKey(), account: `${this.cfg.auth ?? 'offline'}:${this.cfg.username}`, agent: this.cfg.memoryAgentId ?? this.botName },
             dimension: bot?.entity && bot.game?.dimension ? normalizeDimension(bot.game.dimension) : null,
             observation: () => this.requestFacts()?.experience?.observation ?? null,

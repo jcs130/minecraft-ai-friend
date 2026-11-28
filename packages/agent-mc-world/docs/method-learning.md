@@ -53,6 +53,14 @@ failed read is labelled unverified. Per-file stamps avoid re-reading an unchange
 index on every fact sample. A host's `procedure_find` may address a different
 personal/cross-World library; a miss there does not search the core game library.
 
+## Server-specific rules and task recall
+
+Read the active pack with `mc_knowledge {source:"server",action:"get",id}`. Its `rule` binds a guide entry to the profile, edition and content digest. A guide or a book is a source of rules. Record observed conditions, a dated excerpt and its reference with `mc_memory.scene/upsert`. Build a method candidate, execute its exact version under those conditions, inspect the terminal and measure the intended change. On a failed attempt review the receipt and save a revised child. After a successful trial, pass the returned rule to `mc_script.library/adopt` if the method depends on that rule. Empirical methods can be reviewed without a packaged guide.
+
+At the next relevant task, call `mc_memory {action:"scene",operation:"recall",input:{query,limit:2,maxChars:2400}}`. Alongside historical cards, `skills` contains compact, task-matched steps. Each step has a tool and arguments. Read a candidate before trying it, inspect the cited evidence for a failed or unreviewed trial, and invoke an adopted procedure with the parameters for this situation. A changed guide calls for checking the rule again. Check live prerequisites each time. New observations can call a previously adopted version into question. Adoption records the agent's assessment on a specific trial. Confirm improved behavior separately through subsequent natural reuse.
+
+Named profiles have separate learning stores, including profiles on the same proxy configured by different hosts. Older unnamed records keep their original location. To carry forward records with a known owner, run `node scripts/import-profile-learning.mjs DATA_DIR verified-origin.json` with that profile offline. The JSON contains `profile, realm, auth, username, botName`, optionally `agent` (memory identity) and `worlds` (observed native map names). Verify the historical endpoint/realm, account and profile before repeating with `--apply`. The importer copies immutable method versions and evidence, and only scene cards from the specified maps. Existing destinations are skipped; unrelated memories stay where they were. Leave unattributed records in the original store.
+
 ## Persistence and evidence boundaries
 
 Versions, receipts, reviews and selection records stay under the existing

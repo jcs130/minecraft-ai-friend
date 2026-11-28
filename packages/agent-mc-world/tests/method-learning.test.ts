@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MinecraftWorld } from '../core/world.ts';
 import { MINECRAFT_DEFAULTS } from '../core/config.ts';
+import { applyServerProfile } from '../core/server-profiles.ts';
 import { MethodLibrary } from '../core/method-library.ts';
 import { methodHarness, methodEnded } from './method-harness.ts';
 
@@ -18,13 +19,19 @@ const dependency = createRequire(createRequire(import.meta.url).resolve('minefla
 describe('game method accumulation', () => {
   it('retains an unsuccessful trial, selects a revised action, composes exact children and retrieves evidence after restart', async () => {
     const directory = mkdtempSync(join(tmpdir(),'mc-learning-'));
-    const create = () => new MinecraftWorld({ cfg: structuredClone(MINECRAFT_DEFAULTS), dataDir: directory });
+    const guide = {profile:'alpha',title:'Test guide',revision:'edition-1',entries:[{id:'sneak',title:'Movement',summary:'Sneak on the route',text:'Walk on the marked path.',reference:'fixture:guide'}]};
+    let profile = 'alpha';
+    const create = () => new MinecraftWorld({cfg:applyServerProfile({...structuredClone(MINECRAFT_DEFAULTS),server:profile,
+      servers:profile==='alpha' ? {alpha:{host:'shared.example.test',guide}} : {beta:{host:'shared.example.test'}}},{}),dataDir:directory});
     const rig = () => { const harness=methodHarness('1.21.1',create);
       Object.assign(harness.bot,{supportFeature:(name:string)=>harness.bot.registry.supportFeature(name)});
       dependency('./lib/plugins/physics.js')(harness.bot,{physicsEnabled:true}); return harness; };
     let r = rig();
     try {
       const call = async (args: Record<string,unknown>) => r.world.tools().find(t=>t.name==='mc_script')!.handler(args,{role:'main',log:r.host.log});
+      const tool = async (name:string,args:Record<string,unknown>) => decode(await r.world.tools().find(t=>t.name===name)!.handler(args,{role:'main',log:r.host.log}));
+      const recall = async (query='please sneak across the route') => (await tool('mc_memory',{action:'scene',operation:'recall',input:{query,limit:2,maxChars:1000}})).skills;
+      const {rule} = await tool('mc_knowledge',{source:'server',action:'get',id:'sneak'});
       const library = async (args: Record<string,unknown>) => decode(await call({library:args}));
       const run = async (args: Record<string,unknown>) => { const reply = await call(args); if (reply.failed) throw Error(reply.text);
         return methodEnded(r,r.runner.read().at(-1)!.id); };
@@ -35,13 +42,16 @@ describe('game method accumulation', () => {
       };
       const unchanged = 'const s=await mc.state();return {before:s.snapshot.position,after:s.snapshot.position};';
       const first = await save('measured-step',unchanged);
+      expect(await recall()).toContainEqual(expect.objectContaining({id:'measured-step',state:'candidate'}));
       const failedGoal = await run({procedure:first.reference}); expect(failedGoal.status).toBe('completed');
       const firstExecution = failedGoal.procedure!.executionId;
+      expect((await recall())[0]).toMatchObject({state:'review',next:{args:{library:{executionId:firstExecution}}}});
       const badReview = await library({op:'review',id:'measured-step',revision:first.reference.revision,executionId:firstExecution,
         outcome:'not-achieved',assessment:'The code only read the scene; no movement occurred.',context:'Offline local flat grid, actual Mineflayer physics.',
         measurements:{'distance-blocks':0},counterexamples:['Program completed without attempting the requested action.']});
       expect(await call({library:{op:'adopt',id:'measured-step',revision:first.reference.revision,reviewId:badReview.id,
         expectedAdopted:null,reason:'Incorrectly treating completion as progress'}})).toMatchObject({failed:true});
+      expect((await recall())[0]).toMatchObject({state:'revise',outcome:'not-achieved'});
       const code = `const before=await mc.state();
         try { await bot.setControlState('sneak',true); await bot.setControlState('forward',true);
           await bot.waitForTicks(params.ticks); return {before:before.snapshot.position,after:(await mc.state()).snapshot.position};
@@ -62,7 +72,9 @@ describe('game method accumulation', () => {
         context:'One offline flat-grid case; no live-world or general improvement claim.',measurements:{'distance-blocks':distance},
         counterexamples:['Obstructed routes and water are untested.']});
       expect(assessed).toMatchObject({assessmentAuthority:'agent-interpretation',verifiedImprovement:false,goalVerified:false});
-      const adopted = await library({op:'adopt',id:'measured-step',revision:second.reference.revision,reviewId:assessed.id,
+      expect(await call({library:{op:'adopt',id:'measured-step',revision:second.reference.revision,reviewId:assessed.id,
+        expectedAdopted:null,reason:'wrong server',rule:{...rule,profile:'beta'}}})).toMatchObject({failed:true});
+      const adopted = await library({op:'adopt',rule,id:'measured-step',revision:second.reference.revision,reviewId:assessed.id,
         expectedAdopted:null,reason:'Choose the measured revision for another explicit applicable attempt.'});
       expect(adopted).toMatchObject({changedRunningProgram:false,verifiedImprovement:false,author:{kind:'agent',role:'main'}});
       const parent = await save('two-short-steps',`const a=await methods.run('step',params);const b=await methods.run('step',params);return {a,b};`,
@@ -81,14 +93,26 @@ describe('game method accumulation', () => {
       expect(restored).toMatchObject({status:'completed',root:first.reference,goalVerified:false});
       expect((await library({op:'evidence',id:'measured-step',reviewId:badReview.id})).counterexamples).toHaveLength(1);
       expect(await library({op:'evidence',id:'measured-step',selectionId:adopted.id})).toMatchObject({reason:adopted.reason,author:{role:'main'}});
-      const retry = await run({procedure:adopted.reference,params:{ticks:3}});
+      const reusable = (await recall()).find((s:any)=>s.id==='measured-step');
+      expect(reusable).toMatchObject({state:'adopted',next:{args:{procedure:adopted.reference}}});
+      expect(await recall('钻石采矿')).toEqual([]);
+      const retry = await run({...reusable.next.args,params:{ticks:3}});
       expect(retry.status).toBe('completed');
       expect(retry.procedure!.versions[0].revision).toBe(second.reference.revision);
+      expect((await recall()).find((s:any)=>s.id==='measured-step')).toMatchObject({state:'review'});
+      await library({op:'review',id:'measured-step',revision:second.reference.revision,executionId:retry.procedure!.executionId,
+        outcome:'not-achieved',assessment:'Distance was below the new target.',context:'Test changed the distance required.'});
+      expect((await recall()).find((s:any)=>s.id==='measured-step')).toMatchObject({state:'revise'});
       const facts = r.world.requestFacts()!.parts!.find(p=>p.key==='methods')!.text;
       expect(facts).toContain('measured-step'); expect(facts).toContain('待核验/复盘');
       expect(facts).not.toContain(code); expect(facts.length).toBeLessThan(1100);
       expect(await call({library:{op:'adopt',id:'measured-step',revision:second.reference.revision,reviewId:assessed.id,
         expectedAdopted:null,reason:'stale selection'}})).toMatchObject({failed:true,text:expect.stringContaining('changed')});
+      r.close(); guide.entries[0].text='The route was closed.'; r=rig();
+      expect((await recall()).find((s:any)=>s.id==='measured-step')).toMatchObject({state:'recheck-rule',next:{tool:'mc_knowledge'}});
+      r.close(); profile='beta'; r=rig();
+      expect(await recall()).toEqual([]);
+      expect(await call({procedure:adopted.reference})).toMatchObject({failed:true});
     } finally { r.close(); rmSync(directory,{recursive:true,force:true}); }
   },20000);
 

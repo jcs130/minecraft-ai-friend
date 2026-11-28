@@ -28,6 +28,7 @@ export interface GameMemoryContext {
   /** Host-owned stable service identity; local historical records can still be partitioned by native map. */
   serviceScope?: GameMemoryScope;
   dimension: string | null;
+  recallMethods?: (query: string, limit: number) => Record<string, unknown>[];
   /** Fresh metadata for explicit local policy advice; unavailable offline. */
   observation?: () => import('./operation-experience.ts').OperationObservation | null;
   /** Must read current, connected runtime facts; never return cached disconnected state. */
@@ -143,7 +144,7 @@ function integer(value: unknown, fallback: number, max: number, name: string, mi
   if (!Number.isInteger(value) || Number(value) < min || Number(value) > max) throw new Error(`${name}: outside ${min}..${max}`);
   return Number(value);
 }
-function terms(value: string): string[] {
+export function memorySearchTerms(value: string): string[] {
   // Chinese substring search and word search, without an embedding service or language-specific persona.
   const words = value.toLocaleLowerCase().match(/[\p{L}\p{N}_-]+/gu) ?? [];
   return [...new Set(words.flatMap(w => /[\p{Script=Han}]/u.test(w) && w.length > 2
@@ -200,7 +201,7 @@ export class GameMemoryBook {
       const limit = integer(args.limit, 8, 20, 'limit'), offset = integer(args.offset, 0, MAX_ENTRIES, 'offset', 0);
       if (args.includeArchived !== undefined && typeof args.includeArchived !== 'boolean') throw new Error('includeArchived must be boolean');
       if (args.query !== undefined && (typeof args.query !== 'string' || args.query.length > 200)) throw new Error('query exceeds 200 characters');
-      const query = (args.query as string | undefined)?.trim().toLocaleLowerCase() ?? '', tokens = terms(query);
+      const query = (args.query as string | undefined)?.trim().toLocaleLowerCase() ?? '', tokens = memorySearchTerms(query);
       if (args.tags !== undefined && (!Array.isArray(args.tags) || !args.tags.length || args.tags.length > 12)) throw new Error('search tags: 1..12 exact tags');
       const tagFilter = (args.tags as unknown[] | undefined)?.map(t => text(t, 'tag', 48).toLocaleLowerCase());
       const eligible = book.entries.map(e => ({ e, v: e.versions.at(-1)! })).filter(({ v }) =>
