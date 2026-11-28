@@ -60,10 +60,16 @@ export class SceneKnowledgeLibrary {
     const r=this.book.execute({action:'search',kind:'method',tags:[TAG],query:input.query??'',limit,offset:input.offset??0},ctx);
     const rows=(r.entries as (MemoryCandidate&{expired?:boolean})[]).filter(e=>!e.archived&&!e.expired);
     if(op==='list')return {...boundary,total:r.total,nextOffset:r.nextOffset,entries:rows.map(e=>({id:e.id,revision:e.revision,title:e.summary,scenes:e.tags.filter(t=>t!==TAG)}))};
-    const cards:unknown[]=[];let used=0;
+    const skills:Record<string,unknown>[]=[];
+    let used=0;
+    for(const skill of ctx.recallMethods?.(input.query as string,Number(limit)) ?? []) {
+      const size=JSON.stringify(skill).length;
+      if(used+size <= Number(maxChars)*(rows.length ? 0.6 : 1)){skills.push(skill);used+=size;}
+    }
+    const cards:unknown[]=[];
     for(const e of rows){const {entry,card}=this.read(e.id,e.revision,ctx),full={id:entry.id,revision:entry.revision,recordedAt:entry.recordedAt,card};
       const chosen=used+JSON.stringify(full).length<=Number(maxChars)?full:{id:e.id,revision:e.revision,title:card.title,scenes:card.scenes,when:card.when.slice(0,200),detailOmitted:true};
       const size=JSON.stringify(chosen).length;if(used+size<=Number(maxChars)){cards.push(chosen);used+=size;}}
-    return {...boundary,query:input.query,total:r.total,cards,chars:used,fullDetails:{action:'scene',operation:'get',input:{id:'selected id',revision:'selected revision'}}};
+    return {...boundary,query:input.query,total:r.total,cards,skills,chars:used,fullDetails:{action:'scene',operation:'get',input:{id:'selected id',revision:'selected revision'}}};
   }
 }

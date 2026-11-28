@@ -6,8 +6,11 @@ import { METHOD_ADAPTER, type MethodRun } from './method-runner.ts';
 import { parseProcedure, procedureId, procedureRevision, procedureHash, resolveProcedure, PROCEDURE_SCHEMA, PROCEDURE_RECEIPT_SCHEMA,
   type ProcedureReference, type ProcedureVersion, type ProcedureReceipt } from './support/procedure.ts';
 
+import { memorySearchTerms } from './game-memory.ts';
+import { matchesServerRule, type MinecraftServerGuide, type ServerRuleRef } from './server-guide.ts';
+
 interface Trial { executionId: string; revision: string; mode: ProcedureReceipt['mode']; status: ProcedureReceipt['status']; endedAt: string }
-interface Selection { revision: string; reviewId: string; selectionId?: string }
+interface Selection { revision: string; reviewId: string; selectionId?: string; rule?: ServerRuleRef; description?: string; conditions?: string[]; lastTrial?: Trial; lastOutcome?: MethodReview['outcome'] }
 export interface MethodReview {
   id: string; method: string; revision: string; executionId: string; receiptHash: string;
   outcome: 'achieved' | 'not-achieved' | 'unknown'; assessment: string; context: string;
@@ -15,7 +18,7 @@ export interface MethodReview {
   author: { kind: 'agent'; role: string }; createdAt: string;
 }
 interface Entry { revision: string; versions: number; description: string; conditions: string[]; updatedAt: string;
-  recentTrials?: Trial[]; latestReview?: Pick<MethodReview, 'id' | 'revision' | 'executionId' | 'outcome'>; selected?: Selection }
+  headTrial?: Trial; headOutcome?: MethodReview['outcome']; recentTrials?: Trial[]; latestReview?: Pick<MethodReview, 'id' | 'revision' | 'executionId' | 'outcome'> & { lesson?: string; counterexample?: string }; selected?: Selection }
 type Index = Record<string, Entry>;
 const uuid = (value: unknown): string => {
   if (typeof value !== 'string' || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(value)) throw new Error('Expected an exact execution/review UUID');
@@ -41,6 +44,7 @@ export const METHOD_LIBRARY_SCHEMA = { type: 'object', additionalProperties: fal
     outcome: { type: 'string', enum: ['achieved', 'not-achieved', 'unknown'] }, assessment: { type: 'string', maxLength: 1600 },
     context: { type: 'string', maxLength: 1600 }, measurements: { type: 'object', maxProperties: 12, additionalProperties: { type: ['number', 'null'] } },
     counterexamples: { type: 'array', maxItems: 8, items: { type: 'string', maxLength: 400 } },
+    rule: { type:'object', additionalProperties:false, properties:{profile:{type:'string'},entryId:{type:'string'},revision:{type:'string'},digest:{type:'string'}},required:['profile','entryId','revision','digest'],description:'Optional on adoption. Copy rule from mc_knowledge source:server get for the active guide entry.' },
     expectedAdopted: { type: ['string', 'null'] }, reason: { type: 'string', maxLength: 800 },
   }, required: ['op'] };
 
@@ -133,6 +137,38 @@ export class MethodLibrary {
     note: '源码版本与语法校验不是玩法效果证据；read 按需读取，procedure 显式选择版本运行。' };
   }
 
+  /** Return a small task projection, without source code, model calls or physical actions. */
+  recall(query: string, limit: number, guide?: MinecraftServerGuide): Record<string, unknown>[] {
+    if (!query.trim() || query.length > 200 || !Number.isInteger(limit) || limit < 1 || limit > 3) throw Error('Invalid method recall');
+    this.reload();
+    const tokens = memorySearchTerms(query);
+    const matches = Object.entries(this.index).map(([id, entry]) => {
+      const selected = entry.selected;
+      const revision = selected?.revision ?? entry.revision;
+      // Older indexes do not carry the selected description. Do not describe v1 with v2's conditions.
+      const metadata = selected?.description !== undefined ? selected : revision === entry.revision ? entry : undefined;
+      const description = metadata?.description ?? '';
+      const hay = [id,description,...(metadata?.conditions ?? []),selected?.rule?.entryId ?? ''].join(' ').toLowerCase();
+      const score = tokens.reduce((sum, t) => sum + (hay.includes(t) ? Math.min(t.length,8) : 0),0);
+      return {id,entry,selected,revision,description,score};
+    }).filter(m => m.score > 0).sort((a,b) => b.score-a.score || a.id.localeCompare(b.id));
+    return matches.slice(0,limit).map(({id,entry,selected,revision,description}) => {
+      const base = {id,description:description.slice(0,160),revision};
+      if (selected?.rule && !matchesServerRule(selected.rule,guide)) return {...base,state:'recheck-rule',
+        next:{tool:'mc_knowledge',args:{source:'server',action:'get',id:selected.rule.entryId}}};
+      const trial = selected?.lastTrial ?? (entry.revision===revision ? entry.headTrial : undefined) ?? entry.recentTrials?.find(t => t.mode==='execution' && t.revision===revision);
+      const review = entry.latestReview?.executionId === trial?.executionId ? entry.latestReview : undefined;
+      const outcome = (selected?.lastTrial ? selected.lastOutcome : entry.headTrial?.executionId===trial?.executionId ? entry.headOutcome : undefined) ?? review?.outcome;
+      if (trial && (trial.status!=='completed' || outcome!=='achieved' || !selected)) return {...base,
+        state:trial.status==='failed' || trial.status==='cancelled' || outcome==='not-achieved' ? 'revise' : outcome==='achieved' ? 'consider-adoption' : 'review',
+        status:trial.status,outcome:outcome??null,lesson:review?.lesson,counterexample:review?.counterexample,next:{tool:'mc_script',args:{library:{op:'evidence',id,
+          ...(review ? {reviewId:review.id} : {executionId:trial.executionId})}}}};
+      if (selected) return {...base,state:'adopted',reviewId:selected.reviewId,conditions:selected.conditions?.slice(0,2).map(c=>c.slice(0,100)),rule: selected.rule?.entryId,
+        next:{tool:'mc_script',args:{procedure:this.reference(id,revision)}}};
+      return {...base,state:'candidate',next:{tool:'mc_script',args:{library:{op:'read',id,revision}}}};
+    });
+  }
+
   reference(id: string, revision: string): ProcedureReference {
     return { handle: `mem:mc-method/${procedureId(id)}/${procedureRevision(revision)}`, revision };
   }
@@ -190,7 +226,15 @@ export class MethodLibrary {
       // This bounded index is a reading window; older immutable files remain addressable by UUID.
       const recentTrials = [trial, ...(entry.recentTrials ?? []).filter(t => t.executionId !== executionId)]
         .sort((a,b) => b.endedAt.localeCompare(a.endedAt)).slice(0,8);
-      this.writeIndex({ ...this.index, [id]: { ...entry, recentTrials } });
+      let selected = entry.selected;
+      if (selected?.revision === trial.revision && trial.mode === 'execution' && selected.lastTrial?.executionId !== executionId
+        && (!selected.lastTrial || Date.parse(trial.endedAt) >= Date.parse(selected.lastTrial.endedAt))) {
+        selected = {...selected,lastTrial:trial,lastOutcome:entry.latestReview?.executionId===executionId ? entry.latestReview.outcome : undefined};
+      }
+      const newHeadTrial = entry.revision===trial.revision && trial.mode==='execution' && entry.headTrial?.executionId!==executionId
+        && (!entry.headTrial || Date.parse(trial.endedAt)>=Date.parse(entry.headTrial.endedAt));
+      this.writeIndex({ ...this.index, [id]: { ...entry, recentTrials, selected,
+        ...(newHeadTrial ? {headTrial:trial,headOutcome:entry.latestReview?.executionId===executionId ? entry.latestReview.outcome : undefined} : {}) } });
       return true;
     });
   }
@@ -261,13 +305,15 @@ export class MethodLibrary {
       author: { kind: 'agent', role: role.slice(0,80) }, createdAt: new Date().toISOString() };
     return this.writing(() => {
       this.artifact(`reviews/${id}/${review.id}`, review);
-      const latestReview = { id: review.id, revision, executionId, outcome: review.outcome };
-      this.writeIndex({ ...this.index, [id]: { ...this.index[id], latestReview } });
+      const latestReview = { id: review.id, revision, executionId, outcome: review.outcome, lesson:review.assessment.slice(0,160), counterexample:review.counterexamples[0]?.slice(0,100) };
+      const entry = this.index[id], selection = entry.selected;
+      const selected = selection?.lastTrial?.executionId === executionId ? {...selection,lastOutcome:review.outcome} : selection;
+      this.writeIndex({ ...this.index, [id]: { ...entry, latestReview, selected, ...(entry.headTrial?.executionId===executionId ? {headOutcome:review.outcome} : {}) } });
       return { ...review, assessmentAuthority: 'agent-interpretation', goalVerified: false, verifiedImprovement: false };
     });
   }
 
-  adopt(args: Record<string, unknown>, role = 'unknown'): unknown {
+  adopt(args: Record<string, unknown>, role = 'unknown', guide?: MinecraftServerGuide): unknown {
     const id = procedureId(args.id), revision = procedureRevision(args.revision), reviewId = uuid(args.reviewId);
     const expected = args.expectedAdopted === null ? null : procedureRevision(args.expectedAdopted);
     const reason = text(args.reason,'reason',800);
@@ -276,10 +322,26 @@ export class MethodLibrary {
       if ((entry.selected?.revision ?? null) !== expected) throw new Error('selected version changed; read before adopting');
       const review = this.reviewRecord(id, reviewId), { receipt } = this.execution(id, review.executionId);
       if (review.revision !== revision || review.outcome !== 'achieved' || receipt.status !== 'completed') throw new Error('selection requires this version\'s completed execution and explicit achieved-goal assessment');
-      const selection = { id: randomUUID(), method: id, revision, previous: expected, reviewId, reason,
+      const priorRule = entry.selected?.revision===revision ? entry.selected.rule : undefined;
+      const requestedRule = args.rule ?? priorRule;
+      if (requestedRule !== undefined && !matchesServerRule(requestedRule,guide)) throw Error('Rule changed or belongs to a different server. Read the active server guide entry again.');
+      if (priorRule && !matchesServerRule(priorRule,guide) && entry.selected?.selectionId) {
+        const prior = this.artifact(`selections/${id}/${entry.selected.selectionId}`) as {createdAt:string};
+        if (Date.parse(receipt.startedAt)<=Date.parse(prior.createdAt)) throw Error('Changed rule requires a fresh execution before reassessment.');
+      }
+      const supplied = requestedRule as ServerRuleRef | undefined;
+      const rule = supplied && {profile:supplied.profile,entryId:supplied.entryId,revision:supplied.revision,digest:supplied.digest};
+      const version = this.read(id,revision);
+      const lastTrial = (entry.selected?.revision===revision ? entry.selected.lastTrial : undefined)
+        ?? (entry.revision===revision ? entry.headTrial : undefined) ?? entry.recentTrials?.find(t=>t.mode==='execution' && t.revision===revision);
+      if (lastTrial && lastTrial.executionId !== review.executionId) throw Error('A newer execution exists for this version; review it before adopting.');
+      const lastOutcome = entry.selected?.lastTrial?.executionId===review.executionId ? entry.selected.lastOutcome
+        : entry.headTrial?.executionId===review.executionId ? entry.headOutcome : undefined;
+      if ((lastOutcome && lastOutcome !== 'achieved') || (entry.latestReview?.executionId===review.executionId && entry.latestReview.outcome!=='achieved')) throw Error('Execution assessment changed; review the counterexample.');
+      const selection = { rule, id: randomUUID(), method: id, revision, previous: expected, reviewId, reason,
         author: { kind: 'agent', role: role.slice(0,80) }, createdAt: new Date().toISOString() };
       this.artifact(`selections/${id}/${selection.id}`, selection);
-      this.writeIndex({ ...this.index, [id]: { ...entry, selected: { revision, reviewId, selectionId: selection.id } } });
+      this.writeIndex({ ...this.index, [id]: { ...entry, selected: { revision, reviewId, selectionId: selection.id, rule, description:version.description, conditions:version.conditions, lastTrial, lastOutcome:review.outcome } } });
       return { ...selection, reference: this.reference(id,revision),
         changedRunningProgram: false, verifiedImprovement: false,
         note: 'Preferred version for future explicit selection only; the assessment remains an Agent interpretation. Older versions and counterexamples are retained.' };
@@ -307,7 +369,7 @@ export class MethodLibrary {
       const reference = this.reference(id, version.revision);
       resolveProcedure(reference, METHOD_ADAPTER, handle => handle === reference.handle
         ? { bytes: Buffer.from(JSON.stringify(version)), mime: 'application/json' } : this.blob(handle));
-      const entry: Entry = { ...previous, revision: version.revision, versions: (previous?.versions ?? 0) + 1,
+      const entry: Entry = { ...previous, headTrial:undefined, headOutcome:undefined, revision: version.revision, versions: (previous?.versions ?? 0) + 1,
         description: version.description, conditions: version.conditions, updatedAt: version.createdAt };
       const next = { ...this.index, [id]: entry };
       if (this.directory) {
@@ -317,6 +379,7 @@ export class MethodLibrary {
       this.writeIndex(next);
       return { reference: this.reference(id, version.revision), sourceHash, parent: version.parent,
         persistent: !!this.directory, author: version.author, validationRunId: validation.id,
+        next: {tool:'mc_script',args:{procedure:reference}},
         verifiedImprovement: false, note: '已保存、未运行。procedure 可运行该版本或旧版；按真实任务终态和世界净变化评价效果。' };
     });
   }

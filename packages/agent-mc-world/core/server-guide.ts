@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 /** Operator-supplied server reference. It cannot register tools or execute commands. */
 export interface MinecraftServerGuide {
   profile: string;
@@ -21,6 +23,17 @@ export function validateServerGuide(input: unknown, activeProfile: string): inpu
     && new Set(guide.entries.map(e => e.id)).size === guide.entries.length;
 }
 
+export interface ServerRuleRef { profile:string; entryId:string; revision:string; digest:string }
+export function serverRuleRef(guide: MinecraftServerGuide, entry: MinecraftServerGuide['entries'][number]): ServerRuleRef {
+  const digest = createHash('sha256').update(JSON.stringify([entry.id,entry.title,entry.summary,entry.text,entry.reference])).digest('hex');
+  return {profile:guide.profile,entryId:entry.id,revision:guide.revision,digest};
+}
+export function matchesServerRule(value: unknown, guide?: MinecraftServerGuide): boolean {
+  if (!guide || !value || typeof value !== 'object') return false;
+  const ref = value as ServerRuleRef, entry = guide.entries.find(e => e.id === ref.entryId);
+  return !!entry && ref.profile === guide.profile && ref.revision === guide.revision && ref.digest === serverRuleRef(guide,entry).digest;
+}
+
 export function readServerGuide(args: Record<string, unknown>, guide?: MinecraftServerGuide) {
   const action = args.action ?? (args.id !== undefined ? 'get' : args.query !== undefined || args.offset !== undefined
     || args.limit !== undefined ? 'search' : 'help');
@@ -41,7 +54,7 @@ export function readServerGuide(args: Record<string, unknown>, guide?: Minecraft
     const entry = guide.entries.find(e => e.id === args.id);
     if (!entry) throw new Error('Guide entry not found in the active profile');
     const { id, title, summary, text, reference } = entry;
-    return { ...scope, entry: { id, title, summary, text, reference } };
+    return { ...scope, entry: { id, title, summary, text, reference }, rule: serverRuleRef(guide, entry) };
   }
   const { limit = 5, offset = 0, query = '' } = args;
   if (typeof limit !== 'number' || !Number.isSafeInteger(limit) || limit < 1 || limit > 10
