@@ -14,7 +14,7 @@ it('reuses receipts across native/canonical names and enforces the same SDK and 
   const tools = ['mc_bag','mc_script'].map(name=>({name,description:name,tags:['read'],
     parameters:{type:'object'},handler:async(args:Record<string,unknown>)=>{calls.push(args);return {text:'slot observation'};}}));
   const world:World = {id:'minecraft',tools:()=>tools,envPromptVars:()=>null,start:async()=>{},stop:async()=>{}};
-  const runtime = new MinecraftAgentClient({cfg:structuredClone(MINECRAFT_CLIENT_DEFAULTS),dataDir:dir,
+  const runtime = new MinecraftAgentClient({cfg:{...structuredClone(MINECRAFT_CLIENT_DEFAULTS),host:'localhost',username:'AliasFixture'},dataDir:dir,
     bodyGate:{key:{},expose:name=>name!=='mc_script'},log:nullLogger()},world);
   const server = createMinecraftMcpServer(runtime,'fixture');
   const client = new Client({name:'alias-consumer',version:'1'});
