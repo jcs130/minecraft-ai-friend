@@ -1,3 +1,4 @@
+import { appearanceTool, compareSelfSkin } from '../appearance.ts';
 import { operatorPlaySteps } from './operator-play.ts';
 import { nativeInvocation, nativeCallSource } from '../../core/mineflayer-call.ts';
 import { resolveMineflayerCall } from './mineflayer-call.ts';
@@ -342,7 +343,11 @@ export class MinecraftAgentClient {
   }
 
   private coreTools() {
-    const tools = this.world.tools(), name = `${this.toolPrefix}_choose`;
+    const native = this.world.tools();
+    const appearanceName = this.toolPrefix + '_appearance';
+    const tools = native.some(tool => tool.name === appearanceName) ? native : [...native, appearanceTool(
+      () => this.phase === 'started' && this.world.connectionReadiness?.()?.ready !== false ? this.requestFacts() : null, appearanceName)];
+    const name = `${this.toolPrefix}_choose`;
     const choices=this.options.decisions && !tools.some(tool => tool.name === name || tool.name === 'mc_choose')
       ? [...tools, { ...this.hostChoice, name }] : tools;
     const practiceName=`${this.toolPrefix}_practice`;
@@ -590,7 +595,7 @@ export class MinecraftAgentClient {
       ...(workCurrent?.workStates ? { workStates: structuredClone(workCurrent.workStates) } : {}),
       ...(workCurrent?.workBindings ? { workBindings: structuredClone(workCurrent.workBindings) } : {}),
       ...(workCurrent?.world ? { world: structuredClone(workCurrent.world) } : {}),
-      selfSkin: workCurrent?.selfSkin ? { ...workCurrent.selfSkin } : null,
+      selfSkin: compareSelfSkin(workCurrent).observed,
       ...(current?.decisionStability ? { decisionStability: structuredClone(current.decisionStability) } : {}),
       ...(current?.decisionBoundary !== undefined ? {decisionBoundary:current.decisionBoundary} : {}),
       ...(current?.partKeys ? {partKeys:['connection','executionState',...current.partKeys]} : {}),
