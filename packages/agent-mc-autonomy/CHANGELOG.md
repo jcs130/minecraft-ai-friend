@@ -1,3 +1,7 @@
+## 0.2.161
+
+- Ground first-person Minecraft play in the active body's native observations and receipts within the existing prompt budget.
+
 ## 0.2.159
 
 - Opt in to authenticated Simple Voice Chat transcripts and server-selected game speech.

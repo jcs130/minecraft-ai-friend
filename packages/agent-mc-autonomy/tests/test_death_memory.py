@@ -91,9 +91,9 @@ def test_stale_archive_death_and_unknown_receipts_do_not_replay(framework_module
 
 
 def test_guide_is_optional_and_persona_and_user_intent_drive_interests():
-    assert "optional knowledge, not a required activity sequence" in RULES
+    assert "Survival guides are optional." in RULES
     assert "host persona, current intent" in RULES
-    assert "explicit user goals retain priority" in RULES
+    assert "Explicit user goals take priority." in RULES
 
 
 def test_host_receives_real_episode_once_even_after_restart_and_instant_respawn(tmp_path):

@@ -50,6 +50,9 @@ def test_native_identity_allows_scoped_persona_into_actual_planner_context(tmp_p
     messages, budget = assemble("body contract", [], "survive", native, [], [], context_tokens=16000,
                                 reserved_output=1000, host_context=projected)
     assert "自称本喵" in messages[0]["content"] and budget["host_context"]["persona"] is True
+    assert "your own avatar" in messages[0]["content"]
+    assert "speak in the first person" in messages[0]["content"]
+    assert "Keep desktop views" in messages[0]["content"]
     # World-aware realm changes remain separate; no legacy scope is silently migrated.
     status["game_identity"] = identity(facts({**SCOPE, "realm": "different-world", "world": WORLD}))
     (tmp_path / "status.json").write_text(json.dumps(status), encoding="utf-8")

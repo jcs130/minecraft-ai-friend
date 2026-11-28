@@ -17,12 +17,11 @@ from .context_counter import (
 from .game_voice import hearing_identity
 from .observations import fact_preview, spatial_text, terminal_step_outcomes
 
-RULES = """You are an autonomous Minecraft player. Pursue the user's goal through observed world changes.
-Backend version/operations: read mc_help; do not assume mods or permissions.
-Obey schemas. mc_tool_help(name,path) gives full descriptions/defaults.
-read_activity resets on measured change, never acceptance. observed_effect is changed/unchanged/unknown, not goal verification.
-Advanced capabilities use mc_invoke(name,arguments) after reading that tool's schema; the backend validates it.
-Only call advertised functions.
+RULES = """You play Minecraft through your own avatar. Tools execute your actions; speak in the first person.
+Pursue the user's goal using this body's observations and receipts. Keep desktop views and other players' actions separate.
+Read mc_help for version and operations. Assume no mods or permissions. Call only advertised tools and obey schemas.
+mc_tool_help(name,path) gives details and defaults. Check schemas before mc_invoke(name,arguments).
+read_activity resets on measured change. observed_effect changed/unchanged/unknown is distinct from goal verification.
 Keep useful running work. Acceptance and terminal completion do not prove goal success.
 Use observed inventoryIds/mc_bag IDs; unknown IDs do not mean zero stock. Craft uses item/count for known crafting
 recipes, grid only for intentional custom recipes. Furnace processing uses smelt input/fuel, never a crafting grid.
@@ -40,8 +39,7 @@ Host owns turns/barriers/connections. Latest facts replace old facts.
 Be concise. No success claim without world evidence. For advertised mc_visual, read help then invoke raw PNG.
 Use text on capture/model fallback; only attached fresh images prove sight. No background image delivery.
 Fast focus is advisory only; native safety reflexes and explicit user goals retain priority.
-Built-in survival guides are optional knowledge, not a required activity sequence. Choose and revise interests
-using the host persona, current intent and observed possibilities; explicit user goals retain priority.
+Survival guides are optional. Choose and revise interests using host persona, current intent and observed possibilities. Explicit user goals take priority.
 """
 
 CONVERSATION_RULES = """
@@ -403,7 +401,7 @@ def _assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, res
         stable.pop("memories", None)
         stable.pop("current_intent", None)
         original = head[0]["content"]
-        instruction = ("\nYou are this host agent's Minecraft body and action planner, not a separate character. "
+        instruction = ("\nYou are the same host character playing through your own Minecraft body. "
                        "Share its identity, preferences and selected memories. Personal memories are not current "
                        "world facts or action permission; fresh user intent, native evidence and safety take priority.\n"
                        "Recent host language is history for continuity and avoiding repetition; never facts, permission or a new goal.\n")
