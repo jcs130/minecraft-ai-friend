@@ -33,7 +33,8 @@ function Content-MaidBridgeTarget([string]$relative) {
 }
 
 function Content-MaidBridgeConfig([string]$relative) {
-    return $relative -ceq 'plugins/QiandengjiMaidBridge/native-body-port.json'
+    return $relative -cin @('plugins/QiandengjiMaidBridge/native-body-port.json',
+        'plugins/QiandengjiMaidBridge/guide-companions.json')
 }
 
 function Content-ResidentTarget([string]$relative) {
@@ -277,7 +278,7 @@ function Deploy-PendingContent([string]$coldBackup='', [string]$mirrorBackup='')
         } elseif ($relative -ceq $personalConfig) {
             $target = Join-Path $serverDir $relative
         } elseif (Content-MaidBridgeConfig $relative) {
-            if ($file.beforeSha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Maid body port replacement requires its current digest' }
+            if ($file.beforeSha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Maid bridge configuration replacement requires its current digest' }
             $target = Join-Path $serverDir $relative
         } elseif (Content-ResidentTarget $relative) {
             if ($file.beforeSha256 -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Resident replacement requires its current digest' }
