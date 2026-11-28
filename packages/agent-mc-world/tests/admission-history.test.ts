@@ -24,6 +24,21 @@ function rig() {
   return { exec, bot };
 }
 
+it('keeps the original route when an append repeats it, allows a new tail and a revised queued plan', () => {
+  const {exec}=rig();
+  const original:SkillCall[]=[{skill:'goto',at:[10,64,10]},{skill:'goto',at:[12,64,10]}];
+  const tail:SkillCall={skill:'goto',at:[15,64,10]};
+  try {
+    expect(exec.submitDetailed(original,'append').accepted).toBe(true);
+    const repeated=exec.submitDetailed([...original,tail],'append');
+    expect(repeated.accepted).toBe(false);
+    expect(repeated.receipt).toContain('第 3 步');
+    expect(exec.status().waiting).toHaveLength(1);
+    expect(exec.submitDetailed([...original,tail],'replace').accepted).toBe(true);
+    expect(exec.submitDetailed([{skill:'goto',at:[16,64,10]}],'append').accepted).toBe(true);
+  } finally { exec.shutdown(); }
+});
+
 it('admits same-container take/stow and its following retry with a history note', () => {
   const r = rig();
   const steps: SkillCall[] = [{ skill: 'use', at: [1,64,0] },
