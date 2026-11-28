@@ -154,6 +154,32 @@ interface WorkRoutine {
   parameters: Record<string, unknown>; code: string;
 }
 const ROUTINES: WorkRoutine[] = [
+  { id: 'craft_to_stock', title: '按目标数量连续合成',
+    description: '从当前库存和版本配方推导中间材料，依次制作并核对净增量。count 是目标持有量。',
+    conditions: ['缺原料先返回清单；不采集、不凭空补足，不自动重试失败的配方'],
+    parameters: {type:'object',additionalProperties:false,properties:{...shared,
+      item:{type:'string',pattern:'^[a-z0-9_]+$',maxLength:80},count:{type:'integer',minimum:1,maximum:64}},
+      required:['dimension','item','count']},
+    code: "const ROUTINE_ID = 'craft_to_stock';\n" + COMMON + String.raw`
+const target = params.item, amount = params.count;
+const initialStop = unsafe();
+if (initialStop) return finish(initialStop, [target]);
+if ((before[target] || 0) >= amount) return finish(null, []);
+const plan = world.getDetailedCraftingPlan(bot, target, amount);
+if (!plan.ready) return {...finish(plan.limited ? 'recipe_search_limit' : 'missing_ingredients', [target]), missing:plan.missing};
+for (const step of plan.steps) {
+  const start = counts(state)[step.item] || 0;
+  const crafted = await skills.craftRecipe(bot, step.item, step.applications);
+  state = await mc.state();
+  const stop = unsafe(), after = counts(state);
+  const actual = after ? after[step.item] || 0 : null;
+  const verified = crafted && actual !== null && actual - start >= step.output;
+  records.push({item:step.item,before:start,after:actual,changed:actual!==null && actual!==start,outcome:verified?'ok':'blocked'});
+  if (stop || !verified) return finish(stop || 'craft_unconfirmed', [target]);
+}
+const met = (counts(state)[target] || 0) >= amount;
+return finish(met ? null : 'quantity_unconfirmed', met ? [] : [target]);
+` },
   { id: 'farm_harvest', title: '收割补种',
     description: '逐格检查指定田地，只收成熟作物并补种；返回方块状态、库存净变化和未完成坐标。',
     conditions: ['原版四种耕地作物；at/cells 指植株格，不是土格', '预留种子；只用已存在的步行通路',

@@ -1,3 +1,5 @@
+import { SvcPublicSpeech } from '../core/svc-public-speech.ts';
+import type { ChatDeliveryReceipt } from '../src/contracts/chat-delivery.ts';
 import { EventEmitter } from 'node:events';
 import { createSocket } from 'node:dgram';
 import { createDecipheriv, createCipheriv, randomBytes } from 'node:crypto';
@@ -343,3 +345,38 @@ describe('native Simple Voice Chat client (jcs130 contract + official codec)', (
     expect(SIMPLE_VOICE_CHAT_TOOL.name).not.toBe(PROXIMITY_VOICE_TOOL.name);
     expect(SIMPLE_VOICE_CHAT_TOOL.description).toMatch(/not mc_voice/i);
   });
+
+describe('confirmed public speech to native SVC',()=>{
+  const chat:ChatDeliveryReceipt={protocol:'agent-mc/chat-delivery/v1',id:'send-1',text:'一起走吧',channel:'public',
+    status:'sent',sentAt:new Date().toISOString(),recipientRead:'unknown',boundary:'client-transport'};
+  it('shares one render ID, serializes sends, and excludes whispers and existing speech captions',async()=>{
+    const {vi}=await import('vitest');
+    const ids:string[]=[],sent:string[]=[];
+    const wav=makeWav();
+    vi.stubGlobal('fetch',async(_url:URL,options:RequestInit)=>{
+      const {requestId,text}=JSON.parse(String(options.body)); expect(text).toBe(chat.text);ids.push(requestId);
+      return new Response(new Uint8Array(wav),{headers:{'x-voice-artifact-id':requestId}});
+    });
+    try {
+      const lane=new SvcPublicSpeech(), connection={current:()=>true,send:async(bytes:Buffer,id:string)=>{
+        expect(bytes.equals(wav)).toBe(true);sent.push(id);return {state:'sent',frames:10};
+      }};
+      const url='http://localhost';
+      const first=lane.enqueue(chat,url,connection);
+      expect(lane.enqueue(chat,url,connection)).toBe(first);
+      for(const change of [{channel:'private' as const},{text:'/login secret'},{voiceRequestId:'caption'}])
+        expect(lane.enqueue({...chat,...change},url,connection)).toBeUndefined();
+      const second=lane.enqueue({...chat,id:'send-2'},url,connection);
+      await vi.waitFor(()=>expect(sent).toEqual([first,second]));
+      expect(ids).toEqual(sent);expect(lane.status()[1]).toMatchObject({state:'sent',frames:10,recipientHeard:'unknown'});
+    } finally {vi.unstubAllGlobals();}
+  });
+  it('cancels queued audio on disconnect without replay into the next connection',async()=>{
+    const {vi}=await import('vitest');
+    const lane=new SvcPublicSpeech(),send=vi.fn();
+    lane.enqueue(chat,'http://localhost',{current:()=>true,send});
+    lane.disconnect();
+    await vi.waitFor(()=>expect(lane.status()[0]?.state).toBe('cancelled'));
+    expect(send).not.toHaveBeenCalled();
+  });
+});

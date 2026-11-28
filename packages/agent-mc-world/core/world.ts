@@ -3145,6 +3145,7 @@ export class MinecraftWorld implements World {
       file:this.dataDir?join(this.dataDir,'minecraft-voice',createHash('sha256').update(JSON.stringify([this.cfg.host,this.cfg.port,this.cfg.auth,this.cfg.username])).digest('hex')+'.json'):null,
     });
     this.simpleVoiceChat = new SimpleVoiceChatLane({
+      publicSpeechReceipt: data=>this.diag.write({lane:'link',event:'svc-public-speech',level:'info',msg:String(data.state),data:{...data}}),
       serverHost: () => this.cfg.host,
       config: () => ({enabled:false,officialJar:'',javaPath:'',compatibilityVersion:20,...this.cfg.simpleVoiceChat}),
       blob: handle => this.host?.blob(handle) ?? null,
@@ -4889,6 +4890,8 @@ export class MinecraftWorld implements World {
         ...(context?.voiceRequestId ? { voiceRequestId: context.voiceRequestId } : {}),
         ...(context?.taskId !== undefined ? { taskExecutionId: `${this.executionEpoch}:${context.taskId}` } : {}),
         ...(context?.stepIndex !== undefined ? { stepIndex: context.stepIndex } : {}) };
+      const publicSpeechArtifactId = this.simpleVoiceChat?.publicChat(delivery);
+      if (publicSpeechArtifactId) delivery.publicSpeechArtifactId = publicSpeechArtifactId;
       const target = message.to ? `玩家 ${message.to}` : audience?.channel === 'nearby' ? '附近聊天频道'
         : audience?.channel === 'shout' ? '全服喊话频道' : '服务器默认聊天频道';
       this.emit('minecraft.chat.sent', `已向${target}发送一条逻辑消息；仅确认客户端传输，不证明任何收件人收到或已读。`, false,
