@@ -259,9 +259,7 @@ final class NativeMaidBodyActions {
         if(action.equals("context")){data.addProperty("nativeGuardDelegated",guarding(id));
             var loaded=HybridMaidPlugin.nativeMaid(Bukkit.getEntity(id));
             if(loaded!=null){data.addProperty("passenger",loaded.isPassenger());if(loaded.getVehicle()!=null)data.addProperty("vehicleType",net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(loaded.getVehicle().getType()).toString());}
-            data.addProperty("nativeGuardAvailable",loaded!=null&&loaded.isAlive()&&!loaded.isRemoved()
-                    &&!loaded.isSleeping()&&!loaded.isPassenger()&&!activeMovement(id)&&!physicalBusy(loaded)
-                    &&!resumeGuards.containsKey(id));
+            data.addProperty("nativeGuardAvailable",guardAvailable(owner,id,loaded));
             if(local.qdj.maids.brain.ResidentBodyAccess.external(id))data.add("resident",JsonParser.parseString(local.qdj.maids.brain.ResidentBodyAccess.status(id)));
             else if(data.get("loaded").getAsBoolean())data.add("scene",plugin.companionScene(loaded));}
         if(action.equals("context")){
@@ -316,6 +314,16 @@ final class NativeMaidBodyActions {
 
     private boolean physicalBusy(EntityMaid maid) {
         return plugin.editingMaidInventory(maid)||plugin.workshops().busy(maid.getUUID())||maid.isNoAi()||maid.isVehicle();
+    }
+
+    private boolean guardAvailable(UUID owner,UUID id,EntityMaid maid) {
+        if(maid==null||!maid.isAlive()||maid.isRemoved()||maid.isSleeping()||maid.isPassenger()
+                ||activeMovement(id)||physicalBusy(maid)||resumeGuards.containsKey(id))return false;
+        if(companions.contains(id)){
+            try{plugin.nativeReady(owner,id);}
+            catch(CompatibilityException busy){return false;}
+        }
+        return true;
     }
 
     private boolean socialWalkAvailable(EntityMaid maid) {
