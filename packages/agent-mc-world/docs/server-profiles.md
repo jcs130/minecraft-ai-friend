@@ -87,3 +87,11 @@ Bind the selected profile before exposing tools or creating the client. An opera
 A custom wire protocol belongs in the selected server extension. Use `BridgeOptions.onServerReady(bot,reconnect)` for optional per-connection announcements after authentication, spawn and PLAY readiness. Respawning on the same connection does not repeat the handshake. Own custom channels, command meanings, listeners and disposal in the extension. Keep the generic SDK usable with a third server that has neither plugin nor guide.
 
 Use matching server/account/realm scope for observations and receipts. Test the same account and dimension on two different servers and an unconfigured third server. Test new packages through SDK, MCP and a real consumer before updating its pinned dependency.
+
+## Player identity across profiles
+
+A host supplies its character name, persona, portrait, chosen texture and voice. A server profile selects its own login and optional plugin dialect. Current profile readings expire with that connection. Never infer a character's chosen skin from a login alias, a missing texture, a viewer overlay or another player's name.
+
+Use the read-only `mc_appearance({})` tool through the World, SDK or MCP. Pass `expected: {textureHash, model}` to compare the account's advertised texture and slim/classic arm model with the host's selection. The result includes the observed account and UUID when available. Other body adapters can supply the same facts; missing native evidence is explicitly unknown. A host can also import `compareSelfSkin` from `agent-mc-world/client`.
+
+On a server that supports SkinsRestorer, add `prepareRestore: "skinsrestorer"` to get a proposed self-only chat step on mismatch. Apply it through the normal action tool on that same connection if intended. Re-read the player profile for completion. Matching or unknown observations produce no step. Servers with a different skin system use their own adapter. Agent-specific PNGs, voice references, model IDs and character habits belong in the character's own repository.

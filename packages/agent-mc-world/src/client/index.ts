@@ -1,4 +1,6 @@
 /// <reference path="../../core/pathfinder-lib.d.ts" />
+export { compareSelfSkin, type SkinSelection } from '../appearance.ts';
+export { skinsRestorerCommandKind, skinsRestorerRestoreCommand } from '../skinsrestorer.ts';
 export { resolveMineflayerCall, mineflayerCallHelp } from './mineflayer-call.ts';
 export { NutritionNeedObserver, nutritionNeedText, type NutritionNeed } from '../../core/nutrition.ts';
 export { MinecraftAgentClient, type MinecraftClientOptions, type MinecraftPracticeOptions, type ClientEnvironment, type MinecraftEventObserver, type MinecraftBodyGate } from './runtime.ts';

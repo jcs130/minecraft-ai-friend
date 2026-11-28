@@ -101,6 +101,7 @@ import { minecraftTextComponent } from './text-component.ts';
 import { richTextAnnotation } from './rich-text.mjs';
 import { setMinecraftTextLanguage } from './nbt-text.mjs';
 import { bookPage, readInventoryBook } from './window-protocol.ts';
+import { appearanceTool, APPEARANCE_DECL } from '../src/appearance.ts';
 import { selfSkin } from './self-skin.ts';
 import { beginViewerInteraction } from './viewer-interaction.ts';
 import { MinecraftChatProvenance, incomingPrivateParts, isServerNotice, type ChatIdentityEvidence } from '../src/chat-provenance.ts';
@@ -2290,6 +2291,7 @@ const SCOUT_QUEUE_SCHEMA = {
 
 export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   TOOL_HELP_TOOL,
+  APPEARANCE_DECL,
   PHOTO_TOOL,
   GAME_MEMORY_TOOL,
   KNOWLEDGE_TOOL,
@@ -5012,6 +5014,7 @@ export class MinecraftWorld implements World {
 
   tools(): ToolDef[] {
     const handlers: Record<string, ToolDef['handler']> = {
+      mc_appearance: appearanceTool(() => this.connectionReadiness().ready ? {selfSkin:selfSkin(this.bridge?.bot)} : null).handler,
       mc_voice: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.proximityVoice.call(args); },
       mc_svc: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.simpleVoiceChat.call(args, ctx.signal); },
       mc_query: async (args, ctx) => { ctx.signal?.throwIfAborted(); return this.queryServer(args,ctx.signal); },
