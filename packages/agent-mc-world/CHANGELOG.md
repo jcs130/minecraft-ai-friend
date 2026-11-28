@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.154
+
+Model-authored Minecraft programs can use the Mindcraft world and skills namespaces with the active Mineflayer connection. Includes scoped observations, original call receipts, and cancellable actions. Consult mc_script api:"mindcraft".
+
 ## 0.5.7-rc.160-preview.153
 
 Single supported Mineflayer calls on the script tool now accept `{native:{name:"lookAt",args:[point,true]}}` and dispatch to the connected body without starting a JavaScript worker. Named aliases use the same path. Script programs, cancellation, body leases and persisted request replay retain their existing contracts. The legacy inventory alias returns the slot summary. Use `{native:{name:"inventory.items",args:[]}}` for the item snapshots accepted by equip.

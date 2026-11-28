@@ -1,4 +1,6 @@
 /** On-demand contracts for the program SDK; native primitives retain their own guide. */
+import { libraryHelp } from './mindcraft/help.mjs';
+import { gameLibrary } from './mindcraft/catalog.mjs';
 import { nativeApiHelp } from './method-mineflayer.ts';
 import { METHOD_CAPABILITIES_HELP } from './method-capabilities.ts';
 import { adaptiveDivingDecision } from './diving-budget.mjs';
@@ -131,7 +133,10 @@ const SDK_API = Object.freeze({
 });
 
 export function methodApiHelp(name: string): string {
-  if (name === 'index') return `程序 SDK（按需用 api:"mc.do" 等读取）：${Object.keys(SDK_API).join(', ')}\n${nativeApiHelp('index')}`;
+  if (name === 'mindcraft') return 'Mineflayer: world reads are synchronous snapshots. await skills.name(bot, ...) for actions; see bot.output and original run trace. One script can branch, loop, and use native bot calls on the same connection. Read api:"skills.craftRecipe" etc. Blocks use observed cells within 32, at most 64 candidates per query; null can mean hidden or unloaded. Function block predicates filter up to 64 visible non-air candidates; request specific block names or numeric IDs for targeted searches. goToGoal accepts GoalBlock/GoalNear. craftRecipe num counts recipe applications.\n' + Object.entries(gameLibrary).map(([group,entries]) => group + ': ' + Object.keys(entries).join(', ')).join('\n');
+  const [group, helper] = name.split('.');
+  if ((group === 'skills' || group === 'world') && helper && Object.hasOwn(gameLibrary[group],helper)) return group + '.' + helper + '(' + gameLibrary[group][helper] + '). ' + libraryHelp[name];
+  if (name === 'index') return `mindcraft (world + skills), 程序 SDK（按需用 api:"mc.do" 等读取）：${Object.keys(SDK_API).join(', ')}\n${nativeApiHelp('index')}`;
   if (Object.hasOwn(SDK_API, name)) return SDK_API[name as keyof typeof SDK_API];
   return nativeApiHelp(name);
 }

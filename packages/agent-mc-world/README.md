@@ -1,5 +1,7 @@
 # Agent MC World
 
+Model-authored programs can use [Mindcraft world queries and game skills](core/mindcraft/README.md) on their current Mineflayer connection. Discover signatures through `mc_script {api:"mindcraft"}`.
+
 A host can enroll one Mineflayer character in body handoffs through
 `MinecraftClientOptions.bodyHandoff`. Bind the character ID, actual player UUID,
 controller generation and authenticated request transport when constructing the client.

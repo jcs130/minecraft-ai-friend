@@ -1,6 +1,7 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import 'ses';
 import { Vec3 } from 'vec3';
+import { programLibrary } from './mindcraft/worker.mjs';
 import { procedureProgram } from './support/procedure-program.mjs';
 import { GoalBlock, GoalNear } from './method-goals.mjs';
 
@@ -52,7 +53,16 @@ function capabilities(scope) {
     get() { throw new TypeError(`bot.${key} is not a live object in this worker. Use await bot.read("${key}") or await bot.read("entitySnapshot") for a detached, read-only observation.`); },
     enumerable: false,
   });
-  return { mc: harden({ capabilities: () => rpc('capabilities', {}, scope), state: () => rpc('state', {}, scope), do: (steps, options) => {
+  const library = workerData.gameLibrary && bot ? programLibrary(bot, (name,args) => {
+    const sync = new SharedArrayBuffer(96_008);
+    const state = new Int32Array(sync,0,2);
+    parentPort.postMessage({kind:'call',id:++serial,method:'mindcraft',args:JSON.parse(JSON.stringify({family:'world',name,args})),scope,sync});
+    Atomics.wait(state,0,0);
+    const reply = JSON.parse(new TextDecoder().decode(new Uint8Array(sync,8,Atomics.load(state,1))));
+    if (reply.error) throw new Error(reply.error);
+    return harden(revive(reply.value.value));
+  }, (name,args)=>rpc('mindcraft',{family:'skills',name,args},scope)) : {};
+  return { ...library, mc: harden({ capabilities: () => rpc('capabilities', {}, scope), state: () => rpc('state', {}, scope), do: (steps, options) => {
       if(options!==undefined&&(!options||typeof options!=='object'||Array.isArray(options)||Object.keys(options).some(k=>k!=='queue')
         || !['append','now','afterCheckpoint'].includes(options.queue)))throw new TypeError('mc.do options must be {queue:"append"|"now"|"afterCheckpoint"}');
       return rpc('do', { steps, ...(options===undefined?{}:{queue:options.queue}) }, scope);
