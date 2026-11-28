@@ -97,7 +97,7 @@ export function plankSourceHint(items: Array<{ name: string; count: number }>, n
  * craft:配方齐不齐。与 skillCraft 问的是同一份数据(标签配方或 recipesAll + 背包),
  * 所以它说凑不齐,真跑也一定凑不齐 —— 台架 `bench-precheck.ts` 锁死这条蕴含。
  */
-function precheckCraft(bot: Bot, call: Extract<SkillCall, { skill: 'craft' }>): PrecheckNote | null {
+export function precheckCraft(bot: Bot, call: Extract<SkillCall, { skill: 'craft' }>): PrecheckNote | null {
   if (call.grid) {
     const unknown = call.grid.flat().find(name => name && !bot.registry?.itemsByName?.[name]);
     return unknown ? { level: 'hard', text: unknownCraftItemText(bot, unknown), rule: 'craft.unknownItem' } : null;

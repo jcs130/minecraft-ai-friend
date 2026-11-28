@@ -76,6 +76,7 @@ import { sendDeduplicatedChat } from './chat-dedup.ts';
 import { taggedCraftChoice } from './tagged-crafting.ts';
 import { flyToLanding, flyToPosition, landFlight, flightState, previewFlight } from './flight.ts';
 import { promoteTemporaryScaffold, reclaimPendingTemporaryScaffold, temporaryScaffoldReadout, scaffoldCleanupCheckpoint } from './temporary-scaffold.ts';
+import { recentlyEmptyCraftGrid } from './craft-grid-observation.ts';
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { sampleEffect, observedEffect } from './observed-effect.ts';
 import { taskEffectProgress, type TaskEffectProgress } from './task-effect-progress.ts';
@@ -3021,28 +3022,45 @@ export class Executor {
         }
       }
     }
-    const first = steps[0];
-    if (first?.skill !== 'craft' || this.opts.precheck?.() === false) return null;
-    if (!bot) return null;
+    return this.craftStockStartNote(steps, false);
+  }
+
+  private craftStockStartNote(steps: readonly SkillCall[], atDispatch: boolean): string | null {
+    const bot = this.opts.getBot();
+    // Discarding cannot supply a missing ingredient. Check the dependent craft before
+    // starting irreversible discards. Other prefixes may acquire materials.
+    const index = steps.findIndex(step => step.skill !== 'toss');
+    const first = steps[index];
+    if (!bot || first?.skill !== 'craft' || this.opts.precheck?.() === false) return null;
+    const afterDiscard = index > 0;
+    if (afterDiscard && steps.slice(0, index).some(step => step.skill === 'toss' && (step.target || step.at))) return null;
+    if (afterDiscard && ((!atDispatch && (this.task || this.queue.length || this.frozen)) ||
+      !inventoryReadConfirmed(bot) || (bot.currentWindow ?? bot.inventory).selectedItem)) return null;
+    const position = afterDiscard ? `第 ${index + 1} 步（前面的丢弃未执行）` : '第一步';
     if (first.grid) {
-      if (!inventoryReadConfirmed(bot)) return null;
+      if (!inventoryReadConfirmed(bot) || (bot.currentWindow ?? bot.inventory).selectedItem) return null;
       // A queued task may still supply ingredients before this task starts.
-      if (this.task || this.queue.length > 0 || this.frozen) return null;
+      if (!atDispatch && (this.task || this.queue.length > 0 || this.frozen)) return null;
+      if (afterDiscard && recentlyEmptyCraftGrid(bot, first.grid)) {
+        return `${position}自摆合成：这个摆法刚才在本世界的产出槽没有返回物品。换一种丢弃物不会改变摆法；先查配方，若有新依据也可以单独试摆。原队列保留`;
+      }
       const needed = new Map<string, number>();
       for (const name of first.grid.flat()) {
         if (name) needed.set(name, (needed.get(name) ?? 0) + 1);
       }
-      const missing = [...needed].filter(([name, count]) => invCount(bot, (item) => item === name) < count)
-        .map(([name, count]) => `${zhName(name)}要 ${count} 个,包里 ${invCount(bot, (item) => item === name)} 个`);
+      const stock = playerInvIn(bot, bot.currentWindow).items();
+      const countOf = (name: string) => stock.reduce((sum, item) => sum + (item.name === name ? item.count : 0), 0);
+      const missing = [...needed].filter(([name, count]) => countOf(name) < count)
+        .map(([name, count]) => `${zhName(name)}要 ${count} 个,包里 ${countOf(name)} 个`);
       return missing.length > 0
-        ? `第一步自摆合成当前做不了：${missing.join('；')}。先取得材料或换格子，再提交整单；原队列保留`
+        ? `${position}自摆合成当前做不了：${missing.join('；')}。先取得材料或换格子，再提交整单；原队列保留`
         : null;
     }
     const hit = precheckSteps(bot, [first], this.precheckDeps(bot))[0]?.note;
     if (hit?.level !== 'hard' || !['craft.short', 'craft.unknownItem'].includes(hit.rule)) return null;
     const product = first.item ? bot.registry?.itemsByName?.[first.item] : null;
-    if (product && invCountById(bot, product.id) >= first.count) return null;
-    return `第一步合成当前做不了：${hit.text}。先取得材料或换配方，再提交整单；原队列保留`;
+    if (!afterDiscard && product && invCountById(bot, product.id) >= first.count) return null;
+    return `${position}合成当前做不了：${hit.text}。先取得材料或换配方，再提交整单；原队列保留`;
   }
 
   /** 账本合并了同类槽位；仅计入能保证腾出的格数，再扣除本单先前存物。 */
@@ -5385,6 +5403,15 @@ export class Executor {
       task.program?.cancel('Minecraft 连接已结束，原生程序未执行');
       this.finish(flag, { kind: 'blocked', text: `${span()}${label()}执行不了:当前没连上服务器。`, taskId: id });
       return;
+    }
+    // Queued producers may finish with fewer materials than planned. Recheck
+    // once the body becomes ours, before the first disposal has happened.
+    if (!task.program && !task.resumeFrom && !task.stepLog.length && task.steps[0]?.skill === 'toss') {
+      const correction = this.craftStockStartNote(task.steps, true);
+      if (correction) {
+        this.finish(flag, {kind:'blocked', taskId:id, text:`${span()}${label()}开工前受阻：${correction}`});
+        return;
+      }
     }
     let windowStep = 0;
     const windowInstances = new WeakMap<object, number>();

@@ -8,12 +8,13 @@ import { ShowPacer, withShowPacer } from '../core/show.ts';
 import { inventoryClickState, INVENTORY_CLICK_CONFIRM_MS } from '../core/inventory-click-sync.ts';
 import { Executor } from '../core/executor.ts';
 import { Vec3 } from 'vec3';
+import { recentlyEmptyCraftGrid } from '../core/craft-grid-observation.ts';
 import { skillCraft } from '../core/skills-craft.ts';
 import { CRAFT_SETTLE_MS } from '../core/inventory.ts';
 
 const mf = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
 afterEach(() => vi.useRealTimers());
-function craftRig(table = false, inventory = true) {
+function craftRig(table = false, inventory = true, emitsResult = true) {
   vi.useFakeTimers(); vi.setSystemTime(100000);
   const registry = mf('prismarine-registry')('1.21.1');
   const Item = mf('prismarine-item')(registry);
@@ -29,7 +30,7 @@ function craftRig(table = false, inventory = true) {
       const w = bot.currentWindow ?? bot.inventory;
       const slots = w.slots.map((item: any) => Item.toNotch(item));
       if (packet.slot === 0) slots[1] = Item.toNotch(null);
-      slots[0] = packet.slot !== 0 && w.slots[1] ? raw('oak_planks', 4) : Item.toNotch(null);
+      slots[0] = emitsResult && packet.slot !== 0 && w.slots[1] ? raw('oak_planks', 4) : Item.toNotch(null);
       client.emit('window_items', { windowId: w.id, stateId: ++stateId, items: slots, carriedItem: packet.cursorItem });
     };
     if (confirm) queueMicrotask(acknowledge); else acknowledgements.push(acknowledge);
@@ -228,4 +229,19 @@ it('shares one budget across the actual skill calling bot.craft once per iterati
   expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThanOrEqual(2);
   expect(r.notes.filter(note => note.event === 'show-budget-limited')).toHaveLength(1);
   expect(finishedAt - 100000).toBe(12000 + 10 * CRAFT_SETTLE_MS); // presentation plus original receipt settle
+});
+
+it('records a failed manual layout only after the native empty result window, with materials returned', async () => {
+  const r = craftRig(false, false, false), grid = [['oak_log']];
+  Object.assign(r.bot,{findBlocks:() => []});
+  const task = skillCraft(r.bot,{skill:'craft',grid,count:1},{aborted:() => false} as never);
+  const rejected = expect(task).rejects.toThrow(/1500ms.*没有给出产物/);
+  await vi.advanceTimersByTimeAsync(50);
+  expect(recentlyEmptyCraftGrid(r.bot,grid)).toBe(false);
+  await vi.advanceTimersByTimeAsync(4000);
+  await rejected;
+  expect(recentlyEmptyCraftGrid(r.bot,grid)).toBe(true);
+  expect(r.bot.inventory.items().find(i => i.name === 'oak_log')?.count).toBe(20);
+  await vi.advanceTimersByTimeAsync(10 * 60_000);
+  expect(recentlyEmptyCraftGrid(r.bot,grid)).toBe(false);
 });

@@ -7415,15 +7415,20 @@ export class MinecraftWorld implements World {
     // actual registry documentation, without another model/server request.
     const processing = parsed.steps.some(step => step.skill === 'craft' && !step.grid
       && (step.item === 'charcoal' || Object.values(FOOD_COOKING).includes(step.item ?? '')));
+    const craftCorrection = !admitted && rejection?.rule === 'craft.invalid' && parsed.steps.some(step => step.skill === 'craft');
     const recoverySkill = !admitted && rejection
-      ? rejection.rule === 'craft.invalid' && processing ? 'smelt' : parsed.steps[0]?.skill : undefined;
+      ? craftCorrection ? processing ? 'smelt' : 'craft' : parsed.steps[0]?.skill : undefined;
+    const targetCraft = parsed.steps.find(step => step.skill === 'craft' && !step.grid && step.item);
+    const recipeRead = craftCorrection && !processing && targetCraft?.skill === 'craft'
+      ? { tool: 'mc_knowledge', arguments: { kind: 'recipe', query: targetCraft.item } } : null;
     const help = recoverySkill ? readSkillHelp({ skill: recoverySkill }) : null;
     const admission = !admitted && rejection ? { accepted: false, ...rejection,
       recovery: help && 'text' in help ? [{ tool: 'mc_help', arguments: { skill: recoverySkill }, text: help.text }] : [] } : null;
     return {text:receipt, data: { status: admitted ? completedImmediately ? 'completed' : 'accepted' : 'blocked',
       reason: rejection?.rule ?? null, completed: admitted ? completedImmediately ? parsed.steps.length : null : 0,
       remaining: admitted ? completedImmediately ? 0 : null : parsed.steps.length, retryable:false, retry_after:null,
-      next_safe_read: { tool:'mc_queue', arguments:admittedTaskId === undefined
+      next_safe_read: recipeRead ?? (craftCorrection ? { tool:'mc_help', arguments:{ skill:recoverySkill } } : null)
+        ?? { tool:'mc_queue', arguments:admittedTaskId === undefined
         ? rejection?.review ? { taskId:rejection.review.latestTaskId, detail:true } : {} : { taskId:admittedTaskId } },
       goal_completed:false }, ...(admission ? { meta: { admission } } : {}), ...(execution ? {execution} : {}),
       ...(!admitted ? { failed: true, ...(rejection?.rule === 'task.no-observed-effect' ? { endsTurn:true } : {}) } : {})};

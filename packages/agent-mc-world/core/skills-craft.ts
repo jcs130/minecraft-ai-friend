@@ -24,7 +24,7 @@ import {
 import { HANDHELD_SUFFIXES, equipDestOf, equippedAlready } from './tools.ts';
 import { DRINKABLES } from './item-facts.ts';
 import { noteAte } from './placed-ledger.ts';
-import { edibleInBag, notFoodText, unknownCraftItemText } from './precheck.ts';
+import { edibleInBag, notFoodText, precheckCraft, unknownCraftItemText } from './precheck.ts';
 import { pickLabel, pickTargetOf } from './item-pick.ts';
 import { itemCustomName } from './item-display.ts';
 import { taggedCraftChoice } from './tagged-crafting.ts';
@@ -32,6 +32,7 @@ import { isInventoryClickError, resumeInventoryCursor } from './inventory-click-
 import { inventoryReadConfirmed } from './inventory-window-sync.ts';
 import { clearOffHandConfirmed, equipHandConfirmed, equipSlotConfirmed } from './equipment.ts';
 import { takeWornItem } from './equipment-access.ts';
+import { CraftResultSlotTimeout, observeCraftGrid } from './craft-grid-observation.ts';
 import { beginViewerInteraction, finishViewerInteraction } from './viewer-interaction.ts';
 
 /**
@@ -150,7 +151,8 @@ export async function skillCraft(
             `包里虽有 ${stock} 个成品，但未现场合成。持有≠任务制作进度，请凑齐材料后重试 craft`,
           );
         }
-        throw new SkillBlocked(`${label}的配方要:${options};包里凑不齐`);
+        const gap = precheckCraft(bot, call);
+        throw new SkillBlocked(gap?.rule === 'craft.short' ? gap.text : `${label}的配方要:${options};包里凑不齐`);
       }
       recipe = ready;
     }
@@ -211,7 +213,10 @@ export async function skillCraft(
         await withShowPacer(bot, show, () => bot.craft(recipe as never, 1, recipe.requiresTable ? table ?? undefined : undefined));
       } catch (err) {
         if (err instanceof Aborted) throw err;
-        const msg = zhErrorText((err as Error).message);
+        const emptyGrid = !!call.grid && err instanceof CraftResultSlotTimeout;
+        if (emptyGrid && call.grid) observeCraftGrid(bot, call.grid, 'empty');
+        const msg = zhErrorText((err as Error).message) + (emptyGrid
+          ? '。本次没有观察到产物；可按目标物品查配方或看本服指南，再选择摆法' : '');
         throw new SkillBlocked(
           n === 0 ? `合成 ${label}: ${msg}` : `合成 ${label} 做到第 ${n + 1} 次时: ${msg}。${doneSoFar()}`,
           err instanceof SkillBlocked ? err.scene : [], 'server',
@@ -258,6 +263,7 @@ export async function skillCraft(
     const held = targetId !== null ? await equipIfHandheld(bot, nameOfId(bot, targetId)) : false;
     // Returning old grid materials is an inventory gain, not a crafted product.
     const product = targetId === null ? gains : [`${zhName(nameOfId(bot, targetId))}×${targetGain}`];
+    if (call.grid) observeCraftGrid(bot, call.grid, 'produced');
     finishViewerInteraction(bot, view, 'confirmed', targetId === null ? '库存净增 ' + product.join('、') : product.join('、'));
     const otherGains = targetId === null ? [] : gains.filter((gain) => !product.includes(gain));
     return `${made.length > 0 ? `${made.join('、')};` : ''}合成出来:${product.join('、')}` +
