@@ -17,7 +17,8 @@ import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Aborted, SkillBlocked, SkillNoop, checkAbort, type SkillContext } from './skill-context.ts';
-import { equipHandConfirmed } from './equipment.ts';
+import { equipHandConfirmed, unequipSlotConfirmed } from './equipment.ts';
+import { beginPlayerRound } from './sparring.ts';
 import { isKnownTarget } from './entity-facts.ts';
 import { dropGoal, findEntity, gotoGoal, levelTravelGoal, walkOnlyPath } from './travel.ts';
 import { zhEntity } from './names.ts';
@@ -165,12 +166,13 @@ export function pressMelee(bot: Bot, entity: { position: { distanceTo(o: unknown
 export async function meleeSwing(
   bot: Bot,
   entity: Parameters<Bot['attack']>[0],
-  beforeAttack?: () => void,
-): Promise<void> {
+  beforeAttack?: () => void | boolean,
+): Promise<boolean> {
   await hopCrit(bot);
   await aimAt(bot, entity);
-  beforeAttack?.();
+  if (beforeAttack?.() === false) return false;
   bot.attack(entity);
+  return true;
 }
 
 /** 水下攻击回执附氧气读数，不额外用氧气阈值阻断主动攻击。 */
@@ -304,25 +306,38 @@ export async function skillAttack(
   ctx: SkillContext,
   entityId?: number,
   weaponName?: string,
+  times?: number,
 ): Promise<string> {
   const forcedRanged = mode === 'ranged' || mode === 'kite';
   const rangedPreference = forcedRanged ? weaponName : undefined;
-  const allowAutoRanged = mode === 'auto' && weaponName === undefined;
+  if (times !== undefined && (!Number.isSafeInteger(times) || times < 1 || times > 64)) throw new SkillBlocked('attack.times 要 1–64 的整数');
+  if (forcedRanged && weaponName === 'unarmed') throw new SkillBlocked('空手不能发射远程武器，请选择 melee');
   const selectedWeapon = () => weaponName === undefined ? bestWeapon(bot)
     : meleeWeapons(bot).find(item => item.name === weaponName) ?? null;
   const requireSelectedWeapon = (): void => {
-    if (weaponName === undefined) return;
+    if (weaponName === undefined || weaponName === 'unarmed') return;
     if (!inventoryReadConfirmed(bot) || (bot as Bot & {deathLifecycle?:{inventorySynced?:boolean}}).deathLifecycle?.inventorySynced === false)
       throw new SkillBlocked('当前背包尚未确认，不能核对指定武器');
     if (!forcedRanged && !selectedWeapon()) throw new SkillBlocked(`指定近战武器 ${weaponName} 不可用；没有换用其他武器或空手攻击`, [], 'local', 'resource-unavailable');
   };
-  requireSelectedWeapon();
   if (!isKnownTarget(bot, target)) {
     throw new SkillBlocked(`不认识「${target}」这种目标；attack.target 要实体英文类型或玩家名，数字实体编号另填 entityId 并同时提供实际类型；未选择或攻击其他实体`);
   }
+  const radius = attackTargetRadius(target);
+  const entity = findEntity(bot, target, radius, (candidate) => candidate.isValid !== false
+    && (entityId === undefined || candidate.id === entityId) && canSeeEntity(bot, candidate));
+  if (!entity && entityId !== undefined) {
+    throw new SkillBlocked(`当前连接 ${radius} 格内没有可见的 ${target} entityId=${entityId}；ID 失效、类型不符或被遮挡，未改打其他实体；重新观察`);
+  }
+  // 要打的东西不在场 = 无事可做:没打输,是没得打(见 SkillNoop)
+  if (!entity) throw new SkillNoop(`附近 ${radius} 格内没看见${zhEntity(target)}，不能隔墙选它作攻击目标`);
+  const unarmed = weaponName === 'unarmed' || (entity.type === 'player' && !forcedRanged && weaponName === undefined);
+  const allowAutoRanged = !unarmed && mode === 'auto' && weaponName === undefined;
+  const attemptLimit = times ?? (unarmed && entity.type === 'player' ? 1 : undefined);
+  requireSelectedWeapon();
   // Auto selects usable weapons, not an implicit unarmed fallback. Recheck at execution, after any earlier
   // equip/craft/container steps. This does not disable spell programs or the cornered self-defence policy.
-  if (mode === 'auto') {
+  if (mode === 'auto' && !unarmed) {
     checkAbort(ctx);
     const synced = (bot as Bot & { deathLifecycle?: { inventorySynced?: boolean } }).deathLifecycle?.inventorySynced;
     if (!inventoryReadConfirmed(bot) || synced === false)
@@ -333,25 +348,17 @@ export async function skillAttack(
         + '；auto 未改为空手挥击，未开始攻击。补给后重新核对实际背包与主手；法术和避险可单独选择');
     }
   }
-  const radius = attackTargetRadius(target);
-  const entity = findEntity(bot, target, radius, (candidate) => candidate.isValid !== false
-    && (entityId === undefined || candidate.id === entityId) && canSeeEntity(bot, candidate));
-  if (!entity && entityId !== undefined) {
-    throw new SkillBlocked(`当前连接 ${radius} 格内没有可见的 ${target} entityId=${entityId}；ID 失效、类型不符或被遮挡，未改打其他实体；重新观察`);
-  }
-  // 要打的东西不在场 = 无事可做:没打输,是没得打(见 SkillNoop)
-  if (!entity) throw new SkillNoop(`附近 ${radius} 格内没看见${zhEntity(target)}，不能隔墙选它作攻击目标`);
   const selectedUuid = typeof entity.uuid === 'string' ? entity.uuid : undefined;
   const checkNamedTarget = (requireSight = false): void => {
-    if (entityId === undefined) return;
+    if (entityId === undefined && !unarmed && entity.type !== 'player') return;
     checkAbort(ctx);
-    if (bot.entities[entityId] !== entity || entity.isValid === false
+    if (bot.entities[entityId ?? entity.id] !== entity || entity.isValid === false
         || (selectedUuid !== undefined && entity.uuid !== selectedUuid)) {
-      throw new SkillBlocked(`点名实体 entityId=${entityId} 已失效；未改打其他实体，重新观察`, [], 'local', 'attack-target-unconfirmed');
+      throw new SkillBlocked(`点名实体 entityId=${entity.id} 已失效；未改打其他实体，重新观察`, [], 'local', 'attack-target-unconfirmed');
     }
     // Ordinary brief occlusion keeps the existing 1.5-second tracking grace.
     // Recheck sight immediately before a physical swing or ranged preparation.
-    if (requireSight && !canSeeEntity(bot, entity)) throw new SkillBlocked(`点名实体 entityId=${entityId} 已被遮挡；未继续攻击，重新观察`, [], 'local', 'attack-target-unconfirmed');
+    if (requireSight && !canSeeEntity(bot, entity)) throw new SkillBlocked(`点名实体 entityId=${entity.id} 已被遮挡；未继续攻击，重新观察`, [], 'local', 'attack-target-unconfirmed');
   };
   const ranged = ctx.attack.ranged;
   if (forcedRanged) {
@@ -367,6 +374,7 @@ export async function skillAttack(
     // 这一步是**主动**打它:攻击本身就是挑衅,金甲带来的中立当场作废,所以 provoked 传真
     || (attackName === 'piglin' && piglinIsHostile(bot, entity, true));
   const stats = ctx.attack.acquire(entity.id);
+  const endPlayerRound = beginPlayerRound(bot, entity, unarmed || times !== undefined);
   const deadline = Date.now() + 45_000;
   let lastSwing = 0;
   let inMelee = false;
@@ -379,8 +387,28 @@ export async function skillAttack(
   let rangedRetryAfter = 0;
   let tridentInFlightUntil = 0;
   let outOfSightSince = 0;
+  let lastSwingMainHand: string | null | undefined;
+  const attempts = () => stats.swings + stats.arrows + (stats.tridents ?? 0);
+  const checkUnarmed = (): void => {
+    checkAbort(ctx);
+    if (!inventoryReadConfirmed(bot) || (bot as Bot & {deathLifecycle?: {inventorySynced?: boolean}}).deathLifecycle?.inventorySynced === false || bot.currentWindow || bot.inventory.selectedItem)
+      throw new SkillBlocked('当前主手槽位、窗口或物品光标尚未就绪，未继续空手切磋');
+  };
   const equipMelee = async (): Promise<void> => {
     ranged?.abort();
+    if (unarmed) {
+      checkUnarmed();
+      if (bot.heldItem) {
+        const inv = bot.inventory;
+        const emptyHotbar = inv.slots.findIndex((item, i) => i >= inv.hotbarStart && i < inv.hotbarStart + 9 && item === null);
+        if (emptyHotbar >= 0) bot.setQuickBarSlot(emptyHotbar - inv.hotbarStart);
+        else if ((inv.firstEmptyInventorySlot?.() ?? -1) >= 0) await unequipSlotConfirmed(bot, 'hand');
+        else throw new SkillBlocked('没有空格收起主手物品，未丢弃物品或出拳');
+      }
+      checkUnarmed();
+      if (bot.heldItem) throw new SkillBlocked('主手仍有物品，未出拳');
+      return;
+    }
     requireSelectedWeapon();
     const best = selectedWeapon();
     if (!best || bot.heldItem?.name === best.name) return;
@@ -432,7 +460,7 @@ export async function skillAttack(
   if (crystal) bot._client.on('explosion', onExplosion);
   try {
     if (weapon === 'melee') await equipMelee();
-    while (!stats.dead && !blasted && entity.isValid && Date.now() < deadline) {
+    while (!stats.dead && !blasted && entity.isValid && Date.now() < deadline && (attemptLimit === undefined || attempts() < attemptLimit)) {
       // 某些寻路或远程回执会立即返回；每轮让出一个游戏 tick，避免空转饿死协议 keepalive。
       await sleep(50);
       checkAbort(ctx);
@@ -619,13 +647,17 @@ export async function skillAttack(
       if (stats.dead) break;
       pressMelee(bot, entity, dangerous ? strafeLeft : null);
       if (d <= MELEE_REACH && Date.now() - lastSwing >= attackCooldownMs(bot)) {
-        if (weaponScore(bot.heldItem?.name ?? '') < 0 || weaponName !== undefined && bot.heldItem?.name !== weaponName) await equipMelee();
+        if (!unarmed && (weaponScore(bot.heldItem?.name ?? '') < 0 || weaponName !== undefined && bot.heldItem?.name !== weaponName)) await equipMelee();
         await meleeSwing(bot, entity, () => {
           if (stats.dead) throw new SkillBlocked('目标已确认死亡，未继续挥击');
           checkNamedTarget(true);
           requireSelectedWeapon();
-          if (weaponName !== undefined && bot.heldItem?.name !== weaponName)
+          if (unarmed) {
+            checkUnarmed();
+            if (bot.heldItem) throw new SkillBlocked(`出拳前主手变为 ${bot.heldItem.name}，已收手；${attackStats(stats)}`);
+          } else if (weaponName !== undefined && bot.heldItem?.name !== weaponName)
             throw new SkillBlocked(`主手已不再是指定武器 ${weaponName}，未出手`);
+          lastSwingMainHand = bot.heldItem?.name ?? null;
           stats.lastSwingAt = Date.now();
           stats.lastSwingTargetId = entity.id;
           stats.swings += 1;
@@ -646,6 +678,7 @@ export async function skillAttack(
     // Preserve that observed terminal, but never swallow cancellation or link loss.
     if (!(stats.dead && !stats.disconnected && !ctx.aborted() && error instanceof SkillBlocked)) throw error;
   } finally {
+    endPlayerRound();
     if (crystal) bot._client.removeListener('explosion', onExplosion);
     releaseMelee(bot);
     ranged?.abort();
@@ -659,15 +692,17 @@ export async function skillAttack(
       try { targetState = canSeeEntity(bot, entity) ? 'visible' : 'occluded'; } catch { /* unknown */ }
     }
     const evidence: AttackEvidence = { schema: 'agent-mc-attack-evidence/v1', sampledAt: new Date().toISOString(),
-      target: { entityId: entity.id, uuid: selectedUuid ?? null, name: entity.name ?? target }, targetState,
+      target: { entityId: entity.id, uuid: selectedUuid ?? null, name: entity.username ?? entity.name ?? target }, targetState,
       deathObservedAt: typeof stats.deathObservedAt === 'number' ? new Date(stats.deathObservedAt).toISOString() : null,
       ownKillCredit: stats.fatalDamage ? ownKillCredit(bot, stats.fatalDamage) : null,
       ...(stats.fatalDamage ? { fatalDamage: stats.fatalDamage } : {}),
       attempts: { meleeSwings: stats.swings, arrowsReleased: stats.arrows,
         ...(stats.tridents ? { tridentsThrown: stats.tridents } : {}) },
+      ...(lastSwingMainHand !== undefined ? {lastSwingMainHand} : {}),
       observedHits: { melee: stats.meleeHits, ranged: stats.rangedHits }, goalVerified: false };
     try { ctx.recordObservation?.({ ...evidence }); } catch { /* A failed evidence sink never changes the native verdict. */ }
   }
+  const handNote = lastSwingMainHand === undefined ? '' : `；末次挥击主手=${lastSwingMainHand ?? '空手'}`;
   if (blasted) {
     // A nearby explosion is observed, but it does not identify who caused it.
     return `${zhEntity(target)}在原位炸了(${attackStats(stats)})${underwaterOxygenNote(bot)}`;
@@ -680,9 +715,11 @@ export async function skillAttack(
     );
   }
   if (stats.dead) {
-    if (stats.fatalDamage) return fatalDamageText(stats.fatalDamage) + '（' + attackStats(stats) + '）';
-    return `确认${zhEntity(target)}死亡，未确认本人击杀归属(${attackStats(stats)})${retreatFailed ? ';撤退期间观察到目标死亡' : ''}${underwaterOxygenNote(bot)}`;
+    if (stats.fatalDamage) return fatalDamageText(stats.fatalDamage) + '（' + attackStats(stats) + '）' + handNote;
+    return `确认${zhEntity(target)}死亡，未确认本人击杀归属(${attackStats(stats)})${retreatFailed ? ';撤退期间观察到目标死亡' : ''}${underwaterOxygenNote(bot)}${handNote}`;
   }
+  if (attemptLimit !== undefined && attempts() >= attemptLimit)
+    return `对 ${entity.username ?? target} 已按约定出手 ${attempts()} 次，收手；${attackStats(stats)}${handNote}。胜负未判定。`;
   if (!entity.isValid) {
     throw new SkillBlocked(`交手中${zhEntity(target)}离开了视野,没有把“消失”算成击杀;${attackStats(stats)}${underwaterOxygenNote(bot)}`, [], 'local', 'attack-target-unconfirmed');
   }

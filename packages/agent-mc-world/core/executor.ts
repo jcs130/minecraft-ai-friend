@@ -224,6 +224,7 @@ import {
   type CraftRecipeLike,
 } from './skills-craft.ts';
 import { isKnownTarget, unknownUseTargetText } from './entity-facts.ts';
+import { inPlayerRound } from './sparring.ts';
 import { skillAttack } from './melee.ts';
 import {
   LEAD_ITEM, USE_SETTLE_MS, aimThenUse, isBoat, skillAnvil, skillGrindstone, skillLead, skillRide, skillUse,
@@ -1097,7 +1098,7 @@ export async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, cha
     case 'brew': return skillBrew(bot, call, ctx);
     case 'enchant': return skillEnchant(bot, call, ctx);
     case 'eat': return surfacePause(bot,ctx,check=>skillEat(bot, call.item, check));
-    case 'attack': return skillAttack(bot, call.target, call.mode ?? 'auto', ctx, call.entityId, call.weapon);
+    case 'attack': return skillAttack(bot, call.target, call.mode ?? 'auto', ctx, call.entityId, call.weapon, call.times);
     case 'equip': return skillEquip(bot, call, ctx);
     case 'pickup': return withBlueprintGain(bot, ctx, () => skillPickup(bot, ctx, call.item));
     case 'toss': return skillToss(bot, call, ctx);
@@ -6571,6 +6572,7 @@ interface ReflexOptions {
    * 战斗会话接手受击:返回 true = 会话开打/已在打(反射不再自己抡,也不用
    * 反应冷却);false = 会话进不了场(关着/冷却/环境自保),退回反射的降级行为。
    */
+  taskHurt?: (attackerId: number, name: string) => boolean;
   combatHurt?: (attackerId: number, name: string) => boolean;
   /** World 日志;不给就不记 */
   diag?: MinecraftLog;
@@ -8234,9 +8236,11 @@ export class Reflexes {
         loaded: !!attacker?.isValid, attacker: actor.name, health: bot.health } });
     // 战斗会话在场就归它:反击、血线撤退、退出闸门都是它的(反射这套 10 秒挥两下
     // 保留为 combat.enabled 关掉时的降级行为)
-    if (this.opts.fightBack() && this.opts.combatHurt?.(actor.id, actor.name)) return;
+    if (this.opts.taskHurt?.(actor.id, actor.name)) return;
+    const retaliate = this.opts.fightBack() && !inPlayerRound(bot, attacker);
+    if (retaliate && this.opts.combatHurt?.(actor.id, actor.name)) return;
     const bleedingOut = (bot.health ?? 20) < this.opts.fleeHealth();
-    if (!this.opts.fightBack() && !bleedingOut) return;
+    if (!retaliate && !bleedingOut) return;
     // Identity is not visibility or reachability: the degraded melee loop never
     // attacks a stale entity or aims through a solid obstruction.
     if (!attacker?.isValid || bot.entities[actor.id] !== attacker
@@ -8279,7 +8283,7 @@ export class Reflexes {
         try {
           while (attacker.isValid && Date.now() < deadline && !this.stopped) {
             if ((bot.health ?? 0) <= 0) break; // 人都死了,别再对着空气挥
-            if (this.opts.getBot() !== bot || !canSeeEntity(bot, attacker)) break;
+            if (this.opts.getBot() !== bot || inPlayerRound(bot, attacker) || !canSeeEntity(bot, attacker)) break;
             const d = attacker.position.distanceTo(bot.entity.position);
             if (d > 3.5) break; // 它跑了/被打退,不追:追击是主脑的决策,不归反射
             if (Date.now() >= strafeAt) {
@@ -8289,7 +8293,7 @@ export class Reflexes {
             await aimAt(bot, attacker);
             pressMelee(bot, attacker, strafeLeft);
             if (d <= MELEE_REACH && Date.now() - lastSwing >= attackCooldownMs(bot)) {
-              await meleeSwing(bot, attacker);
+              if (!await meleeSwing(bot, attacker, () => !inPlayerRound(bot, attacker))) break;
               swings++;
               lastSwing = Date.now();
             } else {

@@ -22,6 +22,7 @@ const SDK_API = Object.freeze({
     + '报价/效果未确认先核对原物品，不重新提交付费动作。成品入包、实际装备与当前任务是否达标分别验收。'
     + '有宿主 worker 时可交给已有制造/补给 worker，附上用途、数量、可花资源、保留物品及完成条件；只加载这些资料，执行仍走单身体队列。原生技能程序用 api:"authoring" 保存、评估和选择版本。',
   weapons: '先 mc_bag 按需读取物品 ID、槽位、附魔和耐久；mc_combat_tactic {battlefield:true} 的 loadout.choices 是当前武器模式索引。'
+    + '与玩家切磋应按约定点名对手、武器和次数，如 attack 的 mode:"melee",weapon:"unarmed",times:3；看回执里的实际主手和出手数，回合结束再决定是否继续。'
     + '近战支持剑、斧、三叉戟、重锤及工具；单步 mc.do([{skill:"attack",target:实际类型,entityId:实际编号,mode:"melee",weapon:"trident"}]) 精确指定，缺失不替换。'
     + '反射/快战斗的偏好用 mc_combat_tactic {meleeWeapons:["trident","iron_sword"]}，不存在的跳过再回退，[]复原；仅设置不开始战斗。'
     + '原生远程支持弓、已装填箭或有普通箭、光灵箭、药箭的弩、以及忠诚三叉戟。用 attack 的 mode:"ranged",weapon:"crossbow" 或 weapon:"trident" 明确选择；无忠诚的三叉戟投出后可能丢失，激流三叉戟不能投掷。'

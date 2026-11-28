@@ -40,6 +40,7 @@ import {
   HARD, blend, blur, decide, dirSlot, newMap, slotDir, write, writeSlot, type Map16,
 } from './combat-context.ts';
 import { HOSTILE, bestWeapon, dropOwnedGoal, meleeCooldownMs, releaseBody, setOwnedGoal } from './executor.ts';
+import { inPlayerRound } from './sparring.ts';
 import { weaponScore } from './melee.ts';
 import { createDefensiveWeaponSelector } from './defensive-weapon.ts';
 import { combatLoadout } from './combat-loadout.ts';
@@ -1055,7 +1056,7 @@ export class CombatSession {
     for (const key of Object.keys(bot.entities)) {
       const e = bot.entities[key as unknown as number];
       if (!e?.isValid || !e.position || e === bot.entity) continue;
-      if (this.deadIds.has(e.id)) continue;
+      if (this.deadIds.has(e.id) || inPlayerRound(bot, e)) continue;
       const name = e.name ?? '';
       const provoked = this.provoked.has(e.id);
       if (suppressSpeciesThreat(bot, e, provoked)) continue;
