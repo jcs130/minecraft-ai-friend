@@ -40,6 +40,16 @@ function cellsOf(recipe: TaggedRecipe): { rows: Array<Array<Ingredient | null>>;
   return { rows: [(recipe.ingredients ?? [])], shaped: false };
 }
 
+export function taggedRecipeIngredients(bot: Bot, item: string): {slots:string[][]; output:number}[] {
+  const version=bot.registry.version?.minecraftVersion;
+  const data=version ? versions[version] : undefined;
+  if (!data || !Object.hasOwn(data.recipes,item)) return [];
+  return data.recipes[item]!.map(recipe=>({
+    slots:cellsOf(recipe).rows.flat().filter((cell): cell is Ingredient=>cell!==null).map(cell=>expand(cell,data.tags)),
+    output:recipe.result.count,
+  })).filter(recipe=>recipe.slots.every(slot=>slot.length>0));
+}
+
 export interface TaggedCraftChoice {
   recipe: CraftRecipeLike | null;
   /** 配方表中要求的直接材料，失败时供 Agent 改计划，不把标签错写成橡木。 */

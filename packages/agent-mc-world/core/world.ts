@@ -2335,6 +2335,7 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
       + 'A sent server command still needs observed effects; done is the executor result, not proof of an external quest. '
       + 'await mc.flightPlan(args) uses the same read-only geometry/budget contract as mc_flight_plan. '
       + 'Use JavaScript conditions, calculations and bounded loops to adapt to feedback. Prepare a timed route before casting; combine already-known cast/movement/blink steps with needs in one mc.do to avoid model delays. '
+      + 'Mindcraft programs can compose world observations and skills on this bot. Use {api:"mindcraft"} for the on-demand index. '
       + 'bot and Vec3 expose a bounded asynchronous transport for Mineflayer public primitives; use {api:"index"} then {api:"blockAt"}, {api:"activateItem"}, etc. for native signatures and differences. '
       + 'One public method can pass directly to this body with native:{name:"lookAt",args:[{x,y,z},true]}; read the returned run as usual. '
       + 'Native calls preserve the current hand and do not navigate or select tools. bot.blockAt returns Block|null with getProperties() for your own JavaScript result checks. '
@@ -2884,6 +2885,7 @@ export class MinecraftWorld implements World {
   protected readonly methodTasks = new Map<number, (report: TaskReport) => void>();
   protected readonly methodTerminals = new Map<number, TaskReport>();
   protected readonly methods = new MethodRunner({
+    gameLibrary: true,
     nativeMethods: Object.keys(NATIVE_API),
     call: (method, args, signal) => this.methodCall(method, args, signal),
     onFinish: (run) => this.onMethodFinish(run),
@@ -5340,7 +5342,7 @@ export class MinecraftWorld implements World {
     if (!bot?.entity || !this.executor) throw new Error('Minecraft尚未连接');
     if (method === 'capabilities') return methodCapabilities('mineflayer', Object.keys(NATIVE_API));
     if (method === 'state') return this.methodState();
-    if (method === 'mineflayer') {
+    if (method === 'mineflayer' || method === 'mindcraft') {
       if (typeof args.name !== 'string' || !Array.isArray(args.args)) throw new Error('原生调用须包含 name 与 args 数组');
       const run = this.methods.current;
       if (!run) throw new Error('自主程序权限已撤销');
@@ -5351,7 +5353,8 @@ export class MinecraftWorld implements World {
           revoke: reason => { if (this.methods.current?.id === run.id) this.methods.stop(reason); },
           beforeEnqueue: () => this.interruptIdle('native-program') }) };
       }
-      return this.nativeMethod.session.call(args.name, args.args);
+      if (method === 'mindcraft' && args.family !== 'skills' && args.family !== 'world') throw new Error('Unknown Mindcraft namespace');
+      return this.nativeMethod.session.call(args.name, args.args, method === 'mindcraft' ? args.family as 'skills'|'world' : undefined);
     }
     if (method === 'flightPlan') {
       const parsed = parseFlightPlan(args, this.markLookup());
@@ -5431,7 +5434,7 @@ export class MinecraftWorld implements World {
       sourceHash: run.sourceHash, routine: run.routine, startedAt: run.startedAt, endedAt: run.endedAt, result: work })),
       mime: 'application/json', name: 'work-run.json', fallbackText: '工作脚本实际结果；原始逐格记录与库存净变化，不自动重放。' });
     this.emit('minecraft.method', `方法#${run.id}「${run.name}」终态${run.status}；源码SHA256 ${run.sourceHash}；`
-      + `${run.trace.length}次SDK调用。${run.error ?? ''}用 mc_script {runId:${run.id}}读取各次真实回执；`
+      + `${run.trace.length}次SDK调用。${run.error ?? run.executionNote ?? ''}用 mc_script {runId:${run.id}}读取各次真实回执；`
       + (receipt ? `执行UUID ${receipt.executionId}，方法版本 ${receipt.root.revision}；完整回执已随事件保存。` : '')
       + libraryEvidence
       + (workSummary ? `工作结果 ${workSummary.outcome}，goalCompleted=${String(workSummary.goalCompleted)}，原因 ${String(workSummary.reason)}；逐格回执已保存。` : '')

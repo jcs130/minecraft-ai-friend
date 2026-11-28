@@ -679,7 +679,7 @@ function gotoArrivalNote(call: Extract<SkillCall, { skill: 'goto' }>, target: Ce
     ? `;本次满足目标 ${cellText(target)} 的 1 格邻域条件，未精确站上目标格；精确站位用 exact:true` : '';
 }
 
-async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispatch?: ChatDispatch,
+export async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext, chatDispatch?: ChatDispatch,
   inventoryCommand?: import('./command-inventory-arrival.ts').InventoryCommandDispatch): Promise<string> {
   const bodyBlocked = nativeBodyBlockedReason(bot, call.skill);
   if (bodyBlocked) throw new SkillBlocked(bodyBlocked);

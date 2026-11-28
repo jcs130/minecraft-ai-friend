@@ -5,7 +5,12 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Bot, ControlState } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { createHash } from 'node:crypto';
-import type { Executor } from './executor.ts';
+import { runSkill, type Executor } from './executor.ts';
+import { parseSteps } from './skills.ts';
+import { taggedCraftChoice, taggedRecipeIngredients } from './tagged-crafting.ts';
+import { nearestHostileWithin } from './melee.ts';
+import { callGameLibrary } from './mindcraft/runtime.mjs';
+import { gameLibrary } from './mindcraft/catalog.mjs';
 import { checkAbort, sleep, type SkillContext } from './skill-context.ts';
 import { breakPermissionNote, goals, gotoGoal, walkOnlyPath } from './travel.ts';
 import { navigationGoal } from './navigation-goal.ts';
@@ -169,11 +174,12 @@ export class MineflayerMethod {
       } });
     return this.body;
   }
-  async call(name: string, args: unknown[]): Promise<unknown> {
-    if (!Object.hasOwn(NATIVE_API, name)) throw new Error(`未开放 Mineflayer API ${name}`);
+  async call(name: string, args: unknown[], family?: 'skills'|'world'): Promise<unknown> {
+    if (!Object.hasOwn(family ? gameLibrary[family] : NATIVE_API, name)) throw new Error(`未开放 Mineflayer API ${name}`);
     this.opts.signal.throwIfAborted();
     if (this.terminalError) throw this.terminalError;
-    const owner = READ_ONLY.has(name as NativeName) ? null : await this.acquire();
+    const readonly = family ? family === 'world' || name === 'wait' || name === 'log' : READ_ONLY.has(name as NativeName);
+    const owner = readonly ? null : await this.acquire();
     const bot = owner?.bot ?? this.opts.getBot();
     if (!bot || bot !== this.connectionBot || bot !== this.opts.getBot()) throw new Error('Minecraft 连接已变化');
     const active = () => {
@@ -189,12 +195,38 @@ export class MineflayerMethod {
       };
       guarded.add(bot._client);
     }
-    const value = await nativeCalls.run(active, async () => {
-      const value = await this.invoke(bot, owner?.ctx, name as NativeName, args);
+    const result = await nativeCalls.run(active, async () => {
+      const result = family ? await callGameLibrary({
+        family, name, args, bot, view: observationView(bot), signal: this.opts.signal, check: active,
+        taggedIngredients: item => taggedRecipeIngredients(bot,item),
+        taggedOutput: item => taggedCraftChoice(bot,item)?.recipe?.result.count ?? null,
+        escapeFrom: async (from, range, entityId) => {
+          if (!owner || !Number.isSafeInteger(range) || range < 0 || range > 64) throw new Error('Escape distance must be 0..64');
+          const seen = observationView(bot).entities;
+          const target = entityId === undefined ? undefined : seen[entityId];
+          if (entityId !== undefined && !target) return false;
+          const goal = target ? new goals.GoalFollow(target, range) : new goals.GoalNear(from.x, from.y, from.z, range);
+          const release = walkOnlyPath(bot);
+          try {
+            await gotoGoal(bot, new goals.GoalInvert(goal), owner.ctx);
+            const end = target ? observationView(bot).entities[target.id]?.position : new Vec3(from.x,from.y,from.z);
+            return !!end && bot.entity.position.distanceTo(end) >= range;
+          } finally { release(); }
+        },
+        hostile: nearestHostileWithin, packBlock, cleanup: cb => nativeCalls.run(() => {}, cb),
+        native: (key, values) => { active(); return this.invoke(bot, owner?.ctx, key as NativeName, values); },
+        step: async raw => {
+          active();
+          if (!owner) throw new Error('Action requires the body');
+          const parsed = parseSteps([raw]);
+          if ('error' in parsed) throw new Error(parsed.error);
+          return runSkill(bot, parsed.steps[0]!, owner.ctx);
+        }
+      }) : { value: await this.invoke(bot, owner?.ctx, name as NativeName, args) ?? null };
       active();
-      return value ?? null;
+      return result;
     });
-    return { value, taskId: this.taskId, sampledAt: new Date().toISOString(), nativeMethod: name };
+    return { ...result, taskId: this.taskId, sampledAt: new Date().toISOString(), nativeMethod: family ? family + '.' + name : name };
   }
   private async invoke(bot: Bot, ctx: SkillContext | undefined, name: NativeName, args: unknown[]): Promise<unknown> {
     const [a, b, c] = args;

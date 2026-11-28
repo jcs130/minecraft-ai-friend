@@ -16,6 +16,7 @@ export function methodCapabilities(backend: 'mineflayer' | 'java-client', advert
     schema: 'minecraft-method-capabilities/v1' as const,
     contract: 'minecraft-method/v1' as const,
     backend,
+    ...(backend === 'mineflayer' ? { gameLibrary: { name:'mindcraft', help:'mindcraft', worldReads:'synchronous', skills:'await' } } : {}),
     botMethods: BOT_METHODS.filter(name => supported.has(name)),
     mcMethods: ['capabilities', 'state', 'do', ...(backend === 'mineflayer' ? ['flightPlan', 'swimPlan'] : [])],
     stepGroups: backend === 'mineflayer' ? 'core' : 'single-legacy',

@@ -9,7 +9,7 @@ export const METHOD_ADAPTER = 'minecraft-method/v1';
 export const METHOD_LIMITS = Object.freeze({ sourceChars: 12_000, paramsChars: 4_096,
   calls: 32, actions: 16, messageChars: 24_000, durationMs: 60_000, maxDurationMs: 120_000 });
 
-export type MethodOperation = 'capabilities' | 'state' | 'do' | 'flightPlan' | 'swimPlan' | 'mineflayer';
+export type MethodOperation = 'capabilities' | 'state' | 'do' | 'flightPlan' | 'swimPlan' | 'mineflayer' | 'mindcraft';
 export interface MethodTrace {
   call: number; method: MethodOperation; args: unknown; startedAt: string;
   endedAt?: string; result?: unknown; error?: string;
@@ -20,6 +20,7 @@ export interface MethodRun {
   mode?: 'validation' | 'execution';
   status: 'running' | 'validated' | 'completed' | 'failed' | 'cancelled';
   trace: MethodTrace[]; result?: unknown; error?: string;
+  executionNote?: string;
   routine?: { id: string; version: number };
   procedure?: { executionId: string; reference: ProcedureReference; adapter: string; mode: 'validation' | 'execution';
     invocations: ProcedureInvocation[]; versions: Array<{ id: string; revision: string; sourceHash: string; parent: string | null; author: unknown }> };
@@ -31,6 +32,7 @@ export interface MethodRequest {
 }
 export interface MethodHost {
   nativeMethods?: string[];
+  gameLibrary?: boolean;
   call: (method: MethodOperation, args: Record<string, unknown>, signal: AbortSignal) => unknown | Promise<unknown>;
   onFinish: (run: MethodRun) => void;
 }
@@ -86,7 +88,7 @@ export class MethodRunner {
       return structuredClone({ ...summary(run), trace });
     }
     const result = JSON.stringify(run.result ?? null);
-    return { ...summary(run), ...(result.length > 2000 && !run.routine
+    return { ...summary(run), ...(run.executionNote ? {executionNote:run.executionNote} : {}), ...(result.length > 2000 && !run.routine
       ? { resultExcerpt: result.slice(0, 2000), resultTruncated: true }
       : { result: run.result }),
     trace: run.trace.map(trace => {
@@ -148,7 +150,7 @@ export class MethodRunner {
     }
     const controller = new AbortController();
     const worker = native ? null : new Worker(new URL('./method-worker.mjs', import.meta.url), {
-      workerData: { code: request.code, params, validate: request.validate === true, nativeMethods: this.host.nativeMethods,
+      workerData: { code: request.code, params, validate: request.validate === true, nativeMethods: this.host.nativeMethods, gameLibrary: this.host.gameLibrary === true,
         graph: request.procedure?.graph, maxInvocations: PROCEDURE_LIMITS.invocations },
       env: {}, execArgv: [], resourceLimits: { maxOldGenerationSizeMb: 64, stackSizeMb: 4 },
     });
@@ -170,6 +172,9 @@ export class MethodRunner {
         invocation.status = 'failed'; invocation.endedAt = run.endedAt; invocation.error = error ?? 'procedure capability revoked';
       }
       if (result !== undefined) run.result = result;
+      if (status === 'completed' && !run.trace.length && result == null) {
+        run.executionNote = '程序没有调用游戏，也没有返回结果。如果只声明了函数，请在函数体末尾实际调用并返回结果。';
+      }
       controller.abort(new Error(error ?? '方法结束'));
       void worker?.terminate();
       if(this.active?.run.id===run.id)this.active=null;
@@ -187,12 +192,24 @@ export class MethodRunner {
     }
     worker?.on('error', (error) => finish('failed', String(error)));
     worker?.on('exit', (code) => { if (!finished) finish('failed', `脚本线程退出(${code})`); });
-    const dispatch = (id: number, method: MethodOperation, rawArgs: unknown, scope?: MethodTrace['procedure']) => {
+    const dispatch = (id: number, method: MethodOperation, rawArgs: unknown, scope?: MethodTrace['procedure'], sync?: SharedArrayBuffer) => {
       if (request.validate) { finish('failed', '语法校验不可调用World'); return; }
       if (outstanding) { finish('failed', 'World调用必须逐个await；连续身体动作请放入同一mc.do'); return; }
       if (run.trace.length >= METHOD_LIMITS.calls || (method === 'do' && ++actions > METHOD_LIMITS.actions)) {
         finish('failed', '方法已达到调用上限；请读取终态后修订方法'); return;
       }
+      const reply = (message: {value?: unknown; error?: string}) => {
+        if (!worker) return;
+        if (!sync) { worker.postMessage({id,...message}); return; }
+        const state = new Int32Array(sync,0,2);
+        const bytes = new Uint8Array(sync,8);
+        const encoded = new TextEncoder().encode(JSON.stringify(message));
+        if (encoded.length > bytes.length) throw new Error('Mindcraft read exceeds reply budget');
+        bytes.set(encoded);
+        Atomics.store(state,1,encoded.length);
+        Atomics.store(state,0,1);
+        Atomics.notify(state,0);
+      };
       let args: Record<string, unknown>;
       try {
         args = jsonValue(rawArgs) as Record<string, unknown>;
@@ -210,14 +227,14 @@ export class MethodRunner {
         trace.result = jsonValue(value);
         trace.endedAt = new Date().toISOString();
         outstanding = false;
-        if (worker) worker.postMessage({ id, value: trace.result });
+        if (worker) reply({value:trace.result});
         else finish('completed', undefined, (trace.result as { value?: unknown })?.value ?? null);
       }).catch((error) => {
         if (finished) return;
         trace.error = String(error).slice(0, 1600);
         trace.endedAt = new Date().toISOString();
         outstanding = false;
-        if (worker) worker.postMessage({ id, error: trace.error });
+        if (worker) reply({error:trace.error});
         else finish('failed', trace.error);
       });
     };
@@ -254,10 +271,15 @@ export class MethodRunner {
         catch (error) { finish('failed', String(error)); }
         return;
       }
-      if (message.kind !== 'call' || !['capabilities', 'state', 'do', 'flightPlan', 'swimPlan', 'mineflayer'].includes(message.method)) {
+      if (message.kind !== 'call' || !['capabilities', 'state', 'do', 'flightPlan', 'swimPlan', 'mineflayer', 'mindcraft'].includes(message.method)) {
         finish('failed', '脚本协议包含未知操作'); return;
       }
-      dispatch(message.id, message.method, message.args, message.scope);
+      if (message.method === 'mindcraft' && !this.host.gameLibrary ||
+        message.sync && (message.method !== 'mindcraft' || message.args?.family !== 'world' ||
+        !(message.sync instanceof SharedArrayBuffer) || message.sync.byteLength !== 96_008)) {
+        finish('failed', 'Mindcraft unavailable on this body or invalid read buffer'); return;
+      }
+      dispatch(message.id, message.method, message.args, message.scope, message.sync);
     });
     if (native) dispatch(1, 'mineflayer', { name: native, args: (params as { args: unknown[] }).args });
     return structuredClone(run);
