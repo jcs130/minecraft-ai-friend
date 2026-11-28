@@ -4660,9 +4660,8 @@ export class MinecraftWorld implements World {
       emergencyDrown: () => this.cfg.reflex.emergencyDrown !== false,
       antiLava: () => this.cfg.reflex.antiLava,
       currentTask: () => this.executor?.currentTask ?? null,
-      combatHurt: (id, name) => (
-        this.executor?.onCombatHurt(id, name) || this.combat?.onHurtBy(id, name) || false
-      ),
+      taskHurt: (id, name) => this.executor?.onCombatHurt(id, name) ?? false,
+      combatHurt: (id, name) => this.combat?.onHurtBy(id, name) ?? false,
       diag: this.diag,
     });
 

@@ -643,6 +643,9 @@ function precheckAttackTarget(bot: Bot, call: Extract<SkillCall, { skill: 'attac
 
 /** Report the requested mode's current equipment without selecting a different mode. */
 function precheckAttack(bot: Bot, call: Extract<SkillCall, { skill: 'attack' }>): PrecheckNote | null {
+  const target = attackEntity(bot, call.target, call.entityId);
+  if (call.weapon === 'unarmed' || (target && bot.entities[target.id]?.type === 'player' && !call.weapon && call.mode !== 'ranged' && call.mode !== 'kite'))
+    return precheckAttackTarget(bot, call);
   if ((!call.mode || call.mode === 'auto') && inventoryReadConfirmed(bot) && !bestWeapon(bot)
     && !hasReadyRangedWeapon(bot)) {
     const target = precheckAttackTarget(bot, call);
@@ -665,7 +668,6 @@ function precheckAttack(bot: Bot, call: Extract<SkillCall, { skill: 'attack' }>)
     const weapon = call.weapon ? `指定远程武器 ${call.weapon}` : '自动远程武器';
     return { level: 'hard', text: `当前${weapon}不可用；强制远程不会改用其他模式`, rule: 'attack.noRangedWeapon' };
   }
-  const target = attackEntity(bot, call.target, call.entityId);
   if (!target) return precheckAttackTarget(bot, call);
   if (!hasRangedLos(bot, target)) {
     return { level: 'hard', text: `现在看不见${zhEntity(call.target)}的射线;强制远程不会改用近战`, rule: 'attack.noLos' };

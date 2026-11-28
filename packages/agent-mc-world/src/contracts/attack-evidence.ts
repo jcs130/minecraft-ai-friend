@@ -10,6 +10,8 @@ export interface AttackEvidence {
   ownKillCredit: boolean | null;
   fatalDamage?: MobDeathReceipt;
   attempts: { meleeSwings: number; arrowsReleased: number; tridentsThrown?: number };
+  /** Main hand observed at the last melee dispatch. Null means empty, absent means no swing sampled. */
+  lastSwingMainHand?: string | null;
   /** Existing target-hurt associations, separate from attempted dispatch and final kill credit. */
   observedHits: { melee: number; ranged: number };
   goalVerified: false;

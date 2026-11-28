@@ -96,6 +96,56 @@ it('losing the chosen weapon before the swing never falls back to food or anothe
   expect(String(await task)).toContain('指定近战武器 trident 不可用');
   expect(f.bot.attack).not.toHaveBeenCalled();expect(Object.values(f.controls).some(Boolean)).toBe(false);
 });
+function playerRound() {
+  const f = fixture(['iron_sword','bow','arrow']);
+  const enemy = Object.assign(f.bot.entities[7], {type:'player', name:'player', username:'SparringPeer'});
+  Object.assign(f.bot.players, {SparringPeer:{entity:enemy}});
+  const slots = Array(46).fill(null);
+  slots[36] = f.bot.heldItem;
+  Object.assign(f.bot.inventory, {slots, hotbarStart:36, firstEmptyInventorySlot:()=>null});
+  const select = vi.fn((slot:number) => { f.bot.heldItem = slots[36+slot]; });
+  Object.assign(f.bot,{setQuickBarSlot:select});
+  const observations = vi.fn();
+  Object.assign(f.ctx,{recordObservation:observations});
+  f.bot.attack.mockImplementation(()=>{});
+  return {...f,select,observations,slots};
+}
+it.each([[undefined,3,3],['unarmed',3,3],[undefined,undefined,1]] as const)('honours a player round with a sword in the bag (%s/%s)',async(weapon,times,expected)=>{
+  vi.useFakeTimers();const f=playerRound();
+  const round=skillAttack(f.bot as never,'SparringPeer','melee',f.ctx as never,7,weapon,times);
+  await vi.advanceTimersByTimeAsync(6000);
+  expect(await round).toContain('末次挥击主手=空手');
+  expect(f.bot.attack).toHaveBeenCalledTimes(expected);
+  expect(f.bot.equip).not.toHaveBeenCalled();
+  expect(f.slots[36]?.name).toBe('iron_sword');
+  expect(f.observations).toHaveBeenCalledWith(expect.objectContaining({lastSwingMainHand:null,targetState:'visible',target:{entityId:7,uuid:expect.anything(),name:'SparringPeer'}}));
+  expect(f.ctx.attack.release).toHaveBeenCalledOnce();
+});
+it('lets a player explicitly choose an armed round',async()=>{
+  vi.useFakeTimers(); const f=playerRound();
+  const round=skillAttack(f.bot as never,'SparringPeer','melee',f.ctx as never,7,'iron_sword',2);
+  await vi.advanceTimersByTimeAsync(4000);expect(await round).toContain('末次挥击主手=iron_sword');
+  expect(f.bot.attack).toHaveBeenCalledTimes(2);expect(f.select).not.toHaveBeenCalled();
+});
+it.each(['full','window','resync','changed hand','changed target','cancelled'])('never sends an armed punch or drops the weapon on %s',async(problem)=>{
+  vi.useFakeTimers();const f=playerRound();
+  if(problem==='full')f.slots.fill(item('bread'));
+  if(problem==='window')Object.assign(f.bot,{currentWindow:{id:3}});
+  if(problem==='resync')Object.assign(f.bot,{deathLifecycle:{inventorySynced:false}});
+  if(problem==='changed hand')f.bot.lookAt.mockImplementation(async()=>{f.bot.heldItem=item('iron_sword');});
+  if(problem==='changed target')f.bot.lookAt.mockImplementation(async()=>{f.bot.entities[7]={...f.bot.entities[7],uuid:'replacement'};});
+  if(problem==='cancelled')f.bot.lookAt.mockImplementation(async()=>{f.ctx.aborted=()=>true;});
+  const round=skillAttack(f.bot as never,'SparringPeer','auto',f.ctx as never,7,'unarmed',3).catch(e=>e);
+  await vi.advanceTimersByTimeAsync(6000);expect(await round).toBeInstanceOf(Error);
+  expect(f.bot.attack).not.toHaveBeenCalled();expect(f.ctx.attack.release).toHaveBeenCalledOnce();
+});
+it('preserves the agreed swing count through schema and parser and rejects conflicting options',()=>{
+  const step={skill:'attack',target:'Peer',mode:'melee',weapon:'unarmed',times:3};
+  expect(new Ajv({strict:false}).compile(SKILL_STEP_SCHEMA)(step)).toBe(true);
+  expect(parseSteps([step])).toMatchObject({steps:[step]});
+  for(const times of [0,1.5,65,'3'])expect(parseSteps([{...step,times}])).toHaveProperty('error');
+  expect(parseSteps([{...step,mode:'ranged'}])).toHaveProperty('error');
+});
 class World extends TacticalMinecraftWorld {
   protected override syncRealm(){this.tactics.useRealm('fixture');}
   update(args:Record<string,unknown>){return this.setCombatTactic(args);}

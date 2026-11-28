@@ -6,6 +6,7 @@ import { methodHarness } from './method-harness.ts';
 import { localHazardExit } from '../core/hazard-exit.ts';
 import { findEscapeCell, hazardsWithin, hazardTouch } from '../core/terrain.ts';
 import { crossFire, intentionalFireCrossing, fireRoutes, fireRouteGeometryCurrent } from '../core/fire-route.ts';
+import { beginPlayerRound } from '../core/sparring.ts';
 import { pressRanged } from '../core/melee.ts';
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-04T16:52:12Z')); });
@@ -62,6 +63,34 @@ function rig(fightBack = () => true, combatHurt = vi.fn(() => true)) {
   reflex.start();
   return { ...h, reflex, pause, reports, combatHurt, close() { reflex.stop(); h.close(); } };
 }
+
+it('keeps return hits within the player round without blocking other attackers or retreat', async () => {
+  const r = rig();
+  try {
+    const peer = { id: 7, name: 'player', type: 'player', isValid: true, position: new Vec3(3,64,.5), height: 1.8 };
+    const hit = (entity: typeof peer) => (r.reflex as any).onHurt(r.bot, {
+      origin: 'packet', sequence: 1, actor: { id: entity.id, name: entity.name, entity },
+      sourceType: 'player_attack', causeId: entity.id, directId: entity.id, projectile: false, sourcePosition: entity.position,
+    });
+    const other = {...peer, id: 8};
+    Object.assign(r.bot.entities, {7:peer, 8:other});
+    const finish = beginPlayerRound(r.bot as never, peer as never, true);
+    await hit(peer);
+    finish();
+    await hit(peer);
+    expect(r.combatHurt).not.toHaveBeenCalled();
+    await hit(other);
+    expect(r.combatHurt).toHaveBeenCalledTimes(1);
+    r.bot.health = 3;
+    await hit(peer);
+    expect(r.bot.pathfinder.goal).not.toBeNull();
+    expect(r.combatHurt).toHaveBeenCalledTimes(1);
+    r.bot.health = 20;
+    vi.setSystemTime(Date.now()+31_000);
+    await hit(peer);
+    expect(r.combatHurt).toHaveBeenCalledTimes(2);
+  } finally { r.close(); }
+});
 
 it('honors live retaliation choice while retaining low-health escape', async () => {
   let enabled = false;

@@ -160,7 +160,7 @@ export function describeSkill(c: SkillCall, heldItem?: string | null): string {
         : `铁砧:把${zhName(c.item)}和${zhName(c.with ?? '')}合一起`;
     case 'grindstone':
       return `砂轮:磨${zhName(c.item)}${c.with ? `+${zhName(c.with)}` : ''}`;
-    case 'attack': return `攻击${zhEntity(c.target)}${c.mode && c.mode !== 'auto' ? `(${c.mode})` : ''}`;
+    case 'attack': return `攻击${zhEntity(c.target)}${c.mode && c.mode !== 'auto' ? `(${c.mode})` : ''}${c.weapon ? '·' + (c.weapon === 'unarmed' ? '空手' : c.weapon) : ''}${c.times ? '·最多' + c.times + '下' : ''}`;
     case 'equip': {
       if (!c.item) return c.hand === 'off' ? '把副手腾空' : '把主手腾空';
       if (c.hand === 'off') return `把${zhName(c.item)}挂上副手`;

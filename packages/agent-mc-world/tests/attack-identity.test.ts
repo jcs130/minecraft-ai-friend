@@ -92,6 +92,7 @@ describe('attack target identity shared by declarations, precheck and execution'
     const player = { ...f.selected, id: 9, type: 'player', name: 'player', username: '27534' };
     f.bot.players['27534'] = { entity: player }; f.bot.entities[9] = player;
     f.bot.entities[27534] = { ...f.nearby, id: 27534 };
+    Object.assign(f.bot, { heldItem: null });
     const result = skillAttack(f.bot as never, '27534', 'melee', f.ctx as never);
     await vi.advanceTimersByTimeAsync(1000); await result;
     expect(f.bot.attack).toHaveBeenCalledWith(player);

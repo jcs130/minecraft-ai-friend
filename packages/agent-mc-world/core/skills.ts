@@ -140,7 +140,7 @@ export type SkillCall = StepBounds & (
   | { skill: 'brew'; at?: Anchor; input: string; bottle: string; count: number; fuel: string }
   | { skill: 'enchant'; at: Anchor; item: string; pick?: string; index?: number }
   | { skill: 'eat'; item: string }
-  | { skill: 'attack'; target: string; entityId?: number; mode?: AttackMode; weapon?: string }
+  | { skill: 'attack'; target: string; entityId?: number; mode?: AttackMode; weapon?: string; times?: number }
   | { skill: 'equip'; item?: string; pick?: string; hand?: 'main' | 'off' }
   | { skill: 'pickup'; item?: string }
   | { skill: 'toss'; item: string; count: number; at?: Anchor; target?: string; pick?: string }
@@ -879,7 +879,10 @@ function parseAttack(c: Record<string, unknown>, at: string): ParseResult {
       || c.entityId < 0 || c.entityId > 2_147_483_647)) {
     return { error: `${at} attack 的 entityId 要是本连接里观察到的非负整数实体 ID；target 仍填实体英文类型或玩家名` };
   }
+  if (c.times !== undefined && (typeof c.times !== 'number' || !Number.isSafeInteger(c.times) || c.times < 1 || c.times > 64))
+    return { error: `${at} attack.times 要 1–64 的整数，表示实际出手次数上限` };
   const parsed = parseByFields(SKILL_INDEX.get('attack')!, c, at);
+  if ('step' in parsed && c.times === undefined) delete (parsed.step as Extract<SkillCall, { skill: 'attack' }>).times;
   if ('step' in parsed && c.entityId === undefined) delete (parsed.step as Extract<SkillCall, { skill: 'attack' }>).entityId;
   return parsed;
 }
@@ -1869,7 +1872,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
   },
   {
     name: 'attack',
-    doc: `{"skill":"attack","target":"zombie"}             攻击最近的该目标。mode 不写/auto = 8 格切可用远程、5.5 格切回近战，两者都不可用时明确受阻，不降级为空手。
+    doc: `{"skill":"attack","target":"对手的玩家名","entityId":42,"mode":"melee","weapon":"unarmed","times":3} 约定空手切磋：每击确认主手为空，最多挥三下就收手。对玩家选 auto/melee 且省略武器也会空手，默认一下；约好用武器可明确指定。times 统计挥击/发射，命中和胜负另看回执。
+{"skill":"attack","target":"zombie"}             攻击最近的该目标。mode 不写/auto = 8 格切可用远程、5.5 格切回近战，两者都不可用时明确受阻，不降级为空手。
 {"skill":"attack","target":"zombie","entityId":42} 精确指定现场观察到的这一只；target 是英文类型或玩家名，编号另填 entityId，不把 "42" 写成 target。
                                                  ID 只在当前连接有效；失效、类型不符或被遮挡时不改打附近同类，重新观察。
 {"skill":"attack","target":"skeleton","entityId":42,"mode":"ranged","weapon":"crossbow"}  指定弩，可用已装填箭的弩，或用普通箭、光灵箭、药箭装填。
@@ -1882,7 +1886,8 @@ ground 使用普通物理，飞行悬停时先 land 或改用 flight。flight �
     fields: [
       { key: 'target', kind: 'string', required: true, hint: '实体英文类型或玩家名；数字实体编号另填 entityId' },
       { key: 'entityId', kind: 'int', lo: 0, hi: 2_147_483_647, def: 0, doc: '可选；与 target 一起精确指定本连接观察到的实体 ID；省略时选最近同类，指定后不改选其他实体' },
-      { key: 'weapon', kind: 'string', doc: '可选；auto/melee 指定近战物品英文 ID；ranged/kite 指定 bow、crossbow 或 trident。失去后不替换。' },
+      { key: 'times', kind: 'int', lo: 1, hi: 64, def: 1, doc: '可选；挥击和实际发射的总上限。点到即止时使用。' },
+      { key: 'weapon', kind: 'string', doc: '可选；auto/melee 用 unarmed 明确空手，或指定近战物品英文 ID；ranged/kite 指定 bow、crossbow 或 trident。失去后不替换。' },
       {
         key: 'mode', kind: 'enum', values: ['auto', 'melee', 'ranged', 'kite'],
         error: 'attack 的 mode 只认 auto/melee/ranged/kite',
