@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.152
+
+Native nearby SVC packets can be transcribed on the client using a server-profile ASR endpoint. Speaker identity comes from the authenticated packet and current player roster. Listening runs independently of the body queue.
+
 ## 0.5.7-rc.160-preview.151
 
 Resolve supported Mineflayer-shaped tool calls before normal grant checks and replay. Native Simple Voice Chat accepts a per-server UDP port and waits for authentication before sending audio.

@@ -99,7 +99,7 @@ export function attachSimpleVoiceChat(bot, {
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 300000) throw Error('SVC_TIMEOUT_INVALID');
   attached.get(bot)?.close();
   let closed = false, key, uuid, secretMeta = null, sock = null, sequence = 0n, keepalive = null, uploading = false, udpAuthenticated = false, udpValidated = false, udpAddress = null, resolveError = null, authTimer = null, authTries = 0;
-  const pendingAudio = [];
+  let receivedAudioFrames = 0;
   const stateOf = () => ({
     transport: 'simple-voice-chat',
     compatibilityVersion,
@@ -108,7 +108,7 @@ export function attachSimpleVoiceChat(bot, {
     voiceHost: secretMeta?.voiceHost ?? '',
     codec: secretMeta?.codec ?? null,
     keepAlive: secretMeta?.keepAlive ?? null,
-    receivedAudioFrames: pendingAudio.length,
+    receivedAudioFrames,
     // True only after the server's AuthenticateAck datagram was decrypted. Still not hearing evidence.
     udpAuthenticated: !closed && udpAuthenticated,
     /** Server answered ConnectionCheck (official AuthThread second phase). */
@@ -151,11 +151,17 @@ export function attachSimpleVoiceChat(bot, {
       else if (data[0] === 2 || data[0] === 3 || data[0] === 4) {
         const pos = data[0] === 4 ? 57 : 33;
         const [size, start] = readv(data, pos);
-        if (size > 0) {
-          const frame = Buffer.from(data.subarray(start, start + size));
-          const row = { kind: data[0] === 3 ? 'group' : data[0] === 4 ? 'positional' : 'nearby', bytes: frame.length, heard: 'unknown' };
-          if (pendingAudio.length < 512) pendingAudio.push(row);
-          onAudio?.({ ...row, opus: frame });
+        const tail = start + size;
+        if (size < 0 || size > 4096 || tail + 8 + (data[0] === 3 ? 1 : 5) > data.length) return;
+        if (size > 0) receivedAudioFrames++;
+        if (onAudio && udpAuthenticated) {
+          const uuidAt = offset => {
+            const hex = data.subarray(offset,offset+16).toString('hex');
+            return [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
+          };
+          onAudio({kind:data[0]===3?'group':data[0]===4?'positional':'nearby',bytes:size,heard:'unknown',
+            channelUuid:uuidAt(1),speakerUuid:uuidAt(17),sequence:data.readBigInt64BE(tail).toString(),
+            ended:size===0,opus:Buffer.from(data.subarray(start,tail))});
         }
       }
     } catch { /* malformed datagrams are dropped; they are not hearing evidence */ }

@@ -59,7 +59,7 @@ export interface SimpleVoiceChatOptions {
   resolveUdpHost?: (host: string) => Promise<string>;
   compatibilityVersion?: number;
   timeoutMs?: number;
-  onAudio?: (row: { kind: string; bytes: number; heard: 'unknown'; opus: Buffer }) => void;
+  onAudio?: (row: { kind: string; bytes: number; heard: 'unknown'; opus: Buffer; speakerUuid: string; channelUuid: string; sequence: string; ended: boolean }) => void;
   onState?: (row: Record<string, unknown>) => void;
 }
 export const attachSimpleVoiceChat: (bot: SimpleVoiceChatBot, options: SimpleVoiceChatOptions) => SimpleVoiceChatClient = attach;
@@ -76,3 +76,4 @@ export const SVC_CHANNELS = [
   'voicechat:request_secret', 'voicechat:update_state',
 ] as const;
 export { inspectVoiceWav };
+export { SvcHearing, transcribeSvcWav, type SvcHearingOptions, type VoiceSpeaker, type VoiceTranscript } from '../core/svc-hearing.ts';
