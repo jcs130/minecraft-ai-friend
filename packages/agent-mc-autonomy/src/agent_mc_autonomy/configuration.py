@@ -241,7 +241,8 @@ class Settings:
         if len(username) > 254 or (username and auth == "offline" and not re.fullmatch(r"[A-Za-z0-9_]{1,16}", username)):
             raise SettingsValidationError("server.username", "invalid_username")
         version = _text(server, "version", "1.21.1")
-        if version != "1.21.1" and not (body_provider == "java-client" and version == "1.20.6"):
+        versions = {"1.21.1", "1.21.11"} if body_provider == "mineflayer" else {"1.20.6", "1.21.1"}
+        if version not in versions:
             raise SettingsValidationError("server.version", "unsupported_version")
         if _integer(viewer, "port", 0, 0, 65535) or _integer(viewer, "console_port", 0, 0, 65535):
             raise ValueError("This headless build uses viewer.url; bundled viewer and console ports must be zero")

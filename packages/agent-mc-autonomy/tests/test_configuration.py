@@ -201,3 +201,10 @@ def test_game_memory_config_and_credentials_are_forwarded_without_personal_memor
 def test_invalid_memory_configuration_is_rejected(memory):
     with pytest.raises(ValueError):
         Settings.parse({"memory": memory})
+
+
+
+def test_mineflayer_minecraft_1_21_11_reaches_native_world_configuration(tmp_path):
+    settings = Settings.parse({"server": {"host": "play.example.org", "port": 25575,
+                                          "username": "Alice", "version": "1.21.11"}})
+    assert settings.client_config(tmp_path)["world"]["version"] == "1.21.11"

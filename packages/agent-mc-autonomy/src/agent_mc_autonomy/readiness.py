@@ -18,7 +18,7 @@ def validation_feedback(error: Exception) -> dict:
         "invalid_host": "填写服务器域名或 IP 地址，不要填写 URL、路径或账号。",
         "invalid_auth": "请选择离线昵称或 Microsoft 认证。",
         "invalid_username": "离线昵称须为 1–16 位字母、数字或下划线；Microsoft 请填有效账户标识。",
-        "unsupported_version": "此 Mineflayer 集成要求 Java 1.21.1。",
+        "unsupported_version": "请选择此身体支持的 Minecraft Java 版本。Mineflayer 支持 1.21.1 和 1.21.11。",
         "operator_port_unprivileged": "Mineflayer 账户端口请填 0（关闭）或 1024–65535 的空闲本机端口。",
         "renderer_catalog_pair_required": "渲染器目录与版本资源 catalog JSON 必须一起填写，或一起留空使用文字模式。",
     }
