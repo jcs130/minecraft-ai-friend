@@ -489,7 +489,7 @@ export function narrateWorldSegments(
     text: gear,
     cmp: s.invSynced ? `${s.heldItem ?? 'bare'}:${s.heldItemDisplayName ?? ''}|${bagFull}|${narrateCursor(s)}` : gear,
   });
-  const inventoryIds = inventoryDetail === 'current' && s.invSynced ? '物品 ID 及槽位按需查询 mc_bag {detail:"slots"}。' : s.invSynced
+  const inventoryIds = inventoryDetail === 'current' && s.invSynced ? '物品 ID 与槽位已同步，可按需查看。' : s.invSynced
     ? `当前随身物品 ID：${inventoryIdentityText(s.inventory) || '空'}。数量见背包读数；调用技能使用这些实际 ID，不推测别名。`
     : '当前随身物品 ID 暂不可用：库存尚未确认。';
   segs.push({ key: 'inventoryIds', text: inventoryIds, cmp: inventoryIds });

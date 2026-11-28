@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.149
+
+Keep inventory facts and deltas independent of the host's tool names. Explicit SDK and MCP inventory reads retain their slot and page continuations.
+
 ## 0.5.7-rc.160-preview.148
 
 Avoid replaying an in-flight approach when extending its itinerary. An unknown server query named mc_bag points to the native inventory read.
