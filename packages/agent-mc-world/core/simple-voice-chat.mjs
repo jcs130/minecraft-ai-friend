@@ -57,7 +57,9 @@ export function parseVoicechatSecret(data) {
   let allowRecording = null, at = hostAt + hostLen;
   if (at < data.length) { allowRecording = !!data[at]; at += 1; }
   let udpHost = null, udpPort = port;
-  if (voiceHost) {
+  if (/^\d+$/.test(voiceHost)) {
+    udpPort = Number(voiceHost);
+  } else if (voiceHost) {
     const cut = voiceHost.lastIndexOf(':');
     if (cut > 0 && /^\d+$/.test(voiceHost.slice(cut + 1))) {
       udpHost = voiceHost.slice(0, cut);
@@ -87,11 +89,13 @@ async function defaultResolveUdpHost(host) {
 
 export function attachSimpleVoiceChat(bot, {
   onAudio, onState, isAuthenticated, opus, bindHost = '0.0.0.0', resolveUdpHost = defaultResolveUdpHost,
+  serverHost, udpPort,
   compatibilityVersion = SVC_COMPATIBILITY_VERSION, timeoutMs = 15000,
 } = {}) {
   const ready = () => bot?._client?.state === 'play' && (!isAuthenticated || isAuthenticated());
   if (!ready()) throw Error('SVC_AUTHENTICATED_PLAY_REQUIRED');
   if (!opus || typeof opus.encode !== 'function') throw Error('SVC_OPUS_CODEC_REQUIRED');
+  if (udpPort !== undefined && (!Number.isSafeInteger(udpPort) || udpPort < 1 || udpPort > 65535)) throw Error('SVC_UDP_PORT_INVALID');
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 300000) throw Error('SVC_TIMEOUT_INVALID');
   attached.get(bot)?.close();
   let closed = false, key, uuid, secretMeta = null, sock = null, sequence = 0n, keepalive = null, uploading = false, udpAuthenticated = false, udpValidated = false, udpAddress = null, resolveError = null, authTimer = null, authTries = 0;
@@ -186,7 +190,8 @@ export function attachSimpleVoiceChat(bot, {
     key = Buffer.from(packet.data.subarray(0, 16));
     uuid = Buffer.from(packet.data.subarray(20, 36));
     secretMeta = parsed;
-    if (!secretMeta.udpHost) secretMeta.udpHost = bindHost;
+    if (!secretMeta.udpHost) secretMeta.udpHost = serverHost || bot._client?.socket?.remoteAddress || bindHost;
+    if (udpPort !== undefined) secretMeta.udpPort = udpPort;
     udpAddress = null; resolveError = null;
     emitState({ state: 'secret-received', ...stateOf() });
     const meta = secretMeta;
@@ -232,15 +237,16 @@ export function attachSimpleVoiceChat(bot, {
   };
   const ended = () => close(false);
 
-  const waitReady = async (signal) => {
+  const waitReady = async (signal, requireAuth = false) => {
     const end = Date.now() + timeoutMs;
     while (Date.now() < end) {
       if (closed) throw Error('SVC_CONNECTION_ENDED');
       if (signal?.aborted) throw Error('SVC_CANCELLED');
-      if (secretMeta && sock && udpAddress) return;
+      if (secretMeta && sock && udpAddress && (!requireAuth || udpAuthenticated)) return;
       if (resolveError) throw Error(resolveError);
       await sleep(20);
     }
+    if (requireAuth && udpAddress) throw Error('SVC_UDP_AUTH_TIMEOUT');
     throw Error(secretMeta ? 'SVC_UDP_HOST_UNRESOLVED' : 'SVC_HANDSHAKE_TIMEOUT');
   };
 
@@ -256,7 +262,7 @@ export function attachSimpleVoiceChat(bot, {
       if (!opus) throw Error('SVC_OPUS_CODEC_REQUIRED');
       uploading = true;
       try {
-        await waitReady(signal);
+        await waitReady(signal,true);
         const frames = pcmFrames(pcm16Mono48kFromWav(wav));
         for (const frame of frames) {
           if (closed || !ready() || signal?.aborted) {

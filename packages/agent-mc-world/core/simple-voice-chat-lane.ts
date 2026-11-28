@@ -17,6 +17,8 @@ export interface SimpleVoiceChatConfig {
   javaPath: string;
   compatibilityVersion: number;
   bindHost?: string;
+  /** Override the remote UDP port for a server behind an operator-provided port mapping. */
+  udpPort?: number;
 }
 export interface SimpleVoiceChatContext {
   bot: Parameters<typeof attachSimpleVoiceChat>[0];
@@ -44,6 +46,7 @@ export class SimpleVoiceChatLane {
   private codec: (SimpleVoiceChatOpus & { close?(): void }) | null = null;
   constructor(private readonly options: {
     config: () => SimpleVoiceChatConfig;
+    serverHost?: () => string;
     blob: (handle: string) => { bytes: Uint8Array; mime?: string } | null;
     /** Optional host-provided Opus codec; otherwise the official SVC jar's Concentus is used. */
     opus?: () => SimpleVoiceChatOpus & { close?(): void };
@@ -61,6 +64,7 @@ export class SimpleVoiceChatLane {
       this.client = attachSimpleVoiceChat(this.context.bot, {
         opus: this.codec, isAuthenticated: () => this.context!.stillCurrent(),
         compatibilityVersion: cfg.compatibilityVersion || 20, bindHost: cfg.bindHost || '0.0.0.0',
+        serverHost:this.options.serverHost?.(), udpPort:cfg.udpPort === 0 ? undefined : cfg.udpPort,
         resolveUdpHost: this.options.resolveUdpHost ?? resolveSvcUdpHost,
       });
     } catch (error) {
@@ -71,6 +75,9 @@ export class SimpleVoiceChatLane {
   private lastError: string | null = null;
   /** True while a native SVC client is attached to the current connection. */
   get attached(): boolean { return this.client !== null; }
+  status() {
+    return this.client?.state() ?? {connected:false,udpAuthenticated:false,udpValidated:false,udpPort:null,reason:this.lastError,recipientHeard:'unknown'};
+  }
   disconnect(_reason?: string) {
     try { this.client?.close(); } catch {}
     this.client = null;

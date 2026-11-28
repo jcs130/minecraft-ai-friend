@@ -1,4 +1,5 @@
 import { Ajv } from 'ajv';
+import { resolveMineflayerCall } from '../client/mineflayer-call.ts';
 import { compactToolSchema, type CompactCatalogOptions } from '../client/context-budget.ts';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListResourcesRequestSchema, ListToolsRequestSchema, ReadResourceRequestSchema,
@@ -156,9 +157,11 @@ export function createMinecraftMcpServer(runtime: MinecraftAgentClient, version:
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: advertised }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra): Promise<CallToolResult> => {
-    const { name, arguments: args = {} } = request.params;
+    let { name, arguments: args = {} } = request.params;
     let submittedRequestId: string | undefined;
     try {
+      const mapped=resolveMineflayerCall(name,args,prefix);
+      if(mapped){name=mapped.name;args=mapped.args;}
       const validate = validators.get(name);
       if (!validate) throw new Error(`Unknown tool: ${name}`);
       if (options.turnOwnership === 'host' && name === protocol.name && args.protocol === PROTOCOL && hostTurnActions.has(String(args.action))) {

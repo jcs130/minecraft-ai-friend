@@ -53,6 +53,8 @@ export interface SimpleVoiceChatOptions {
   opus: SimpleVoiceChatOpus;
   isAuthenticated?: () => boolean;
   bindHost?: string;
+  serverHost?: string;
+  udpPort?: number;
   /** Resolve the SecretPacket voice host (may be a DNS name) to an IPv4 address. Fake 198.18/15 answers are rejected. */
   resolveUdpHost?: (host: string) => Promise<string>;
   compatibilityVersion?: number;
