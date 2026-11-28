@@ -48,7 +48,7 @@ export interface SimpleVoiceChatClient {
   ready(signal?: AbortSignal): Promise<SimpleVoiceChatState>;
   upload(wav: Buffer, options?: { requestId?: string; signal?: AbortSignal; whisper?: boolean }): Promise<SimpleVoiceChatResult>;
   /** Send 48 kHz mono PCM frames as produced. Closing the readable signals normal end of input. */
-  uploadFrames(source:ReadableStream<Int16Array>, options?:{requestId?:string; signal?:AbortSignal; whisper?:boolean}):Promise<SimpleVoiceChatResult>;
+  uploadFrames(source:ReadableStream<Int16Array>, options?:{requestId?:string; signal?:AbortSignal; whisper?:boolean; program?:boolean}):Promise<SimpleVoiceChatResult>;
   close(unregister?: boolean): void;
 }
 export interface SimpleVoiceChatOptions {

@@ -1,3 +1,7 @@
+## 0.5.7-rc.160-preview.160
+
+Nearby vocal performances share the native SVC microphone with priority replies and resumable frame offsets.
+
 ## 0.5.7-rc.160-preview.154
 
 Model-authored Minecraft programs can use the Mindcraft world and skills namespaces with the active Mineflayer connection. Includes scoped observations, original call receipts, and cancellable actions. Consult mc_script api:"mindcraft".

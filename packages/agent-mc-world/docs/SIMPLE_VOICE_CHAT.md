@@ -64,3 +64,7 @@ World 工具：`mc_svc`。`{ }` 或 `{action:"status"}` 只报告握手状态。
 ## 本环境验证范围
 
 本地测试用已知 PCM/WAV，在 `127.0.0.1` 上完成 `request_secret`、UDP 认证、加密麦克风帧到达，并用官方 2.6.22 Concentus 解码。本环境没有现成的 Bukkit 2.6.27 + Paper 进程；因此这是官方编解码 + 官方报文布局 + 作者已验证发送契约的端到端，而不是再起一个完整 Paper 语音服。
+
+### Nearby singing
+
+A configured loopback audio library can expose approved vocal tracks through GET /api/music-artifacts and /api/music-artifacts/{id}. Use mc_svc with action songs, then perform with trackId and a stable requestId. Poll status or cancel using the same ID. The game microphone yields to foreground speech and resumes on the next unsent 20 ms frame. Disconnect cancels the performance. Movement and planning can continue. A sent receipt counts transmitted frames. Receiver playback requires separate evidence.

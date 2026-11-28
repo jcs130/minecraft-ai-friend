@@ -1,3 +1,4 @@
+import { SvcPerformance, songEndpoint } from '../core/svc-performance.ts';
 import { SvcPublicSpeech } from '../core/svc-public-speech.ts';
 import type { ChatDeliveryReceipt } from '../src/contracts/chat-delivery.ts';
 import { EventEmitter } from 'node:events';
@@ -396,4 +397,49 @@ describe('confirmed public speech to native SVC',()=>{
     await vi.waitFor(()=>expect(lane.status()[0]?.state).toBe('cancelled'));
     expect(send).not.toHaveBeenCalled();
   });
+});
+
+it('sends a long performance once, yields the microphone and resumes on the exact next frame',async()=>{
+  const id='12345678-0000-4000-8000-123456789abc', opusMs=20, source=makeWav(31000,24000);
+  // Give each frame a distinct sample to detect replay, loss, or skipping the interrupted frame.
+  for(let i=0;i<(source.length-44)/2;i++)source.writeInt16LE(Math.floor(i/(24*opusMs)),44+i*2);
+  expect(()=>inspectVoiceWav(source)).toThrow();
+  const states:string[]=[],samples:number[]=[];
+  const finished=Promise.withResolvers<void>();
+  const performance=new SvcPerformance(row=>{states.push(row.state);if(['sent','cancelled','failed'].includes(row.state))finished.resolve();},async()=>source);
+  let tail=Promise.resolve();
+  function microphone<T>(run:()=>Promise<T>){const pending=tail.then(run);tail=pending.then(()=>{},()=>{});return pending;}
+  const connection:Parameters<SvcPerformance['start']>[3]={
+    current:()=>true,microphone,
+    send:async(stream,opts)=>{
+      const reader=stream.getReader();let frames=0;
+      while(!opts?.signal?.aborted){
+        const next=await reader.read();if(next.done)break;
+        samples.push(next.value[0]);frames++;
+        if(samples.length===3){performance.yieldToSpeech();void microphone(async()=>{states.push('speech');});}
+      }
+      await reader.cancel();
+      return {state:opts?.signal?.aborted?'cancelled':'sent',frames,requestId:id,recipientHeard:'unknown',transport:'simple-voice-chat'};
+    }
+  };
+  expect(SIMPLE_VOICE_CHAT_TOOL.bodyControl).toBe('independent');
+  expect(performance.start('http://localhost','original',id,connection).state).toBe('queued');
+  expect(performance.start('http://localhost','original',id,connection).requestId).toBe(id);
+  expect(()=>performance.start('http://localhost','another',id,connection)).toThrow('CONFLICT');
+  await finished.promise;
+  expect(samples).toEqual(Array.from({length:1550},(_,i)=>i));
+  expect(states.filter(s=>s==='sending')).toHaveLength(2);
+  expect(states.indexOf('speech')).toBeLessThan(states.lastIndexOf('sending'));
+  expect(performance.status(id)).toMatchObject({frames:1550,totalFrames:1550,state:'sent',recipientHeard:'unknown'});
+  expect(performance.cancel(id)).toBe(false);
+  expect(()=>songEndpoint('https://example.org','original')).toThrow();
+});
+it('cancels an outstanding fetch on connection loss and never sends on reconnect',async()=>{
+  const finished=Promise.withResolvers<void>(),id='12345678-0000-4000-8000-123456789abc';
+  const service=new SvcPerformance(row=>{if(row.state==='cancelled')finished.resolve();},async(_url,signal)=>
+    new Promise<Buffer>((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true})));
+  service.start('http://127.0.0.1','original',id,{current:()=>true,send:async()=>{throw Error('unexpected send');},microphone:run=>run()});
+  expect(service.cancel(id,'connection-closed')).toBe(true);
+  await finished.promise;
+  expect(service.status(id)).toMatchObject({state:'cancelled',frames:0,reason:'connection-closed'});
 });
