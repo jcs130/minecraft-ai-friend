@@ -1,6 +1,7 @@
 /** Reuse the independent JS worker, method versions and receipts on the real Java body. */
 import { createHash, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
+import { nativeInvocation, NATIVE_INVOCATION_SCHEMA } from '../../core/mineflayer-call.ts';
 import { MethodRunner, METHOD_ADAPTER, METHOD_LIMITS, type MethodOperation, type MethodRun } from '../../core/method-runner.ts';
 import { MethodLibrary, METHOD_LIBRARY_SCHEMA } from '../../core/method-library.ts';
 import { procedureReference, resolveProcedure } from '../../core/support/procedure.ts';
@@ -25,7 +26,7 @@ export function javaMethodCapabilities(caps: Record<string, unknown>) {
 }
 const READS = new Set(['read','blockAt','findBlocks','findBlock','canSeeBlock','inventory.items','getControlState']);
 export const JAVA_METHOD_FIELDS = {
-  find: blockFindSchema(16),
+  native:NATIVE_INVOCATION_SCHEMA,find: blockFindSchema(16),
   name:{type:'string',minLength:1,maxLength:80}, params:{type:'object'}, durationMs:{type:'integer',minimum:1000,maximum:120000},
   waitMs:{type:'integer',minimum:0,maximum:30000},
   validate:{type:'boolean'}, stop:{type:'boolean'}, runId:{type:'integer',minimum:1}, call:{type:'integer',minimum:1,maximum:32},
@@ -110,6 +111,7 @@ export class JavaMethods {
   }
   private async reconcile(){if(!this.uncertain)return;const action:JavaClientAction=await this.port.rpc('result',{action_id:this.uncertain});if(['completed','partial','blocked','cancelled'].includes(action.phase)){this.owned.delete(this.uncertain);this.uncertain=null;for(const run of this.finishedRuns.values())run.unknown=false;}else throw new Error(`Cleanup unknown for ${this.uncertain}; reconcile original action, no replay`);}
   async execute(args:Record<string,unknown>,ctx:ToolCallContext):Promise<ToolOutcome>{
+    const native=nativeInvocation(args);
     if(args.find!==undefined)args=blockFindRequest(args,16);
     const waitMs=args.waitMs??this.cfg.methodWaitMs??1000;
     if(typeof waitMs!=='number'||!Number.isInteger(waitMs)||waitMs<0||waitMs>30000)throw new Error('waitMs must be 0..30000');
@@ -118,7 +120,7 @@ export class JavaMethods {
       const value=q.op==='list'?this.library.list(q):q.op==='read'?this.library.read(String(q.id),q.revision as string|undefined):q.op==='save'?this.library.save(q,this.runner.read(Number(q.validationRunId))[0],ctx.role):null;
       if(value===null)throw new Error('library.op must be list/read/save');return {text:JSON.stringify(value)};}
     if(args.stop===true){if(args.code||args.procedure||args.runId||args.call)throw new Error('Use stop separately');await this.stop('mc_script explicit cancellation');await this.reconcile();return{text:'Method stopped; own native cleanup confirmed'};}
-    if(args.code!==undefined||args.procedure!==undefined){
+    if(native||args.code!==undefined||args.procedure!==undefined){
       if(args.runId||args.call||args.code&&args.procedure)throw new Error('Choose code OR procedure; inspect runs separately');
       if(args.validate!==true){await this.reconcile();this.guard();}ctx.signal?.throwIfAborted();
       if(args.validate!==true){const caps=await this.port.rpc('capabilities',{},ctx.signal);if(caps.methodAdapter!==JAVA_METHOD_PROTOCOL||!Array.isArray(caps.methodCalls)||!JAVA_METHOD_REQUIRED.every(n=>caps.methodCalls.includes(n)))throw new Error('Actual Java bridge lacks agent-mc-method/v1; install matching bridge before JS execution. No Python conversion occurred.');this.availableMethods=new Set(caps.methodCalls);this.generation=(await this.port.state(ctx.signal)).generation;}
@@ -128,7 +130,7 @@ export class JavaMethods {
       ctx.signal?.throwIfAborted();
       const code=root?.code??args.code as string;
       const name=root?.id??args.name??`inline-${createHash('sha256').update(String(code)).digest('hex').slice(0,12)}`;
-      const run=this.runner.start({name:name as string,code,params:args.params as Record<string,unknown>|undefined,durationMs:args.durationMs as number|undefined,validate:args.validate===true,...(reference&&graph?{procedure:{reference,graph}}:{})});
+      const run=native ? this.runner.startNative(native,{name:args.name as string|undefined,durationMs:args.durationMs as number|undefined}) : this.runner.start({name:name as string,code,params:args.params as Record<string,unknown>|undefined,durationMs:args.durationMs as number|undefined,validate:args.validate===true,...(reference&&graph?{procedure:{reference,graph}}:{})});
       const waitingCancelled=await this.settleRun(run.id,waitMs,ctx.signal);
       const current=this.runner.read(run.id)[0],finished=this.finishedRuns.get(run.id),terminal=current.status!=='running'&&!!finished&&!finished.unknown;
       const phase=terminal?finished!.phase:finished?.unknown?'blocked':'accepted';

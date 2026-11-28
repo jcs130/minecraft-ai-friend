@@ -48,7 +48,7 @@ export const NATIVE_API = Object.freeze({
   dig: 'dig(block,forceLook=true,digFace="auto"): native dig with current tool and measured reach; no navigation or automatic tool selection. digFace is auto/raycast or a Vec3 face. Protected, unknown-permission or changed blocks are rejected.',
   stopDigging: 'stopDigging(): interrupt current native digging.',
   placeBlock: 'placeBlock(referenceBlock,faceVector): native server-confirmed placement at reference.position.plus(faceVector). Six cardinal faces only; current held item and normal material permission apply. No automatic equip or navigation; installed World confirmation and retry fixes still apply.',
-  equip: 'equip(itemOrNumericType,destination): native inventory equip, using a fresh item instance/slot. Destination hand/head/torso/legs/feet/off-hand; existing inventory synchronization remains active.',
+  equip: 'equip(itemOrNumericType,destination="hand"): native inventory equip, using a fresh item instance/slot. Destination hand/head/torso/legs/feet/off-hand; existing inventory synchronization remains active.',
   unequip: 'unequip(destination): native removal; refuses when no inventory space is available, so native toss fallback cannot discard equipment.',
   activateBlock: 'activateBlock(block,direction?,cursorPos?): native right click with the CURRENT hand, default up face and center cursor. Does not clear/equip the hand. Return confirms dispatch only; read actual block/inventory effects.',
   activateItem: 'activateItem(offHand=false): native held-item use (including buckets). Aim with lookAt first. Return confirms dispatch only; re-read world and inventory. Does not clear/equip the hand.',

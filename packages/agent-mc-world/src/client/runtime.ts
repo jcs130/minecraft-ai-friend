@@ -1,4 +1,5 @@
 import { operatorPlaySteps } from './operator-play.ts';
+import { nativeInvocation, nativeCallSource } from '../../core/mineflayer-call.ts';
 import { resolveMineflayerCall } from './mineflayer-call.ts';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -650,7 +651,11 @@ export class MinecraftAgentClient {
     const characterTool = this.handoff !== undefined && name === `${this.toolPrefix}_character_body`;
     if (this.phase !== 'started' && !offlineCall && !characterTool) throw new Error(`Game runtime is disconnected; call ${this.toolPrefix}_connection action:connect first.`);
     if (typeof callId !== 'string' || !callId || callId.length > 256) throw new Error('Invalid request id');
-    const signature = createHash('sha256').update(JSON.stringify([name, args, characterTool ? null : turnId ?? this.turn?.id, ...(attribution ? [attribution] : [])])).digest('hex');
+    // A retry may arrive after upgrading from the original one-line script representation.
+    const native=name===this.toolPrefix+'_script' && args.native!==undefined ? nativeInvocation(args) : undefined;
+    const keyArgs=native && Object.keys(args).length===2 && args.waitMs===1000
+      ? {code:nativeCallSource(native.name),params:{args:native.args},waitMs:1000} : args;
+    const signature = createHash('sha256').update(JSON.stringify([name, keyArgs, characterTool ? null : turnId ?? this.turn?.id, ...(attribution ? [attribution] : [])])).digest('hex');
     const prior = this.calls.get(callId);
     if (prior) { if (prior.signature !== signature) throw new Error('Request id reused with different arguments'); return prior.promise; }
     const replay = this.requests.read(callId, signature);
