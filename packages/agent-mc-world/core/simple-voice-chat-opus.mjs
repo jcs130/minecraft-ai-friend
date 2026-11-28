@@ -57,6 +57,7 @@ function frameBytes(frame) {
  * Talk to the official Concentus encoder/decoder shipped in a Simple Voice Chat jar.
  * Used as an independent codec (not a second invented Opus). Requires a JDK at runtime.
  */
+const compiledOracles = new Set();
 export function createOfficialOpusCodec({ jar, javaPath, classDir, sourcePath } = {}) {
   if (!jar || !existsSync(jar)) throw Error('SVC_OFFICIAL_OPUS_JAR_REQUIRED');
   const java = javaPath || process.env.JAVA_HOME && join(process.env.JAVA_HOME, 'bin/java') || 'java';
@@ -64,14 +65,16 @@ export function createOfficialOpusCodec({ jar, javaPath, classDir, sourcePath } 
   const here = dirname(fileURLToPath(import.meta.url));
   const src = sourcePath || join(here, 'official-svc-opus/OfficialSvcOpusOracle.java');
   const out = classDir || join(tmpdir(), 'agent-mc-world-official-svc-opus');
-  if (!existsSync(join(out, 'OfficialSvcOpusOracle.class')) || existsSync(src)) {
+  const buildKey=JSON.stringify([java,jar,src,out]);
+  if (!compiledOracles.has(buildKey) || !existsSync(join(out, 'OfficialSvcOpusOracle.class'))) {
     mkdirSync(out, { recursive: true });
     if (existsSync(src)) {
       const compiled = spawnSync(javac, ['--release', '17', '-cp', jar, '-d', out, src], { encoding: 'utf8' });
       if (compiled.status !== 0) throw Error('SVC_OFFICIAL_OPUS_COMPILE_FAILED');
+      compiledOracles.add(buildKey);
     }
   }
-  const child = spawn(java, ['-cp', `${out}${sep()}${jar}`, 'OfficialSvcOpusOracle'], { stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(java, ['-cp', `${out}${sep()}${jar}`, 'OfficialSvcOpusOracle'], { windowsHide:true, stdio: ['pipe', 'pipe', 'pipe'] });
   let leftover = Buffer.alloc(0), waiters = [];
   child.stdout.on('data', (chunk) => {
     leftover = Buffer.concat([leftover, chunk]);
@@ -86,6 +89,7 @@ export function createOfficialOpusCodec({ jar, javaPath, classDir, sourcePath } 
   });
   const fail = (error) => { for (const waiter of waiters) waiter.reject(error); waiters = []; };
   child.on('error', fail);
+  child.stdin.on('error', fail);
   let stderr=''; child.stderr.on('data', (chunk)=>{stderr+=chunk.toString(); if(stderr.length>4000)stderr=stderr.slice(-4000);});
   child.on('exit', (code) => fail(Error(`SVC_OFFICIAL_OPUS_EXIT_${code}${stderr?': '+stderr.slice(0,800):''}`)));
   const request = (payload) => new Promise((resolve, reject) => {

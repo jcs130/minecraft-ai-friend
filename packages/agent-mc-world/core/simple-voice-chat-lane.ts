@@ -1,3 +1,4 @@
+import { SvcHearing, transcribeSvcWav, type VoiceSpeaker, type VoiceTranscript } from './svc-hearing.ts';
 import { randomUUID } from 'node:crypto';
 import type { ToolDef } from './support/host-contract.ts';
 import { attachSimpleVoiceChat, createOfficialOpusCodec, type SimpleVoiceChatClient, type SimpleVoiceChatOpus } from '../src/simple-voice-chat.ts';
@@ -19,10 +20,13 @@ export interface SimpleVoiceChatConfig {
   bindHost?: string;
   /** Override the remote UDP port for a server behind an operator-provided port mapping. */
   udpPort?: number;
+  transcriptionEndpoint?: string;
 }
 export interface SimpleVoiceChatContext {
   bot: Parameters<typeof attachSimpleVoiceChat>[0];
   stillCurrent(): boolean;
+  speaker?(uuid:string):VoiceSpeaker | undefined;
+  deliver?(row:VoiceTranscript):void;
 }
 
 export const SIMPLE_VOICE_CHAT_TOOL: Omit<ToolDef, 'handler'> = {
@@ -41,6 +45,7 @@ export const SIMPLE_VOICE_CHAT_TOOL: Omit<ToolDef, 'handler'> = {
 };
 
 export class SimpleVoiceChatLane {
+  private hearing:SvcHearing | null=null;
   private client: SimpleVoiceChatClient | null = null;
   private context: SimpleVoiceChatContext | null = null;
   private codec: (SimpleVoiceChatOpus & { close?(): void }) | null = null;
@@ -54,21 +59,31 @@ export class SimpleVoiceChatLane {
     resolveUdpHost?: (host: string) => Promise<string>;
   }) {}
   sync(context?: SimpleVoiceChatContext) {
+    if (this.client && this.context && !this.context.stillCurrent()) this.disconnect('connection-or-world-changed');
     if (context) this.context = context;
     const cfg = this.options.config();
     if (!cfg.enabled || !this.context?.stillCurrent()) { this.disconnect('disabled-or-stale'); return; }
     if (this.client) return;
     this.lastError = null;
     try {
-      this.codec = this.codec ?? (this.options.opus ? this.options.opus() : createOfficialOpusCodec({ jar: cfg.officialJar, javaPath: cfg.javaPath || undefined }));
+      const decoder=()=>this.options.opus ? this.options.opus() : createOfficialOpusCodec({jar:cfg.officialJar,javaPath:cfg.javaPath||undefined});
+      this.codec ??= decoder();
+      const live=this.context;
+      const endpoint=cfg.transcriptionEndpoint;
+      if(endpoint && live.speaker && live.deliver){
+        this.hearing=new SvcHearing({decoder,transcribe:(wav,signal)=>transcribeSvcWav(endpoint,wav,signal),
+          speaker:live.speaker,deliver:live.deliver,current:live.stillCurrent});
+      }
       this.client = attachSimpleVoiceChat(this.context.bot, {
         opus: this.codec, isAuthenticated: () => this.context!.stillCurrent(),
         compatibilityVersion: cfg.compatibilityVersion || 20, bindHost: cfg.bindHost || '0.0.0.0',
         serverHost:this.options.serverHost?.(), udpPort:cfg.udpPort === 0 ? undefined : cfg.udpPort,
+        onAudio: this.hearing ? row=>this.hearing?.receive(row) : undefined,
         resolveUdpHost: this.options.resolveUdpHost ?? resolveSvcUdpHost,
       });
     } catch (error) {
       this.client = null;
+      this.hearing?.close();this.hearing=null;
       this.lastError = error instanceof Error ? error.message : 'SVC_ATTACH_FAILED';
     }
   }
@@ -76,9 +91,10 @@ export class SimpleVoiceChatLane {
   /** True while a native SVC client is attached to the current connection. */
   get attached(): boolean { return this.client !== null; }
   status() {
-    return this.client?.state() ?? {connected:false,udpAuthenticated:false,udpValidated:false,udpPort:null,reason:this.lastError,recipientHeard:'unknown'};
+    return {...(this.client?.state() ?? {connected:false,udpAuthenticated:false,udpValidated:false,udpPort:null,reason:this.lastError,recipientHeard:'unknown'}),hearing:this.hearing?.status()??null};
   }
   disconnect(_reason?: string) {
+    this.hearing?.close();this.hearing=null;
     try { this.client?.close(); } catch {}
     this.client = null;
   }
@@ -98,7 +114,7 @@ export class SimpleVoiceChatLane {
       return { text: `[mc_svc] 当前无法握手：${this.lastError ?? '未附着'}。检查已认证 play、officialJar，以及服务端是否登记了 voicechat 通道。`, data: { transport: 'simple-voice-chat', enabled: true, connected: false, recipientHeard: 'unknown' } as Record<string, unknown> };
     }
     if (action === 'status' || !action) {
-      const state = this.client.state();
+      const state = {...this.client.state(), hearing:this.hearing?.status()??null};
       return { text: `[mc_svc] 原生 SVC 协议 ${state.compatibilityVersion}；${state.connected ? '已拿到密钥并解析语音地址' : '尚未完成握手'}；UDP 认证回执：${state.udpAuthenticated ? '已收到' : '未收到'}；recipientHeard=unknown。sent 不等于听见。`, data: { ...state } as Record<string, unknown> };
     }
     if (action === 'upload') {

@@ -8878,7 +8878,19 @@ export class MinecraftWorld implements World {
     const bot = this.bridge?.bot;
     const svcCurrent = (b: NonNullable<typeof bot>) => this.bridge?.bot===b && this.bridge?.connectionState?.ready===true
       && b._client?.state==='play' && this.simpleVoiceChatGate(b);
-    this.simpleVoiceChat?.sync(bot && svcCurrent(bot) ? {bot, stillCurrent:()=>svcCurrent(bot)} : undefined);
+    if(bot && svcCurrent(bot)){
+      const world=readWorldIdentity(bot);
+      this.simpleVoiceChat?.sync({bot,stillCurrent:()=>svcCurrent(bot) && readWorldIdentity(bot).key===world.key && readWorldIdentity(bot).revision===world.revision,
+        speaker:uuid=>{
+          const player=Object.values(bot.players??{}).find(p=>p.uuid?.toLowerCase()===uuid);
+          if(!player || player.username===bot.username)return;
+          return {name:player.username,uuid};
+        },
+        deliver:row=>this.emit('minecraft.chat',`[MC 附近语音] ${row.speaker.name}: ${row.text}`,true,
+          {meta:{uname:row.speaker.name,senderUuid:row.speaker.uuid,utteranceId:row.utteranceId,body:row.text,chatBody:row.text,
+            channel:'nearby-voice',socialScope:'minecraft-server',source:'simple-voice-chat/asr',transcript:true,
+            observedAt:row.observedAt,deliveryWorld:world,deliveryWorldKey:world.key}},row.speaker.name)});
+    }else this.simpleVoiceChat?.sync();
     if (!bot?.entity || !this.host) return;
     const viewerUrl = this.bridge?.viewerUrl;
     if (this.cfg.viewerAssetsDir && viewerUrl && this.bridge?.viewerKind !== 'basic') {
