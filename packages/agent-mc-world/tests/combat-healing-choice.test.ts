@@ -50,7 +50,7 @@ it('still yields when an actual survival controller holds the body',()=>{
   expect(world.sample()!.battlefield.action.emergency).toBe(true);
   expect(world.sample()!.candidates).toHaveLength(0);
 });
-it('routes a selected search through the existing body task queue with a relative turn and no attack',()=>{
+it('routes a forward search through the existing body task queue facing the absolute sound bearing',()=>{
   const {world,field}=rig();
   field.actors=[];
   const submit=vi.fn(()=>({accepted:true,taskId:42}));
@@ -64,6 +64,6 @@ it('routes a selected search through the existing body task queue with a relativ
   expect(submit).toHaveBeenCalledTimes(1);
   const [steps,mode]=submit.mock.calls[0] as unknown as [Array<{skill:string;keys:string[];mode:string;durationMs:number;yawDeg:number}>,string];
   expect(mode).toBe('append');expect(steps).toHaveLength(1);
-  expect(steps[0]).toMatchObject({skill:'control',keys:['forward'],mode:'ground',durationMs:250});
-  expect(Math.abs(steps[0].yawDeg)).toBeCloseTo(180);
+  expect(steps[0]).toMatchObject({skill:'control',keys:['forward'],mode:'ground',durationMs:250,orientation:'absolute'});
+  expect(steps[0].yawDeg).toBeCloseTo(-90);
 });

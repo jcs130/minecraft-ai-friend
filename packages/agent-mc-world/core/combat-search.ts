@@ -7,6 +7,21 @@ import type { HearingHint } from './perception-hearing.ts';
 
 const directions=['北','东北','东','东南','南','西南','西','西北'];
 
+const travelKeys = [
+  ['forward'], ['forward','left'], ['left'], ['back','left'],
+  ['back'], ['back','right'], ['right'], ['forward','right'],
+] as const;
+
+/** Choose controls for the checked world-space corridor. Side steps preserve sight to within half a key sector. */
+export function combatSearchControl(dx: number, dz: number, yaw: number, sidestep: boolean) {
+  const heading = Math.atan2(-dx, -dz);
+  const offset = Math.atan2(Math.sin(heading-yaw), Math.cos(heading-yaw));
+  const sector = sidestep ? Math.round(offset / (Math.PI/4)) : 0;
+  const facing = heading - sector*Math.PI/4;
+  return { skill: 'control' as const, keys: [...travelKeys[(sector+8)%8]!], durationMs: 250,
+    mode: 'ground' as const, orientation: 'absolute' as const, yawDeg: Math.atan2(Math.sin(facing), Math.cos(facing))*180/Math.PI };
+}
+
 /** Recent observed starting points, not guessed enemy positions or cleared rooms. */
 export class CombatSearchHistory {
   private scope = '';
@@ -110,6 +125,7 @@ export function combatSearchCandidates(bot:Bot,field:Battlefield,bodyFree:boolea
       const to=new Vec3(p.x+1.2*Math.cos(angle+offset),p.y,p.z+1.2*Math.sin(angle+offset));
       if(!corridorSafe(bot,p,to))continue;
       candidates.push({id:`search_${i}`,kind:'search',clueKey:key,source:clue.source,destination:[to.x,to.y,to.z],
+        ...(i ? {sidestep:true} : {}),
         intent:`Investigate ${description}. Take one checked short ${i?'side':'forward'} step without attacking, then observe again.`.slice(0,240)});
     }
     if(candidates.length)return candidates;

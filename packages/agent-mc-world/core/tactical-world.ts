@@ -16,7 +16,7 @@ import { combatLoadout } from './combat-loadout.ts';
 import { CombatProgramRunner, CombatProgramBusyError, CombatProgramSceneChangedError, combatProgramCandidates, combatProgramHash, combatProgramSelection, validCombatProgram } from './combat-program.ts';
 import { combatRulesError, type CombatRule } from './combat-rules.ts';
 import { combatMayTakeTask, diverseCombatOptions } from './combat-options.ts';
-import { combatSearchCandidates, CombatSearchHistory } from './combat-search.ts';
+import { combatSearchCandidates, combatSearchControl, CombatSearchHistory } from './combat-search.ts';
 import { goalPlanSummary } from './goal-plan.ts';
 import type { TaskReport } from './executor.ts';
 import type { Battlefield } from './battlefield.ts';
@@ -410,9 +410,8 @@ protected applyCombatDecision(candidate: CombatCandidate, tacticRevision: number
       if(!this.executor||queue?.running||queue?.waiting.length||queue?.hold||this.combat?.active||this.methodOwnsBody()
         ||bot.currentWindow||!corridorSafe(bot,p,to))return false;
       this.interruptIdle('search-clue');
-      const targetYaw=Math.atan2(-(to.x-p.x),-(to.z-p.z));
-      const yawDeg=Math.atan2(Math.sin(targetYaw-bot.entity.yaw),Math.cos(targetYaw-bot.entity.yaw))*180/Math.PI;
-      const result=this.executor.submitDetailed([{skill:'control',keys:['forward'],durationMs:250,mode:'ground',yawDeg}], 'append');
+      const step = combatSearchControl(to.x-p.x, to.z-p.z, bot.entity.yaw, candidate.sidestep === true);
+      const result=this.executor.submitDetailed([step], 'append');
       if(!result.accepted||result.taskId===undefined)return false;
       this.searchHistory.record(this.searchScope(current.battlefield),
         candidate.clueKey,[p.x,p.y,p.z],current.battlefield.sampledAtMs);

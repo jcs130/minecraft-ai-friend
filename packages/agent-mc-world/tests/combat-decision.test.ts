@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CombatDecisionLoop, assessCombatDecisionScene, type CombatDecisionFrame, type CombatCandidate, type CombatDecisionConfig } from '../src/decisions/combat-decision.ts';
 import { COMBAT_DECISION_DEFAULTS } from '../src/decisions/defaults.ts';
 import { combatReactions } from '../core/combat-reactions.ts';
+import { combatSearchControl } from '../core/combat-search.ts';
 import { combatMayTakeTask, diverseCombatOptions } from '../core/combat-options.ts';
 import { CombatAbilities as CombatSpells } from '../core/combat-abilities.ts';
 
@@ -54,6 +55,38 @@ function rig() {
 afterEach(() => vi.useRealTimers());
 
 describe('independent asynchronous combat choices', () => {
+  it('holds a one-off equivalent retarget but accepts confirmation and a closer threat immediately', async () => {
+    vi.useFakeTimers();
+    const r = rig(), field = r.f!.battlefield, current = field.actors[0];
+    const other = {...current, entityId:4, uuid:'other', distance:7};
+    field.actors.push(other);
+    const choice = {id:'switch', kind:'engage' as const, targetId:4, uuid:'other', intent:'Engage other hostile'};
+    r.f!.candidates = [choice];
+    async function select(option = 'option_0') {
+      await vi.advanceTimersByTimeAsync(r.cfg.minIntervalMs);
+      r.loop.tick(); r.resolve(response(option)); await vi.advanceTimersByTimeAsync(1);
+    }
+    await select(); expect(r.sent).toEqual([]);
+    expect(r.reports.at(-1)?.data.application).toMatchObject({reason:'confirm-retarget',keptCurrent:true});
+    await select('keep'); await select(); expect(r.sent).toEqual([]);
+    await select(); expect(r.sent).toEqual([choice]);
+    other.distance = 1.1;
+    await select(); expect(r.sent).toEqual([choice,choice]);
+    r.loop.stop();
+  });
+
+  it('travels along each checked search corridor without spinning to perform lateral steps', () => {
+    for (const yaw of [-3.1, -1.2, 0, 1.2, 3.1]) for (let deg=-180; deg<=180; deg+=7) {
+      const heading = deg*Math.PI/180, dx=-Math.sin(heading), dz=-Math.cos(heading);
+      const step = combatSearchControl(dx,dz,yaw,true), facing=step.yawDeg*Math.PI/180;
+      const angle = (n:number) => Math.atan2(Math.sin(n),Math.cos(n));
+      expect(Math.abs(angle(facing-yaw))).toBeLessThanOrEqual(Math.PI/8+1e-9);
+      const left = Number(step.keys.includes('left'))-Number(step.keys.includes('right'));
+      const forward = Number(step.keys.includes('forward'))-Number(step.keys.includes('back'));
+      expect(angle(facing+Math.atan2(left,forward)-heading)).toBeCloseTo(0,8);
+      expect(combatSearchControl(dx,dz,yaw,false)).toMatchObject({keys:['forward'],orientation:'absolute'});
+    }
+  });
   it.each(['departed','small-drift','new-occluded'] as const)('keeps an executable search across %s without inheriting an old attack target',async change=>{
     vi.useFakeTimers();const r=rig();r.f!.battlefield.action.fighting=false;
     r.f!.battlefield.actors=r.f!.battlefield.actors.slice(0,1);r.f!.battlefield.actors[0].lineOfSight=false;r.f!.battlefield.actors[0].targetEntityId=null;

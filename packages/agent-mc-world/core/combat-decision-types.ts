@@ -7,7 +7,7 @@ export type CombatCandidate = { id: string; intent: string } & (
   | { kind: 'step'; destination: [number, number, number] }
   | { kind: 'track'; targetId: number; uuid: string | null; minDistance: number; maxDistance: number; leaseMs: number }
   | { kind: 'retreat' }
-  | { kind:'search';clueKey:string;source:'sound-packet'|'last-seen'|'objective';destination:[number,number,number] }
+  | { kind:'search';clueKey:string;source:'sound-packet'|'last-seen'|'objective';destination:[number,number,number]; sidestep?: boolean }
   | { kind: 'idle'; action: 'wander'; destination: [number, number, number] }
   | ({ kind: 'method' } & CombatRoutine)
 );

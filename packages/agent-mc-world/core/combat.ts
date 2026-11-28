@@ -368,6 +368,7 @@ export class CombatSession {
   private emptySince = 0;
   private retreatFrom: { x: number; z: number } | null = null;
   private retreatStartedAt = 0;
+  private retreatDirection: {x:number; z:number} | null = null;
   private retreatWhy: 'flee' | 'mc_stop' | 'no-fight' = 'flee';
   /** 在水里撤退时的登岸目标;上岸或转身还手后清掉 */
   private retreatBank: { x: number; y: number; z: number } | null = null;
@@ -1360,8 +1361,6 @@ export class CombatSession {
       return;
     }
 
-    this.aimAt(bot, target);
-
     // 接近卡住 1.5s 交给寻路器,够得着立刻收回来自己打
     if (!this.pathing && target.reach > 3.4 && now - this.lastProgressAt > STUCK_PATH_MS && now >= this.pathRetryAfter) {
       this.pathing = true;
@@ -1380,15 +1379,12 @@ export class CombatSession {
         dropOwnedGoal(bot, 'combat', '够得着了,收回来自己打', this.opts.diag);
       } else {
         // 寻路期间视线归寻路器:两边每 tick 各拧一次,镜头里就是原地疯狂旋转
-        if (this.canSwing(now) && target.reach <= REACH_MAX) {
-          this.aimAt(bot, target);
-          this.tryOffense(target, this.resolveMode(visibleFoes, target), now);
-        }
         this.statusTick(bot, visibleFoes, now);
         return;
       }
     }
 
+    this.aimAt(bot, target);
     const mode = this.resolveMode(visibleFoes, target);
     this.shieldLogic(bot, visibleFoes, now);
     this.driveContext(bot, t, target, mode, now, visibleFoes);
@@ -2176,6 +2172,7 @@ export class CombatSession {
     this.retreatWhy = why;
     const now = Date.now();
     this.retreatStartedAt = now;
+    this.retreatDirection = null;
     this.swingPhase = 'idle';
     if (this.pathing) { this.pathing = false; dropOwnedGoal(bot, 'combat', '转撤退', this.opts.diag); }
     this.lowerShield(bot);
@@ -2235,7 +2232,7 @@ export class CombatSession {
     const bank = this.retreatBank;
     const wantedX = bank ? bank.x + 0.5 - p.x : p.x - from.x;
     const wantedZ = bank ? bank.z + 0.5 - p.z : p.z - from.z;
-    const heading = this.retreatHeading(bot, foes, wantedX, wantedZ);
+    const heading = this.retreatHeading(bot, foes, wantedX, wantedZ, stalled ? null : this.retreatDirection);
     if (!bank && !footingAhead(bot, wantedX, wantedZ) && !this.retreatEdgeNoted) {
       this.retreatEdgeNoted = true;
       this.opts.diag?.write({
@@ -2324,19 +2321,25 @@ export class CombatSession {
       return;
     }
     if (!heading) {
+      this.retreatDirection = null;
       this.stopMovement(bot);
       const threat = fightable[0];
       if (threat) void bot.lookAt(threat.pos.offset(0, EYE, 0), true).catch(() => undefined);
       return;
     }
+    if (!this.movementSafe(bot, heading.x, heading.z, false, 2.1)) {
+      this.retreatDirection = null;
+      this.stopMovement(bot);
+      return;
+    }
+    this.retreatDirection = heading;
     void bot.lookAt(new Vec3(p.x + heading.x * 4, p.y + EYE, p.z + heading.z * 4), true).catch(() => undefined);
-    if (!this.movementSafe(bot, heading.x, heading.z, false, 2.1)) { this.stopMovement(bot); return; }
     this.pressToward(bot, heading.x, heading.z, true);
     this.autoJump(bot, heading.x, heading.z);
   }
 
   /** 从可站立方向中选撤退路线；直线后退被墙挡住时优先沿墙侧移。 */
-  private retreatHeading(bot: Bot, foes: Foe[], dx: number, dz: number): { x: number; z: number } | null {
+  private retreatHeading(bot: Bot, foes: Foe[], dx: number, dz: number, previous: {x:number; z:number} | null): { x: number; z: number } | null {
     const p = bot.entity.position;
     const len = Math.hypot(dx, dz);
     if (len < 1e-6) return null;
@@ -2353,7 +2356,8 @@ export class CombatSession {
         const vx = f.pos.x - p.x, vz = f.pos.z - p.z;
         return sum + Math.max(0, (d.x * vx + d.z * vz) / (Math.hypot(vx, vz) || 1)) * 0.8;
       }, 0);
-      const score = alignment - foePenalty;
+      const continuity = previous ? 0.12 * (previous.x*d.x + previous.z*d.z) : 0;
+      const score = alignment - foePenalty + continuity;
       if (score > bestScore) { bestScore = score; best = d; }
     }
     return best;
