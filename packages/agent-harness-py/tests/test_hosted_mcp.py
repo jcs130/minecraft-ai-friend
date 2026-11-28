@@ -1,10 +1,11 @@
 import asyncio
+import hashlib
 import json
 from types import SimpleNamespace
 
 import pytest
 
-from agent_mc_harness.body.hosted_mcp import HostedMcpPort
+from agent_mc_harness.body.hosted_mcp import HostedMcpPort, MissingOriginalReceipt
 
 BODY="10000000-0000-0000-0000-000000000011"
 OWNER="20000000-0000-0000-0000-000000000021"
@@ -144,6 +145,46 @@ def test_hosted_walk_asks_for_a_waypoint_before_running_native_search():
     assert lua.globals().calls == 0
     assert lua.execute(HOSTED_WALK.format(x=10, y=95, z=8)) == 95
     assert lua.globals().calls == 1
+
+
+@pytest.mark.parametrize("verb,text", [("chat", "近况如何？"), ("chat", "/warp village"), ("move", "")])
+def test_original_receipt_missing_after_handoff_only_releases_unconfirmed_plain_chat(tmp_path, verb, text):
+    async def run():
+        class MissingReceiptSession(Session):
+            async def call_tool(self, tool, args):
+                if args["op"] == "result":
+                    self.calls.append(args)
+                    digest = hashlib.sha256(args["id"].encode()).hexdigest()
+                    message = f"call failed: java.nio.file.NoSuchFileException: /synthetic/hosted-receipts/{BODY}/{digest}.json"
+                    return SimpleNamespace(isError=True, content=[SimpleNamespace(type="text", text=message)])
+                if args["op"] == "facts":
+                    return SimpleNamespace(isError=False, structuredContent={
+                        "roleUuid": BODY, "ready": True, "workPending": False, "fenced": True,
+                        "epoch": args["epoch"], "mode": self.mode,
+                    })
+                return await super().call_tool(tool, args)
+
+        session = MissingReceiptSession()
+        adapter = port(tmp_path, session)
+        request = "original-transmission"
+        payload = {"text": text}
+        adapter.ledger.begin(request, hashlib.sha256(json.dumps(["say", payload], sort_keys=True).encode()).hexdigest(),
+                             "previous-connection")
+        adapter.action_journal = SimpleNamespace(action=lambda *_: SimpleNamespace(verb=verb, args=payload))
+        await adapter.open()
+        try:
+            if verb == "chat" and not text.startswith("/"):
+                failed = await adapter.result(request)
+                assert failed.status == "failed" and failed.data["originalOutcome"] == "unknown"
+                assert failed.data["retryAllowed"] is False
+            else:
+                with pytest.raises(MissingOriginalReceipt):
+                    await adapter.result(request)
+            assert not any(row["op"] == "call" for row in session.calls)
+        finally:
+            await adapter.close()
+
+    asyncio.run(run())
 
 
 def test_stop_releases_the_inline_walk_waiter_without_replaying(tmp_path):

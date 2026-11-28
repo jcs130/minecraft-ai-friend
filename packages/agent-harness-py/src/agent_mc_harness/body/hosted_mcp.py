@@ -25,6 +25,10 @@ WALK_INLINE_SECONDS = 2
 WALK_RECEIPT_PROBE_SECONDS = 2
 
 
+class MissingOriginalReceipt(RuntimeError):
+    """The server explicitly reported a missing file for this original request."""
+
+
 class HostedMcpPort:
     transport = "numen-hosted-mcp"
     dialect = "numen-hosted-0.1.5"
@@ -79,6 +83,14 @@ class HostedMcpPort:
                 "epoch": self.epoch if fence_epoch is None else fence_epoch}
         reply = await session.call_tool("hosted_body", args)
         if _field(reply, "isError", "is_error"):
+            if op == "result":
+                request_digest = hashlib.sha256(values["id"].encode()).hexdigest()
+                receipt_suffix = f"/hosted-receipts/{self.body}/{request_digest}.json"
+                blocks = getattr(reply, "content", [])
+                if len(blocks) == 1 and blocks[0].type == "text":
+                    message = blocks[0].text.replace("\\", "/").strip()
+                    if message.startswith("call failed: java.nio.file.NoSuchFileException: ") and message.endswith(receipt_suffix):
+                        raise MissingOriginalReceipt
             raise RuntimeError("HOSTED_REQUEST_REFUSED_QUERY_ORIGINAL")
         value = _field(reply, "structuredContent", "structured_content")
         if not value:
@@ -481,7 +493,10 @@ class HostedMcpPort:
             except Exception:
                 return self._walk_pending(request_id)
         else:
-            value = await self.rpc("result", id=request_id)
+            try:
+                value = await self.rpc("result", id=request_id)
+            except MissingOriginalReceipt:
+                return await self._unconfirmed_chat_delivery(request_id, saved)
         result = self.mapped(value, request_id)
         if saved and result.status == "accepted" and result.execution_id:
             # The original Lua reply identifies the background task. Its finish
@@ -500,6 +515,29 @@ class HostedMcpPort:
         if waiting_for_walk:
             return self._walk_pending(request_id)
         return PortResult(**saved) if saved else result
+
+    async def _unconfirmed_chat_delivery(self, request_id, saved):
+        # A missed chat can stop blocking later work after a verified control
+        # handoff. Gameplay actions still require their original receipt.
+        generation = self.confirmed_initial_fence
+        original = self.action_journal.action(self.body, request_id) if self.action_journal else None
+        if (not saved or saved["status"] != "unknown" or saved["execution_id"] is not None
+                or not saved["data"]["connection"] or saved["data"]["connection"] == self.task_connection
+                or not generation or not original or original.verb != "chat"
+                or not isinstance(original.args.get("text"), str) or original.args["text"].lstrip().startswith("/")):
+            raise MissingOriginalReceipt
+        signature = hashlib.sha256(json.dumps(["say", original.args], sort_keys=True).encode()).hexdigest()
+        if saved["data"]["fingerprint"] != signature:
+            raise MissingOriginalReceipt
+        facts = await self.rpc("facts")
+        if (self.confirmed_initial_fence != generation or facts.get("ready") is not True
+                or facts.get("workPending") is not False or not self._confirmed(facts, "harness", self.owned_epoch)):
+            raise MissingOriginalReceipt
+        return PortResult(
+            "failed", "Original chat delivery could not be verified. Do not replay it.",
+            {"reason": "original_chat_receipt_missing_after_handoff", "originalOutcome": "unknown",
+             "effectsVerified": False, "retryAllowed": False},
+        )
 
     async def observe(self):
         facts = await self.rpc("facts")
