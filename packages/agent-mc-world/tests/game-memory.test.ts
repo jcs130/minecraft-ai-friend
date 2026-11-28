@@ -26,6 +26,22 @@ it('reuses identical attributed notes across restarts without refreshing evidenc
   expect(readFileSync(file, 'utf8')).toBe(before);
 });
 
+it('reports all missing revision fields and permits one attributed correction without losing history',()=>{
+  const book=new GameMemoryBook(directory()),first=entry(book.execute(note,ctx));
+  const draft={action:'revise',id:first.id,expectedRevision:1,summary:'Second observation',content:'Rechecked at task:2'};
+  let error:unknown;
+  try {book.execute(draft,ctx);} catch(e) {error=e;}
+  expect(error).toBeInstanceOf(Error);
+  const recovery=JSON.parse((error as Error).message);
+  expect(recovery).toMatchObject({written:false,missing:['kind','source'],previousKind:'method',id:first.id,expectedRevision:1,
+    next:{action:'revise',keepSuppliedFields:true},help:{action:'help',topic:'revise'}});
+  expect(entry(book.execute({action:'get',id:first.id},ctx)).revision).toBe(1);
+  const result=entry(book.execute({...draft,kind:recovery.previousKind,source:{kind:'agent_note',reference:'task:2'}},ctx));
+  expect(result).toMatchObject({revision:2,content:draft.content,source:{reference:'task:2'}});
+  expect(entry(book.execute({action:'get',id:first.id,revision:1},ctx)).content).toBe(note.content);
+  expect(()=>book.execute(draft,ctx)).toThrow('Revision conflict');
+});
+
 it('keeps changed evidence, content, dimension and archived notes distinct', () => {
   const book = new GameMemoryBook(directory()), first = entry(book.execute(note, ctx));
   for (const change of [{ source: { ...note.source, speaker: 'another author' } },

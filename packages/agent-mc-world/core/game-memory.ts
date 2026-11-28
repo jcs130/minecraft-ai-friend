@@ -112,13 +112,14 @@ const LOCAL_FIELDS: Record<string, string[]> = {
   revise: ['id', 'expectedRevision', 'kind', 'summary', 'content', 'source', 'tags', 'dimension', 'expiresAt'],
   archive: ['id', 'expectedRevision'],
 };
+const NOTE_FIELDS = ['kind','summary','content','source'] as const;
 const NOTE_EXAMPLE = { kind: 'lesson', summary: 'A failed route needs a fresh geometry check',
   content: 'Describe the actual attempt, terminal, measured change, applicability and counterexample here; do not invent a successful result.',
   source: { kind: 'agent_note', speaker: '<actual author>', reference: '<actual run/task/receipt location>' } };
 function actionHelp(topic: unknown): Record<string, unknown> {
   if (typeof topic !== 'string' || !['search', 'remember', 'capture', 'revise'].includes(topic)) throw new Error('help topic must be search, remember, capture or revise');
-  const required = topic === 'remember' ? ['kind', 'summary', 'content', 'source']
-    : topic === 'revise' ? ['id', 'expectedRevision', 'kind', 'summary', 'content', 'source'] : [];
+  const required = topic === 'remember' ? NOTE_FIELDS
+    : topic === 'revise' ? ['id', 'expectedRevision', ...NOTE_FIELDS] : [];
   const fields = GAME_MEMORY_TOOL.parameters.properties as Record<string, unknown>;
   const example = topic === 'remember' ? { action: topic, ...NOTE_EXAMPLE }
     : topic === 'revise' ? { action: topic, id: '<returned id>', expectedRevision: 1, ...NOTE_EXAMPLE }
@@ -227,6 +228,18 @@ export class GameMemoryBook {
     }
     if (existing && args.expectedRevision !== existing.versions.length) throw new Error(`Revision conflict: expectedRevision must be ${existing.versions.length}; read before revising`);
     if (existing && existing.versions.length >= MAX_REVISIONS) throw new Error('Revision limit reached; create a new note referencing this history');
+    if (action === 'revise' && existing) {
+      const missing = NOTE_FIELDS.filter(field => args[field] == null
+        || typeof args[field] === 'string' && !(args[field] as string).trim());
+      if (missing.length) {
+        const previous = existing.versions.at(-1)!;
+        throw new Error(JSON.stringify({error:'INCOMPLETE_MEMORY_REVISION',written:false,missing,
+          id:existing.id,expectedRevision:previous.revision,previousKind:previous.kind,
+          next:{action:'revise',keepSuppliedFields:true,fill:missing},
+          ...(missing.includes('source')?{sourceHint:'source is required for the revised claim. For your own assessment use {kind:"agent_note",reference:"<actual task or receipt>"}.'}:{}),
+          help:{action:'help',topic:'revise'}}));
+      }
+    }
     const sampled = action === 'capture' ? context.capture?.() : undefined;
     now = this.now();
     if (action === 'capture' && !sampled) throw new Error('No connected runtime observation available');

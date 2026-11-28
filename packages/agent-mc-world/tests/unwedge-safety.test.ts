@@ -54,6 +54,24 @@ describe('unsticking uses supported ground and releases controls', () => {
     } finally { r.close(); }
   });
 
+  it.each([['forward',0,-1],['right',1,0]] as const)('can take the sole supported %s exit without crossing an edge',async (key,dx,dz)=>{
+    const r=methodHarness();
+    try{
+      await settledGround(r);
+      for(let x=-3;x<=3;x++)for(let z=-3;z<=3;z++){
+        if(x===0&&z===0 || dx!==0&&x*dx>0&&z===0 || dz!==0&&z*dz>0&&x===0)continue;
+        r.set(x,63,z,'air');
+      }
+      const from=r.bot.entity.position.clone(),used:string[]=[];
+      const set=r.bot.setControlState.bind(r.bot);
+      r.bot.setControlState=(k,v)=>{if(v&&k!=='sneak')used.push(k);set(k,v);};
+      expect(await unwedgeBody(r.bot as never,context())).toBeGreaterThan(.2);
+      expect(used).toEqual([key]);expect(r.bot.entity.position.y).toBe(64);
+      const step=r.bot.entity.position.minus(from);expect(step.x*dx+step.z*dz).toBeGreaterThan(.2);
+      expect(Object.values(r.keys).some(Boolean)).toBe(false);
+    }finally{r.close();}
+  });
+
   it('still moves on loaded flat ground using real Minecraft physics', async () => {
     const r = methodHarness();
     try {
