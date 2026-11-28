@@ -36,7 +36,7 @@ export const NATIVE_API = Object.freeze({
   mount:'mount(entityId): mount one currently observed entity within 4.5 blocks; waits for actual attachment to that exact entity. No search, navigation or fallback to another same-name vehicle.',
   dismount:'dismount(): request dismount and wait for the client attachment to clear; returns actual position. Does not promise dry or safe footing.',
   moveVehicle:'moveVehicle(left,forward,ticks=1): bounded native steering input, axes -1..1, ticks 1..100. Sends the native vehicle input once per tick, releases to zero on completion/cancellation. Reports actual vehicle positions; dispatch is not arrival or proof that a mod vehicle supports this input. Does not simulate client-controlled boat/mod vehicle physics; use ride for the supported vanilla vehicles.',
-  findBlocks: 'findBlocks({point?,matching,maxDistance?,count?,useExtraInfo?}): Vec3[]. matching is a numeric block id or array of ids; maxDistance 1..32 and count 1..64. Function predicates stay in the program: filter returned blocks there.',
+  findBlocks: 'findBlocks({point?,matching,maxDistance?,count?,useExtraInfo?}): Vec3[]. matching accepts a registry block id, name or array; maxDistance 1..64 and count 1..64. Function predicates stay in the program: filter returned blocks there.',
   findBlock: 'findBlock(options): Block|null, with the same options and bounds as findBlocks.',
   canSeeBlock: 'canSeeBlock(block): boolean from Mineflayer visibility, using a fresh block at its position.',
   canDigBlock: 'canDigBlock(block): boolean from Mineflayer reach and diggability; server permission is separately checked when digging.',
@@ -64,7 +64,7 @@ const READ_ONLY = new Set<NativeName>(['read', 'blockAt', 'findBlocks', 'findBlo
   'canDigBlock', 'digTime', 'inventory.items', 'getControlState', 'waitForTicks']);
 
 export function nativeApiHelp(name?: string): string {
-  const lead = 'mc_script 提供 bot 与 Vec3。Mineflayer 4.37.1 公共接口通过 Worker JSON 传输，所有 bot 调用须逐个 await；返回 Block.getProperties() 与 Vec3 运算在 Worker 内同步。属性保留原生 string/number/boolean，不自动转数字；具体见 api:"blockAt"。'
+  const lead = 'mc_script 提供 bot 与 Vec3。Mineflayer 4.37.1 公共接口通过 Worker JSON 传输，动作须逐个 await；Mineflayer 身体的同步观察（blockAt、findBlock(s)、inventory.items 等）可直接在程序内使用，原有 await 写法也有效；bot.registry.blocksByName[name] 与 itemsByName[name] 按需读取当前版本条目；返回 Block.getProperties() 与 Vec3 运算在 Worker 内同步。属性保留原生 string/number/boolean，不自动转数字；具体见 api:"blockAt"。'
     + ' 首次身体调用排入现有身体队列并独占至程序结束；此后不能再调用 mc.do，防止等待自己的队列。读数不占身体。'
     + ' 取消、战斗/环境接管、死亡、断线或超时均撤销原生程序，不自动重放。可用 api:<方法名> 按需查看签名；缺少的 API 明确不可用。';
   if (name === undefined || name === 'index') return `${lead}\n${Object.keys(NATIVE_API).join(', ')}\n上游文档：https://github.com/PrismarineJS/mineflayer/blob/master/docs/api.md`;
@@ -257,10 +257,18 @@ export class MineflayerMethod {
       case 'findBlock': case 'findBlocks': {
         const options = a as { point?: unknown; matching?: unknown; maxDistance?: number; count?: number; useExtraInfo?: boolean } | null;
         const matching = Array.isArray(options?.matching) ? options.matching : [options?.matching];
-        if (matching.length < 1 || matching.length > 64 || !matching.every(id => Number.isInteger(id) && Number(id) >= 0)) throw new Error('matching 须为方块数字 ID 或 ID 数组');
+        if (!matching.length || matching.length > 64) throw new Error('matching 须为 1–64 个方块名称或注册 ID');
+        const ids = matching.map(value => {
+          if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
+          if (typeof value === 'string') {
+            const entry = bot.registry.blocksByName[value.replace(/^minecraft:/, '')];
+            if (entry && typeof entry.id === 'number') return entry.id;
+          }
+          throw new Error('当前版本没有这个方块名称或注册 ID: '+String(value).slice(0,80));
+        });
         const maxDistance = options?.maxDistance ?? 16, count = options?.count ?? 1;
-        if (!Number.isInteger(maxDistance) || maxDistance < 1 || maxDistance > 32 || !Number.isInteger(count) || count < 1 || count > 64) throw new Error('搜索范围或数量超出 api 契约');
-        const query = { matching: matching as number[], maxDistance, count,
+        if (!Number.isInteger(maxDistance) || maxDistance < 1 || maxDistance > 64 || !Number.isInteger(count) || count < 1 || count > 64) throw new Error('搜索范围或数量超出 api 契约');
+        const query = { matching: ids, maxDistance, count,
           ...(options?.point === undefined ? {} : { point: point(options.point) }), useExtraInfo: options?.useExtraInfo === true };
         const positions=observationView(bot).findBlocks(query);
         return name === 'findBlock' ? packBlock(positions[0]?bot.blockAt(positions[0]):null) : positions;
