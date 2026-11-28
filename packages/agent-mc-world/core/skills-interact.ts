@@ -5,6 +5,8 @@
  * 右键的结果一律回读世界或背包再报,不按客户端预测说话。
  */
 import { Vec3 } from 'vec3';
+import { bedsWorkHere } from './world-scope.ts';
+import { observationView } from './perception-sight.ts';
 import { recoverBoat } from './boat-recovery.ts';
 import { boatDetour, type BoatPoint } from './boat-detour.ts';
 import type { Bot } from 'mineflayer';
@@ -851,6 +853,16 @@ function farmingUseBlockedFact(
 
 /** 一次右键:三种宾语(某一格 / 某只活物 / 手上这样东西本身) */
 export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' }>, ctx: SkillContext): Promise<string> {
+  if (call.sleep && call.at) {
+    checkAbort(ctx);
+    if (!bedsWorkHere(bot)) throw new SkillBlocked('当前维度没有确认床可用，未点击');
+    const cell = resolveAt(bot,call.at);
+    const bed = observationView(bot).blockAt(new Vec3(cell.x,cell.y,cell.z));
+    if (!bed?.name.endsWith('_bed')) throw new SkillBlocked('这格没有可见的床，未点击');
+    await bot.sleep(bed);
+    // Mineflayer resolves sleep only on this player's native sleep event; wake may already follow it.
+    return '已在 '+cellText(cell)+' 的'+zhName(bed.name)+'入睡'+await waitForWake(bot,ctx);
+  }
   const bareBlockUse = call.at !== undefined && !call.item;
   const selected = call.item ? invItemNamed(bot, call.item) : bot.heldItem;
   let held: string | null;

@@ -119,6 +119,7 @@ export const MINECRAFT_DEFAULTS = {
   journey: {enabled:true,choiceMinBlocks:10,choiceMaxBlocks:20,dangerChoiceMaxBlocks:5},
   reflex: {
     /** 受击反击 */
+    sleepAtCamp: false,
     fightBack: true,
     /** 生命低于此值就脱离战斗;不还手也照样跑 */
     fleeHealth: 10,
@@ -326,6 +327,7 @@ export interface MinecraftConfigSection {
     minIdleMs: number; minIntervalMs: number; maxIntervalMs: number; allowMovement: boolean;
   };
   reflex: {
+    sleepAtCamp?: boolean;
     fightBack: boolean; fleeHealth: number;
     reactCooldownSec: number; antiDrown: boolean; emergencyDrown?: boolean; antiLava: boolean;
   };
@@ -636,6 +638,8 @@ export const MINECRAFT_RHYTHM_CONFIG_GROUP: ConfigGroup = {
         description: '第一个捕获组为禁止挖矿的分钟数。留空则不从聊天解析限时禁令。默认：(\\d+)\\s*分钟内禁止挖。' },
       'worlds.minecraft.chatDuplicateWindowMs': { type: 'integer', title: '相同回复去重窗口', minimum: 0, 'x-suffix': 'ms', 'x-hot': true,
         description: '只去重同频道/同私聊接收人的相同文字；收到对方新消息即允许回复。0 关闭。不限制新内容，不拦业务命令。' },
+      'worlds.minecraft.reflex.sleepAtCamp': { type: 'boolean', title: '夜间在营地就寝', 'x-hot': true,
+        description: '身体空闲、营地床在身边、所在维度允许睡眠时尝试入睡。以游戏睡眠和起床回执为准。' },
       'worlds.minecraft.reflex.fightBack': {
         type: 'boolean', title: '受击反击', 'x-hot': true,
         description: '关掉则挨打不还手,打不打交给主脑决定;血线以下的脱离不受它影响。',

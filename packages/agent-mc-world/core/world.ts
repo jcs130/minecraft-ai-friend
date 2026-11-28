@@ -188,6 +188,7 @@ import {
   type AccessSettings, type GameSettings, type LevelType, type WorldIdentity, type WorldInfo,
 } from './server-config.ts';
 import { ChestBook, type ChestRecord } from './chests.ts';
+import { bedsWorkHere } from './world-scope.ts';
 import { CampStockBook, campScopeKey, bedFoot, isCampFacility, type Cell } from './camp-stock.ts';
 import { DirectionalSweepBook } from './directional-sweeps.ts';
 import { containerStacks } from './containers.ts';
@@ -2990,6 +2991,8 @@ export class MinecraftWorld implements World {
   protected readonly chests: ChestBook;
   protected readonly campStock: CampStockBook;
   private campScanAfter = 0;
+  private campRestScanAfter = 0;
+  private lastCampRestNight?: string;
   private campObservationError: string | null = null;
   protected readonly directionalSweeps: DirectionalSweepBook;
   protected readonly explored: ExploreBook;
@@ -9071,6 +9074,7 @@ export class MinecraftWorld implements World {
     }
     this.autoEatTick(bot);
     this.nutritionTick(bot);
+    this.campRestTick(bot);
     this.tryArrivalIdle();
     this.idleBehavior?.tick();
     this.publishBodyStatus();
@@ -9111,6 +9115,40 @@ export class MinecraftWorld implements World {
     if (this.lastWorldEmitAt === 0) this.lastWorldEmitAt = now;
     if (now - this.lastWorldEmitAt < this.cfg.world.tickSec * 1000) return;
     this.reportWorldDelta();
+  }
+
+  /** A camp bed is a known facility. Verify the exact cell now, then let the
+   * ordinary body queue and native bed operation own the action and its receipt. */
+  protected campRestTick(bot: Bot): void {
+    const time = bot.time;
+    if (!this.cfg.reflex?.sleepAtCamp || !time || !Number.isSafeInteger(time.day)
+      || !(time.timeOfDay >= 12541 && time.timeOfDay <= 23458) || !bedsWorkHere(bot)) return;
+    const now = Date.now();
+    if (now < this.campRestScanAfter || (bot as Bot & {vehicle?:unknown}).vehicle || bodyInWater(bot) || !this.canIdle()) return;
+    this.campRestScanAfter = now + 5000;
+    const scope = this.campScope();
+    if (!scope) return;
+    const night = JSON.stringify([scope,time.day]);
+    if (this.lastCampRestNight === night) return;
+    const me = bot.entity.position;
+    const camps = this.campStock.camps(scope);
+    const view = observationView(bot);
+    const distance = (p:Cell) => Math.hypot(p.x+0.5-me.x,p.y-me.y,p.z+0.5-me.z);
+    for (const p of this.campStock.nearby(scope,me,3).sort((a,b)=>distance(a)-distance(b))) {
+      if (distance(p)>3 || !camps.some(c=>Math.hypot(c.x-p.x,c.y-p.y,c.z-p.z)<=c.radius)) continue;
+      const block = view.blockAt(new Vec3(p.x,p.y,p.z));
+      if (!block?.name.endsWith('_bed')) continue;
+      const props=block.getProperties();
+      if (props.part!=='foot' || String(props.occupied)==='true') continue;
+      // Wait for nearby threats to leave before spending this night's attempt.
+      if (Object.values(bot.entities).some(e=>e!==bot.entity && e?.isValid!==false && e?.position
+        && classifyEntity(e.type,e.name??'')==='hostile' && e.position.distanceTo(block.position)<9)) return;
+      const result = this.executor!.submitDetailed([{skill:'use',at:[p.x,p.y,p.z],sleep:true}], 'append',
+        undefined,()=>this.interruptIdle('camp-rest'));
+      if (result.accepted) this.lastCampRestNight = night;
+      this.diag.write({lane:'body',event:'camp-rest',msg:result.receipt,data:{day:time.day,bed:p,accepted:result.accepted,taskId:result.taskId}});
+      return;
+    }
   }
 
   /** Routine food fallback uses the executor's safe handoff and preserves current work. */
