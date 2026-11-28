@@ -9,6 +9,9 @@ export const METHOD_ADAPTER = 'minecraft-method/v1';
 export const METHOD_LIMITS = Object.freeze({ sourceChars: 12_000, paramsChars: 4_096,
   calls: 32, actions: 16, messageChars: 24_000, durationMs: 60_000, maxDurationMs: 120_000 });
 
+// These Mineflayer methods return an immediate value on the native client. The worker alone waits for the game thread.
+const synchronousObservations = new Set(['blockAt','findBlock','findBlocks','canSeeBlock','canDigBlock','digTime','inventory.items','getControlState']);
+
 export type MethodOperation = 'capabilities' | 'state' | 'do' | 'flightPlan' | 'swimPlan' | 'mineflayer' | 'mindcraft';
 export interface MethodTrace {
   call: number; method: MethodOperation; args: unknown; startedAt: string;
@@ -150,7 +153,7 @@ export class MethodRunner {
     }
     const controller = new AbortController();
     const worker = native ? null : new Worker(new URL('./method-worker.mjs', import.meta.url), {
-      workerData: { code: request.code, params, validate: request.validate === true, nativeMethods: this.host.nativeMethods, gameLibrary: this.host.gameLibrary === true,
+      workerData: { code: request.code, params, validate: request.validate === true, nativeMethods: this.host.nativeMethods, syncObservations: this.host.gameLibrary ? this.host.nativeMethods?.filter(name => synchronousObservations.has(name)) : [], gameLibrary: this.host.gameLibrary === true,
         graph: request.procedure?.graph, maxInvocations: PROCEDURE_LIMITS.invocations },
       env: {}, execArgv: [], resourceLimits: { maxOldGenerationSizeMb: 64, stackSizeMb: 4 },
     });
@@ -275,6 +278,7 @@ export class MethodRunner {
         finish('failed', '脚本协议包含未知操作'); return;
       }
       const syncRead = (message.method === 'mindcraft' && message.args?.family === 'world')
+        || (message.method === 'mineflayer' && this.host.gameLibrary && this.host.nativeMethods?.includes(message.args?.name) && synchronousObservations.has(message.args?.name))
         || (message.method === 'mineflayer' && this.host.nativeMethods?.includes('read') && message.args?.name === 'read'
           && Array.isArray(message.args.args) && message.args.args.length === 1 && message.args.args[0] === 'entity');
       if (message.method === 'mindcraft' && !this.host.gameLibrary ||

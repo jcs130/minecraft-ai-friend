@@ -6,13 +6,14 @@ describe('program task result evidence', () => {
     const r=methodHarness('1.21.1');
     try{
       const tool=r.world.tools().find(t=>t.name==='mc_script')!;
-      const args={api:'mindcraft',name:'note_origin',params:{},durationMs:10000,waitMs:5000,code:'const self=bot.entity; const p=self.position; if (!Object.isFrozen(self)) throw Error("mutable entity"); return {x:p.x,y:p.y,z:p.z};'};
+      const args={api:'mindcraft',name:'note_origin',params:{},durationMs:10000,waitMs:5000,code:'const self=bot.entity; const p=self.position; const blocks=bot.findBlocks({matching:["minecraft:chest","oak_log"],maxDistance:64,count:10}); if (!Array.isArray(blocks)) throw Error("not a list"); if (!Object.isFrozen(self)) throw Error("mutable entity"); return {x:p.x,y:p.y,z:p.z};'};
       expect(tool.readOnlyCall?.({api:'mindcraft'})).toBe(true);
       expect(tool.readOnlyCall?.(args)).toBe(false);
       expect(tool.learningCall?.(args)).toBe(false);
       const out=await tool.handler(args,{role:'main',log:r.host.log});
       expect(out).toMatchObject({execution:{kind:'method',phase:'completed',terminal:true}});
       const id=(out as any).execution.evidence.localId;
+      expect(r.host.events.find(e=>e.type==='minecraft.method')?.text).toContain('程序返回值 {');
       expect(r.runner.read(id)[0].result).toMatchObject({x:expect.any(Number),y:expect.any(Number),z:expect.any(Number)});
       for(const mix of [{api:'index'}, {stop:true},{find:{names:['stone']}},{routine:{op:'list'}}]){
         expect(await tool.handler({...args,...mix},{role:'main',log:r.host.log})).toMatchObject({failed:true});

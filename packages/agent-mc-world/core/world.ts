@@ -5450,10 +5450,13 @@ export class MinecraftWorld implements World {
     if (work) (blobs ??= []).push({ bytes: new TextEncoder().encode(JSON.stringify({ runId: run.id, executionId: `${this.executionEpoch}:${run.id}`,
       sourceHash: run.sourceHash, routine: run.routine, startedAt: run.startedAt, endedAt: run.endedAt, result: work })),
       mime: 'application/json', name: 'work-run.json', fallbackText: '工作脚本实际结果；原始逐格记录与库存净变化，不自动重放。' });
+    const returned = !procedure && !work && run.status === 'completed' && run.result != null ? JSON.stringify(run.result) : undefined;
+    const shortResult = returned && returned.length <= 800 ? returned : undefined;
     this.emit('minecraft.method', `方法#${run.id}「${run.name}」终态${run.status}；源码SHA256 ${run.sourceHash}；`
       + `${run.trace.length}次SDK调用。${run.error ?? run.executionNote ?? ''}用 mc_script {runId:${run.id}}读取各次真实回执；`
       + (receipt ? `执行UUID ${receipt.executionId}，方法版本 ${receipt.root.revision}；完整回执已随事件保存。` : '')
       + libraryEvidence
+      + (shortResult ? `程序返回值 ${shortResult}。` : '')
       + (workSummary ? `工作结果 ${workSummary.outcome}，goalCompleted=${String(workSummary.goalCompleted)}，原因 ${String(workSummary.reason)}；逐格回执已保存。` : '')
       + '脚本结束不等于原目标已达成。核对执行后状态，修订方法并记录已验证范围。', true,
     { execution:{kind:'method',id:`${this.executionEpoch}:${run.id}`,phase:run.status==='validated'?'validated':run.status==='completed'?'completed':run.status==='cancelled'?'cancelled':'blocked',terminal:true,goalCompleted:false,evidence:{sourceHash:run.sourceHash,receipt:receipt??null,...(workSummary ? {work:workSummary} : {})}}, meta: { runId: run.id, sourceHash: run.sourceHash, status: run.status, ...(workSummary ? {work:workSummary} : {}), ...(receipt ? { procedureReceipt: {
