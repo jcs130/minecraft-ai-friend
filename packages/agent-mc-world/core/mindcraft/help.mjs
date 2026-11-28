@@ -1,5 +1,6 @@
 // On-demand descriptions adapted from Mindcraft; see adjacent LICENSE.
 export const libraryHelp = Object.freeze({
+  "world.getEscapeDigPlan": "Compare carried tools at one visible absolute block. Returns the fastest slot, estimated digging time and timing budget accounting for water, footing, effects and enchantments. Read-only; null if unavailable.",
   "world.getDetailedCraftingPlan": "Read the recipe plan from the version registry and carried items. Only execute if plan.ready === true. plan.missing is an object mapping item names to counts; plan.limited is a boolean. Each step is {item,applications,output}. Steps are already in dependency order. Each awaited skills.craftRecipe(bot,step.item,step.applications) returns a boolean; recheck the inventory. Server-specific recipes can differ.",
   "world.getNearestFreeSpace": "Find observed air with solid support for a square footprint. Returns its corner or null.",
   "world.getBlockAtPosition": "Read a block at an offset from current feet. Hidden and unloaded positions return null.",

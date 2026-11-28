@@ -1,6 +1,7 @@
 // Adapted from mindcraft-bots/mindcraft e1c1fc3 (MIT). See LICENSE and README.md.
 export const gameLibrary = Object.freeze({
   world: Object.freeze({
+  "getEscapeDigPlan": "bot, x, y, z",
   "getDetailedCraftingPlan": "bot, targetItem, count=1",
   "getNearestFreeSpace": "bot, size=1, distance=8",
   "getBlockAtPosition": "bot, x=0, y=0, z=0",

@@ -170,6 +170,23 @@ describe('native Simple Voice Chat client (jcs130 contract + official codec)', (
     expect(decoded.length).toBe(SVC_FRAME_SAMPLES);
     const energy = Array.from(decoded).reduce((s, v) => s + v * v, 0) / decoded.length;
     expect(energy).toBeGreaterThan(1000);
+    // Withhold source EOF until the independent UDP recipient has decoded the first frame.
+    let stream!:ReadableStreamDefaultController<Int16Array>;
+    let cancelled=false;
+    const source=new ReadableStream<Int16Array>({start(controller){stream=controller;},cancel(){cancelled=true;}});
+    const abort=new AbortController();
+    const baseline=received.length;
+    const streaming=voice.uploadFrames(source,{signal:abort.signal});
+    stream.enqueue(pcm16Mono48kFromWav(makeWav(200)).slice(0,SVC_FRAME_SAMPLES));
+    const deadline=Date.now()+3000;
+    while(received.length===baseline && Date.now()<deadline) await new Promise(resolve=>setTimeout(resolve,10));
+    expect(received.length).toBe(baseline+1);
+    expect((await codec.decode(received[baseline])).length).toBe(SVC_FRAME_SAMPLES);
+    await expect(voice.upload(makeWav(100))).rejects.toThrow('SVC_UPLOAD_ALREADY_PENDING');
+    abort.abort();
+    expect(await streaming).toMatchObject({state:'cancelled',frames:1,recipientHeard:'unknown'});
+    expect(cancelled).toBe(true);
+    expect(await voice.upload(makeWav(100))).toMatchObject({state:'sent'});
     // The client must decode the server's ack (official no-UUID layout) and answer with ConnectionCheck.
     expect(checks, 'client decoded AuthenticateAck and sent ConnectionCheck').toBeGreaterThan(0);
     expect(voice.state().udpAuthenticated).toBe(true);

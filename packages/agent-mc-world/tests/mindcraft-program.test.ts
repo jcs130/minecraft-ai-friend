@@ -4,6 +4,23 @@ import { methodApiHelp } from '../core/method-api.ts';
 import { gameLibrary } from '../core/mindcraft/catalog.mjs';
 
 describe('model-authored Mindcraft programs on the existing Mineflayer body', () => {
+  it('uses the visible block and actual footing for a read-only escape digging program',async()=>{
+    const h=methodHarness('1.21.1');
+    try {
+      const tool={name:'iron_pickaxe',type:h.bot.registry.itemsByName.iron_pickaxe.id,slot:36,enchants:[]};
+      Object.assign(h.bot,{physicsEnabled:false,getEquipmentDestSlot:()=>5});
+      Object.assign(h.bot.inventory,{items:()=>[tool]});
+      h.set(1,64,0,'stone');
+      const sample=async()=>{const run=h.runner.start({code:'return world.getEscapeDigPlan(bot,1,64,0);'});
+        const end=await methodEnded(h,run.id);expect(end.status,end.error).toBe('completed');
+        return end.result as {tool:string;digMs:number;inWater:boolean};};
+      const dry=await sample();
+      expect(dry).toMatchObject({tool:'iron_pickaxe',slot:36,inWater:false});
+      h.set(0,65,0,'water');h.bot.entity.onGround=false;
+      const wet=await sample();expect(wet.inWater).toBe(true);expect(wet.digMs).toBeGreaterThan(dry.digMs*10);
+      expect(h.exec.currentTask).toBeNull();
+    } finally {h.close();}
+  });
   it('uses synchronous observations, branches, awaits a native equipment change, and reads its identity back',async()=>{
     const h=methodHarness('1.21.1');
     try {

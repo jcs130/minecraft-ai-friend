@@ -24,7 +24,7 @@ it.each(['return 1;','return (await bot.read("entity")).id;'])('does not cancel 
   expect(result.failed).not.toBe(true);
   expect((await methodEnded(r,run.id)).status).toBe('completed');
 });
-it('still revokes a method holding native body input when a new body task is admitted',async()=>{
+it('still revokes a method holding native body input on an explicit immediate takeover',async()=>{
   const r=methodHarness();rigs.push(r);
   let release!:()=>void;
   const waiting=new Promise<void>(resolve=>{release=resolve;});
@@ -32,7 +32,7 @@ it('still revokes a method holding native body input when a new body task is adm
   try {
     const run=r.runner.start({code:'await bot.setControlState("forward",true); await bot.waitForTicks(200);'});
     await vi.waitFor(()=>expect(r.keys.forward).toBe(true));
-    const result=await r.world.tools().find(t=>t.name==='mc_do')!.handler({queue:'replace',steps:[{skill:'probe',shape:'line',anchors:[[0,65,0],[1,65,0]]}]},{role:'test',log:r.host.log});
+    const result=await r.world.tools().find(t=>t.name==='mc_do')!.handler({queue:'now',steps:[{skill:'probe',shape:'line',anchors:[[0,65,0],[1,65,0]]}]},{role:'test',log:r.host.log});
     expect(result.failed).not.toBe(true);
     expect((await methodEnded(r,run.id)).status).toBe('cancelled');
     expect(r.keys.forward).toBe(false);
