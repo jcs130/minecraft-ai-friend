@@ -3123,15 +3123,20 @@ export class MinecraftWorld implements World {
     this.protectedRegions = new ProtectedRegions(this.dataDir ? join(this.dataDir, 'minecraft-protected-regions.json') : null);
     this.protectedRegions.load();
     this.proximityVoice = new ProximityVoiceLane({
-      config: () => ({enabled:false,audioProducerUrl:'',outputMode:'game-only',...this.cfg.proximityVoice}),
+      config: () => this.useNativeSpeech()
+        ? {enabled:true,audioProducerUrl:this.cfg.simpleVoiceChat!.publicChatArtifactUrl!,outputMode:'game-only',speechSource:'artifact'}
+        : {enabled:false,audioProducerUrl:'',outputMode:'game-only',...this.cfg.proximityVoice},
       context: () => {
         const bot=this.bridge?.bot;
         if(!bot||!this.bridge?.connected||this.bridge.connectionState?.ready!==true||bot._client?.state!=='play')return null;
         const world=readWorldIdentity(bot),generation=String(this.connectionGeneration);
-        return {bot,generation,world,stillCurrent:()=>this.bridge?.bot===bot&&this.bridge?.connectionState?.ready===true
+        const native=this.useNativeSpeech();
+        const nativeUpload=native?this.simpleVoiceChat?.speechUpload():undefined;
+        if(native && !nativeUpload)return null;
+        return {bot,generation,world,nativeUpload,stillCurrent:()=>this.bridge?.bot===bot&&this.bridge?.connectionState?.ready===true
           &&bot._client?.state==='play'&&readWorldIdentity(bot).key===world.key&&readWorldIdentity(bot).revision===world.revision,
           disableAutoSpeech:()=>sendChat(bot,'/voice auto off'),
-          sendNearbyText:(text,requestId)=>this.sendNearbyVoiceText(text,requestId)};
+          sendNearbyText:native?undefined:(text,requestId)=>this.sendNearbyVoiceText(text,requestId)};
       },
       blob:handle=>this.host?.blob(handle)??null,
       hearing:(row,world)=>this.emit('minecraft.chat',`[MC 附近语音] ${row.speaker}: ${row.text}`
@@ -4993,6 +4998,9 @@ export class MinecraftWorld implements World {
    * voice (e.g. after a proxy lobby hop). Default: any authenticated play connection. Returning
    * false closes an attached client; it reconnects once this returns true again.
    */
+  private useNativeSpeech():boolean {
+    return !this.cfg.proximityVoice?.enabled && !!this.cfg.simpleVoiceChat?.enabled && !!this.cfg.simpleVoiceChat.publicChatArtifactUrl;
+  }
   protected simpleVoiceChatGate(_bot: Bot): boolean { return true; }
   protected disposeExtension(): void {}
   protected extensionAdmission(_steps: readonly SkillCall[]): string | null { return null; }

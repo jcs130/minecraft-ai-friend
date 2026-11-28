@@ -1,8 +1,8 @@
 # Mineflayer 工作脚本
 
-十种内置脚本通过通用 `mc_script` 工具运行；它们随 `agent-mc-world` 核心发布，不要求服务端安装 NPC 模组。宿主负责目标与模型推理，脚本负责在一次明确任务中循环观察、操作、核对和停止。没有新增后台 Agent 或控制器。
+内置脚本通过通用 `mc_script` 工具运行；它们随 `agent-mc-world` 核心发布，不要求服务端安装 NPC 模组。宿主负责目标与模型推理，脚本负责在一次明确任务中循环观察、操作、核对和停止。没有新增后台 Agent 或控制器。
 
-移动类新增 `navigate_route`、`swim_to`、`flight_route`。参数示例、能力边界及第三方方案比较见 [移动脚本与调研](movement-routines.md)。四种生产/仓储脚本的接口保持。
+移动类新增 `navigate_route`、`swim_to`、`flight_route`。参数示例、能力边界及第三方方案比较见 [移动脚本与调研](movement-routines.md)。生产和仓储脚本也能直接从当前库存展开合成配方。
 
 进阶的 `swim_route`、`ride_route`、`portal_route` 和普通鞘翅原生接口见 [进阶移动](advanced-mobility.md)。
 
@@ -18,6 +18,7 @@
 下面是 `mc_script` 的完整参数示例。坐标都必须是绝对坐标，`dimension` 必填；耕作坐标指植株占用格，箱子坐标指箱子方块。
 
 ```json
+{"routine":{"op":"run","id":"craft_to_stock"},"params":{"dimension":"overworld","item":"wooden_pickaxe","count":1}}
 {"routine":{"op":"run","id":"farm_harvest"},"params":{"dimension":"overworld","crop":"wheat","cells":[[10,64,20],[11,64,20]]}}
 {"routine":{"op":"run","id":"gather_logs"},"params":{"dimension":"overworld","block":"oak_log","cells":[[15,64,20],[15,65,20]],"tool":"iron_axe"}}
 {"routine":{"op":"run","id":"deposit_surplus"},"params":{"dimension":"overworld","chest":[8,64,20],"items":[{"item":"wheat","count":8},{"item":"oak_log","count":4}]}}

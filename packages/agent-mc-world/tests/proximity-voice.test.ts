@@ -76,6 +76,28 @@ function laneFixture(options:{file?:string;url?:string;live?:boolean;caption?:bo
  return{lane,b,changes,heard,ops,parts,texts,outgoing,setValid:(value:boolean)=>{valid=value;},setWorld:(value:string)=>{world=value;revision++;},getAuto:()=>auto};
 }
 describe('independent game voice lane',()=>{
+ it('uses the existing authenticated SVC transport and keeps a single native voice receipt without sending global text',async()=>{
+   const b=bot(), id=randomUUID(), uploads:string[]=[], writes:unknown[]=[], changes:GameVoiceReceipt[]=[];
+   b.on('write',(...args:unknown[])=>writes.push(args));
+   const bytes=wav(); const http=createServer((_req,res)=>{
+     res.writeHead(200,{'content-type':'audio/wav','x-voice-artifact-id':id,'x-voice-audio-sha256':createHash('sha256').update(bytes).digest('hex')});res.end(bytes);
+   });
+   await new Promise<void>(resolve=>http.listen(0,'127.0.0.1',resolve));
+   const context:ProximityVoiceContext={bot:b,generation:'join-1',world:{key:'minecraft:world_new'},stillCurrent:()=>true,
+     disableAutoSpeech(){throw Error('mcagent channel unavailable');},
+     nativeUpload:async(audio,options)=>{expect(audio).toEqual(bytes);uploads.push(options!.requestId!);
+       return {requestId:options!.requestId!,state:'sent'};}};
+   const lane=new ProximityVoiceLane({config:()=>({enabled:true,audioProducerUrl:'http://127.0.0.1:'+(http.address() as any).port,outputMode:'game-only'}),
+     context:()=>context,blob:()=>null,hearing:()=>{},changed:r=>changes.push(r)});
+   try{
+     expect(JSON.parse((await lane.call({action:'status'})).text)).toMatchObject({connected:true,transport:'simple-voice-chat',autoSpeechOffRequested:false});
+     const args={action:'speak',requestId:id,text:'小鱼，你好呀。'};
+     await lane.call(args); await eventually(()=>changes.some(r=>r.game.state==='sent'));
+     await lane.call(args); const receipt=JSON.parse((await lane.call({requestId:id})).text);
+     expect(receipt).toMatchObject({requestId:id,game:{state:'sent'},recipientHeard:'unknown',nearbyText:{state:'unavailable'}});
+     expect(writes).toEqual([]);expect(uploads).toEqual([id]);
+   }finally{await lane.stop();http.closeAllConnections();http.close();}
+ });
  it('sends one server-selected utterance without WAV production and keeps a durable receipt',async()=>{
    const file=join(await mkdtemp(join(tmpdir(),'server-voice-')),'ledger.json');
    const f=laneFixture({file,speechSource:'server',caption:true,url:'unused by server speech'});

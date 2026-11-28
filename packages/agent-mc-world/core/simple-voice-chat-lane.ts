@@ -49,13 +49,30 @@ export const SIMPLE_VOICE_CHAT_TOOL: Omit<ToolDef, 'handler'> = {
 
 export class SimpleVoiceChatLane {
   private readonly publicSpeech = new SvcPublicSpeech(row=>this.options.publicSpeechReceipt?.({...row}));
+  private uploadTail:Promise<void>=Promise.resolve();
+  /** A single microphone stream serves captions, authored speech and file uploads. */
+  private upload(client:SimpleVoiceChatClient, wav:Buffer, options:Parameters<SimpleVoiceChatClient['upload']>[1]) {
+    const scope=this.context;
+    const result=this.uploadTail.then(()=>{
+      options?.signal?.throwIfAborted();
+      if(this.client!==client || !scope?.stillCurrent()) throw Error('SVC_CONNECTION_CHANGED');
+      return client.upload(wav,options);
+    });
+    this.uploadTail=result.then(()=>{},()=>{});
+    return result;
+  }
+  speechUpload() {
+    const client=this.client;
+    if(!client || !this.context?.stillCurrent() || !client.state().udpValidated) return undefined;
+    return (wav:Buffer,options?:Parameters<SimpleVoiceChatClient['upload']>[1])=>this.upload(client,wav,options);
+  }
   publicChat(chat:ChatDeliveryReceipt) {
     const cfg=this.options.config();
     if (!cfg.enabled || !cfg.publicChatArtifactUrl) return;
     const client=this.client, context=this.context;
     return this.publicSpeech.enqueue(chat,cfg.publicChatArtifactUrl,client && context ? {
       current:()=>this.client===client && context.stillCurrent() && client.state().udpAuthenticated && client.state().udpValidated,
-      send:(bytes,requestId,signal)=>client.upload(bytes,{requestId,signal}),
+      send:(bytes,requestId,signal)=>this.upload(client,bytes,{requestId,signal}),
     } : null);
   }
   private hearing:SvcHearing | null=null;
@@ -138,7 +155,7 @@ export class SimpleVoiceChatLane {
       if (!blob || !/^audio\/(wav|x-wav|wave)$/.test(blob.mime ?? 'audio/wav')) return { text: '[mc_svc] audio_handle 必须是 PCM16 WAV blob。', data: { state: 'failed', reason: 'SVC_WAV_BLOB_REQUIRED', recipientHeard: 'unknown' } as Record<string, unknown> };
       const wav = Buffer.from(blob.bytes);
       inspectVoiceWav(wav);
-      const result = await this.client.upload(wav, { requestId: typeof args.requestId === 'string' ? args.requestId : randomUUID(), whisper: args.whisper === true, signal });
+      const result = await this.upload(this.client, wav, { requestId: typeof args.requestId === 'string' ? args.requestId : randomUUID(), whisper: args.whisper === true, signal });
       return { text: `[mc_svc] 状态 ${result.state}，recipientHeard=unknown。这不是听见证明。`, data: { ...result } as Record<string, unknown> };
     }
     return { text: '[mc_svc] 未知 action。仅 status 与 upload。', data: { state: 'failed', reason: 'SVC_ACTION_UNKNOWN', recipientHeard: 'unknown' } as Record<string, unknown> };
